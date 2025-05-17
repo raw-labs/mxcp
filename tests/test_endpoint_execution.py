@@ -1,18 +1,29 @@
 import pytest
 from pathlib import Path
 from raw.endpoints.executor import EndpointExecutor, EndpointType
-from raw.config.types import EndpointDefinition
 import duckdb
+import os
+
+@pytest.fixture(scope="session", autouse=True)
+def set_raw_config_env():
+    os.environ["RAW_CONFIG"] = str(Path(__file__).parent / "fixtures" / "test-repo" / "raw-config.yaml")
 
 @pytest.fixture
-def endpoint_path():
-    return Path(__file__).parent / "fixtures" / "endpoints" / "hello.yml"
+def test_repo_path():
+    return Path(__file__).parent / "fixtures" / "test-repo"
 
 @pytest.fixture
-def executor(endpoint_path):
-    return EndpointExecutor(EndpointType.TOOL, "hello")
+def executor(test_repo_path):
+    # Change to test repo directory
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        executor = EndpointExecutor(EndpointType.TOOL, "hello")
+        yield executor
+    finally:
+        os.chdir(original_dir)
 
-def test_endpoint_loading(executor, endpoint_path):
+def test_endpoint_loading(executor):
     """Test that endpoint definition is loaded correctly"""
     executor._load_endpoint()
     assert executor.endpoint is not None

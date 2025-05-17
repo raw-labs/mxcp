@@ -5,7 +5,7 @@ import duckdb
 import yaml
 from datetime import datetime
 import json
-from raw.config.types import EndpointDefinition
+from raw.endpoints.types import EndpointDefinition
 from raw.engine.duckdb_session import DuckDBSession
 
 class EndpointType(Enum):

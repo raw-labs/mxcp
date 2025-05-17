@@ -1,6 +1,6 @@
 import duckdb
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Any, Optional
 from raw.config.site_config import load_site_config
 from raw.config.user_config import load_user_config
 from raw.config.types import SiteConfig, UserConfig

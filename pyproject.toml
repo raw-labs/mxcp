@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "raw"
-version = "1.0.0"
-description = "RAW CLI"
+name = "raw-mcp"
+version = "0.1.0"
+description = "RAW Model Context Protocol"
 authors = [{ name = "RAW Labs SA", email = "hello@raw-labs.com" }]
 readme = "README.md"
 requires-python = ">=3.9"
@@ -30,3 +30,8 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 "raw.config.schemas" = ["*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v"
