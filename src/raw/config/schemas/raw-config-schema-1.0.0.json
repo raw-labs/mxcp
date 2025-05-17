@@ -57,7 +57,15 @@
                           "parameters": {
                             "type": "object",
                             "description": "The secret definition.",
-                            "additionalProperties": { "type": "string" }
+                            "additionalProperties": {
+                              "oneOf": [
+                                { "type": "string" },
+                                { 
+                                  "type": "object",
+                                  "additionalProperties": { "type": "string" }
+                                }
+                              ]
+                            }
                           }
                         },
                         "additionalProperties": false

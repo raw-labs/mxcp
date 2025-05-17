@@ -4,3 +4,4 @@ project: test_project
 profile: test_profile
 secrets:
   - http_auth_token
+  - http_headers_token

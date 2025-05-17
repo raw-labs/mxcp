@@ -9,5 +9,11 @@ projects:
             type: http
             parameters:
               BEARER_TOKEN: "bearer_token"
+          - name: http_headers_token
+            type: http
+            parameters:
+              EXTRA_HTTP_HEADERS:
+                Authorization: "Bearer test_token"
+                X-Custom-Header: "custom_value"
 vault:
   enabled: false 

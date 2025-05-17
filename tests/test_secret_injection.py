@@ -22,7 +22,23 @@ def executor(test_repo_path):
     finally:
         os.chdir(original_dir)
 
+@pytest.fixture
+def http_headers_executor(test_repo_path):
+    # Change to test repo directory
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        executor = EndpointExecutor(EndpointType.TOOL, "http_headers_test")
+        yield executor
+    finally:
+        os.chdir(original_dir)
+
 def test_secret_injection(executor):
     result = executor.execute({})
     print(result)
-    assert result[0][0] == "name=http_auth_token;type=http;provider=config;serializable=true;scope;bearer_token=bearer_token" 
+    assert result[0][0] == "name=http_auth_token;type=http;provider=config;serializable=true;scope;bearer_token=bearer_token"
+
+def test_http_headers_injection(http_headers_executor):
+    result = http_headers_executor.execute({})
+    print(result)
+    assert result[0][0] == "name=http_headers_token;type=http;provider=config;serializable=true;scope;extra_http_headers={Authorization=Bearer test_token, X-Custom-Header=custom_value}"

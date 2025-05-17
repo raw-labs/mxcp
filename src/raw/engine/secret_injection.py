@@ -38,8 +38,11 @@ def inject_secrets(con, site_config: SiteConfig, user_config: UserConfig, profil
         for key, value in secret["parameters"].items():
             # Handle special case for HTTP headers
             if isinstance(value, dict):
-                value = str(value)  # Convert dict to string representation
-            params.append(f"{key} '{value}'")
+                # Convert dict to DuckDB MAP syntax
+                map_items = [f"'{k}': '{v}'" for k, v in value.items()]
+                params.append(f"{key} MAP {{{', '.join(map_items)}}}")
+            else:
+                params.append(f"{key} '{value}'")
             
         create_secret_sql = f"""
         CREATE TEMPORARY SECRET {secret['name']} (
