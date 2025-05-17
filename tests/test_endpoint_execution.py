@@ -18,7 +18,7 @@ def executor(test_repo_path):
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "hello")
+        executor = EndpointExecutor(EndpointType.TOOL, "example")
         yield executor
     finally:
         os.chdir(original_dir)
@@ -27,7 +27,7 @@ def test_endpoint_loading(executor):
     """Test that endpoint definition is loaded correctly"""
     executor._load_endpoint()
     assert executor.endpoint is not None
-    assert executor.endpoint["tool"]["name"] == "hello"
+    assert executor.endpoint["tool"]["name"] == "example"
     assert "parameters" in executor.endpoint["tool"]
     assert "return" in executor.endpoint["tool"]
 

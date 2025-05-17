@@ -10,4 +10,4 @@ def test_raw_list_runs():
         text=True
     )
     assert result.returncode == 0
-    assert "hello" in result.stdout.lower()
+    assert "example" in result.stdout.lower()

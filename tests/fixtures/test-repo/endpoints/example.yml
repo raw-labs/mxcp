@@ -1,17 +1,10 @@
 # yaml-language-server: $schema=./src/raw/config/schemas/endpoint-schema-1.0.0.json
 raw: "1.0.0"
 tool:
-  name: hello
-  description: Hello world example
+  name: example
+  description: Endpoints example
   tags:
-    - helloworld
-  code: snapi
-  declaration: hello_world
-  codeFile: hello-world.snapi
-  format: json
-  security:
-    public: true
-  computeClass: normal
+    - example
   enabled: true
   parameters:
     - name: name
@@ -86,15 +79,8 @@ tool:
         $tags as tags,
         $preferences as preferences
       FROM (VALUES (1)) t
-  tests:
-    - name: Hello World test
-      description: Tests a hello world endpoint
-      arguments:
-        - key: name
-          value: World
-      result: Hello, World!
 metadata:
-  title: Hello world
-  description: Hello world example
+  title: Endpoints example
+  description: This is an example of an endpoint.
   tags:
-    - helloworld
+    - example
