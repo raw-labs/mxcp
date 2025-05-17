@@ -7,6 +7,7 @@ from datetime import datetime
 import json
 from raw.endpoints.types import EndpointDefinition
 from raw.engine.duckdb_session import DuckDBSession
+from raw.endpoints.loader import find_repo_root
 
 class EndpointType(Enum):
     TOOL = "tool"
@@ -82,18 +83,10 @@ class EndpointExecutor:
         self.endpoint: Optional[EndpointDefinition] = None
         self.session = DuckDBSession()
         
-    def _find_repo_root(self) -> Path:
-        """Find the repository root (where raw-site.yml is)"""
-        current = Path.cwd()
-        for parent in [current] + list(current.parents):
-            if (parent / "raw-site.yml").exists():
-                return parent
-        raise FileNotFoundError("raw-site.yml not found in current directory or any parent directory")
-
     def _load_endpoint(self):
         """Load the endpoint definition from YAML file"""
         # Find repository root
-        repo_root = self._find_repo_root()
+        repo_root = find_repo_root()
         
         # Find endpoint file relative to repo root
         endpoint_file = repo_root / "endpoints" / f"{self.name}.yml"
@@ -161,7 +154,7 @@ class EndpointExecutor:
         if not self.endpoint:
             raise RuntimeError("Endpoint not loaded")
         # Find repository root and endpoint file path
-        repo_root = self._find_repo_root()
+        repo_root = find_repo_root()
         endpoint_file = repo_root / "endpoints" / f"{self.name}.yml"
         return get_endpoint_source_code(self.endpoint, self.endpoint_type.value, endpoint_file, repo_root)
             

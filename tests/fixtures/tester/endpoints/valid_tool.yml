@@ -1,0 +1,56 @@
+raw: "1.0.0"
+
+tool:
+  name: valid_tool
+  enabled: true
+
+  parameters:
+    - name: name
+      type: string
+      description: Name parameter
+      examples: ["test"]
+
+    - name: count
+      type: integer
+      description: Count parameter
+      examples: [42]
+
+  return:
+    name: result
+    type: array
+    description: List of results
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+
+  source:
+    code: |
+      SELECT 
+        $name as name,
+        $count as count
+      FROM (VALUES (1)) t
+
+  tests:
+    - name: valid test
+      description: Test with valid parameters
+      arguments:
+        - key: name
+          value: "test"
+        - key: count
+          value: 42
+      result:
+        - name: "test"
+          count: 42
+
+    - name: missing optional
+      description: Test with missing optional parameter
+      arguments:
+        - key: name
+          value: "test"
+      result:
+        - name: "test"
+          count: null 

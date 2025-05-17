@@ -10,49 +10,17 @@ from raw.config.site_config import find_repo_root
 from raw.endpoints.executor import get_endpoint_source_code
 from raw.endpoints.loader import EndpointLoader
 
-def discover_endpoints(repo_root: Path) -> List[Path]:
-    """Discover all endpoint files in the repository.
-    
-    Args:
-        repo_root: Root directory of the repository
-        
-    Returns:
-        List of paths to endpoint files
-    """
-    # Get the RAW_CONFIG environment variable if set
-    raw_config = Path(os.environ.get("RAW_CONFIG", ""))
-    
-    # Find all YAML files in the repo
-    yaml_files = list(repo_root.glob("**/*.yml"))
-    
-    # Filter out configuration files
-    endpoint_files = []
-    for yaml_file in yaml_files:
-        # Skip raw-site.yml only if it's at the root
-        if yaml_file.name == "raw-site.yml" and yaml_file.parent == repo_root:
-            continue
-            
-        # Skip the file specified in RAW_CONFIG if it exists
-        if raw_config.exists() and yaml_file.samefile(raw_config):
-            continue
-            
-        endpoint_files.append(yaml_file)
-            
-    return endpoint_files
-
 def validate_all_endpoints(config, user, profile):
     """Validate all endpoints in the repository."""
-    # Find repository root
-    repo_root = find_repo_root()
-    
-    # Discover endpoint files
-    endpoint_files = discover_endpoints(repo_root)
-    if not endpoint_files:
+    # Use EndpointLoader to discover endpoints
+    loader = EndpointLoader(config)
+    endpoints = loader.discover_endpoints()
+    if not endpoints:
         return {"status": "error", "message": "No endpoint files found in the repository"}
 
     results = []
-    for endpoint_file in endpoint_files:
-        result = validate_endpoint(str(endpoint_file), config, user, profile)
+    for file_path, endpoint in endpoints:
+        result = validate_endpoint(str(file_path), config, user, profile)
         results.append(result)
 
     return {"status": "ok", "validated": results}
@@ -60,20 +28,25 @@ def validate_all_endpoints(config, user, profile):
 def validate_endpoint(path, config, user, profile):
     """Validate a single endpoint."""
     try:
-        # Use EndpointLoader for loading and basic validation
-        loader = EndpointLoader(config)
-        loader.discover_endpoints(Path(path).parent)  # Discover endpoints in the same directory
-        endpoint = loader.get_endpoint(path)
-        if not endpoint:
-            return {"status": "error", "path": path, "message": "Failed to load endpoint"}
-
-        # Detect endpoint type
+        # Load the endpoint file directly
+        with open(path) as f:
+            endpoint = yaml.safe_load(f)
+            
+        # Determine endpoint type and name
         endpoint_type = None
+        name = None
         for t in ("tool", "resource", "prompt"):
             if t in endpoint:
                 endpoint_type = t
+                if t == "tool":
+                    name = endpoint[t]["name"]
+                elif t == "resource":
+                    name = endpoint[t]["uri"]
+                elif t == "prompt":
+                    name = endpoint[t]["name"]
                 break
-        if not endpoint_type:
+                
+        if not endpoint_type or not name:
             return {"status": "error", "path": path, "message": "No valid endpoint type (tool/resource/prompt) found"}
 
         # Find repo root and endpoint file path

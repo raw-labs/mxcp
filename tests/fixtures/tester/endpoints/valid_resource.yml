@@ -1,0 +1,47 @@
+raw: "1.0.0"
+
+resource:
+  uri: valid_resource
+  enabled: true
+
+  parameters:
+    - name: filter
+      type: string
+      description: Filter parameter
+      examples: ["active"]
+
+  return:
+    name: result
+    type: array
+    description: List of resources
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+
+  source:
+    code: |
+      SELECT 
+        'test-1' as id,
+        $filter as status
+      FROM (VALUES (1)) t
+
+  tests:
+    - name: valid filter
+      description: Test with valid filter
+      arguments:
+        - key: filter
+          value: "active"
+      result:
+        - id: "test-1"
+          status: "active"
+
+    - name: no filter
+      description: Test without filter
+      arguments: []
+      result:
+        - id: "test-1"
+          status: null 

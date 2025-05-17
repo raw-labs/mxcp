@@ -1,0 +1,45 @@
+raw: "1.0.0"
+
+prompt:
+  name: valid_prompt
+  enabled: true
+
+  parameters:
+    - name: context
+      type: string
+      description: Context for the prompt
+      examples: ["test context"]
+
+    - name: temperature
+      type: number
+      description: Temperature parameter
+      default: 0.7
+      examples: [0.5]
+
+  return:
+    name: result
+    type: string
+    description: Generated text
+
+  source:
+    code: |
+      SELECT 
+        'Generated: ' || $context as result
+      FROM (VALUES (1)) t
+
+  tests:
+    - name: valid context
+      description: Test with valid context
+      arguments:
+        - key: context
+          value: "test context"
+      result: "Generated: test context"
+
+    - name: with temperature
+      description: Test with temperature parameter
+      arguments:
+        - key: context
+          value: "test context"
+        - key: temperature
+          value: 0.5
+      result: "Generated: test context" 
