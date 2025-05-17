@@ -1,0 +1,18 @@
+raw: "1.0.0"
+tool:
+  name: valid_endpoint
+  description: A valid endpoint for testing
+  parameters:
+    - name: user_id
+      type: integer
+      description: User ID to query
+  return:
+    type: object
+    properties:
+      user_name:
+        type: string
+  source:
+    code: |
+      SELECT 'test_user' as user_name
+      FROM (SELECT 1 as user_id) as users
+      WHERE user_id = $user_id
