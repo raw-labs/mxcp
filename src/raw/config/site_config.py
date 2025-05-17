@@ -4,6 +4,21 @@ from jsonschema import validate, ValidationError
 from pathlib import Path
 from raw.config.types import SiteConfig
 
+def find_repo_root() -> Path:
+    """Find the repository root by looking for raw-site.yml.
+    
+    Returns:
+        Path to the repository root
+        
+    Raises:
+        FileNotFoundError: If raw-site.yml is not found in current directory or any parent
+    """
+    current = Path.cwd()
+    for parent in [current] + list(current.parents):
+        if (parent / "raw-site.yml").exists():
+            return parent
+    raise FileNotFoundError("raw-site.yml not found in current directory or any parent directory")
+
 def _apply_defaults(config: dict, repo_root: Path) -> dict:
     """Apply default values to the config"""
     # Create a copy to avoid modifying the input
@@ -29,15 +44,9 @@ def load_site_config(path=None) -> SiteConfig:
         if not path.exists():
             raise FileNotFoundError(f"{path} not found.")
     else:
-        # Traverse upward from current directory
-        current = Path.cwd()
-        for parent in [current] + list(current.parents):
-            candidate = parent / "raw-site.yml"
-            if candidate.exists():
-                path = candidate
-                break
-        else:
-            raise FileNotFoundError("raw-site.yml not found in current directory or any parent directory.")
+        # Find repo root and raw-site.yml
+        repo_root = find_repo_root()
+        path = repo_root / "raw-site.yml"
 
     with open(path) as f:
         config = yaml.safe_load(f)

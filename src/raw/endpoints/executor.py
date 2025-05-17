@@ -13,6 +13,21 @@ class EndpointType(Enum):
     RESOURCE = "resource"
     PROMPT = "prompt"
 
+def get_endpoint_source_code(endpoint_dict: dict, endpoint_type: str, endpoint_file_path: Path, repo_root: Path) -> str:
+    """Get the source code for the endpoint, resolving code vs file."""
+    source = endpoint_dict[endpoint_type]["source"]
+    if "code" in source:
+        return source["code"]
+    elif "file" in source:
+        source_path = Path(source["file"])
+        if source_path.is_absolute():
+            full_path = repo_root / source_path.relative_to("/")
+        else:
+            full_path = endpoint_file_path.parent / source_path
+        return full_path.read_text()
+    else:
+        raise ValueError("No source code found in endpoint definition")
+
 class TypeConverter:
     """Handles conversion between Python types and DuckDB types"""
     
@@ -145,30 +160,10 @@ class EndpointExecutor:
         """Get the source code for the endpoint"""
         if not self.endpoint:
             raise RuntimeError("Endpoint not loaded")
-            
-        source = self.endpoint[self.endpoint_type.value]["source"]
-            
-        if "code" in source:
-            return source["code"]
-        elif "file" in source:
-            # Find repository root
-            repo_root = self._find_repo_root()
-            
-            # Get endpoint file location
-            endpoint_file = repo_root / "endpoints" / f"{self.name}.yml"
-            
-            # Resolve source file path
-            source_path = Path(source["file"])
-            if source_path.is_absolute():
-                # If absolute, resolve relative to repo root
-                full_path = repo_root / source_path.relative_to("/")
-            else:
-                # If relative, resolve relative to endpoint file
-                full_path = endpoint_file.parent / source_path
-            
-            return full_path.read_text()
-        else:
-            raise ValueError("No source code found in endpoint definition")
+        # Find repository root and endpoint file path
+        repo_root = self._find_repo_root()
+        endpoint_file = repo_root / "endpoints" / f"{self.name}.yml"
+        return get_endpoint_source_code(self.endpoint, self.endpoint_type.value, endpoint_file, repo_root)
             
     def execute(self, params: Dict[str, Any]) -> Any:
         """Execute the endpoint with given parameters"""

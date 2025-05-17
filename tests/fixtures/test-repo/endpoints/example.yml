@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=./src/raw/config/schemas/endpoint-schema-1.0.0.json
 raw: "1.0.0"
 tool:
   name: example
@@ -47,9 +46,7 @@ tool:
           description: Theme preference
           enum: [light, dark]
   return:
-    name: result
     type: array
-    description: List of user records
     items:
       type: object
       properties:

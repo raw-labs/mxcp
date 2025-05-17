@@ -106,7 +106,7 @@
         "parameters": {
           "type": "array",
           "description": "Input parameters for this endpoint.",
-          "items": { "$ref": "#/definitions/typeDefinition" }
+          "items": { "$ref": "#/definitions/paramDefinition" }
         },
         "return": {
           "$ref": "#/definitions/typeDefinition",
@@ -180,7 +180,7 @@
         "parameters": {
           "type": "array",
           "description": "Input parameters for this endpoint.",
-          "items": { "$ref": "#/definitions/typeDefinition" }
+          "items": { "$ref": "#/definitions/paramDefinition" }
         },
         "return": {
           "$ref": "#/definitions/typeDefinition",
@@ -253,7 +253,7 @@
         "parameters": {
           "type": "array",
           "description": "Input parameters used to populate the prompt.",
-          "items": { "$ref": "#/definitions/typeDefinition" }
+          "items": { "$ref": "#/definitions/paramDefinition" }
         },
         "prompt_template": {
           "type": "string",
@@ -262,7 +262,7 @@
       }
     },
 
-    "typeDefinition": {
+    "paramDefinition": {
       "type": "object",
       "required": ["name", "type", "description"],
       "properties": {
@@ -293,6 +293,34 @@
         "maxLength": { "type": "integer", "minimum": 0, "description": "Maximum string length." },
         "minItems": { "type": "integer", "minimum": 0, "description": "Minimum number of array items." },
         "maxItems": { "type": "integer", "minimum": 0, "description": "Maximum number of array items." },
+        "items": {
+          "$ref": "#/definitions/typeDefinition",
+          "description": "Schema for items if type is array."
+        },
+        "properties": {
+          "type": "object",
+          "description": "Schema for object properties if type is object.",
+          "additionalProperties": {
+            "$ref": "#/definitions/typeDefinition"
+          }
+        },
+        "required": {
+          "type": "array",
+          "description": "List of required fields if type is object.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
+    "typeDefinition": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "integer", "boolean", "array", "object"],
+          "description": "The data type of the return value."
+        },
         "items": {
           "$ref": "#/definitions/typeDefinition",
           "description": "Schema for items if type is array."

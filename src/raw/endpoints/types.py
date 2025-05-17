@@ -14,19 +14,25 @@ class TestDefinition(TypedDict):
     arguments: List[TestArgument]
     result: Optional[object]
 
-class TypeDefinition(TypedDict):
+class ParamDefinition(TypedDict):
     name: str
     type: str
     description: Optional[str]
     required: Optional[bool]
     default: Optional[object]
 
+class TypeDefinition(TypedDict):
+    type: str
+    items: Optional['TypeDefinition']
+    properties: Optional[dict[str, 'TypeDefinition']]
+    required: Optional[List[str]]
+
 class ToolDefinition(TypedDict):
     name: str
     description: Optional[str]
     tags: Optional[List[str]]
     annotations: Optional[dict]
-    parameters: Optional[List[TypeDefinition]]
+    parameters: Optional[List[ParamDefinition]]
     return_: Optional[TypeDefinition]
     language: Optional[Literal["sql"]]
     source: SourceDefinition
@@ -38,7 +44,7 @@ class ResourceDefinition(TypedDict):
     description: Optional[str]
     tags: Optional[List[str]]
     mime_type: Optional[str]
-    parameters: Optional[List[TypeDefinition]]
+    parameters: Optional[List[ParamDefinition]]
     return_: Optional[TypeDefinition]
     language: Optional[Literal["sql"]]
     source: SourceDefinition
@@ -49,7 +55,7 @@ class PromptDefinition(TypedDict):
     name: str
     description: Optional[str]
     tags: Optional[List[str]]
-    parameters: Optional[List[TypeDefinition]]
+    parameters: Optional[List[ParamDefinition]]
     return_: Optional[TypeDefinition]
     language: Optional[Literal["sql"]]
     source: SourceDefinition
