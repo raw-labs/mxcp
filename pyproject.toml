@@ -20,6 +20,9 @@ dependencies = [
 [project.scripts]
 raw = "raw.__main__:cli"
 
+[project.optional-dependencies]
+dev = ["pytest"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["raw", "raw.cli", "raw.config", "raw.config.schemas"]
