@@ -2,6 +2,7 @@ import click
 from raw.cli.list import list_endpoints
 from raw.cli.run import run_endpoint
 from raw.cli.validate import validate
+from raw.cli.test import test
 
 @click.group()
 def cli():
@@ -11,3 +12,4 @@ def cli():
 cli.add_command(list_endpoints)
 cli.add_command(run_endpoint)
 cli.add_command(validate)
+cli.add_command(test)
