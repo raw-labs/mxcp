@@ -1,12 +1,13 @@
 import click
 from raw.endpoints.loader import EndpointLoader
 from pathlib import Path
+from raw.config.site_config import load_site_config
 
 @click.command(name="list")
 def list_endpoints():
     """List available endpoints"""
-    loader = EndpointLoader()
-    loader.load_site_config()  # Load site config first
+    site_config = load_site_config()
+    loader = EndpointLoader(site_config)
     endpoints = loader.discover_endpoints()
     
     for endpoint in endpoints:

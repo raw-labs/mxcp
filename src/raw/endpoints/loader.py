@@ -2,24 +2,18 @@ from pathlib import Path
 import yaml
 from typing import Dict, List, Optional
 from dataclasses import dataclass
-from raw.config.site_config import load_site_config
 from raw.endpoints.types import EndpointDefinition
 import json
 from jsonschema import validate
 
 @dataclass
 class EndpointLoader:
-    _endpoints: Dict[str, EndpointDefinition] = None
-    
-    def __init__(self):
+    _endpoints: Dict[str, EndpointDefinition]
+    _site_config: dict
+
+    def __init__(self, site_config: dict):
+        self._site_config = site_config
         self._endpoints = {}
-        self._site_config = None
-    
-    def load_site_config(self) -> dict:
-        """Load and cache the site configuration"""
-        if self._site_config is None:
-            self._site_config = load_site_config()
-        return self._site_config
     
     def discover_endpoints(self, base_path: Optional[Path] = None) -> List[EndpointDefinition]:
         """Discover all endpoint files and load their metadata"""

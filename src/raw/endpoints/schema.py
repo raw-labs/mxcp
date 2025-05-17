@@ -8,6 +8,7 @@ from raw.engine.duckdb_session import DuckDBSession
 import os
 from raw.config.site_config import find_repo_root
 from raw.endpoints.executor import get_endpoint_source_code
+from raw.endpoints.loader import EndpointLoader
 
 def discover_endpoints(repo_root: Path) -> List[Path]:
     """Discover all endpoint files in the repository.
@@ -59,15 +60,12 @@ def validate_all_endpoints(config, user, profile):
 def validate_endpoint(path, config, user, profile):
     """Validate a single endpoint."""
     try:
-        # Load endpoint YAML
-        with open(path, "r") as f:
-            endpoint = yaml.safe_load(f)
-
-        # Validate YAML schema
-        schema_path = Path(__file__).parent / "schemas" / "endpoint-schema-1.0.0.json"
-        with open(schema_path) as schema_file:
-            schema = json.load(schema_file)
-        jsonschema_validate(instance=endpoint, schema=schema)
+        # Use EndpointLoader for loading and basic validation
+        loader = EndpointLoader(config)
+        loader.discover_endpoints(Path(path).parent)  # Discover endpoints in the same directory
+        endpoint = loader.get_endpoint(path)
+        if not endpoint:
+            return {"status": "error", "path": path, "message": "Failed to load endpoint"}
 
         # Detect endpoint type
         endpoint_type = None
