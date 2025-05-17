@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "raw"
+version = "1.0.0"
+description = "RAW CLI"
+authors = [{ name = "RAW Labs SA", email = "hello@raw-labs.com" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "mcp-server",
+  "click",
+  "pyyaml",
+  "jsonschema",
+  "duckdb"
+]
+
+[project.scripts]
+raw = "raw.__main__:cli"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["raw", "raw.cli", "raw.config", "raw.config.schemas"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"raw.config.schemas" = ["*.json"]

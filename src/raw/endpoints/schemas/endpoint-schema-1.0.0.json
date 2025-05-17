@@ -1,0 +1,315 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RAW Endpoint Definition Schema",
+  "type": "object",
+  "required": ["raw"],
+  "properties": {
+    "raw": {
+      "type": "string",
+      "description": "Schema version. Always use '1.0.0'.",
+      "default": "1.0.0"
+    },
+
+    "tool": {
+      "$ref": "#/definitions/toolDefinition",
+      "description": "Defines an MCP tool endpoint."
+    },
+    "resource": {
+      "$ref": "#/definitions/resourceDefinition",
+      "description": "Defines an MCP resource endpoint."
+    },
+    "prompt": {
+      "$ref": "#/definitions/promptDefinition",
+      "description": "Defines an MCP prompt endpoint."
+    },
+
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Short display title." },
+        "description": { "type": "string", "description": "Longer description." }
+      },
+      "description": "Optional metadata for documentation purposes."
+    },
+
+    "cloud": {
+      "type": "object",
+      "description": "Optional SaaS/cloud runtime settings.",
+      "properties": {
+        "compute_limit_seconds": { "type": "integer", "description": "Max compute time in seconds." },
+        "compute_class": { "type": "string", "description": "Compute tier to run on." },
+        "security": {
+          "type": "object",
+          "description": "Security configuration for this endpoint.",
+          "properties": {
+            "public": { "type": "boolean", "default": false, "description": "Whether the endpoint is publicly accessible." },
+            "scopes": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Access scopes required to call this endpoint."
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags to classify the endpoint."
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "required": ["tool"] },
+    { "required": ["resource"] },
+    { "required": ["prompt"] }
+  ],
+
+  "definitions": {
+    "toolDefinition": {
+      "type": "object",
+      "required": ["name", "source"],
+      "properties": {
+        "name": { "type": "string", "description": "Name of this tool." },
+        "description": { "type": "string", "description": "Description of this tool." },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags to classify this tool."
+        },
+        "annotations": {
+          "type": "object",
+          "description": "Optional behavioral hints for this tool.",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Human-readable display title for the tool."
+            },
+            "readOnlyHint": {
+              "type": "boolean",
+              "description": "Hint: tool does not modify its environment (side-effect-free)."
+            },
+            "destructiveHint": {
+              "type": "boolean",
+              "description": "Hint: tool may perform destructive updates (e.g. delete, overwrite)."
+            },
+            "idempotentHint": {
+              "type": "boolean",
+              "description": "Hint: repeated calls with same arguments yield the same result."
+            },
+            "openWorldHint": {
+              "type": "boolean",
+              "description": "Hint: tool interacts with external systems or entities (non-closed-world)."
+            }
+          },
+          "additionalProperties": false
+        },
+        "parameters": {
+          "type": "array",
+          "description": "Input parameters for this endpoint.",
+          "items": { "$ref": "#/definitions/typeDefinition" }
+        },
+        "return": {
+          "$ref": "#/definitions/typeDefinition",
+          "description": "Description of the output schema."  
+        },
+        "language": {
+          "type": "string",
+          "default": "sql",
+          "enum": ["sql"],
+          "description": "The language used to define the logic of this endpoint. Only 'sql' is currently supported."
+        },
+        "source": {
+          "type": "object",
+          "description": "Source for the endpoint logic, either inline or a file reference.",
+          "oneOf": [
+            { "required": ["code"], "not": { "required": ["file"] } },
+            { "required": ["file"], "not": { "required": ["code"] } }
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "The inline code snippet to execute."
+            },
+            "file": {
+              "type": "string",
+              "description": "A relative path to a file containing the code."
+            }
+          },
+          "additionalProperties": false
+        },
+        "enabled": { "type": "boolean", "default": true, "description": "Whether this endpoint is active." },
+        "tests": {
+          "type": "array",
+          "description": "Tests to validate this endpoint.",
+          "items": {
+            "type": "object",
+            "required": ["name", "arguments"],
+            "properties": {
+              "name": { "type": "string", "description": "Name of the test." },
+              "description": { "type": "string", "description": "What the test checks."  },
+              "arguments": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["key", "value"],
+                  "properties": {
+                    "key": { "type": "string", "description": "Input parameter to pass to test." },
+                    "value": { "description": "Value of the input parameter to test." }
+                  }
+                }
+              },
+              "result": { "description": "Expected result." }
+            }
+          }
+        }
+      }
+    },
+
+    "resourceDefinition": {
+      "type": "object",
+      "required": ["uri", "source"],
+      "properties": {
+        "uri": { "type": "string", "description": "Logical URI identifying this resource." },
+        "description": { "type": "string", "description": "Description of this resource." },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags to classify this resource."
+        },
+        "mime_type": { "type": "string", "description": "MIME type of this resource." },
+        "parameters": {
+          "type": "array",
+          "description": "Input parameters for this endpoint.",
+          "items": { "$ref": "#/definitions/typeDefinition" }
+        },
+        "return": {
+          "$ref": "#/definitions/typeDefinition",
+          "description": "Description of the output schema."  
+        },
+        "language": {
+          "type": "string",
+          "default": "sql",
+          "enum": ["sql"],
+          "description": "The language used to define the logic of this endpoint. Only 'sql' is currently supported."
+        },
+        "source": {
+          "type": "object",
+          "description": "Source for the endpoint logic, either inline or a file reference.",
+          "oneOf": [
+            { "required": ["code"], "not": { "required": ["file"] } },
+            { "required": ["file"], "not": { "required": ["code"] } }
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "The inline code snippet to execute."
+            },
+            "file": {
+              "type": "string",
+              "description": "A relative path to a file containing the code."
+            }
+          },
+          "additionalProperties": false
+        },
+        "enabled": { "type": "boolean", "default": true, "description": "Whether this endpoint is active." },
+        "tests": {
+          "type": "array",
+          "description": "Tests to validate this endpoint.",
+          "items": {
+            "type": "object",
+            "required": ["name", "arguments"],
+            "properties": {
+              "name": { "type": "string", "description": "Name of the test." },
+              "description": { "type": "string", "description": "What the test checks."  },
+              "arguments": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["key", "value"],
+                  "properties": {
+                    "key": { "type": "string", "description": "Input parameter to pass to test." },
+                    "value": { "description": "Value of the input parameter to test." }
+                  }
+                }
+              },
+              "result": { "description": "Expected result." }
+            }
+          }
+        }
+      }
+    },
+
+    "promptDefinition": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "description": "Logical name identifying this prompt." },
+        "description": { "type": "string", "description": "Description of this prompt." },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags to classify the prompt."
+        },
+        "parameters": {
+          "type": "array",
+          "description": "Input parameters used to populate the prompt.",
+          "items": { "$ref": "#/definitions/typeDefinition" }
+        },
+        "prompt_template": {
+          "type": "string",
+          "description": "The actual prompt string, optionally with template variables."
+        }
+      }
+    },
+
+    "typeDefinition": {
+      "type": "object",
+      "required": ["name", "type", "description"],
+      "properties": {
+        "name": { "type": "string", "description": "Parameter name." },
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "integer", "boolean", "array", "object"],
+          "description": "The data type of the parameter."
+        },
+        "description": { "type": "string", "description": "What this parameter represents." },
+        "default": { "description": "Optional default value if none is provided." },
+        "examples": {
+          "type": "array",
+          "description": "Example values for this parameter.",
+          "items": {}
+        },
+        "enum": {
+          "type": "array",
+          "description": "List of allowed values.",
+          "items": {}
+        },
+        "format": {
+          "type": "string",
+          "enum": ["email", "uri", "date", "time", "date-time", "duration", "timestamp"],
+          "description": "Expected format for string values."
+        },
+        "minLength": { "type": "integer", "minimum": 0, "description": "Minimum string length." },
+        "maxLength": { "type": "integer", "minimum": 0, "description": "Maximum string length." },
+        "minItems": { "type": "integer", "minimum": 0, "description": "Minimum number of array items." },
+        "maxItems": { "type": "integer", "minimum": 0, "description": "Maximum number of array items." },
+        "items": {
+          "$ref": "#/definitions/typeDefinition",
+          "description": "Schema for items if type is array."
+        },
+        "properties": {
+          "type": "object",
+          "description": "Schema for object properties if type is object.",
+          "additionalProperties": {
+            "$ref": "#/definitions/typeDefinition"
+          }
+        },
+        "required": {
+          "type": "array",
+          "description": "List of required fields if type is object.",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
