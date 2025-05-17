@@ -14,7 +14,7 @@ The goal is simple: clone a repo, run raw serve, and you are up and running — 
   - [dbt](#dbt)
   - [RAW CLI](#raw-cli)
 - [RAW Tool](#raw-tool)
-  - [~/.raw/config.yaml](#rawconfigyaml)
+  - [~/.raw/config.yml](#rawconfigyaml)
   - [Repository](#repository)
     - [Site Configuration](#site-configuration)
     - [Endpoint file](#endpoint-file)
@@ -64,7 +64,7 @@ Together, these components form a powerful yet simple architecture:
 └────────┘      └────────┘      └────────────┘
      ▲                                ▲
      │                                │
-  Git repo                    ~/.raw/config.yaml
+  Git repo                    ~/.raw/config.yml
                               + raw-site.yml
 ```
 
@@ -89,7 +89,7 @@ In the managed/SaaS model, RAW can take care of running dbt for the user on a sc
 ## RAW CLI
 
 RAW provides a CLI that:
-*	Reads project definitions (raw-site.yml) and secrets (~/.raw/config.yaml).
+*	Reads project definitions (raw-site.yml) and secrets (~/.raw/config.yml).
 *	Serves endpoints (raw serve) as an MCP-compatible HTTP interface.
 *	Validates endpoint definitions and tests them (raw validate, raw test).
 *	Integrates with dbt and Python seamlessly.
@@ -101,9 +101,9 @@ In the managed version, RAW simply wraps this exact toolchain in a Kubernetes-na
 
 ## RAW Tool
 
-### `~/.raw/config.yaml`
+### `~/.raw/config.yml`
 
-The RAW tool requires a config file in the user account (e.g. ~/.raw/config.yaml), which defines user profiles (including FDW database to use, DASes to use, and sources to use in each DAS). (The user can override its location by setting the `RAW_CONFIG` env var.)
+The RAW tool requires a config file in the user account (e.g. ~/.raw/config.yml), which defines user profiles (including FDW database to use, DASes to use, and sources to use in each DAS). (The user can override its location by setting the `RAW_CONFIG` env var.)
 
 An example of the configuration file:
 
@@ -163,13 +163,13 @@ The root of the repository must contain `raw-site.yml` such as:
 ```yaml
 raw: "1.0.0"  # (Mandatory): Version of the raw-site.yml format
 
-project: project_a         # (Mandatory): Name of the project in ~/.raw/config.yaml
+project: project_a         # (Mandatory): Name of the project in ~/.raw/config.yml
 profile: prod              # (Mandatory): Profile name under the project
 
 base_url: demo             # (Optional): Deployment base URL (used for endpoint publishing)
 enabled: true              # (Optional): Whether to enable this repo in CI/deploy flows
 
-secrets:                   # (Mandatory): List of secret names from ~/.raw/config.yaml
+secrets:                   # (Mandatory): List of secret names from ~/.raw/config.yml
   - my_s3_secret
   - my_azure_secret
 
@@ -403,7 +403,7 @@ This allows RAW endpoints to remain static, serializable, and directly usable in
 Description: Install the declared adapter packages via pip.
 
 Actions:
-*	Parse package strings from all adapters from ~/.raw/config.yaml.
+*	Parse package strings from all adapters from ~/.raw/config.yml.
 * Run pip install
 
 This is optional: users may prefer pin requirements in requirements.txt or poetry/pipenv and manage these separately.
@@ -414,7 +414,7 @@ Description: Lists all the endpoints (tools, resources, prompts) defined and cur
 
 Requirements:
 * A valid RAW repository (raw-site.yml must exist at repo root).
-*	Proper secrets and profile must be resolvable from ~/.raw/config.yaml.
+*	Proper secrets and profile must be resolvable from ~/.raw/config.yml.
 
 Actions:
 *	Locate the root directory of the repo (look upward for raw-site.yml).
@@ -657,7 +657,7 @@ Adapters are configured in the `raw-site.yml` file under the `adapters` section.
 
 - `name`: Logical name of the adapter instance. This becomes the DuckDB schema name.
 - `package`: Python module name of the adapter (must already be installed).
-- `config`: Name of the configuration block defined in `~/.raw/config.yaml`.
+- `config`: Name of the configuration block defined in `~/.raw/config.yml`.
 
 #### Example
 
@@ -674,7 +674,7 @@ adapters:
 
 ### Providing Configuration
 
-Each adapter can reference a named configuration object defined in the user’s profile in `~/.raw/config.yaml`. This configuration is passed as a dictionary to the adapter’s constructor at runtime.
+Each adapter can reference a named configuration object defined in the user’s profile in `~/.raw/config.yml`. This configuration is passed as a dictionary to the adapter’s constructor at runtime.
 
 #### Example
 
@@ -695,7 +695,7 @@ projects:
             API_KEY: vault://hubspot/api-key
 ```
 
-All configuration values must be strings. Environment variable resolution (`${ENV_VAR}`) and Vault resolution (`vault://...`) are supported as normally in `~/.raw/config.yaml`.
+All configuration values must be strings. Environment variable resolution (`${ENV_VAR}`) and Vault resolution (`vault://...`) are supported as normally in `~/.raw/config.yml`.
 
 ### Runtime Behavior
 
@@ -765,7 +765,7 @@ RAW is built on an opinionated yet modular integration of powerful open-source c
 DuckDB is the foundation of RAW's runtime. It acts as both the **query engine** and the **in-memory application host** — thanks to a custom **C++ extension** built by RAW.
 
 This extension (`raw.duckdb_extension`) is loaded automatically in every session and enables seamless integration between:
-* project-specific configuration (from `~/.raw/config.yaml`)
+* project-specific configuration (from `~/.raw/config.yml`)
 * repository-specific setup (`raw-site.yml`)
 * Python code (`init.py` bootstrap - see below)
 * secret management (see below)
@@ -776,7 +776,7 @@ This extension (`raw.duckdb_extension`) is loaded automatically in every session
 The RAW DuckDB extension must implement the following:
 
 1. **Secret Injection**
-  * On session start, resolve the `~/.raw/config.yaml` (or the path from the `RAW_CONFIG` env var).
+  * On session start, resolve the `~/.raw/config.yml` (or the path from the `RAW_CONFIG` env var).
   * Determine the current project/profile based on `raw-site.yml`.
   * Load the relevant secrets from config (supporting environment and Vault resolution).
   * Inject them into DuckDB as `CREATE TEMPORARY SECRET` so that DuckDB connectors can find them in the session.

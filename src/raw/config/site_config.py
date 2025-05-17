@@ -4,7 +4,7 @@ from jsonschema import validate, ValidationError
 from pathlib import Path
 from raw.config.types import SiteConfig
 
-def _apply_defaults(config: dict) -> dict:
+def _apply_defaults(config: dict, repo_root: Path) -> dict:
     """Apply default values to the config"""
     # Create a copy to avoid modifying the input
     config = config.copy()
@@ -17,9 +17,9 @@ def _apply_defaults(config: dict) -> dict:
         
     # DuckDB defaults
     if "duckdb" not in config:
-        config["duckdb"] = {"path": ":memory:"}
+        config["duckdb"] = {"path": str(repo_root / ".duckdb")}
     elif "path" not in config["duckdb"]:
-        config["duckdb"]["path"] = ":memory:"
+        config["duckdb"]["path"] = str(repo_root / ".duckdb")
         
     return config
 
@@ -43,7 +43,8 @@ def load_site_config(path=None) -> SiteConfig:
         config = yaml.safe_load(f)
         
     # Apply defaults before validation
-    config = _apply_defaults(config)
+    repo_root = path.parent
+    config = _apply_defaults(config, repo_root)
         
     # Load and apply JSON Schema validation
     schema_path = Path(__file__).parent / "schemas" / "raw-site-schema-1.0.0.json"

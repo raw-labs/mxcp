@@ -10,7 +10,7 @@
     },
     "project": {
       "type": "string",
-      "description": "Project name (must match one in ~/.raw/config.yaml)."
+      "description": "Project name (must match one in ~/.raw/config.yml)."
     },
     "profile": {
       "type": "string",
@@ -26,7 +26,7 @@
     },
     "secrets": {
       "type": "array",
-      "description": "List of secret names used by this repo (resolved from ~/.raw/config.yaml).",
+      "description": "List of secret names used by this repo (resolved from ~/.raw/config.yml).",
       "items": {
         "type": "string"
       }
@@ -40,7 +40,7 @@
         "properties": {
           "name": { "type": "string", "description": "Logical schema name" },
           "package": { "type": "string", "description": "Python package to import (must be installed beforehand)." },
-          "config": { "type": "string", "description": "Name of the adapter config entry in ~/.raw/config.yaml" }
+          "config": { "type": "string", "description": "Name of the adapter config entry in ~/.raw/config.yml" }
         },
         "additionalProperties": false
       }

@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=./src/raw/config/schemas/raw-site-schema-1.0.0.json
+raw: "1.0.0"
+project: test_project
+profile: test_profile
+secrets:
+  - http_auth_token

@@ -5,7 +5,7 @@ from raw.config.site_config import load_site_config
 from raw.config.user_config import load_user_config
 from raw.config.types import SiteConfig, UserConfig
 from raw.engine.secret_injection import inject_secrets
-from raw.engine.extension_loader import load_raw_extension
+from raw.engine.extension_loader import load_extensions
 from raw.engine.python_bootstrap import run_init_script
 
 class DuckDBSession:
@@ -50,8 +50,8 @@ class DuckDBSession:
         db_path = self.site_config["duckdb"]["path"]
         self.conn = duckdb.connect(db_path)
             
-        # Load RAW extension
-        load_raw_extension(self.conn)
+        # Load DuckDB extensions
+        load_extensions(self.conn)
         
         # Load Python bootstrap if configured
         run_init_script(self.conn, self.site_config)

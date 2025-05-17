@@ -39,7 +39,7 @@ def inject_secrets(con, site_config: SiteConfig, user_config: UserConfig, profil
             # Handle special case for HTTP headers
             if isinstance(value, dict):
                 value = str(value)  # Convert dict to string representation
-            params.append(f"{key}='{value}'")
+            params.append(f"{key} '{value}'")
             
         create_secret_sql = f"""
         CREATE TEMPORARY SECRET {secret['name']} (

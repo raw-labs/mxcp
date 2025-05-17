@@ -1,0 +1,13 @@
+raw: "1.0.0"
+projects:
+  test_project:
+    default: test_profile
+    profiles:
+      test_profile:
+        secrets:
+          - name: http_auth_token
+            type: http
+            parameters:
+              BEARER_TOKEN: "bearer_token"
+vault:
+  enabled: false 

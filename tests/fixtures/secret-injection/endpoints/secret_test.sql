@@ -1,0 +1,1 @@
+SELECT secret_string AS secret_value FROM duckdb_secrets() WHERE name = 'http_auth_token'; 

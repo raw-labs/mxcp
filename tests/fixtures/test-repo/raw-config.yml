@@ -1,0 +1,8 @@
+raw: "1.0.0"
+projects:
+  test_project:
+    default: test_profile
+    profiles:
+      test_profile: {}
+vault:
+  enabled: false 

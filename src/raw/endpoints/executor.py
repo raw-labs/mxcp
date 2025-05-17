@@ -67,11 +67,21 @@ class EndpointExecutor:
         self.endpoint: Optional[EndpointDefinition] = None
         self.session = DuckDBSession()
         
+    def _find_repo_root(self) -> Path:
+        """Find the repository root (where raw-site.yml is)"""
+        current = Path.cwd()
+        for parent in [current] + list(current.parents):
+            if (parent / "raw-site.yml").exists():
+                return parent
+        raise FileNotFoundError("raw-site.yml not found in current directory or any parent directory")
+
     def _load_endpoint(self):
         """Load the endpoint definition from YAML file"""
-        # Find endpoint file
-        endpoint_dir = Path("endpoints")
-        endpoint_file = endpoint_dir / f"{self.name}.yml"
+        # Find repository root
+        repo_root = self._find_repo_root()
+        
+        # Find endpoint file relative to repo root
+        endpoint_file = repo_root / "endpoints" / f"{self.name}.yml"
         
         if not endpoint_file.exists():
             raise FileNotFoundError(f"Endpoint file not found: {endpoint_file}")
@@ -141,8 +151,22 @@ class EndpointExecutor:
         if "code" in source:
             return source["code"]
         elif "file" in source:
-            path = Path(source["file"])
-            return path.read_text()
+            # Find repository root
+            repo_root = self._find_repo_root()
+            
+            # Get endpoint file location
+            endpoint_file = repo_root / "endpoints" / f"{self.name}.yml"
+            
+            # Resolve source file path
+            source_path = Path(source["file"])
+            if source_path.is_absolute():
+                # If absolute, resolve relative to repo root
+                full_path = repo_root / source_path.relative_to("/")
+            else:
+                # If relative, resolve relative to endpoint file
+                full_path = endpoint_file.parent / source_path
+            
+            return full_path.read_text()
         else:
             raise ValueError("No source code found in endpoint definition")
             

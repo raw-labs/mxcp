@@ -3,8 +3,6 @@ projects:
   test_project:
     default: test_profile
     profiles:
-      test_profile:
-        secrets: []
-        adapter_configs: {}
+      test_profile: {}
 vault:
   enabled: false 
