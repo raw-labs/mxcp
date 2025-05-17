@@ -2,8 +2,9 @@ import yaml
 import json
 from jsonschema import validate, ValidationError
 from pathlib import Path
+from raw.config.types import SiteConfig
 
-def load_site_config(path=None):
+def load_site_config(path=None) -> SiteConfig:
     if path:
         path = Path(path)
         if not path.exists():

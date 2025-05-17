@@ -3,8 +3,9 @@ import yaml
 from pathlib import Path
 import json
 from jsonschema import validate, ValidationError
+from raw.config.types import UserConfig
 
-def load_user_config():
+def load_user_config() -> UserConfig:
     path = Path(os.environ.get("RAW_CONFIG", Path.home() / ".raw" / "config.yaml"))
     if not path.exists():
         raise FileNotFoundError(f"RAW user config not found at {path}")
