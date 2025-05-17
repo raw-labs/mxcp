@@ -266,14 +266,17 @@
       "type": "object",
       "required": ["name", "type", "description"],
       "properties": {
-        "name": { "type": "string", "description": "Parameter name." },
-        "type": {
-          "type": "string",
-          "enum": ["string", "number", "integer", "boolean", "array", "object"],
-          "description": "The data type of the parameter."
+        "name": { 
+          "type": "string", 
+          "description": "Parameter name." 
         },
-        "description": { "type": "string", "description": "What this parameter represents." },
-        "default": { "description": "Optional default value if none is provided." },
+        "description": { 
+          "type": "string", 
+          "description": "What this parameter represents." 
+        },
+        "default": { 
+          "description": "Optional default value if none is provided." 
+        },
         "examples": {
           "type": "array",
           "description": "Example values for this parameter.",
@@ -283,33 +286,11 @@
           "type": "array",
           "description": "List of allowed values.",
           "items": {}
-        },
-        "format": {
-          "type": "string",
-          "enum": ["email", "uri", "date", "time", "date-time", "duration", "timestamp"],
-          "description": "Expected format for string values."
-        },
-        "minLength": { "type": "integer", "minimum": 0, "description": "Minimum string length." },
-        "maxLength": { "type": "integer", "minimum": 0, "description": "Maximum string length." },
-        "minItems": { "type": "integer", "minimum": 0, "description": "Minimum number of array items." },
-        "maxItems": { "type": "integer", "minimum": 0, "description": "Maximum number of array items." },
-        "items": {
-          "$ref": "#/definitions/typeDefinition",
-          "description": "Schema for items if type is array."
-        },
-        "properties": {
-          "type": "object",
-          "description": "Schema for object properties if type is object.",
-          "additionalProperties": {
-            "$ref": "#/definitions/typeDefinition"
-          }
-        },
-        "required": {
-          "type": "array",
-          "description": "List of required fields if type is object.",
-          "items": { "type": "string" }
         }
-      }
+      },
+      "allOf": [
+        { "$ref": "#/definitions/typeDefinition" }
+      ]
     },
 
     "typeDefinition": {
@@ -319,7 +300,32 @@
         "type": {
           "type": "string",
           "enum": ["string", "number", "integer", "boolean", "array", "object"],
-          "description": "The data type of the return value."
+          "description": "The data type of the value."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["email", "uri", "date", "time", "date-time", "duration", "timestamp"],
+          "description": "Expected format for string values."
+        },
+        "minLength": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Minimum string length." 
+        },
+        "maxLength": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Maximum string length." 
+        },
+        "minItems": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Minimum number of array items." 
+        },
+        "maxItems": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Maximum number of array items." 
         },
         "items": {
           "$ref": "#/definitions/typeDefinition",
