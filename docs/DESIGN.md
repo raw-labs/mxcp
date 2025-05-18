@@ -317,6 +317,9 @@ tool:
 
 These YAML files must conform to the following [schema](../src/raw/config/schemas/endpoint-schema-1.0.0.json).
 
+Within a parameter definition, if `default` is set, then the argument may is optional.
+The `required` field is not to be confused with `default`; instead, `required` (similarly to OpenAPI spec) is to define the inner fields that are required if the parameter is itself an object.
+
 The `cloud` section is ignored when running locally; it only applies to the managed/SaaS solution.
 
 ### Type System
