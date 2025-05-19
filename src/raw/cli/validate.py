@@ -6,7 +6,7 @@ from raw.config.user_config import load_user_config
 @click.command(name="validate")
 @click.argument("endpoint", required=False)
 @click.option("--profile", default=None)
-@click.option("--json", is_flag=True)
+@click.option("--json-output", is_flag=True, help="Output in JSON format")
 def validate(endpoint, profile, json):
     """Validate one or all endpoints"""
     config = load_site_config()
