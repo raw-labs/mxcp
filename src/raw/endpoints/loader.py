@@ -28,10 +28,10 @@ class EndpointLoader:
         self._site_config = site_config
         self._endpoints = {}
     
-    def discover_endpoints(self, base_path: Optional[Path] = None) -> List[tuple[Path, dict]]:
+    def discover_endpoints(self) -> List[tuple[Path, dict]]:
         """Discover all endpoint files and load their metadata, returning (file_path, endpoint_dict) tuples"""
-        if base_path is None:
-            base_path = Path.cwd()
+        # Always use repository root for finding endpoints
+        base_path = find_repo_root()
             
         endpoints = []
         schema_path = Path(__file__).parent / "schemas" / "endpoint-schema-1.0.0.json"

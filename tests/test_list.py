@@ -24,7 +24,7 @@ def test_config(test_repo_path):
         os.chdir(original_dir)
 
 def test_list_endpoints(test_repo_path, test_config):
-    """Test listing all endpoints"""
+    """Test listing all endpoints from root directory"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
@@ -32,50 +32,121 @@ def test_list_endpoints(test_repo_path, test_config):
         loader = EndpointLoader({})
         endpoints = loader.discover_endpoints()
         
-        # Verify we found all our test endpoints
-        assert len(endpoints) == 3  # tool1, resource1, prompt1
-        
         # Convert to dict for easier lookup
         endpoint_dict = {str(path): data for path, data in endpoints}
         
-        # Verify tool endpoint
-        tool_path = test_repo_path / "endpoints" / "tool1.yml"
-        assert str(tool_path) in endpoint_dict
-        tool_data = endpoint_dict[str(tool_path)]
-        assert "tool" in tool_data
-        assert tool_data["tool"]["name"] == "tool1"
+        # Verify we found all our test endpoints (including those in subfolder)
+        assert len(endpoints) == 5  # tool1, resource1, prompt1, tool2, prompt2
         
-        # Verify resource endpoint
-        resource_path = test_repo_path / "endpoints" / "resource1.yml"
-        assert str(resource_path) in endpoint_dict
-        resource_data = endpoint_dict[str(resource_path)]
-        assert "resource" in resource_data
-        assert resource_data["resource"]["name"] == "resource1"
+        # Verify root directory endpoints
+        tool1_path = test_repo_path / "endpoints" / "tool1.yml"
+        assert str(tool1_path) in endpoint_dict
+        tool1_data = endpoint_dict[str(tool1_path)]
+        assert "tool" in tool1_data
+        assert tool1_data["tool"]["name"] == "tool1"
         
-        # Verify prompt endpoint
-        prompt_path = test_repo_path / "endpoints" / "prompt1.yml"
-        assert str(prompt_path) in endpoint_dict
-        prompt_data = endpoint_dict[str(prompt_path)]
-        assert "prompt" in prompt_data
-        assert prompt_data["prompt"]["name"] == "prompt1"
+        resource1_path = test_repo_path / "endpoints" / "resource1.yml"
+        assert str(resource1_path) in endpoint_dict
+        resource1_data = endpoint_dict[str(resource1_path)]
+        assert "resource" in resource1_data
+        assert resource1_data["resource"]["name"] == "resource1"
         
-        # Verify prompt has proper message structure
-        messages = prompt_data["prompt"]["messages"]
+        prompt1_path = test_repo_path / "endpoints" / "prompt1.yml"
+        assert str(prompt1_path) in endpoint_dict
+        prompt1_data = endpoint_dict[str(prompt1_path)]
+        assert "prompt" in prompt1_data
+        assert prompt1_data["prompt"]["name"] == "prompt1"
+        
+        # Verify prompt1 has proper message structure
+        messages = prompt1_data["prompt"]["messages"]
         assert len(messages) == 2
         assert messages[0]["role"] == "system"
         assert messages[0]["type"] == "text"
         assert messages[1]["role"] == "user"
         assert messages[1]["type"] == "text"
         
+        # Verify subfolder endpoints
+        tool2_path = test_repo_path / "endpoints" / "subfolder" / "tool2.yml"
+        assert str(tool2_path) in endpoint_dict
+        tool2_data = endpoint_dict[str(tool2_path)]
+        assert "tool" in tool2_data
+        assert tool2_data["tool"]["name"] == "tool2"
+        assert "source" in tool2_data["tool"]
+        assert "code" in tool2_data["tool"]["source"]
+        
+        prompt2_path = test_repo_path / "endpoints" / "subfolder" / "prompt2.yml"
+        assert str(prompt2_path) in endpoint_dict
+        prompt2_data = endpoint_dict[str(prompt2_path)]
+        assert "prompt" in prompt2_data
+        assert prompt2_data["prompt"]["name"] == "prompt2"
+        
+        # Verify prompt2 has proper message structure
+        messages = prompt2_data["prompt"]["messages"]
+        assert len(messages) == 2
+        assert messages[0]["role"] == "system"
+        assert messages[0]["type"] == "text"
+        assert messages[0]["prompt"] == "You are a helpful assistant in a subfolder."
+        assert messages[1]["role"] == "user"
+        assert messages[1]["type"] == "text"
+        assert messages[1]["prompt"] == "{{message}}"
+    finally:
+        os.chdir(original_dir)
+
+def test_list_endpoints_from_subfolder(test_repo_path, test_config):
+    """Test listing endpoints from subfolder directory"""
+    original_dir = os.getcwd()
+    subfolder_path = test_repo_path / "endpoints" / "subfolder"
+    os.chdir(subfolder_path)
+    try:
+        # Create loader and discover endpoints
+        loader = EndpointLoader({})
+        endpoints = loader.discover_endpoints()
+        
+        # Convert to dict for easier lookup
+        endpoint_dict = {str(path): data for path, data in endpoints}
+        
+        # Should still find all endpoints, not just those in subfolder
+        assert len(endpoints) == 5  # tool1, resource1, prompt1, tool2, prompt2
+        
+        # Verify root directory endpoints are still accessible
+        tool1_path = test_repo_path / "endpoints" / "tool1.yml"
+        assert str(tool1_path) in endpoint_dict
+        tool1_data = endpoint_dict[str(tool1_path)]
+        assert "tool" in tool1_data
+        assert tool1_data["tool"]["name"] == "tool1"
+        
+        # Verify subfolder endpoints
+        tool2_path = test_repo_path / "endpoints" / "subfolder" / "tool2.yml"
+        assert str(tool2_path) in endpoint_dict
+        tool2_data = endpoint_dict[str(tool2_path)]
+        assert "tool" in tool2_data
+        assert tool2_data["tool"]["name"] == "tool2"
+        assert "source" in tool2_data["tool"]
+        assert "code" in tool2_data["tool"]["source"]
+        
+        prompt2_path = test_repo_path / "endpoints" / "subfolder" / "prompt2.yml"
+        assert str(prompt2_path) in endpoint_dict
+        prompt2_data = endpoint_dict[str(prompt2_path)]
+        assert "prompt" in prompt2_data
+        assert prompt2_data["prompt"]["name"] == "prompt2"
+        
+        # Verify prompt2 has proper message structure
+        messages = prompt2_data["prompt"]["messages"]
+        assert len(messages) == 2
+        assert messages[0]["role"] == "system"
+        assert messages[0]["type"] == "text"
+        assert messages[0]["prompt"] == "You are a helpful assistant in a subfolder."
+        assert messages[1]["role"] == "user"
+        assert messages[1]["type"] == "text"
+        assert messages[1]["prompt"] == "{{message}}"
     finally:
         os.chdir(original_dir)
 
 def test_list_endpoints_skips_config_files(test_repo_path, test_config):
-    """Test that list skips raw-site.yml and raw-config.yml"""
+    """Test that config files are not included in endpoint list"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        # Create loader and discover endpoints
         loader = EndpointLoader({})
         endpoints = loader.discover_endpoints()
         
@@ -88,6 +159,5 @@ def test_list_endpoints_skips_config_files(test_repo_path, test_config):
         
         assert str(site_config_path) not in endpoint_dict
         assert str(user_config_path) not in endpoint_dict
-        
     finally:
         os.chdir(original_dir) 
