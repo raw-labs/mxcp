@@ -1,0 +1,14 @@
+raw: "1.0.0"
+
+tool:
+  name: tool1
+  description: A simple test tool
+  parameters:
+    - name: input
+      type: string
+      description: Input parameter
+      minLength: 1
+      maxLength: 100 
+  source:
+    code: |
+      SELECT 1 as value
