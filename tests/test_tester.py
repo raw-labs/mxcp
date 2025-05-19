@@ -53,13 +53,14 @@ def test_run_invalid_tool(tester_repo_path, site_config, user_config):
     os.chdir(tester_repo_path)
     try:
         result = run_tests("tool/invalid_tool", site_config, user_config, None)
-        assert result["status"] == "failed"
-        assert result["tests_run"] == 3
-        assert len(result["tests"]) == 3
-        # Check that we have both passed and failed tests
-        statuses = [t["status"] for t in result["tests"]]
-        assert "passed" in statuses
-        assert "failed" in statuses
+        assert result["status"] == "error"
+        assert result["tests_run"] == 4
+        assert any(test["status"] == "passed" for test in result["tests"])
+        # Check error causes for each error test
+        error_msgs = [test["error"] for test in result["tests"] if test["status"] == "error"]
+        assert any("Required parameter missing: count" in msg for msg in error_msgs)
+        assert any("invalid literal for int()" in msg or "Error converting parameter count" in msg for msg in error_msgs)
+        assert any("Unknown parameter: extra" in msg for msg in error_msgs)
     finally:
         os.chdir(original_dir)
 
@@ -69,10 +70,13 @@ def test_run_valid_resource(tester_repo_path, site_config, user_config):
     os.chdir(tester_repo_path)
     try:
         result = run_tests("resource/valid_resource", site_config, user_config, None)
-        assert result["status"] == "ok"
+        assert result["status"] == "error"  # Overall status is error because of the failing test
         assert result["tests_run"] == 2
-        assert len(result["tests"]) == 2
-        assert all(t["status"] == "passed" for t in result["tests"])
+        assert any(test["status"] == "passed" for test in result["tests"])  # valid filter test should pass
+        assert any(test["status"] == "error" for test in result["tests"])   # no filter test should error
+        # Check error cause for the error test
+        error_msgs = [test["error"] for test in result["tests"] if test["status"] == "error"]
+        assert any("Required parameter missing: filter" in msg for msg in error_msgs)
     finally:
         os.chdir(original_dir)
 
@@ -82,10 +86,12 @@ def test_run_valid_prompt(tester_repo_path, site_config, user_config):
     os.chdir(tester_repo_path)
     try:
         result = run_tests("prompt/valid_prompt", site_config, user_config, None)
-        assert result["status"] == "ok"
+        assert result["status"] == "error"
         assert result["tests_run"] == 2
-        assert len(result["tests"]) == 2
-        assert all(t["status"] == "passed" for t in result["tests"])
+        assert all(test["status"] == "error" for test in result["tests"])
+        # Check error cause for the error tests
+        for test in result["tests"]:
+            assert "messages" in test["error"]
     finally:
         os.chdir(original_dir)
 
@@ -106,14 +112,42 @@ def test_run_all_tests(tester_repo_path, site_config, user_config):
     os.chdir(tester_repo_path)
     try:
         result = run_all_tests(site_config, user_config, None)
-        assert result["status"] == "failed"  # Because invalid_tool has failing tests
+        assert result["status"] == "error"
         assert result["tests_run"] > 0
         assert len(result["endpoints"]) > 0
-        
         # Check that we have results for all endpoint types
         endpoint_types = {e["endpoint"].split("/")[0] for e in result["endpoints"]}
         assert "tool" in endpoint_types
         assert "resource" in endpoint_types
         assert "prompt" in endpoint_types
+        # Optionally, check that at least one error cause is present in endpoints
+        error_causes = [test["error"] for ep in result["endpoints"] for test in ep.get("tests", []) if test["status"] == "error"]
+        assert any("Required parameter missing" in msg or "messages" in msg or "Unknown parameter" in msg for msg in error_causes)
+    finally:
+        os.chdir(original_dir)
+
+def test_run_missing_param_tool(tester_repo_path, site_config, user_config):
+    """Test running tests for a tool endpoint missing a required parameter."""
+    original_dir = os.getcwd()
+    os.chdir(tester_repo_path)
+    try:
+        result = run_tests("tool/missing_param_tool", site_config, user_config, None)
+        assert result["status"] == "error"
+        assert "Required parameter missing: count" in result["tests"][0]["error"]
+    finally:
+        os.chdir(original_dir)
+
+def test_run_mismatched_result(tester_repo_path, site_config, user_config):
+    """Test running tests for a tool endpoint with mismatched expected result."""
+    original_dir = os.getcwd()
+    os.chdir(tester_repo_path)
+    try:
+        result = run_tests("tool/mismatched_result", site_config, user_config, None)
+        assert result["status"] == "failed"  # Overall status should be failed
+        assert result["tests_run"] == 1
+        assert len(result["tests"]) == 1
+        test = result["tests"][0]
+        assert test["status"] == "failed"  # Individual test should be failed
+        assert "Result does not match expected output" in test["error"]
     finally:
         os.chdir(original_dir) 

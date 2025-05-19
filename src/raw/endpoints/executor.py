@@ -174,6 +174,15 @@ class EndpointExecutor:
         """Get the source code for the endpoint"""
         if not self.endpoint:
             raise RuntimeError("Endpoint not loaded")
+        
+        # For test fixtures with inline code, use that directly
+        endpoint_type_value = self.endpoint_type.value
+        if endpoint_type_value in self.endpoint and "source" in self.endpoint[endpoint_type_value]:
+            source = self.endpoint[endpoint_type_value]["source"]
+            if "code" in source:
+                return source["code"]
+                
+        # Otherwise, try to load from file
         # Find repository root and endpoint file path
         repo_root = find_repo_root()
         endpoint_file = repo_root / "endpoints" / f"{self.name}.yml"
@@ -181,8 +190,9 @@ class EndpointExecutor:
             
     def execute(self, params: Dict[str, Any]) -> Any:
         """Execute the endpoint with given parameters"""
-        # Load endpoint definition
-        self._load_endpoint()
+        # Load endpoint definition if not already loaded
+        if self.endpoint is None:
+            self._load_endpoint()
         
         # Apply default values
         params = self._apply_defaults(params)

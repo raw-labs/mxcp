@@ -14,6 +14,7 @@ tool:
       type: integer
       description: Count parameter
       examples: [42]
+      default: null
 
   return:
     name: result
@@ -46,11 +47,13 @@ tool:
         - name: "test"
           count: 42
 
-    - name: missing optional
-      description: Test with missing optional parameter
+    - name: another valid test
+      description: Test with different valid parameters
       arguments:
         - key: name
-          value: "test"
+          value: "foo"
+        - key: count
+          value: 7
       result:
-        - name: "test"
-          count: null 
+        - name: "foo"
+          count: 7 

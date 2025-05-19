@@ -35,6 +35,17 @@ tool:
       FROM (VALUES (1)) t
 
   tests:
+    - name: valid test
+      description: Test with valid parameters
+      arguments:
+        - key: name
+          value: "test"
+        - key: count
+          value: 42
+      result:
+        - name: "test"
+          count: 42
+
     - name: missing required
       description: Test with missing required parameter
       arguments:
@@ -42,7 +53,7 @@ tool:
           value: "test"
       result:
         - name: "test"
-          count: null
+          count: 999
 
     - name: wrong type
       description: Test with wrong parameter type
@@ -53,7 +64,7 @@ tool:
           value: "not a number"
       result:
         - name: "123"
-          count: 0
+          count: 999
 
     - name: extra parameter
       description: Test with extra parameter
@@ -66,4 +77,4 @@ tool:
           value: "extra"
       result:
         - name: "test"
-          count: 42 
+          count: 999 
