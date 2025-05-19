@@ -1,8 +1,10 @@
+import os
 import yaml
 import json
 from jsonschema import validate, ValidationError
 from pathlib import Path
-from raw.config.types import SiteConfig
+from raw.config.types import SiteConfig, UserConfig
+from typing import Optional, Dict, Any
 
 def find_repo_root() -> Path:
     """Find the repository root by looking for raw-site.yml.
@@ -38,30 +40,57 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
         
     return config
 
-def load_site_config(path=None) -> SiteConfig:
-    if path:
-        path = Path(path)
-        if not path.exists():
-            raise FileNotFoundError(f"{path} not found.")
-    else:
-        # Find repo root and raw-site.yml
-        repo_root = find_repo_root()
-        path = repo_root / "raw-site.yml"
-
-    with open(path) as f:
+def load_site_config(repo_path: Optional[Path] = None) -> Dict[str, Any]:
+    """Load and validate the raw-site.yml configuration from the repository.
+    
+    Args:
+        repo_path: Optional path to the repository root. If not provided, uses current directory.
+        
+    Returns:
+        The validated site configuration
+    """
+    if repo_path is None:
+        repo_path = Path.cwd()
+    
+    config_path = repo_path / "raw-site.yml"
+    if not config_path.exists():
+        raise FileNotFoundError(f"raw-site.yml not found at {config_path}")
+    
+    with open(config_path) as f:
         config = yaml.safe_load(f)
-        
-    # Apply defaults before validation
-    repo_root = path.parent
-    config = _apply_defaults(config, repo_root)
-        
+    
     # Load and apply JSON Schema validation
     schema_path = Path(__file__).parent / "schemas" / "raw-site-schema-1.0.0.json"
     with open(schema_path) as schema_file:
         schema = json.load(schema_file)
-
+    
     try:
         validate(instance=config, schema=schema)
     except ValidationError as e:
         raise ValueError(f"Site config validation error: {e.message}")
+    
+    # Apply defaults (e.g., duckdb.path)
+    config = _apply_defaults(config, repo_path)
     return config
+
+def get_active_profile(user_config: UserConfig, site_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Get the active profile from the user config based on site configuration.
+    
+    Args:
+        user_config: The user configuration loaded from ~/.raw/config.yml
+        site_config: The site configuration loaded from raw-site.yml
+        
+    Returns:
+        The active profile configuration
+    """
+    project_name = site_config["project"]
+    profile_name = site_config["profile"]
+    
+    if project_name not in user_config["projects"]:
+        raise ValueError(f"Project '{project_name}' not found in user config")
+    
+    project = user_config["projects"][project_name]
+    if profile_name not in project["profiles"]:
+        raise ValueError(f"Profile '{profile_name}' not found in project '{project_name}'")
+    
+    return project["profiles"][profile_name]

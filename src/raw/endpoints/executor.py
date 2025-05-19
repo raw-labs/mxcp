@@ -5,6 +5,7 @@ import duckdb
 import yaml
 from datetime import datetime
 import json
+from jinja2 import Template
 from raw.endpoints.types import EndpointDefinition
 from raw.engine.duckdb_session import DuckDBSession
 from raw.endpoints.loader import find_repo_root
@@ -115,7 +116,8 @@ class EndpointExecutor:
         
         # Check required parameters
         for param in param_defs:
-            if param.get("required", False) and param["name"] not in params:
+            # A parameter is required if it does not have a default value
+            if "default" not in param and param["name"] not in params:
                 raise ValueError(f"Required parameter missing: {param['name']}")
                 
         # Validate and convert each parameter
@@ -149,6 +151,25 @@ class EndpointExecutor:
                 if "maxLength" in param_def and len(value) > param_def["maxLength"]:
                     raise ValueError(f"String {name} is too long")
         
+    def _apply_defaults(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply default values from parameter definitions"""
+        if not self.endpoint:
+            raise RuntimeError("Endpoint not loaded")
+            
+        endpoint_def = self.endpoint[self.endpoint_type.value]
+        param_defs = endpoint_def.get("parameters", [])
+        
+        # Create a copy of params to avoid modifying the input
+        result = params.copy()
+        
+        # Apply defaults for missing parameters
+        for param in param_defs:
+            name = param["name"]
+            if name not in result and "default" in param:
+                result[name] = param["default"]
+                
+        return result
+            
     def _get_source_code(self) -> str:
         """Get the source code for the endpoint"""
         if not self.endpoint:
@@ -163,6 +184,9 @@ class EndpointExecutor:
         # Load endpoint definition
         self._load_endpoint()
         
+        # Apply default values
+        params = self._apply_defaults(params)
+        
         # Validate parameters
         self._validate_parameters(params)
         
@@ -170,24 +194,51 @@ class EndpointExecutor:
         conn = self.session.connect()
         
         try:
-            # Get source code
-            source = self._get_source_code()
-            
-            # Execute the endpoint
             if self.endpoint_type == EndpointType.TOOL:
                 # For tools, we execute SQL and return results
+                source = self._get_source_code()
+                
+                # Check for missing parameters in SQL
+                required_params = duckdb.extract_statements(source)[0].named_parameters
+                missing_params = set(required_params) - set(params.keys())
+                if missing_params:
+                    raise ValueError(f"Required parameter missing: {', '.join(missing_params)}")
+                
                 result = conn.execute(source, params).fetchall()
                 return result
                 
             elif self.endpoint_type == EndpointType.RESOURCE:
                 # For resources, we execute SQL and return the resource
+                source = self._get_source_code()
+                
+                # Check for missing parameters in SQL
+                required_params = duckdb.extract_statements(source)[0].named_parameters
+                missing_params = set(required_params) - set(params.keys())
+                if missing_params:
+                    raise ValueError(f"Required parameter missing: {', '.join(missing_params)}")
+                
                 result = conn.execute(source, params).fetchall()
                 return result
                 
             else:  # PROMPT
-                # For prompts, we execute SQL and return the prompt result
-                result = conn.execute(source, params).fetchall()
-                return result
+                # For prompts, we process each message through Jinja2 templating
+                prompt_def = self.endpoint["prompt"]
+                messages = prompt_def["messages"]
+                
+                processed_messages = []
+                for msg in messages:
+                    template = Template(msg["prompt"])
+                    processed_prompt = template.render(**params)
+                    
+                    processed_msg = {
+                        "prompt": processed_prompt,
+                        "role": msg.get("role"),
+                        "type": msg.get("type")
+                    }
+                    processed_messages.append(processed_msg)
+                
+                # Return as a list of tuples to match other endpoint types
+                return [(processed_messages,)]
                 
         finally:
             self.session.close()

@@ -255,9 +255,28 @@
           "description": "Input parameters used to populate the prompt.",
           "items": { "$ref": "#/definitions/paramDefinition" }
         },
-        "prompt_template": {
-          "type": "string",
-          "description": "The actual prompt string, optionally with template variables."
+        "messages": {
+          "type": "array",
+          "description": "List of structured prompt messages forming the full prompt sequence.",
+          "items": {
+            "type": "object",
+            "required": ["prompt"],
+            "properties": {
+              "role": {
+                "type": "string",
+                "description": "The role of the speaker of the message (e.g. 'user', 'assistant', 'system')."
+              },
+              "type": {
+                "type": "string",
+                "description": "The content type of the message (e.g. 'text')."
+              },
+              "prompt": {
+                "type": "string",
+                "description": "The templated prompt text (supports Jinja syntax)."
+              }
+            },
+            "additionalProperties": false
+          }
         }
       }
     },

@@ -9,14 +9,12 @@ tool:
     - name: name
       type: string
       description: User's name
-      required: true
       minLength: 1
       maxLength: 100
       examples: ["John Doe"]
     - name: age
       type: integer
       description: User's age
-      required: true
       minimum: 0
       maximum: 150
       examples: [25]

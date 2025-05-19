@@ -66,14 +66,18 @@ class ResourceDefinition(TypedDict):
     enabled: Optional[bool]
     tests: Optional[List[TestDefinition]]
 
+class PromptMessage(TypedDict):
+    prompt: str
+    role: Optional[str]
+    type: Optional[str]
+
 class PromptDefinition(TypedDict):
     name: str
     description: Optional[str]
     tags: Optional[List[str]]
     parameters: Optional[List[ParamDefinition]]
     return_: Optional[TypeDefinition]
-    language: Optional[Literal["sql"]]
-    source: SourceDefinition
+    messages: List[PromptMessage]
     enabled: Optional[bool]
     tests: Optional[List[TestDefinition]]
 

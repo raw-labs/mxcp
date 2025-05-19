@@ -8,13 +8,11 @@ tool:
     - name: name
       type: string
       description: Name parameter
-      required: true
       examples: ["test"]
 
     - name: count
       type: integer
       description: Count parameter
-      required: true
       examples: [42]
 
   return:
