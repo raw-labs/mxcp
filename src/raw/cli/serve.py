@@ -1,28 +1,34 @@
 import click
+import asyncio
 from typing import Dict, Any, Optional
 from raw.endpoints.executor import execute_endpoint, EndpointType
-import uvicorn
-from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-
-app = FastAPI(title="RAW Endpoints")
+from raw.server.mcp import RAWMCP
 
 class EndpointRequest(BaseModel):
     params: Dict[str, Any] = {}
 
-@app.post("/{endpoint_type}/{name}")
-async def run_endpoint(endpoint_type: str, name: str, request: EndpointRequest):
-    try:
-        result = execute_endpoint(endpoint_type, name, request.params)
-        return {"result": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @click.command(name="serve")
-@click.option("--host", default="127.0.0.1", help="Host to bind to")
-@click.option("--port", default=8000, help="Port to bind to")
-@click.option("--profile", help="Profile name to use")
-def serve_endpoints(host: str, port: int, profile: Optional[str]):
-    """Start a server for running endpoints"""
-    click.echo(f"Starting server at http://{host}:{port}")
-    uvicorn.run(app, host=host, port=port)
+@click.option("--profile", help="Profile name to use for configuration")
+@click.option("--transport", type=click.Choice(["http", "stdio"]), default="http", help="Transport protocol to use (http or stdio)")
+@click.option("--port", type=int, default=8000, help="Port number to use for HTTP transport (default: 8000)")
+def serve(profile: Optional[str], transport: str, port: int):
+    """Start the RAW MCP server to expose endpoints via HTTP or stdio.
+    
+    This command starts a server that exposes your RAW endpoints as an MCP-compatible
+    interface. By default, it runs an HTTP server on port 8000, but can also use stdio
+    for integration with other tools.
+    
+    Examples:
+        raw serve                    # Start HTTP server on default port 8000
+        raw serve --port 9000       # Start HTTP server on port 9000
+        raw serve --transport stdio # Use stdio transport instead of HTTP
+        raw serve --profile dev     # Use the 'dev' profile configuration
+    """
+    try:
+        # Create and run MCP server
+        server = RAWMCP(profile=profile)
+        asyncio.run(server.run(transport=transport, port=port))
+    except Exception as e:
+        click.echo(f"Error starting server: {e}", err=True)
+        raise click.Abort()

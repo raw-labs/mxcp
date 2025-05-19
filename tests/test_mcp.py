@@ -1,0 +1,209 @@
+import os
+import pytest
+import asyncio
+import aiohttp
+from pathlib import Path
+from raw.server.mcp import RAWMCP
+from raw.endpoints.executor import EndpointType
+import json
+from unittest.mock import Mock, patch, AsyncMock
+import time
+
+@pytest.fixture(scope="session", autouse=True)
+def set_raw_config_env():
+    os.environ["RAW_CONFIG"] = str(Path(__file__).parent / "fixtures" / "mcp" / "raw-config.yml")
+
+@pytest.fixture
+def mcp_repo_path():
+    return Path(__file__).parent / "fixtures" / "mcp"
+
+@pytest.fixture(autouse=True)
+def change_to_mcp_repo(mcp_repo_path):
+    original_dir = os.getcwd()
+    os.chdir(mcp_repo_path)
+    try:
+        yield
+    finally:
+        os.chdir(original_dir)
+
+@pytest.fixture
+def mcp_server():
+    """Create a RAWMCP instance for testing."""
+    return RAWMCP(stateless_http=True, json_response=True, host="localhost", port=8000)
+
+@pytest.fixture
+async def http_server(mcp_server):
+    """Create a running HTTP server for testing."""
+    transport = "streamable-http"
+    server_task = asyncio.create_task(mcp_server.run(transport=transport))
+    await asyncio.sleep(1)  # Give server time to start
+    yield mcp_server
+    server_task.cancel()
+    try:
+        await server_task
+    except asyncio.CancelledError:
+        pass
+
+@pytest.fixture
+def mock_endpoint():
+    """Create a mock endpoint definition."""
+    return {
+        "name": "test_tool",
+        "parameters": [
+            {"name": "str_param", "type": "string"},
+            {"name": "int_param", "type": "integer"},
+            {"name": "bool_param", "type": "boolean"},
+            {"name": "array_param", "type": "array"},
+            {"name": "object_param", "type": "object"}
+        ]
+    }
+
+def test_convert_param_type_string(mcp_server):
+    """Test converting parameters to string type."""
+    assert mcp_server._convert_param_type(123, "string") == "123"
+    assert mcp_server._convert_param_type(True, "string") == "True"
+    assert mcp_server._convert_param_type("test", "string") == "test"
+
+def test_convert_param_type_integer(mcp_server):
+    """Test converting parameters to integer type."""
+    assert mcp_server._convert_param_type("123", "integer") == 123
+    assert mcp_server._convert_param_type(123, "integer") == 123
+    with pytest.raises(ValueError):
+        mcp_server._convert_param_type("not_a_number", "integer")
+
+def test_convert_param_type_boolean(mcp_server):
+    """Test converting parameters to boolean type."""
+    assert mcp_server._convert_param_type("true", "boolean") is True
+    assert mcp_server._convert_param_type("false", "boolean") is False
+    assert mcp_server._convert_param_type(True, "boolean") is True
+    assert mcp_server._convert_param_type(False, "boolean") is False
+
+def test_convert_param_type_array(mcp_server):
+    """Test converting parameters to array type."""
+    test_array = [1, 2, 3]
+    assert mcp_server._convert_param_type(json.dumps(test_array), "array") == test_array
+    assert mcp_server._convert_param_type(test_array, "array") == test_array
+    with pytest.raises(ValueError):
+        mcp_server._convert_param_type("invalid_json", "array")
+
+def test_convert_param_type_object(mcp_server):
+    """Test converting parameters to object type."""
+    test_obj = {"key": "value"}
+    assert mcp_server._convert_param_type(json.dumps(test_obj), "object") == test_obj
+    assert mcp_server._convert_param_type(test_obj, "object") == test_obj
+    with pytest.raises(ValueError):
+        mcp_server._convert_param_type("invalid_json", "object")
+
+@pytest.mark.asyncio
+def test_register_tool(mcp_server, mock_endpoint):
+    """Test registering a tool endpoint."""
+    with patch.object(mcp_server.mcp, 'tool', return_value=lambda f: f):
+        mcp_server._register_tool(mock_endpoint)
+
+@pytest.mark.asyncio
+def test_register_resource(mcp_server):
+    """Test registering a resource endpoint."""
+    resource_def = {
+        "uri": "resource://test/resource",
+        "parameters": [
+            {"name": "param1", "type": "string"}
+        ]
+    }
+    with patch.object(mcp_server.mcp, 'resource', return_value=lambda f: f):
+        mcp_server._register_resource(resource_def)
+
+@pytest.mark.asyncio
+def test_register_prompt(mcp_server, mock_endpoint):
+    """Test registering a prompt endpoint."""
+    with patch.object(mcp_server.mcp, 'prompt', return_value=lambda f: f):
+        mcp_server._register_prompt(mock_endpoint)
+
+@pytest.mark.asyncio
+async def test_run_http(mcp_server):
+    """Test running the server with HTTP transport."""
+    with patch.object(mcp_server.mcp, 'run', new_callable=AsyncMock) as mock_run:
+        await mcp_server.run(transport="streamable-http")
+        mock_run.assert_called_once_with(transport="streamable-http")
+
+@pytest.mark.asyncio
+async def test_run_stdio(mcp_server):
+    """Test running the server with stdio transport."""
+    with patch.object(mcp_server.mcp, 'run', new_callable=AsyncMock) as mock_run:
+        await mcp_server.run(transport="stdio")
+        mock_run.assert_called_once_with(transport="stdio")
+
+@pytest.mark.asyncio
+async def test_invalid_transport(mcp_server):
+    """Test running with invalid transport."""
+    with pytest.raises(ValueError, match="Unknown transport: invalid"):
+        await mcp_server.run(transport="invalid")
+
+@pytest.mark.asyncio
+async def test_parameter_conversion(mcp_server):
+    """Test parameter type conversion."""
+    # Test string conversion
+    assert mcp_server._convert_param_type("123", "string") == "123"
+    
+    # Test integer conversion
+    assert mcp_server._convert_param_type("123", "integer") == 123
+    
+    # Test boolean conversion
+    assert mcp_server._convert_param_type("true", "boolean") is True
+    assert mcp_server._convert_param_type("false", "boolean") is False
+    
+    # Test array conversion
+    assert mcp_server._convert_param_type('["a", "b"]', "array") == ["a", "b"]
+    
+    # Test object conversion
+    assert mcp_server._convert_param_type('{"key": "value"}', "object") == {"key": "value"}
+    
+    # Test invalid conversions
+    with pytest.raises(ValueError):
+        mcp_server._convert_param_type("not_a_number", "integer")
+    
+    with pytest.raises(ValueError):
+        mcp_server._convert_param_type("not_json", "array")
+
+@pytest.mark.asyncio
+async def test_endpoint_registration(mcp_server):
+    """Test endpoint registration."""
+    # Register endpoints
+    mcp_server.register_endpoints()
+    
+    # Verify endpoints were registered
+    # Note: This is a basic test - we'll need more comprehensive tests
+    # that verify the actual MCP server behavior
+    assert len(mcp_server.endpoints) > 0
+
+@pytest.mark.asyncio
+async def test_server_transport(mcp_server):
+    """Test server transport options."""
+    # Test invalid transport
+    with pytest.raises(ValueError, match="Unknown transport: invalid"):
+        await mcp_server.run(transport="invalid")
+    
+    # Test HTTP transport
+    with patch.object(mcp_server.mcp, 'run', new_callable=AsyncMock) as mock_run:
+        await mcp_server.run(transport="streamable-http")
+        mock_run.assert_called_once_with(transport="streamable-http")
+
+@pytest.mark.skip(reason="Incompatible with pytest-asyncio event loop; should be run in a subprocess or integration test harness. TODO: Refactor to subprocess-based integration test.")
+@pytest.mark.asyncio
+async def test_server_lifecycle(http_server):
+    """Test server startup and shutdown."""
+    # Test server is running
+    async with aiohttp.ClientSession() as session:
+        async with session.get("http://localhost:8000/health") as response:
+            assert response.status == 200
+            data = await response.json()
+            assert data["status"] == "ok"
+
+@pytest.mark.skip(reason="Incompatible with pytest-asyncio event loop; should be run in a subprocess or integration test harness. TODO: Refactor to subprocess-based integration test.")
+@pytest.mark.asyncio
+async def test_server_shutdown(http_server):
+    """Test server shutdown."""
+    # Verify server is running
+    async with aiohttp.ClientSession() as session:
+        async with session.get("http://localhost:8000/health") as response:
+            assert response.status == 200
+    # Server will be shut down by fixture cleanup 
