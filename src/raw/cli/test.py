@@ -51,8 +51,8 @@ def format_test_results(results):
 @click.command(name="test")
 @click.argument("endpoint", required=False)
 @click.option("--profile", default=None)
-@click.option("--json", is_flag=True)
-def test(endpoint, profile, json):
+@click.option("--json-output", is_flag=True, help="Output in JSON format")
+def test(endpoint, profile, json_output: bool):
     """Run endpoint tests"""
     config = load_site_config()
     user = load_user_config()
@@ -61,7 +61,7 @@ def test(endpoint, profile, json):
     else:
         results = run_all_tests(config, user, profile)
         
-    if json:
+    if json_output:
         print(json.dumps(results, indent=2))
     else:
         print(format_test_results(results))
