@@ -1,0 +1,47 @@
+raw: "1.0.0"
+
+tool:
+  name: mismatched_result
+  enabled: true
+
+  parameters:
+    - name: name
+      type: string
+      description: Name parameter
+      examples: ["test"]
+
+    - name: count
+      type: integer
+      description: Count parameter
+      examples: [42]
+
+  return:
+    name: result
+    type: array
+    description: List of results
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+
+  source:
+    code: |
+      SELECT 
+        $name as name,
+        $count as count
+      FROM (VALUES (1)) t
+
+  tests:
+    - name: mismatched result
+      description: Test with mismatched expected result
+      arguments:
+        - key: name
+          value: "test"
+        - key: count
+          value: 42
+      result:
+        - name: "test"
+          count: 999  # This will not match the actual result of 42 

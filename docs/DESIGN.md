@@ -770,7 +770,8 @@ DuckDB is the foundation of RAW's runtime. It acts as both the **query engine** 
 This extension (`raw.duckdb_extension`) is loaded automatically in every session and enables seamless integration between:
 * project-specific configuration (from `~/.raw/config.yml`)
 * repository-specific setup (`raw-site.yml`)
-* Python code (`init.py` bootstrap - see below)
+* Python adapters
+* Python bootstrap (`init.py`- see below)
 * secret management (see below)
 * ... as to provide a complete environment for execution in SQL.
 

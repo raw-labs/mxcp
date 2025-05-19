@@ -1,0 +1,25 @@
+raw: "1.0.0"
+
+prompt:
+  name: greeting_prompt
+  description: A prompt that generates personalized greetings
+  parameters:
+    - name: name
+      type: string
+      description: Name to greet
+      minLength: 1
+      maxLength: 50
+    - name: time_of_day
+      type: string
+      description: Time of day for greeting
+      enum: ["morning", "afternoon", "evening"]
+      default: "morning"
+  messages:
+    - role: "system"
+      type: "text"
+      prompt: "You are a friendly greeter."
+    - role: "user"
+      type: "text"
+      prompt: |
+        Good {{time_of_day}}, {{name}}! 
+        I hope you're having a wonderful {{time_of_day}}. 
