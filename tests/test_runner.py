@@ -210,4 +210,45 @@ def test_greeting_prompt_missing_required_param(test_repo_path, test_config, tes
             run_endpoint(endpoint_type, name, args, test_config, "test", test_profile)
         assert "Required parameter missing" in str(exc_info.value)
     finally:
+        os.chdir(original_dir)
+
+def test_valid_prompt_success(test_repo_path, test_config, test_profile):
+    """Test successful execution of a valid prompt endpoint"""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        endpoint_type = "prompt"
+        name = "valid_prompt"
+        args = {"topic": "quantum computing", "expertise_level": "intermediate"}
+        result = run_endpoint(endpoint_type, name, args, test_config, "test", test_profile)
+        assert len(result) == 1
+        messages = result[0][0]  # Access first tuple element
+        assert len(messages) == 2
+        # Verify system message
+        assert messages[0]["role"] == "system"
+        assert messages[0]["type"] == "text"
+        assert messages[0]["prompt"] == "You are a knowledgeable teacher who adapts explanations to the audience's expertise level."
+        # Verify user message
+        assert messages[1]["role"] == "user"
+        assert messages[1]["type"] == "text"
+        assert "quantum computing" in messages[1]["prompt"]
+        assert "intermediate" in messages[1]["prompt"]
+    finally:
+        os.chdir(original_dir)
+
+def test_valid_prompt_default_value(test_repo_path, test_config, test_profile):
+    """Test prompt execution with default expertise_level value"""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        endpoint_type = "prompt"
+        name = "valid_prompt"
+        args = {"topic": "machine learning"}  # expertise_level defaults to "beginner"
+        result = run_endpoint(endpoint_type, name, args, test_config, "test", test_profile)
+        assert len(result) == 1
+        messages = result[0][0]  # Access first tuple element
+        assert len(messages) == 2
+        assert "machine learning" in messages[1]["prompt"]
+        assert "beginner" in messages[1]["prompt"]
+    finally:
         os.chdir(original_dir) 
