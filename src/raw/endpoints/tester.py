@@ -134,8 +134,8 @@ def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteConfig, p
             logger.info(f"Expected result: {expected_result}")
             
             try:
-                # Use the proper execute_endpoint function
-                result = execute_endpoint(endpoint_type, name, params, user_config, site_config)
+                # Use the proper execute_endpoint function with profile
+                result = execute_endpoint(endpoint_type, name, params, user_config, site_config, profile)
                 logger.info(f"Execution result: {result}")
                 
                 # Normalize result for comparison

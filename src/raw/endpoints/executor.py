@@ -80,11 +80,20 @@ class TypeConverter:
         return value
 
 class EndpointExecutor:
-    def __init__(self, endpoint_type: EndpointType, name: str, user_config: UserConfig, site_config: SiteConfig):
+    def __init__(self, endpoint_type: EndpointType, name: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None):
+        """Initialize the endpoint executor.
+        
+        Args:
+            endpoint_type: The type of endpoint (tool, resource, or prompt)
+            name: The name of the endpoint
+            user_config: The user configuration
+            site_config: The site configuration
+            profile: Optional profile name to override the default profile
+        """
         self.endpoint_type = endpoint_type
         self.name = name
         self.endpoint: Optional[EndpointDefinition] = None
-        self.session = DuckDBSession(user_config, site_config)
+        self.session = DuckDBSession(user_config, site_config, profile)
         
     def _load_endpoint(self):
         """Load the endpoint definition from YAML file"""
@@ -255,12 +264,12 @@ class EndpointExecutor:
         finally:
             self.session.close()
             
-def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig) -> Any:
+def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None) -> Any:
     """Execute an endpoint by type and name"""
     try:
         endpoint_type_enum = EndpointType(endpoint_type.lower())
     except ValueError:
         raise ValueError(f"Invalid endpoint type: {endpoint_type}. Must be one of: {', '.join(t.value for t in EndpointType)}")
         
-    executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config)
+    executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config, profile)
     return executor.execute(params) 

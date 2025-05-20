@@ -41,13 +41,13 @@ def test_profile():
     return "test_profile"
 
 @pytest.fixture
-def executor(test_repo_path, user_config, site_config):
+def executor(test_repo_path, user_config, site_config, test_profile):
     """Create an executor for endpoint execution tests."""
     # Change to test repo directory
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "example", user_config, site_config)
+        executor = EndpointExecutor(EndpointType.TOOL, "example", user_config, site_config, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)

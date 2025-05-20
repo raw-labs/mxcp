@@ -22,7 +22,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
         site_config = load_site_config()
         
         # Get active profile
-        active_profile = get_active_profile(user_config, site_config)
+        active_profile = get_active_profile(user_config, site_config, profile)
         
         # Parse parameters
         params: Dict[str, Any] = {}

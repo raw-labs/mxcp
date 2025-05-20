@@ -25,7 +25,7 @@ def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user_confi
             raise FileNotFoundError(f"Endpoint {endpoint_type}/{name} not found")
 
         # Use EndpointExecutor for execution
-        executor = EndpointExecutor(EndpointType(endpoint_type), name, user_config, site_config)
+        executor = EndpointExecutor(EndpointType(endpoint_type), name, user_config, site_config, profile)
         result = executor.execute(args)
         return result
     except Exception as e:

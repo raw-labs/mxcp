@@ -40,25 +40,25 @@ def test_profile():
     return "test_profile"
 
 @pytest.fixture
-def executor(test_repo_path, user_config, site_config):
+def executor(test_repo_path, user_config, site_config, test_profile):
     """Create an executor for secret injection tests."""
     # Change to test repo directory
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "secret_test", user_config, site_config)
+        executor = EndpointExecutor(EndpointType.TOOL, "secret_test", user_config, site_config, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)
 
 @pytest.fixture
-def http_headers_executor(test_repo_path, user_config, site_config):
+def http_headers_executor(test_repo_path, user_config, site_config, test_profile):
     """Create an executor for HTTP headers injection tests."""
     # Change to test repo directory
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "http_headers_test", user_config, site_config)
+        executor = EndpointExecutor(EndpointType.TOOL, "http_headers_test", user_config, site_config, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)

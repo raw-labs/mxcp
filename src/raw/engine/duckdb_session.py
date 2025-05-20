@@ -1,21 +1,22 @@
 import duckdb
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from raw.config.types import SiteConfig, UserConfig
 from raw.engine.secret_injection import inject_secrets
 from raw.engine.extension_loader import load_extensions
 from raw.engine.python_bootstrap import run_init_script
 
 class DuckDBSession:
-    def __init__(self, user_config: UserConfig, site_config: SiteConfig):
+    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None):
         self.conn = None
         self.user_config = user_config
         self.site_config = site_config
+        self.profile = profile
         
     def _get_project_profile(self) -> tuple[str, str]:
         """Get the current project and profile from site config"""
         if not self.site_config:
             raise ValueError("Site config not loaded")
-        return self.site_config["project"], self.site_config["profile"]
+        return self.site_config["project"], self.profile or self.site_config["profile"]
         
     def _get_profile_config(self) -> Dict[str, Any]:
         """Get the current profile's config from user config"""
@@ -45,8 +46,9 @@ class DuckDBSession:
         # Load Python bootstrap if configured
         run_init_script(self.conn, self.site_config)
             
-        # Inject secrets
-        inject_secrets(self.conn, self.site_config, self.user_config, self.site_config["profile"])
+        # Inject secrets using the active profile
+        project, profile = self._get_project_profile()
+        inject_secrets(self.conn, self.site_config, self.user_config, profile)
         
         return self.conn
         
