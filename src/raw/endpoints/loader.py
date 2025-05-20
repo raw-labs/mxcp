@@ -3,6 +3,7 @@ import yaml
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from raw.endpoints.types import EndpointDefinition
+from raw.config.site_config import SiteConfig
 import json
 from jsonschema import validate
 import os
@@ -22,13 +23,13 @@ def find_repo_root() -> Path:
 @dataclass
 class EndpointLoader:
     _endpoints: Dict[str, EndpointDefinition]
-    _site_config: dict
+    _site_config: SiteConfig
 
-    def __init__(self, site_config: dict):
+    def __init__(self, site_config: SiteConfig):
         self._site_config = site_config
         self._endpoints = {}
     
-    def discover_endpoints(self) -> List[tuple[Path, dict]]:
+    def discover_endpoints(self) -> List[tuple[Path, EndpointDefinition]]:
         """Discover all endpoint files and load their metadata, returning (file_path, endpoint_dict) tuples"""
         # Always use repository root for finding endpoints
         base_path = find_repo_root()

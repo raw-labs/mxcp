@@ -40,7 +40,7 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
         
     return config
 
-def load_site_config(repo_path: Optional[Path] = None) -> Dict[str, Any]:
+def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
     """Load and validate the raw-site.yml configuration from the repository.
     
     Args:
@@ -73,7 +73,7 @@ def load_site_config(repo_path: Optional[Path] = None) -> Dict[str, Any]:
     config = _apply_defaults(config, repo_path)
     return config
 
-def get_active_profile(user_config: UserConfig, site_config: Dict[str, Any]) -> Dict[str, Any]:
+def get_active_profile(user_config: UserConfig, site_config: SiteConfig) -> Dict[str, Any]:
     """Get the active profile from the user config based on site configuration.
     
     Args:
