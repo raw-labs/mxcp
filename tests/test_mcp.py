@@ -8,6 +8,8 @@ from raw.endpoints.executor import EndpointType
 import json
 from unittest.mock import Mock, patch, AsyncMock
 import time
+from raw.config.user_config import load_user_config
+from raw.config.site_config import load_site_config
 
 @pytest.fixture(scope="session", autouse=True)
 def set_raw_config_env():
@@ -27,9 +29,36 @@ def change_to_mcp_repo(mcp_repo_path):
         os.chdir(original_dir)
 
 @pytest.fixture
-def mcp_server():
+def test_user_config(mcp_repo_path):
+    """Load test user configuration."""
+    original_dir = os.getcwd()
+    os.chdir(mcp_repo_path)
+    try:
+        return load_user_config()
+    finally:
+        os.chdir(original_dir)
+
+@pytest.fixture
+def test_site_config(mcp_repo_path):
+    """Load test site configuration."""
+    original_dir = os.getcwd()
+    os.chdir(mcp_repo_path)
+    try:
+        return load_site_config()
+    finally:
+        os.chdir(original_dir)
+
+@pytest.fixture
+def mcp_server(test_user_config, test_site_config):
     """Create a RAWMCP instance for testing."""
-    return RAWMCP(stateless_http=True, json_response=True, host="localhost", port=8000)
+    return RAWMCP(
+        user_config=test_user_config,
+        site_config=test_site_config,
+        stateless_http=True,
+        json_response=True,
+        host="localhost",
+        port=8000
+    )
 
 @pytest.fixture
 async def http_server(mcp_server):

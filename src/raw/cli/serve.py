@@ -4,6 +4,8 @@ from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from raw.server.mcp import RAWMCP
 from raw.cli.utils import output_error
+from raw.config.user_config import load_user_config
+from raw.config.site_config import load_site_config
 
 class EndpointRequest(BaseModel):
     params: Dict[str, Any] = {}
@@ -27,8 +29,11 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool):
         raw serve --profile dev     # Use the 'dev' profile configuration
     """
     try:
+        user_config = load_user_config()
+        site_config = load_site_config()
+
         # Create and run MCP server
-        server = RAWMCP(profile=profile)
+        server = RAWMCP(user_config, site_config, profile=profile)
         asyncio.run(server.run(transport=transport, port=port))
     except Exception as e:
         output_error(e, json_output=False, debug=debug)

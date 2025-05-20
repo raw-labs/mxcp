@@ -4,15 +4,15 @@ import logging
 from mcp.server.fastmcp import FastMCP
 from raw.endpoints.loader import EndpointLoader
 from raw.endpoints.executor import EndpointExecutor, EndpointType
-from raw.config.user_config import load_user_config
-from raw.config.site_config import load_site_config, get_active_profile
+from raw.config.user_config import load_user_config, UserConfig
+from raw.config.site_config import load_site_config, SiteConfig, get_active_profile
 
 logger = logging.getLogger(__name__)
 
 class RAWMCP:
     """RAW MCP Server implementation that bridges RAW endpoints with MCP protocol."""
     
-    def __init__(self, profile: Optional[str] = None, stateless_http: bool = False, json_response: bool = False, host: str = "localhost", port: int = 8000):
+    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, stateless_http: bool = False, json_response: bool = False, host: str = "localhost", port: int = 8000):
         """Initialize the RAW MCP server.
         
         Args:
@@ -29,8 +29,8 @@ class RAWMCP:
             host=host,
             port=port
         )
-        self.user_config = load_user_config()
-        self.site_config = load_site_config()
+        self.user_config = user_config
+        self.site_config = site_config
         self.active_profile = get_active_profile(self.user_config, self.site_config)
         self.loader = EndpointLoader(self.site_config)
         self.endpoints = self.loader.discover_endpoints()
