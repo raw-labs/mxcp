@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional
 from raw.endpoints.executor import execute_endpoint, EndpointType
 from pydantic import BaseModel
 from raw.server.mcp import RAWMCP
+from raw.cli.utils import output_error
 
 class EndpointRequest(BaseModel):
     params: Dict[str, Any] = {}
@@ -12,7 +13,8 @@ class EndpointRequest(BaseModel):
 @click.option("--profile", help="Profile name to use for configuration")
 @click.option("--transport", type=click.Choice(["http", "stdio"]), default="http", help="Transport protocol to use (http or stdio)")
 @click.option("--port", type=int, default=8000, help="Port number to use for HTTP transport (default: 8000)")
-def serve(profile: Optional[str], transport: str, port: int):
+@click.option("--debug", is_flag=True, help="Show detailed error information")
+def serve(profile: Optional[str], transport: str, port: int, debug: bool):
     """Start the RAW MCP server to expose endpoints via HTTP or stdio.
     
     This command starts a server that exposes your RAW endpoints as an MCP-compatible
@@ -30,5 +32,4 @@ def serve(profile: Optional[str], transport: str, port: int):
         server = RAWMCP(profile=profile)
         asyncio.run(server.run(transport=transport, port=port))
     except Exception as e:
-        click.echo(f"Error starting server: {e}", err=True)
-        raise click.Abort()
+        output_error(e, json_output=False, debug=debug)

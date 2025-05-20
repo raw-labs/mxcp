@@ -10,7 +10,7 @@ from raw.config.site_config import find_repo_root
 from raw.endpoints.executor import get_endpoint_source_code
 from raw.endpoints.loader import EndpointLoader
 
-def validate_all_endpoints(config, user, profile):
+def validate_all_endpoints(config, profile):
     """Validate all endpoints in the repository."""
     # Use EndpointLoader to discover endpoints
     loader = EndpointLoader(config)
@@ -20,12 +20,12 @@ def validate_all_endpoints(config, user, profile):
 
     results = []
     for file_path, endpoint in endpoints:
-        result = validate_endpoint(str(file_path), config, user, profile)
+        result = validate_endpoint(str(file_path), config, profile)
         results.append(result)
 
     return {"status": "ok", "validated": results}
 
-def validate_endpoint(path, config, user, profile):
+def validate_endpoint(path, config, profile):
     """Validate a single endpoint."""
     try:
         # Load the endpoint file directly

@@ -3,6 +3,7 @@ from raw.endpoints.tester import run_tests, run_all_tests
 from raw.config.site_config import load_site_config
 from raw.config.user_config import load_user_config
 import json
+from raw.cli.utils import output_result, output_error
 
 def format_test_results(results):
     """Format test results for human-readable output"""
@@ -52,16 +53,19 @@ def format_test_results(results):
 @click.argument("endpoint", required=False)
 @click.option("--profile", default=None)
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
-def test(endpoint, profile, json_output: bool):
+@click.option("--debug", is_flag=True, help="Show detailed error information")
+def test(endpoint, profile, json_output: bool, debug: bool):
     """Run endpoint tests"""
-    config = load_site_config()
-    user = load_user_config()
-    if endpoint:
-        results = run_tests(endpoint, config, user, profile)
-    else:
-        results = run_all_tests(config, user, profile)
-        
-    if json_output:
-        print(json.dumps(results, indent=2))
-    else:
-        print(format_test_results(results))
+    try:
+        config = load_site_config()
+        if endpoint:
+            results = run_tests(endpoint, config, profile)
+        else:
+            results = run_all_tests(config, profile)
+            
+        if json_output:
+            output_result(results, json_output, debug)
+        else:
+            click.echo(format_test_results(results))
+    except Exception as e:
+        output_error(e, json_output, debug)

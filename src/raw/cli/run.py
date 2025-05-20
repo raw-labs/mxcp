@@ -5,6 +5,7 @@ from raw.endpoints.runner import run_endpoint as execute_endpoint
 from raw.endpoints.executor import EndpointType
 from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config, get_active_profile
+from raw.cli.utils import output_result, output_error
 
 @click.command(name="run")
 @click.argument("endpoint_type", type=click.Choice([t.value for t in EndpointType]))
@@ -12,7 +13,8 @@ from raw.config.site_config import load_site_config, get_active_profile
 @click.option("--param", "-p", multiple=True, help="Parameter in format name=value")
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
-def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool):
+@click.option("--debug", is_flag=True, help="Show detailed error information")
+def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool):
     """Run an endpoint (tool, resource, or prompt)"""
     try:
         # Load configs
@@ -28,13 +30,9 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
             if "=" not in p:
                 error_msg = f"Parameter must be in format name=value: {p}"
                 if json_output:
-                    print(json.dumps({
-                        "status": "error",
-                        "error": error_msg
-                    }, indent=2))
+                    output_error(click.BadParameter(error_msg), json_output, debug)
                 else:
                     raise click.BadParameter(error_msg)
-                raise click.Abort()
             key, value = p.split("=", 1)
             params[key] = value
             
@@ -42,24 +40,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
         result = execute_endpoint(endpoint_type, name, params, user_config, "cli", active_profile)
         
         # Output result
-        if json_output:
-            print(json.dumps({
-                "status": "ok",
-                "result": result
-            }, indent=2))
-        else:
-            if isinstance(result, list):
-                for row in result:
-                    click.echo(row)
-            else:
-                click.echo(result)
+        output_result(result, json_output, debug)
             
     except Exception as e:
-        if json_output:
-            print(json.dumps({
-                "status": "error",
-                "error": str(e)
-            }, indent=2))
-        else:
-            click.echo(f"Error executing endpoint: {e}", err=True)
-        raise click.Abort()
+        output_error(e, json_output, debug)

@@ -4,6 +4,7 @@ from typing import Dict, List, Tuple, Optional
 from raw.endpoints.loader import EndpointLoader
 from pathlib import Path
 from raw.config.site_config import load_site_config
+from raw.cli.utils import output_result, output_error
 
 def parse_endpoint(path: Path, endpoint: dict) -> Tuple[str, str, Optional[str]]:
     """Parse an endpoint dictionary to determine its type, name, and any error.
@@ -22,39 +23,42 @@ def parse_endpoint(path: Path, endpoint: dict) -> Tuple[str, str, Optional[str]]
 
 @click.command(name="list")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
-def list_endpoints(json_output: bool):
+@click.option("--debug", is_flag=True, help="Show detailed error information")
+def list_endpoints(json_output: bool, debug: bool):
     """List available endpoints"""
-    site_config = load_site_config()
-    loader = EndpointLoader(site_config)
-    endpoints = loader.discover_endpoints()
-    
-    # Process endpoints into structured data
-    results = []
-    for path, endpoint in endpoints:
-        kind, name, error = parse_endpoint(path, endpoint)
-        results.append({
-            "path": str(path),
-            "kind": kind,
-            "name": name,
-            "error": error
-        })
-    
-    if json_output:
-        # JSON output
-        print(json.dumps({
-            "status": "ok" if all(r["error"] is None for r in results) else "error",
-            "endpoints": results
-        }, indent=2))
-    else:
-        # Human-friendly output
-        if not results:
-            print("No endpoints found")
-            return
-            
-        print(f"\nFound {len(results)} endpoint files:")
-        for result in results:
-            if result["error"]:
-                print(f"\n[ERROR] {result['error']}")
-            else:
-                print(f"\n[{result['kind']}] {result['name']}")
-                print(f"  Path: {result['path']}")
+    try:
+        site_config = load_site_config()
+        loader = EndpointLoader(site_config)
+        endpoints = loader.discover_endpoints()
+        
+        # Process endpoints into structured data
+        results = []
+        for path, endpoint in endpoints:
+            kind, name, error = parse_endpoint(path, endpoint)
+            results.append({
+                "path": str(path),
+                "kind": kind,
+                "name": name,
+                "error": error
+            })
+        
+        if json_output:
+            output_result({
+                "status": "ok" if all(r["error"] is None for r in results) else "error",
+                "endpoints": results
+            }, json_output, debug)
+        else:
+            if not results:
+                click.echo("No endpoints found")
+                return
+                
+            click.echo(f"\nFound {len(results)} endpoint files:")
+            for result in results:
+                if result["error"]:
+                    click.echo(f"\n[ERROR] {result['error']}")
+                else:
+                    click.echo(f"\n[{result['kind']}] {result['name']}")
+                    click.echo(f"  Path: {result['path']}")
+                    
+    except Exception as e:
+        output_error(e, json_output, debug)
