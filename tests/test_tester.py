@@ -39,7 +39,7 @@ def test_run_valid_tool(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = run_tests("tool/valid_tool", site_config, user_config, None)
+        result = run_tests("tool/valid_tool", user_config, site_config, None)
         assert result["status"] == "ok"
         assert result["tests_run"] == 2
         assert len(result["tests"]) == 2
@@ -52,7 +52,7 @@ def test_run_invalid_tool(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = run_tests("tool/invalid_tool", site_config, user_config, None)
+        result = run_tests("tool/invalid_tool", user_config, site_config, None)
         assert result["status"] == "error"
         assert result["tests_run"] == 4
         assert any(test["status"] == "passed" for test in result["tests"])
@@ -69,7 +69,7 @@ def test_run_valid_resource(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = run_tests("resource/valid_resource", site_config, user_config, None)
+        result = run_tests("resource/valid_resource", user_config, site_config, None)
         assert result["status"] == "error"  # Overall status is error because of the failing test
         assert result["tests_run"] == 2
         assert any(test["status"] == "passed" for test in result["tests"])  # valid filter test should pass
@@ -85,7 +85,7 @@ def test_run_valid_prompt(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = run_tests("prompt/valid_prompt", site_config, user_config, None)
+        result = run_tests("prompt/valid_prompt", user_config, site_config, None)
         assert result["status"] == "error"
         assert result["tests_run"] == 2
         assert all(test["status"] == "error" for test in result["tests"])
@@ -100,7 +100,7 @@ def test_run_nonexistent_endpoint(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = run_tests("tool/nonexistent", site_config, user_config, None)
+        result = run_tests("tool/nonexistent", user_config, site_config, None)
         assert result["status"] == "error"
         assert "Endpoint not found" in result["message"]
     finally:
@@ -111,7 +111,7 @@ def test_run_all_tests(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = run_all_tests(site_config, user_config, None)
+        result = run_all_tests(user_config, site_config, None)
         assert result["status"] == "error"
         assert result["tests_run"] > 0
         assert len(result["endpoints"]) > 0
@@ -131,7 +131,7 @@ def test_run_missing_param_tool(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = run_tests("tool/missing_param_tool", site_config, user_config, None)
+        result = run_tests("tool/missing_param_tool", user_config, site_config, None)
         assert result["status"] == "error"
         assert "Required parameter missing: count" in result["tests"][0]["error"]
     finally:
@@ -142,7 +142,7 @@ def test_run_mismatched_result(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = run_tests("tool/mismatched_result", site_config, user_config, None)
+        result = run_tests("tool/mismatched_result", user_config, site_config, None)
         assert result["status"] == "failed"  # Overall status should be failed
         assert result["tests_run"] == 1
         assert len(result["tests"]) == 1

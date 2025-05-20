@@ -37,7 +37,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
             params[key] = value
             
         # Execute endpoint
-        result = execute_endpoint(endpoint_type, name, params, user_config, "cli", active_profile)
+        result = execute_endpoint(endpoint_type, name, params, user_config, site_config, active_profile)
         
         # Output result
         output_result(result, json_output, debug)

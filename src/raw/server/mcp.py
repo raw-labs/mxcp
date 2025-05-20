@@ -87,7 +87,7 @@ class RAWMCP:
                         )
                 
                 # Execute using RAW's executor
-                executor = EndpointExecutor(EndpointType.TOOL, tool_def["name"])
+                executor = EndpointExecutor(EndpointType.TOOL, tool_def["name"], self.user_config, self.site_config)
                 return await executor.execute(converted_params)
             except Exception as e:
                 logger.error(f"Error executing tool {tool_def['name']}: {e}")
@@ -111,7 +111,7 @@ class RAWMCP:
                             param["type"]
                         )
                 
-                executor = EndpointExecutor(EndpointType.RESOURCE, resource_def["uri"])
+                executor = EndpointExecutor(EndpointType.RESOURCE, resource_def["uri"], self.user_config, self.site_config)
                 return await executor.execute(converted_params)
             except Exception as e:
                 logger.error(f"Error executing resource {resource_def['uri']}: {e}")
@@ -135,7 +135,7 @@ class RAWMCP:
                             param["type"]
                         )
                 
-                executor = EndpointExecutor(EndpointType.PROMPT, prompt_def["name"])
+                executor = EndpointExecutor(EndpointType.PROMPT, prompt_def["name"], self.user_config, self.site_config)
                 return await executor.execute(converted_params)
             except Exception as e:
                 logger.error(f"Error executing prompt {prompt_def['name']}: {e}")

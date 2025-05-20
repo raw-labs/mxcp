@@ -57,11 +57,12 @@ def format_test_results(results):
 def test(endpoint, profile, json_output: bool, debug: bool):
     """Run endpoint tests"""
     try:
-        config = load_site_config()
+        site_config = load_site_config()
+        user_config = load_user_config()
         if endpoint:
-            results = run_tests(endpoint, config, profile)
+            results = run_tests(endpoint, user_config, site_config, profile)
         else:
-            results = run_all_tests(config, profile)
+            results = run_all_tests(user_config, site_config, profile)
             
         if json_output:
             output_result(results, json_output, debug)

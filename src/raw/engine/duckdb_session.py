@@ -1,23 +1,15 @@
 import duckdb
-from pathlib import Path
-from typing import Dict, Any, Optional
-from raw.config.site_config import load_site_config
-from raw.config.user_config import load_user_config
+from typing import Dict, Any
 from raw.config.types import SiteConfig, UserConfig
 from raw.engine.secret_injection import inject_secrets
 from raw.engine.extension_loader import load_extensions
 from raw.engine.python_bootstrap import run_init_script
 
 class DuckDBSession:
-    def __init__(self):
+    def __init__(self, user_config: UserConfig, site_config: SiteConfig):
         self.conn = None
-        self.site_config: Optional[SiteConfig] = None
-        self.user_config: Optional[UserConfig] = None
-        
-    def _load_configs(self):
-        """Load both site and user configs"""
-        self.site_config = load_site_config()
-        self.user_config = load_user_config()
+        self.user_config = user_config
+        self.site_config = site_config
         
     def _get_project_profile(self) -> tuple[str, str]:
         """Get the current project and profile from site config"""
@@ -42,10 +34,7 @@ class DuckDBSession:
         return profile_config
         
     def connect(self) -> duckdb.DuckDBPyConnection:
-        """Establish DuckDB connection and set up the session"""
-        # Load configs first
-        self._load_configs()
-        
+        """Establish DuckDB connection and set up the session"""        
         # Connect to DuckDB using path from config
         db_path = self.site_config["duckdb"]["path"]
         self.conn = duckdb.connect(db_path)

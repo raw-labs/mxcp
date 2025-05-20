@@ -9,6 +9,8 @@ from jinja2 import Template
 from raw.endpoints.types import EndpointDefinition
 from raw.engine.duckdb_session import DuckDBSession
 from raw.endpoints.loader import find_repo_root
+from raw.config.user_config import UserConfig
+from raw.config.site_config import SiteConfig
 
 class EndpointType(Enum):
     TOOL = "tool"
@@ -78,11 +80,11 @@ class TypeConverter:
         return value
 
 class EndpointExecutor:
-    def __init__(self, endpoint_type: EndpointType, name: str):
+    def __init__(self, endpoint_type: EndpointType, name: str, user_config: UserConfig, site_config: SiteConfig):
         self.endpoint_type = endpoint_type
         self.name = name
         self.endpoint: Optional[EndpointDefinition] = None
-        self.session = DuckDBSession()
+        self.session = DuckDBSession(user_config, site_config)
         
     def _load_endpoint(self):
         """Load the endpoint definition from YAML file"""
@@ -253,12 +255,12 @@ class EndpointExecutor:
         finally:
             self.session.close()
             
-def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]) -> Any:
+def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig) -> Any:
     """Execute an endpoint by type and name"""
     try:
         endpoint_type_enum = EndpointType(endpoint_type.lower())
     except ValueError:
         raise ValueError(f"Invalid endpoint type: {endpoint_type}. Must be one of: {', '.join(t.value for t in EndpointType)}")
         
-    executor = EndpointExecutor(endpoint_type_enum, name)
+    executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config)
     return executor.execute(params) 

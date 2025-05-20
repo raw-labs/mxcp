@@ -2,6 +2,7 @@ from typing import Dict, Any, List, Optional
 from raw.endpoints.executor import execute_endpoint, EndpointType, EndpointExecutor
 from raw.endpoints.loader import EndpointLoader
 from raw.config.site_config import SiteConfig, find_repo_root
+from raw.config.user_config import UserConfig
 import time
 import json
 import logging
@@ -15,7 +16,7 @@ import duckdb
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-def run_all_tests(config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
+def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
     """Run tests for all endpoints in the repository"""
     # Find repository root
     repo_root = find_repo_root()
@@ -56,7 +57,7 @@ def run_all_tests(config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
                 continue
                 
             # Run tests for this endpoint
-            endpoint_results = run_tests(f"{kind}/{name}", config, profile)
+            endpoint_results = run_tests(f"{kind}/{name}", user_config, site_config, profile)
             results["endpoints"].append(endpoint_results)
             results["tests_run"] += endpoint_results.get("tests_run", 0)
             
@@ -70,7 +71,7 @@ def run_all_tests(config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
             
     return results
 
-def run_tests(endpoint: str, config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
+def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
     """Run tests for a specific endpoint"""
     try:
         # Split endpoint into type and name
@@ -79,7 +80,7 @@ def run_tests(endpoint: str, config: SiteConfig, profile: Optional[str]) -> Dict
         logger.info(f"Running tests for endpoint: {endpoint_type}/{name}")
         
         # Use EndpointLoader to load the endpoint definition
-        loader = EndpointLoader(config)
+        loader = EndpointLoader(site_config)
         endpoint_def = loader.load_endpoint(endpoint_type, name)
         
         if endpoint_def is None:
@@ -134,7 +135,7 @@ def run_tests(endpoint: str, config: SiteConfig, profile: Optional[str]) -> Dict
             
             try:
                 # Use the proper execute_endpoint function
-                result = execute_endpoint(endpoint_type, name, params)
+                result = execute_endpoint(endpoint_type, name, params, user_config, site_config)
                 logger.info(f"Execution result: {result}")
                 
                 # Normalize result for comparison

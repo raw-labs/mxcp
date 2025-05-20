@@ -10,22 +10,22 @@ from raw.config.site_config import find_repo_root
 from raw.endpoints.executor import get_endpoint_source_code
 from raw.endpoints.loader import EndpointLoader
 
-def validate_all_endpoints(config, profile):
+def validate_all_endpoints(user_config, site_config, profile):
     """Validate all endpoints in the repository."""
     # Use EndpointLoader to discover endpoints
-    loader = EndpointLoader(config)
+    loader = EndpointLoader(site_config)
     endpoints = loader.discover_endpoints()
     if not endpoints:
         return {"status": "error", "message": "No endpoint files found in the repository"}
 
     results = []
     for file_path, endpoint in endpoints:
-        result = validate_endpoint(str(file_path), config, profile)
+        result = validate_endpoint(str(file_path), user_config, site_config, profile)
         results.append(result)
 
     return {"status": "ok", "validated": results}
 
-def validate_endpoint(path, config, profile):
+def validate_endpoint(path, user_config, site_config, profile):
     """Validate a single endpoint."""
     try:
         # Load the endpoint file directly
@@ -62,7 +62,7 @@ def validate_endpoint(path, config, profile):
             return {"status": "error", "path": path, "message": "No SQL query found"}
 
         # Use DuckDBSession for proper secret injection and type inference
-        session = DuckDBSession()
+        session = DuckDBSession(user_config, site_config)
         con = session.connect()
         try:
             con.execute("PREPARE my_query AS " + sql_query)

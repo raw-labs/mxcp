@@ -1,7 +1,6 @@
 import click
 import asyncio
 from typing import Dict, Any, Optional
-from raw.endpoints.executor import execute_endpoint, EndpointType
 from pydantic import BaseModel
 from raw.server.mcp import RAWMCP
 from raw.cli.utils import output_error

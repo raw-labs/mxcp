@@ -1,6 +1,8 @@
 import pytest
 from pathlib import Path
 from raw.endpoints.executor import EndpointExecutor, EndpointType
+from raw.config.user_config import load_user_config
+from raw.config.site_config import load_site_config
 import duckdb
 import os
 
@@ -10,15 +12,42 @@ def set_raw_config_env():
 
 @pytest.fixture
 def test_repo_path():
+    """Path to the test repository."""
     return Path(__file__).parent / "fixtures" / "endpoint-execution"
 
 @pytest.fixture
-def executor(test_repo_path):
+def user_config(test_repo_path):
+    """Load test user configuration."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        return load_user_config()
+    finally:
+        os.chdir(original_dir)
+
+@pytest.fixture
+def site_config(test_repo_path):
+    """Load test site configuration."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        return load_site_config()
+    finally:
+        os.chdir(original_dir)
+
+@pytest.fixture
+def test_profile():
+    """Test profile name."""
+    return "test_profile"
+
+@pytest.fixture
+def executor(test_repo_path, user_config, site_config):
+    """Create an executor for endpoint execution tests."""
     # Change to test repo directory
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "example")
+        executor = EndpointExecutor(EndpointType.TOOL, "example", user_config, site_config)
         yield executor
     finally:
         os.chdir(original_dir)
