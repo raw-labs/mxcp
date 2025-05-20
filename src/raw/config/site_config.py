@@ -73,18 +73,19 @@ def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
     config = _apply_defaults(config, repo_path)
     return config
 
-def get_active_profile(user_config: UserConfig, site_config: SiteConfig) -> Dict[str, Any]:
+def get_active_profile(user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None) -> Dict[str, Any]:
     """Get the active profile from the user config based on site configuration.
     
     Args:
         user_config: The user configuration loaded from ~/.raw/config.yml
         site_config: The site configuration loaded from raw-site.yml
+        profile: Optional profile name to override the default profile
         
     Returns:
         The active profile configuration
     """
     project_name = site_config["project"]
-    profile_name = site_config["profile"]
+    profile_name = profile or site_config["profile"]
     
     if project_name not in user_config["projects"]:
         raise ValueError(f"Project '{project_name}' not found in user config")

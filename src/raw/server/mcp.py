@@ -31,7 +31,7 @@ class RAWMCP:
         )
         self.user_config = user_config
         self.site_config = site_config
-        self.active_profile = get_active_profile(self.user_config, self.site_config)
+        self.active_profile = get_active_profile(self.user_config, self.site_config, profile)
         self.loader = EndpointLoader(self.site_config)
         self.endpoints = self.loader.discover_endpoints()
         
