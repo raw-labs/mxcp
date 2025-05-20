@@ -21,8 +21,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
         site_config = load_site_config()
         user_config = load_user_config(site_config)
         
-        # Get active profile
-        active_profile = get_active_profile(user_config, site_config, profile)
+        profile_name = profile or site_config["profile"]
         
         # Parse parameters
         params: Dict[str, Any] = {}
@@ -37,7 +36,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
             params[key] = value
             
         # Execute endpoint
-        result = execute_endpoint(endpoint_type, name, params, user_config, site_config, active_profile)
+        result = execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name)
         
         # Output result
         output_result(result, json_output, debug)

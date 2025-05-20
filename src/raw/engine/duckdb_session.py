@@ -4,9 +4,14 @@ from raw.config.types import SiteConfig, UserConfig
 from raw.engine.secret_injection import inject_secrets
 from raw.engine.extension_loader import load_extensions
 from raw.engine.python_bootstrap import run_init_script
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DuckDBSession:
     def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None):
+        if profile is not None and not isinstance(profile, str):
+            raise ValueError(f"profile argument must be a string, not {type(profile)}: {profile}")
         self.conn = None
         self.user_config = user_config
         self.site_config = site_config
@@ -16,7 +21,12 @@ class DuckDBSession:
         """Get the current project and profile from site config"""
         if not self.site_config:
             raise ValueError("Site config not loaded")
-        return self.site_config["project"], self.profile or self.site_config["profile"]
+            
+        project = self.site_config["project"]
+        profile_name = self.profile or self.site_config["profile"]
+        
+        logger.debug(f"Getting project/profile: {project}/{profile_name}")
+        return project, profile_name
         
     def _get_profile_config(self) -> Dict[str, Any]:
         """Get the current profile's config from user config"""
@@ -47,8 +57,9 @@ class DuckDBSession:
         run_init_script(self.conn, self.site_config)
             
         # Inject secrets using the active profile
-        project, profile = self._get_project_profile()
-        inject_secrets(self.conn, self.site_config, self.user_config, profile)
+        project, profile_name = self._get_project_profile()
+        logger.debug(f"Using project: {project}, profile: {profile_name}")
+        inject_secrets(self.conn, self.site_config, self.user_config, profile_name)
         
         return self.conn
         

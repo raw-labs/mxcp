@@ -30,7 +30,10 @@ def _generate_default_config(site_config: SiteConfig) -> dict:
     project_name = site_config["project"]
     profile_name = site_config["profile"]
     
-    return {
+    logger.debug(f"Generating default config for project: {project_name}, profile: {profile_name}")
+    logger.debug(f"Site config: {site_config}")
+    
+    config = {
         "raw": "1.0.0",
         "projects": {
             project_name: {
@@ -44,6 +47,8 @@ def _generate_default_config(site_config: SiteConfig) -> dict:
             }
         }
     }
+    logger.debug(f"Generated default config: {config}")
+    return config
 
 def load_user_config(site_config: SiteConfig) -> UserConfig:
     """Load the user configuration from ~/.raw/config.yml or RAW_CONFIG env var.
@@ -58,6 +63,8 @@ def load_user_config(site_config: SiteConfig) -> UserConfig:
         The validated user configuration
     """
     path = Path(os.environ.get("RAW_CONFIG", Path.home() / ".raw" / "config.yml"))
+    logger.debug(f"Looking for user config at: {path}")
+    
     if not path.exists():
         # If RAW_CONFIG is not set, generate a default config based on site config
         if "RAW_CONFIG" not in os.environ:
@@ -68,9 +75,11 @@ def load_user_config(site_config: SiteConfig) -> UserConfig:
     else:
         with open(path) as f:
             config = yaml.safe_load(f)
+            logger.debug(f"Loaded user config from file: {config}")
     
     # Apply defaults before validation
     config = _apply_defaults(config)
+    logger.debug(f"Config after applying defaults: {config}")
     
     # Load and apply JSON Schema validation
     schema_path = Path(__file__).parent / "schemas" / "raw-config-schema-1.0.0.json"

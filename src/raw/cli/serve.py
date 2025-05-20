@@ -12,7 +12,7 @@ class EndpointRequest(BaseModel):
 
 @click.command(name="serve")
 @click.option("--profile", help="Profile name to use")
-@click.option("--transport", type=click.Choice(["http", "stdio"]), default="http", help="Transport protocol to use (http or stdio)")
+@click.option("--transport", type=click.Choice(["streamable-http", "sse", "stdio"]), default="streamable-http", help="Transport protocol to use (streamable-http, sse, or stdio)")
 @click.option("--port", type=int, default=8000, help="Port number to use for HTTP transport (default: 8000)")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
 def serve(profile: Optional[str], transport: str, port: int, debug: bool):
@@ -33,7 +33,7 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool):
         user_config = load_user_config(site_config)
 
         # Create and run MCP server
-        server = RAWMCP(user_config, site_config, profile=profile)
-        asyncio.run(server.run(transport=transport, port=port))
+        server = RAWMCP(user_config, site_config, profile=profile, port=port)
+        asyncio.run(server.run(transport=transport))
     except Exception as e:
         output_error(e, json_output=False, debug=debug)
