@@ -52,6 +52,34 @@ def test_validate_valid_endpoint(validation_repo_path, site_config, user_config,
     finally:
         os.chdir(original_dir)
 
+def test_validate_valid_prompt(validation_repo_path, site_config, user_config, test_profile):
+    """Test validation of a valid prompt endpoint."""
+    original_dir = os.getcwd()
+    os.chdir(validation_repo_path)
+    try:
+        endpoint_path = "endpoints/valid_prompt.yml"
+        result = validate_endpoint(endpoint_path, user_config, site_config, test_profile)
+        assert result["status"] == "ok"
+        assert result["path"] == endpoint_path
+    finally:
+        os.chdir(original_dir)
+
+def test_validate_invalid_prompt(validation_repo_path, site_config, user_config, test_profile):
+    """Test validation of a prompt endpoint with undefined template variables."""
+    original_dir = os.getcwd()
+    os.chdir(validation_repo_path)
+    try:
+        endpoint_path = "endpoints/invalid_prompt.yml"
+        result = validate_endpoint(endpoint_path, user_config, site_config, test_profile)
+        assert result["status"] == "error"
+        assert "undefined template variables" in result["message"].lower()
+        # Check that all undefined variables are mentioned
+        assert "expertise_level" in result["message"]
+        assert "complexity" in result["message"]
+        assert "extra_info" in result["message"]
+    finally:
+        os.chdir(original_dir)
+
 @pytest.mark.skip(reason="Type checking temporarily disabled until DuckDB provides better parameter type inference")
 def test_validate_invalid_type(validation_repo_path, site_config, user_config, test_profile):
     """Test validation of an endpoint with type mismatch."""
@@ -86,7 +114,7 @@ def test_validate_all_endpoints(validation_repo_path, site_config, user_config, 
     try:
         result = validate_all_endpoints(user_config, site_config, test_profile)
         assert result["status"] == "ok"
-        assert len(result["validated"]) == 3  # We have 3 test endpoints
+        assert len(result["validated"]) == 5  # We now have 5 test endpoints
         # Check that we have both valid and invalid results
         statuses = [r["status"] for r in result["validated"]]
         assert "ok" in statuses

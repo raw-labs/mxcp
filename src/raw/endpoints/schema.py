@@ -9,6 +9,7 @@ import os
 from raw.config.site_config import find_repo_root
 from raw.endpoints.executor import get_endpoint_source_code
 from raw.endpoints.loader import EndpointLoader
+import re
 
 def validate_all_endpoints(user_config, site_config, profile):
     """Validate all endpoints in the repository."""
@@ -24,6 +25,13 @@ def validate_all_endpoints(user_config, site_config, profile):
         results.append(result)
 
     return {"status": "ok", "validated": results}
+
+def extract_template_variables(template: str) -> set[str]:
+    """Extract all Jinja template variables from a string."""
+    # Match both {{ var }} and {{var}} patterns
+    pattern = r'{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}'
+    matches = re.finditer(pattern, template)
+    return {match.group(1) for match in matches}
 
 def validate_endpoint(path, user_config, site_config, profile):
     """Validate a single endpoint."""
@@ -53,7 +61,41 @@ def validate_endpoint(path, user_config, site_config, profile):
         repo_root = find_repo_root()
         endpoint_file_path = Path(path).resolve()
 
-        # Extract SQL query using utility
+        # For prompts, validate messages structure and template variables
+        if endpoint_type == "prompt":
+            prompt_def = endpoint["prompt"]
+            if "messages" not in prompt_def:
+                return {"status": "error", "path": path, "message": "No messages found in prompt definition"}
+            
+            messages = prompt_def["messages"]
+            if not isinstance(messages, list) or not messages:
+                return {"status": "error", "path": path, "message": "Messages must be a non-empty array"}
+            
+            # Get defined parameters
+            defined_params = {p["name"] for p in prompt_def.get("parameters", [])}
+            
+            # Check each message
+            for i, msg in enumerate(messages):
+                if not isinstance(msg, dict):
+                    return {"status": "error", "path": path, "message": f"Message {i} must be an object"}
+                if "prompt" not in msg:
+                    return {"status": "error", "path": path, "message": f"Message {i} missing required 'prompt' field"}
+                if not isinstance(msg["prompt"], str):
+                    return {"status": "error", "path": path, "message": f"Message {i} prompt must be a string"}
+                
+                # Extract and validate template variables
+                template_vars = extract_template_variables(msg["prompt"])
+                undefined_vars = template_vars - defined_params
+                if undefined_vars:
+                    return {
+                        "status": "error", 
+                        "path": path, 
+                        "message": f"Message {i} uses undefined template variables: {', '.join(sorted(undefined_vars))}"
+                    }
+            
+            return {"status": "ok", "path": path}
+
+        # For tools and resources, validate SQL
         try:
             sql_query = get_endpoint_source_code(endpoint, endpoint_type, endpoint_file_path, repo_root)
         except Exception as e:
