@@ -2,6 +2,8 @@ import pytest
 from pathlib import Path
 from raw.endpoints.loader import EndpointLoader
 import os
+from raw.config.site_config import load_site_config
+from raw.config.user_config import load_user_config
 
 @pytest.fixture(scope="session", autouse=True)
 def set_raw_config_env():
@@ -18,8 +20,8 @@ def test_config(test_repo_path):
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        from raw.config.user_config import load_user_config
-        return load_user_config()
+        site_config = load_site_config()
+        return load_user_config(site_config)
     finally:
         os.chdir(original_dir)
 

@@ -30,7 +30,8 @@ def user_config(tester_repo_path):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        return load_user_config()
+        site_config = load_site_config()
+        return load_user_config(site_config)
     finally:
         os.chdir(original_dir)
 

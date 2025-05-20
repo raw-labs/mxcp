@@ -11,7 +11,7 @@ class EndpointRequest(BaseModel):
     params: Dict[str, Any] = {}
 
 @click.command(name="serve")
-@click.option("--profile", help="Profile name to use for configuration")
+@click.option("--profile", help="Profile name to use")
 @click.option("--transport", type=click.Choice(["http", "stdio"]), default="http", help="Transport protocol to use (http or stdio)")
 @click.option("--port", type=int, default=8000, help="Port number to use for HTTP transport (default: 8000)")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
@@ -29,8 +29,8 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool):
         raw serve --profile dev     # Use the 'dev' profile configuration
     """
     try:
-        user_config = load_user_config()
         site_config = load_site_config()
+        user_config = load_user_config(site_config)
 
         # Create and run MCP server
         server = RAWMCP(user_config, site_config, profile=profile)

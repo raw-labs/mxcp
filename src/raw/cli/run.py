@@ -18,8 +18,8 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
     """Run an endpoint (tool, resource, or prompt)"""
     try:
         # Load configs
-        user_config = load_user_config()
         site_config = load_site_config()
+        user_config = load_user_config(site_config)
         
         # Get active profile
         active_profile = get_active_profile(user_config, site_config, profile)

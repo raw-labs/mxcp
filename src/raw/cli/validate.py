@@ -50,14 +50,14 @@ def format_validation_results(results):
 
 @click.command(name="validate")
 @click.argument("endpoint", required=False)
-@click.option("--profile", default=None)
+@click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
 def validate(endpoint, profile, json_output: bool, debug: bool):
     """Validate one or all endpoints"""
     try:
-        user_config = load_user_config()
         site_config = load_site_config()
+        user_config = load_user_config(site_config)
         if endpoint:
             result = validate_endpoint(endpoint, user_config, site_config, profile)
         else:

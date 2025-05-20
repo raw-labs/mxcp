@@ -1,8 +1,9 @@
 import click
-from raw.endpoints.tester import run_tests, run_all_tests
-from raw.config.site_config import load_site_config
-from raw.config.user_config import load_user_config
 import json
+from typing import Dict, Any, Optional
+from raw.endpoints.tester import run_tests, run_all_tests
+from raw.config.user_config import load_user_config
+from raw.config.site_config import load_site_config
 from raw.cli.utils import output_result, output_error
 
 def format_test_results(results):
@@ -51,14 +52,15 @@ def format_test_results(results):
 
 @click.command(name="test")
 @click.argument("endpoint", required=False)
-@click.option("--profile", default=None)
+@click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
-def test(endpoint, profile, json_output: bool, debug: bool):
-    """Run endpoint tests"""
+def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool):
+    """Run tests for one or all endpoints"""
     try:
         site_config = load_site_config()
-        user_config = load_user_config()
+        user_config = load_user_config(site_config)
+        
         if endpoint:
             results = run_tests(endpoint, user_config, site_config, profile)
         else:

@@ -17,6 +17,7 @@ def set_raw_config_env():
 
 @pytest.fixture
 def mcp_repo_path():
+    """Get path to test repository."""
     return Path(__file__).parent / "fixtures" / "mcp"
 
 @pytest.fixture(autouse=True)
@@ -34,7 +35,8 @@ def test_user_config(mcp_repo_path):
     original_dir = os.getcwd()
     os.chdir(mcp_repo_path)
     try:
-        return load_user_config()
+        site_config = load_site_config()
+        return load_user_config(site_config)
     finally:
         os.chdir(original_dir)
 
