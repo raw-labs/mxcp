@@ -155,7 +155,7 @@ class RAWMCP:
                 logger.error(f"Error registering endpoint: {e}")
                 raise
 
-    async def run(self, transport: str = "streamable-http"):
+    def run(self, transport: str = "streamable-http"):
         """Run the MCP server.
         
         Args:
@@ -166,7 +166,7 @@ class RAWMCP:
             self.register_endpoints()
             
             # Start server using MCP's built-in run method
-            await self.mcp.run(transport=transport)
+            self.mcp.run(transport=transport)
         except Exception as e:
             logger.error(f"Error running MCP server: {e}")
             raise 

@@ -32,8 +32,7 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool):
         site_config = load_site_config()
         user_config = load_user_config(site_config)
 
-        # Create and run MCP server
         server = RAWMCP(user_config, site_config, profile=profile, port=port)
-        asyncio.run(server.run(transport=transport))
+        server.run(transport=transport)
     except Exception as e:
         output_error(e, json_output=False, debug=debug)
