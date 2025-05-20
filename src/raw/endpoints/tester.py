@@ -81,15 +81,17 @@ def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteConfig, p
         
         # Use EndpointLoader to load the endpoint definition
         loader = EndpointLoader(site_config)
-        endpoint_def = loader.load_endpoint(endpoint_type, name)
+        result = loader.load_endpoint(endpoint_type, name)
         
-        if endpoint_def is None:
+        if result is None:
             logger.error(f"Endpoint not found: {endpoint}")
             return {
                 "status": "error",
                 "endpoint": endpoint,
                 "message": f"Endpoint not found: {endpoint}"
             }
+            
+        endpoint_file_path, endpoint_def = result
             
         # Get test definitions
         tests = []

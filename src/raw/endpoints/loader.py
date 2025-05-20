@@ -64,8 +64,12 @@ class EndpointLoader:
         """Get a specific endpoint by its path"""
         return self._endpoints.get(path)
     
-    def load_endpoint(self, endpoint_type: str, name: str) -> Optional[EndpointDefinition]:
-        """Load a specific endpoint by type and name"""
+    def load_endpoint(self, endpoint_type: str, name: str) -> Optional[tuple[Path, EndpointDefinition]]:
+        """Load a specific endpoint by type and name
+        
+        Returns:
+            Optional[tuple[Path, EndpointDefinition]]: A tuple of (file_path, endpoint_data) if found, None otherwise
+        """
         try:
             # Find repository root
             repo_root = find_repo_root()
@@ -122,7 +126,7 @@ class EndpointLoader:
                                 schema = json.load(schema_file)
                                 validate(instance=data, schema=schema)
                             self._endpoints[str(f)] = data
-                            return data
+                            return (f, data)
                 except Exception as e:
                     logger.error(f"Warning: Failed to load endpoint {f}: {e}")
                     continue

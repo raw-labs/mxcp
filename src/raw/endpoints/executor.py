@@ -8,7 +8,7 @@ import json
 from jinja2 import Template
 from raw.endpoints.types import EndpointDefinition
 from raw.engine.duckdb_session import DuckDBSession
-from raw.endpoints.loader import find_repo_root
+from raw.endpoints.loader import find_repo_root, EndpointLoader
 from raw.config.user_config import UserConfig
 from raw.config.site_config import SiteConfig
 
@@ -93,22 +93,20 @@ class EndpointExecutor:
         self.endpoint_type = endpoint_type
         self.name = name
         self.endpoint: Optional[EndpointDefinition] = None
+        self.user_config = user_config
+        self.site_config = site_config
         self.session = DuckDBSession(user_config, site_config, profile)
         
     def _load_endpoint(self):
         """Load the endpoint definition from YAML file"""
-        # Find repository root
-        repo_root = find_repo_root()
+        # Use EndpointLoader to find the endpoint file
+        loader = EndpointLoader(self.site_config)
+        result = loader.load_endpoint(self.endpoint_type.value, self.name)
         
-        # Find endpoint file relative to repo root
-        endpoint_file = repo_root / "endpoints" / f"{self.name}.yml"
-        
-        if not endpoint_file.exists():
-            raise FileNotFoundError(f"Endpoint file not found: {endpoint_file}")
+        if not result:
+            raise FileNotFoundError(f"Endpoint {self.endpoint_type.value}/{self.name} not found")
             
-        # Load and parse YAML
-        with open(endpoint_file) as f:
-            self.endpoint = yaml.safe_load(f)
+        self.endpoint_file_path, self.endpoint = result
             
         # Validate basic structure
         if self.endpoint_type.value not in self.endpoint:
@@ -194,10 +192,9 @@ class EndpointExecutor:
                 return source["code"]
                 
         # Otherwise, try to load from file
-        # Find repository root and endpoint file path
+        # Find repository root
         repo_root = find_repo_root()
-        endpoint_file = repo_root / "endpoints" / f"{self.name}.yml"
-        return get_endpoint_source_code(self.endpoint, self.endpoint_type.value, endpoint_file, repo_root)
+        return get_endpoint_source_code(self.endpoint, self.endpoint_type.value, self.endpoint_file_path, repo_root)
             
     def execute(self, params: Dict[str, Any]) -> Any:
         """Execute the endpoint with given parameters"""

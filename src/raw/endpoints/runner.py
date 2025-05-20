@@ -20,8 +20,8 @@ def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user_confi
     try:
         # Load the endpoint using EndpointLoader
         loader = EndpointLoader(site_config)
-        endpoint_dict = loader.load_endpoint(endpoint_type, name)
-        if not endpoint_dict:
+        result = loader.load_endpoint(endpoint_type, name)
+        if not result:
             raise FileNotFoundError(f"Endpoint {endpoint_type}/{name} not found")
 
         # Use EndpointExecutor for execution
