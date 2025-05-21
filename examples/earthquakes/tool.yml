@@ -1,0 +1,52 @@
+raw: 1.0.0
+
+tool:
+  name: "query_recent_earthquakes"
+  description: "Query earthquakes over a given magnitude threshold."
+  tags: ["earthquake", "filter"]
+  parameters:
+    - name: min_magnitude
+      type: number
+      description: "Minimum magnitude"
+      default: 2.5
+  return:
+    type: array
+    items:
+      type: object
+  source:
+    code: |
+      WITH raw AS (
+        SELECT * FROM read_json_auto('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson')
+      ),
+      features AS (
+        SELECT
+          feature
+        FROM raw,
+            UNNEST(features) AS feature
+      ),
+      quakes AS (
+        SELECT
+          feature -> 'unnest' -> 'properties' -> 'mag' AS magnitude,
+          feature -> 'unnest' -> 'properties' -> 'place' AS location,
+          feature -> 'unnest' -> 'properties' -> 'time' AS time,
+          feature -> 'unnest' -> 'geometry' -> 'coordinates' AS coords
+        FROM features
+      )
+      SELECT
+        CAST(magnitude AS DOUBLE) AS magnitude,
+        location,
+        CAST(time AS BIGINT) AS time,
+        coords
+      FROM quakes
+      WHERE CAST(magnitude AS DOUBLE) >= $min_magnitude
+      ORDER BY magnitude DESC;
+  annotations:
+    title: "Query Significant Earthquakes"
+    readOnlyHint: true
+    idempotentHint: true
+    openWorldHint: true
+  tests:
+    - name: filter-mag
+      arguments:
+        - key: min_magnitude
+          value: 5.5
