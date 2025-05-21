@@ -4,8 +4,8 @@ import logging
 from mcp.server.fastmcp import FastMCP
 from raw.endpoints.loader import EndpointLoader
 from raw.endpoints.executor import EndpointExecutor, EndpointType
-from raw.config.user_config import load_user_config, UserConfig
-from raw.config.site_config import load_site_config, SiteConfig, get_active_profile
+from raw.config.user_config import UserConfig
+from raw.config.site_config import SiteConfig, get_active_profile
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,7 @@ class RAWMCP:
         self.active_profile = get_active_profile(self.user_config, self.site_config, profile)
         self.loader = EndpointLoader(self.site_config)
         self.endpoints = self.loader.discover_endpoints()
+        logger.info(f"Discovered {len(self.endpoints)} endpoints")
         
     def _convert_param_type(self, value: Any, param_type: str) -> Any:
         """Convert parameter value to the correct type based on JSON Schema type.
@@ -143,16 +144,21 @@ class RAWMCP:
 
     def register_endpoints(self):
         """Register all discovered endpoints with MCP."""
-        for endpoint in self.endpoints:
+        for path, endpoint_def in self.endpoints:
             try:
-                if "tool" in endpoint:
-                    self._register_tool(endpoint["tool"])
-                elif "resource" in endpoint:
-                    self._register_resource(endpoint["resource"])
-                elif "prompt" in endpoint:
-                    self._register_prompt(endpoint["prompt"])
+                if "tool" in endpoint_def:
+                    self._register_tool(endpoint_def["tool"])
+                    logger.info(f"Registered tool endpoint from {path}: {endpoint_def['tool']['name']}")
+                elif "resource" in endpoint_def:
+                    self._register_resource(endpoint_def["resource"])
+                    logger.info(f"Registered resource endpoint from {path}: {endpoint_def['resource']['uri']}")
+                elif "prompt" in endpoint_def:
+                    self._register_prompt(endpoint_def["prompt"])
+                    logger.info(f"Registered prompt endpoint from {path}: {endpoint_def['prompt']['name']}")
+                else:
+                    logger.warning(f"Unknown endpoint type in {path}: {endpoint_def}")
             except Exception as e:
-                logger.error(f"Error registering endpoint: {e}")
+                logger.error(f"Error registering endpoint {path}: {e}")
                 raise
 
     def run(self, transport: str = "streamable-http"):
@@ -162,11 +168,14 @@ class RAWMCP:
             transport: The transport to use ("streamable-http" or "stdio")
         """
         try:
+            logger.info("Starting MCP server...")
             # Register all endpoints
             self.register_endpoints()
+            logger.info("Endpoints registered successfully.")
             
             # Start server using MCP's built-in run method
             self.mcp.run(transport=transport)
+            logger.info("MCP server started successfully.")
         except Exception as e:
             logger.error(f"Error running MCP server: {e}")
             raise 
