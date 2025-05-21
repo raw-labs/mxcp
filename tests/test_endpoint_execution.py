@@ -131,6 +131,6 @@ async def test_sql_execution(executor):
     
     result = await executor.execute(params)
     assert len(result) > 0
-    assert result[0][0] == "test"  # name column
-    assert result[0][1] == 25      # age column
-    assert result[0][2] is True    # is_active column 
+    assert result[0]["name"] == "test"  # name column
+    assert result[0]["age"] == 25      # age column
+    assert result[0]["is_active"] is True    # is_active column 

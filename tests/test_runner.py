@@ -51,7 +51,7 @@ async def test_simple_tool_success(test_repo_path, test_user_config, test_site_c
         args = {"a": 1, "b": 2}
         result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert len(result) == 1
-        assert result[0][0] == 3
+        assert result[0]["result"] == 3
     finally:
         os.chdir(original_dir)
 
@@ -96,8 +96,8 @@ async def test_date_resource_success(test_repo_path, test_user_config, test_site
         args = {"date": "2024-03-20", "format": "human"}
         result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert len(result) == 1
-        assert result[0][0] == "March 20, 2024"
-        assert result[0][1] == "human"
+        assert result[0]["date"] == "March 20, 2024"
+        assert result[0]["format"] == "human"
     finally:
         os.chdir(original_dir)
 
@@ -141,16 +141,16 @@ async def test_greeting_prompt_success(test_repo_path, test_user_config, test_si
         name = "greeting_prompt"
         args = {"name": "Alice", "time_of_day": "afternoon"}
         result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
-        assert len(result) == 1
-        messages = result[0][0]  # Access first tuple element
-        assert len(messages) == 2
-        assert messages[0]["role"] == "system"
-        assert messages[0]["type"] == "text"
-        assert messages[0]["prompt"] == "You are a friendly greeter."
-        assert messages[1]["role"] == "user"
-        assert messages[1]["type"] == "text"
-        assert "Good afternoon, Alice!" in messages[1]["prompt"]
-        assert "wonderful afternoon" in messages[1]["prompt"]
+        assert len(result) == 2  # Two messages
+        # Verify system message
+        assert result[0]["role"] == "system"
+        assert result[0]["type"] == "text"
+        assert result[0]["prompt"] == "You are a friendly greeter."
+        # Verify user message
+        assert result[1]["role"] == "user"
+        assert result[1]["type"] == "text"
+        assert "Good afternoon, Alice!" in result[1]["prompt"]
+        assert "wonderful afternoon" in result[1]["prompt"]
     finally:
         os.chdir(original_dir)
 
@@ -164,10 +164,8 @@ async def test_greeting_prompt_default_value(test_repo_path, test_user_config, t
         name = "greeting_prompt"
         args = {"name": "Bob"}  # time_of_day defaults to "morning"
         result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
-        assert len(result) == 1
-        messages = result[0][0]  # Access first tuple element
-        assert len(messages) == 2
-        assert "Good morning, Bob!" in messages[1]["prompt"]
+        assert len(result) == 2  # Two messages
+        assert "Good morning, Bob!" in result[1]["prompt"]
     finally:
         os.chdir(original_dir)
 
@@ -247,18 +245,16 @@ async def test_valid_prompt_success(test_repo_path, test_user_config, test_site_
         name = "valid_prompt"
         args = {"topic": "quantum computing", "expertise_level": "intermediate"}
         result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
-        assert len(result) == 1
-        messages = result[0][0]  # Access first tuple element
-        assert len(messages) == 2
+        assert len(result) == 2  # Two messages
         # Verify system message
-        assert messages[0]["role"] == "system"
-        assert messages[0]["type"] == "text"
-        assert messages[0]["prompt"] == "You are a knowledgeable teacher who adapts explanations to the audience's expertise level."
+        assert result[0]["role"] == "system"
+        assert result[0]["type"] == "text"
+        assert result[0]["prompt"] == "You are a knowledgeable teacher who adapts explanations to the audience's expertise level."
         # Verify user message
-        assert messages[1]["role"] == "user"
-        assert messages[1]["type"] == "text"
-        assert "quantum computing" in messages[1]["prompt"]
-        assert "intermediate" in messages[1]["prompt"]
+        assert result[1]["role"] == "user"
+        assert result[1]["type"] == "text"
+        assert "quantum computing" in result[1]["prompt"]
+        assert "intermediate" in result[1]["prompt"]
     finally:
         os.chdir(original_dir)
 
@@ -272,10 +268,8 @@ async def test_valid_prompt_default_value(test_repo_path, test_user_config, test
         name = "valid_prompt"
         args = {"topic": "machine learning"}  # expertise_level defaults to "beginner"
         result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
-        assert len(result) == 1
-        messages = result[0][0]  # Access first tuple element
-        assert len(messages) == 2
-        assert "machine learning" in messages[1]["prompt"]
-        assert "beginner" in messages[1]["prompt"]
+        assert len(result) == 2  # Two messages
+        assert "machine learning" in result[1]["prompt"]
+        assert "beginner" in result[1]["prompt"]
     finally:
         os.chdir(original_dir) 

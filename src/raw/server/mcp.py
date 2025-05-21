@@ -131,7 +131,9 @@ class RAWMCP:
                     self.site_config,
                     self.profile_name,
                 )
-                return await exec_.execute(converted)
+                result = await exec_.execute(converted)
+                logger.debug(f"Result: {json.dumps(result, indent=2)}")
+                return result
 
             except Exception as e:
                 logger.error(f"Error executing {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))}:\n{traceback.format_exc()}")

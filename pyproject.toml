@@ -18,7 +18,8 @@ dependencies = [
     "jinja2>=3.1.3",
     "aiohttp>=3.8.0",  # Required for MCP HTTP transport
     "starlette>=0.27.0",  # Required for MCP HTTP transport
-    "makefun"
+    "makefun",
+    "pandas>=2.0.0"  # Required for DuckDB DataFrame operations
 ]
 
 [project.scripts]

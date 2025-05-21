@@ -17,6 +17,9 @@ class EndpointType(Enum):
     RESOURCE = "resource"
     PROMPT = "prompt"
 
+# Type alias for standardized endpoint results
+EndpointResult = List[Dict[str, Any]]
+
 def get_endpoint_source_code(endpoint_dict: dict, endpoint_type: str, endpoint_file_path: Path, repo_root: Path) -> str:
     """Get the source code for the endpoint, resolving code vs file."""
     source = endpoint_dict[endpoint_type]["source"]
@@ -196,8 +199,13 @@ class EndpointExecutor:
         repo_root = find_repo_root()
         return get_endpoint_source_code(self.endpoint, self.endpoint_type.value, self.endpoint_file_path, repo_root)
             
-    async def execute(self, params: Dict[str, Any]) -> Any:
-        """Execute the endpoint with given parameters"""
+    async def execute(self, params: Dict[str, Any]) -> EndpointResult:
+        """Execute the endpoint with given parameters.
+        
+        Returns:
+            For tools and resources: List[Dict[str, Any]] where each dict represents a row with column names as keys
+            For prompts: List[Dict[str, Any]] where each dict represents a message with role, prompt, and type
+        """
         # Load endpoint definition if not already loaded
         if self.endpoint is None:
             self._load_endpoint()
@@ -212,8 +220,8 @@ class EndpointExecutor:
         conn = self.session.connect()
         
         try:
-            if self.endpoint_type == EndpointType.TOOL:
-                # For tools, we execute SQL and return results
+            if self.endpoint_type in (EndpointType.TOOL, EndpointType.RESOURCE):
+                # For tools and resources, we execute SQL and return results as list of dicts
                 source = self._get_source_code()
                 
                 # Check for missing parameters in SQL
@@ -222,20 +230,8 @@ class EndpointExecutor:
                 if missing_params:
                     raise ValueError(f"Required parameter missing: {', '.join(missing_params)}")
                 
-                result = conn.execute(source, params).fetchall()
-                return result
-                
-            elif self.endpoint_type == EndpointType.RESOURCE:
-                # For resources, we execute SQL and return the resource
-                source = self._get_source_code()
-                
-                # Check for missing parameters in SQL
-                required_params = duckdb.extract_statements(source)[0].named_parameters
-                missing_params = set(required_params) - set(params.keys())
-                if missing_params:
-                    raise ValueError(f"Required parameter missing: {', '.join(missing_params)}")
-                
-                result = conn.execute(source, params).fetchall()
+                # Convert to DataFrame and then to list of dicts to preserve column names
+                result = conn.execute(source, params).fetchdf().to_dict("records")
                 return result
                 
             else:  # PROMPT
@@ -255,14 +251,18 @@ class EndpointExecutor:
                     }
                     processed_messages.append(processed_msg)
                 
-                # Return as a list of tuples to match other endpoint types
-                return [(processed_messages,)]
+                return processed_messages
                 
         finally:
             self.session.close()
             
-async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None) -> Any:
-    """Execute an endpoint by type and name"""
+async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None) -> EndpointResult:
+    """Execute an endpoint by type and name.
+    
+    Returns:
+        For tools and resources: List[Dict[str, Any]] where each dict represents a row with column names as keys
+        For prompts: List[Dict[str, Any]] where each dict represents a message with role, prompt, and type
+    """
     try:
         endpoint_type_enum = EndpointType(endpoint_type.lower())
     except ValueError:

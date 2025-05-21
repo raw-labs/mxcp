@@ -71,7 +71,8 @@ async def test_secret_injection(executor):
     executor._load_endpoint()
     result = await executor.execute({})
     assert len(result) == 1
-    assert "bearer_token=bearer_token" in result[0][0]
+    print(result)
+    assert "bearer_token=bearer_token" in result[0]["secret_value"]
 
 @pytest.mark.asyncio
 async def test_http_headers_injection(http_headers_executor):
@@ -79,5 +80,5 @@ async def test_http_headers_injection(http_headers_executor):
     http_headers_executor._load_endpoint()
     result = await http_headers_executor.execute({})
     assert len(result) == 1
-    assert "Authorization=Bearer test_token" in result[0][0]
-    assert "X-Custom-Header=custom_value" in result[0][0]
+    assert "Authorization=Bearer test_token" in result[0]["secret_value"]
+    assert "X-Custom-Header=custom_value" in result[0]["secret_value"]
