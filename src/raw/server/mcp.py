@@ -35,6 +35,7 @@ class RAWMCP:
         )
         self.user_config = user_config
         self.site_config = site_config
+        self.profile_name = profile or site_config["profile"]
         self.active_profile = get_active_profile(self.user_config, self.site_config, profile)
         self.loader = EndpointLoader(self.site_config)
         self.endpoints = self.loader.discover_endpoints()
@@ -128,7 +129,7 @@ class RAWMCP:
                     endpoint_def["name"] if endpoint_key != "resource" else endpoint_def["uri"],
                     self.user_config,
                     self.site_config,
-                    self.active_profile,
+                    self.profile_name,
                 )
                 return await exec_.execute(converted)
 
