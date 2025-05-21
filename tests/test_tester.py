@@ -70,7 +70,7 @@ def test_run_valid_resource(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = run_tests("resource/valid_resource", user_config, site_config, None)
+        result = run_tests("resource/data://valid.resource", user_config, site_config, None)
         assert result["status"] == "error"  # Overall status is error because of the failing test
         assert result["tests_run"] == 2
         assert any(test["status"] == "passed" for test in result["tests"])  # valid filter test should pass

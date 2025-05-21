@@ -1,7 +1,7 @@
 raw: "1.0.0"
 
 resource:
-  uri: valid_resource
+  uri: data://valid.resource
   enabled: true
 
   parameters:

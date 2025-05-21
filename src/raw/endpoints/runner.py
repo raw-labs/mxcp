@@ -22,7 +22,7 @@ def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user_confi
         loader = EndpointLoader(site_config)
         result = loader.load_endpoint(endpoint_type, name)
         if not result:
-            raise FileNotFoundError(f"Endpoint {endpoint_type}/{name} not found")
+            raise FileNotFoundError(f"Endpoint {endpoint_type} {name} not found")
 
         # Use EndpointExecutor for execution
         executor = EndpointExecutor(EndpointType(endpoint_type), name, user_config, site_config, profile)

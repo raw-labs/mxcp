@@ -72,6 +72,27 @@ class RAWMCP:
             logger.error(f"Error converting parameter value {value} to type {param_type}: {e}")
             raise ValueError(f"Invalid parameter value for type {param_type}: {value}")
 
+    def _clean_uri_for_func_name(self, uri: str) -> str:
+        """Clean a URI to be used as a function name.
+        
+        Args:
+            uri: The URI to clean
+            
+        Returns:
+            A string suitable for use as a function name
+        """
+        # Replace protocol:// with _
+        name = uri.replace("://", "_")
+        # Replace / with _
+        name = name.replace("/", "_")
+        # Replace {param} with _param
+        name = name.replace("{", "_").replace("}", "")
+        # Replace any remaining non-alphanumeric chars with _
+        name = "".join(c if c.isalnum() else "_" for c in name)
+        # Remove consecutive underscores
+        name = "_".join(filter(None, name.split("_")))
+        return name
+
     # ---------------------------------------------------------------------------
     # helper that every register_* method will call
     # ---------------------------------------------------------------------------
@@ -117,7 +138,9 @@ class RAWMCP:
         #   (param1, param2, ...)
         # -------------------------------------------------------------------
         signature = f"({', '.join(param_names)})"
-        func_name = endpoint_def.get("name", endpoint_def.get("uri", "handler")).replace(".", "_")
+        func_name = endpoint_def.get("name", endpoint_def.get("uri", "handler"))
+        if endpoint_key == "resource":
+            func_name = self._clean_uri_for_func_name(func_name)
         handler = create_function(signature, _body, func_name=func_name)
 
         # Finally register the function with FastMCP -------------------------

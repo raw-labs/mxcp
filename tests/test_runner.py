@@ -87,7 +87,7 @@ def test_date_resource_success(test_repo_path, test_user_config, test_site_confi
     os.chdir(test_repo_path)
     try:
         endpoint_type = "resource"
-        name = "date_resource"
+        name = "data://date.resource"
         args = {"date": "2024-03-20", "format": "human"}
         result = run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert len(result) == 1
@@ -102,7 +102,7 @@ def test_date_resource_invalid_date(test_repo_path, test_user_config, test_site_
     os.chdir(test_repo_path)
     try:
         endpoint_type = "resource"
-        name = "date_resource"
+        name = "data://date.resource"
         args = {"date": "not-a-date", "format": "iso"}
         with pytest.raises(RuntimeError) as exc_info:
             run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
@@ -116,7 +116,7 @@ def test_date_resource_invalid_format(test_repo_path, test_user_config, test_sit
     os.chdir(test_repo_path)
     try:
         endpoint_type = "resource"
-        name = "date_resource"
+        name = "data://date.resource"
         args = {"date": "2024-03-20", "format": "invalid_format"}
         with pytest.raises(RuntimeError) as exc_info:
             run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)

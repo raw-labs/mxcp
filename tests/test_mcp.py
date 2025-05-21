@@ -125,13 +125,11 @@ def test_convert_param_type_object(mcp_server):
     with pytest.raises(ValueError):
         mcp_server._convert_param_type("invalid_json", "object")
 
-@pytest.mark.asyncio
 def test_register_tool(mcp_server, mock_endpoint):
     """Test registering a tool endpoint."""
     with patch.object(mcp_server.mcp, 'tool', return_value=lambda f: f):
         mcp_server._register_tool(mock_endpoint)
 
-@pytest.mark.asyncio
 def test_register_resource(mcp_server):
     """Test registering a resource endpoint."""
     resource_def = {
@@ -143,34 +141,29 @@ def test_register_resource(mcp_server):
     with patch.object(mcp_server.mcp, 'resource', return_value=lambda f: f):
         mcp_server._register_resource(resource_def)
 
-@pytest.mark.asyncio
 def test_register_prompt(mcp_server, mock_endpoint):
     """Test registering a prompt endpoint."""
     with patch.object(mcp_server.mcp, 'prompt', return_value=lambda f: f):
         mcp_server._register_prompt(mock_endpoint)
 
-@pytest.mark.asyncio
-async def test_run_http(mcp_server):
+def test_run_http(mcp_server):
     """Test running the server with HTTP transport."""
-    with patch.object(mcp_server.mcp, 'run', new_callable=AsyncMock) as mock_run:
-        await mcp_server.run(transport="streamable-http")
+    with patch.object(mcp_server.mcp, 'run') as mock_run:
+        mcp_server.run(transport="streamable-http")
         mock_run.assert_called_once_with(transport="streamable-http")
 
-@pytest.mark.asyncio
-async def test_run_stdio(mcp_server):
+def test_run_stdio(mcp_server):
     """Test running the server with stdio transport."""
-    with patch.object(mcp_server.mcp, 'run', new_callable=AsyncMock) as mock_run:
-        await mcp_server.run(transport="stdio")
+    with patch.object(mcp_server.mcp, 'run') as mock_run:
+        mcp_server.run(transport="stdio")
         mock_run.assert_called_once_with(transport="stdio")
 
-@pytest.mark.asyncio
-async def test_invalid_transport(mcp_server):
+def test_invalid_transport(mcp_server):
     """Test running with invalid transport."""
     with pytest.raises(ValueError, match="Unknown transport: invalid"):
-        await mcp_server.run(transport="invalid")
+        mcp_server.run(transport="invalid")
 
-@pytest.mark.asyncio
-async def test_parameter_conversion(mcp_server):
+def test_parameter_conversion(mcp_server):
     """Test parameter type conversion."""
     # Test string conversion
     assert mcp_server._convert_param_type("123", "string") == "123"
@@ -195,8 +188,7 @@ async def test_parameter_conversion(mcp_server):
     with pytest.raises(ValueError):
         mcp_server._convert_param_type("not_json", "array")
 
-@pytest.mark.asyncio
-async def test_endpoint_registration(mcp_server):
+def test_endpoint_registration(mcp_server):
     """Test endpoint registration."""
     # Register endpoints
     mcp_server.register_endpoints()
@@ -211,11 +203,11 @@ async def test_server_transport(mcp_server):
     """Test server transport options."""
     # Test invalid transport
     with pytest.raises(ValueError, match="Unknown transport: invalid"):
-        await mcp_server.run(transport="invalid")
+        mcp_server.run(transport="invalid")
     
     # Test HTTP transport
-    with patch.object(mcp_server.mcp, 'run', new_callable=AsyncMock) as mock_run:
-        await mcp_server.run(transport="streamable-http")
+    with patch.object(mcp_server.mcp, 'run') as mock_run:
+        mcp_server.run(transport="streamable-http")
         mock_run.assert_called_once_with(transport="streamable-http")
 
 @pytest.mark.skip(reason="Incompatible with pytest-asyncio event loop; should be run in a subprocess or integration test harness. TODO: Refactor to subprocess-based integration test.")

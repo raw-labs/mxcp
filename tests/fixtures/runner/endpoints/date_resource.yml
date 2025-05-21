@@ -1,7 +1,7 @@
 raw: "1.0.0"
 
 resource:
-  uri: date_resource
+  uri: data://date.resource
   description: A resource that returns dates in different formats
   parameters:
     - name: date
