@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional, List
 import json
 import logging
+import traceback
 from mcp.server.fastmcp import FastMCP
 from raw.endpoints.loader import EndpointLoader
 from raw.endpoints.executor import EndpointExecutor, EndpointType
@@ -112,6 +113,8 @@ class RAWMCP:
         # -------------------------------------------------------------------
         async def _body(**kwargs):
             try:
+                logger.info(f"Calling {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))} with: {kwargs}")
+
                 # type-convert each param according to the YAML schema --------
                 converted = {
                     p["name"]: self._convert_param_type(kwargs[p["name"]], p["type"])
@@ -130,7 +133,7 @@ class RAWMCP:
                 return await exec_.execute(converted)
 
             except Exception as e:
-                logger.error(f"Error executing {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))}: {e}")
+                logger.error(f"Error executing {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))}:\n{traceback.format_exc()}")
                 raise
 
         # -------------------------------------------------------------------
