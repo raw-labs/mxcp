@@ -11,8 +11,11 @@ pip install -e .
 ## 🚀 Usage
 
 ```bash
+cd examples/earthquakes
 raw list
-raw run examples/hello.yml --param=value
+raw validate
+raw test
+raw run --param min_magnitude=5 tool query_recent_earthquakes           
 raw serve
 ```
 
