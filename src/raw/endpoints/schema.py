@@ -11,6 +11,25 @@ from raw.endpoints.executor import get_endpoint_source_code
 from raw.endpoints.loader import EndpointLoader
 import re
 
+RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
+
+def validate_resource_uri_vs_params(res_def, path):
+    uri_params = set(RESOURCE_VAR_RE.findall(res_def["uri"]))
+    yaml_params = {p["name"] for p in res_def.get("parameters", [])}
+
+    extra_in_yaml = yaml_params - uri_params
+    if extra_in_yaml:
+        return {
+            "status": "error",
+            "path": path,
+            "message": (
+                f"Resource parameter(s) {sorted(extra_in_yaml)} are not used "
+                f"in uri '{res_def['uri']}'. Put them in the uri or make a "
+                f"'tool:' instead."
+            ),
+        }
+    return None
+
 def validate_all_endpoints(user_config, site_config, profile):
     """Validate all endpoints in the repository."""
     # Use EndpointLoader to discover endpoints
@@ -94,6 +113,12 @@ def validate_endpoint(path, user_config, site_config, profile):
                     }
             
             return {"status": "ok", "path": path}
+        
+        # For resources, validate URI vs parameters
+        if endpoint_type == "resource":
+            err = validate_resource_uri_vs_params(endpoint["resource"], path)
+            if err:
+                return err
 
         # For tools and resources, validate SQL
         try:

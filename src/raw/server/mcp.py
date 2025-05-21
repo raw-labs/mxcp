@@ -6,6 +6,8 @@ from raw.endpoints.loader import EndpointLoader
 from raw.endpoints.executor import EndpointExecutor, EndpointType
 from raw.config.user_config import UserConfig
 from raw.config.site_config import SiteConfig, get_active_profile
+from makefun import create_function
+from functools import partial
 
 logger = logging.getLogger(__name__)
 
@@ -68,31 +70,71 @@ class RAWMCP:
             logger.error(f"Error converting parameter value {value} to type {param_type}: {e}")
             raise ValueError(f"Invalid parameter value for type {param_type}: {value}")
 
+    # ---------------------------------------------------------------------------
+    # helper that every register_* method will call
+    # ---------------------------------------------------------------------------
+    def _build_and_register(
+        self,
+        endpoint_type: EndpointType,
+        endpoint_key: str,            # "tool" | "resource" | "prompt"
+        endpoint_def: Dict[str, Any],
+        decorator,                    # self.mcp.tool() | self.mcp.resource(uri) | self.mcp.prompt()
+        log_name: str                 # for nice logging
+    ):
+        # List of arg names exactly as FastMCP expects
+        param_names = [p["name"] for p in endpoint_def["parameters"]]
+
+        # -------------------------------------------------------------------
+        # Body of the handler: receives **kwargs with those exact names
+        # -------------------------------------------------------------------
+        async def _body(**kwargs):
+            try:
+                # type-convert each param according to the YAML schema --------
+                converted = {
+                    p["name"]: self._convert_param_type(kwargs[p["name"]], p["type"])
+                    for p in endpoint_def["parameters"]
+                    if p["name"] in kwargs
+                }
+
+                # run through RAW executor -----------------------------------
+                exec_ = EndpointExecutor(
+                    endpoint_type,
+                    endpoint_def["name"] if endpoint_key != "resource" else endpoint_def["uri"],
+                    self.user_config,
+                    self.site_config,
+                    self.active_profile,
+                )
+                return await exec_.execute(converted)
+
+            except Exception as e:
+                logger.error(f"Error executing {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))}: {e}")
+                raise
+
+        # -------------------------------------------------------------------
+        # Dynamically create an *async* function whose signature is
+        #   (param1, param2, ...)
+        # -------------------------------------------------------------------
+        signature = f"({', '.join(param_names)})"
+        func_name = endpoint_def.get("name", endpoint_def.get("uri", "handler")).replace(".", "_")
+        handler = create_function(signature, _body, func_name=func_name)
+
+        # Finally register the function with FastMCP -------------------------
+        decorator(handler)
+        logger.info(f"Registered {log_name}: {func_name}")
+
     def _register_tool(self, tool_def: Dict[str, Any]):
         """Register a tool endpoint with MCP.
         
         Args:
             tool_def: The tool definition from YAML
         """
-        @self.mcp.tool()
-        async def tool_handler(**params):
-            try:
-                # Convert parameters to correct types
-                converted_params = {}
-                for param in tool_def["parameters"]:
-                    param_name = param["name"]
-                    if param_name in params:
-                        converted_params[param_name] = self._convert_param_type(
-                            params[param_name], 
-                            param["type"]
-                        )
-                
-                # Execute using RAW's executor
-                executor = EndpointExecutor(EndpointType.TOOL, tool_def["name"], self.user_config, self.site_config, self.active_profile)
-                return await executor.execute(converted_params)
-            except Exception as e:
-                logger.error(f"Error executing tool {tool_def['name']}: {e}")
-                raise
+        self._build_and_register(
+            EndpointType.TOOL,
+            "tool",
+            tool_def,
+            decorator=self.mcp.tool(),          # note the call!
+            log_name="tool"
+        )
 
     def _register_resource(self, resource_def: Dict[str, Any]):
         """Register a resource endpoint with MCP.
@@ -100,23 +142,13 @@ class RAWMCP:
         Args:
             resource_def: The resource definition from YAML
         """
-        @self.mcp.resource(resource_def['uri'])
-        async def resource_handler(**params):
-            try:
-                converted_params = {}
-                for param in resource_def["parameters"]:
-                    param_name = param["name"]
-                    if param_name in params:
-                        converted_params[param_name] = self._convert_param_type(
-                            params[param_name], 
-                            param["type"]
-                        )
-                
-                executor = EndpointExecutor(EndpointType.RESOURCE, resource_def["uri"], self.user_config, self.site_config, self.active_profile)
-                return await executor.execute(converted_params)
-            except Exception as e:
-                logger.error(f"Error executing resource {resource_def['uri']}: {e}")
-                raise
+        self._build_and_register(
+            EndpointType.RESOURCE,
+            "resource",
+            resource_def,
+            decorator=self.mcp.resource(resource_def["uri"]),
+            log_name="resource"
+        )
 
     def _register_prompt(self, prompt_def: Dict[str, Any]):
         """Register a prompt endpoint with MCP.
@@ -124,23 +156,13 @@ class RAWMCP:
         Args:
             prompt_def: The prompt definition from YAML
         """
-        @self.mcp.prompt()
-        async def prompt_handler(**params):
-            try:
-                converted_params = {}
-                for param in prompt_def["parameters"]:
-                    param_name = param["name"]
-                    if param_name in params:
-                        converted_params[param_name] = self._convert_param_type(
-                            params[param_name], 
-                            param["type"]
-                        )
-                
-                executor = EndpointExecutor(EndpointType.PROMPT, prompt_def["name"], self.user_config, self.site_config, self.active_profile)
-                return await executor.execute(converted_params)
-            except Exception as e:
-                logger.error(f"Error executing prompt {prompt_def['name']}: {e}")
-                raise
+        self._build_and_register(
+            EndpointType.PROMPT,
+            "prompt",
+            prompt_def,
+            decorator=self.mcp.prompt(),
+            log_name="prompt"
+        )
 
     def register_endpoints(self):
         """Register all discovered endpoints with MCP."""
