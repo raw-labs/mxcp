@@ -4,7 +4,7 @@ from raw.endpoints.loader import EndpointLoader
 from raw.config.user_config import UserConfig
 from raw.config.site_config import SiteConfig
 
-def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: str) -> List[Dict[str, Any]]:
+async def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: str) -> List[Dict[str, Any]]:
     """
     Run an endpoint with the given arguments, using EndpointLoader for consistency.
     Args:
@@ -26,7 +26,7 @@ def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user_confi
 
         # Use EndpointExecutor for execution
         executor = EndpointExecutor(EndpointType(endpoint_type), name, user_config, site_config, profile)
-        result = executor.execute(args)
+        result = await executor.execute(args)
         return result
     except Exception as e:
         raise RuntimeError(f"Error running endpoint: {str(e)}")

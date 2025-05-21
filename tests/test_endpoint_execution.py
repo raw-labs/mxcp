@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from pathlib import Path
 from raw.endpoints.executor import EndpointExecutor, EndpointType
 from raw.config.user_config import load_user_config
@@ -88,7 +89,8 @@ def test_parameter_validation(executor):
     with pytest.raises(ValueError):
         executor._validate_parameters({"tags": "not an array"})  # Wrong type
 
-def test_sql_execution(executor):
+@pytest.mark.asyncio
+async def test_sql_execution(executor):
     """Test SQL execution with parameter conversion"""
     executor._load_endpoint()
     
@@ -127,7 +129,7 @@ def test_sql_execution(executor):
         }
     }
     
-    result = executor.execute(params)
+    result = await executor.execute(params)
     assert len(result) > 0
     assert result[0][0] == "test"  # name column
     assert result[0][1] == 25      # age column

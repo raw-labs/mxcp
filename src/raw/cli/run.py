@@ -1,5 +1,6 @@
 import click
 import json
+import asyncio
 from typing import Dict, Any, Optional
 from raw.endpoints.runner import run_endpoint as execute_endpoint
 from raw.endpoints.executor import EndpointType
@@ -36,7 +37,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
             params[key] = value
             
         # Execute endpoint
-        result = execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name)
+        result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name))
         
         # Output result
         output_result(result, json_output, debug)

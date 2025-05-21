@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from pathlib import Path
 from raw.endpoints.runner import run_endpoint
 from raw.config.user_config import load_user_config
@@ -39,7 +40,8 @@ def test_site_config(test_repo_path):
 def test_profile():
     return "test_profile"
 
-def test_simple_tool_success(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_simple_tool_success(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test successful execution of a simple tool endpoint"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -47,13 +49,14 @@ def test_simple_tool_success(test_repo_path, test_user_config, test_site_config,
         endpoint_type = "tool"
         name = "simple_tool"
         args = {"a": 1, "b": 2}
-        result = run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+        result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert len(result) == 1
         assert result[0][0] == 3
     finally:
         os.chdir(original_dir)
 
-def test_simple_tool_missing_arg(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_simple_tool_missing_arg(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test tool execution with missing required argument"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -62,12 +65,13 @@ def test_simple_tool_missing_arg(test_repo_path, test_user_config, test_site_con
         name = "simple_tool"
         args = {"a": 1}  # Missing 'b'
         with pytest.raises(RuntimeError) as exc_info:
-            run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+            await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert "Required parameter missing" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 
-def test_simple_tool_wrong_type(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_simple_tool_wrong_type(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test tool execution with wrong argument type"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -76,12 +80,13 @@ def test_simple_tool_wrong_type(test_repo_path, test_user_config, test_site_conf
         name = "simple_tool"
         args = {"a": "not_a_number", "b": 2}
         with pytest.raises(RuntimeError) as exc_info:
-            run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+            await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert "Error converting parameter" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 
-def test_date_resource_success(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_date_resource_success(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test successful execution of a date resource endpoint"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -89,14 +94,15 @@ def test_date_resource_success(test_repo_path, test_user_config, test_site_confi
         endpoint_type = "resource"
         name = "data://date.resource"
         args = {"date": "2024-03-20", "format": "human"}
-        result = run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+        result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert len(result) == 1
         assert result[0][0] == "March 20, 2024"
         assert result[0][1] == "human"
     finally:
         os.chdir(original_dir)
 
-def test_date_resource_invalid_date(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_date_resource_invalid_date(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test resource execution with invalid date format"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -105,12 +111,13 @@ def test_date_resource_invalid_date(test_repo_path, test_user_config, test_site_
         name = "data://date.resource"
         args = {"date": "not-a-date", "format": "iso"}
         with pytest.raises(RuntimeError) as exc_info:
-            run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+            await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert "Error converting parameter" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 
-def test_date_resource_invalid_format(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_date_resource_invalid_format(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test resource execution with invalid format enum value"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -119,12 +126,13 @@ def test_date_resource_invalid_format(test_repo_path, test_user_config, test_sit
         name = "data://date.resource"
         args = {"date": "2024-03-20", "format": "invalid_format"}
         with pytest.raises(RuntimeError) as exc_info:
-            run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+            await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert "Invalid value for format" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 
-def test_greeting_prompt_success(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_greeting_prompt_success(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test successful execution of a greeting prompt endpoint"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -132,7 +140,7 @@ def test_greeting_prompt_success(test_repo_path, test_user_config, test_site_con
         endpoint_type = "prompt"
         name = "greeting_prompt"
         args = {"name": "Alice", "time_of_day": "afternoon"}
-        result = run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+        result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert len(result) == 1
         messages = result[0][0]  # Access first tuple element
         assert len(messages) == 2
@@ -146,7 +154,8 @@ def test_greeting_prompt_success(test_repo_path, test_user_config, test_site_con
     finally:
         os.chdir(original_dir)
 
-def test_greeting_prompt_default_value(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_greeting_prompt_default_value(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test prompt execution with default time_of_day value"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -154,7 +163,7 @@ def test_greeting_prompt_default_value(test_repo_path, test_user_config, test_si
         endpoint_type = "prompt"
         name = "greeting_prompt"
         args = {"name": "Bob"}  # time_of_day defaults to "morning"
-        result = run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+        result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert len(result) == 1
         messages = result[0][0]  # Access first tuple element
         assert len(messages) == 2
@@ -162,7 +171,8 @@ def test_greeting_prompt_default_value(test_repo_path, test_user_config, test_si
     finally:
         os.chdir(original_dir)
 
-def test_greeting_prompt_name_too_long(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_greeting_prompt_name_too_long(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test prompt execution with name exceeding maxLength"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -171,12 +181,13 @@ def test_greeting_prompt_name_too_long(test_repo_path, test_user_config, test_si
         name = "greeting_prompt"
         args = {"name": "A" * 51, "time_of_day": "morning"}  # 51 chars > maxLength 50
         with pytest.raises(RuntimeError) as exc_info:
-            run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+            await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert "String name is too long" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 
-def test_nonexistent_endpoint(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_nonexistent_endpoint(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test execution of a non-existent endpoint"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -185,12 +196,13 @@ def test_nonexistent_endpoint(test_repo_path, test_user_config, test_site_config
         name = "nonexistent"
         args = {}
         with pytest.raises(RuntimeError) as exc_info:
-            run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+            await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert "not found" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 
-def test_invalid_endpoint_yaml(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_invalid_endpoint_yaml(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test execution of an endpoint with invalid YAML"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -203,14 +215,15 @@ def test_invalid_endpoint_yaml(test_repo_path, test_user_config, test_site_confi
         try:
             args = {}
             with pytest.raises(RuntimeError) as exc_info:
-                run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+                await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
             assert "Error running endpoint" in str(exc_info.value)
         finally:
             invalid_path.unlink()
     finally:
         os.chdir(original_dir)
 
-def test_greeting_prompt_missing_required_param(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_greeting_prompt_missing_required_param(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test prompt execution with missing required parameter"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -219,12 +232,13 @@ def test_greeting_prompt_missing_required_param(test_repo_path, test_user_config
         name = "greeting_prompt"
         args = {"time_of_day": "morning"}  # Missing required 'name' parameter
         with pytest.raises(RuntimeError) as exc_info:
-            run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+            await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert "Required parameter missing" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 
-def test_valid_prompt_success(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_valid_prompt_success(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test successful execution of a valid prompt endpoint"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -232,7 +246,7 @@ def test_valid_prompt_success(test_repo_path, test_user_config, test_site_config
         endpoint_type = "prompt"
         name = "valid_prompt"
         args = {"topic": "quantum computing", "expertise_level": "intermediate"}
-        result = run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+        result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert len(result) == 1
         messages = result[0][0]  # Access first tuple element
         assert len(messages) == 2
@@ -248,7 +262,8 @@ def test_valid_prompt_success(test_repo_path, test_user_config, test_site_config
     finally:
         os.chdir(original_dir)
 
-def test_valid_prompt_default_value(test_repo_path, test_user_config, test_site_config, test_profile):
+@pytest.mark.asyncio
+async def test_valid_prompt_default_value(test_repo_path, test_user_config, test_site_config, test_profile):
     """Test prompt execution with default expertise_level value"""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
@@ -256,7 +271,7 @@ def test_valid_prompt_default_value(test_repo_path, test_user_config, test_site_
         endpoint_type = "prompt"
         name = "valid_prompt"
         args = {"topic": "machine learning"}  # expertise_level defaults to "beginner"
-        result = run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
+        result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
         assert len(result) == 1
         messages = result[0][0]  # Access first tuple element
         assert len(messages) == 2

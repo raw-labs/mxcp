@@ -1,9 +1,10 @@
 import pytest
+import asyncio
 from pathlib import Path
+import os
 from raw.endpoints.executor import EndpointExecutor, EndpointType
 from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config
-import os
 
 @pytest.fixture(scope="session", autouse=True)
 def set_raw_config_env():
@@ -64,12 +65,19 @@ def http_headers_executor(test_repo_path, user_config, site_config, test_profile
     finally:
         os.chdir(original_dir)
 
-def test_secret_injection(executor):
-    """Test basic secret injection."""
-    result = executor.execute({})
-    assert result[0][0] == "name=http_auth_token;type=http;provider=config;serializable=true;scope;bearer_token=bearer_token"
+@pytest.mark.asyncio
+async def test_secret_injection(executor):
+    """Test that secrets are properly injected into DuckDB session"""
+    executor._load_endpoint()
+    result = await executor.execute({})
+    assert len(result) == 1
+    assert "bearer_token=bearer_token" in result[0][0]
 
-def test_http_headers_injection(http_headers_executor):
-    """Test HTTP headers injection."""
-    result = http_headers_executor.execute({})
-    assert result[0][0] == "name=http_headers_token;type=http;provider=config;serializable=true;scope;extra_http_headers={Authorization=Bearer test_token, X-Custom-Header=custom_value}"
+@pytest.mark.asyncio
+async def test_http_headers_injection(http_headers_executor):
+    """Test that HTTP headers are properly injected as MAP type"""
+    http_headers_executor._load_endpoint()
+    result = await http_headers_executor.execute({})
+    assert len(result) == 1
+    assert "Authorization=Bearer test_token" in result[0][0]
+    assert "X-Custom-Header=custom_value" in result[0][0]

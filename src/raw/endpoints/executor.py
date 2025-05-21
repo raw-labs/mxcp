@@ -196,7 +196,7 @@ class EndpointExecutor:
         repo_root = find_repo_root()
         return get_endpoint_source_code(self.endpoint, self.endpoint_type.value, self.endpoint_file_path, repo_root)
             
-    def execute(self, params: Dict[str, Any]) -> Any:
+    async def execute(self, params: Dict[str, Any]) -> Any:
         """Execute the endpoint with given parameters"""
         # Load endpoint definition if not already loaded
         if self.endpoint is None:
@@ -261,7 +261,7 @@ class EndpointExecutor:
         finally:
             self.session.close()
             
-def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None) -> Any:
+async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None) -> Any:
     """Execute an endpoint by type and name"""
     try:
         endpoint_type_enum = EndpointType(endpoint_type.lower())
@@ -269,4 +269,4 @@ def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user
         raise ValueError(f"Invalid endpoint type: {endpoint_type}. Must be one of: {', '.join(t.value for t in EndpointType)}")
         
     executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config, profile)
-    return executor.execute(params) 
+    return await executor.execute(params) 

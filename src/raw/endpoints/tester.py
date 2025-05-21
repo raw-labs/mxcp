@@ -11,14 +11,14 @@ from pathlib import Path
 import yaml
 from jsonschema import validate
 import duckdb
+import asyncio
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
-    """Run tests for all endpoints in the repository"""
-    # Find repository root
+async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
+    """Run tests for all endpoints in the repository (async)"""
     repo_root = find_repo_root()
     logger.debug(f"Repository root: {repo_root}")
     
@@ -57,7 +57,7 @@ def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profile: Opt
                 continue
                 
             # Run tests for this endpoint
-            endpoint_results = run_tests(f"{kind}/{name}", user_config, site_config, profile)
+            endpoint_results = await run_tests(f"{kind}/{name}", user_config, site_config, profile)
             results["endpoints"].append(endpoint_results)
             results["tests_run"] += endpoint_results.get("tests_run", 0)
             
@@ -71,7 +71,7 @@ def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profile: Opt
             
     return results
 
-def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
+async def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
     """Run tests for a specific endpoint"""
     try:
         # Split endpoint into type and name
@@ -137,7 +137,7 @@ def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteConfig, p
             
             try:
                 # Use the proper execute_endpoint function with profile
-                result = execute_endpoint(endpoint_type, name, params, user_config, site_config, profile)
+                result = await execute_endpoint(endpoint_type, name, params, user_config, site_config, profile)
                 logger.info(f"Execution result: {result}")
                 
                 # Normalize result for comparison
