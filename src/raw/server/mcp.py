@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import json
 import logging
 from mcp.server.fastmcp import FastMCP
@@ -6,6 +6,7 @@ from raw.endpoints.loader import EndpointLoader
 from raw.endpoints.executor import EndpointExecutor, EndpointType
 from raw.config.user_config import UserConfig
 from raw.config.site_config import SiteConfig, get_active_profile
+from raw.endpoints.schema import validate_endpoint
 from makefun import create_function
 from functools import partial
 
@@ -36,6 +37,7 @@ class RAWMCP:
         self.active_profile = get_active_profile(self.user_config, self.site_config, profile)
         self.loader = EndpointLoader(self.site_config)
         self.endpoints = self.loader.discover_endpoints()
+        self.skipped_endpoints: List[Dict[str, Any]] = []
         logger.info(f"Discovered {len(self.endpoints)} endpoints")
         
     def _convert_param_type(self, value: Any, param_type: str) -> Any:
@@ -132,7 +134,7 @@ class RAWMCP:
             EndpointType.TOOL,
             "tool",
             tool_def,
-            decorator=self.mcp.tool(),          # note the call!
+            decorator=self.mcp.tool(),
             log_name="tool"
         )
 
@@ -168,6 +170,17 @@ class RAWMCP:
         """Register all discovered endpoints with MCP."""
         for path, endpoint_def in self.endpoints:
             try:
+                # Validate endpoint before registration
+                validation_result = validate_endpoint(str(path), self.user_config, self.site_config, self.active_profile)
+                
+                if validation_result["status"] != "ok":
+                    logger.warning(f"Skipping invalid endpoint {path}: {validation_result.get('message', 'Unknown error')}")
+                    self.skipped_endpoints.append({
+                        "path": str(path),
+                        "error": validation_result.get("message", "Unknown error")
+                    })
+                    continue
+
                 if "tool" in endpoint_def:
                     self._register_tool(endpoint_def["tool"])
                     logger.info(f"Registered tool endpoint from {path}: {endpoint_def['tool']['name']}")
@@ -181,7 +194,17 @@ class RAWMCP:
                     logger.warning(f"Unknown endpoint type in {path}: {endpoint_def}")
             except Exception as e:
                 logger.error(f"Error registering endpoint {path}: {e}")
-                raise
+                self.skipped_endpoints.append({
+                    "path": str(path),
+                    "error": str(e)
+                })
+                continue
+
+        # Report skipped endpoints
+        if self.skipped_endpoints:
+            logger.warning(f"Skipped {len(self.skipped_endpoints)} invalid endpoints:")
+            for skipped in self.skipped_endpoints:
+                logger.warning(f"  - {skipped['path']}: {skipped['error']}")
 
     def run(self, transport: str = "streamable-http"):
         """Run the MCP server.
