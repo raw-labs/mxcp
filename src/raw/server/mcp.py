@@ -84,7 +84,7 @@ class RAWMCP:
         log_name: str                 # for nice logging
     ):
         # List of arg names exactly as FastMCP expects
-        param_names = [p["name"] for p in endpoint_def["parameters"]]
+        param_names = [p["name"] for p in endpoint_def.get("parameters", [])]
 
         # -------------------------------------------------------------------
         # Body of the handler: receives **kwargs with those exact names
@@ -94,7 +94,7 @@ class RAWMCP:
                 # type-convert each param according to the YAML schema --------
                 converted = {
                     p["name"]: self._convert_param_type(kwargs[p["name"]], p["type"])
-                    for p in endpoint_def["parameters"]
+                    for p in endpoint_def.get("parameters", [])
                     if p["name"] in kwargs
                 }
 

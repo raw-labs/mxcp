@@ -169,7 +169,13 @@
       "type": "object",
       "required": ["uri", "source"],
       "properties": {
-        "uri": { "type": "string", "description": "Logical URI identifying this resource." },
+        "uri": { 
+          "type": "string", 
+          "description": "Logical URI identifying this resource.",
+          "pattern": "^[a-z0-9]+(\\.[a-z0-9]+)*$",
+          "minLength": 1,
+          "maxLength": 255
+        },
         "description": { "type": "string", "description": "Description of this resource." },
         "tags": {
           "type": "array",
