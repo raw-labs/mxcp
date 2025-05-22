@@ -12,6 +12,10 @@ def check_existing_raw_repo(target_dir: Path) -> bool:
             return True
     return False
 
+def check_existing_duckdb(target_dir: Path) -> bool:
+    """Check if there's a .duckdb file in the target directory."""
+    return (target_dir / ".duckdb").exists()
+
 def check_project_exists(user_config: dict, project_name: str) -> bool:
     """Check if the project name already exists in the user config."""
     return project_name in user_config.get("projects", {})
@@ -69,8 +73,6 @@ def create_hello_world_files(target_dir: Path):
     with open(endpoints_dir / "hello-world.yml", "w") as f:
         yaml.dump(hello_world_yml, f, default_flow_style=False)
 
-    
-
 @click.command(name="init")
 @click.argument("folder", type=click.Path(file_okay=False, dir_okay=True, writable=True), default=".")
 @click.option("--project", help="Project name (defaults to folder name)")
@@ -95,6 +97,10 @@ def init(folder: str, project: str, profile: str, bootstrap: bool):
         # Check if we're trying to create a repo inside another one
         if check_existing_raw_repo(target_dir):
             raise click.ClickException("Cannot create a RAW repository inside another one")
+            
+        # Check if .duckdb file already exists
+        if check_existing_duckdb(target_dir):
+            raise click.ClickException("Cannot create a RAW repository in a directory with an existing .duckdb file")
         
         # Create target directory if it doesn't exist
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -125,6 +131,20 @@ def init(folder: str, project: str, profile: str, bootstrap: bool):
         if bootstrap:
             create_hello_world_files(target_dir)
             click.echo("Created example hello world endpoint")
+            
+        # Initialize DuckDB session to create .duckdb file
+        try:
+            from raw.config.site_config import load_site_config
+            from raw.engine.duckdb_session import DuckDBSession
+            
+            site_config = load_site_config(target_dir)
+            new_user_config = load_user_config(site_config)
+            session = DuckDBSession(new_user_config, site_config)
+            session.connect()
+            session.close()
+            click.echo("Initialize DuckDB database")
+        except Exception as e:
+            click.echo(f"Warning: Failed to initialize DuckDB database: {e}")
             
     except Exception as e:
         output_error(e, json_output=False, debug=False) 
