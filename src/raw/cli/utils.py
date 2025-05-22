@@ -35,7 +35,7 @@ def output_result(result: Any, json_output: bool = False, debug: bool = False) -
         print(json.dumps({
             "status": "ok",
             "result": result
-        }, indent=2))
+        }, indent=2, default=str))
     else:
         if isinstance(result, list):
             for row in result:
