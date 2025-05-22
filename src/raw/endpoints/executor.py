@@ -12,6 +12,7 @@ from raw.endpoints.loader import find_repo_root, EndpointLoader
 from raw.config.user_config import UserConfig
 from raw.config.site_config import SiteConfig
 import re
+import numpy as np
 
 class EndpointType(Enum):
     TOOL = "tool"
@@ -113,7 +114,7 @@ class TypeConverter:
             return bool(value)
             
         elif param_type == "array":
-            if not isinstance(value, list):
+            if not isinstance(value, (list, np.ndarray)):
                 if isinstance(value, str):
                     try:
                         value = json.loads(value)
@@ -121,6 +122,9 @@ class TypeConverter:
                         raise ValueError(f"Invalid JSON array: {value}")
                 else:
                     raise ValueError(f"Expected array, got {type(value)}")
+            
+            if isinstance(value, np.ndarray):
+                value = value.tolist()
             
             # Validate array constraints
             if "minItems" in param_def and len(value) < param_def["minItems"]:
@@ -291,7 +295,10 @@ class EndpointExecutor:
             validate_output: Whether to validate the output against the return type definition (default: True)
         
         Returns:
-            For tools and resources: List[Dict[str, Any]] where each dict represents a row with column names as keys
+            For tools and resources: 
+                - If return type is array: List[Dict[str, Any]] where each dict represents a row
+                - If return type is object: Dict[str, Any] representing a single row
+                - If return type is scalar: The scalar value from a single row, single column
             For prompts: List[Dict[str, Any]] where each dict represents a message with role, prompt, and type
         """
         # Load endpoint definition if not already loaded
@@ -320,6 +327,28 @@ class EndpointExecutor:
                 
                 # Convert to DataFrame and then to list of dicts to preserve column names
                 result = conn.execute(source, params).fetchdf().to_dict("records")
+                
+                # Transform result based on return type if specified
+                endpoint_def = self.endpoint[self.endpoint_type.value]
+                if "return" in endpoint_def:
+                    return_type = endpoint_def["return"].get("type")
+                    
+                    if return_type != "array":
+                        if len(result) == 0:
+                            raise ValueError("SQL query returned no rows")
+                        if len(result) > 1:
+                            raise ValueError(f"SQL query returned multiple rows ({len(result)}), but return type is '{return_type}'")
+                        
+                        # We have exactly one row
+                        row = result[0]
+                        
+                        if return_type == "object":
+                            result = row
+                        else:  # scalar type
+                            if len(row) != 1:
+                                raise ValueError(f"SQL query returned multiple columns ({len(row)}), but return type is '{return_type}'")
+                            result = next(iter(row.values()))
+                
                 # Validate the output against the return type definition if enabled
                 if validate_output:
                     self._validate_return(result)
@@ -357,11 +386,11 @@ class EndpointExecutor:
             return
         
         return_def = endpoint_def["return"]
+        return_type = return_def.get("type")
+        
         try:
-            # Use TypeConverter to validate the output
             TypeConverter.convert_value(output, return_def)
         except Exception as e:
-            # Convert Python types to schema types for error messages
             expected_type = return_def.get("type", "unknown")
             actual_type = self._python_type_to_schema_type(type(output).__name__)
             error_msg = f"Output validation failed: Expected return type '{expected_type}', but received '{actual_type}'"

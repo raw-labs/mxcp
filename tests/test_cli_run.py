@@ -37,6 +37,7 @@ def chdir_to_fixtures():
 
 def test_simple_parameters(runner):
     result = runner.invoke(run_endpoint, ["tool", "test_tool", "--param", "name=value"])
+    print("CLI OUTPUT:\n", result.output)
     assert result.exit_code == 0
 
 def test_json_file_parameter(runner, temp_json_file):

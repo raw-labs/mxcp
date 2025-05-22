@@ -1,0 +1,22 @@
+raw: 1.0.0
+tool:
+  description: Test endpoint for return type validation
+  name: example
+  parameters:
+  - description: Name parameter
+    name: name
+    type: string
+  - description: Age parameter
+    name: age
+    type: integer
+  return:
+    properties:
+      age:
+        type: integer
+      name:
+        type: string
+    type: object
+  source:
+    code: "-- For array/object return types\nSELECT\n  $name as name,\n  $age as age\n\
+      FROM (VALUES (1)) t\n-- For scalar return types\n-- SELECT $age as result \"\
+      \n"

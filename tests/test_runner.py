@@ -50,8 +50,7 @@ async def test_simple_tool_success(test_repo_path, test_user_config, test_site_c
         name = "simple_tool"
         args = {"a": 1, "b": 2}
         result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
-        assert len(result) == 1
-        assert result[0]["result"] == 3
+        assert result == 3
     finally:
         os.chdir(original_dir)
 
@@ -95,9 +94,8 @@ async def test_date_resource_success(test_repo_path, test_user_config, test_site
         name = "data://date.resource"
         args = {"date": "2024-03-20", "format": "human"}
         result = await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
-        assert len(result) == 1
-        assert result[0]["date"] == "March 20, 2024"
-        assert result[0]["format"] == "human"
+        assert result["date"] == "March 20, 2024"
+        assert result["format"] == "human"
     finally:
         os.chdir(original_dir)
 
