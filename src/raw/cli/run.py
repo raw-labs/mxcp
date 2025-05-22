@@ -16,7 +16,8 @@ from raw.cli.utils import output_result, output_error
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
-def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool):
+@click.option("--skip-output-validation", is_flag=True, help="Skip output validation against the return type definition")
+def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool):
     """Run an endpoint (tool, resource, or prompt)
     
     Parameters can be provided in two ways:
@@ -60,7 +61,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
             params[key] = value
             
         # Execute endpoint
-        result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name))
+        result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name, validate_output=not skip_output_validation))
         
         # Output result
         output_result(result, json_output, debug)

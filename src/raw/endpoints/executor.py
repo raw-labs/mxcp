@@ -283,8 +283,12 @@ class EndpointExecutor:
         repo_root = find_repo_root()
         return get_endpoint_source_code(self.endpoint, self.endpoint_type.value, self.endpoint_file_path, repo_root)
             
-    async def execute(self, params: Dict[str, Any]) -> EndpointResult:
+    async def execute(self, params: Dict[str, Any], validate_output: bool = True) -> EndpointResult:
         """Execute the endpoint with given parameters.
+        
+        Args:
+            params: Dictionary of parameter name/value pairs
+            validate_output: Whether to validate the output against the return type definition (default: True)
         
         Returns:
             For tools and resources: List[Dict[str, Any]] where each dict represents a row with column names as keys
@@ -316,6 +320,9 @@ class EndpointExecutor:
                 
                 # Convert to DataFrame and then to list of dicts to preserve column names
                 result = conn.execute(source, params).fetchdf().to_dict("records")
+                # Validate the output against the return type definition if enabled
+                if validate_output:
+                    self._validate_return(result)
                 return result
                 
             else:  # PROMPT
@@ -340,6 +347,22 @@ class EndpointExecutor:
         finally:
             self.session.close()
             
+    def _validate_return(self, output: EndpointResult) -> None:
+        """Validate the output against the return type definition if present."""
+        if not self.endpoint:
+            raise RuntimeError("Endpoint not loaded")
+        
+        endpoint_def = self.endpoint[self.endpoint_type.value]
+        if "return" not in endpoint_def:
+            return
+        
+        return_def = endpoint_def["return"]
+        try:
+            # Use TypeConverter to validate the output
+            TypeConverter.convert_value(output, return_def)
+        except Exception as e:
+            raise ValueError(f"Output validation failed: {str(e)}")
+
 async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None) -> EndpointResult:
     """Execute an endpoint by type and name.
     
