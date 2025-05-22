@@ -32,11 +32,32 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
     elif "enabled" not in config["dbt"]:
         config["dbt"]["enabled"] = True
         
-    # DuckDB defaults
-    if "duckdb" not in config:
-        config["duckdb"] = {"path": str(repo_root / ".duckdb")}
-    elif "path" not in config["duckdb"]:
-        config["duckdb"]["path"] = str(repo_root / ".duckdb")
+    # Initialize profiles section if not present
+    if "profiles" not in config:
+        config["profiles"] = {}
+        
+    # Get the current profile
+    profile = config.get("profile", "default")
+    
+    # Initialize profile config if not present
+    if profile not in config["profiles"]:
+        config["profiles"][profile] = {}
+        
+    # Initialize duckdb config for the profile if not present
+    if "duckdb" not in config["profiles"][profile]:
+        config["profiles"][profile]["duckdb"] = {}
+        
+    # Set default DuckDB path for the profile if not specified
+    if "path" not in config["profiles"][profile]["duckdb"]:
+        config["profiles"][profile]["duckdb"]["path"] = str(repo_root / f".duckdb-{profile}")
+        
+    # Initialize drift config for the profile if not present
+    if "drift" not in config["profiles"][profile]:
+        config["profiles"][profile]["drift"] = {}
+        
+    # Set default drift manifest path for the profile if not specified
+    if "path" not in config["profiles"][profile]["drift"]:
+        config["profiles"][profile]["drift"]["path"] = str(repo_root / f"drift-{profile}.json")
         
     return config
 

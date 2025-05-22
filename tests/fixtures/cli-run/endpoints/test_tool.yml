@@ -1,0 +1,31 @@
+raw: "1.0.0"
+
+tool:
+  name: test_tool
+  description: A test tool for CLI parameter testing
+  parameters:
+    - name: name
+      type: string
+      description: A simple string parameter
+    - name: data
+      type: object
+      description: A complex object parameter
+      default: null
+      properties:
+        nested:
+          type: object
+          properties:
+            array:
+              type: array
+              items:
+                type: integer
+            object:
+              type: object
+              properties:
+                key:
+                  type: string
+  source:
+    code: |
+      SELECT 
+        $name as name,
+        $data as data 
