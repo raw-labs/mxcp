@@ -4,6 +4,8 @@ from pathlib import Path
 import os
 from raw.cli.utils import output_error
 from raw.config.user_config import load_user_config
+from raw.config.analytics import track_command_with_timing
+from typing import Optional
 
 def check_existing_raw_repo(target_dir: Path) -> bool:
     """Check if there's a raw-site.yml in the target directory or any parent directory."""
@@ -78,6 +80,7 @@ def create_hello_world_files(target_dir: Path):
 @click.option("--project", help="Project name (defaults to folder name)")
 @click.option("--profile", help="Profile name (defaults to 'default')")
 @click.option("--bootstrap", is_flag=True, help="Create example hello world endpoint")
+@track_command_with_timing("init")
 def init(folder: str, project: str, profile: str, bootstrap: bool):
     """Initialize a new RAW repository in the specified folder.
 

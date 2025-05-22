@@ -5,6 +5,7 @@ from raw.endpoints.loader import EndpointLoader
 from pathlib import Path
 from raw.config.site_config import load_site_config
 from raw.cli.utils import output_result, output_error
+from raw.config.analytics import track_command_with_timing
 
 def parse_endpoint(path: Path, endpoint: dict) -> Tuple[str, str, Optional[str]]:
     """Parse an endpoint dictionary to determine its type, name, and any error.
@@ -22,10 +23,13 @@ def parse_endpoint(path: Path, endpoint: dict) -> Tuple[str, str, Optional[str]]
         return "unknown", "unknown", f"Invalid endpoint structure in {path}: missing tool/resource/prompt key"
 
 @click.command(name="list")
+@click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
-def list_endpoints(json_output: bool, debug: bool):
-    """List available endpoints"""
+@track_command_with_timing("list")
+def list_endpoints(profile: str, json_output: bool, debug: bool):
+    """List all endpoints
+    """
     try:
         site_config = load_site_config()
         loader = EndpointLoader(site_config)

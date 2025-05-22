@@ -8,6 +8,7 @@ from raw.endpoints.executor import EndpointType
 from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config, get_active_profile
 from raw.cli.utils import output_result, output_error
+from raw.config.analytics import track_command_with_timing
 
 @click.command(name="run")
 @click.argument("endpoint_type", type=click.Choice([t.value for t in EndpointType]))
@@ -17,6 +18,7 @@ from raw.cli.utils import output_result, output_error
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
 @click.option("--skip-output-validation", is_flag=True, help="Skip output validation against the return type definition")
+@track_command_with_timing("run")
 def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool):
     """Run an endpoint (tool, resource, or prompt)
     

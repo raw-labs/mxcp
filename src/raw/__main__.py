@@ -6,11 +6,12 @@ from raw.cli.test import test
 from raw.cli.serve import serve
 from raw.cli.init import init
 from raw.cli.query import query
+from raw.config.analytics import initialize_analytics
 
 @click.group()
 def cli():
     """RAW CLI"""
-    pass
+    initialize_analytics()
 
 cli.add_command(list_endpoints)
 cli.add_command(run_endpoint)

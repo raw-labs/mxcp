@@ -7,6 +7,7 @@ from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config
 from raw.cli.utils import output_result, output_error
 from raw.engine.duckdb_session import DuckDBSession
+from raw.config.analytics import track_command_with_timing
 
 @click.command(name="query")
 @click.argument("sql", required=False)
@@ -15,6 +16,7 @@ from raw.engine.duckdb_session import DuckDBSession
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
+@track_command_with_timing("query")
 def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool):
     """Execute a SQL query directly against the DuckDB database.
     
