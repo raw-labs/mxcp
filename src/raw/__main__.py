@@ -6,12 +6,14 @@ from raw.cli.test import test
 from raw.cli.serve import serve
 from raw.cli.init import init
 from raw.cli.query import query
-from raw.config.analytics import initialize_analytics
+from raw.config.analytics import initialize_analytics, track_base_command
 
 @click.group()
 def cli():
     """RAW CLI"""
     initialize_analytics()
+    # Track when user runs just 'raw' without any command
+    track_base_command()
 
 cli.add_command(list_endpoints)
 cli.add_command(run_endpoint)

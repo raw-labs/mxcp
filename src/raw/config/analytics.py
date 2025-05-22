@@ -75,6 +75,12 @@ def track_command(command_name: str, success: bool, error: Optional[str] = None,
     
     track_event("cli_command_executed", properties)
 
+def track_base_command() -> None:
+    """
+    Track when user runs just 'raw' without any command.
+    """
+    track_command("base", True)
+
 def track_command_with_timing(command_name: str) -> Any:
     """
     Decorator to track command execution with timing.

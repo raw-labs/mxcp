@@ -1,6 +1,5 @@
 import click
 import json
-import asyncio
 from typing import Dict, Any, Optional
 from pathlib import Path
 from raw.config.user_config import load_user_config
