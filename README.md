@@ -29,4 +29,3 @@ pytest tests/
 
 - Open this folder in VSCode
 - Ensure interpreter is set to `.venv`
-- You can debug CLI commands via `.vscode/launch.json`
