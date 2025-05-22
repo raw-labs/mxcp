@@ -24,6 +24,7 @@ class TypeDefinition(TypedDict):
     items: Optional['TypeDefinition']
     properties: Optional[dict[str, 'TypeDefinition']]
     required: Optional[List[str]]
+    additionalProperties: Optional[bool]  # Whether to allow additional properties not defined in the schema
 
 class ParamDefinition(TypedDict):
     name: str

@@ -1,0 +1,14 @@
+raw: "1.0.0"
+tool:
+  name: strict_endpoint_extra
+  description: "Test endpoint with strict schema and extra column"
+  return:
+    type: object
+    properties:
+      name:
+        type: string
+      age:
+        type: integer
+    additionalProperties: false
+  source:
+    file: extra_column.sql 

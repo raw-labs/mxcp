@@ -367,6 +367,10 @@
           "type": "array",
           "description": "List of required fields if type is object.",
           "items": { "type": "string" }
+        },
+        "additionalProperties": {
+          "type": "boolean",
+          "description": "Whether to allow additional properties not defined in the schema. Defaults to true if not specified."
         }
       }
     }

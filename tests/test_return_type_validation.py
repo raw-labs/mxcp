@@ -1,10 +1,22 @@
+import os
 import pytest
+from contextlib import contextmanager
 from pathlib import Path
 from raw.endpoints.executor import EndpointExecutor, EndpointType
-from raw.config.user_config import load_user_config
-from raw.config.site_config import load_site_config
-import os
-import yaml
+from raw.config.user_config import load_user_config, UserConfig
+from raw.config.site_config import load_site_config, SiteConfig
+
+TEST_REPO_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "return-type-validation")
+
+@contextmanager
+def change_working_dir(path):
+    """Change working directory temporarily."""
+    original_dir = os.getcwd()
+    try:
+        os.chdir(path)
+        yield
+    finally:
+        os.chdir(original_dir)
 
 @pytest.fixture(scope="session", autouse=True)
 def set_raw_config_env():
@@ -31,98 +43,139 @@ def test_profile():
     return "test_profile"
 
 @pytest.fixture
-def endpoint_file(test_repo_path):
-    """Path to the endpoint file."""
-    return test_repo_path / "endpoints" / "example.yml"
-
-def modify_return_type(endpoint_file: Path, return_type: str, properties: dict = None):
-    """Modify the return type in the endpoint file."""
-    with open(endpoint_file) as f:
-        endpoint = yaml.safe_load(f)
-    
-    if return_type == "array":
-        endpoint["tool"]["return"] = {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "age": {"type": "integer"}
-                }
-            }
-        }
-    elif return_type == "object":
-        endpoint["tool"]["return"] = {
-            "type": "object",
-            "properties": {
-                "name": {"type": "string"},
-                "age": {"type": "integer"}
-            }
-        }
-    else:  # scalar type
-        endpoint["tool"]["return"] = {
-            "type": return_type
-        }
-    
-    with open(endpoint_file, "w") as f:
-        yaml.dump(endpoint, f)
-
-@pytest.fixture
-def executor(test_repo_path, user_config, site_config, test_profile, endpoint_file):
-    """Create an executor for endpoint execution tests."""
-    # Change to test repo directory
+def array_executor(test_repo_path, user_config, site_config, test_profile):
+    """Create an executor for array endpoint tests."""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "example", user_config, site_config, test_profile)
+        executor = EndpointExecutor(EndpointType.TOOL, "array_endpoint", user_config, site_config, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)
 
-async def test_array_return_type(executor, endpoint_file):
+@pytest.fixture
+def object_executor(test_repo_path, user_config, site_config, test_profile):
+    """Create an executor for object endpoint tests."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        executor = EndpointExecutor(EndpointType.TOOL, "object_endpoint", user_config, site_config, test_profile)
+        yield executor
+    finally:
+        os.chdir(original_dir)
+
+@pytest.fixture
+def scalar_executor(test_repo_path, user_config, site_config, test_profile):
+    """Create an executor for scalar endpoint tests."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        executor = EndpointExecutor(EndpointType.TOOL, "scalar_endpoint", user_config, site_config, test_profile)
+        yield executor
+    finally:
+        os.chdir(original_dir)
+
+@pytest.fixture
+def error_executor(test_repo_path, user_config, site_config, test_profile):
+    """Create an executor for error endpoint tests."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        executor = EndpointExecutor(EndpointType.TOOL, "error_endpoint", user_config, site_config, test_profile)
+        yield executor
+    finally:
+        os.chdir(original_dir)
+
+@pytest.fixture
+def strict_executor(test_repo_path, user_config, site_config, test_profile):
+    """Create an executor for strict endpoint tests."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        executor = EndpointExecutor(EndpointType.TOOL, "strict_endpoint", user_config, site_config, test_profile)
+        yield executor
+    finally:
+        os.chdir(original_dir)
+
+@pytest.fixture
+def strict_extra_executor(test_repo_path, user_config, site_config, test_profile):
+    """Create an executor for strict endpoint with extra column tests."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        executor = EndpointExecutor(EndpointType.TOOL, "strict_endpoint_extra", user_config, site_config, test_profile)
+        yield executor
+    finally:
+        os.chdir(original_dir)
+
+@pytest.fixture
+def flexible_executor(test_repo_path, user_config, site_config, test_profile):
+    """Create an executor for flexible endpoint tests."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        executor = EndpointExecutor(EndpointType.TOOL, "flexible_endpoint", user_config, site_config, test_profile)
+        yield executor
+    finally:
+        os.chdir(original_dir)
+
+async def test_array_return_type(array_executor):
     """Test that array return type works with multiple rows."""
-    modify_return_type(endpoint_file, "array")
-    executor._load_endpoint()
-    output = [
+    array_executor._load_endpoint()
+    expected = [
         {"name": "Alice", "age": 30},
-        {"name": "Bob", "age": 25}
+        {"name": "Bob", "age": 25},
+        {"name": "test", "age": 25}
     ]
-    result = await executor.execute({"name": "test", "age": 25})
-    assert result == output
+    result = await array_executor.execute({"name": "test", "age": 25})
+    assert result == expected
 
-async def test_object_return_type(executor, endpoint_file):
+async def test_object_return_type(object_executor):
     """Test that object return type works with single row."""
-    modify_return_type(endpoint_file, "object")
-    executor._load_endpoint()
-    output = {"name": "Alice", "age": 30}
-    result = await executor.execute({"name": "Alice", "age": 30})
-    assert result == output
+    object_executor._load_endpoint()
+    expected = {"name": "Alice", "age": 30}
+    result = await object_executor.execute({"name": "test", "age": 25})
+    assert result == expected
 
-async def test_scalar_return_type(executor, endpoint_file):
+async def test_scalar_return_type(scalar_executor):
     """Test that scalar return type works with single row, single column."""
-    modify_return_type(endpoint_file, "number")
-    executor._load_endpoint()
-    output = 42
-    result = await executor.execute({"name": "test", "age": 42})
-    assert result == output
+    scalar_executor._load_endpoint()
+    expected = 42
+    result = await scalar_executor.execute({"value": 42})
+    assert result == expected
 
-async def test_multiple_rows_error(executor, endpoint_file):
+async def test_multiple_rows_error(error_executor):
     """Test that multiple rows error when return type is not array."""
-    modify_return_type(endpoint_file, "object")
-    executor._load_endpoint()
+    error_executor._load_endpoint()
     with pytest.raises(ValueError, match="SQL query returned multiple rows"):
-        await executor.execute({"name": "test", "age": 25})
+        await error_executor.execute({"error_type": "multiple_rows"})
 
-async def test_multiple_columns_error(executor, endpoint_file):
+async def test_multiple_columns_error(error_executor):
     """Test that multiple columns error when return type is scalar."""
-    modify_return_type(endpoint_file, "number")
-    executor._load_endpoint()
-    with pytest.raises(ValueError, match="SQL query returned multiple columns"):
-        await executor.execute({"name": "test", "age": 25})
+    error_executor._load_endpoint()
+    with pytest.raises(ValueError, match="Unexpected property: extra"):
+        await error_executor.execute({"error_type": "multiple_columns"})
 
-async def test_no_rows_error(executor, endpoint_file):
+async def test_no_rows_error(error_executor):
     """Test that no rows error when return type is not array."""
-    modify_return_type(endpoint_file, "object")
-    executor._load_endpoint()
+    error_executor._load_endpoint()
     with pytest.raises(ValueError, match="SQL query returned no rows"):
-        await executor.execute({"name": "test", "age": 25}) 
+        await error_executor.execute({"error_type": "no_rows"})
+
+async def test_strict_endpoint_success(strict_executor):
+    """Test that strict endpoint succeeds when only allowed columns are present."""
+    strict_executor._load_endpoint()
+    result = await strict_executor.execute({})
+    assert result == {"name": "Alice", "age": 30}
+
+async def test_strict_endpoint_extra_failure(strict_extra_executor):
+    """Test that strict endpoint fails when extra column is present."""
+    strict_extra_executor._load_endpoint()
+    with pytest.raises(ValueError, match="Unexpected property: extra"):
+        await strict_extra_executor.execute({})
+
+async def test_flexible_endpoint_success(flexible_executor):
+    """Test that flexible endpoint succeeds when extra column is present."""
+    flexible_executor._load_endpoint()
+    result = await flexible_executor.execute({})
+    assert result == {"name": "Alice", "age": 30, "extra": "extra"} 

@@ -37,9 +37,29 @@ def get_endpoint_source_code(endpoint_dict: dict, endpoint_type: str, endpoint_f
     else:
         raise ValueError("No source code found in endpoint definition")
 
+class SchemaError(ValueError):
+    """Raised when a value doesn't match the expected schema."""
+    pass
+
 class TypeConverter:
     """Handles conversion between Python types and DuckDB types"""
     
+    @staticmethod
+    def python_type_to_schema_type(python_type: str) -> str:
+        type_map = {
+            "str": "string",
+            "int": "integer",
+            "float": "number",
+            "bool": "boolean",
+            "list": "array",
+            "dict": "object",
+            "datetime": "date-time",
+            "date": "date",
+            "time": "time",
+            "timedelta": "duration"
+        }
+        return type_map.get(python_type, python_type)
+
     @staticmethod
     def convert_value(value: Any, param_def: Dict[str, Any]) -> Any:
         """Convert a value to the appropriate type based on parameter definition"""
@@ -59,53 +79,59 @@ class TypeConverter:
                 return datetime.strptime(value, "%H:%M:%S").time()
             elif param_format == "email":
                 if not re.match(r"[^@]+@[^@]+\.[^@]+", value):
-                    raise ValueError(f"Invalid email format: {value}")
+                    raise SchemaError(f"Invalid email format: {value}")
                 return str(value)
             elif param_format == "uri":
                 if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:.*$", value):
-                    raise ValueError(f"Invalid URI format: {value}")
+                    raise SchemaError(f"Invalid URI format: {value}")
                 return str(value)
             elif param_format == "duration":
                 # ISO 8601 duration format (e.g., P1DT2H)
                 if not re.match(r"^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$", value):
-                    raise ValueError(f"Invalid duration format: {value}")
+                    raise SchemaError(f"Invalid duration format: {value}")
                 return str(value)
             elif param_format == "timestamp":
                 # Unix timestamp (seconds since epoch)
                 try:
                     return datetime.fromtimestamp(float(value))
                 except (ValueError, OSError):
-                    raise ValueError(f"Invalid timestamp: {value}")
+                    raise SchemaError(f"Invalid timestamp: {value}")
             return str(value)
             
         elif param_type == "number":
-            result = float(value)
+            try:
+                result = float(value)
+            except (ValueError, TypeError):
+                raise SchemaError(f"Expected number, got {type(value).__name__}")
             # Validate numeric constraints
             if "multipleOf" in param_def and result % param_def["multipleOf"] != 0:
-                raise ValueError(f"Value must be multiple of {param_def['multipleOf']}")
+                raise SchemaError(f"Value must be multiple of {param_def['multipleOf']}")
             if "minimum" in param_def and result < param_def["minimum"]:
-                raise ValueError(f"Value must be >= {param_def['minimum']}")
+                raise SchemaError(f"Value must be >= {param_def['minimum']}")
             if "maximum" in param_def and result > param_def["maximum"]:
-                raise ValueError(f"Value must be <= {param_def['maximum']}")
+                raise SchemaError(f"Value must be <= {param_def['maximum']}")
             if "exclusiveMinimum" in param_def and result <= param_def["exclusiveMinimum"]:
-                raise ValueError(f"Value must be > {param_def['exclusiveMinimum']}")
+                raise SchemaError(f"Value must be > {param_def['exclusiveMinimum']}")
             if "exclusiveMaximum" in param_def and result >= param_def["exclusiveMaximum"]:
-                raise ValueError(f"Value must be < {param_def['exclusiveMaximum']}")
+                raise SchemaError(f"Value must be < {param_def['exclusiveMaximum']}")
             return result
             
         elif param_type == "integer":
-            result = int(value)
+            try:
+                result = int(value)
+            except (ValueError, TypeError):
+                raise SchemaError(f"Expected integer, got {type(value).__name__}")
             # Validate integer constraints
             if "multipleOf" in param_def and result % param_def["multipleOf"] != 0:
-                raise ValueError(f"Value must be multiple of {param_def['multipleOf']}")
+                raise SchemaError(f"Value must be multiple of {param_def['multipleOf']}")
             if "minimum" in param_def and result < param_def["minimum"]:
-                raise ValueError(f"Value must be >= {param_def['minimum']}")
+                raise SchemaError(f"Value must be >= {param_def['minimum']}")
             if "maximum" in param_def and result > param_def["maximum"]:
-                raise ValueError(f"Value must be <= {param_def['maximum']}")
+                raise SchemaError(f"Value must be <= {param_def['maximum']}")
             if "exclusiveMinimum" in param_def and result <= param_def["exclusiveMinimum"]:
-                raise ValueError(f"Value must be > {param_def['exclusiveMinimum']}")
+                raise SchemaError(f"Value must be > {param_def['exclusiveMinimum']}")
             if "exclusiveMaximum" in param_def and result >= param_def["exclusiveMaximum"]:
-                raise ValueError(f"Value must be < {param_def['exclusiveMaximum']}")
+                raise SchemaError(f"Value must be < {param_def['exclusiveMaximum']}")
             return result
             
         elif param_type == "boolean":
@@ -119,21 +145,22 @@ class TypeConverter:
                     try:
                         value = json.loads(value)
                     except json.JSONDecodeError:
-                        raise ValueError(f"Invalid JSON array: {value}")
+                        raise SchemaError(f"Invalid JSON array: {value}")
                 else:
-                    raise ValueError(f"Expected array, got {type(value)}")
+                    actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
+                    raise SchemaError(f"Expected array, got {actual_type}")
             
             if isinstance(value, np.ndarray):
                 value = value.tolist()
             
             # Validate array constraints
             if "minItems" in param_def and len(value) < param_def["minItems"]:
-                raise ValueError(f"Array must have at least {param_def['minItems']} items")
+                raise SchemaError(f"Array must have at least {param_def['minItems']} items")
             if "maxItems" in param_def and len(value) > param_def["maxItems"]:
-                raise ValueError(f"Array must have at most {param_def['maxItems']} items")
+                raise SchemaError(f"Array must have at most {param_def['maxItems']} items")
             if "uniqueItems" in param_def and param_def["uniqueItems"]:
                 if len(value) != len(set(str(v) for v in value)):
-                    raise ValueError("Array must contain unique items")
+                    raise SchemaError("Array must contain unique items")
             
             items_def = param_def.get("items", {})
             return [TypeConverter.convert_value(item, items_def) for item in value]
@@ -144,9 +171,10 @@ class TypeConverter:
                     try:
                         value = json.loads(value)
                     except json.JSONDecodeError:
-                        raise ValueError(f"Invalid JSON object: {value}")
+                        raise SchemaError(f"Invalid JSON object: {value}")
                 else:
-                    raise ValueError(f"Expected object, got {type(value)}")
+                    actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
+                    raise SchemaError(f"Expected object, got {actual_type}")
             
             properties = param_def.get("properties", {})
             required = param_def.get("required", [])
@@ -154,7 +182,7 @@ class TypeConverter:
             # Check required properties
             missing = [prop for prop in required if prop not in value]
             if missing:
-                raise ValueError(f"Missing required properties: {', '.join(missing)}")
+                raise SchemaError(f"Missing required properties: {', '.join(missing)}")
             
             # Convert and validate each property
             result = {}
@@ -162,7 +190,7 @@ class TypeConverter:
                 if k in properties:
                     result[k] = TypeConverter.convert_value(v, properties[k])
                 elif not param_def.get("additionalProperties", True):
-                    raise ValueError(f"Unexpected property: {k}")
+                    raise SchemaError(f"Unexpected property: {k}")
                 else:
                     result[k] = v
             
@@ -390,27 +418,15 @@ class EndpointExecutor:
         
         try:
             TypeConverter.convert_value(output, return_def)
+        except SchemaError as e:
+            # Schema errors are already user-friendly
+            raise e
         except Exception as e:
+            # For any other errors, provide a generic type mismatch message
             expected_type = return_def.get("type", "unknown")
-            actual_type = self._python_type_to_schema_type(type(output).__name__)
+            actual_type = TypeConverter.python_type_to_schema_type(type(output).__name__)
             error_msg = f"Output validation failed: Expected return type '{expected_type}', but received '{actual_type}'"
-            raise ValueError(error_msg) from e
-
-    def _python_type_to_schema_type(self, python_type: str) -> str:
-        """Convert Python type names to schema type names."""
-        type_map = {
-            "str": "string",
-            "int": "integer",
-            "float": "number",
-            "bool": "boolean",
-            "list": "array",
-            "dict": "object",
-            "datetime": "date-time",
-            "date": "date",
-            "time": "time",
-            "timedelta": "duration"
-        }
-        return type_map.get(python_type, python_type)
+            raise SchemaError(error_msg) from e
 
 async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None) -> EndpointResult:
     """Execute an endpoint by type and name.
