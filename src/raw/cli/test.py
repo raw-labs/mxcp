@@ -7,7 +7,7 @@ from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config
 from raw.cli.utils import output_result, output_error
 
-def format_test_results(results):
+def format_test_results(results, debug: bool = False):
     """Format test results for human-readable output"""
     if isinstance(results, str):
         return results
@@ -45,7 +45,11 @@ def format_test_results(results):
                 output.append(f"  Description: {test['description']}")
                 
             if test.get("error"):
-                output.append(f"  Error: {test['error']}")
+                error = test["error"]
+                output.append(f"  Error: {error}")
+                # Only show cause in debug mode
+                if debug and isinstance(error, ValueError) and hasattr(error, "__cause__") and error.__cause__:
+                    output.append(f"  Cause: {str(error.__cause__)}")
                 
         output.append("")
         
@@ -70,6 +74,6 @@ def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, deb
         if json_output:
             output_result(results, json_output, debug)
         else:
-            click.echo(format_test_results(results))
+            click.echo(format_test_results(results, debug))
     except Exception as e:
         output_error(e, json_output, debug)

@@ -361,7 +361,27 @@ class EndpointExecutor:
             # Use TypeConverter to validate the output
             TypeConverter.convert_value(output, return_def)
         except Exception as e:
-            raise ValueError(f"Output validation failed: {str(e)}")
+            # Convert Python types to schema types for error messages
+            expected_type = return_def.get("type", "unknown")
+            actual_type = self._python_type_to_schema_type(type(output).__name__)
+            error_msg = f"Output validation failed: Expected return type '{expected_type}', but received '{actual_type}'"
+            raise ValueError(error_msg) from e
+
+    def _python_type_to_schema_type(self, python_type: str) -> str:
+        """Convert Python type names to schema type names."""
+        type_map = {
+            "str": "string",
+            "int": "integer",
+            "float": "number",
+            "bool": "boolean",
+            "list": "array",
+            "dict": "object",
+            "datetime": "date-time",
+            "date": "date",
+            "time": "time",
+            "timedelta": "duration"
+        }
+        return type_map.get(python_type, python_type)
 
 async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None) -> EndpointResult:
     """Execute an endpoint by type and name.
