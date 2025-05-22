@@ -5,6 +5,7 @@ from raw.cli.validate import validate
 from raw.cli.test import test
 from raw.cli.serve import serve
 from raw.cli.init import init
+from raw.cli.query import query
 
 @click.group()
 def cli():
@@ -17,3 +18,4 @@ cli.add_command(validate)
 cli.add_command(test)
 cli.add_command(serve)
 cli.add_command(init)
+cli.add_command(query)
