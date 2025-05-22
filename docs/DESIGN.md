@@ -908,6 +908,7 @@ Airflow for cronjobs on SaaS?
 dbt deps
 dbt seed
 dbt test
+dbt run
 raw validate
 raw test
 raw drift-check
@@ -917,6 +918,7 @@ raw drift-check
 
 ```
 ...
+dbt run
 raw serve
 ```
 

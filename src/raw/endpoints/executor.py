@@ -11,6 +11,7 @@ from raw.engine.duckdb_session import DuckDBSession
 from raw.endpoints.loader import find_repo_root, EndpointLoader
 from raw.config.user_config import UserConfig
 from raw.config.site_config import SiteConfig
+import re
 
 class EndpointType(Enum):
     TOOL = "tool"
@@ -48,37 +49,120 @@ class TypeConverter:
             return None
             
         if param_type == "string":
+            # Handle string format annotations
             if param_format == "date-time":
                 return datetime.fromisoformat(value.replace("Z", "+00:00"))
             elif param_format == "date":
                 return datetime.strptime(value, "%Y-%m-%d").date()
             elif param_format == "time":
                 return datetime.strptime(value, "%H:%M:%S").time()
+            elif param_format == "email":
+                if not re.match(r"[^@]+@[^@]+\.[^@]+", value):
+                    raise ValueError(f"Invalid email format: {value}")
+                return str(value)
+            elif param_format == "uri":
+                if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:.*$", value):
+                    raise ValueError(f"Invalid URI format: {value}")
+                return str(value)
+            elif param_format == "duration":
+                # ISO 8601 duration format (e.g., P1DT2H)
+                if not re.match(r"^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$", value):
+                    raise ValueError(f"Invalid duration format: {value}")
+                return str(value)
+            elif param_format == "timestamp":
+                # Unix timestamp (seconds since epoch)
+                try:
+                    return datetime.fromtimestamp(float(value))
+                except (ValueError, OSError):
+                    raise ValueError(f"Invalid timestamp: {value}")
             return str(value)
             
         elif param_type == "number":
-            return float(value)
+            result = float(value)
+            # Validate numeric constraints
+            if "multipleOf" in param_def and result % param_def["multipleOf"] != 0:
+                raise ValueError(f"Value must be multiple of {param_def['multipleOf']}")
+            if "minimum" in param_def and result < param_def["minimum"]:
+                raise ValueError(f"Value must be >= {param_def['minimum']}")
+            if "maximum" in param_def and result > param_def["maximum"]:
+                raise ValueError(f"Value must be <= {param_def['maximum']}")
+            if "exclusiveMinimum" in param_def and result <= param_def["exclusiveMinimum"]:
+                raise ValueError(f"Value must be > {param_def['exclusiveMinimum']}")
+            if "exclusiveMaximum" in param_def and result >= param_def["exclusiveMaximum"]:
+                raise ValueError(f"Value must be < {param_def['exclusiveMaximum']}")
+            return result
             
         elif param_type == "integer":
-            return int(value)
+            result = int(value)
+            # Validate integer constraints
+            if "multipleOf" in param_def and result % param_def["multipleOf"] != 0:
+                raise ValueError(f"Value must be multiple of {param_def['multipleOf']}")
+            if "minimum" in param_def and result < param_def["minimum"]:
+                raise ValueError(f"Value must be >= {param_def['minimum']}")
+            if "maximum" in param_def and result > param_def["maximum"]:
+                raise ValueError(f"Value must be <= {param_def['maximum']}")
+            if "exclusiveMinimum" in param_def and result <= param_def["exclusiveMinimum"]:
+                raise ValueError(f"Value must be > {param_def['exclusiveMinimum']}")
+            if "exclusiveMaximum" in param_def and result >= param_def["exclusiveMaximum"]:
+                raise ValueError(f"Value must be < {param_def['exclusiveMaximum']}")
+            return result
             
         elif param_type == "boolean":
+            if isinstance(value, str):
+                return value.lower() == "true"
             return bool(value)
             
         elif param_type == "array":
             if not isinstance(value, list):
-                raise ValueError(f"Expected array, got {type(value)}")
+                if isinstance(value, str):
+                    try:
+                        value = json.loads(value)
+                    except json.JSONDecodeError:
+                        raise ValueError(f"Invalid JSON array: {value}")
+                else:
+                    raise ValueError(f"Expected array, got {type(value)}")
+            
+            # Validate array constraints
+            if "minItems" in param_def and len(value) < param_def["minItems"]:
+                raise ValueError(f"Array must have at least {param_def['minItems']} items")
+            if "maxItems" in param_def and len(value) > param_def["maxItems"]:
+                raise ValueError(f"Array must have at most {param_def['maxItems']} items")
+            if "uniqueItems" in param_def and param_def["uniqueItems"]:
+                if len(value) != len(set(str(v) for v in value)):
+                    raise ValueError("Array must contain unique items")
+            
             items_def = param_def.get("items", {})
             return [TypeConverter.convert_value(item, items_def) for item in value]
             
         elif param_type == "object":
             if not isinstance(value, dict):
-                raise ValueError(f"Expected object, got {type(value)}")
+                if isinstance(value, str):
+                    try:
+                        value = json.loads(value)
+                    except json.JSONDecodeError:
+                        raise ValueError(f"Invalid JSON object: {value}")
+                else:
+                    raise ValueError(f"Expected object, got {type(value)}")
+            
             properties = param_def.get("properties", {})
-            return {
-                k: TypeConverter.convert_value(v, properties.get(k, {}))
-                for k, v in value.items()
-            }
+            required = param_def.get("required", [])
+            
+            # Check required properties
+            missing = [prop for prop in required if prop not in value]
+            if missing:
+                raise ValueError(f"Missing required properties: {', '.join(missing)}")
+            
+            # Convert and validate each property
+            result = {}
+            for k, v in value.items():
+                if k in properties:
+                    result[k] = TypeConverter.convert_value(v, properties[k])
+                elif not param_def.get("additionalProperties", True):
+                    raise ValueError(f"Unexpected property: {k}")
+                else:
+                    result[k] = v
+            
+            return result
             
         return value
 

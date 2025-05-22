@@ -2,6 +2,7 @@ import click
 import json
 import asyncio
 from typing import Dict, Any, Optional
+from pathlib import Path
 from raw.endpoints.runner import run_endpoint as execute_endpoint
 from raw.endpoints.executor import EndpointType
 from raw.config.user_config import load_user_config
@@ -11,12 +12,21 @@ from raw.cli.utils import output_result, output_error
 @click.command(name="run")
 @click.argument("endpoint_type", type=click.Choice([t.value for t in EndpointType]))
 @click.argument("name")
-@click.option("--param", "-p", multiple=True, help="Parameter in format name=value")
+@click.option("--param", "-p", multiple=True, help="Parameter in format name=value or name=@file.json for complex values")
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
 def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool):
-    """Run an endpoint (tool, resource, or prompt)"""
+    """Run an endpoint (tool, resource, or prompt)
+    
+    Parameters can be provided in two ways:
+    1. Simple values: --param name=value
+    2. Complex values from JSON file: --param name=@file.json
+    
+    Examples:
+        raw run tool my_tool --param name=value
+        raw run tool my_tool --param complex=@data.json
+    """
     try:
         # Load configs
         site_config = load_site_config()
@@ -28,12 +38,25 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
         params: Dict[str, Any] = {}
         for p in param:
             if "=" not in p:
-                error_msg = f"Parameter must be in format name=value: {p}"
+                error_msg = f"Parameter must be in format name=value or name=@file.json: {p}"
                 if json_output:
                     output_error(click.BadParameter(error_msg), json_output, debug)
                 else:
                     raise click.BadParameter(error_msg)
+                    
             key, value = p.split("=", 1)
+            
+            # Handle JSON file input
+            if value.startswith("@"):
+                file_path = Path(value[1:])
+                if not file_path.exists():
+                    raise click.BadParameter(f"JSON file not found: {file_path}")
+                try:
+                    with open(file_path) as f:
+                        value = json.load(f)
+                except json.JSONDecodeError as e:
+                    raise click.BadParameter(f"Invalid JSON in file {file_path}: {e}")
+            
             params[key] = value
             
         # Execute endpoint
