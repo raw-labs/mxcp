@@ -178,7 +178,7 @@ async def test_greeting_prompt_name_too_long(test_repo_path, test_user_config, t
         args = {"name": "A" * 51, "time_of_day": "morning"}  # 51 chars > maxLength 50
         with pytest.raises(RuntimeError) as exc_info:
             await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
-        assert "String name is too long" in str(exc_info.value)
+        assert "String must be at most 50 characters long" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 

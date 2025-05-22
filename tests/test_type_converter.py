@@ -33,6 +33,8 @@ def test_numeric_constraints():
         "type": "number",
         "minimum": 0,
         "maximum": 100,
+        "exclusiveMinimum": -1,
+        "exclusiveMaximum": 101,
         "multipleOf": 0.5
     }
     assert TypeConverter.convert_value("50.0", param_def) == 50.0
@@ -43,12 +45,18 @@ def test_numeric_constraints():
         TypeConverter.convert_value("101", param_def)  # Above maximum
     with pytest.raises(ValueError):
         TypeConverter.convert_value("0.3", param_def)  # Not multiple of 0.5
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("-1", {**param_def, "exclusiveMinimum": 0})  # Not greater than exclusiveMinimum
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("101", {**param_def, "exclusiveMaximum": 100})  # Not less than exclusiveMaximum
     
     # Integer constraints
     param_def = {
         "type": "integer",
         "minimum": 0,
         "maximum": 100,
+        "exclusiveMinimum": -1,
+        "exclusiveMaximum": 101,
         "multipleOf": 2
     }
     assert TypeConverter.convert_value("50", param_def) == 50
@@ -58,6 +66,114 @@ def test_numeric_constraints():
         TypeConverter.convert_value("101", param_def)  # Above maximum
     with pytest.raises(ValueError):
         TypeConverter.convert_value("3", param_def)  # Not multiple of 2
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("-1", {**param_def, "exclusiveMinimum": 0})  # Not greater than exclusiveMinimum
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("101", {**param_def, "exclusiveMaximum": 100})  # Not less than exclusiveMaximum
+
+def test_string_constraints():
+    """Test string type constraints"""
+    param_def = {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 5
+    }
+    
+    # Valid string
+    assert TypeConverter.convert_value("abc", param_def) == "abc"
+    
+    # Too short
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("a", param_def)
+    
+    # Too long
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("abcdef", param_def)
+
+def test_string_format():
+    """Test string format validation"""
+    # Email format
+    param_def = {
+        "type": "string",
+        "format": "email"
+    }
+    assert TypeConverter.convert_value("user@example.com", param_def) == "user@example.com"
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("invalid-email", param_def)
+    
+    # URI format
+    param_def = {
+        "type": "string",
+        "format": "uri"
+    }
+    assert TypeConverter.convert_value("https://example.com", param_def) == "https://example.com"
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("not-a-uri", param_def)
+    
+    # Date format
+    param_def = {
+        "type": "string",
+        "format": "date"
+    }
+    result = TypeConverter.convert_value("2024-03-20", param_def)
+    assert isinstance(result, date)
+    assert result.year == 2024
+    assert result.month == 3
+    assert result.day == 20
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("invalid-date", param_def)
+    
+    # Time format
+    param_def = {
+        "type": "string",
+        "format": "time"
+    }
+    result = TypeConverter.convert_value("14:30:00", param_def)
+    assert isinstance(result, time)
+    assert result.hour == 14
+    assert result.minute == 30
+    assert result.second == 0
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("invalid-time", param_def)
+    
+    # Date-time format
+    param_def = {
+        "type": "string",
+        "format": "date-time"
+    }
+    result = TypeConverter.convert_value("2024-03-20T14:30:00Z", param_def)
+    assert isinstance(result, datetime)
+    assert result.year == 2024
+    assert result.month == 3
+    assert result.day == 20
+    assert result.hour == 14
+    assert result.minute == 30
+    assert result.second == 0
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("invalid-datetime", param_def)
+    
+    # Duration format
+    param_def = {
+        "type": "string",
+        "format": "duration"
+    }
+    assert TypeConverter.convert_value("P1DT2H3M4S", param_def) == "P1DT2H3M4S"
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("invalid-duration", param_def)
+    
+    # Timestamp format
+    param_def = {
+        "type": "string",
+        "format": "timestamp"
+    }
+    # Use a Unix timestamp (seconds since epoch)
+    result = TypeConverter.convert_value("1672531199", param_def)
+    assert isinstance(result, datetime)
+    assert result.year == 2023
+    assert result.month == 1
+    assert result.day == 1
+    with pytest.raises(ValueError):
+        TypeConverter.convert_value("invalid-timestamp", param_def)
 
 def test_array_constraints():
     """Test array type constraints"""
@@ -88,6 +204,16 @@ def test_array_constraints():
     assert TypeConverter.convert_value('["a", "b"]', param_def) == ["a", "b"]
     with pytest.raises(ValueError):
         TypeConverter.convert_value("invalid-json", param_def)
+    
+    # Test uniqueItems: False (should allow duplicates)
+    param_def_no_unique = {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 3,
+        "uniqueItems": False,
+        "items": {"type": "string"}
+    }
+    assert TypeConverter.convert_value(["a", "a"], param_def_no_unique) == ["a", "a"]
 
 def test_object_constraints():
     """Test object type constraints"""

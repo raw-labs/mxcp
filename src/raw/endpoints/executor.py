@@ -96,6 +96,13 @@ class TypeConverter:
                     return datetime.fromtimestamp(float(value))
                 except (ValueError, OSError):
                     raise SchemaError(f"Invalid timestamp: {value}")
+            
+            # Validate string length constraints
+            if "minLength" in param_def and len(value) < param_def["minLength"]:
+                raise SchemaError(f"String must be at least {param_def['minLength']} characters long")
+            if "maxLength" in param_def and len(value) > param_def["maxLength"]:
+                raise SchemaError(f"String must be at most {param_def['maxLength']} characters long")
+            
             return str(value)
             
         elif param_type == "number":

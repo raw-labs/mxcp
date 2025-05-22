@@ -342,6 +342,26 @@
           "minimum": 0, 
           "description": "Maximum string length." 
         },
+        "minimum": {
+          "type": "number",
+          "description": "Minimum value for numbers or integers."
+        },
+        "maximum": {
+          "type": "number",
+          "description": "Maximum value for numbers or integers."
+        },
+        "exclusiveMinimum": {
+          "type": "number",
+          "description": "Exclusive minimum value for numbers or integers."
+        },
+        "exclusiveMaximum": {
+          "type": "number",
+          "description": "Exclusive maximum value for numbers or integers."
+        },
+        "multipleOf": {
+          "type": "number",
+          "description": "Value must be a multiple of this for numbers or integers."
+        },
         "minItems": { 
           "type": "integer", 
           "minimum": 0, 
@@ -351,6 +371,10 @@
           "type": "integer", 
           "minimum": 0, 
           "description": "Maximum number of array items." 
+        },
+        "uniqueItems": {
+          "type": "boolean",
+          "description": "Whether array items must be unique."
         },
         "items": {
           "$ref": "#/definitions/typeDefinition",
