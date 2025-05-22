@@ -1,5 +1,6 @@
 import click
 import json
+import asyncio
 from typing import Dict, Any, Optional
 from raw.endpoints.tester import run_tests, run_all_tests
 from raw.config.user_config import load_user_config
@@ -62,9 +63,9 @@ def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, deb
         user_config = load_user_config(site_config)
         
         if endpoint:
-            results = run_tests(endpoint, user_config, site_config, profile)
+            results = asyncio.run(run_tests(endpoint, user_config, site_config, profile))
         else:
-            results = run_all_tests(user_config, site_config, profile)
+            results = asyncio.run(run_all_tests(user_config, site_config, profile))
             
         if json_output:
             output_result(results, json_output, debug)
