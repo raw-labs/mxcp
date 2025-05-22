@@ -4,6 +4,7 @@ from raw.cli.run import run_endpoint
 from raw.cli.validate import validate
 from raw.cli.test import test
 from raw.cli.serve import serve
+from raw.cli.init import init
 
 @click.group()
 def cli():
@@ -15,3 +16,4 @@ cli.add_command(run_endpoint)
 cli.add_command(validate)
 cli.add_command(test)
 cli.add_command(serve)
+cli.add_command(init)
