@@ -7,6 +7,9 @@ from raw.endpoints.executor import EndpointType
 from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config, get_active_profile
 from raw.cli.utils import output_result, output_error
+import logging
+
+logger = logging.getLogger(__name__)
 
 @click.command(name="run")
 @click.argument("endpoint_type", type=click.Choice([t.value for t in EndpointType]))
@@ -35,7 +38,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
                     raise click.BadParameter(error_msg)
             key, value = p.split("=", 1)
             params[key] = value
-            
+        logger.debug(f"Parsed parameters: {params}")
         # Execute endpoint
         result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name))
         

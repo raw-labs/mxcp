@@ -11,6 +11,9 @@ from raw.engine.duckdb_session import DuckDBSession
 from raw.endpoints.loader import find_repo_root, EndpointLoader
 from raw.config.user_config import UserConfig
 from raw.config.site_config import SiteConfig
+import logging
+
+logger = logging.getLogger(__name__)
 
 class EndpointType(Enum):
     TOOL = "tool"
@@ -212,7 +215,6 @@ class EndpointExecutor:
         
         # Apply default values
         params = self._apply_defaults(params)
-        
         # Validate parameters
         self._validate_parameters(params)
         
@@ -231,7 +233,9 @@ class EndpointExecutor:
                     raise ValueError(f"Required parameter missing: {', '.join(missing_params)}")
                 
                 # Convert to DataFrame and then to list of dicts to preserve column names
+                logger.debug(f"Executing SQL: {source} with params: {params}")
                 result = conn.execute(source, params).fetchdf().to_dict("records")
+                logger.debug(f"Got  {len(result)} results from SQL execution")
                 return result
                 
             else:  # PROMPT
