@@ -18,7 +18,7 @@ from raw.config.analytics import track_command_with_timing
 @click.option("--debug", is_flag=True, help="Show detailed error information")
 @track_command_with_timing("query")
 def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool):
-    """Execute a SQL query directly against the DuckDB database.
+    """Execute a SQL query directly against the database.
     
     The query can be provided either directly as an argument or from a file.
     Parameters can be provided in two ways:

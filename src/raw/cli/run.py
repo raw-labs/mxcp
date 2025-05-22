@@ -20,7 +20,7 @@ from raw.config.analytics import track_command_with_timing
 @click.option("--skip-output-validation", is_flag=True, help="Skip output validation against the return type definition")
 @track_command_with_timing("run")
 def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool):
-    """Run an endpoint (tool, resource, or prompt)
+    """Run an endpoint (tool, resource, or prompt).
     
     Parameters can be provided in two ways:
     1. Simple values: --param name=value

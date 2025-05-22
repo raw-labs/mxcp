@@ -28,7 +28,15 @@ def parse_endpoint(path: Path, endpoint: dict) -> Tuple[str, str, Optional[str]]
 @click.option("--debug", is_flag=True, help="Show detailed error information")
 @track_command_with_timing("list")
 def list_endpoints(profile: str, json_output: bool, debug: bool):
-    """List all endpoints
+    """List all available endpoints.
+    
+    This command discovers and lists all endpoints in the current repository.
+    Endpoints can be tools, resources, or prompts.
+    
+    Examples:
+        raw list                    # List all endpoints
+        raw list --json-output     # Output in JSON format
+        raw list --profile dev     # List endpoints in dev profile
     """
     try:
         site_config = load_site_config()

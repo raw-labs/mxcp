@@ -63,7 +63,16 @@ def format_test_results(results, debug: bool = False):
 @click.option("--debug", is_flag=True, help="Show detailed error information")
 @track_command_with_timing("test")
 def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool):
-    """Run tests for one or all endpoints"""
+    """Run tests for one or all endpoints.
+    
+    This command executes the test cases defined in endpoint configurations.
+    If no endpoint is specified, all endpoints are tested.
+    
+    Examples:
+        raw test                    # Test all endpoints
+        raw test my_endpoint       # Test specific endpoint
+        raw test --json-output     # Output results in JSON format
+    """
     try:
         site_config = load_site_config()
         user_config = load_user_config(site_config)

@@ -82,12 +82,12 @@ def create_hello_world_files(target_dir: Path):
 @click.option("--bootstrap", is_flag=True, help="Create example hello world endpoint")
 @track_command_with_timing("init")
 def init(folder: str, project: str, profile: str, bootstrap: bool):
-    """Initialize a new RAW repository in the specified folder.
-
+    """Initialize a new RAW repository.
+    
     This command creates a new RAW repository by:
     1. Creating a raw-site.yml file with project and profile configuration
     2. Optionally creating example endpoint files
-
+    
     Examples:
         raw init                    # Initialize in current directory
         raw init my-project        # Initialize in my-project directory

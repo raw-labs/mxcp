@@ -2,6 +2,7 @@ import os
 import time
 from typing import Optional, Any
 import logging
+import functools
 
 import posthog
 
@@ -82,6 +83,7 @@ def track_command_with_timing(command_name: str) -> Any:
         command_name: Name of the command to track
     """
     def decorator(func):
+        @functools.wraps(func)  # This preserves the function's metadata
         def wrapper(*args, **kwargs):
             start_time = time.time()
             try:
