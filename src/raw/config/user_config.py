@@ -37,7 +37,6 @@ def _generate_default_config(site_config: SiteConfig) -> dict:
         "raw": "1.0.0",
         "projects": {
             project_name: {
-                "default": profile_name,
                 "profiles": {
                     profile_name: {
                         "secrets": [],

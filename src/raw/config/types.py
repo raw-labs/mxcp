@@ -56,7 +56,7 @@ class SecretDefinition(TypedDict):
     parameters: Dict[str, str]
 
 class ProjectConfig(TypedDict):
-    default: str
+    default: Optional[str]
     profiles: Dict[str, ProfileConfig]
 
 class UserConfig(TypedDict):
