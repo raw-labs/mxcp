@@ -71,7 +71,7 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
     if not path.exists():
         # If RAW_CONFIG is not set, generate a default config based on site config
         if "RAW_CONFIG" not in os.environ and generate_default:
-            logger.warning(f"RAW user config not found at {path}, generating default config based on site config")
+            logger.warning(f"RAW user config not found at {path}, assuming empty configuration")
             config = _generate_default_config(site_config)
         else:
             raise FileNotFoundError(f"RAW user config not found at {path}")
@@ -79,6 +79,26 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
         with open(path) as f:
             config = yaml.safe_load(f)
             logger.debug(f"Loaded user config from file: {config}")
+            
+        # Ensure project and profile exist in config
+        project_name = site_config["project"]
+        profile_name = site_config["profile"]
+        
+        if "projects" not in config:
+            config["projects"] = {}
+            
+        if project_name not in config["projects"]:
+            config["projects"][project_name] = {"profiles": {}}
+            
+        if "profiles" not in config["projects"][project_name]:
+            config["projects"][project_name]["profiles"] = {}
+            
+        if profile_name not in config["projects"][project_name]["profiles"]:
+            logger.warning(f"Project '{project_name}' and/or profile '{profile_name}' not found in user config at {path}, assuming empty configuration")
+            config["projects"][project_name]["profiles"][profile_name] = {
+                "secrets": [],
+                "adapter_configs": {}
+            }
     
     # Apply defaults before validation
     config = _apply_defaults(config)
