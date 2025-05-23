@@ -1,5 +1,4 @@
 import click
-import json
 import asyncio
 from typing import Dict, Any, Optional
 from raw.endpoints.tester import run_tests, run_all_tests
@@ -18,41 +17,88 @@ def format_test_results(results, debug: bool = False):
     # Overall status
     status = results.get("status", "unknown")
     tests_run = results.get("tests_run", 0)
-    output.append(f"Status: {status.upper()}")
-    output.append(f"Tests run: {tests_run}")
-    output.append("")
     
-    # Individual endpoint results
-    for endpoint_result in results.get("endpoints", []):
-        endpoint = endpoint_result.get("endpoint", "unknown")
-        endpoint_status = endpoint_result.get("status", "unknown")
-        output.append(f"Endpoint: {endpoint}")
+    # Single endpoint test
+    if "endpoint" in results:
+        endpoint = results["endpoint"]
+        endpoint_status = results.get("status", "unknown")
+        output.append(f"File: {endpoint}")
         output.append(f"Status: {endpoint_status.upper()}")
         
-        if "message" in endpoint_result:
-            output.append(f"Message: {endpoint_result['message']}")
+        if "message" in results:
+            output.append(f"Error: {results['message']}")
             
         # Test results
-        for test in endpoint_result.get("tests", []):
+        for test in results.get("tests", []):
             test_name = test.get("name", "Unnamed test")
             test_status = test.get("status", "unknown")
             test_time = test.get("time", 0)
             
-            output.append(f"  Test: {test_name}")
-            output.append(f"  Status: {test_status.upper()}")
-            output.append(f"  Time: {test_time:.2f}s")
-            
-            if test.get("description"):
-                output.append(f"  Description: {test['description']}")
-                
-            if test.get("error"):
-                error = test["error"]
-                output.append(f"  Error: {error}")
-                # Only show cause in debug mode
-                if debug and isinstance(error, ValueError) and hasattr(error, "__cause__") and error.__cause__:
-                    output.append(f"  Cause: {str(error.__cause__)}")
-                
+            if test_status == "ok":
+                output.append(f"  ✓ {test_name} ({test_time:.2f}s)")
+            else:
+                output.append(f"  ✗ {test_name} ({test_time:.2f}s)")
+                if test.get("error"):
+                    output.append(f"    Error: {test['error']}")
+                if debug and test.get("error") and hasattr(test["error"], "__cause__") and test["error"].__cause__:
+                    output.append(f"    Cause: {str(test['error'].__cause__)}")
+        
+        return "\n".join(output)
+    
+    # Multiple endpoint tests
+    endpoints = results.get("endpoints", [])
+    if not endpoints:
+        output.append("No endpoints found to test")
+        return "\n".join(output)
+    
+    # Count passed and failed endpoints
+    passed_count = sum(1 for r in endpoints if r.get("status") == "ok")
+    failed_count = len(endpoints) - passed_count
+    
+    output.append(f"Found {len(endpoints)} endpoint files ({passed_count} passed, {failed_count} failed):")
+    output.append("")
+    
+    # Group by status
+    passed_endpoints = []
+    failed_endpoints = []
+    
+    for endpoint_result in endpoints:
+        endpoint = endpoint_result.get("endpoint", "unknown")
+        endpoint_status = endpoint_result.get("status", "unknown")
+        message = endpoint_result.get("message")
+        tests = endpoint_result.get("tests", [])
+        
+        if endpoint_status == "ok":
+            passed_endpoints.append((endpoint, tests))
+        else:
+            failed_endpoints.append((endpoint, message, tests))
+    
+    # Show failed endpoints first
+    if failed_endpoints:
+        output.append("Failed endpoints:")
+        for endpoint, message, tests in sorted(failed_endpoints, key=lambda x: x[0]):
+            output.append(f"  ✗ {endpoint}")
+            if message:
+                output.append(f"    Error: {message}")
+            for test in tests:
+                test_name = test.get("name", "Unnamed test")
+                test_time = test.get("time", 0)
+                if test.get("error"):
+                    output.append(f"    ✗ {test_name} ({test_time:.2f}s)")
+                    output.append(f"      Error: {test['error']}")
+                    if debug and hasattr(test["error"], "__cause__") and test["error"].__cause__:
+                        output.append(f"      Cause: {str(test['error'].__cause__)}")
         output.append("")
+    
+    # Then show passed endpoints
+    if passed_endpoints:
+        output.append("Passed endpoints:")
+        for endpoint, tests in sorted(passed_endpoints, key=lambda x: x[0]):
+            output.append(f"  ✓ {endpoint}")
+            for test in tests:
+                test_name = test.get("name", "Unnamed test")
+                test_time = test.get("time", 0)
+                output.append(f"    ✓ {test_name} ({test_time:.2f}s)")
         
     return "\n".join(output)
 

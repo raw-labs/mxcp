@@ -78,7 +78,7 @@ def list_endpoints(profile: str, json_output: bool, debug: bool):
             valid_count = sum(1 for r in results if r["error"] is None)
             failed_count = len(results) - valid_count
             
-            click.echo(f"\nFound {len(results)} endpoint files ({valid_count} valid, {failed_count} failed):")
+            click.echo(f"Found {len(results)} endpoint files ({valid_count} valid, {failed_count} failed):")
             
             # Group by status
             valid_endpoints = []

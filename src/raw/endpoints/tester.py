@@ -22,9 +22,10 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
     repo_root = find_repo_root()
     logger.debug(f"Repository root: {repo_root}")
     
-    # List all YAML files in the repository
-    endpoints_files = list(repo_root.rglob("*.yml"))
-    logger.debug(f"Found {len(endpoints_files)} YAML files")
+    # Use EndpointLoader to discover endpoints
+    loader = EndpointLoader(site_config)
+    endpoints = loader.discover_endpoints()
+    logger.debug(f"Found {len(endpoints)} YAML files")
     
     results = {
         "status": "ok",
@@ -32,26 +33,33 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
         "endpoints": []
     }
     
-    # Skip raw-site.yml and raw-config.yml
-    for file_path in endpoints_files:
+    for file_path, endpoint, error_msg in endpoints:
         if file_path.name in ["raw-site.yml", "raw-config.yml"]:
             continue
             
         logger.debug(f"Processing file: {file_path}")
+        
+        if error_msg is not None:
+            # This endpoint failed to load
+            results["endpoints"].append({
+                "status": "error",
+                "endpoint": str(file_path),
+                "message": error_msg
+            })
+            results["status"] = "error"
+            continue
+            
         try:
-            with open(file_path) as f:
-                endpoint_def = yaml.safe_load(f)
-                
             # Determine endpoint type and name
-            if "tool" in endpoint_def:
+            if "tool" in endpoint:
                 kind = "tool"
-                name = endpoint_def["tool"]["name"]
-            elif "resource" in endpoint_def:
+                name = endpoint["tool"]["name"]
+            elif "resource" in endpoint:
                 kind = "resource"
-                name = endpoint_def["resource"]["uri"]
-            elif "prompt" in endpoint_def:
+                name = endpoint["resource"]["uri"]
+            elif "prompt" in endpoint:
                 kind = "prompt"
-                name = endpoint_def["prompt"]["name"]
+                name = endpoint["prompt"]["name"]
             else:
                 logger.debug(f"Skipping file {file_path}: not a valid endpoint")
                 continue
@@ -68,6 +76,12 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
                 results["status"] = "failed"
         except Exception as e:
             logger.error(f"Error processing file {file_path}: {str(e)}")
+            results["endpoints"].append({
+                "status": "error",
+                "endpoint": str(file_path),
+                "message": str(e)
+            })
+            results["status"] = "error"
             
     return results
 
