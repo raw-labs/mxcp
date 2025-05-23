@@ -49,7 +49,7 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
         
     # Set default DuckDB path for the profile if not specified
     if "path" not in config["profiles"][profile]["duckdb"]:
-        config["profiles"][profile]["duckdb"]["path"] = str(repo_root / f"duckdb-{profile}")
+        config["profiles"][profile]["duckdb"]["path"] = str(repo_root / f"db-{profile}.duckdb")
         
     # Initialize drift config for the profile if not present
     if "drift" not in config["profiles"][profile]:

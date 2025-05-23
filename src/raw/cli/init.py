@@ -16,7 +16,7 @@ def check_existing_raw_repo(target_dir: Path) -> bool:
 
 def check_existing_duckdb(target_dir: Path, profile: str = "default") -> bool:
     """Check if there's a .duckdb file for the given profile in the target directory."""
-    return (target_dir / f"duckdb-{profile}").exists()
+    return (target_dir / f"db-{profile}.duckdb").exists()
 
 def check_project_exists(user_config: dict, project_name: str) -> bool:
     """Check if the project name already exists in the user config."""
@@ -107,7 +107,7 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
             
         # Check if .duckdb file already exists for this profile
         if check_existing_duckdb(target_dir, profile):
-            raise click.ClickException(f"Cannot create a RAW repository in a directory with an existing .duckdb-{profile} file")
+            raise click.ClickException(f"Cannot create a RAW repository in a directory with an existing db-{profile}.duckdb file")
         
         # Create target directory if it doesn't exist
         target_dir.mkdir(parents=True, exist_ok=True)
