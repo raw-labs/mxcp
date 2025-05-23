@@ -20,6 +20,30 @@ def find_repo_root() -> Path:
             return parent
     raise FileNotFoundError("raw-site.yml not found in current directory or any parent directory")
 
+def extract_validation_error(error_msg: str) -> str:
+    """Extract a concise validation error message from jsonschema error.
+    
+    Args:
+        error_msg: The raw error message from jsonschema
+        
+    Returns:
+        A concise error message
+    """
+    # For required field errors
+    if "'required'" in error_msg:
+        field = error_msg.split("'")[1]
+        return f"Missing required field: {field}"
+    
+    # For type errors
+    if "is not of a type" in error_msg:
+        parts = error_msg.split("'")
+        field = parts[1]
+        expected_type = parts[3]
+        return f"Invalid type for {field}: expected {expected_type}"
+    
+    # For other validation errors, return just the first line
+    return error_msg.split("\n")[0]
+
 @dataclass
 class EndpointLoader:
     _endpoints: Dict[str, EndpointDefinition]
@@ -29,8 +53,15 @@ class EndpointLoader:
         self._site_config = site_config
         self._endpoints = {}
     
-    def discover_endpoints(self) -> List[tuple[Path, EndpointDefinition]]:
-        """Discover all endpoint files and load their metadata, returning (file_path, endpoint_dict) tuples"""
+    def discover_endpoints(self) -> List[tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
+        """Discover all endpoint files and load their metadata, returning (file_path, endpoint_dict, error_message) tuples.
+        
+        Returns:
+            List of tuples where each tuple contains:
+            - file_path: Path to the endpoint file
+            - endpoint_dict: The loaded endpoint dictionary if successful, None if failed
+            - error_message: Error message if loading failed, None if successful
+        """
         # Always use repository root for finding endpoints
         base_path = find_repo_root()
             
@@ -56,10 +87,11 @@ class EndpointLoader:
                 with open(f) as file:
                     data = yaml.safe_load(file)
                     validate(instance=data, schema=schema)
-                    endpoints.append((f, data))
+                    endpoints.append((f, data, None))
                     self._endpoints[str(f)] = data
             except Exception as e:
-                logger.warning("Failed to load endpoint %s: %s", f, e)
+                error_msg = extract_validation_error(str(e))
+                endpoints.append((f, None, error_msg))
                 
         return endpoints
     
@@ -93,7 +125,7 @@ class EndpointLoader:
                 if f.name == "raw-site.yml" and f.parent == repo_root:
                     continue
                 # Skip dbt_project.yml only if it's at the root
-                if f.name == "dbt_project.yml" and f.parent == base_path:
+                if f.name == "dbt_project.yml" and f.parent == repo_root:
                     continue
                 # Skip the file specified in RAW_CONFIG if it exists
                 if raw_config.exists() and f.samefile(raw_config):

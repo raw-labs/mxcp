@@ -42,8 +42,17 @@ class RAWMCP:
         self.profile_name = profile or site_config["profile"]
         self.active_profile = get_active_profile(self.user_config, self.site_config, profile)
         self.loader = EndpointLoader(self.site_config)
-        self.endpoints = self.loader.discover_endpoints()
-        self.skipped_endpoints: List[Dict[str, Any]] = []
+        
+        # Split endpoints into valid and failed
+        discovered = self.loader.discover_endpoints()
+        self.endpoints = [(path, endpoint) for path, endpoint, error in discovered if error is None]
+        self.skipped_endpoints = [(path, error) for path, _, error in discovered if error is not None]
+        
+        # Log discovery results
+        logger.info(f"Discovered {len(self.endpoints)} valid endpoints, {len(self.skipped_endpoints)} failed endpoints")
+        if self.skipped_endpoints:
+            for path, error in self.skipped_endpoints:
+                logger.warning(f"Failed to load endpoint {path}: {error}")
         
         # Determine SQL tools enabled state
         if enable_sql_tools is None:
@@ -53,8 +62,6 @@ class RAWMCP:
             # Use explicitly provided value
             self.enable_sql_tools = enable_sql_tools
             
-        logger.info(f"Discovered {len(self.endpoints)} endpoints")
-        
     def _convert_param_type(self, value: Any, param_type: str) -> Any:
         """Convert parameter value to the correct type based on JSON Schema type.
         

@@ -15,17 +15,15 @@ def format_validation_results(results):
     
     # Overall status
     status = results.get("status", "unknown")
-    output.append(f"Status: {status.upper()}")
-    output.append("")
     
     # Single endpoint validation
     if "path" in results:
         path = results["path"]
         message = results.get("message", "")
-        output.append(f"Endpoint: {path}")
+        output.append(f"File: {path}")
         output.append(f"Status: {status.upper()}")
         if message:
-            output.append(f"Message: {message}")
+            output.append(f"Error: {message}")
         return "\n".join(output)
     
     # Multiple endpoint validation
@@ -34,19 +32,41 @@ def format_validation_results(results):
         output.append("No endpoints found to validate")
         return "\n".join(output)
         
-    output.append(f"Validated {len(validated)} endpoints:")
+    # Count valid and failed endpoints
+    valid_count = sum(1 for r in validated if r.get("status") == "ok")
+    failed_count = len(validated) - valid_count
+    
+    output.append(f"Found {len(validated)} endpoint files ({valid_count} valid, {failed_count} failed):")
     output.append("")
+    
+    # Group by status
+    valid_endpoints = []
+    failed_endpoints = []
     
     for result in validated:
         path = result.get("path", "unknown")
         message = result.get("message", "")
         result_status = result.get("status", "unknown")
         
-        output.append(f"Endpoint: {path}")
-        output.append(f"Status: {result_status.upper()}")
-        if message:
-            output.append(f"Message: {message}")
+        if result_status == "ok":
+            valid_endpoints.append((path, message))
+        else:
+            failed_endpoints.append((path, message))
+    
+    # Show failed endpoints first
+    if failed_endpoints:
+        output.append("Failed endpoints:")
+        for path, message in failed_endpoints:
+            output.append(f"  ✗ {path}")
+            if message:
+                output.append(f"    Error: {message}")
         output.append("")
+    
+    # Then show valid endpoints
+    if valid_endpoints:
+        output.append("Valid endpoints:")
+        for path, _ in valid_endpoints:
+            output.append(f"  ✓ {path}")
         
     return "\n".join(output)
 

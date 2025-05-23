@@ -6,10 +6,6 @@ import functools
 
 import posthog
 
-# Configure logging to be less verbose
-logging.getLogger('posthog').setLevel(logging.ERROR)
-logging.getLogger('urllib3').setLevel(logging.ERROR)
-
 POSTHOG_API_KEY = "phc_6BP2PRVBewZUihdpac9Qk6QHd4eXykdhrvoFncqBjl0"
 POSTHOG_HOST = "https://app.posthog.com"
 
@@ -44,6 +40,10 @@ def track_event(event_name: str, properties: Optional[dict] = None) -> None:
         properties: Optional properties to include with the event
     """
     if not is_analytics_opted_out():
+        # Configure logging to be less verbose
+        logging.getLogger('posthog').setLevel(logging.ERROR)
+        logging.getLogger('urllib3').setLevel(logging.ERROR)
+
         try:
             posthog.capture(
                 distinct_id="anonymous",  # We don't track individual users

@@ -35,7 +35,11 @@ def test_list_endpoints(test_repo_path, test_config):
         endpoints = loader.discover_endpoints()
         
         # Convert to dict for easier lookup
-        endpoint_dict = {str(path): data for path, data in endpoints}
+        endpoint_dict = {str(path): data for path, data, error in endpoints if error is None}
+        failed_endpoints = {str(path): error for path, _, error in endpoints if error is not None}
+        
+        # Verify no failed endpoints
+        assert len(failed_endpoints) == 0, f"Found failed endpoints: {failed_endpoints}"
         
         # Verify we found all our test endpoints (including those in subfolder)
         assert len(endpoints) == 5  # tool1, resource1, prompt1, tool2, prompt2

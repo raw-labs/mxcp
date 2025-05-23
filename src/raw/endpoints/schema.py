@@ -39,12 +39,28 @@ def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, A
         return {"status": "error", "message": "No endpoint files found in the repository"}
 
     results = []
-    for file_path, endpoint in endpoints:
-        # The endpoint is already loaded by EndpointLoader, so we can validate directly
-        result = validate_endpoint_payload(endpoint, str(file_path), user_config, site_config, profile)
-        results.append(result)
+    has_errors = False
+    
+    for file_path, endpoint, error_msg in endpoints:
+        if error_msg is not None:
+            # This endpoint failed to load
+            results.append({
+                "status": "error",
+                "path": str(file_path),
+                "message": error_msg
+            })
+            has_errors = True
+        else:
+            # This endpoint loaded successfully, validate its payload
+            result = validate_endpoint_payload(endpoint, str(file_path), user_config, site_config, profile)
+            results.append(result)
+            if result["status"] == "error":
+                has_errors = True
 
-    return {"status": "ok", "validated": results}
+    return {
+        "status": "error" if has_errors else "ok",
+        "validated": results
+    }
 
 def extract_template_variables(template: str) -> set[str]:
     """Extract all Jinja template variables from a string."""

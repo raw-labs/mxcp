@@ -47,14 +47,22 @@ def list_endpoints(profile: str, json_output: bool, debug: bool):
         
         # Process endpoints into structured data
         results = []
-        for path, endpoint in endpoints:
-            kind, name, error = parse_endpoint(path, endpoint)
-            results.append({
-                "path": str(path),
-                "kind": kind,
-                "name": name,
-                "error": error
-            })
+        for path, endpoint, error_msg in endpoints:
+            if error_msg is not None:
+                results.append({
+                    "path": str(path),
+                    "kind": "unknown",
+                    "name": "unknown",
+                    "error": error_msg
+                })
+            else:
+                kind, name, error = parse_endpoint(path, endpoint)
+                results.append({
+                    "path": str(path),
+                    "kind": kind,
+                    "name": name,
+                    "error": error
+                })
         
         if json_output:
             output_result({
@@ -66,13 +74,36 @@ def list_endpoints(profile: str, json_output: bool, debug: bool):
                 click.echo("No endpoints found")
                 return
                 
-            click.echo(f"\nFound {len(results)} endpoint files:")
+            # Count valid and failed endpoints
+            valid_count = sum(1 for r in results if r["error"] is None)
+            failed_count = len(results) - valid_count
+            
+            click.echo(f"\nFound {len(results)} endpoint files ({valid_count} valid, {failed_count} failed):")
+            
+            # Group by status
+            valid_endpoints = []
+            failed_endpoints = []
+            
             for result in results:
-                if result["error"]:
-                    click.echo(f"\n[ERROR] {result['error']}")
+                if result["error"] is None:
+                    valid_endpoints.append(result)
                 else:
-                    click.echo(f"\n[{result['kind']}] {result['name']}")
-                    click.echo(f"  Path: {result['path']}")
+                    failed_endpoints.append(result)
+            
+            # Show failed endpoints first
+            if failed_endpoints:
+                click.echo("\nFailed endpoints:")
+                for result in sorted(failed_endpoints, key=lambda r: r["path"]):
+                    click.echo(f"  ✗ {result['path']}")
+                    click.echo(f"    Error: {result['error']}")
+            
+            # Then show valid endpoints
+            if valid_endpoints:
+                click.echo("\nValid endpoints:")
+                for result in sorted(valid_endpoints, key=lambda r: r["path"]):
+                    click.echo(f"  ✓ {result['path']}")
+                    click.echo(f"    Type: {result['kind']}")
+                    click.echo(f"    Name: {result['name']}")
                     
     except Exception as e:
         output_error(e, json_output, debug)
