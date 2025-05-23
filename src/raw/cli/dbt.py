@@ -72,14 +72,28 @@ def dbt_wrapper(ctx):
     if not profile_config:
         raise click.ClickException(f"Profile '{profile}' not found in project '{project}'")
     
-    secrets = profile_config.get("secrets", {})
+    secrets = profile_config.get("secrets", [])
     
     # Prepare environment
     env = os.environ.copy()
-    for name, params in secrets.items():
-        for key, value in params.items():
-            var = f"RAW_SECRET_{name.upper()}_{key.upper()}"
-            env[var] = value
+    for secret in secrets:
+        if not isinstance(secret, dict) or "name" not in secret or "parameters" not in secret:
+            continue
+            
+        secret_name = secret["name"]
+        parameters = secret["parameters"]
+        
+        # Handle both string and object parameters
+        for param_name, param_value in parameters.items():
+            if isinstance(param_value, dict):
+                # For map-like parameters (e.g., HTTP headers)
+                for key, value in param_value.items():
+                    var = f"RAW_SECRET_{secret_name.upper()}_{param_name.upper()}_{key.upper()}"
+                    env[var] = str(value)
+            else:
+                # For simple string parameters
+                var = f"RAW_SECRET_{secret_name.upper()}_{param_name.upper()}"
+                env[var] = str(param_value)
     
     # Build dbt command
     cmd = ["dbt"] + ctx.args

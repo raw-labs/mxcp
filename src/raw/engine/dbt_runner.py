@@ -61,6 +61,54 @@ def _save_dbt_project(project_config: Dict[str, Any]) -> None:
     # Atomic rename
     temp_path.rename(project_path)
 
+def _map_secret_to_dbt_format(secret: Dict[str, Any], embed_secrets: bool) -> Dict[str, Any]:
+    """Map a RAW secret to dbt's expected format based on its type.
+    
+    Args:
+        secret: The secret configuration from RAW config
+        embed_secrets: Whether to embed actual values or use env vars
+        
+    Returns:
+        Secret configuration in dbt's expected format, or None if type not supported
+    """
+    if secret["type"] != "http":
+        return None
+        
+    secret_name = secret["name"]
+    parameters = secret["parameters"]
+    
+    # Handle both formats:
+    # 1. Single header: { "BEARER_TOKEN": "value" }
+    # 2. Multiple headers: { "EXTRA_HTTP_HEADERS": { "Header": "value" } }
+    
+    headers = {}
+    if "BEARER_TOKEN" in parameters:
+        if embed_secrets:
+            headers["Authorization"] = f"Bearer {parameters['BEARER_TOKEN']}"
+        else:
+            env_var = f"RAW_SECRET_{secret_name.upper()}_BEARER_TOKEN"
+            headers["Authorization"] = f"Bearer {{{{ env_var('{env_var}') }}}}"
+    elif "EXTRA_HTTP_HEADERS" in parameters:
+        headers = {}
+        for key, value in parameters["EXTRA_HTTP_HEADERS"].items():
+            if embed_secrets:
+                headers[key] = value
+            else:
+                env_var = f"RAW_SECRET_{secret_name.upper()}_HEADERS_{key.upper()}"
+                headers[key] = f"{{{{ env_var('{env_var}') }}}}"
+    
+    if not headers:
+        return None
+        
+    # Convert headers to dbt's expected format
+    headers_str = ", ".join(f"'{k}': '{v}'" for k, v in headers.items())
+    return {
+        "name": secret_name,
+        "type": "http",
+        "scope": parameters.get("scope", ""),  # Optional scope
+        "extra_http_headers": f"map {{ {headers_str} }}"
+    }
+
 def _build_profile_block(
     project: str,
     profile: str,
@@ -98,18 +146,21 @@ def _build_profile_block(
     }
     
     if secrets:
-        if embed_secrets:
-            # Use actual secret values from user config
-            block[dbt_profile]["outputs"][profile]["secrets"] = secrets
-        else:
-            # Use env_var() placeholders
-            block[dbt_profile]["outputs"][profile]["secrets"] = {
-                name: {
-                    key: f"{{{{ env_var('RAW_SECRET_{name.upper()}_{key.upper()}') }}}}"
-                    for key in params
-                }
-                for name, params in secrets.items()
-            }
+        # Initialize secrets array in the output
+        block[dbt_profile]["outputs"][profile]["secrets"] = []
+        
+        for secret in secrets:
+            if not isinstance(secret, dict) or "name" not in secret or "type" not in secret or "parameters" not in secret:
+                continue
+            
+            try:
+                # Map the secret to dbt's expected format
+                dbt_secret = _map_secret_to_dbt_format(secret, embed_secrets)
+                if dbt_secret:  # Only add if mapping was successful
+                    block[dbt_profile]["outputs"][profile]["secrets"].append(dbt_secret)
+            except Exception as e:
+                click.echo(f"Warning: Failed to process secret '{secret.get('name', 'unknown')}': {e}", err=True)
+                continue
     
     return block
 
@@ -259,7 +310,7 @@ def configure_dbt(
     if not profile_config:
         raise click.ClickException(f"Profile '{profile_name}' not found in project '{project}'")
     
-    secrets = profile_config.get("secrets", {})
+    secrets = profile_config.get("secrets", [])
     
     # 6. Load existing profiles and project config
     profiles = _load_profiles()
