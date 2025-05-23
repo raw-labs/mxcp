@@ -1,10 +1,9 @@
 import click
-import json
 from typing import Dict, List, Tuple, Optional
 from raw.endpoints.loader import EndpointLoader
 from pathlib import Path
 from raw.config.site_config import load_site_config
-from raw.cli.utils import output_result, output_error
+from raw.cli.utils import output_result, output_error, configure_logging
 from raw.config.analytics import track_command_with_timing
 
 def parse_endpoint(path: Path, endpoint: dict) -> Tuple[str, str, Optional[str]]:
@@ -25,7 +24,7 @@ def parse_endpoint(path: Path, endpoint: dict) -> Tuple[str, str, Optional[str]]
 @click.command(name="list")
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
-@click.option("--debug", is_flag=True, help="Show detailed error information")
+@click.option("--debug", is_flag=True, help="Show detailed debug information")
 @track_command_with_timing("list")
 def list_endpoints(profile: str, json_output: bool, debug: bool):
     """List all available endpoints.
@@ -38,6 +37,9 @@ def list_endpoints(profile: str, json_output: bool, debug: bool):
         raw list --json-output     # Output in JSON format
         raw list --profile dev     # List endpoints in dev profile
     """
+    # Configure logging
+    configure_logging(debug)
+
     try:
         site_config = load_site_config()
         loader = EndpointLoader(site_config)

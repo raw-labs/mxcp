@@ -2,7 +2,7 @@ import click
 import yaml
 from pathlib import Path
 import os
-from raw.cli.utils import output_error
+from raw.cli.utils import output_error, configure_logging
 from raw.config.user_config import load_user_config
 from raw.config.analytics import track_command_with_timing
 from typing import Optional
@@ -80,8 +80,9 @@ def create_hello_world_files(target_dir: Path):
 @click.option("--project", help="Project name (defaults to folder name)")
 @click.option("--profile", help="Profile name (defaults to 'default')")
 @click.option("--bootstrap", is_flag=True, help="Create example hello world endpoint")
+@click.option("--debug", is_flag=True, help="Show detailed debug information")
 @track_command_with_timing("init")
-def init(folder: str, project: str, profile: str, bootstrap: bool):
+def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
     """Initialize a new RAW repository.
     
     This command creates a new RAW repository by:
@@ -94,6 +95,9 @@ def init(folder: str, project: str, profile: str, bootstrap: bool):
         raw init --project=test    # Initialize with specific project name
         raw init --bootstrap       # Initialize with example endpoint
     """
+    # Configure logging
+    configure_logging(debug)
+    
     try:
         target_dir = Path(folder).resolve()
         

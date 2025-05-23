@@ -1,10 +1,10 @@
 import click
-from raw.endpoints.schema import validate_all_endpoints, validate_endpoint
-from raw.config.site_config import load_site_config
-from raw.config.user_config import load_user_config
-from raw.cli.utils import output_result, output_error
-from raw.config.analytics import track_command_with_timing
 from typing import Optional
+from raw.endpoints.schema import validate_endpoint, validate_all_endpoints
+from raw.config.user_config import load_user_config
+from raw.config.site_config import load_site_config
+from raw.cli.utils import output_result, output_error, configure_logging
+from raw.config.analytics import track_command_with_timing
 
 def format_validation_results(results):
     """Format validation results for human-readable output"""
@@ -54,7 +54,7 @@ def format_validation_results(results):
 @click.argument("endpoint", required=False)
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
-@click.option("--debug", is_flag=True, help="Show detailed error information")
+@click.option("--debug", is_flag=True, help="Show detailed debug information")
 @track_command_with_timing("validate")
 def validate(endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool):
     """Validate one or all endpoints.
@@ -67,6 +67,9 @@ def validate(endpoint: Optional[str], profile: Optional[str], json_output: bool,
         raw validate my_endpoint       # Validate specific endpoint
         raw validate --json-output     # Output results in JSON format
     """
+    # Configure logging
+    configure_logging(debug)
+
     try:
         site_config = load_site_config()
         user_config = load_user_config(site_config)

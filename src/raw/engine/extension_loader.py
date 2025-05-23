@@ -1,3 +1,5 @@
+import logging
+
 def load_extensions(con):
     #__load_raw_extension(con)
     __load_httpfs_extension(con)
@@ -5,13 +7,13 @@ def load_extensions(con):
 def __load_raw_extension(con):
     try:
         con.sql("INSTALL raw; LOAD raw;")
-        print("RAW DuckDB extension loaded.")
+        logging.info("RAW DuckDB extension loaded.")
     except Exception as e:
-        print("Warning: failed to load RAW extension:", e)
+        logging.warning("Failed to load RAW extension: %s", e)
 
 def __load_httpfs_extension(con):
     try:
         con.sql("INSTALL httpfs; LOAD httpfs;")
-        print("HTTPFS DuckDB extension loaded.")
+        logging.info("HTTPFS DuckDB extension loaded.")
     except Exception as e:
-        print("Warning: failed to load HTTPFS extension:", e)
+        logging.warning("Failed to load HTTPFS extension: %s", e)

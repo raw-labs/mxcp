@@ -56,7 +56,7 @@ class EndpointLoader:
                     endpoints.append((f, data))
                     self._endpoints[str(f)] = data
             except Exception as e:
-                print(f"Warning: Failed to load endpoint {f}: {e}")
+                logger.warning("Failed to load endpoint %s: %s", f, e)
                 
         return endpoints
     

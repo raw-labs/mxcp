@@ -2,6 +2,21 @@ import json
 import traceback
 from typing import Any, Dict, Optional
 import click
+import logging
+
+def configure_logging(debug: bool = False) -> None:
+    """Configure logging for all modules.
+    
+    Args:
+        debug: Whether to enable debug logging
+    """
+    log_level = logging.DEBUG if debug else logging.WARNING
+    logging.basicConfig(level=log_level)
+    
+    # Configure all raw.* loggers
+    for logger_name in logging.root.manager.loggerDict:
+        if logger_name.startswith('raw.'):
+            logging.getLogger(logger_name).setLevel(log_level)
 
 def format_error(error: Exception, debug: bool = False) -> Dict[str, Any]:
     """Format an error for output.

@@ -6,6 +6,7 @@ import click
 from ..config.site_config import find_repo_root
 from ..config.types import SiteConfig, UserConfig
 import time
+import logging
 
 def _get_dbt_profiles_dir() -> Path:
     """Get the dbt profiles directory path."""
@@ -302,13 +303,15 @@ def configure_dbt(
         duckdb_path = str(repo_root / duckdb_path)
     
     # 5. Get secrets from user config
-    project_config = user_config["projects"].get(project)
+    project_config = user_config.get("projects", {}).get(project)
     if not project_config:
-        raise click.ClickException(f"Project '{project}' not found in user config")
+        click.echo(f"Warning: Project '{project}' not found in user config, assuming empty configuration", err=True)
+        project_config = {}
     
-    profile_config = project_config["profiles"].get(profile_name)
+    profile_config = project_config.get("profiles", {}).get(profile_name)
     if not profile_config:
-        raise click.ClickException(f"Profile '{profile_name}' not found in project '{project}'")
+        click.echo(f"Warning: Profile '{profile_name}' not found in project '{project}', assuming empty configuration", err=True)
+        profile_config = {}
     
     secrets = profile_config.get("secrets", [])
     
@@ -357,5 +360,6 @@ def configure_dbt(
     mode = "embedded secrets" if embed_secrets else "env_var mode"
     click.echo(f"profiles.yml and dbt_project.yml updated ({mode})")
 
-def run_stale_models():
-    print("Stub: run stale dbt models")
+def run_stale_models(self):
+    """Run stale dbt models"""
+    logging.debug("Stub: run stale dbt models")

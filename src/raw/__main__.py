@@ -9,7 +9,7 @@ from raw.cli.query import query
 from raw.cli.dbt import dbt_config, dbt_wrapper
 from raw.config.analytics import initialize_analytics, track_base_command
 
-@click.group() #context_settings={'max_content_width': 100})
+@click.group()
 def cli():
     """RAW CLI"""
     initialize_analytics()

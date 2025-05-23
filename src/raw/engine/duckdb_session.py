@@ -3,7 +3,6 @@ from typing import Dict, Any, Optional
 from raw.config.types import SiteConfig, UserConfig
 from raw.engine.secret_injection import inject_secrets
 from raw.engine.extension_loader import load_extensions
-from raw.engine.python_bootstrap import run_init_script
 import logging
 
 logger = logging.getLogger(__name__)
@@ -53,9 +52,6 @@ class DuckDBSession:
             
         # Load DuckDB extensions
         load_extensions(self.conn)
-        
-        # Load Python bootstrap if configured
-        run_init_script(self.conn, self.site_config)
             
         # Inject secrets using the active profile
         project, profile_name = self._get_project_profile()

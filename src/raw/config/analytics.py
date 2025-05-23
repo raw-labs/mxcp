@@ -7,8 +7,8 @@ import functools
 import posthog
 
 # Configure logging to be less verbose
-logging.getLogger('posthog').setLevel(logging.WARNING)
-logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('posthog').setLevel(logging.ERROR)
+logging.getLogger('urllib3').setLevel(logging.ERROR)
 
 POSTHOG_API_KEY = "phc_6BP2PRVBewZUihdpac9Qk6QHd4eXykdhrvoFncqBjl0"
 POSTHOG_HOST = "https://app.posthog.com"

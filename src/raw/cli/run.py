@@ -7,7 +7,7 @@ from raw.endpoints.runner import run_endpoint as execute_endpoint
 from raw.endpoints.executor import EndpointType
 from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config, get_active_profile
-from raw.cli.utils import output_result, output_error
+from raw.cli.utils import output_result, output_error, configure_logging
 from raw.config.analytics import track_command_with_timing
 
 @click.command(name="run")
@@ -16,7 +16,7 @@ from raw.config.analytics import track_command_with_timing
 @click.option("--param", "-p", multiple=True, help="Parameter in format name=value or name=@file.json for complex values")
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
-@click.option("--debug", is_flag=True, help="Show detailed error information")
+@click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--skip-output-validation", is_flag=True, help="Skip output validation against the return type definition")
 @track_command_with_timing("run")
 def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool):
@@ -30,6 +30,9 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
         raw run tool my_tool --param name=value
         raw run tool my_tool --param complex=@data.json
     """
+    # Configure logging
+    configure_logging(debug)
+
     try:
         # Load configs
         site_config = load_site_config()

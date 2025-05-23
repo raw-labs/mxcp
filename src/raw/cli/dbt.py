@@ -5,18 +5,23 @@ import click
 from ..config.site_config import load_site_config, find_repo_root
 from ..config.user_config import load_user_config
 from ..engine.dbt_runner import configure_dbt
+from .utils import configure_logging
 
 @click.command(name="dbt-config")
 @click.option("--profile", help="Override the profile name from raw-site.yml")
 @click.option("--dry-run", is_flag=True, help="Show what would be written without making changes")
 @click.option("--force", is_flag=True, help="Overwrite existing profile without confirmation")
 @click.option("--embed-secrets", is_flag=True, help="Embed secrets directly in profiles.yml")
-def dbt_config(profile: str, dry_run: bool, force: bool, embed_secrets: bool):
+@click.option("--debug", is_flag=True, help="Show detailed debug information")
+def dbt_config(profile: str, dry_run: bool, force: bool, embed_secrets: bool, debug: bool):
     """Generate / patch the dbt side-car files (dbt_project.yml + profiles.yml).
     
     Default mode writes env_var() templates, so secrets stay out of YAML.
     Use --embed-secrets to flatten secrets straight into profiles.yml.
     """
+    # Configure logging
+    configure_logging(debug)
+    
     # Load configs
     try:
         repo_root = find_repo_root()
@@ -39,13 +44,17 @@ def dbt_config(profile: str, dry_run: bool, force: bool, embed_secrets: bool):
     ignore_unknown_options=True,
     allow_extra_args=True
 ))
+@click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.pass_context
-def dbt_wrapper(ctx):
+def dbt_wrapper(ctx, debug: bool):
     """Wrapper that injects secrets as env vars, then delegates to the real dbt CLI.
     
     Example:
         raw dbt run --select my_model
     """
+    # Configure logging
+    configure_logging(debug)
+    
     # Load configs
     try:
         repo_root = find_repo_root()
@@ -64,14 +73,8 @@ def dbt_wrapper(ctx):
     profile = site_config["profile"]
     
     # Get secrets from user config
-    project_config = user_config["projects"].get(project)
-    if not project_config:
-        raise click.ClickException(f"Project '{project}' not found in user config")
-    
-    profile_config = project_config["profiles"].get(profile)
-    if not profile_config:
-        raise click.ClickException(f"Profile '{profile}' not found in project '{project}'")
-    
+    project_config = user_config.get("projects", {}).get(project, {})
+    profile_config = project_config.get("profiles", {}).get(profile, {})
     secrets = profile_config.get("secrets", [])
     
     # Prepare environment

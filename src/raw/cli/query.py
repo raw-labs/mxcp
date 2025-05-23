@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config
-from raw.cli.utils import output_result, output_error
+from raw.cli.utils import output_result, output_error, configure_logging
 from raw.engine.duckdb_session import DuckDBSession
 from raw.config.analytics import track_command_with_timing
 
@@ -14,7 +14,7 @@ from raw.config.analytics import track_command_with_timing
 @click.option("--param", "-p", multiple=True, help="Parameter in format name=value or name=@file.json for complex values")
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
-@click.option("--debug", is_flag=True, help="Show detailed error information")
+@click.option("--debug", is_flag=True, help="Show detailed debug information")
 @track_command_with_timing("query")
 def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool):
     """Execute a SQL query directly against the database.
@@ -29,6 +29,9 @@ def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profi
         raw query --file complex_query.sql --param start_date=@dates.json
         raw query "SELECT * FROM sales" --profile production --json-output
     """
+    # Configure logging
+    configure_logging(debug)
+
     try:
         # Validate input
         if not sql and not file:

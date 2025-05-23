@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional
 from raw.endpoints.tester import run_tests, run_all_tests
 from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config
-from raw.cli.utils import output_result, output_error
+from raw.cli.utils import output_result, output_error, configure_logging
 from raw.config.analytics import track_command_with_timing
 
 def format_test_results(results, debug: bool = False):
@@ -60,7 +60,7 @@ def format_test_results(results, debug: bool = False):
 @click.argument("endpoint", required=False)
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
-@click.option("--debug", is_flag=True, help="Show detailed error information")
+@click.option("--debug", is_flag=True, help="Show detailed debug information")
 @track_command_with_timing("test")
 def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool):
     """Run tests for one or all endpoints.
@@ -73,6 +73,9 @@ def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, deb
         raw test my_endpoint       # Test specific endpoint
         raw test --json-output     # Output results in JSON format
     """
+    # Configure logging
+    configure_logging(debug)
+
     try:
         site_config = load_site_config()
         user_config = load_user_config(site_config)

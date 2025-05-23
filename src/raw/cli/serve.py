@@ -1,10 +1,9 @@
 import click
-import asyncio
 import signal
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from raw.server.mcp import RAWMCP
-from raw.cli.utils import output_error
+from raw.cli.utils import output_error, configure_logging
 from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config
 from raw.config.analytics import track_event
@@ -16,7 +15,7 @@ class EndpointRequest(BaseModel):
 @click.option("--profile", help="Profile name to use")
 @click.option("--transport", type=click.Choice(["streamable-http", "sse", "stdio"]), default="streamable-http", help="Transport protocol to use (streamable-http, sse, or stdio)")
 @click.option("--port", type=int, default=8000, help="Port number to use for HTTP transport (default: 8000)")
-@click.option("--debug", is_flag=True, help="Show detailed error information")
+@click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--no-sql-tools", is_flag=True, help="Disable built-in SQL querying and schema exploration tools (enabled by default in site config)")
 def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql_tools: bool):
     """Start the RAW MCP server to expose endpoints via HTTP or stdio.
@@ -32,6 +31,9 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql
         raw serve --profile dev     # Use the 'dev' profile configuration
         raw serve --no-sql-tools    # Disable built-in SQL querying and schema exploration tools
     """
+    # Configure logging
+    configure_logging(debug)
+
     try:
         site_config = load_site_config()
         user_config = load_user_config(site_config)
