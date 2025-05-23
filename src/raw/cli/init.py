@@ -16,7 +16,7 @@ def check_existing_raw_repo(target_dir: Path) -> bool:
 
 def check_existing_duckdb(target_dir: Path, profile: str = "default") -> bool:
     """Check if there's a .duckdb file for the given profile in the target directory."""
-    return (target_dir / f".duckdb-{profile}").exists()
+    return (target_dir / f"duckdb-{profile}").exists()
 
 def check_project_exists(user_config: dict, project_name: str) -> bool:
     """Check if the project name already exists in the user config."""

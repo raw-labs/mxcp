@@ -83,8 +83,9 @@ def _build_profile_block(
     # Create dbt profile name as <project>_<profile>
     dbt_profile = f"{project}_{profile}"
     
+    # Build the minimal required configuration
     block = {
-        dbt_profile: {  # Use combined name as top-level key
+        dbt_profile: {
             "target": profile,  # Use RAW profile name as target
             "outputs": {
                 profile: {  # Use RAW profile name as output key
@@ -130,6 +131,7 @@ def _build_dbt_project(
     # Create dbt profile name as <project>_<profile>
     dbt_profile = f"{project}_{profile}"
     
+    # Build the minimal required configuration
     return {
         "name": project,
         "profile": dbt_profile,  # Use combined profile name
@@ -144,6 +146,60 @@ def _build_dbt_project(
         "target-path": "target",
         "clean-targets": ["target", "dbt_packages"]
     }
+
+def _merge_profile_blocks(existing: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge new profile block into existing one, preserving user configuration.
+    
+    Args:
+        existing: Existing profile configuration
+        new: New profile configuration to merge in
+    
+    Returns:
+        Merged profile configuration
+    """
+    result = existing.copy()
+    
+    for profile_name, profile_config in new.items():
+        if profile_name not in result:
+            result[profile_name] = profile_config
+            continue
+            
+        # Merge outputs
+        if "outputs" in profile_config:
+            if "outputs" not in result[profile_name]:
+                result[profile_name]["outputs"] = {}
+            
+            for output_name, output_config in profile_config["outputs"].items():
+                if output_name not in result[profile_name]["outputs"]:
+                    result[profile_name]["outputs"][output_name] = {}
+                
+                # Update only the keys we need
+                for key, value in output_config.items():
+                    result[profile_name]["outputs"][output_name][key] = value
+        
+        # Update target if specified
+        if "target" in profile_config:
+            result[profile_name]["target"] = profile_config["target"]
+    
+    return result
+
+def _merge_dbt_project(existing: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge new dbt project config into existing one, preserving user configuration.
+    
+    Args:
+        existing: Existing dbt project configuration
+        new: New dbt project configuration to merge in
+    
+    Returns:
+        Merged dbt project configuration
+    """
+    result = existing.copy()
+    
+    # Update only the keys we need
+    for key, value in new.items():
+        result[key] = value
+    
+    return result
 
 def configure_dbt(
     site_config: SiteConfig,
@@ -227,36 +283,24 @@ def configure_dbt(
     
     # 9. Check for existing profile
     if dbt_profile in profiles:
-        if profiles[dbt_profile] != new_profile_block[dbt_profile]:
-            if not force:
-                raise click.ClickException(
-                    f"Profile '{dbt_profile}' already exists and differs. Use --force to overwrite."
-                )
-            if not dry_run:
-                click.echo(f"Overwriting existing profile '{dbt_profile}'")
+        if not force:
+            raise click.ClickException(f"Profile '{dbt_profile}' already exists. Use --force to update configuration.")
     
-    # 10. Check for existing dbt_project.yml
-    if dbt_project:
-        if dbt_project != new_dbt_project:
-            if not force:
-                raise click.ClickException(
-                    "dbt_project.yml already exists and differs. Use --force to overwrite."
-                )
-            if not dry_run:
-                click.echo("Overwriting existing dbt_project.yml")
+    # 10. Merge configurations
+    merged_profiles = _merge_profile_blocks(profiles, new_profile_block)
+    merged_dbt_project = _merge_dbt_project(dbt_project, new_dbt_project)
     
     # 11. Handle dry run
     if dry_run:
         click.echo("Would write the following to profiles.yml:")
-        click.echo(yaml.dump(profiles))
+        click.echo(yaml.dump(merged_profiles))
         click.echo("\nWould write the following to dbt_project.yml:")
-        click.echo(yaml.dump(new_dbt_project))
+        click.echo(yaml.dump(merged_dbt_project))
         return
     
     # 12. Write files
-    profiles.update(new_profile_block)
-    _save_profiles(profiles)
-    _save_dbt_project(new_dbt_project)
+    _save_profiles(merged_profiles)
+    _save_dbt_project(merged_dbt_project)
     
     # 13. Log success
     mode = "embedded secrets" if embed_secrets else "env_var mode"
