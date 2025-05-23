@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 import click
 from ..config.site_config import find_repo_root
 from ..config.types import SiteConfig, UserConfig
+import time
 
 def _get_dbt_profiles_dir() -> Path:
     """Get the dbt profiles directory path."""
@@ -166,21 +167,34 @@ def configure_dbt(
     if not site_config.get("dbt", {}).get("enabled", True):
         raise click.ClickException("dbt integration is disabled in raw-site.yml")
     
-    # 2. Get project and profile names
+    # 2. Handle embed_secrets requirement
+    if embed_secrets and not force:
+        raise click.ClickException("--embed-secrets requires --force to be set")
+    
+    if embed_secrets and not dry_run:
+        click.echo("WARNING: Embedding secrets directly in profiles.yml")
+        click.echo("This will write sensitive values to disk!")
+        for i in range(5, 0, -1):
+            click.echo(f"Continuing in {i}...", nl=False)
+            time.sleep(1)
+            click.echo("\r", nl=False)
+        click.echo("\nContinuing...")
+    
+    # 3. Get project and profile names
     project = site_config["project"]
     profile_name = profile or site_config["profile"]
     
     # Create dbt profile name as <project>_<profile>
     dbt_profile = f"{project}_{profile_name}"
     
-    # 3. Get DuckDB path using the same convention as the rest of the codebase
+    # 4. Get DuckDB path using the same convention as the rest of the codebase
     repo_root = find_repo_root()
     duckdb_path = site_config["profiles"][profile_name]["duckdb"]["path"]
     if not os.path.isabs(duckdb_path):
         # If path is not absolute, it should be relative to repo root
         duckdb_path = str(repo_root / duckdb_path)
     
-    # 4. Get secrets from user config
+    # 5. Get secrets from user config
     project_config = user_config["projects"].get(project)
     if not project_config:
         raise click.ClickException(f"Project '{project}' not found in user config")
@@ -191,11 +205,11 @@ def configure_dbt(
     
     secrets = profile_config.get("secrets", {})
     
-    # 5. Load existing profiles and project config
+    # 6. Load existing profiles and project config
     profiles = _load_profiles()
     dbt_project = _load_dbt_project()
     
-    # 6. Build new profile block
+    # 7. Build new profile block
     new_profile_block = _build_profile_block(
         project=project,
         profile=profile_name,
@@ -204,14 +218,14 @@ def configure_dbt(
         embed_secrets=embed_secrets
     )
     
-    # 7. Build new dbt project config
+    # 8. Build new dbt project config
     new_dbt_project = _build_dbt_project(
         project=project,
         profile=profile_name,
         models_path=site_config.get("dbt", {}).get("models")
     )
     
-    # 8. Check for existing profile
+    # 9. Check for existing profile
     if dbt_profile in profiles:
         if profiles[dbt_profile] != new_profile_block[dbt_profile]:
             if not force:
@@ -221,7 +235,7 @@ def configure_dbt(
             if not dry_run:
                 click.echo(f"Overwriting existing profile '{dbt_profile}'")
     
-    # 9. Check for existing dbt_project.yml
+    # 10. Check for existing dbt_project.yml
     if dbt_project:
         if dbt_project != new_dbt_project:
             if not force:
@@ -231,7 +245,7 @@ def configure_dbt(
             if not dry_run:
                 click.echo("Overwriting existing dbt_project.yml")
     
-    # 10. Handle dry run
+    # 11. Handle dry run
     if dry_run:
         click.echo("Would write the following to profiles.yml:")
         click.echo(yaml.dump(profiles))
@@ -239,12 +253,12 @@ def configure_dbt(
         click.echo(yaml.dump(new_dbt_project))
         return
     
-    # 11. Write files
+    # 12. Write files
     profiles.update(new_profile_block)
     _save_profiles(profiles)
     _save_dbt_project(new_dbt_project)
     
-    # 12. Log success
+    # 13. Log success
     mode = "embedded secrets" if embed_secrets else "env_var mode"
     click.echo(f"profiles.yml and dbt_project.yml updated ({mode})")
 
