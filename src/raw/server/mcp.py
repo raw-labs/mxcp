@@ -10,13 +10,14 @@ from raw.config.site_config import SiteConfig, get_active_profile
 from raw.endpoints.schema import validate_endpoint
 from makefun import create_function
 from functools import partial
+from raw.engine.duckdb_session import DuckDBSession
 
 logger = logging.getLogger(__name__)
 
 class RAWMCP:
     """RAW MCP Server implementation that bridges RAW endpoints with MCP protocol."""
     
-    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, stateless_http: bool = False, json_response: bool = False, host: str = "localhost", port: int = 8000):
+    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, stateless_http: bool = False, json_response: bool = False, host: str = "localhost", port: int = 8000, enable_duckdb: bool = True):
         """Initialize the RAW MCP server.
         
         Args:
@@ -25,6 +26,7 @@ class RAWMCP:
             json_response: Whether to use JSON responses instead of SSE
             host: The host to bind to
             port: The port to bind to
+            enable_duckdb: Whether to enable built-in DuckDB features (default: True)
         """
         self.mcp = FastMCP(
             "RAW Server",
@@ -40,6 +42,7 @@ class RAWMCP:
         self.loader = EndpointLoader(self.site_config)
         self.endpoints = self.loader.discover_endpoints()
         self.skipped_endpoints: List[Dict[str, Any]] = []
+        self.enable_duckdb = enable_duckdb
         logger.info(f"Discovered {len(self.endpoints)} endpoints")
         
     def _convert_param_type(self, value: Any, param_type: str) -> Any:
@@ -195,6 +198,101 @@ class RAWMCP:
             log_name="prompt"
         )
 
+    def _register_duckdb_features(self):
+        """Register built-in DuckDB features if enabled."""
+        if not self.enable_duckdb:
+            return
+
+        # Register SQL query tool
+        @self.mcp.tool(
+            name="execute_sql_query",
+            description="Execute a SQL query against the DuckDB database and return the results as a list of records"
+        )
+        async def execute_sql_query(sql: str) -> List[Dict[str, Any]]:
+            """Execute a SQL query against the DuckDB database.
+            
+            Args:
+                sql: The SQL query to execute
+                
+            Returns:
+                List of records as dictionaries
+            """
+            session = DuckDBSession(self.user_config, self.site_config, self.profile_name)
+            try:
+                conn = session.connect()
+                result = conn.execute(sql).fetchdf()
+                return result.to_dict("records")
+            except Exception as e:
+                logger.error(f"Error executing SQL query: {e}")
+                raise
+            finally:
+                session.close()
+
+        # Register table list resource
+        @self.mcp.tool(
+            name="list_tables",
+            description="List all tables in the DuckDB database"
+        )
+        async def list_tables() -> List[Dict[str, str]]:
+            """List all tables in the DuckDB database.
+            
+            Returns:
+                List of tables with their names and types
+            """
+            session = DuckDBSession(self.user_config, self.site_config, self.profile_name)
+            try:
+                conn = session.connect()
+                result = conn.execute("""
+                    SELECT 
+                        table_name as name,
+                        table_type as type
+                    FROM information_schema.tables
+                    WHERE table_schema = 'main'
+                    ORDER BY table_name
+                """).fetchdf()
+                return result.to_dict("records")
+            except Exception as e:
+                logger.error(f"Error listing tables: {e}")
+                raise
+            finally:
+                session.close()
+
+        # Register schema resource
+        @self.mcp.tool(
+            name="get_table_schema",
+            description="Get the schema for a specific table in the DuckDB database"
+        )
+        async def get_table_schema(table_name: str) -> List[Dict[str, Any]]:
+            """Get the schema for a specific table.
+            
+            Args:
+                table_name: Name of the table to get schema for
+                
+            Returns:
+                List of columns with their names and types
+            """
+            session = DuckDBSession(self.user_config, self.site_config, self.profile_name)
+            try:
+                conn = session.connect()
+                result = conn.execute("""
+                    SELECT 
+                        column_name as name,
+                        data_type as type,
+                        is_nullable as nullable
+                    FROM information_schema.columns
+                    WHERE table_name = ?
+                    ORDER BY ordinal_position
+                """, [table_name]).fetchdf()
+                logger.info(f"Table schema: {result.to_dict('records')}")
+                return result.to_dict("records")
+            except Exception as e:
+                logger.error(f"Error getting table schema: {e}")
+                raise
+            finally:
+                session.close()
+
+        logger.info("Registered built-in DuckDB features")
+
     def register_endpoints(self):
         """Register all discovered endpoints with MCP."""
         for path, endpoint_def in self.endpoints:
@@ -228,6 +326,10 @@ class RAWMCP:
                     "error": str(e)
                 })
                 continue
+
+        # Register DuckDB features if enabled
+        if self.enable_duckdb:
+            self._register_duckdb_features()
 
         # Report skipped endpoints
         if self.skipped_endpoints:
