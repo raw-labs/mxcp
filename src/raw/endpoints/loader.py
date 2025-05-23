@@ -46,6 +46,9 @@ class EndpointLoader:
             # Skip raw-site.yml only if it's at the root
             if f.name == "raw-site.yml" and f.parent == base_path:
                 continue
+            # Skip dbt_project.yml only if it's at the root
+            if f.name == "dbt_project.yml" and f.parent == base_path:
+                continue
             # Skip the file specified in RAW_CONFIG if it exists
             if raw_config.exists() and f.samefile(raw_config):
                 continue
