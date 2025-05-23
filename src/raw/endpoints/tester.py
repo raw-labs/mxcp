@@ -170,7 +170,7 @@ async def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteCon
                     "name": test_name,
                     "description": test_def.get("description", ""),
                     "status": "error",
-                    "error": str(e),
+                    "error": e,  # Pass the actual exception object instead of just the string
                     "time": time.time() - start_time
                 })
                 has_error = True

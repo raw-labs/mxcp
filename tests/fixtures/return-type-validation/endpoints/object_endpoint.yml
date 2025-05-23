@@ -1,0 +1,21 @@
+raw: "1.0.0"
+
+tool:
+  name: object_endpoint
+  description: Test endpoint that returns a single object
+  parameters:
+    - name: name
+      type: string
+      description: Name parameter
+    - name: age
+      type: integer
+      description: Age parameter
+  return:
+    type: object
+    properties:
+      name:
+        type: string
+      age:
+        type: integer
+  source: 
+    file: object_endpoint.sql 

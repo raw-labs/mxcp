@@ -1,0 +1,13 @@
+raw: "1.0.0"
+
+tool:
+  name: scalar_endpoint
+  description: Test endpoint that returns a single scalar value
+  parameters:
+    - name: value
+      type: integer
+      description: Value parameter
+  return:
+    type: number
+  source: 
+    file: scalar_endpoint.sql 

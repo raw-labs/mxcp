@@ -19,11 +19,18 @@ class TypeDefinition(TypedDict):
     format: Optional[str]  # email, uri, date, time, date-time, duration, timestamp
     minLength: Optional[int]
     maxLength: Optional[int]
+    minimum: Optional[float]
+    maximum: Optional[float]
+    exclusiveMinimum: Optional[float]
+    exclusiveMaximum: Optional[float]
+    multipleOf: Optional[float]
     minItems: Optional[int]
     maxItems: Optional[int]
+    uniqueItems: Optional[bool]
     items: Optional['TypeDefinition']
     properties: Optional[dict[str, 'TypeDefinition']]
     required: Optional[List[str]]
+    additionalProperties: Optional[bool]  # Whether to allow additional properties not defined in the schema
 
 class ParamDefinition(TypedDict):
     name: str

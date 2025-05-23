@@ -47,7 +47,8 @@ class DuckDBSession:
     def connect(self) -> duckdb.DuckDBPyConnection:
         """Establish DuckDB connection and set up the session"""        
         # Connect to DuckDB using path from config
-        db_path = self.site_config["duckdb"]["path"]
+        profile = self.profile or self.site_config["profile"]
+        db_path = self.site_config["profiles"][profile]["duckdb"]["path"]
         self.conn = duckdb.connect(db_path)
             
         # Load DuckDB extensions

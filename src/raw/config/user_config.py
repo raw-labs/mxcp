@@ -37,7 +37,6 @@ def _generate_default_config(site_config: SiteConfig) -> dict:
         "raw": "1.0.0",
         "projects": {
             project_name: {
-                "default": profile_name,
                 "profiles": {
                     profile_name: {
                         "secrets": [],
@@ -50,24 +49,28 @@ def _generate_default_config(site_config: SiteConfig) -> dict:
     logger.debug(f"Generated default config: {config}")
     return config
 
-def load_user_config(site_config: SiteConfig) -> UserConfig:
+def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> UserConfig:
     """Load the user configuration from ~/.raw/config.yml or RAW_CONFIG env var.
     
     If the config file doesn't exist and RAW_CONFIG is not set, generates a default config
-    based on the site config.
+    based on the site config if generate_default is True.
     
     Args:
         site_config: The site configuration loaded from raw-site.yml
+        generate_default: Whether to generate a default config if the file doesn't exist
         
     Returns:
         The validated user configuration
+        
+    Raises:
+        FileNotFoundError: If the config file doesn't exist and generate_default is False
     """
     path = Path(os.environ.get("RAW_CONFIG", Path.home() / ".raw" / "config.yml"))
     logger.debug(f"Looking for user config at: {path}")
     
     if not path.exists():
         # If RAW_CONFIG is not set, generate a default config based on site config
-        if "RAW_CONFIG" not in os.environ:
+        if "RAW_CONFIG" not in os.environ and generate_default:
             logger.warning(f"RAW user config not found at {path}, generating default config based on site config")
             config = _generate_default_config(site_config)
         else:

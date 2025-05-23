@@ -3,6 +3,8 @@ from raw.endpoints.schema import validate_all_endpoints, validate_endpoint
 from raw.config.site_config import load_site_config
 from raw.config.user_config import load_user_config
 from raw.cli.utils import output_result, output_error
+from raw.config.analytics import track_command_with_timing
+from typing import Optional
 
 def format_validation_results(results):
     """Format validation results for human-readable output"""
@@ -53,8 +55,18 @@ def format_validation_results(results):
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
-def validate(endpoint, profile, json_output: bool, debug: bool):
-    """Validate one or all endpoints"""
+@track_command_with_timing("validate")
+def validate(endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool):
+    """Validate one or all endpoints.
+    
+    This command validates the schema and configuration of endpoints.
+    If no endpoint is specified, all endpoints are validated.
+    
+    Examples:
+        raw validate                    # Validate all endpoints
+        raw validate my_endpoint       # Validate specific endpoint
+        raw validate --json-output     # Output results in JSON format
+    """
     try:
         site_config = load_site_config()
         user_config = load_user_config(site_config)

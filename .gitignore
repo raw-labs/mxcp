@@ -7,4 +7,4 @@ __pycache__/
 .vscode/
 dist/
 *.egg-info/
-.duckdb
+.duckdb*

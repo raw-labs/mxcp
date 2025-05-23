@@ -1,12 +1,14 @@
 import click
 import json
+import asyncio
 from typing import Dict, Any, Optional
 from raw.endpoints.tester import run_tests, run_all_tests
 from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config
 from raw.cli.utils import output_result, output_error
+from raw.config.analytics import track_command_with_timing
 
-def format_test_results(results):
+def format_test_results(results, debug: bool = False):
     """Format test results for human-readable output"""
     if isinstance(results, str):
         return results
@@ -44,7 +46,11 @@ def format_test_results(results):
                 output.append(f"  Description: {test['description']}")
                 
             if test.get("error"):
-                output.append(f"  Error: {test['error']}")
+                error = test["error"]
+                output.append(f"  Error: {error}")
+                # Only show cause in debug mode
+                if debug and isinstance(error, ValueError) and hasattr(error, "__cause__") and error.__cause__:
+                    output.append(f"  Cause: {str(error.__cause__)}")
                 
         output.append("")
         
@@ -55,20 +61,30 @@ def format_test_results(results):
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
+@track_command_with_timing("test")
 def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool):
-    """Run tests for one or all endpoints"""
+    """Run tests for one or all endpoints.
+    
+    This command executes the test cases defined in endpoint configurations.
+    If no endpoint is specified, all endpoints are tested.
+    
+    Examples:
+        raw test                    # Test all endpoints
+        raw test my_endpoint       # Test specific endpoint
+        raw test --json-output     # Output results in JSON format
+    """
     try:
         site_config = load_site_config()
         user_config = load_user_config(site_config)
         
         if endpoint:
-            results = run_tests(endpoint, user_config, site_config, profile)
+            results = asyncio.run(run_tests(endpoint, user_config, site_config, profile))
         else:
-            results = run_all_tests(user_config, site_config, profile)
+            results = asyncio.run(run_all_tests(user_config, site_config, profile))
             
         if json_output:
             output_result(results, json_output, debug)
         else:
-            click.echo(format_test_results(results))
+            click.echo(format_test_results(results, debug))
     except Exception as e:
         output_error(e, json_output, debug)

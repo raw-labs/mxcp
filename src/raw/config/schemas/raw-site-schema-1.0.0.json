@@ -75,24 +75,37 @@
       },
       "additionalProperties": false
     },
-    "duckdb": {
+    "profiles": {
       "type": "object",
-      "description": "Override the location of the DuckDB database file used for this repo.",
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "Path to the DuckDB file."
-        }
-      },
-      "additionalProperties": false
-    },
-    "drift": {
-      "type": "object",
-      "description": "RAW schema drift detection manifest configuration.",
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "Path to the RAW drift manifest file (JSON)."
+      "description": "Profile-specific configuration settings.",
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "type": "object",
+          "properties": {
+            "duckdb": {
+              "type": "object",
+              "description": "Profile-specific DuckDB configuration.",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Path to the DuckDB file for this profile."
+                }
+              },
+              "additionalProperties": false
+            },
+            "drift": {
+              "type": "object",
+              "description": "Profile-specific RAW schema drift detection manifest configuration.",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Path to the RAW drift manifest file (JSON) for this profile."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

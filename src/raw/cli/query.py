@@ -1,36 +1,41 @@
 import click
 import json
-import asyncio
 from typing import Dict, Any, Optional
 from pathlib import Path
-from raw.endpoints.runner import run_endpoint as execute_endpoint
-from raw.endpoints.executor import EndpointType
 from raw.config.user_config import load_user_config
-from raw.config.site_config import load_site_config, get_active_profile
+from raw.config.site_config import load_site_config
 from raw.cli.utils import output_result, output_error
+from raw.engine.duckdb_session import DuckDBSession
 from raw.config.analytics import track_command_with_timing
 
-@click.command(name="run")
-@click.argument("endpoint_type", type=click.Choice([t.value for t in EndpointType]))
-@click.argument("name")
+@click.command(name="query")
+@click.argument("sql", required=False)
+@click.option("--file", type=click.Path(exists=True), help="Path to SQL file")
 @click.option("--param", "-p", multiple=True, help="Parameter in format name=value or name=@file.json for complex values")
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed error information")
-@click.option("--skip-output-validation", is_flag=True, help="Skip output validation against the return type definition")
-@track_command_with_timing("run")
-def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool):
-    """Run an endpoint (tool, resource, or prompt).
+@track_command_with_timing("query")
+def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool):
+    """Execute a SQL query directly against the database.
     
+    The query can be provided either directly as an argument or from a file.
     Parameters can be provided in two ways:
     1. Simple values: --param name=value
     2. Complex values from JSON file: --param name=@file.json
     
     Examples:
-        raw run tool my_tool --param name=value
-        raw run tool my_tool --param complex=@data.json
+        raw query "SELECT * FROM users WHERE age > 18" --param age=18
+        raw query --file complex_query.sql --param start_date=@dates.json
+        raw query "SELECT * FROM sales" --profile production --json-output
     """
     try:
+        # Validate input
+        if not sql and not file:
+            raise click.BadParameter("Either SQL query or --file must be provided")
+        if sql and file:
+            raise click.BadParameter("Cannot provide both SQL query and --file")
+
         # Load configs
         site_config = load_site_config()
         user_config = load_user_config(site_config)
@@ -61,12 +66,22 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
                     raise click.BadParameter(f"Invalid JSON in file {file_path}: {e}")
             
             params[key] = value
-            
-        # Execute endpoint
-        result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name, validate_output=not skip_output_validation))
-        
-        # Output result
-        output_result(result, json_output, debug)
+
+        # Get SQL query
+        query_sql = sql
+        if file:
+            with open(file) as f:
+                query_sql = f.read()
+
+        # Execute query
+        session = DuckDBSession(user_config, site_config)
+        conn = session.connect()
+        try:
+            # Execute query and convert to DataFrame to preserve column names
+            result = conn.execute(query_sql, params).fetchdf().to_dict("records")
+            output_result(result, json_output, debug)
+        finally:
+            session.close()
             
     except Exception as e:
-        output_error(e, json_output, debug)
+        output_error(e, json_output, debug) 

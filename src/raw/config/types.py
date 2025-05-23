@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Dict, Optional, Literal
+from typing import TypedDict, List, Dict, Optional, Literal, Any
 
 # Site Config Types
 class AdapterDefinition(TypedDict):
@@ -24,8 +24,12 @@ class GitHubCloudConfig(TypedDict):
     prefix_with_branch_name: Optional[bool]
     skip_prefix_for_branches: Optional[List[str]]
 
+class ProfileConfig(TypedDict):
+    duckdb: Optional[DuckDBConfig]
+    drift: Optional[DriftConfig]
+
 class CloudConfig(TypedDict):
-    github: Optional[GitHubCloudConfig]
+    github: Optional[Dict[str, Any]]
 
 class SiteConfig(TypedDict):
     raw: str
@@ -37,8 +41,7 @@ class SiteConfig(TypedDict):
     adapters: Optional[List[AdapterDefinition]]
     dbt: Optional[DbtConfig]
     python: Optional[PythonConfig]
-    duckdb: Optional[DuckDBConfig]
-    drift: Optional[DriftConfig]
+    profiles: Dict[str, ProfileConfig]
     cloud: Optional[CloudConfig]
 
 # User Config Types
@@ -52,12 +55,8 @@ class SecretDefinition(TypedDict):
     type: str
     parameters: Dict[str, str]
 
-class ProfileConfig(TypedDict):
-    secrets: Optional[List[SecretDefinition]]
-    adapter_configs: Optional[Dict[str, Dict[str, str]]]
-
 class ProjectConfig(TypedDict):
-    default: str
+    default: Optional[str]
     profiles: Dict[str, ProfileConfig]
 
 class UserConfig(TypedDict):

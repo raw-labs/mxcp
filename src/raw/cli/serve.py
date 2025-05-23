@@ -1,11 +1,13 @@
 import click
 import asyncio
+import signal
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from raw.server.mcp import RAWMCP
 from raw.cli.utils import output_error
 from raw.config.user_config import load_user_config
 from raw.config.site_config import load_site_config
+from raw.config.analytics import track_event
 
 class EndpointRequest(BaseModel):
     params: Dict[str, Any] = {}
@@ -32,7 +34,35 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool):
         site_config = load_site_config()
         user_config = load_user_config(site_config)
 
+        # Track server start
+        track_event("server_started", {
+            "transport": transport,
+            "port": port if transport != "stdio" else None
+        })
+
+        # Set up signal handler for graceful shutdown
+        def signal_handler(signum, frame):
+            track_event("server_stopped", {
+                "transport": transport,
+                "port": port if transport != "stdio" else None,
+                "signal": signal.Signals(signum).name
+            })
+            raise KeyboardInterrupt()
+
+        # Register signal handlers
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
         server = RAWMCP(user_config, site_config, profile=profile, port=port)
         server.run(transport=transport)
+    except KeyboardInterrupt:
+        # Server was stopped gracefully
+        pass
     except Exception as e:
+        # Track server start failure
+        track_event("server_start_failed", {
+            "transport": transport,
+            "port": port if transport != "stdio" else None,
+            "error": str(e)
+        })
         output_error(e, json_output=False, debug=debug)
