@@ -11,12 +11,28 @@ def configure_logging(debug: bool = False) -> None:
         debug: Whether to enable debug logging
     """
     log_level = logging.DEBUG if debug else logging.WARNING
-    logging.basicConfig(level=log_level)
     
-    # Configure all raw.* loggers
+    # Configure root logger first
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    # Remove any existing handlers to avoid duplicate messages
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Add a basic handler with the desired level
+    handler = logging.StreamHandler()
+    handler.setLevel(log_level)
+    formatter = logging.Formatter('%(levelname)s:%(name)s:%(message)s')
+    handler.setFormatter(formatter)
+    root_logger.addHandler(handler)
+    
+    # Set level for all loggers
     for logger_name in logging.root.manager.loggerDict:
-        if logger_name.startswith('raw.'):
-            logging.getLogger(logger_name).setLevel(log_level)
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(log_level)
+        # Ensure loggers propagate to root logger
+        logger.propagate = True
 
 def format_error(error: Exception, debug: bool = False) -> Dict[str, Any]:
     """Format an error for output.
