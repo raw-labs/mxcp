@@ -9,7 +9,6 @@ from raw.config.user_config import UserConfig
 from raw.config.site_config import SiteConfig, get_active_profile
 from raw.endpoints.schema import validate_endpoint
 from makefun import create_function
-from functools import partial
 from raw.engine.duckdb_session import DuckDBSession
 
 logger = logging.getLogger(__name__)
@@ -17,16 +16,19 @@ logger = logging.getLogger(__name__)
 class RAWMCP:
     """RAW MCP Server implementation that bridges RAW endpoints with MCP protocol."""
     
-    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, stateless_http: bool = False, json_response: bool = False, host: str = "localhost", port: int = 8000, enable_duckdb: bool = True):
+    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, stateless_http: bool = False, json_response: bool = False, host: str = "localhost", port: int = 8000, enable_sql_tools: Optional[bool] = None):
         """Initialize the RAW MCP server.
         
         Args:
+            user_config: The user configuration loaded from ~/.raw/config.yml
+            site_config: The site configuration loaded from raw-site.yml
             profile: Optional profile name to use for configuration
             stateless_http: Whether to run in stateless HTTP mode
             json_response: Whether to use JSON responses instead of SSE
             host: The host to bind to
             port: The port to bind to
-            enable_duckdb: Whether to enable built-in DuckDB features (default: True)
+            enable_sql_tools: Whether to enable built-in SQL querying and schema exploration tools.
+                            If None, uses the value from site_config.sql_tools.enabled (defaults to True)
         """
         self.mcp = FastMCP(
             "RAW Server",
@@ -42,7 +44,15 @@ class RAWMCP:
         self.loader = EndpointLoader(self.site_config)
         self.endpoints = self.loader.discover_endpoints()
         self.skipped_endpoints: List[Dict[str, Any]] = []
-        self.enable_duckdb = enable_duckdb
+        
+        # Determine SQL tools enabled state
+        if enable_sql_tools is None:
+            # Use site config value, defaulting to True if not specified
+            self.enable_sql_tools = site_config.get("sql_tools", {}).get("enabled", True)
+        else:
+            # Use explicitly provided value
+            self.enable_sql_tools = enable_sql_tools
+            
         logger.info(f"Discovered {len(self.endpoints)} endpoints")
         
     def _convert_param_type(self, value: Any, param_type: str) -> Any:
@@ -199,8 +209,8 @@ class RAWMCP:
         )
 
     def _register_duckdb_features(self):
-        """Register built-in DuckDB features if enabled."""
-        if not self.enable_duckdb:
+        """Register built-in SQL querying and schema exploration tools if enabled."""
+        if not self.enable_sql_tools:
             return
 
         # Register SQL query tool
@@ -283,7 +293,6 @@ class RAWMCP:
                     WHERE table_name = ?
                     ORDER BY ordinal_position
                 """, [table_name]).fetchdf()
-                logger.info(f"Table schema: {result.to_dict('records')}")
                 return result.to_dict("records")
             except Exception as e:
                 logger.error(f"Error getting table schema: {e}")
@@ -328,7 +337,7 @@ class RAWMCP:
                 continue
 
         # Register DuckDB features if enabled
-        if self.enable_duckdb:
+        if self.enable_sql_tools:
             self._register_duckdb_features()
 
         # Report skipped endpoints

@@ -134,6 +134,18 @@
         }
       },
       "additionalProperties": false
+    },
+    "sql_tools": {
+      "type": "object",
+      "description": "Configuration for built-in SQL querying and schema exploration tools.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether to enable built-in SQL querying and schema exploration tools (defaults to true).",
+          "default": true
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
