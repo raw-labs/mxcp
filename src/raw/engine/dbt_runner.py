@@ -110,6 +110,18 @@ def _map_secret_to_dbt_format(secret: Dict[str, Any], embed_secrets: bool) -> Di
         "extra_http_headers": f"map {{ {headers_str} }}"
     }
 
+def _sanitize_profile_name(name: str) -> str:
+    """Sanitize a profile name to be dbt-compatible.
+    
+    Args:
+        name: Original profile name
+        
+    Returns:
+        Sanitized profile name that matches dbt's requirements
+    """
+    # Replace hyphens with underscores
+    return name.replace("-", "_")
+
 def _build_profile_block(
     project: str,
     profile: str,
@@ -129,15 +141,19 @@ def _build_profile_block(
     Returns:
         Profile block for profiles.yml
     """
-    # Create dbt profile name as <project>_<profile>
-    dbt_profile = f"{project}_{profile}"
+    # Sanitize names once
+    sanitized_project = _sanitize_profile_name(project)
+    sanitized_profile = _sanitize_profile_name(profile)
+    
+    # Create dbt profile name using sanitized values
+    dbt_profile = f"{sanitized_project}_{sanitized_profile}"
     
     # Build the minimal required configuration
     block = {
         dbt_profile: {
-            "target": profile,  # Use RAW profile name as target
+            "target": sanitized_profile,  # Use sanitized RAW profile name as target
             "outputs": {
-                profile: {  # Use RAW profile name as output key
+                sanitized_profile: {  # Use sanitized RAW profile name as output key
                     "type": "duckdb",
                     "path": duckdb_path,
                     "extensions": ["httpfs"]
@@ -148,7 +164,7 @@ def _build_profile_block(
     
     if secrets:
         # Initialize secrets array in the output
-        block[dbt_profile]["outputs"][profile]["secrets"] = []
+        block[dbt_profile]["outputs"][sanitized_profile]["secrets"] = []
         
         for secret in secrets:
             if not isinstance(secret, dict) or "name" not in secret or "type" not in secret or "parameters" not in secret:
@@ -158,7 +174,7 @@ def _build_profile_block(
                 # Map the secret to dbt's expected format
                 dbt_secret = _map_secret_to_dbt_format(secret, embed_secrets)
                 if dbt_secret:  # Only add if mapping was successful
-                    block[dbt_profile]["outputs"][profile]["secrets"].append(dbt_secret)
+                    block[dbt_profile]["outputs"][sanitized_profile]["secrets"].append(dbt_secret)
             except Exception as e:
                 click.echo(f"Warning: Failed to process secret '{secret.get('name', 'unknown')}': {e}", err=True)
                 continue
@@ -180,12 +196,16 @@ def _build_dbt_project(
     Returns:
         dbt_project.yml configuration
     """
-    # Create dbt profile name as <project>_<profile>
-    dbt_profile = f"{project}_{profile}"
+    # Sanitize names once
+    sanitized_project = _sanitize_profile_name(project)
+    sanitized_profile = _sanitize_profile_name(profile)
+    
+    # Create dbt profile name using sanitized values
+    dbt_profile = f"{sanitized_project}_{sanitized_profile}"
     
     # Build the minimal required configuration
     return {
-        "name": project,
+        "name": sanitized_project,  # Use sanitized project name
         "profile": dbt_profile,  # Use combined profile name
         "version": "1.0.0",
         "config-version": 2,
