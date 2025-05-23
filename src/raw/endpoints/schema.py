@@ -30,7 +30,7 @@ def validate_resource_uri_vs_params(res_def, path):
         }
     return None
 
-def validate_all_endpoints(user_config, site_config, profile):
+def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str) -> Dict[str, Any]:
     """Validate all endpoints in the repository."""
     # Use EndpointLoader to discover endpoints
     loader = EndpointLoader(site_config)
@@ -40,7 +40,8 @@ def validate_all_endpoints(user_config, site_config, profile):
 
     results = []
     for file_path, endpoint in endpoints:
-        result = validate_endpoint(str(file_path), user_config, site_config, profile)
+        # The endpoint is already loaded by EndpointLoader, so we can validate directly
+        result = validate_endpoint_payload(endpoint, str(file_path), user_config, site_config, profile)
         results.append(result)
 
     return {"status": "ok", "validated": results}
@@ -52,13 +53,55 @@ def extract_template_variables(template: str) -> set[str]:
     matches = re.finditer(pattern, template)
     return {match.group(1) for match in matches}
 
-def validate_endpoint(path, user_config, site_config, profile):
-    """Validate a single endpoint."""
-    try:
-        # Load the endpoint file directly
-        with open(path) as f:
-            endpoint = yaml.safe_load(f)
+def load_endpoint(path: str) -> Tuple[Dict[str, Any], str, str]:
+    """Load and parse an endpoint file.
+    
+    Args:
+        path: Path to the endpoint file
+        
+    Returns:
+        Tuple containing:
+        - The loaded endpoint dictionary
+        - The endpoint type (tool/resource/prompt)
+        - The endpoint name
+    """
+    with open(path) as f:
+        endpoint = yaml.safe_load(f)
+        
+    # Determine endpoint type and name
+    endpoint_type = None
+    name = None
+    for t in ("tool", "resource", "prompt"):
+        if t in endpoint:
+            endpoint_type = t
+            if t == "tool":
+                name = endpoint[t]["name"]
+            elif t == "resource":
+                name = endpoint[t]["uri"]
+            elif t == "prompt":
+                name = endpoint[t]["name"]
+            break
             
+    if not endpoint_type or not name:
+        raise ValueError("No valid endpoint type (tool/resource/prompt) found")
+        
+    return endpoint, endpoint_type, name
+
+def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: Dict[str, Any], 
+                            site_config: Dict[str, Any], profile: str) -> Dict[str, Any]:
+    """Validate a single endpoint payload.
+    
+    Args:
+        endpoint: The loaded endpoint dictionary
+        path: Path to the endpoint file (for error reporting)
+        user_config: User configuration
+        site_config: Site configuration
+        profile: Profile name
+        
+    Returns:
+        Dictionary with validation status and details
+    """
+    try:
         # Determine endpoint type and name
         endpoint_type = None
         name = None
@@ -168,6 +211,19 @@ def validate_endpoint(path, user_config, site_config, profile):
 
         return {"status": "ok", "path": path}
 
+    except Exception as e:
+        return {"status": "error", "path": path, "message": str(e)}
+
+def validate_endpoint(path: str, user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str) -> Dict[str, Any]:
+    """Validate a single endpoint file.
+    
+    This is a convenience function that combines loading and validation.
+    For better performance when validating multiple endpoints, use load_endpoint
+    and validate_endpoint_payload separately.
+    """
+    try:
+        endpoint, _, _ = load_endpoint(path)
+        return validate_endpoint_payload(endpoint, path, user_config, site_config, profile)
     except Exception as e:
         return {"status": "error", "path": path, "message": str(e)}
 
