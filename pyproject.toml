@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "RAW Model Context Protocol"
 authors = [{ name = "RAW Labs SA", email = "hello@raw-labs.com" }]
 readme = "README.md"
+license = { text = "Business Source License 1.1" }
 requires-python = ">=3.9"
 dependencies = [
     "mcp>=1.9.0",  # Official MCP Python SDK
