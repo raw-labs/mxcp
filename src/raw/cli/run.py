@@ -18,8 +18,9 @@ from raw.config.analytics import track_command_with_timing
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--skip-output-validation", is_flag=True, help="Skip output validation against the return type definition")
+@click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("run")
-def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool):
+def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool, readonly: bool):
     """Run an endpoint (tool, resource, or prompt).
     
     Parameters can be provided in two ways:
@@ -29,6 +30,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
     Examples:
         raw run tool my_tool --param name=value
         raw run tool my_tool --param complex=@data.json
+        raw run tool my_tool --readonly
     """
     # Configure logging
     configure_logging(debug)
@@ -66,7 +68,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
             params[key] = value
             
         # Execute endpoint
-        result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name, validate_output=not skip_output_validation))
+        result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name, validate_output=not skip_output_validation, readonly=readonly))
         
         # Output result
         output_result(result, json_output, debug)

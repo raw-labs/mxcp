@@ -107,8 +107,9 @@ def format_test_results(results, debug: bool = False):
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
+@click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("test")
-def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool):
+def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool, readonly: bool):
     """Run tests for one or all endpoints.
     
     This command executes the test cases defined in endpoint configurations.
@@ -118,6 +119,7 @@ def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, deb
         raw test                    # Test all endpoints
         raw test my_endpoint       # Test specific endpoint
         raw test --json-output     # Output results in JSON format
+        raw test --readonly        # Open database connection in read-only mode
     """
     # Configure logging
     configure_logging(debug)
@@ -127,9 +129,9 @@ def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, deb
         user_config = load_user_config(site_config)
         
         if endpoint:
-            results = asyncio.run(run_tests(endpoint, user_config, site_config, profile))
+            results = asyncio.run(run_tests(endpoint, user_config, site_config, profile, readonly=readonly))
         else:
-            results = asyncio.run(run_all_tests(user_config, site_config, profile))
+            results = asyncio.run(run_all_tests(user_config, site_config, profile, readonly=readonly))
             
         if json_output:
             output_result(results, json_output, debug)

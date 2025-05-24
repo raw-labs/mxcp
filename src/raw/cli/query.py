@@ -15,8 +15,9 @@ from raw.config.analytics import track_command_with_timing
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
+@click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("query")
-def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool):
+def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool, readonly: bool):
     """Execute a SQL query directly against the database.
     
     The query can be provided either directly as an argument or from a file.
@@ -28,6 +29,7 @@ def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profi
         raw query "SELECT * FROM users WHERE age > 18" --param age=18
         raw query --file complex_query.sql --param start_date=@dates.json
         raw query "SELECT * FROM sales" --profile production --json-output
+        raw query "SELECT * FROM users" --readonly
     """
     # Configure logging
     configure_logging(debug)
@@ -77,7 +79,7 @@ def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profi
                 query_sql = f.read()
 
         # Execute query
-        session = DuckDBSession(user_config, site_config)
+        session = DuckDBSession(user_config, site_config, readonly=readonly)
         conn = session.connect()
         try:
             # Execute query and convert to DataFrame to preserve column names

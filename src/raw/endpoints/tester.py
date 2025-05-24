@@ -17,7 +17,7 @@ import asyncio
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
+async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profile: Optional[str], readonly: Optional[bool] = None) -> Dict[str, Any]:
     """Run tests for all endpoints in the repository (async)"""
     repo_root = find_repo_root()
     logger.debug(f"Repository root: {repo_root}")
@@ -65,7 +65,7 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
                 continue
                 
             # Run tests for this endpoint
-            endpoint_results = await run_tests(f"{kind}/{name}", user_config, site_config, profile)
+            endpoint_results = await run_tests(f"{kind}/{name}", user_config, site_config, profile, readonly)
             results["endpoints"].append(endpoint_results)
             results["tests_run"] += endpoint_results.get("tests_run", 0)
             
@@ -85,7 +85,7 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
             
     return results
 
-async def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str]) -> Dict[str, Any]:
+async def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str], readonly: Optional[bool] = None) -> Dict[str, Any]:
     """Run tests for a specific endpoint"""
     try:
         # Split endpoint into type and name
@@ -150,8 +150,8 @@ async def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteCon
             logger.info(f"Expected result: {expected_result}")
             
             try:
-                # Use the proper execute_endpoint function with profile
-                result = await execute_endpoint(endpoint_type, name, params, user_config, site_config, profile)
+                # Use the proper execute_endpoint function with profile and readonly
+                result = await execute_endpoint(endpoint_type, name, params, user_config, site_config, profile, readonly=readonly)
                 logger.info(f"Execution result: {result}")
                 
                 # Normalize result for comparison

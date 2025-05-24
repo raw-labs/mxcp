@@ -16,6 +16,7 @@ class PythonConfig(TypedDict):
 
 class DuckDBConfig(TypedDict):
     path: Optional[str]
+    readonly: Optional[bool]
 
 class DriftConfig(TypedDict):
     path: Optional[str]

@@ -1,6 +1,6 @@
 import duckdb
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 import yaml
 import json
 from jsonschema import validate as jsonschema_validate
@@ -31,37 +31,45 @@ def validate_resource_uri_vs_params(res_def, path):
         }
     return None
 
-def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str) -> Dict[str, Any]:
-    """Validate all endpoints in the repository."""
-    # Use EndpointLoader to discover endpoints
-    loader = EndpointLoader(site_config)
-    endpoints = loader.discover_endpoints()
-    if not endpoints:
-        return {"status": "error", "message": "No endpoint files found in the repository"}
-
-    results = []
-    has_errors = False
+def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str, readonly: Optional[bool] = None) -> Dict[str, Any]:
+    """Validate all endpoints in the repository.
     
-    for file_path, endpoint, error_msg in endpoints:
-        if error_msg is not None:
-            # This endpoint failed to load
-            results.append({
-                "status": "error",
-                "path": str(file_path),
-                "message": error_msg
-            })
-            has_errors = True
-        else:
-            # This endpoint loaded successfully, validate its payload
-            result = validate_endpoint_payload(endpoint, str(file_path), user_config, site_config, profile)
-            results.append(result)
-            if result["status"] == "error":
+    Args:
+        user_config: User configuration
+        site_config: Site configuration
+        profile: Profile name
+        readonly: Whether to open DuckDB connection in read-only mode
+        
+    Returns:
+        Dictionary with validation status and details for each endpoint
+    """
+    try:
+        # Use EndpointLoader to discover endpoints
+        loader = EndpointLoader(site_config)
+        endpoints = loader.discover_endpoints()
+        if not endpoints:
+            return {"status": "error", "message": "No endpoints found"}
+        
+        # Validate each endpoint
+        results = []
+        has_errors = False
+        
+        for path, endpoint, error in endpoints:
+            if error:
+                results.append({"status": "error", "path": path, "message": error})
                 has_errors = True
-
-    return {
-        "status": "error" if has_errors else "ok",
-        "validated": results
-    }
+            else:
+                result = validate_endpoint_payload(endpoint, path, user_config, site_config, profile, readonly=readonly)
+                results.append(result)
+                if result["status"] == "error":
+                    has_errors = True
+        
+        return {
+            "status": "error" if has_errors else "ok",
+            "validated": results
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 def extract_template_variables(template: str) -> set[str]:
     """Extract all Jinja template variables using Jinja2's own parser."""
@@ -112,7 +120,7 @@ def load_endpoint(path: str) -> Tuple[Dict[str, Any], str, str]:
     return endpoint, endpoint_type, name
 
 def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: Dict[str, Any], 
-                            site_config: Dict[str, Any], profile: str) -> Dict[str, Any]:
+                            site_config: Dict[str, Any], profile: str, readonly: Optional[bool] = None) -> Dict[str, Any]:
     """Validate a single endpoint payload.
     
     Args:
@@ -121,6 +129,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         user_config: User configuration
         site_config: Site configuration
         profile: Profile name
+        readonly: Whether to open DuckDB connection in read-only mode
         
     Returns:
         Dictionary with validation status and details
@@ -196,7 +205,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
             return {"status": "error", "path": path, "message": "No SQL query found"}
 
         # Use DuckDBSession for proper secret injection and type inference
-        session = DuckDBSession(user_config, site_config)
+        session = DuckDBSession(user_config, site_config, readonly=readonly)
         con = session.connect()
         try:
             con.execute("PREPARE my_query AS " + sql_query)
@@ -238,7 +247,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
     except Exception as e:
         return {"status": "error", "path": path, "message": str(e)}
 
-def validate_endpoint(path: str, user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str) -> Dict[str, Any]:
+def validate_endpoint(path: str, user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str, readonly: Optional[bool] = None) -> Dict[str, Any]:
     """Validate a single endpoint file.
     
     This is a convenience function that combines loading and validation.
@@ -247,7 +256,7 @@ def validate_endpoint(path: str, user_config: Dict[str, Any], site_config: Dict[
     """
     try:
         endpoint, _, _ = load_endpoint(path)
-        return validate_endpoint_payload(endpoint, path, user_config, site_config, profile)
+        return validate_endpoint_payload(endpoint, path, user_config, site_config, profile, readonly=readonly)
     except Exception as e:
         return {"status": "error", "path": path, "message": str(e)}
 

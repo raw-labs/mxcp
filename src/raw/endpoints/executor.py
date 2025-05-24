@@ -206,7 +206,7 @@ class TypeConverter:
         return value
 
 class EndpointExecutor:
-    def __init__(self, endpoint_type: EndpointType, name: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None):
+    def __init__(self, endpoint_type: EndpointType, name: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, readonly: Optional[bool] = None):
         """Initialize the endpoint executor.
         
         Args:
@@ -215,13 +215,14 @@ class EndpointExecutor:
             user_config: The user configuration
             site_config: The site configuration
             profile: Optional profile name to override the default profile
+            readonly: Whether to open DuckDB connection in read-only mode
         """
         self.endpoint_type = endpoint_type
         self.name = name
         self.endpoint: Optional[EndpointDefinition] = None
         self.user_config = user_config
         self.site_config = site_config
-        self.session = DuckDBSession(user_config, site_config, profile)
+        self.session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
         
     def _load_endpoint(self):
         """Load the endpoint definition from YAML file"""
@@ -435,9 +436,18 @@ class EndpointExecutor:
             error_msg = f"Output validation failed: Expected return type '{expected_type}', but received '{actual_type}'"
             raise SchemaError(error_msg) from e
 
-async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None) -> EndpointResult:
+async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, readonly: Optional[bool] = None) -> EndpointResult:
     """Execute an endpoint by type and name.
     
+    Args:
+        endpoint_type: The type of endpoint (tool, resource, or prompt)
+        name: The name of the endpoint
+        params: Dictionary of parameter name/value pairs
+        user_config: The user configuration
+        site_config: The site configuration
+        profile: Optional profile name to override the default profile
+        readonly: Whether to open DuckDB connection in read-only mode
+        
     Returns:
         For tools and resources: List[Dict[str, Any]] where each dict represents a row with column names as keys
         For prompts: List[Dict[str, Any]] where each dict represents a message with role, prompt, and type
@@ -447,5 +457,5 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
     except ValueError:
         raise ValueError(f"Invalid endpoint type: {endpoint_type}. Must be one of: {', '.join(t.value for t in EndpointType)}")
         
-    executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config, profile)
+    executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config, profile, readonly=readonly)
     return await executor.execute(params) 

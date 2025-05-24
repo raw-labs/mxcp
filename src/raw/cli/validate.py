@@ -75,8 +75,9 @@ def format_validation_results(results):
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
+@click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("validate")
-def validate(endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool):
+def validate(endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool, readonly: bool):
     """Validate one or all endpoints.
     
     This command validates the schema and configuration of endpoints.
@@ -86,6 +87,7 @@ def validate(endpoint: Optional[str], profile: Optional[str], json_output: bool,
         raw validate                    # Validate all endpoints
         raw validate my_endpoint       # Validate specific endpoint
         raw validate --json-output     # Output results in JSON format
+        raw validate --readonly        # Open database connection in read-only mode
     """
     # Configure logging
     configure_logging(debug)
@@ -94,9 +96,9 @@ def validate(endpoint: Optional[str], profile: Optional[str], json_output: bool,
         site_config = load_site_config()
         user_config = load_user_config(site_config)
         if endpoint:
-            result = validate_endpoint(endpoint, user_config, site_config, profile)
+            result = validate_endpoint(endpoint, user_config, site_config, profile, readonly=readonly)
         else:
-            result = validate_all_endpoints(user_config, site_config, profile)
+            result = validate_all_endpoints(user_config, site_config, profile, readonly=readonly)
             
         if json_output:
             output_result(result, json_output, debug)

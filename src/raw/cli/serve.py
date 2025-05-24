@@ -17,7 +17,8 @@ class EndpointRequest(BaseModel):
 @click.option("--port", type=int, default=8000, help="Port number to use for HTTP transport (default: 8000)")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--no-sql-tools", is_flag=True, help="Disable built-in SQL querying and schema exploration tools (enabled by default in site config)")
-def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql_tools: bool):
+@click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
+def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql_tools: bool, readonly: bool):
     """Start the RAW MCP server to expose endpoints via HTTP or stdio.
     
     This command starts a server that exposes your RAW endpoints as an MCP-compatible
@@ -30,6 +31,7 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql
         raw serve --transport stdio # Use stdio transport instead of HTTP
         raw serve --profile dev     # Use the 'dev' profile configuration
         raw serve --no-sql-tools    # Disable built-in SQL querying and schema exploration tools
+        raw serve --readonly        # Open database connection in read-only mode
     """
     # Configure logging
     configure_logging(debug)
@@ -42,7 +44,8 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql
         track_event("server_started", {
             "transport": transport,
             "port": port if transport != "stdio" else None,
-            "sql_tools_enabled": not no_sql_tools
+            "sql_tools_enabled": not no_sql_tools,
+            "readonly": readonly
         })
 
         # Set up signal handler for graceful shutdown
@@ -51,7 +54,8 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql
                 "transport": transport,
                 "port": port if transport != "stdio" else None,
                 "signal": signal.Signals(signum).name,
-                "sql_tools_enabled": not no_sql_tools
+                "sql_tools_enabled": not no_sql_tools,
+                "readonly": readonly
             })
             raise KeyboardInterrupt()
 
@@ -65,7 +69,8 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql
             site_config, 
             profile=profile, 
             port=port, 
-            enable_sql_tools=None if not no_sql_tools else False
+            enable_sql_tools=None if not no_sql_tools else False,
+            readonly=readonly
         )
         server.run(transport=transport)
     except KeyboardInterrupt:
@@ -77,6 +82,7 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql
             "transport": transport,
             "port": port if transport != "stdio" else None,
             "error": str(e),
-            "sql_tools_enabled": not no_sql_tools
+            "sql_tools_enabled": not no_sql_tools,
+            "readonly": readonly
         })
         output_error(e, json_output=False, debug=debug)

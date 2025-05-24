@@ -8,13 +8,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 class DuckDBSession:
-    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None):
+    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, readonly: Optional[bool] = None):
         if profile is not None and not isinstance(profile, str):
             raise ValueError(f"profile argument must be a string, not {type(profile)}: {profile}")
         self.conn = None
         self.user_config = user_config
         self.site_config = site_config
         self.profile = profile
+        self.readonly = readonly
         
     def _get_project_profile(self) -> tuple[str, str]:
         """Get the current project and profile from site config"""
@@ -48,7 +49,19 @@ class DuckDBSession:
         # Connect to DuckDB using path from config
         profile = self.profile or self.site_config["profile"]
         db_path = self.site_config["profiles"][profile]["duckdb"]["path"]
-        self.conn = duckdb.connect(db_path)
+        
+        # Determine if connection should be readonly
+        # CLI flag takes precedence over config file setting
+        readonly = self.readonly
+        if readonly is None:
+            readonly = self.site_config["profiles"][profile]["duckdb"].get("readonly", False)
+            
+        # Open connection with readonly flag if specified
+        if readonly:
+            self.conn = duckdb.connect(db_path, read_only=True)
+            logger.info("Opened DuckDB connection in read-only mode")
+        else:
+            self.conn = duckdb.connect(db_path)
             
         # Load DuckDB extensions
         load_extensions(self.conn)

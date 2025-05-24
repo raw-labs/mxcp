@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class RAWMCP:
     """RAW MCP Server implementation that bridges RAW endpoints with MCP protocol."""
     
-    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, stateless_http: bool = False, json_response: bool = False, host: str = "localhost", port: int = 8000, enable_sql_tools: Optional[bool] = None):
+    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, stateless_http: bool = False, json_response: bool = False, host: str = "localhost", port: int = 8000, enable_sql_tools: Optional[bool] = None, readonly: bool = False):
         """Initialize the RAW MCP server.
         
         Args:
@@ -29,6 +29,7 @@ class RAWMCP:
             port: The port to bind to
             enable_sql_tools: Whether to enable built-in SQL querying and schema exploration tools.
                             If None, uses the value from site_config.sql_tools.enabled (defaults to True)
+            readonly: Whether to open DuckDB connection in read-only mode
         """
         self.mcp = FastMCP(
             "RAW Server",
@@ -42,6 +43,7 @@ class RAWMCP:
         self.profile_name = profile or site_config["profile"]
         self.active_profile = get_active_profile(self.user_config, self.site_config, profile)
         self.loader = EndpointLoader(self.site_config)
+        self.readonly = readonly
         
         # Split endpoints into valid and failed
         discovered = self.loader.discover_endpoints()
@@ -150,6 +152,7 @@ class RAWMCP:
                     self.user_config,
                     self.site_config,
                     self.profile_name,
+                    readonly=self.readonly
                 )
                 result = await exec_.execute(converted)
                 logger.debug(f"Result: {json.dumps(result, indent=2)}")
@@ -234,7 +237,7 @@ class RAWMCP:
             Returns:
                 List of records as dictionaries
             """
-            session = DuckDBSession(self.user_config, self.site_config, self.profile_name)
+            session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
             try:
                 conn = session.connect()
                 result = conn.execute(sql).fetchdf()
@@ -256,7 +259,7 @@ class RAWMCP:
             Returns:
                 List of tables with their names and types
             """
-            session = DuckDBSession(self.user_config, self.site_config, self.profile_name)
+            session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
             try:
                 conn = session.connect()
                 result = conn.execute("""
@@ -288,7 +291,7 @@ class RAWMCP:
             Returns:
                 List of columns with their names and types
             """
-            session = DuckDBSession(self.user_config, self.site_config, self.profile_name)
+            session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
             try:
                 conn = session.connect()
                 result = conn.execute("""

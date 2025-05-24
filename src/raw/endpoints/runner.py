@@ -1,10 +1,10 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from raw.endpoints.executor import EndpointExecutor, EndpointType
 from raw.endpoints.loader import EndpointLoader
 from raw.config.user_config import UserConfig
 from raw.config.site_config import SiteConfig
 
-async def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: str, validate_output: bool = True) -> List[Dict[str, Any]]:
+async def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: str, validate_output: bool = True, readonly: Optional[bool] = None) -> List[Dict[str, Any]]:
     """
     Run an endpoint with the given arguments, using EndpointLoader for consistency.
     Args:
@@ -15,6 +15,7 @@ async def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user
         site_config: Site configuration
         profile: Profile name
         validate_output: Whether to validate the output against the return type definition
+        readonly: Whether to open DuckDB connection in read-only mode
     Returns:
         List of result rows as dictionaries
     """
@@ -26,7 +27,7 @@ async def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user
             raise FileNotFoundError(f"Endpoint {endpoint_type} {name} not found")
 
         # Use EndpointExecutor for execution
-        executor = EndpointExecutor(EndpointType(endpoint_type), name, user_config, site_config, profile)
+        executor = EndpointExecutor(EndpointType(endpoint_type), name, user_config, site_config, profile, readonly=readonly)
         result = await executor.execute(args, validate_output=validate_output)
         return result
     except Exception as e:
