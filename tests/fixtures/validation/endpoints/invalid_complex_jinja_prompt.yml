@@ -1,4 +1,4 @@
-raw: "1.0.0"
+mxcp: "1.0.0"
 
 prompt:
   name: invalid_complex_jinja_prompt

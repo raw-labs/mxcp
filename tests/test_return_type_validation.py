@@ -2,9 +2,9 @@ import os
 import pytest
 from contextlib import contextmanager
 from pathlib import Path
-from raw.endpoints.executor import EndpointExecutor, EndpointType
-from raw.config.user_config import load_user_config, UserConfig
-from raw.config.site_config import load_site_config, SiteConfig
+from mxcp.endpoints.executor import EndpointExecutor, EndpointType
+from mxcp.config.user_config import load_user_config, UserConfig
+from mxcp.config.site_config import load_site_config, SiteConfig
 
 TEST_REPO_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "return-type-validation")
 
@@ -19,8 +19,8 @@ def change_working_dir(path):
         os.chdir(original_dir)
 
 @pytest.fixture(scope="session", autouse=True)
-def set_raw_config_env():
-    os.environ["RAW_CONFIG"] = str(Path(__file__).parent / "fixtures" / "return-type-validation" / "raw-config.yml")
+def set_mxcp_config_env():
+    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "return-type-validation" / "mxcp-config.yml")
 
 @pytest.fixture
 def test_repo_path():

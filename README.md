@@ -12,11 +12,11 @@ pip install -e .
 
 ```bash
 cd examples/earthquakes
-raw list
-raw validate
-raw test
-raw run --param min_magnitude=5 tool query_recent_earthquakes           
-raw serve
+mxcp list
+mxcp validate
+mxcp test
+mxcp run --param min_magnitude=5 tool query_recent_earthquakes           
+mxcp serve
 ```
 
 ## 🧪 Tests

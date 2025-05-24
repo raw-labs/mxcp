@@ -1,13 +1,13 @@
 import os
 import pytest
 from pathlib import Path
-from raw.endpoints.schema import validate_endpoint, validate_all_endpoints
-from raw.config.site_config import load_site_config
-from raw.config.user_config import load_user_config
+from mxcp.endpoints.schema import validate_endpoint, validate_all_endpoints
+from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
 
 @pytest.fixture(scope="session", autouse=True)
-def set_raw_config_env():
-    os.environ["RAW_CONFIG"] = str(Path(__file__).parent / "fixtures" / "validation" / "raw-config.yml")
+def set_mxcp_config_env():
+    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "validation" / "mxcp-config.yml")
 
 @pytest.fixture
 def validation_repo_path():

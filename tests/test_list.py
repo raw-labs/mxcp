@@ -1,13 +1,13 @@
 import pytest
 from pathlib import Path
-from raw.endpoints.loader import EndpointLoader
+from mxcp.endpoints.loader import EndpointLoader
 import os
-from raw.config.site_config import load_site_config
-from raw.config.user_config import load_user_config
+from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
 
 @pytest.fixture(scope="session", autouse=True)
-def set_raw_config_env():
-    os.environ["RAW_CONFIG"] = str(Path(__file__).parent / "fixtures" / "list" / "raw-config.yml")
+def set_mxcp_config_env():
+    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "list" / "mxcp-config.yml")
 
 @pytest.fixture
 def test_repo_path():
@@ -160,8 +160,8 @@ def test_list_endpoints_skips_config_files(test_repo_path, test_config):
         endpoint_dict = {str(path): data for path, data, error_msg in endpoints if error_msg is None}
         
         # Verify config files are not included
-        site_config_path = test_repo_path / "raw-site.yml"
-        user_config_path = Path(os.environ["RAW_CONFIG"])
+        site_config_path = test_repo_path / "mxcp-site.yml"
+        user_config_path = Path(os.environ["MXCP_CONFIG"])
         
         assert str(site_config_path) not in endpoint_dict
         assert str(user_config_path) not in endpoint_dict

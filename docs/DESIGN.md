@@ -108,7 +108,7 @@ The RAW tool requires a config file in the user account (e.g. ~/.raw/config.yml)
 An example of the configuration file:
 
 ```yaml
-raw: "1.0.0"
+mxcp: "1.0.0"
 projects:
   project_a:
     default: dev
@@ -161,7 +161,7 @@ The secret parameters are typically key (string) to value (string). The value, h
 
 The root of the repository must contain `raw-site.yml` such as:
 ```yaml
-raw: "1.0.0"  # (Mandatory): Version of the raw-site.yml format
+mxcp: "1.0.0"  # (Mandatory): Version of the raw-site.yml format
 
 project: project_a         # (Mandatory): Name of the project in ~/.raw/config.yml
 profile: prod              # (Mandatory): Profile name under the project
@@ -214,7 +214,7 @@ Each endpoint is defined by a YAML file and typically by an accompaining SQL fil
 
 An example of tool endpoint (with code inlined):
 ```yaml
-raw: "1.0.0"
+mxcp: "1.0.0"
 
 tool:
   name: filter_users
@@ -682,7 +682,7 @@ Each adapter can reference a named configuration object defined in the user’s 
 #### Example
 
 ```yaml
-raw: "1.0.0"
+mxcp: "1.0.0"
 projects:
   project_a:
     default: dev
