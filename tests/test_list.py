@@ -35,7 +35,7 @@ def test_list_endpoints(test_repo_path, test_config):
         endpoints = loader.discover_endpoints()
         
         # Convert to dict for easier lookup
-        endpoint_dict = {str(path): data for path, data, error in endpoints if error is None}
+        endpoint_dict = {str(path): data for path, data, error_msg in endpoints if error_msg is None}
         failed_endpoints = {str(path): error for path, _, error in endpoints if error is not None}
         
         # Verify no failed endpoints
@@ -109,7 +109,7 @@ def test_list_endpoints_from_subfolder(test_repo_path, test_config):
         endpoints = loader.discover_endpoints()
         
         # Convert to dict for easier lookup
-        endpoint_dict = {str(path): data for path, data in endpoints}
+        endpoint_dict = {str(path): data for path, data, error_msg in endpoints if error_msg is None}
         
         # Should still find all endpoints, not just those in subfolder
         assert len(endpoints) == 5  # tool1, resource1, prompt1, tool2, prompt2
@@ -157,7 +157,7 @@ def test_list_endpoints_skips_config_files(test_repo_path, test_config):
         endpoints = loader.discover_endpoints()
         
         # Convert to dict for easier lookup
-        endpoint_dict = {str(path): data for path, data in endpoints}
+        endpoint_dict = {str(path): data for path, data, error_msg in endpoints if error_msg is None}
         
         # Verify config files are not included
         site_config_path = test_repo_path / "raw-site.yml"

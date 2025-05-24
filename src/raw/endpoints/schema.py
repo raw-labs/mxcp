@@ -10,6 +10,7 @@ from raw.config.site_config import find_repo_root
 from raw.endpoints.executor import get_endpoint_source_code
 from raw.endpoints.loader import EndpointLoader
 import re
+from jinja2 import Environment, meta
 
 RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
 
@@ -63,11 +64,18 @@ def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, A
     }
 
 def extract_template_variables(template: str) -> set[str]:
-    """Extract all Jinja template variables from a string."""
-    # Match both {{ var }} and {{var}} patterns
-    pattern = r'{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}'
-    matches = re.finditer(pattern, template)
-    return {match.group(1) for match in matches}
+    """Extract all Jinja template variables using Jinja2's own parser."""
+    env = Environment()
+    ast = env.parse(template)
+    # Get all variables including nested ones
+    variables = meta.find_undeclared_variables(ast)
+    # Split nested variables and add their base names
+    base_vars = set()
+    for var in variables:
+        # Handle nested variables like 'item.name'
+        parts = var.split('.')
+        base_vars.add(parts[0])
+    return base_vars
 
 def load_endpoint(path: str) -> Tuple[Dict[str, Any], str, str]:
     """Load and parse an endpoint file.

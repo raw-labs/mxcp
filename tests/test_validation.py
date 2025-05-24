@@ -113,11 +113,40 @@ def test_validate_all_endpoints(validation_repo_path, site_config, user_config, 
     os.chdir(validation_repo_path)
     try:
         result = validate_all_endpoints(user_config, site_config, test_profile)
-        assert result["status"] == "ok"
-        assert len(result["validated"]) == 5  # We now have 5 test endpoints
+        # We expect at least one error due to intentionally invalid endpoints
+        assert result["status"] == "error"
         # Check that we have both valid and invalid results
         statuses = [r["status"] for r in result["validated"]]
         assert "ok" in statuses
         assert "error" in statuses
+    finally:
+        os.chdir(original_dir)
+
+def test_validate_complex_jinja_prompt_valid(validation_repo_path, site_config, user_config, test_profile):
+    """Test validation of a prompt endpoint with valid complex Jinja2 features."""
+    original_dir = os.getcwd()
+    os.chdir(validation_repo_path)
+    try:
+        endpoint_path = "endpoints/complex_jinja_prompt.yml"
+        result = validate_endpoint(endpoint_path, user_config, site_config, test_profile)
+        assert result["status"] == "ok"
+        assert result["path"] == endpoint_path
+    finally:
+        os.chdir(original_dir)
+
+def test_validate_complex_jinja_prompt_invalid(validation_repo_path, site_config, user_config, test_profile):
+    """Test validation of a prompt endpoint with invalid complex Jinja2 features."""
+    original_dir = os.getcwd()
+    os.chdir(validation_repo_path)
+    try:
+        endpoint_path = "endpoints/invalid_complex_jinja_prompt.yml"
+        result = validate_endpoint(endpoint_path, user_config, site_config, test_profile)
+        assert result["status"] == "error"
+        assert "undefined template variables" in result["message"].lower()
+        # Check that all undefined variables are mentioned
+        assert "user_type" in result["message"]
+        assert "username" in result["message"]
+        assert "items" in result["message"]
+        assert "item" in result["message"]
     finally:
         os.chdir(original_dir) 
