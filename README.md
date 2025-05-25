@@ -40,17 +40,27 @@ mxcp serve
 
 ### 1. Declarative Interface Definition
 ```yaml
-# tools/summarize_earthquakes.yml
-name: summarize_earthquakes
-type: tool
-input:
-  date: date
-output:
-  summary: string
-sql: |
-  SELECT 'Summary for ' || :date || ': ' || COUNT(*) || ' earthquakes' AS summary
-  FROM earthquakes
-  WHERE event_date = :date
+# summarize_earthquakes.yml
+mxcp: "1.0.0"
+tool:
+  name: summarize_earthquakes
+  description: "Summarize earthquakes for a given date"
+  parameters:
+    - name: date
+      type: string
+      format: date
+      description: "Date to summarize earthquakes for"
+  return:
+    type: object
+    properties:
+      summary:
+        type: string
+        description: "Summary of earthquakes for the date"
+  source:
+    code: |
+      SELECT 'Summary for ' || $date || ': ' || COUNT(*) || ' earthquakes' AS summary
+      FROM earthquakes
+      WHERE event_date = $date
 ```
 
 - **Type-safe** — Strong typing for LLM safety and schema tracing
@@ -79,11 +89,10 @@ Define your AI interface using MCP (Model Context Protocol) specs:
 ```
 your-project/
 ├── mxcp-site.yml    # Project configuration
-├── models/          # dbt transformations & caches
 ├── tools/           # Tool definitions
 ├── resources/       # Data sources
 ├── prompts/         # LLM templates
-└── tests/           # Validation tests
+└── models/          # (Optional) dbt transformations & caches
 ```
 
 ### CLI Commands
@@ -91,6 +100,11 @@ your-project/
 mxcp serve        # Start local MCP server
 mxcp list         # List all endpoints
 mxcp validate     # Check types, SQL, and references
+mxcp test         # Run endpoint tests
+mxcp query        # Execute SQL queries
+mxcp init         # Initialize new project
+mxcp dbt-config   # Configure dbt integration
+mxcp dbt          # Run dbt commands
 ```
 
 ## 🔌 Integration with Claude
