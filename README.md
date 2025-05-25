@@ -135,9 +135,3 @@ MXCP is developed by RAW Labs, combining the best of:
 - DuckDB's speed and connectors
 - Python MCP official server
 - Modern AI-native workflows
-
----
-
-<div align="center">
-Made with ❤️ by RAW Labs
-</div>
