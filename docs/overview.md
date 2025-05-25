@@ -36,6 +36,7 @@ dbt provides the ETL capabilities in MXCP:
 - **SQL-Based**: Express transformations in standard SQL
 - **Git-Managed**: Version control for all data transformations
 - **DuckDB Integration**: Native support via dbt-duckdb adapter
+- **Caching Strategies**: Use dbt materializations and DuckDB tables for performance optimization
 
 ### 3. MXCP CLI: The Orchestration Layer
 

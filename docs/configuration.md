@@ -76,6 +76,11 @@ dbt:
   manifest_path: "target/manifest.json"  # Path to dbt manifest
 ```
 
+> **Note:** While MXCP doesn't provide built-in caching, you can implement caching strategies using:
+> - dbt materializations (tables, incremental models)
+> - DuckDB persistent tables
+> - External caching layers
+
 ### Python Configuration
 ```yaml
 python:

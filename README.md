@@ -54,8 +54,8 @@ sql: |
 ```
 
 - **Type-safe** — Strong typing for LLM safety and schema tracing
-- **Live reloadable** — No server restarts needed
-- **Composable** — Mix and match with other endpoints or dbt models
+- **Fast restart** — Quick server restarts for development
+- **dbt integration** — Directly use your dbt models in endpoints
 
 ### 2. Powerful Data Engine
 - **DuckDB-powered** — Run instantly, with no infrastructure

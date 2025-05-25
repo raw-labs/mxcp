@@ -133,7 +133,6 @@ MXCP intentionally restricts schema complexity to promote clarity and compatibil
 - `allOf`, `oneOf`, `anyOf` (no union or intersection types)
 - `patternProperties`, `pattern` (no regex-based constraints)
 - Conditional schemas (`if` / `then`)
-- Complex numeric constraints (`multipleOf`, `exclusiveMinimum`, etc.)
 
 This allows MXCP endpoints to remain:
 - Static and serializable
