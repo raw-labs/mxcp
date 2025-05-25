@@ -24,6 +24,7 @@ DuckDB serves as the runtime engine of MXCP, providing:
 - **Python Integration**: Support for Python UDFs via embedded extensions
 - **Local-First Development**: File-based persistence with no server required
 - **Flexible I/O**: Native support for various data sources and formats
+- **Extensible**: Support for core, community, and nightly extensions (e.g., httpfs, parquet, h3)
 
 DuckDB's architecture makes it ideal for operational workloads, with MXCP automatically injecting necessary extensions, secrets, and Python functions.
 

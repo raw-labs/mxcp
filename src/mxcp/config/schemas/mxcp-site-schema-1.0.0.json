@@ -31,6 +31,34 @@
         "type": "string"
       }
     },
+    "extensions": {
+      "type": "array",
+      "description": "List of DuckDB extensions to load. Can be simple strings for core extensions or objects with name/repo for community/nightly extensions.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Name of a core DuckDB extension"
+          },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name of the extension"
+              },
+              "repo": {
+                "type": "string",
+                "description": "Repository to load the extension from (e.g., 'community', 'core_nightly')",
+                "enum": ["community", "core_nightly"]
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
     "dbt": {
       "type": "object",
       "description": "Controls dbt integration and file paths.",

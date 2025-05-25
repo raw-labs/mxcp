@@ -63,8 +63,9 @@ class DuckDBSession:
         else:
             self.conn = duckdb.connect(db_path)
             
-        # Load DuckDB extensions
-        load_extensions(self.conn)
+        # Load DuckDB extensions from config
+        extensions = self.site_config["extensions"]
+        load_extensions(self.conn, extensions)
             
         # Inject secrets using the active profile
         project, profile_name = self._get_project_profile()

@@ -58,6 +58,10 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
     # Set default drift manifest path for the profile if not specified
     if "path" not in config["profiles"][profile]["drift"]:
         config["profiles"][profile]["drift"]["path"] = str(repo_root / f"drift-{profile}.json")
+
+    # Initialize extensions section if not present
+    if "extensions" not in config:
+        config["extensions"] = []
         
     return config
 

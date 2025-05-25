@@ -1,6 +1,10 @@
-from typing import TypedDict, List, Dict, Optional, Literal, Any
+from typing import TypedDict, List, Dict, Optional, Literal, Any, Union
 
 # Site Config Types
+class ExtensionDefinition(TypedDict, total=False):
+    name: str
+    repo: Optional[str]  # Optional repo name for community/nightly extensions
+
 class DbtConfig(TypedDict):
     enabled: Optional[bool]
     models: Optional[str]
@@ -34,6 +38,7 @@ class SiteConfig(TypedDict):
     base_url: Optional[str]
     enabled: Optional[bool]
     secrets: Optional[List[str]]
+    extensions: Optional[List[Union[str, ExtensionDefinition]]]
     dbt: Optional[DbtConfig]
     python: Optional[PythonConfig]
     profiles: Dict[str, ProfileConfig]
