@@ -5,4 +5,3 @@ projects:
     profiles:
       test_profile:
         secrets: []
-        adapter_configs: {} 

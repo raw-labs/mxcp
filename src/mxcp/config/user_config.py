@@ -13,15 +13,13 @@ def _apply_defaults(config: dict) -> dict:
     # Create a copy to avoid modifying the input
     config = config.copy()
 
-    # Ensure each profile has at least empty secrets and adapter_configs
+    # Ensure each profile has at least empty secrets
     for project in config.get("projects", {}).values():
         for profile in project.get("profiles", {}).values():
             if profile is None:
                 profile = {}
             if "secrets" not in profile:
                 profile["secrets"] = []
-            if "adapter_configs" not in profile:
-                profile["adapter_configs"] = {}
     
     return config
 
@@ -39,8 +37,7 @@ def _generate_default_config(site_config: SiteConfig) -> dict:
             project_name: {
                 "profiles": {
                     profile_name: {
-                        "secrets": [],
-                        "adapter_configs": {}
+                        "secrets": []
                     }
                 }
             }
@@ -96,8 +93,7 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
         if profile_name not in config["projects"][project_name]["profiles"]:
             logger.warning(f"Project '{project_name}' and/or profile '{profile_name}' not found in user config at {path}, assuming empty configuration")
             config["projects"][project_name]["profiles"][profile_name] = {
-                "secrets": [],
-                "adapter_configs": {}
+                "secrets": []
             }
     
     # Apply defaults before validation

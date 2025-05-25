@@ -70,15 +70,6 @@
                         },
                         "additionalProperties": false
                       }
-                    },
-                    "adapter_configs": {
-                      "type": "object",
-                      "description": "Optional adapter configuration entries passed to RAW Adapters.",
-                      "additionalProperties": {
-                        "type": "object",
-                        "description": "Key-value settings for a given adapter instance.",
-                        "additionalProperties": { "type": "string" }
-                      }
                     }
                   },
                   "additionalProperties": false

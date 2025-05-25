@@ -1,11 +1,6 @@
 from typing import TypedDict, List, Dict, Optional, Literal, Any
 
 # Site Config Types
-class AdapterDefinition(TypedDict):
-    name: str
-    package: str
-    config: str
-
 class DbtConfig(TypedDict):
     enabled: Optional[bool]
     models: Optional[str]
@@ -39,7 +34,6 @@ class SiteConfig(TypedDict):
     base_url: Optional[str]
     enabled: Optional[bool]
     secrets: Optional[List[str]]
-    adapters: Optional[List[AdapterDefinition]]
     dbt: Optional[DbtConfig]
     python: Optional[PythonConfig]
     profiles: Dict[str, ProfileConfig]

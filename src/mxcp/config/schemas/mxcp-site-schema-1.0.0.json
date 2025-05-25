@@ -31,20 +31,6 @@
         "type": "string"
       }
     },
-    "adapters": {
-      "type": "array",
-      "description": "List of adapters to include in the project.",
-      "items": {
-        "type": "object",
-        "required": ["name", "package", "config"],
-        "properties": {
-          "name": { "type": "string", "description": "Logical schema name" },
-          "package": { "type": "string", "description": "Python package to import (must be installed beforehand)." },
-          "config": { "type": "string", "description": "Name of the adapter config entry in ~/.mxcp/config.yml" }
-        },
-        "additionalProperties": false
-      }
-    },
     "dbt": {
       "type": "object",
       "description": "Controls dbt integration and file paths.",
