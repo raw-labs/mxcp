@@ -1,8 +1,31 @@
 import json
 import traceback
+import os
 from typing import Any, Dict, Optional
 import click
 import logging
+
+def get_env_flag(env_var: str, default: bool = False) -> bool:
+    """Get a boolean flag from an environment variable.
+    
+    Args:
+        env_var: Name of the environment variable
+        default: Default value if environment variable is not set
+        
+    Returns:
+        True if the environment variable is set to "1", "true", or "yes" (case insensitive)
+        False otherwise
+    """
+    value = os.environ.get(env_var, "").lower()
+    return value in ("1", "true", "yes") if value else default
+
+def get_env_profile() -> Optional[str]:
+    """Get the profile name from environment variable.
+    
+    Returns:
+        Profile name from MXCP_PROFILE environment variable, or None if not set
+    """
+    return os.environ.get("MXCP_PROFILE")
 
 def configure_logging(debug: bool = False) -> None:
     """Configure logging for all modules.
@@ -10,6 +33,10 @@ def configure_logging(debug: bool = False) -> None:
     Args:
         debug: Whether to enable debug logging
     """
+    # Check environment variable if debug flag is not set
+    if not debug:
+        debug = get_env_flag("MXCP_DEBUG")
+        
     log_level = logging.DEBUG if debug else logging.WARNING
     
     # Configure root logger first

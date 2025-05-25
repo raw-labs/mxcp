@@ -7,7 +7,7 @@ from mxcp.endpoints.runner import run_endpoint as execute_endpoint
 from mxcp.endpoints.executor import EndpointType
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config, get_active_profile
-from mxcp.cli.utils import output_result, output_error, configure_logging
+from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.config.analytics import track_command_with_timing
 
 @click.command(name="run")
@@ -32,6 +32,12 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
         mxcp run tool my_tool --param complex=@data.json
         mxcp run tool my_tool --readonly
     """
+    # Get values from environment variables if not set by flags
+    if not profile:
+        profile = get_env_profile()
+    if not readonly:
+        readonly = get_env_flag("MXCP_READONLY")
+        
     # Configure logging
     configure_logging(debug)
 

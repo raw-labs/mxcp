@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 from mxcp.endpoints.tester import run_tests, run_all_tests
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
-from mxcp.cli.utils import output_result, output_error, configure_logging
+from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.config.analytics import track_command_with_timing
 
 def format_test_results(results, debug: bool = False):
@@ -121,6 +121,12 @@ def test(endpoint: Optional[str], profile: Optional[str], json_output: bool, deb
         mxcp test --json-output     # Output results in JSON format
         mxcp test --readonly        # Open database connection in read-only mode
     """
+    # Get values from environment variables if not set by flags
+    if not profile:
+        profile = get_env_profile()
+    if not readonly:
+        readonly = get_env_flag("MXCP_READONLY")
+        
     # Configure logging
     configure_logging(debug)
 

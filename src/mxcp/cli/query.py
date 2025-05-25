@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
-from mxcp.cli.utils import output_result, output_error, configure_logging
+from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.config.analytics import track_command_with_timing
 
@@ -31,6 +31,12 @@ def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profi
         mxcp query "SELECT * FROM sales" --profile production --json-output
         mxcp query "SELECT * FROM users" --readonly
     """
+    # Get values from environment variables if not set by flags
+    if not profile:
+        profile = get_env_profile()
+    if not readonly:
+        readonly = get_env_flag("MXCP_READONLY")
+        
     # Configure logging
     configure_logging(debug)
 

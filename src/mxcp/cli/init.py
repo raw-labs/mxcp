@@ -2,7 +2,7 @@ import click
 import yaml
 from pathlib import Path
 import os
-from mxcp.cli.utils import output_error, configure_logging
+from mxcp.cli.utils import output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.config.user_config import load_user_config
 from mxcp.config.analytics import track_command_with_timing
 from typing import Optional
@@ -95,6 +95,10 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
         mxcp init --project=test    # Initialize with specific project name
         mxcp init --bootstrap       # Initialize with example endpoint
     """
+    # Get values from environment variables if not set by flags
+    if not profile:
+        profile = get_env_profile()
+        
     # Configure logging
     configure_logging(debug)
     
@@ -102,7 +106,7 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
         target_dir = Path(folder).resolve()
         
         # Check if we're trying to create a repo inside another one
-        if check_existing__repo(target_dir):
+        if check_existing_mxcp_repo(target_dir):
             raise click.ClickException("Cannot create a MXCP repository inside another one")
             
         # Check if .duckdb file already exists for this profile
