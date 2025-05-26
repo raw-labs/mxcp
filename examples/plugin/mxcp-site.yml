@@ -1,6 +1,7 @@
 mxcp: 1.0.0
-profile: default
-project: plugin
+project: demo-plugin
+profile: dev
 plugin:
-  - name: my_name
+  - name: str_secret
     module: my_plugin
+    config: rot1
