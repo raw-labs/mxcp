@@ -5,8 +5,45 @@ import json
 from jsonschema import validate, ValidationError
 from mxcp.config.types import UserConfig, SiteConfig
 import logging
+from typing import Dict, Any, Optional
+import re
 
 logger = logging.getLogger(__name__)
+
+# Regular expression to match ${ENV_VAR} patterns
+ENV_VAR_PATTERN = re.compile(r'\${([A-Za-z0-9_]+)}')
+
+def _interpolate_env_vars(value: Any) -> Any:
+    """Interpolate environment variables in string values.
+    
+    Args:
+        value: The value to process. Can be a string, dict, list, or other type.
+        
+    Returns:
+        The processed value with environment variables interpolated.
+        
+    Raises:
+        ValueError: If an environment variable is referenced but not set.
+    """
+    if isinstance(value, str):
+        # Find all environment variable references
+        matches = ENV_VAR_PATTERN.findall(value)
+        if not matches:
+            return value
+            
+        # Replace each reference with the environment variable value
+        result = value
+        for env_var in matches:
+            if env_var not in os.environ:
+                raise ValueError(f"Environment variable {env_var} is not set")
+            result = result.replace(f"${{{env_var}}}", os.environ[env_var])
+        return result
+    elif isinstance(value, dict):
+        return {k: _interpolate_env_vars(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [_interpolate_env_vars(item) for item in value]
+    else:
+        return value
 
 def _apply_defaults(config: dict) -> dict:
     """Apply default values to the user config"""
@@ -59,6 +96,11 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
     If the config file doesn't exist and MXCP_CONFIG is not set, generates a default config
     based on the site config if generate_default is True.
     
+    The configuration supports environment variable interpolation using ${ENV_VAR} syntax.
+    For example:
+        database: ${DB_NAME}
+        password: ${DB_PASSWORD}
+    
     Args:
         site_config: The site configuration loaded from mxcp-site.yml
         generate_default: Whether to generate a default config if the file doesn't exist
@@ -68,6 +110,7 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
         
     Raises:
         FileNotFoundError: If the config file doesn't exist and generate_default is False
+        ValueError: If an environment variable is referenced but not set
     """
     path = Path(os.environ.get("MXCP_CONFIG", Path.home() / ".mxcp" / "config.yml"))
     logger.debug(f"Looking for user config at: {path}")
@@ -83,6 +126,9 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
         with open(path) as f:
             config = yaml.safe_load(f)
             logger.debug(f"Loaded user config from file: {config}")
+            
+        # Interpolate environment variables in the config
+        config = _interpolate_env_vars(config)
             
         # Ensure project and profile exist in config
         project_name = site_config["project"]
@@ -114,9 +160,10 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
     schema_path = Path(__file__).parent / "schemas" / "mxcp-config-schema-1.0.0.json"
     with open(schema_path) as schema_file:
         schema = json.load(schema_file)
-
+    
     try:
         validate(instance=config, schema=schema)
     except ValidationError as e:
-        raise ValueError(f"User config validation error: {e.message}")
+        raise ValueError(f"Invalid user config: {e.message}")
+    
     return config
