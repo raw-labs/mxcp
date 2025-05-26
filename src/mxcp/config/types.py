@@ -8,7 +8,7 @@ class ExtensionDefinition(TypedDict, total=False):
 class PluginDefinition(TypedDict):
     name: str
     module: str
-    config: str
+    config: Optional[str]
 
 class DbtConfig(TypedDict):
     enabled: Optional[bool]

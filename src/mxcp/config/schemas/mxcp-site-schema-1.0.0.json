@@ -36,7 +36,7 @@
       "description": "List of plugin modules to load and their configurations.",
       "items": {
         "type": "object",
-        "required": ["name", "module", "config"],
+        "required": ["name", "module"],
         "properties": {
           "name": {
             "type": "string",
@@ -48,7 +48,7 @@
           },
           "config": {
             "type": "string",
-            "description": "The name of the configuration to use from the user config (resolved from ~/.mxcp/config.yml)."
+            "description": "Optional name of the configuration to use from the user config (resolved from ~/.mxcp/config.yml)."
           }
         },
         "additionalProperties": false

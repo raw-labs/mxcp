@@ -3,6 +3,8 @@ from typing import Dict, Any, Optional
 from mxcp.config.types import SiteConfig, UserConfig
 from mxcp.engine.secret_injection import inject_secrets
 from mxcp.engine.extension_loader import load_extensions
+from mxcp.engine.plugin_loader import load_plugins
+from mxcp.plugins import MXCPBasePlugin
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,6 +18,7 @@ class DuckDBSession:
         self.site_config = site_config
         self.profile = profile
         self.readonly = readonly
+        self.plugins: Dict[str, MXCPBasePlugin] = {}
         
     def _get_project_profile(self) -> tuple[str, str]:
         """Get the current project and profile from site config"""
@@ -71,6 +74,9 @@ class DuckDBSession:
         project, profile_name = self._get_project_profile()
         logger.debug(f"Using project: {project}, profile: {profile_name}")
         inject_secrets(self.conn, self.site_config, self.user_config, profile_name)
+        
+        # Load plugins
+        self.plugins = load_plugins(self.site_config, self.user_config, project, profile_name, self.conn)
         
         return self.conn
         
