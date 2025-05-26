@@ -1,4 +1,4 @@
-raw: "1.0.0" 
+mxcp: "1.0.0" 
 tool:
   name: http_headers_test
   description: "Test endpoint for HTTP headers as MAP"

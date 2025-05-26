@@ -3,17 +3,17 @@ import pytest
 import asyncio
 import aiohttp
 from pathlib import Path
-from raw.server.mcp import RAWMCP
-from raw.endpoints.executor import EndpointType
+from mxcp.server.mcp import RAWMCP
+from mxcp.endpoints.executor import EndpointType
 import json
 from unittest.mock import Mock, patch, AsyncMock
 import time
-from raw.config.user_config import load_user_config
-from raw.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
+from mxcp.config.site_config import load_site_config
 
 @pytest.fixture(scope="session", autouse=True)
-def set_raw_config_env():
-    os.environ["RAW_CONFIG"] = str(Path(__file__).parent / "fixtures" / "mcp" / "raw-config.yml")
+def set_mxcp_config_env():
+    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "mcp" / "mxcp-config.yml")
 
 @pytest.fixture
 def mcp_repo_path():

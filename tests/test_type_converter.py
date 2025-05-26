@@ -1,5 +1,5 @@
 import pytest
-from raw.endpoints.executor import TypeConverter
+from mxcp.endpoints.executor import TypeConverter
 from datetime import datetime, date, time
 
 def test_string_formats():

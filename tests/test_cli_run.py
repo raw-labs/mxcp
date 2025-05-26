@@ -3,11 +3,11 @@ import json
 import os
 from pathlib import Path
 from click.testing import CliRunner
-from raw.cli.run import run_endpoint
+from mxcp.cli.run import run_endpoint
 
 @pytest.fixture(scope="session", autouse=True)
-def set_raw_config_env():
-    os.environ["RAW_CONFIG"] = str(Path(__file__).parent / "fixtures" / "cli-run" / "raw-config.yml")
+def set_mxcp_config_env():
+    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "cli-run" / "mxcp-config.yml")
 
 @pytest.fixture
 def runner():

@@ -1,15 +1,15 @@
 import pytest
 import asyncio
 from pathlib import Path
-from raw.endpoints.executor import EndpointExecutor, EndpointType
-from raw.config.user_config import load_user_config
-from raw.config.site_config import load_site_config
+from mxcp.endpoints.executor import EndpointExecutor, EndpointType
+from mxcp.config.user_config import load_user_config
+from mxcp.config.site_config import load_site_config
 import duckdb
 import os
 
 @pytest.fixture(scope="session", autouse=True)
-def set_raw_config_env():
-    os.environ["RAW_CONFIG"] = str(Path(__file__).parent / "fixtures" / "endpoint-execution" / "raw-config.yml")
+def set_mxcp_config_env():
+    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "endpoint-execution" / "mxcp-config.yml")
 
 @pytest.fixture
 def test_repo_path():

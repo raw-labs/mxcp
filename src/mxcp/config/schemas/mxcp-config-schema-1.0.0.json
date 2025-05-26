@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MXCP Config",
+  "type": "object",
+  "required": ["mxcp", "projects"],
+  "properties": {
+    "mxcp": {
+      "type": "string",
+      "description": "Schema version. Always use '1.0.0'.",
+      "default": "1.0.0"
+    },
+
+    "vault": {
+      "type": "object",
+      "description": "Configuration for Vault integration.",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "address": {
+          "type": "string",
+          "format": "uri"
+        },
+        "token_env": {
+          "type": "string",
+          "description": "The environment variable name containing the Vault token."
+        }
+      },
+      "additionalProperties": false
+    },
+    "projects": {
+      "type": "object",
+      "description": "All configured RAW projects.",
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "type": "object",
+          "required": ["profiles"],
+          "properties": {
+            "default": {
+              "type": "string",
+              "description": "Default profile name for this project."
+            },
+            "profiles": {
+              "type": "object",
+              "description": "Profiles under this project.",
+              "patternProperties": {
+                "^[a-zA-Z0-9_-]+$": {
+                  "type": "object",
+                  "properties": {
+                    "secrets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["name", "type", "parameters"],
+                        "properties": {
+                          "name": { "type": "string", "description": "The secret name." },
+                          "type": { "type": "string", "description": "The secret type." },
+                          "parameters": {
+                            "type": "object",
+                            "description": "The secret definition.",
+                            "additionalProperties": {
+                              "oneOf": [
+                                { "type": "string" },
+                                { 
+                                  "type": "object",
+                                  "additionalProperties": { "type": "string" }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

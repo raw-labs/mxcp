@@ -3,11 +3,12 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "raw-mcp"
+name = "mxcp"
 version = "0.1.0"
 description = "RAW Model Context Protocol"
 authors = [{ name = "RAW Labs SA", email = "hello@raw-labs.com" }]
 readme = "README.md"
+license = { text = "Business Source License 1.1" }
 requires-python = ">=3.9"
 dependencies = [
     "mcp>=1.9.0",  # Official MCP Python SDK
@@ -24,7 +25,7 @@ dependencies = [
 ]
 
 [project.scripts]
-raw = "raw.__main__:cli"
+mxcp = "mxcp.__main__:cli"
 
 [project.optional-dependencies]
 dev = [
@@ -41,11 +42,11 @@ dev = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["raw", "raw.cli", "raw.config", "raw.config.schemas", "raw.server"]
+packages = ["mxcp", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.server"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-"raw.config.schemas" = ["*.json"]
+"mxcp.config.schemas" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

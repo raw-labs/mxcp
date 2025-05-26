@@ -1,4 +1,4 @@
-raw: "1.0.0"
+mxcp: "1.0.0"
 
 resource:
   uri: data://date.resource

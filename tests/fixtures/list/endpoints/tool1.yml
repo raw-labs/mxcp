@@ -1,4 +1,4 @@
-raw: "1.0.0"
+mxcp: "1.0.0"
 
 tool:
   name: tool1
@@ -6,9 +6,14 @@ tool:
   parameters:
     - name: input
       type: string
-      description: Input parameter
+      description: POstgresql syntax
+      minLength: 1
+      maxLength: 100 
+    - name: input2
+      type: string
+      description: POstgresql syntax
       minLength: 1
       maxLength: 100 
   source:
     code: |
-      SELECT 1 as value
+      {{input}}
