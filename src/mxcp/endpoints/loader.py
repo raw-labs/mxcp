@@ -77,15 +77,19 @@ class EndpointLoader:
             # Skip mxcp-site.yml only if it's at the root
             if f.name == "mxcp-site.yml" and f.parent == base_path:
                 continue
-            # Skip dbt_project.yml only if it's at the root
-            if f.name == "dbt_project.yml" and f.parent == base_path:
-                continue
             # Skip the file specified in MXCP_CONFIG if it exists
             if mxcp_config.exists() and f.samefile(mxcp_config):
                 continue
             try:
                 with open(f) as file:
                     data = yaml.safe_load(file)
+                    
+                    # Check if this is a mxcp endpoint file
+                    if "mxcp" not in data:
+                        logger.warning(f"Skipping {f}: Not a mxcp endpoint file (missing 'mxcp' field)")
+                        continue
+                        
+                    # Validate against schema only if it's a mxcp endpoint file
                     validate(instance=data, schema=schema)
                     endpoints.append((f, data, None))
                     self._endpoints[str(f)] = data
@@ -124,9 +128,6 @@ class EndpointLoader:
                 # Skip mxcp-site.yml only if it's at the root
                 if f.name == "mxcp-site.yml" and f.parent == repo_root:
                     continue
-                # Skip dbt_project.yml only if it's at the root
-                if f.name == "dbt_project.yml" and f.parent == repo_root:
-                    continue
                 # Skip the file specified in MXCP_CONFIG if it exists
                 if mxcp_config.exists() and f.samefile(mxcp_config):
                     continue
@@ -136,6 +137,11 @@ class EndpointLoader:
                     with open(f) as file:
                         data = yaml.safe_load(file)
                         logger.debug(f"YAML contents keys: {list(data.keys())}")
+                        
+                        # Check if this is a mxcp endpoint file
+                        if "mxcp" not in data:
+                            logger.debug(f"Skipping {f}: Not a mxcp endpoint file (missing 'mxcp' field)")
+                            continue
                         
                         # Check if this is the endpoint we're looking for
                         if endpoint_type in data:
