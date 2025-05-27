@@ -125,7 +125,27 @@ profiles:
     duckdb:
       path: "db-prod.duckdb"
       readonly: true
+    drift:
+      path: "drift-prod.json"
 ```
+
+#### Drift Detection Configuration
+
+The `drift` section configures drift detection for each profile:
+
+```yaml
+profiles:
+  default:
+    drift:
+      path: "drift-default.json"  # Path to drift snapshot file
+```
+
+- **path**: Path to the drift snapshot file (relative to project root)
+  - Used as the default baseline for `mxcp drift-check`
+  - Created by `mxcp drift-snapshot`
+  - Should be unique per profile to avoid conflicts
+
+For more details on drift detection, see the [Drift Detection Guide](drift-detection.md).
 
 ### Cloud Settings
 ```yaml

@@ -208,4 +208,4 @@ For more details on secret management, see the [Configuration Guide](configurati
 4. **Data Quality**
    - Use tests to ensure data consistency
    - Implement data validation in your models
-   - Monitor for schema drift 
+   - Monitor for schema drift using MXCP's [drift detection](drift-detection.md) 

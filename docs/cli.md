@@ -148,11 +148,12 @@ mxcp validate --readonly        # Open database connection in read-only mode
 Run tests for one or all endpoints.
 
 ```bash
-mxcp test [ENDPOINT] [OPTIONS]
+mxcp test [ENDPOINT_TYPE] [NAME] [OPTIONS]
 ```
 
 **Arguments:**
-- `ENDPOINT`: Name of endpoint to test (optional)
+- `ENDPOINT_TYPE`: Type of endpoint (tool, resource, or prompt) (optional)
+- `NAME`: Name of endpoint to test (optional)
 
 **Options:**
 - `--profile`: Profile name to use
@@ -162,10 +163,10 @@ mxcp test [ENDPOINT] [OPTIONS]
 
 **Examples:**
 ```bash
-mxcp test                    # Test all endpoints
-mxcp test my_endpoint       # Test specific endpoint
-mxcp test --json-output     # Output results in JSON format
-mxcp test --readonly        # Open database connection in read-only mode
+mxcp test                        # Test all endpoints
+mxcp test tool my_tool          # Test specific tool endpoint
+mxcp test --json-output         # Output results in JSON format
+mxcp test --readonly            # Open database connection in read-only mode
 ```
 
 ### `mxcp list`
@@ -187,6 +188,71 @@ mxcp list                    # List all endpoints
 mxcp list --json-output     # Output in JSON format
 mxcp list --profile dev     # List endpoints in dev profile
 ```
+
+### `mxcp drift-snapshot`
+
+Generate a drift snapshot of the current state for change detection.
+
+```bash
+mxcp drift-snapshot [OPTIONS]
+```
+
+**Options:**
+- `--profile`: Profile name to use
+- `--force`: Overwrite existing snapshot file
+- `--dry-run`: Show what would be done without writing the snapshot file
+- `--json-output`: Output in JSON format
+- `--debug`: Show detailed debug information
+
+**Examples:**
+```bash
+mxcp drift-snapshot                    # Generate snapshot using default profile
+mxcp drift-snapshot --profile prod     # Generate snapshot using prod profile
+mxcp drift-snapshot --force           # Overwrite existing snapshot
+mxcp drift-snapshot --dry-run         # Show what would be done
+mxcp drift-snapshot --json-output     # Output results in JSON format
+```
+
+**Description:**
+Creates a snapshot of the current state of your MXCP repository, including:
+- Database schema (tables and columns)
+- Endpoint definitions (tools, resources, prompts)
+- Validation results
+- Test results
+
+The snapshot is used as a baseline to detect drift between different environments or over time. For more information, see the [Drift Detection Guide](drift-detection.md).
+
+### `mxcp drift-check`
+
+Check for drift between current state and baseline snapshot.
+
+```bash
+mxcp drift-check [OPTIONS]
+```
+
+**Options:**
+- `--profile`: Profile name to use
+- `--baseline`: Path to baseline snapshot file (defaults to profile drift path)
+- `--json-output`: Output in JSON format
+- `--debug`: Show detailed debug information
+- `--readonly`: Open database connection in read-only mode
+
+**Examples:**
+```bash
+mxcp drift-check                           # Check against default baseline
+mxcp drift-check --baseline path/to/snap   # Check against specific baseline
+mxcp drift-check --json-output             # Output results in JSON format
+mxcp drift-check --debug                   # Show detailed change information
+mxcp drift-check --readonly                # Open database in read-only mode
+```
+
+**Description:**
+Compares the current state of your database and endpoints against a previously generated baseline snapshot to detect any changes. Reports:
+- Added, removed, or modified database tables and columns
+- Added, removed, or modified endpoints
+- Changes in validation or test results
+
+Exit code is 1 if drift is detected, 0 if no drift. For more information, see the [Drift Detection Guide](drift-detection.md).
 
 ### `mxcp dbt-config`
 

@@ -76,6 +76,7 @@ tool:
 - **dbt integration** — Use your data models directly
 - **Git-based workflow** — Version control and collaboration
 - **Validation tools** — Type checking, SQL linting, and testing
+- **Drift detection** — Monitor schema and endpoint changes across environments
 
 ## 🛠️ Core Concepts
 
@@ -97,14 +98,16 @@ your-project/
 
 ### CLI Commands
 ```bash
-mxcp serve        # Start local MCP server
-mxcp list         # List all endpoints
-mxcp validate     # Check types, SQL, and references
-mxcp test         # Run endpoint tests
-mxcp query        # Execute SQL queries
-mxcp init         # Initialize new project
-mxcp dbt-config   # Configure dbt integration
-mxcp dbt          # Run dbt commands
+mxcp serve           # Start local MCP server
+mxcp list            # List all endpoints
+mxcp validate        # Check types, SQL, and references
+mxcp test            # Run endpoint tests
+mxcp query           # Execute SQL queries
+mxcp init            # Initialize new project
+mxcp dbt-config      # Configure dbt integration
+mxcp dbt             # Run dbt commands
+mxcp drift-snapshot  # Create drift detection baseline
+mxcp drift-check     # Check for schema and endpoint drift
 ```
 
 ## 🔌 Integration with Claude
@@ -137,6 +140,7 @@ Connect your MXCP server to Claude Desktop by configuring `server_config.json`:
 - [Configuration](docs/configuration.md) — Project setup
 - [Type System](docs/type-system.md) — Data types and validation
 - [Integrations](docs/integrations.md) — Data sources and tools
+- [Drift Detection](docs/drift-detection.md) — Schema and endpoint change monitoring
 
 ## 🤝 Contributing
 
