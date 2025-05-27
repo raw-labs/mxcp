@@ -9,7 +9,6 @@
       "description": "Schema version. Always use '1.0.0'.",
       "default": "1.0.0"
     },
-
     "vault": {
       "type": "object",
       "description": "Configuration for Vault integration.",
@@ -70,6 +69,27 @@
                         },
                         "additionalProperties": false
                       }
+                    },
+                    "plugin": {
+                      "type": "object",
+                      "description": "Plugin configuration for this profile.",
+                      "properties": {
+                        "config": {
+                          "type": "object",
+                          "description": "Plugin-specific configurations.",
+                          "patternProperties": {
+                            "^[a-zA-Z0-9_-]+$": {
+                              "type": "object",
+                              "description": "Configuration for a specific plugin.",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "additionalProperties": false
                     }
                   },
                   "additionalProperties": false

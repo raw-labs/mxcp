@@ -5,6 +5,11 @@ class ExtensionDefinition(TypedDict, total=False):
     name: str
     repo: Optional[str]  # Optional repo name for community/nightly extensions
 
+class PluginDefinition(TypedDict):
+    name: str
+    module: str
+    config: Optional[str]
+
 class DbtConfig(TypedDict):
     enabled: Optional[bool]
     models: Optional[str]
@@ -24,9 +29,19 @@ class GitHubCloudConfig(TypedDict):
     prefix_with_branch_name: Optional[bool]
     skip_prefix_for_branches: Optional[List[str]]
 
+class SecretDefinition(TypedDict):
+    name: str
+    type: str
+    parameters: Dict[str, str]
+
+class PluginConfig(TypedDict):
+    config: Dict[str, Dict[str, str]]
+
 class ProfileConfig(TypedDict):
     duckdb: Optional[DuckDBConfig]
     drift: Optional[DriftConfig]
+    secrets: Optional[List[SecretDefinition]]
+    plugin: Optional[PluginConfig]
 
 class CloudConfig(TypedDict):
     github: Optional[Dict[str, Any]]
@@ -38,6 +53,7 @@ class SiteConfig(TypedDict):
     base_url: Optional[str]
     enabled: Optional[bool]
     secrets: Optional[List[str]]
+    plugin: Optional[List[PluginDefinition]]
     extensions: Optional[List[Union[str, ExtensionDefinition]]]
     dbt: Optional[DbtConfig]
     python: Optional[PythonConfig]
@@ -50,11 +66,6 @@ class VaultConfig(TypedDict):
     address: Optional[str]
     token_env: Optional[str]
 
-class SecretDefinition(TypedDict):
-    name: str
-    type: str
-    parameters: Dict[str, str]
-
 class ProjectConfig(TypedDict):
     default: Optional[str]
     profiles: Dict[str, ProfileConfig]
@@ -62,4 +73,4 @@ class ProjectConfig(TypedDict):
 class UserConfig(TypedDict):
     mxcp: str
     vault: Optional[VaultConfig]
-    projects: Dict[str, ProjectConfig] 
+    projects: Dict[str, ProjectConfig]

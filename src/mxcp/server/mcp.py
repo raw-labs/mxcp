@@ -155,7 +155,7 @@ class RAWMCP:
                     readonly=self.readonly
                 )
                 result = await exec_.execute(converted)
-                logger.debug(f"Result: {json.dumps(result, indent=2)}")
+                logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                 return result
 
             except Exception as e:

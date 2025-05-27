@@ -40,7 +40,7 @@ mxcp serve
 
 ### 1. Declarative Interface Definition
 ```yaml
-# summarize_earthquakes.yml
+# tools/summarize_earthquakes.yml
 mxcp: "1.0.0"
 tool:
   name: summarize_earthquakes

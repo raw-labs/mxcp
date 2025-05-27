@@ -31,6 +31,29 @@
         "type": "string"
       }
     },
+    "plugin": {
+      "type": "array",
+      "description": "List of plugin modules to load and their configurations.",
+      "items": {
+        "type": "object",
+        "required": ["name", "module"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the plugin instance."
+          },
+          "module": {
+            "type": "string",
+            "description": "The Python module containing the MXCP plugin."
+          },
+          "config": {
+            "type": "string",
+            "description": "Optional name of the configuration to use from the user config (resolved from ~/.mxcp/config.yml)."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "extensions": {
       "type": "array",
       "description": "List of DuckDB extensions to load. Can be simple strings for core extensions or objects with name/repo for community/nightly extensions.",

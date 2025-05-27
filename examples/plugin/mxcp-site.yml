@@ -1,0 +1,6 @@
+mxcp: 1.0.0
+profile: default
+project: plugin
+plugin:
+  - name: my_name
+    module: my_plugin

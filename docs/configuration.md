@@ -6,6 +6,31 @@ This guide covers all aspects of MXCP configuration, from user settings to endpo
 
 The user configuration file (`~/.mxcp/config.yml`) stores user-specific settings and secrets.
 
+### Environment Variable Interpolation
+
+The user configuration file supports environment variable interpolation using `${ENV_VAR}` syntax. This allows you to reference environment variables in your configuration, which is particularly useful for sensitive values like passwords and API keys.
+
+Example:
+```yaml
+mxcp: "1.0.0"
+projects:
+  my_project:
+    default: "dev"
+    profiles:
+      dev:
+        secrets:
+          - name: "db_credentials"
+            type: "database"
+            parameters:
+              host: "localhost"
+              port: "5432"
+              database: "${DB_NAME}"
+              username: "${DB_USER}"
+              password: "${DB_PASSWORD}"
+```
+
+If any referenced environment variable is not set, MXCP will raise an error when loading the configuration.
+
 ### Schema Version
 ```yaml
 mxcp: "1.0.0"  # Always use this version
