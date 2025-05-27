@@ -1,6 +1,6 @@
 # COVID-19 MCP Server Example
 
-This example demonstrates how to create an MCP server that provides LLM-friendly access to COVID-19 data. It automatically fetches the latest [Our World in Data (OWID) COVID-19 dataset](https://ourworldindata.org/coronavirus) from GitHub, processes and caches it in a DuckDB database using dbt transformations, and exposes it through configurable endpoints for both direct queries and natural language interactions.
+This example demonstrates how to create an MCP server that provides LLM-friendly access to COVID-19 data. It automatically fetches the latest [Our World in Data (OWID) COVID-19 dataset](https://ourworldindata.org/coronavirus) from GitHub, processes and caches it using dbt transformations, and exposes it through configurable endpoints for both direct queries and natural language interactions.
 
 ## What This Example Shows
 
