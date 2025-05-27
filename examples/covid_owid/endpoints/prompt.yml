@@ -1,0 +1,10 @@
+mxcp: 1.0.0
+
+prompt:
+  name: "covid_data_summary"
+  description: "Summarizes covid data."
+  tags: ["summary", "covid"]
+  messages:
+    - role: system
+      type: text
+      prompt: "You are an covid expert. Please answer to user queries based on the owid covid data"
