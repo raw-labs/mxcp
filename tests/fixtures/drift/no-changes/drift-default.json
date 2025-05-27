@@ -1,0 +1,43 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2025-05-27T11:04:04.109401Z",
+  "tables": [],
+  "resources": [
+    {
+      "validation_results": {
+        "status": "ok",
+        "path": "endpoints/hello-world.yml"
+      },
+      "test_results": {
+        "status": "ok",
+        "tests_run": 0,
+        "message": "No tests defined"
+      },
+      "definition": {
+        "mxcp": "1.0.0",
+        "tool": {
+          "description": "A simple hello world tool",
+          "enabled": true,
+          "name": "hello_world",
+          "parameters": [
+            {
+              "description": "Name to greet",
+              "examples": [
+                "World"
+              ],
+              "name": "name",
+              "type": "string"
+            }
+          ],
+          "return": {
+            "description": "Greeting message",
+            "type": "string"
+          },
+          "source": {
+            "file": "hello-world.sql"
+          }
+        }
+      }
+    }
+  ]
+}

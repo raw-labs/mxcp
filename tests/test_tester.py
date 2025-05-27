@@ -42,7 +42,7 @@ async def test_run_valid_tool(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = await run_tests("tool/valid_tool", user_config, site_config, None)
+        result = await run_tests("tool", "valid_tool", user_config, site_config, None)
         assert result["status"] == "ok"
     finally:
         os.chdir(original_dir)
@@ -53,7 +53,7 @@ async def test_run_invalid_tool(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = await run_tests("tool/invalid_tool", user_config, site_config, None)
+        result = await run_tests("tool", "invalid_tool", user_config, site_config, None)
         assert result["status"] == "error"
         assert result["tests_run"] == 4
         assert any(test["status"] == "passed" for test in result["tests"])
@@ -71,7 +71,7 @@ async def test_run_valid_resource(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = await run_tests("resource/data://valid.resource", user_config, site_config, None)
+        result = await run_tests("resource", "data://valid.resource", user_config, site_config, None)
         assert result["status"] == "error"  # Overall status is error because of the failing test
         assert result["tests_run"] == 2
         assert any(test["status"] == "passed" for test in result["tests"])  # valid filter test should pass
@@ -88,7 +88,7 @@ async def test_run_valid_prompt(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = await run_tests("prompt/valid_prompt", user_config, site_config, None)
+        result = await run_tests("prompt", "valid_prompt", user_config, site_config, None)
         assert result["status"] == "error"
         assert result["tests_run"] == 2
         assert all(test["status"] == "error" for test in result["tests"])
@@ -104,7 +104,7 @@ async def test_run_nonexistent_endpoint(tester_repo_path, site_config, user_conf
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = await run_tests("tool/nonexistent", user_config, site_config, None)
+        result = await run_tests("tool", "nonexistent", user_config, site_config, None)
         assert result["status"] == "error"
         assert "Endpoint not found" in result["message"]
     finally:
@@ -126,7 +126,7 @@ async def test_run_all_tests(tester_repo_path, site_config, user_config):
         assert "resource" in endpoint_types
         assert "prompt" in endpoint_types
         # Optionally, check that at least one error cause is present in endpoints
-        error_causes = [test["error"] for ep in result["endpoints"] for test in ep.get("tests", []) if test["status"] == "error"]
+        error_causes = [test["error"] for ep in result["endpoints"] for test in ep.get("test_results", {}).get("tests", []) if test["status"] == "error"]
         assert any("Required parameter missing" in str(msg) or "messages" in str(msg) or "Unknown parameter" in str(msg) for msg in error_causes)
     finally:
         os.chdir(original_dir)
@@ -137,7 +137,7 @@ async def test_run_missing_param_tool(tester_repo_path, site_config, user_config
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = await run_tests("tool/missing_param_tool", user_config, site_config, None)
+        result = await run_tests("tool", "missing_param_tool", user_config, site_config, None)
         assert result["status"] == "error"
         assert "Required parameter missing: count" in str(result["tests"][0]["error"])
     finally:
@@ -149,7 +149,7 @@ async def test_run_mismatched_result(tester_repo_path, site_config, user_config)
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = await run_tests("tool/mismatched_result", user_config, site_config, None)
+        result = await run_tests("tool", "mismatched_result", user_config, site_config, None)
         assert result["status"] == "failed"  # Overall status should be failed
     finally:
         os.chdir(original_dir) 
