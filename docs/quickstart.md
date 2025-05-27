@@ -207,11 +207,14 @@ JOIN source_c c ON a.id = c.id;
 ```yaml
 parameters:
   - name: "date"
-    type: "date"
+    type: "string"
+    format: "date"
     description: "Date to filter by"
+    examples: ["2024-01-15"]
   - name: "threshold"
     type: "number"
     description: "Minimum value"
+    minimum: 0
 ```
 
 ## Need Help?
