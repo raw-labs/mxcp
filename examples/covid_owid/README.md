@@ -1,70 +1,136 @@
-# COVID-19 Data Analysis Project
+# COVID-19 MCP Server Example
 
-This project demonstrates the integration of [Our World in Data (OWID)](https://ourworldindata.org/coronavirus) COVID-19 dataset with DuckDB and dbt. It showcases how to build a data pipeline that processes and analyzes global COVID-19 data using modern data tools.
+This example demonstrates how to create an MCP server that provides LLM-friendly access to COVID-19 data. It automatically fetches the latest [Our World in Data (OWID) COVID-19 dataset](https://ourworldindata.org/coronavirus) from GitHub, processes and caches it in a DuckDB database using dbt transformations, and exposes it through configurable endpoints for both direct queries and natural language interactions.
 
-## Overview
+## What This Example Shows
 
-This example project:
-- Fetches COVID-19 data directly from OWID's GitHub repository
-- Processes the data using dbt and DuckDB
-- Provides models for analyzing COVID-19 cases, hospitalizations, and location data
-- Exposes the processed data through a REST API
+1. **Data Pipeline**:
+   - Fetching data from OWID's GitHub repository
+   - Data transformation and caching using dbt models
+
+2. **MCP Server Setup**:
+   - How to configure MCP endpoints for data access
+   - How to create an LLM-friendly prompt for natural language queries
+   - How to expose DuckDB data through MCP tools.
+
+3. **Data Sources**:
+   - COVID-19 cases and deaths
+   - Vaccination data
+   - Hospitalization statistics
+   - Country-specific information
 
 ## Prerequisites
 
-- DuckDB
+- Raw MCP CLI tools (`mxcp`)
 - dbt-core
-- Python 3.8+
-- Raw MCP CLI tools
+- dbt-duckdb
+- Python 3.8 or higher
 
 ## Project Structure
 
 ```
 covid_owid/
-├── models/              # dbt models for data transformation
-│   ├── covid_data.sql      # Main COVID-19 data model
-│   ├── hospitalizations.sql # Hospitalization metrics
-│   └── locations.sql       # Location-specific data
-├── endpoints/           # API endpoint definitions
-├── tests/              # Data tests
-└── mxcp-site.yml       # Raw MCP configuration
+├── endpoints/                # MCP endpoint definitions
+│   ├── prompt.yml           # LLM system prompt for natural language queries
+│   ├── hospitalizations.yml # Hospital data endpoint
+│   └── owid-covid.yml      # Main COVID data endpoint
+├── models/                  # Data models
+│   ├── covid_data.sql      # Main COVID-19 statistics
+│   ├── hospitalizations.sql # Hospital/ICU data
+│   └── locations.sql       # Geographic data
+├── mxcp-site.yml           # MCP site configuration
+├── dbt_project.yml         # dbt configuration
+└── server_config.json      # Server configuration
 ```
 
-## Getting Started
+## Quick Start
 
-1. Clone the repository and navigate to this example:
+1. **Setup**:
    ```bash
+   # Navigate to the example
    cd examples/covid_owid
+
+   # Install dependencies
+   pip install dbt-core duckdb
    ```
 
-2. Start the Raw MCP server:
+2. **Prepare the Data**:
    ```bash
-   mxcp serve
-   ```
-
-3. Run the dbt models:
-   ```bash
+   # Initialize and run dbt models to populate DuckDB
+   dbt deps
    dbt run
    ```
 
-4. Run the tests to ensure data quality:
+3. **Start MCP Server**:
    ```bash
-   dbt test
+   # Start the server
+   mxcp serve
    ```
 
-## Data Models
+## MCP Endpoint Structure
 
-- **covid_data**: Raw COVID-19 data from OWID
-- **hospitalizations**: Filtered view of hospitalization metrics
-- **locations**: Geographic and demographic information about locations
+The server provides three types of endpoints:
 
-## API Endpoints
+1. **Data Exploration Endpoints**:
+   - `list_tables`: View available tables
+   - `get_table_schema`: Examine table structures
+   - `execute_sql_query`: Run custom SQL queries
 
-The processed data is available through REST API endpoints defined in the `endpoints/` directory. The server configuration is managed through `server_config.json`.
+2. **LLM Interface** (`prompt.yml`):
+   - Handles natural language queries
+   - Converts questions to SQL
+   - Formats responses for users
+
+3. **Specialized Data Access**:
+   - `owid-covid.yml`: Core COVID-19 statistics
+   - `hospitalizations.yml`: Hospital metrics
+
+## Using the Server
+
+### Direct Data Access
+```bash
+# Example: Query COVID data for a specific country
+curl -X POST http://localhost:8080/owid-covid \
+  -d '{"country_code": "USA", "start_date": "2022-01-01"}'
+```
+
+### Natural Language Queries
+The LLM interface accepts questions in plain English:
+```bash
+# Example: Ask about COVID trends
+curl -X POST http://localhost:8080/prompt \
+  -d '{"question": "What were the peak cases in Germany during 2022?"}'
+```
+
+## Customizing the Server
+
+### Adding New Endpoints
+1. Create a new YAML file in `endpoints/`
+2. Define the endpoint structure:
+   ```yaml
+   mxcp: 1.0.0
+   tool:
+     name: "endpoint_name"
+     description: "Endpoint description"
+     parameters:
+       # Define parameters
+     return:
+       # Define return type
+   ```
+
+### Modifying the LLM Prompt
+Edit `endpoints/prompt.yml` to:
+- Adjust the system prompt
+- Add new query capabilities
+- Modify response formatting
 
 ## Resources
 
-- [Our World in Data COVID-19 Dataset](https://github.com/owid/covid-19-data)
-- [dbt Documentation](https://docs.getdbt.com/)
-- [DuckDB Documentation](https://duckdb.org/docs/)
 - [Raw MCP Documentation](https://raw-labs.com/)
+- [Our World in Data COVID-19 Dataset](https://github.com/owid/covid-19-data)
+- [DuckDB Documentation](https://duckdb.org/docs/)
+- [dbt Documentation](https://docs.getdbt.com/)
+
+## Contributing
+
+Feel free to submit issues and enhancement requests!
