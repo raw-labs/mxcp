@@ -109,4 +109,32 @@ class DriftSnapshot(TypedDict):
     version: str
     generated_at: str
     tables: List[Table]
-    resources: List[ResourceDefinition] 
+    resources: List[ResourceDefinition]
+
+# Drift Report Types
+class TableChange(TypedDict):
+    name: str
+    change_type: Literal["added", "removed", "modified"]
+    columns_added: Optional[List[Column]]
+    columns_removed: Optional[List[Column]]
+    columns_modified: Optional[List[Dict[str, Any]]]  # old/new column info
+
+class ResourceChange(TypedDict):
+    path: str
+    endpoint: Optional[str]  # endpoint identifier like "tool/name"
+    change_type: Literal["added", "removed", "modified"]
+    validation_changed: Optional[bool]
+    test_results_changed: Optional[bool]
+    definition_changed: Optional[bool]
+    details: Optional[Dict[str, Any]]  # specific change details
+
+class DriftReport(TypedDict):
+    version: str
+    generated_at: str
+    baseline_snapshot_path: str
+    current_snapshot_generated_at: str
+    baseline_snapshot_generated_at: str
+    has_drift: bool
+    summary: Dict[str, int]  # counts of changes by type
+    table_changes: List[TableChange]
+    resource_changes: List[ResourceChange] 

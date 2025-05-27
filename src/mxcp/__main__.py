@@ -9,6 +9,7 @@ from mxcp.cli.query import query
 from mxcp.cli.dbt import dbt_config, dbt_wrapper
 from mxcp.config.analytics import initialize_analytics, track_base_command
 from mxcp.cli.drift_snapshot import drift_snapshot
+from mxcp.cli.drift_check import drift_check
 
 @click.group()
 def cli():
@@ -27,3 +28,4 @@ cli.add_command(query)
 cli.add_command(dbt_config)
 cli.add_command(dbt_wrapper)
 cli.add_command(drift_snapshot)
+cli.add_command(drift_check)
