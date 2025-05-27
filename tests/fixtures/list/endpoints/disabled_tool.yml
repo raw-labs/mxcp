@@ -1,0 +1,18 @@
+mxcp: "1.0.0"
+
+tool:
+  name: disabled_tool
+  description: A test tool that should be filtered out
+  enabled: false
+  parameters:
+    - name: input
+      type: string
+      description: Test input parameter
+      minLength: 1
+      maxLength: 100 
+  return:
+    type: string
+    description: Test result
+  source:
+    code: |
+      SELECT 'This should not be accessible' as result 

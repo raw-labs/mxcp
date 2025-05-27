@@ -20,10 +20,6 @@
       "type": "string",
       "description": "Optional base URL to use for serving endpoints (e.g., 'demo', 'prod', etc.)"
     },
-    "enabled": {
-      "type": "boolean",
-      "description": "If false, disables this repo from being served or validated by default."
-    },
     "secrets": {
       "type": "array",
       "description": "List of secret names used by this repo (resolved from ~/.mxcp/config.yml).",

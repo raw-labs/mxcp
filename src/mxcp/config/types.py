@@ -15,6 +15,9 @@ class DbtConfig(TypedDict):
     models: Optional[str]
     manifest_path: Optional[str]
 
+class SqlToolsConfig(TypedDict):
+    enabled: Optional[bool]
+
 class PythonConfig(TypedDict):
     path: Optional[str]
 
@@ -44,12 +47,12 @@ class SiteConfig(TypedDict):
     project: str
     profile: str
     base_url: Optional[str]
-    enabled: Optional[bool]
     secrets: Optional[List[str]]
     plugin: Optional[List[PluginDefinition]]
     extensions: Optional[List[Union[str, ExtensionDefinition]]]
     dbt: Optional[DbtConfig]
     python: Optional[PythonConfig]
+    sql_tools: Optional[SqlToolsConfig]
     profiles: Dict[str, ProfileConfig]
 
 # User Config Types
