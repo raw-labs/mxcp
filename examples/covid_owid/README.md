@@ -51,7 +51,7 @@ covid_owid/
    cd examples/covid_owid
 
    # Install dependencies
-   pip install dbt-core duckdb
+   pip install dbt-core dbt-duckdb
    ```
 
 2. **Prepare the Data**:
@@ -66,6 +66,39 @@ covid_owid/
    # Start the server
    mxcp serve
    ```
+
+## Using the Server
+
+### Server Configuration
+First, create a `server_config.json` file:
+
+```json
+{
+  "mcpServers": {
+    "local": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "cd /path/to/raw-mcp/examples/covid_owid && source ../../.venv/bin/activate && mxcp serve --transport stdio"
+      ],
+      "env": {
+        "PATH": "/path/to/raw-mcp/.venv/bin:/usr/local/bin:/usr/bin:/bin",
+        "HOME": "/home/user"
+      }
+    }
+  }
+}
+```
+
+### Using MCP CLI
+Once your server is configured, you can interact with it using the MCP CLI:
+
+```bash
+# Start an interactive session
+mcp-cli --config-file ./server_config.json
+```
+
+The CLI will use the LLM to interpret your questions and return formatted results.
 
 ## MCP Endpoint Structure
 
@@ -85,48 +118,8 @@ The server provides three types of endpoints:
    - `owid-covid.yml`: Core COVID-19 statistics
    - `hospitalizations.yml`: Hospital metrics
 
-## Using the Server
-
-### Direct Data Access
-```bash
-# Example: Query COVID data for a specific country
-curl -X POST http://localhost:8080/owid-covid \
-  -d '{"country_code": "USA", "start_date": "2022-01-01"}'
-```
-
-### Natural Language Queries
-The LLM interface accepts questions in plain English:
-```bash
-# Example: Ask about COVID trends
-curl -X POST http://localhost:8080/prompt \
-  -d '{"question": "What were the peak cases in Germany during 2022?"}'
-```
-
-## Customizing the Server
-
-### Adding New Endpoints
-1. Create a new YAML file in `endpoints/`
-2. Define the endpoint structure:
-   ```yaml
-   mxcp: 1.0.0
-   tool:
-     name: "endpoint_name"
-     description: "Endpoint description"
-     parameters:
-       # Define parameters
-     return:
-       # Define return type
-   ```
-
-### Modifying the LLM Prompt
-Edit `endpoints/prompt.yml` to:
-- Adjust the system prompt
-- Add new query capabilities
-- Modify response formatting
-
 ## Resources
 
-- [Raw MCP Documentation](https://raw-labs.com/)
 - [Our World in Data COVID-19 Dataset](https://github.com/owid/covid-19-data)
 - [DuckDB Documentation](https://duckdb.org/docs/)
 - [dbt Documentation](https://docs.getdbt.com/)
