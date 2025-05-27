@@ -110,27 +110,17 @@ mxcp drift-snapshot  # Create drift detection baseline
 mxcp drift-check     # Check for schema and endpoint drift
 ```
 
-## 🔌 Integration with Claude
+## 🔌 LLM Integration
 
-Connect your MXCP server to Claude Desktop by configuring `server_config.json`:
+MXCP implements the Model Context Protocol (MCP), making it compatible with:
 
-```json
-{
-  "mcpServers": {
-    "local": {
-      "command": "bash",
-      "args": [
-        "-c",
-        "cd ~/your-project && source ../../.venv/bin/activate && mxcp serve --transport stdio"
-      ],
-      "env": {
-        "PATH": "/your/path/to/.venv/bin:/usr/local/bin:/usr/bin",
-        "HOME": "/your/home"
-      }
-    }
-  }
-}
-```
+- **Claude Desktop** — Native MCP support
+- **OpenAI-compatible tools** — Via MCP adapters
+- **Custom integrations** — Using the MCP specification
+
+For specific setup instructions, see:
+- [Earthquakes Example](examples/earthquakes/README.md) — Complete Claude Desktop setup walkthrough
+- [Integration Guide](docs/integrations.md) — Claude Desktop, OpenAI, mcp-cli, and custom integrations
 
 ## 📚 Documentation
 
