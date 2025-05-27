@@ -9,7 +9,7 @@ from mxcp.plugins import MXCPBasePlugin
 
 logger = logging.getLogger(__name__)
 
-def _load_plugin(module_path: str, name: str, config: Dict[str, str], conn: duckdb.DuckDBPyConnection) -> MXCPBasePlugin:
+def _load_plugin(module_path: str, config: Dict[str, str]) -> MXCPBasePlugin:
     """Load and instantiate a plugin.
     
     Args:
@@ -35,7 +35,7 @@ def _load_plugin(module_path: str, name: str, config: Dict[str, str], conn: duck
         plugin_class = getattr(module, "MXCPPlugin")
         if not issubclass(plugin_class, MXCPBasePlugin):
             raise AttributeError(f"Plugin class in {module_path} must inherit from MXCPBasePlugin")
-        return plugin_class(name, config, conn)
+        return plugin_class(config)
     except ImportError as e:
         raise ImportError(f"Failed to import plugin module {module_path}: {e}")
     except AttributeError as e:
@@ -80,8 +80,14 @@ def load_plugins(site_config: SiteConfig, user_config: UserConfig, project: str,
             plugin_config_dict = {}
         
         # Load and instantiate the plugin
-        plugin = _load_plugin(module, name, plugin_config_dict, conn)
+        plugin = _load_plugin(module, plugin_config_dict)
         plugins[name] = plugin
         logger.info(f"Loaded plugin {name} from {module}")
         
+        udfs = plugin.udfs()
+        
+        for udf in udfs:
+            method_name = udf['name']
+            db_name = f"{method_name}_{name}"
+            conn.create_function(db_name, udf['method'], udf['args'], udf['return_type'])
     return plugins 
