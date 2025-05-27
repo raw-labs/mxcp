@@ -5,7 +5,7 @@ import click
 from ..config.site_config import load_site_config, find_repo_root
 from ..config.user_config import load_user_config
 from ..engine.dbt_runner import configure_dbt
-from .utils import configure_logging
+from .utils import configure_logging, check_command_available
 
 @click.command(name="dbt-config")
 @click.option("--profile", help="Override the profile name from mxcp-site.yml")
@@ -30,6 +30,14 @@ def dbt_config(profile: str, dry_run: bool, force: bool, embed_secrets: bool, de
     
     site_config = load_site_config(repo_root)
     user_config = load_user_config(site_config)
+    
+    # Check if dbt CLI is available (warn but don't fail)
+    if not check_command_available("dbt"):
+        click.echo(
+            "Warning: dbt CLI is not installed or not available in PATH. "
+            "You may want to install dbt-core and dbt-duckdb: pip install dbt-core dbt-duckdb",
+            err=True
+        )
     
     configure_dbt(
         site_config=site_config,
@@ -67,6 +75,13 @@ def dbt_wrapper(ctx, debug: bool):
     # Check dbt is enabled
     if not site_config.get("dbt", {}).get("enabled", True):
         raise click.ClickException("dbt integration is disabled in mxcp-site.yml")
+    
+    # Check if dbt CLI is available
+    if not check_command_available("dbt"):
+        raise click.ClickException(
+            "dbt CLI is not installed or not available in PATH. "
+            "Please install dbt-core and dbt-duckdb: pip install dbt-core dbt-duckdb"
+        )
     
     # Get project and profile names
     project = site_config["project"]

@@ -21,7 +21,9 @@ dependencies = [
     "starlette>=0.27.0",  # Required for MCP HTTP transport
     "makefun",
     "pandas>=2.0.0",  # Required for DuckDB DataFrame operations
-    "posthog>=3.0.0"  # For anonymous usage analytics
+    "posthog>=3.0.0",  # For anonymous usage analytics
+    "dbt-core>=1.6.0",  # dbt core for data transformations
+    "dbt-duckdb>=1.6.0"  # dbt DuckDB adapter
 ]
 
 [project.scripts]
