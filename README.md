@@ -11,7 +11,7 @@
 
 ## ✨ Why MXCP?
 
-MXCP (Model Execution + Context Protocol) is a developer-first tool that bridges the gap between your operational data and AI applications. It lets you:
+MXCP (Model eXecution + Context Protocol) is a developer-first tool that bridges the gap between your operational data and AI applications. It lets you:
 
 - 🚀 **Go from data to AI in minutes** — Define interfaces in YAML + SQL, serve instantly
 - 🔒 **Keep control of your data** — Run locally, with full observability and type safety
