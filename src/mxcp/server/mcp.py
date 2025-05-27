@@ -48,13 +48,13 @@ class RAWMCP:
         # Split endpoints into valid and failed
         discovered = self.loader.discover_endpoints()
         self.endpoints = [(path, endpoint) for path, endpoint, error in discovered if error is None]
-        self.skipped_endpoints = [(path, error) for path, _, error in discovered if error is not None]
+        self.skipped_endpoints = [{"path": str(path), "error": error} for path, _, error in discovered if error is not None]
         
         # Log discovery results
         logger.info(f"Discovered {len(self.endpoints)} valid endpoints, {len(self.skipped_endpoints)} failed endpoints")
         if self.skipped_endpoints:
-            for path, error in self.skipped_endpoints:
-                logger.warning(f"Failed to load endpoint {path}: {error}")
+            for skipped in self.skipped_endpoints:
+                logger.warning(f"Failed to load endpoint {skipped['path']}: {skipped['error']}")
         
         # Determine SQL tools enabled state
         if enable_sql_tools is None:
