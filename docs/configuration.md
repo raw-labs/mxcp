@@ -55,12 +55,55 @@ projects:
 ```
 
 ### Vault Integration (Optional)
+
+MXCP supports HashiCorp Vault for secure secret management. When enabled, you can use `vault://` URLs in your configuration to retrieve secrets from Vault.
+
 ```yaml
 vault:
   enabled: true
   address: "https://vault.example.com"
   token_env: "VAULT_TOKEN"  # Environment variable containing the Vault token
 ```
+
+#### Using Vault URLs
+
+Once Vault is configured, you can use `vault://` URLs anywhere in your configuration where you would normally put sensitive values:
+
+```yaml
+mxcp: "1.0.0"
+vault:
+  enabled: true
+  address: "https://vault.example.com"
+  token_env: "VAULT_TOKEN"
+projects:
+  my_project:
+    default: "dev"
+    profiles:
+      dev:
+        secrets:
+          - name: "db_credentials"
+            type: "database"
+            parameters:
+              host: "localhost"
+              port: "5432"
+              database: "mydb"
+              username: "vault://secret/database#username"
+              password: "vault://secret/database#password"
+```
+
+**Vault URL Format:** `vault://path/to/secret#key`
+
+- `path/to/secret`: The path to the secret in Vault
+- `key`: The specific key within that secret
+
+**Requirements:**
+- The `hvac` Python library must be installed: `pip install "mxcp[vault]"` or `pip install hvac`
+- Vault must be configured with `enabled: true`
+- The Vault token must be available in the specified environment variable (default: `VAULT_TOKEN`)
+
+**Supported Secret Engines:**
+- KV Secrets Engine v2 (default)
+- KV Secrets Engine v1 (fallback)
 
 ## Repository Configuration
 

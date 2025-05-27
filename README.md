@@ -24,6 +24,9 @@ MXCP (Model eXecution + Context Protocol) is a developer-first tool that bridges
 # Install globally
 pip install mxcp
 
+# Install with Vault support (optional)
+pip install "mxcp[vault]"
+
 # Or develop locally
 git clone https://github.com/raw-labs/mxcp.git && cd mxcp
 python -m venv .venv && source .venv/bin/activate

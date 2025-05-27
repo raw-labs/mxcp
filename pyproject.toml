@@ -36,10 +36,14 @@ dev = [
     "pytest-cov",  # For test coverage
     "pytest-mock",  # For better mock integration with pytest
     "pytest-timeout",  # For test timeout protection
-    "aiohttp-client-mock",  # For mocking HTTP requests
+    "aioresponses",  # For mocking HTTP requests
     "black",  # For code formatting
     "isort",  # For import sorting
     "mypy",  # For type checking
+    "hvac>=2.0.0",  # For testing Vault integration
+]
+vault = [
+    "hvac>=2.0.0",  # HashiCorp Vault client for vault:// URL support
 ]
 
 [tool.setuptools]
