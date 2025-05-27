@@ -39,7 +39,7 @@ covid_owid/
 
 2. Start the Raw MCP server:
    ```bash
-   mxcp run
+   mxcp serve
    ```
 
 3. Run the dbt models:
