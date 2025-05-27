@@ -94,4 +94,3 @@ class EndpointDefinition(TypedDict):
     resource: Optional[ResourceDefinition]
     prompt: Optional[PromptDefinition]
     metadata: Optional[dict]
-    cloud: Optional[dict] 

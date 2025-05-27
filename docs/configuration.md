@@ -190,16 +190,6 @@ profiles:
 
 For more details on drift detection, see the [Drift Detection Guide](drift-detection.md).
 
-### Cloud Settings
-```yaml
-cloud:
-  github:
-    prefix_with_branch_name: true
-    skip_prefix_for_branches:
-      - "main"
-      - "master"
-```
-
 ### SQL Tools
 ```yaml
 sql_tools:

@@ -25,10 +25,6 @@ class DuckDBConfig(TypedDict):
 class DriftConfig(TypedDict):
     path: Optional[str]
 
-class GitHubCloudConfig(TypedDict):
-    prefix_with_branch_name: Optional[bool]
-    skip_prefix_for_branches: Optional[List[str]]
-
 class SecretDefinition(TypedDict):
     name: str
     type: str
@@ -43,9 +39,6 @@ class ProfileConfig(TypedDict):
     secrets: Optional[List[SecretDefinition]]
     plugin: Optional[PluginConfig]
 
-class CloudConfig(TypedDict):
-    github: Optional[Dict[str, Any]]
-
 class SiteConfig(TypedDict):
     mxcp: str
     project: str
@@ -58,7 +51,6 @@ class SiteConfig(TypedDict):
     dbt: Optional[DbtConfig]
     python: Optional[PythonConfig]
     profiles: Dict[str, ProfileConfig]
-    cloud: Optional[CloudConfig]
 
 # User Config Types
 class VaultConfig(TypedDict):

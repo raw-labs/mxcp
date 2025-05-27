@@ -30,32 +30,6 @@
         "description": { "type": "string", "description": "Longer description." }
       },
       "description": "Optional metadata for documentation purposes."
-    },
-
-    "cloud": {
-      "type": "object",
-      "description": "Optional SaaS/cloud runtime settings.",
-      "properties": {
-        "compute_limit_seconds": { "type": "integer", "description": "Max compute time in seconds." },
-        "compute_class": { "type": "string", "description": "Compute tier to run on." },
-        "security": {
-          "type": "object",
-          "description": "Security configuration for this endpoint.",
-          "properties": {
-            "public": { "type": "boolean", "default": false, "description": "Whether the endpoint is publicly accessible." },
-            "scopes": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Access scopes required to call this endpoint."
-            }
-          }
-        },
-        "tags": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Tags to classify the endpoint."
-        }
-      }
     }
   },
   "oneOf": [
