@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Callable, get_type_hints, Annotated, get_origin, get_args
 import json
 import logging
 import traceback
@@ -10,8 +10,58 @@ from mxcp.config.site_config import SiteConfig, get_active_profile
 from mxcp.endpoints.schema import validate_endpoint
 from makefun import create_function
 from mxcp.engine.duckdb_session import DuckDBSession
+import inspect
+from pydantic import Field
 
 logger = logging.getLogger(__name__)
+
+def _map_json_type_to_python_type(json_type: str) -> type:
+    """Map JSON Schema type to Python type.
+    
+    Args:
+        json_type: JSON Schema type name
+        
+    Returns:
+        Corresponding Python type
+    """
+    type_map = {
+        "string": str,
+        "integer": int,
+        "number": float,
+        "boolean": bool,
+        "array": list,
+        "object": dict
+    }
+    return type_map.get(json_type, Any)
+
+def _create_field_type(param_metadata: Dict[str, Any], param_name: str) -> Any:
+    """Create a type with Field metadata.
+    
+    Args:
+        param_metadata: Parameter metadata from YAML
+        param_name: Name of the parameter
+        
+    Returns:
+        Type with Field metadata
+    """
+    base_type = _map_json_type_to_python_type(param_metadata.get("type", "string"))
+    
+    # Convert metadata to Field arguments
+    field_kwargs = {
+        "description": param_metadata.get("description", ""),
+        "title": param_metadata.get("title", param_name.title()),
+        "default": param_metadata.get("default"),
+        "min_length": param_metadata.get("minLength"),
+        "max_length": param_metadata.get("maxLength"),
+        "minimum": param_metadata.get("minimum"),
+        "maximum": param_metadata.get("maximum"),
+        "enum": param_metadata.get("enum"),
+        "format": param_metadata.get("format")
+    }
+    # Remove None values
+    field_kwargs = {k: v for k, v in field_kwargs.items() if v is not None}
+    
+    return Annotated[base_type, Field(**field_kwargs)]
 
 class RAWMCP:
     """MXCP MCP Server implementation that bridges MXCP endpoints with MCP protocol."""
@@ -123,13 +173,27 @@ class RAWMCP:
     def _build_and_register(
         self,
         endpoint_type: EndpointType,
-        endpoint_key: str,            # "tool" | "resource" | "prompt"
+        endpoint_key: str,
         endpoint_def: Dict[str, Any],
-        decorator,                    # self.mcp.tool() | self.mcp.resource(uri) | self.mcp.prompt()
-        log_name: str                 # for nice logging
+        decorator: Callable,
+        log_name: str
     ):
-        # List of arg names exactly as FastMCP expects
-        param_names = [p["name"] for p in endpoint_def.get("parameters", [])]
+        """Build and register an endpoint handler with MCP.
+        
+        Args:
+            endpoint_type: The type of endpoint (tool/resource/prompt)
+            endpoint_key: The key in the endpoint definition ("tool"/"resource"/"prompt")
+            endpoint_def: The endpoint definition from YAML
+            decorator: The MCP decorator to use (mcp.tool/resource/prompt)
+            log_name: Name to use in logs
+        """
+        # Get parameter names and metadata
+        param_names = []
+        param_metadata = {}
+        for p in endpoint_def.get("parameters", []):
+            param_names.append(p["name"])
+            # Store all parameter metadata except 'name'
+            param_metadata[p["name"]] = {k: v for k, v in p.items() if k != "name"}
 
         # -------------------------------------------------------------------
         # Body of the handler: receives **kwargs with those exact names
@@ -171,6 +235,17 @@ class RAWMCP:
         if endpoint_key == "resource":
             func_name = self._clean_uri_for_func_name(func_name)
         handler = create_function(signature, _body, func_name=func_name)
+
+        # Add docstring and annotations with Field metadata
+        handler.__doc__ = endpoint_def.get("description", "")
+        handler.__annotations__ = {
+            name: _create_field_type(param_metadata[name], name)
+            for name in param_names
+        }
+
+        # Create decorator
+        if endpoint_key == "resource":
+            decorator = decorator(endpoint_def["uri"])
 
         # Finally register the function with FastMCP -------------------------
         decorator(handler)
