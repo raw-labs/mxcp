@@ -14,6 +14,7 @@ from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.auth.providers import create_oauth_handler, GeneralOAuthAuthorizationServer, MCP_SCOPE
 from mxcp.auth.middleware import AuthenticationMiddleware
 from mxcp.auth.context import get_user_context
+from mxcp.auth.url_utils import create_url_builder
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +38,19 @@ class RAWMCP:
         """
         # Initialize OAuth authentication
         auth_config = user_config.get("auth", {})
-        self.oauth_handler = create_oauth_handler(auth_config, host=host, port=port)
+        self.oauth_handler = create_oauth_handler(auth_config, host=host, port=port, user_config=user_config)
         self.oauth_server = None
         auth_settings = None
         
         if self.oauth_handler:
             self.oauth_server = GeneralOAuthAuthorizationServer(self.oauth_handler, auth_config)
+            
+            # Use URL builder for OAuth endpoints
+            url_builder = create_url_builder(user_config)
+            base_url = url_builder.get_base_url(host=host, port=port)
+            
             auth_settings = AuthSettings(
-                issuer_url=f"http://{host}:{port}",
+                issuer_url=base_url,
                 client_registration_options=ClientRegistrationOptions(
                     enabled=True,
                     valid_scopes=[MCP_SCOPE],
@@ -126,12 +132,16 @@ class RAWMCP:
                 """Handle OAuth Protected Resource metadata requests (RFC 8693)"""
                 from starlette.responses import JSONResponse
                 
+                # Use URL builder with request context for proper scheme detection
+                url_builder = create_url_builder(user_config)
+                base_url = url_builder.get_base_url(request)
+                
                 metadata = {
-                    "resource": f"http://{host}:{port}",
-                    "authorization_servers": [f"http://{host}:{port}"],
+                    "resource": base_url,
+                    "authorization_servers": [base_url],
                     "scopes_supported": [MCP_SCOPE],
                     "bearer_methods_supported": ["header"],
-                    "resource_documentation": f"http://{host}:{port}/docs"
+                    "resource_documentation": f"{base_url}/docs"
                 }
                 
                 return JSONResponse(

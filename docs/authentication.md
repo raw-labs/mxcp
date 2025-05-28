@@ -267,4 +267,139 @@ The authentication system is designed to be extensible. Future OAuth providers c
 
 Currently supported providers:
 - `none` (default, no authentication)
-- `github` (GitHub OAuth) 
+- `github` (GitHub OAuth)
+
+## Reverse Proxy Deployment
+
+When deploying MXCP behind a reverse proxy (nginx, HAProxy, AWS ELB, etc.) that handles SSL/TLS termination, you need to configure the URL scheme properly for OAuth callbacks to work correctly.
+
+### The Problem
+
+OAuth providers require HTTPS callback URLs in production. When MXCP runs behind a reverse proxy with SSL termination:
+
+1. **Client** → **HTTPS** → **Reverse Proxy** → **HTTP** → **MXCP**
+2. MXCP sees only HTTP requests but needs to generate HTTPS callback URLs
+3. Without proper configuration, OAuth flows fail with "CSRF detected" or "invalid callback URL" errors
+
+### Solution Options
+
+MXCP provides three ways to handle this:
+
+#### Option 1: Explicit Scheme Configuration (Recommended)
+
+Set the scheme explicitly in your transport configuration:
+
+```yaml
+transport:
+  provider: streamable-http
+  http:
+    port: 8000
+    host: "0.0.0.0"
+    scheme: "https"  # Force HTTPS for all generated URLs
+```
+
+#### Option 2: Automatic Proxy Header Detection
+
+Enable proxy header trust to automatically detect scheme from `X-Forwarded-Proto`:
+
+```yaml
+transport:
+  provider: streamable-http
+  http:
+    port: 8000
+    host: "0.0.0.0"
+    trust_proxy: true  # Trust X-Forwarded-Proto and X-Forwarded-Scheme headers
+```
+
+Your reverse proxy must set the appropriate headers:
+
+```nginx
+# nginx configuration
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-Host $host;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
+
+#### Option 3: Complete Base URL Override
+
+Specify the complete external URL:
+
+```yaml
+transport:
+  provider: streamable-http
+  http:
+    base_url: "https://api.example.com"  # Complete external URL
+```
+
+### Example nginx Configuration
+
+Here's a complete nginx configuration for SSL termination with MXCP:
+
+```nginx
+server {
+    listen 80;
+    server_name api.example.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.example.com;
+    
+    ssl_certificate /path/to/ssl/certificate.crt;
+    ssl_certificate_key /path/to/ssl/private.key;
+    
+    # Security headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        
+        # WebSocket support (if needed)
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+### OAuth Client Configuration
+
+Update your OAuth client redirect URIs to use HTTPS:
+
+```yaml
+auth:
+  provider: github
+  clients:
+    - client_id: "${PROD_CLIENT_ID}"
+      client_secret: "${PROD_CLIENT_SECRET}"
+      name: "Production Application"
+      redirect_uris:
+        - "https://api.example.com/github/callback"  # HTTPS callback
+      scopes:
+        - "mxcp:access"
+```
+
+### Troubleshooting
+
+**"CSRF detected" errors**: Usually indicates scheme mismatch. Check that:
+- Your transport configuration specifies `scheme: "https"` or `trust_proxy: true`
+- Your reverse proxy sets `X-Forwarded-Proto: https` header
+- OAuth client redirect URIs use HTTPS
+
+**"Invalid callback URL" errors**: OAuth provider rejects the callback URL. Verify:
+- Callback URLs in OAuth provider settings match your configuration
+- URLs use HTTPS in production environments
+- No port numbers in URLs when using standard ports (80/443)
+
+## Configuration
+
+Authentication is configured in your user configuration file (`~/.mxcp/config.yml`) under the `auth` section. 

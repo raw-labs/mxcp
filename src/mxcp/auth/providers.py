@@ -151,7 +151,12 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
             client = OAuthClientInformationFull(
                 client_id=client_id,
                 client_secret=client_config.get("client_secret"),  # None for public clients
-                redirect_uris=client_config.get("redirect_uris", ["http://127.0.0.1:49153/oauth/callback"]),
+                redirect_uris=client_config.get("redirect_uris", [
+                    "http://127.0.0.1:49153/oauth/callback",
+                    "https://127.0.0.1:49153/oauth/callback",
+                    "http://localhost:49153/oauth/callback", 
+                    "https://localhost:49153/oauth/callback"
+                ]),
                 grant_types=client_config.get("grant_types", ["authorization_code"]),
                 response_types=client_config.get("response_types", ["code"]),
                 scope=" ".join(client_config.get("scopes", ["mxcp:access"])),
@@ -338,13 +343,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
             self._token_mapping.pop(token, None)
 
 
-def create_oauth_handler(auth_config: AuthConfig, host: str = "localhost", port: int = 8000) -> Optional[ExternalOAuthHandler]:
+def create_oauth_handler(auth_config: AuthConfig, host: str = "localhost", port: int = 8000, user_config: Optional[Dict[str, Any]] = None) -> Optional[ExternalOAuthHandler]:
     """Create an OAuth handler based on the auth configuration.
     
     Args:
         auth_config: The auth configuration from user config
         host: The server host to use for callback URLs
         port: The server port to use for callback URLs
+        user_config: Full user configuration for transport settings
         
     Returns:
         OAuth handler instance or None if provider is 'none'
@@ -355,6 +361,10 @@ def create_oauth_handler(auth_config: AuthConfig, host: str = "localhost", port:
         return None
     elif provider == "github":
         from .github import GitHubOAuthHandler
-        return GitHubOAuthHandler(auth_config, host=host, port=port)
+        # Pass transport config to GitHub handler
+        enhanced_auth_config = dict(auth_config)
+        if user_config and "transport" in user_config:
+            enhanced_auth_config["transport"] = user_config["transport"]
+        return GitHubOAuthHandler(enhanced_auth_config, host=host, port=port)
     else:
         raise ValueError(f"Unsupported auth provider: {provider}") 

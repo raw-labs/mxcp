@@ -63,6 +63,9 @@ class VaultConfig(TypedDict):
 class HttpTransportConfig(TypedDict):
     port: Optional[int]
     host: Optional[str]
+    scheme: Optional[Literal["http", "https"]]
+    base_url: Optional[str]
+    trust_proxy: Optional[bool]
 
 class TransportConfig(TypedDict):
     provider: Optional[str]

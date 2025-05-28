@@ -149,6 +149,22 @@
               "type": "string",
               "default": "localhost",
               "description": "Default host to bind the HTTP server to."
+            },
+            "scheme": {
+              "type": "string",
+              "enum": ["http", "https"],
+              "default": "http",
+              "description": "URL scheme to use for generating callback URLs and OAuth endpoints. Use 'https' when behind SSL-terminating reverse proxy."
+            },
+            "base_url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Complete base URL for the server (e.g., 'https://api.example.com'). When provided, overrides scheme, host, and port for URL generation."
+            },
+            "trust_proxy": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether to trust X-Forwarded-* headers from reverse proxies for scheme detection."
             }
           },
           "additionalProperties": false

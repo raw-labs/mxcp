@@ -14,6 +14,7 @@ from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
 from .providers import ExternalOAuthHandler, ExternalUserInfo, StateMeta, UserContext, MCP_SCOPE
 from mxcp.config.types import AuthConfig
+from .url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,13 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
         self.host = host
         self.port = port
         
+        # Initialize URL builder for proper scheme detection
+        # Extract transport config from auth_config if available
+        transport_config = None
+        if "transport" in auth_config:
+            transport_config = auth_config["transport"].get("http", {})
+        self.url_builder = URLBuilder(transport_config)
+        
         # State storage for OAuth flow
         self._state_store: Dict[str, StateMeta] = {}
 
@@ -55,9 +63,12 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
         state = params.state or secrets.token_hex(16)
         
-        # Use the server's host and port for the GitHub callback URL
-        # This ensures consistency regardless of what the client sends
-        full_callback_url = f"http://{self.host}:{self.port}{self._callback_path}"
+        # Use URL builder to construct callback URL with proper scheme detection
+        full_callback_url = self.url_builder.build_callback_url(
+            self._callback_path, 
+            host=self.host, 
+            port=self.port
+        )
         
         # Store the original redirect URI and callback URL in state for later use
         self._state_store[state] = StateMeta(
@@ -99,8 +110,12 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
         # Use the stored callback URL for consistency
         full_callback_url = self._state_store.get(state + "_callback")
         if not full_callback_url:
-            # Fallback to constructing it from server settings
-            full_callback_url = f"http://{self.host}:{self.port}{self._callback_path}"
+            # Fallback to constructing it using URL builder
+            full_callback_url = self.url_builder.build_callback_url(
+                self._callback_path,
+                host=self.host,
+                port=self.port
+            )
         
         logger.info(f"GitHub OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}")
         
