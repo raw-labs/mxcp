@@ -13,6 +13,7 @@ from makefun import create_function
 from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.auth.providers import create_oauth_handler, GeneralOAuthAuthorizationServer, MCP_SCOPE
 from mxcp.auth.middleware import AuthenticationMiddleware
+from mxcp.auth.context import get_user_context
 
 logger = logging.getLogger(__name__)
 
@@ -236,7 +237,12 @@ class RAWMCP:
         # -------------------------------------------------------------------
         async def _body(**kwargs):
             try:
+                # Get the user context from the context variable (set by auth middleware)
+                user_context = get_user_context()
+                
                 logger.info(f"Calling {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))} with: {kwargs}")
+                if user_context:
+                    logger.info(f"Authenticated user: {user_context.username} (provider: {user_context.provider})")
 
                 # type-convert each param according to the YAML schema --------
                 converted = {
@@ -343,6 +349,10 @@ class RAWMCP:
             Returns:
                 List of records as dictionaries
             """
+            user_context = get_user_context()
+            if user_context:
+                logger.info(f"User {user_context.username} executing SQL query")
+            
             session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
             try:
                 conn = session.connect()
@@ -366,6 +376,10 @@ class RAWMCP:
             Returns:
                 List of tables with their names and types
             """
+            user_context = get_user_context()
+            if user_context:
+                logger.info(f"User {user_context.username} listing tables")
+                
             session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
             try:
                 conn = session.connect()
@@ -399,6 +413,10 @@ class RAWMCP:
             Returns:
                 List of columns with their names and types
             """
+            user_context = get_user_context()
+            if user_context:
+                logger.info(f"User {user_context.username} getting schema for table {table_name}")
+                
             session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
             try:
                 conn = session.connect()

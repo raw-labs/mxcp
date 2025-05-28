@@ -6,6 +6,7 @@ from functools import wraps
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mxcp.auth.providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer, UserContext
+from mxcp.auth.context import set_user_context, reset_user_context
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +73,13 @@ class AuthenticationMiddleware:
             func: Function to protect with authentication
             
         Returns:
-            Wrapped function that checks authentication
+            Wrapped function that checks authentication and sets UserContext in context
         """
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            user_context = None
+            context_token = None
+            
             if self.auth_enabled:
                 user_context = await self.check_authentication()
                 if user_context:
@@ -93,6 +97,15 @@ class AuthenticationMiddleware:
                     # In a production system, you might want to raise an exception here
             else:
                 logger.debug(f"Executing {func.__name__} (authentication disabled)")
-                
-            return await func(*args, **kwargs)
+            
+            # Set the user context in the context variable
+            context_token = set_user_context(user_context)
+            
+            try:
+                return await func(*args, **kwargs)
+            finally:
+                # Always reset the context when done
+                if context_token is not None:
+                    reset_user_context(context_token)
+                    
         return wrapper 
