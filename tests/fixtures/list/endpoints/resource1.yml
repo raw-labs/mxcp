@@ -3,7 +3,7 @@ mxcp: "1.0.0"
 resource:
   name: resource1
   description: A simple test resource
-  uri: "test://resource1"
+  uri: "test://resource1/{id}"
   parameters:
     - name: id
       type: string

@@ -43,7 +43,7 @@ def test_list_endpoints(test_repo_path, test_config):
         
         # Verify we found all our test endpoints (including those in subfolder)
         # Note: disabled_tool.yml should be filtered out due to enabled: false
-        assert len(endpoints) == 5  # tool1, resource1, prompt1, tool2, prompt2 (disabled_tool filtered out)
+        assert len(endpoints) == 7  # tool1, resource1, resource1_detail, prompt1, tool2, prompt2, disabled_tool (disabled_tool filtered out)
         
         # Verify root directory endpoints
         tool1_path = test_repo_path / "endpoints" / "tool1.yml"
@@ -118,7 +118,7 @@ def test_list_endpoints_from_subfolder(test_repo_path, test_config):
         
         # Should still find all endpoints, not just those in subfolder
         # Note: disabled_tool.yml should be filtered out due to enabled: false
-        assert len(endpoints) == 5  # tool1, resource1, prompt1, tool2, prompt2 (disabled_tool filtered out)
+        assert len(endpoints) == 7  # tool1, resource1, resource1_detail, prompt1, tool2, prompt2 (disabled_tool filtered out)
         
         # Verify root directory endpoints are still accessible
         tool1_path = test_repo_path / "endpoints" / "tool1.yml"

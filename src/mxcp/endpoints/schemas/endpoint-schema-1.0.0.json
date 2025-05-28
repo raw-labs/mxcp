@@ -146,7 +146,7 @@
         "uri": { 
           "type": "string", 
           "description": "Logical URI identifying this resource.",
-          "pattern": "^[a-zA-Z][a-zA-Z0-9+.-]*://[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*(?:/\\{[A-Za-z_][A-Za-z0-9_]*\\})*$",
+          "pattern": "^[A-Za-z][A-Za-z0-9+.-]*://(?:[A-Za-z0-9._-]+|\\{[A-Za-z_][A-Za-z0-9_]*\\})(?:/(?:[A-Za-z0-9._-]+|\\{[A-Za-z_][A-Za-z0-9_]*\\}))*$",
           "minLength": 1,
           "maxLength": 255
         },
