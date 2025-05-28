@@ -114,7 +114,6 @@ The repository configuration file (`mxcp-site.yml`) defines project-specific set
 mxcp: "1.0.0"  # Schema version
 project: "my_project"  # Must match a project in ~/.mxcp/config.yml
 profile: "dev"  # Profile to use
-base_url: "demo"  # Optional base URL for serving endpoints
 ```
 
 ### Secrets

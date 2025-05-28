@@ -16,10 +16,6 @@
       "type": "string",
       "description": "Profile name under the given project."
     },
-    "base_url": {
-      "type": "string",
-      "description": "Optional base URL to use for serving endpoints (e.g., 'demo', 'prod', etc.)"
-    },
     "secrets": {
       "type": "array",
       "description": "List of secret names used by this repo (resolved from ~/.mxcp/config.yml).",

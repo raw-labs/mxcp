@@ -46,7 +46,6 @@ class SiteConfig(TypedDict):
     mxcp: str
     project: str
     profile: str
-    base_url: Optional[str]
     secrets: Optional[List[str]]
     plugin: Optional[List[PluginDefinition]]
     extensions: Optional[List[Union[str, ExtensionDefinition]]]
