@@ -51,12 +51,15 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
         transport_config = user_config.get("transport", {})
         final_transport = transport or transport_config.get("provider", "streamable-http")
         
-        # Get port from user config if not specified via CLI
+        # Get host and port from user config if not specified via CLI
+        http_config = transport_config.get("http", {})
         if port is None:
-            http_config = transport_config.get("http", {})
             final_port = http_config.get("port", 8000)
         else:
             final_port = port
+            
+        # Get host from user config (defaults to localhost)
+        final_host = http_config.get("host", "localhost")
 
         # Set up signal handler for graceful shutdown
         def signal_handler(signum, frame):
@@ -71,6 +74,7 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
             user_config, 
             site_config, 
             profile=profile, 
+            host=final_host,
             port=final_port, 
             enable_sql_tools=None if not no_sql_tools else False,
             readonly=readonly

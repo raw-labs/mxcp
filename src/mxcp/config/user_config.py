@@ -133,6 +133,14 @@ def _apply_defaults(config: dict) -> dict:
     # Create a copy to avoid modifying the input
     config = config.copy()
 
+    # Apply auth defaults
+    if "auth" not in config:
+        config["auth"] = {}
+    
+    auth = config["auth"]
+    if "provider" not in auth:
+        auth["provider"] = "none"
+
     # Apply transport defaults
     if "transport" not in config:
         config["transport"] = {}

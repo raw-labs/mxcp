@@ -3,6 +3,7 @@ import json
 import logging
 import traceback
 from mcp.server.fastmcp import FastMCP
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.executor import EndpointExecutor, EndpointType
 from mxcp.config.user_config import UserConfig
@@ -10,6 +11,8 @@ from mxcp.config.site_config import SiteConfig, get_active_profile
 from mxcp.endpoints.schema import validate_endpoint
 from makefun import create_function
 from mxcp.engine.duckdb_session import DuckDBSession
+from mxcp.auth.providers import create_oauth_handler, GeneralOAuthAuthorizationServer, MCP_SCOPE
+from mxcp.auth.middleware import AuthenticationMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +34,110 @@ class RAWMCP:
                             If None, uses the value from site_config.sql_tools.enabled (defaults to True)
             readonly: Whether to open DuckDB connection in read-only mode
         """
-        self.mcp = FastMCP(
-            "MXCP Server",
-            stateless_http=stateless_http,
-            json_response=json_response,
-            host=host,
-            port=port
-        )
+        # Initialize OAuth authentication
+        auth_config = user_config.get("auth", {})
+        self.oauth_handler = create_oauth_handler(auth_config, host=host, port=port)
+        self.oauth_server = None
+        auth_settings = None
+        
+        if self.oauth_handler:
+            self.oauth_server = GeneralOAuthAuthorizationServer(self.oauth_handler)
+            auth_settings = AuthSettings(
+                issuer_url=f"http://{host}:{port}",
+                client_registration_options=ClientRegistrationOptions(
+                    enabled=True,
+                    valid_scopes=[MCP_SCOPE],
+                    default_scopes=[MCP_SCOPE],
+                ),
+                required_scopes=[MCP_SCOPE],
+            )
+            logger.info(f"OAuth authentication enabled with provider: {auth_config.get('provider')}")
+        else:
+            logger.info("OAuth authentication disabled")
+        
+        # Initialize FastMCP with optional auth settings
+        fastmcp_kwargs = {
+            "name": "MXCP Server",
+            "stateless_http": stateless_http,
+            "json_response": json_response,
+            "host": host,
+            "port": port
+        }
+        
+        logger.info(f"Initializing FastMCP with host={host}, port={port}")
+        
+        if auth_settings and self.oauth_server:
+            fastmcp_kwargs["auth"] = auth_settings
+            fastmcp_kwargs["auth_server_provider"] = self.oauth_server
+            
+        self.mcp = FastMCP(**fastmcp_kwargs)
+        
+        # Debug: Check what FastMCP actually set for host and port
+        logger.info(f"FastMCP settings after initialization: host={self.mcp.settings.host}, port={self.mcp.settings.port}")
+        
+        # Initialize authentication middleware
+        self.auth_middleware = AuthenticationMiddleware(self.oauth_handler, self.oauth_server)
+        
+        # Register OAuth callback route if authentication is enabled
+        if self.oauth_handler and self.oauth_server:
+            callback_path = self.oauth_handler.callback_path
+            logger.info(f"Registering OAuth callback route: {callback_path}")
+            
+            # Use custom_route to register the callback
+            @self.mcp.custom_route(callback_path, methods=["GET"])
+            async def oauth_callback(request):
+                return await self.oauth_handler.on_callback(request, self.oauth_server)
+            
+            # Register Dynamic Client Registration endpoint
+            @self.mcp.custom_route("/register", methods=["POST"])
+            async def client_registration(request):
+                """Handle Dynamic Client Registration requests (RFC 7591)"""
+                import json
+                from starlette.responses import JSONResponse
+                
+                try:
+                    # Parse client metadata from request body
+                    body = await request.body()
+                    client_metadata = json.loads(body.decode('utf-8'))
+                    
+                    # Register the client dynamically
+                    registration_response = await self.oauth_server.register_client_dynamically(client_metadata)
+                    
+                    logger.info(f"Dynamically registered client: {registration_response['client_id']}")
+                    
+                    return JSONResponse(
+                        content=registration_response,
+                        status_code=201,
+                        headers={"Content-Type": "application/json"}
+                    )
+                    
+                except Exception as e:
+                    logger.error(f"Error in client registration: {e}")
+                    return JSONResponse(
+                        content={"error": "invalid_client_metadata", "error_description": str(e)},
+                        status_code=400,
+                        headers={"Content-Type": "application/json"}
+                    )
+            
+            # Register OAuth Protected Resource metadata endpoint
+            @self.mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
+            async def oauth_protected_resource_metadata(request):
+                """Handle OAuth Protected Resource metadata requests (RFC 8693)"""
+                from starlette.responses import JSONResponse
+                
+                metadata = {
+                    "resource": f"http://{host}:{port}",
+                    "authorization_servers": [f"http://{host}:{port}"],
+                    "scopes_supported": [MCP_SCOPE],
+                    "bearer_methods_supported": ["header"],
+                    "resource_documentation": f"http://{host}:{port}/docs"
+                }
+                
+                return JSONResponse(
+                    content=metadata,
+                    headers={"Content-Type": "application/json"}
+                )
+        
         self.user_config = user_config
         self.site_config = site_config
         self.profile_name = profile or site_config["profile"]
@@ -163,6 +263,11 @@ class RAWMCP:
                 raise
 
         # -------------------------------------------------------------------
+        # Wrap with authentication middleware
+        # -------------------------------------------------------------------
+        authenticated_body = self.auth_middleware.require_auth(_body)
+
+        # -------------------------------------------------------------------
         # Dynamically create an *async* function whose signature is
         #   (param1, param2, ...)
         # -------------------------------------------------------------------
@@ -170,7 +275,7 @@ class RAWMCP:
         func_name = endpoint_def.get("name", endpoint_def.get("uri", "handler"))
         if endpoint_key == "resource":
             func_name = self._clean_uri_for_func_name(func_name)
-        handler = create_function(signature, _body, func_name=func_name)
+        handler = create_function(signature, authenticated_body, func_name=func_name)
 
         # Finally register the function with FastMCP -------------------------
         decorator(handler)
@@ -228,6 +333,7 @@ class RAWMCP:
             name="execute_sql_query",
             description="Execute a SQL query against the DuckDB database and return the results as a list of records"
         )
+        @self.auth_middleware.require_auth
         async def execute_sql_query(sql: str) -> List[Dict[str, Any]]:
             """Execute a SQL query against the DuckDB database.
             
@@ -253,6 +359,7 @@ class RAWMCP:
             name="list_tables",
             description="List all tables in the DuckDB database"
         )
+        @self.auth_middleware.require_auth
         async def list_tables() -> List[Dict[str, str]]:
             """List all tables in the DuckDB database.
             
@@ -282,6 +389,7 @@ class RAWMCP:
             name="get_table_schema",
             description="Get the schema for a specific table in the DuckDB database"
         )
+        @self.auth_middleware.require_auth
         async def get_table_schema(table_name: str) -> List[Dict[str, Any]]:
             """Get the schema for a specific table.
             
@@ -367,6 +475,10 @@ class RAWMCP:
             # Register all endpoints
             self.register_endpoints()
             logger.info("Endpoints registered successfully.")
+            
+            # Add debug logging for uvicorn config if using streamable-http
+            if transport == "streamable-http":
+                logger.info(f"About to start uvicorn with host={self.mcp.settings.host}, port={self.mcp.settings.port}")
             
             # Start server using MCP's built-in run method
             self.mcp.run(transport=transport)

@@ -9,6 +9,55 @@
       "description": "Schema version. Always use '1.0.0'.",
       "default": "1.0.0"
     },
+    "auth": {
+      "type": "object",
+      "description": "Authentication configuration for the MCP server.",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["none", "github"],
+          "default": "none",
+          "description": "Authentication provider to use."
+        },
+        "github": {
+          "type": "object",
+          "description": "GitHub OAuth configuration (required when provider is 'github').",
+          "required": ["client_id", "client_secret", "callback_path", "auth_url", "token_url"],
+          "properties": {
+            "client_id": {
+              "type": "string",
+              "description": "GitHub OAuth client ID."
+            },
+            "client_secret": {
+              "type": "string",
+              "description": "GitHub OAuth client secret."
+            },
+            "scope": {
+              "type": "string",
+              "description": "OAuth scope to request (optional).",
+              "default": "user:email"
+            },
+            "callback_path": {
+              "type": "string",
+              "description": "Callback path for OAuth flow.",
+              "default": "/github/callback"
+            },
+            "auth_url": {
+              "type": "string",
+              "format": "uri",
+              "description": "GitHub authorization URL."
+            },
+            "token_url": {
+              "type": "string",
+              "format": "uri",
+              "description": "GitHub token exchange URL."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "vault": {
       "type": "object",
       "description": "Configuration for Vault integration.",
