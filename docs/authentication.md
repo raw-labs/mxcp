@@ -31,6 +31,114 @@ auth:
     token_url: "https://github.com/login/oauth/access_token"
 ```
 
+## OAuth Client Registration
+
+MXCP supports multiple ways for OAuth clients to register and authenticate:
+
+### 1. Pre-registered Clients (Recommended for Development)
+
+You can pre-register OAuth clients in your configuration file. This is the most straightforward approach for development and testing:
+
+```yaml
+auth:
+  provider: github
+  
+  # Pre-registered OAuth clients
+  clients:
+    # MCP CLI client (public client)
+    - client_id: "aa27466a-fd71-4c2a-9ecf-8b5db5d34384"
+      name: "MCP CLI Development Client"
+      redirect_uris:
+        - "http://127.0.0.1:49153/oauth/callback"
+        - "http://localhost:49153/oauth/callback"
+      scopes:
+        - "mxcp:access"
+    
+    # Custom application (confidential client)
+    - client_id: "my-custom-app-client-id"
+      client_secret: "${MY_APP_CLIENT_SECRET}"
+      name: "My Custom Application"
+      redirect_uris:
+        - "https://myapp.example.com/oauth/callback"
+      grant_types:
+        - "authorization_code"
+        - "refresh_token"
+      scopes:
+        - "mxcp:access"
+        - "mxcp:admin"
+  
+  github:
+    # ... GitHub configuration
+```
+
+**Client Configuration Options:**
+- `client_id` (required): Unique identifier for the client
+- `name` (required): Human-readable name for the client
+- `client_secret` (optional): Secret for confidential clients (omit for public clients)
+- `redirect_uris` (optional): Allowed redirect URIs (defaults to MCP CLI callback)
+- `grant_types` (optional): Allowed OAuth grant types (defaults to `["authorization_code"]`)
+- `scopes` (optional): Allowed OAuth scopes (defaults to `["mxcp:access"]`)
+
+### 2. Dynamic Client Registration (RFC 7591)
+
+MXCP implements RFC 7591 Dynamic Client Registration. Clients can register themselves at runtime by making a POST request to `/register`:
+
+```bash
+curl -X POST http://localhost:8000/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_name": "My Application",
+    "redirect_uris": ["https://myapp.example.com/oauth/callback"],
+    "grant_types": ["authorization_code"],
+    "scope": "mxcp:access"
+  }'
+```
+
+The server will respond with client credentials:
+
+```json
+{
+  "client_id": "generated-client-id",
+  "client_secret": "generated-client-secret",
+  "client_id_issued_at": 1640995200,
+  "client_secret_expires_at": 0,
+  "redirect_uris": ["https://myapp.example.com/oauth/callback"],
+  "grant_types": ["authorization_code"],
+  "scope": "mxcp:access"
+}
+```
+
+### 3. Production Recommendations
+
+For production deployments:
+
+1. **Remove development clients**: Don't include test/development client IDs in production configs
+2. **Use environment variables**: Store client secrets in environment variables, not config files
+3. **Limit redirect URIs**: Only include production callback URLs
+4. **Scope restrictions**: Use minimal required scopes
+5. **HTTPS only**: Ensure all redirect URIs use HTTPS in production
+
+Example production configuration:
+
+```yaml
+auth:
+  provider: github
+  
+  clients:
+    - client_id: "${PROD_CLIENT_ID}"
+      client_secret: "${PROD_CLIENT_SECRET}"
+      name: "Production Application"
+      redirect_uris:
+        - "https://myapp.example.com/oauth/callback"
+      scopes:
+        - "mxcp:access"
+  
+  github:
+    client_id: "${GITHUB_CLIENT_ID}"
+    client_secret: "${GITHUB_CLIENT_SECRET}"
+    # ... other GitHub config
+```
+
 #### GitHub OAuth Setup
 
 1. **Create a GitHub OAuth App**:

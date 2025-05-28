@@ -22,6 +22,7 @@ from mcp.server.auth.provider import (
     construct_redirect_uri,
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
+from mxcp.config.types import AuthConfig
 
 logger = logging.getLogger(__name__)
 
@@ -127,35 +128,38 @@ class ExternalOAuthHandler(ABC):
 # ────────────────────────────────────────────────────────────────────────────
 
 class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
-    """Converts external logins into internal MCP tokens."""
+    """OAuth authorization server that bridges external OAuth providers with MCP."""
 
-    def __init__(self, handler: ExternalOAuthHandler):
+    def __init__(self, handler: ExternalOAuthHandler, auth_config: Optional[AuthConfig] = None):
         self.handler = handler
-        self._lock = asyncio.Lock()
         self._clients: dict[str, OAuthClientInformationFull] = {}
-        self._auth_codes: dict[str, AuthorizationCode] = {}
         self._tokens: dict[str, AccessToken] = {}
-        self._token_mapping: dict[str, str] = {}  # internal → external
-        
-        # Pre-register a test client for development/testing
-        self._register_test_client()
+        self._auth_codes: dict[str, AuthorizationCode] = {}
+        self._token_mapping: dict[str, str] = {}  # MCP token -> external token
+        self._lock = asyncio.Lock()
 
-    def _register_test_client(self):
-        """Pre-register a test client for development/testing purposes."""
-        # Create a test client with a known client ID
-        test_client_id = "aa27466a-fd71-4c2a-9ecf-8b5db5d34384"  # The client ID from your logs
-        test_client = OAuthClientInformationFull(
-            client_id=test_client_id,
-            client_secret=None,  # Public client - no secret required
-            redirect_uris=['http://127.0.0.1:49153/oauth/callback'],
-            grant_types=['authorization_code'],
-            response_types=['code'],
-            scope='mxcp:access',
-            client_name='Test MCP Client'
-        )
+        # Register pre-configured clients from user config
+        if auth_config:
+            self._register_configured_clients(auth_config)
+
+    def _register_configured_clients(self, auth_config: AuthConfig):
+        """Register pre-configured OAuth clients from user config."""
+        clients = auth_config.get("clients", [])
         
-        self._clients[test_client_id] = test_client
-        logger.info(f"Pre-registered test client: {test_client_id}")
+        for client_config in clients:
+            client_id = client_config["client_id"]
+            client = OAuthClientInformationFull(
+                client_id=client_id,
+                client_secret=client_config.get("client_secret"),  # None for public clients
+                redirect_uris=client_config.get("redirect_uris", ["http://127.0.0.1:49153/oauth/callback"]),
+                grant_types=client_config.get("grant_types", ["authorization_code"]),
+                response_types=client_config.get("response_types", ["code"]),
+                scope=" ".join(client_config.get("scopes", ["mxcp:access"])),
+                client_name=client_config["name"]
+            )
+            
+            self._clients[client_id] = client
+            logger.info(f"Pre-registered OAuth client: {client_id} ({client_config['name']})")
 
     # ----- client registry -----
     async def get_client(self, client_id: str) -> Optional[OAuthClientInformationFull]:
@@ -334,7 +338,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
             self._token_mapping.pop(token, None)
 
 
-def create_oauth_handler(auth_config: Dict[str, Any], host: str = "localhost", port: int = 8000) -> Optional[ExternalOAuthHandler]:
+def create_oauth_handler(auth_config: AuthConfig, host: str = "localhost", port: int = 8000) -> Optional[ExternalOAuthHandler]:
     """Create an OAuth handler based on the auth configuration.
     
     Args:

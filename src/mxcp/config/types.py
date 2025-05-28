@@ -68,12 +68,35 @@ class TransportConfig(TypedDict):
     provider: Optional[str]
     http: Optional[HttpTransportConfig]
 
+# Auth Config Types
+class OAuthClientConfig(TypedDict):
+    client_id: str
+    name: str
+    client_secret: Optional[str]
+    redirect_uris: Optional[List[str]]
+    grant_types: Optional[List[Literal["authorization_code", "refresh_token"]]]
+    scopes: Optional[List[str]]
+
+class GitHubAuthConfig(TypedDict):
+    client_id: str
+    client_secret: str
+    scope: Optional[str]
+    callback_path: str
+    auth_url: str
+    token_url: str
+
+class AuthConfig(TypedDict):
+    provider: Optional[Literal["none", "github"]]
+    clients: Optional[List[OAuthClientConfig]]
+    github: Optional[GitHubAuthConfig]
+
 class ProjectConfig(TypedDict):
     default: Optional[str]
     profiles: Dict[str, ProfileConfig]
 
 class UserConfig(TypedDict):
     mxcp: str
+    auth: Optional[AuthConfig]
     vault: Optional[VaultConfig]
     transport: Optional[TransportConfig]
     projects: Dict[str, ProjectConfig]

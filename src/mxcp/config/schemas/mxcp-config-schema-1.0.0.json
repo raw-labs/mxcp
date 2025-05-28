@@ -19,6 +19,55 @@
           "default": "none",
           "description": "Authentication provider to use."
         },
+        "clients": {
+          "type": "array",
+          "description": "Pre-registered OAuth clients for development and testing.",
+          "items": {
+            "type": "object",
+            "required": ["client_id", "name"],
+            "properties": {
+              "client_id": {
+                "type": "string",
+                "description": "OAuth client ID."
+              },
+              "client_secret": {
+                "type": "string",
+                "description": "OAuth client secret (optional for public clients)."
+              },
+              "name": {
+                "type": "string",
+                "description": "Human-readable name for this client."
+              },
+              "redirect_uris": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "description": "Allowed redirect URIs for this client.",
+                "default": ["http://127.0.0.1:49153/oauth/callback"]
+              },
+              "grant_types": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["authorization_code", "refresh_token"]
+                },
+                "description": "Allowed OAuth grant types.",
+                "default": ["authorization_code"]
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Allowed OAuth scopes.",
+                "default": ["mxcp:access"]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
         "github": {
           "type": "object",
           "description": "GitHub OAuth configuration (required when provider is 'github').",

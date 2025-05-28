@@ -2,50 +2,54 @@
 """GitHub OAuth provider implementation for MXCP authentication."""
 import logging
 import secrets
-from typing import Any, Dict
+from typing import Dict, Any, Optional
+from urllib.parse import urlencode, parse_qs, urlparse
 
+import httpx
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import JSONResponse, RedirectResponse, Response
+from starlette.responses import RedirectResponse, HTMLResponse, Response
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
-
 from .providers import ExternalOAuthHandler, ExternalUserInfo, StateMeta, UserContext, MCP_SCOPE
+from mxcp.config.types import AuthConfig
 
 logger = logging.getLogger(__name__)
 
 
 class GitHubOAuthHandler(ExternalOAuthHandler):
-    """GitHub OAuth handler implementation."""
-    
-    def __init__(self, auth_config: Dict[str, Any], host: str = "localhost", port: int = 8000):
-        """Initialize GitHub OAuth handler with configuration from user config.
+    """GitHub OAuth provider implementation."""
+
+    def __init__(self, auth_config: AuthConfig, host: str = "localhost", port: int = 8000):
+        """Initialize GitHub OAuth handler.
         
         Args:
             auth_config: The auth configuration from user config
-            host: The server host to use for callback URLs
-            port: The server port to use for callback URLs
+            host: The server host for callback URLs
+            port: The server port for callback URLs
         """
-        self.auth_config = auth_config
-        self.host = host
-        self.port = port
-        print(f"GitHubOAuthHandler init: {auth_config}")
+        logger.info(f"GitHubOAuthHandler init: {auth_config}")
+        
         github_config = auth_config.get("github", {})
         
-        # Extract GitHub configuration
-        self.client_id = github_config.get("client_id")
-        self.client_secret = github_config.get("client_secret")
-        self.scope = github_config.get("scope", "user:email")
-        self.callback_path_value = github_config.get("callback_path", "/github/callback")
-        self.auth_url = github_config.get("auth_url")
-        self.token_url = github_config.get("token_url")
-        
-        # Validate required configuration
-        if not all([self.client_id, self.client_secret, self.auth_url, self.token_url]):
+        # Validate required GitHub configuration
+        required_fields = ["client_id", "client_secret", "auth_url", "token_url"]
+        missing_fields = [field for field in required_fields if not github_config.get(field)]
+        if missing_fields:
             raise ValueError("GitHub OAuth configuration is incomplete. Required: client_id, client_secret, auth_url, token_url")
         
-        self._state: dict[str, StateMeta] = {}
+        self.client_id = github_config["client_id"]
+        self.client_secret = github_config["client_secret"]
+        self.scope = github_config.get("scope", "user:email")
+        self._callback_path = github_config.get("callback_path", "/github/callback")
+        self.auth_url = github_config["auth_url"]
+        self.token_url = github_config["token_url"]
+        self.host = host
+        self.port = port
+        
+        # State storage for OAuth flow
+        self._state_store: Dict[str, StateMeta] = {}
 
     # ----- authorize -----
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
@@ -53,17 +57,17 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
         
         # Use the server's host and port for the GitHub callback URL
         # This ensures consistency regardless of what the client sends
-        full_callback_url = f"http://{self.host}:{self.port}{self.callback_path_value}"
+        full_callback_url = f"http://{self.host}:{self.port}{self._callback_path}"
         
         # Store the original redirect URI and callback URL in state for later use
-        self._state[state] = StateMeta(
+        self._state_store[state] = StateMeta(
             redirect_uri=str(params.redirect_uri),
             code_challenge=params.code_challenge,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             client_id=client_id,
         )
         # Store the callback URL separately for consistency
-        self._state[state + "_callback"] = full_callback_url
+        self._state_store[state + "_callback"] = full_callback_url
         
         logger.info(f"GitHub OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}")
         
@@ -76,27 +80,27 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
     # ----- state helpers -----
     def get_state_metadata(self, state: str) -> StateMeta:
         try:
-            return self._state[state]
+            return self._state_store[state]
         except KeyError:
             raise HTTPException(400, "Invalid state parameter")
 
     def _pop_state(self, state: str):
-        self._state.pop(state, None)
+        self._state_store.pop(state, None)
 
     def cleanup_state(self, state: str):
         """Clean up state and associated callback URL after OAuth flow completion."""
         self._pop_state(state)
-        self._state.pop(state + "_callback", None)
+        self._state_store.pop(state + "_callback", None)
 
     # ----- code exchange -----
     async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
         meta = self.get_state_metadata(state)
         
         # Use the stored callback URL for consistency
-        full_callback_url = self._state.get(state + "_callback")
+        full_callback_url = self._state_store.get(state + "_callback")
         if not full_callback_url:
             # Fallback to constructing it from server settings
-            full_callback_url = f"http://{self.host}:{self.port}{self.callback_path_value}"
+            full_callback_url = f"http://{self.host}:{self.port}{self._callback_path}"
         
         logger.info(f"GitHub OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}")
         
@@ -132,7 +136,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
     # ----- callback -----
     @property
     def callback_path(self) -> str:  # noqa: D401
-        return self.callback_path_value
+        return self._callback_path
 
     async def on_callback(self, request: Request, provider: "GeneralOAuthAuthorizationServer") -> Response:  # noqa: E501
         code = request.query_params.get("code")
@@ -146,7 +150,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
             raise
         except Exception as exc:
             logger.error("GitHub callback failed", exc_info=exc)
-            return JSONResponse(status_code=500, content={"error": "oauth_failure"})
+            return HTMLResponse(status_code=500, content="oauth_failure")
 
     # ----- user context -----
     async def get_user_context(self, token: str) -> UserContext:

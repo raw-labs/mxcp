@@ -42,7 +42,7 @@ class RAWMCP:
         auth_settings = None
         
         if self.oauth_handler:
-            self.oauth_server = GeneralOAuthAuthorizationServer(self.oauth_handler)
+            self.oauth_server = GeneralOAuthAuthorizationServer(self.oauth_handler, auth_config)
             auth_settings = AuthSettings(
                 issuer_url=f"http://{host}:{port}",
                 client_registration_options=ClientRegistrationOptions(
