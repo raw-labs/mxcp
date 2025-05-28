@@ -15,6 +15,7 @@ from mxcp.auth.providers import create_oauth_handler, GeneralOAuthAuthorizationS
 from mxcp.auth.middleware import AuthenticationMiddleware
 from mxcp.auth.context import get_user_context
 from mxcp.auth.url_utils import create_url_builder
+from mcp.types import ToolAnnotations
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,63 @@ class RAWMCP:
             # Use explicitly provided value
             self.enable_sql_tools = enable_sql_tools
             
+    def _json_schema_to_python_type(self, param_def: Dict[str, Any]) -> str:
+        """Convert JSON Schema type to Python type annotation string.
+        
+        Args:
+            param_def: Parameter definition from endpoint YAML
+            
+        Returns:
+            Python type annotation string
+        """
+        json_type = param_def.get("type", "string")
+        
+        if json_type == "string":
+            return "str"
+        elif json_type == "integer":
+            return "int"
+        elif json_type == "number":
+            return "float"
+        elif json_type == "boolean":
+            return "bool"
+        elif json_type == "array":
+            items_type = param_def.get("items", {}).get("type", "Any")
+            if items_type == "string":
+                return "List[str]"
+            elif items_type == "integer":
+                return "List[int]"
+            elif items_type == "number":
+                return "List[float]"
+            elif items_type == "boolean":
+                return "List[bool]"
+            else:
+                return "List[Any]"
+        elif json_type == "object":
+            return "Dict[str, Any]"
+        else:
+            return "Any"
+
+    def _create_tool_annotations(self, tool_def: Dict[str, Any]) -> Optional[ToolAnnotations]:
+        """Create ToolAnnotations from tool definition.
+        
+        Args:
+            tool_def: Tool definition from endpoint YAML
+            
+        Returns:
+            ToolAnnotations object if annotations are present, None otherwise
+        """
+        annotations_data = tool_def.get("annotations", {})
+        if not annotations_data:
+            return None
+            
+        return ToolAnnotations(
+            title=annotations_data.get("title"),
+            readOnlyHint=annotations_data.get("readOnlyHint"),
+            destructiveHint=annotations_data.get("destructiveHint"),
+            idempotentHint=annotations_data.get("idempotentHint"),
+            openWorldHint=annotations_data.get("openWorldHint")
+        )
+            
     def _convert_param_type(self, value: Any, param_type: str) -> Any:
         """Convert parameter value to the correct type based on JSON Schema type.
         
@@ -190,6 +248,8 @@ class RAWMCP:
                 return str(value)
             elif param_type == "integer":
                 return int(value)
+            elif param_type == "number":
+                return float(value)
             elif param_type == "boolean":
                 if isinstance(value, str):
                     return value.lower() == "true"
@@ -239,8 +299,17 @@ class RAWMCP:
         decorator,                    # self.mcp.tool() | self.mcp.resource(uri) | self.mcp.prompt()
         log_name: str                 # for nice logging
     ):
-        # List of arg names exactly as FastMCP expects
-        param_names = [p["name"] for p in endpoint_def.get("parameters", [])]
+        # Get parameter definitions
+        parameters = endpoint_def.get("parameters", [])
+        
+        # Create function signature with proper type annotations
+        param_signatures = []
+        for param in parameters:
+            param_name = param["name"]
+            param_type = self._json_schema_to_python_type(param)
+            param_signatures.append(f"{param_name}: {param_type}")
+        
+        signature = f"({', '.join(param_signatures)})"
 
         # -------------------------------------------------------------------
         # Body of the handler: receives **kwargs with those exact names
@@ -257,7 +326,7 @@ class RAWMCP:
                 # type-convert each param according to the YAML schema --------
                 converted = {
                     p["name"]: self._convert_param_type(kwargs[p["name"]], p["type"])
-                    for p in endpoint_def.get("parameters", [])
+                    for p in parameters
                     if p["name"] in kwargs
                 }
 
@@ -285,9 +354,8 @@ class RAWMCP:
 
         # -------------------------------------------------------------------
         # Dynamically create an *async* function whose signature is
-        #   (param1, param2, ...)
+        #   (param1: type1, param2: type2, ...)
         # -------------------------------------------------------------------
-        signature = f"({', '.join(param_names)})"
         func_name = endpoint_def.get("name", endpoint_def.get("uri", "handler"))
         if endpoint_key == "resource":
             func_name = self._clean_uri_for_func_name(func_name)
@@ -303,11 +371,18 @@ class RAWMCP:
         Args:
             tool_def: The tool definition from YAML
         """
+        # Create tool annotations from the definition
+        annotations = self._create_tool_annotations(tool_def)
+        
         self._build_and_register(
             EndpointType.TOOL,
             "tool",
             tool_def,
-            decorator=self.mcp.tool(),
+            decorator=self.mcp.tool(
+                name=tool_def.get("name"),
+                description=tool_def.get("description"),
+                annotations=annotations
+            ),
             log_name="tool"
         )
 
@@ -321,7 +396,12 @@ class RAWMCP:
             EndpointType.RESOURCE,
             "resource",
             resource_def,
-            decorator=self.mcp.resource(resource_def["uri"]),
+            decorator=self.mcp.resource(
+                resource_def["uri"],
+                name=resource_def.get("name"),
+                description=resource_def.get("description"),
+                mime_type=resource_def.get("mime_type")
+            ),
             log_name="resource"
         )
 
@@ -335,7 +415,10 @@ class RAWMCP:
             EndpointType.PROMPT,
             "prompt",
             prompt_def,
-            decorator=self.mcp.prompt(),
+            decorator=self.mcp.prompt(
+                name=prompt_def.get("name"),
+                description=prompt_def.get("description")
+            ),
             log_name="prompt"
         )
 
@@ -344,10 +427,17 @@ class RAWMCP:
         if not self.enable_sql_tools:
             return
 
-        # Register SQL query tool
+        # Register SQL query tool with proper metadata
         @self.mcp.tool(
             name="execute_sql_query",
-            description="Execute a SQL query against the DuckDB database and return the results as a list of records"
+            description="Execute a SQL query against the DuckDB database and return the results as a list of records",
+            annotations=ToolAnnotations(
+                title="SQL Query Executor",
+                readOnlyHint=False,  # SQL can modify data
+                destructiveHint=True,  # SQL can delete/update data
+                idempotentHint=False,  # SQL queries may not be idempotent
+                openWorldHint=False   # Operates on closed database
+            )
         )
         @self.auth_middleware.require_auth
         async def execute_sql_query(sql: str) -> List[Dict[str, Any]]:
@@ -374,10 +464,17 @@ class RAWMCP:
             finally:
                 session.close()
 
-        # Register table list resource
+        # Register table list tool with proper metadata
         @self.mcp.tool(
             name="list_tables",
-            description="List all tables in the DuckDB database"
+            description="List all tables in the DuckDB database",
+            annotations=ToolAnnotations(
+                title="Database Table Lister",
+                readOnlyHint=True,   # Only reads metadata
+                destructiveHint=False,  # Cannot modify data
+                idempotentHint=True,    # Always returns same result
+                openWorldHint=False     # Operates on closed database
+            )
         )
         @self.auth_middleware.require_auth
         async def list_tables() -> List[Dict[str, str]]:
@@ -408,10 +505,17 @@ class RAWMCP:
             finally:
                 session.close()
 
-        # Register schema resource
+        # Register schema tool with proper metadata
         @self.mcp.tool(
             name="get_table_schema",
-            description="Get the schema for a specific table in the DuckDB database"
+            description="Get the schema for a specific table in the DuckDB database",
+            annotations=ToolAnnotations(
+                title="Table Schema Inspector",
+                readOnlyHint=True,   # Only reads metadata
+                destructiveHint=False,  # Cannot modify data
+                idempotentHint=True,    # Always returns same result for same table
+                openWorldHint=False     # Operates on closed database
+            )
         )
         @self.auth_middleware.require_auth
         async def get_table_schema(table_name: str) -> List[Dict[str, Any]]:
