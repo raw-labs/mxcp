@@ -60,6 +60,14 @@ class VaultConfig(TypedDict):
     address: Optional[str]
     token_env: Optional[str]
 
+class HttpTransportConfig(TypedDict):
+    port: Optional[int]
+    host: Optional[str]
+
+class TransportConfig(TypedDict):
+    provider: Optional[str]
+    http: Optional[HttpTransportConfig]
+
 class ProjectConfig(TypedDict):
     default: Optional[str]
     profiles: Dict[str, ProfileConfig]
@@ -67,4 +75,5 @@ class ProjectConfig(TypedDict):
 class UserConfig(TypedDict):
     mxcp: str
     vault: Optional[VaultConfig]
+    transport: Optional[TransportConfig]
     projects: Dict[str, ProjectConfig]

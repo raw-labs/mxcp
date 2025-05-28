@@ -133,6 +133,23 @@ def _apply_defaults(config: dict) -> dict:
     # Create a copy to avoid modifying the input
     config = config.copy()
 
+    # Apply transport defaults
+    if "transport" not in config:
+        config["transport"] = {}
+    
+    transport = config["transport"]
+    if "provider" not in transport:
+        transport["provider"] = "streamable-http"
+    
+    if "http" not in transport:
+        transport["http"] = {}
+    
+    http_config = transport["http"]
+    if "port" not in http_config:
+        http_config["port"] = 8000
+    if "host" not in http_config:
+        http_config["host"] = "localhost"
+
     # Ensure each profile has at least empty secrets and plugin config
     for project in config.get("projects", {}).values():
         for profile in project.get("profiles", {}).values():

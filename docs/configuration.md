@@ -36,6 +36,17 @@ If any referenced environment variable is not set, MXCP will raise an error when
 mxcp: "1.0.0"  # Always use this version
 ```
 
+### Transport Configuration
+```yaml
+transport:
+  provider: "streamable-http"  # Default transport: streamable-http, sse, or stdio
+  http:
+    port: 8000      # Default port for HTTP transport
+    host: "localhost"  # Default host for HTTP transport
+```
+
+The transport configuration sets the default behavior for the `mxcp serve` command. You can override these settings using command-line options.
+
 ### Projects Configuration
 ```yaml
 projects:

@@ -48,17 +48,17 @@ mxcp serve [OPTIONS]
 
 **Options:**
 - `--profile`: Profile name to use
-- `--transport`: Transport protocol to use (streamable-http, sse, or stdio)
-- `--port`: Port number for HTTP transport (default: 8000)
+- `--transport`: Transport protocol to use (streamable-http, sse, or stdio) - defaults to user config setting
+- `--port`: Port number for HTTP transport - defaults to user config setting
 - `--debug`: Show detailed debug information
 - `--no-sql-tools`: Disable built-in SQL querying and schema exploration tools
 - `--readonly`: Open database connection in read-only mode
 
 **Examples:**
 ```bash
-mxcp serve                   # Start HTTP server on default port 8000
-mxcp serve --port 9000       # Start HTTP server on port 9000
-mxcp serve --transport stdio # Use stdio transport instead of HTTP
+mxcp serve                   # Use transport settings from user config
+mxcp serve --port 9000       # Override port from user config
+mxcp serve --transport stdio # Override transport from user config
 mxcp serve --profile dev     # Use the 'dev' profile configuration
 mxcp serve --no-sql-tools    # Disable built-in SQL querying tools
 mxcp serve --readonly        # Open database connection in read-only mode

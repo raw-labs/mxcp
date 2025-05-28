@@ -26,6 +26,38 @@
       },
       "additionalProperties": false
     },
+    "transport": {
+      "type": "object",
+      "description": "Default transport configuration for serving endpoints.",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["streamable-http", "sse", "stdio"],
+          "default": "streamable-http",
+          "description": "Default transport protocol to use."
+        },
+        "http": {
+          "type": "object",
+          "description": "HTTP transport specific configuration.",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "default": 8000,
+              "description": "Default port number for HTTP transport."
+            },
+            "host": {
+              "type": "string",
+              "default": "localhost",
+              "description": "Default host to bind the HTTP server to."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "projects": {
       "type": "object",
       "description": "All configured RAW projects.",

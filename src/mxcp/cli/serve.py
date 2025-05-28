@@ -6,29 +6,30 @@ from mxcp.server.mcp import RAWMCP
 from mxcp.cli.utils import output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
-from mxcp.config.analytics import track_event
+from mxcp.config.analytics import track_command_with_timing
 
 class EndpointRequest(BaseModel):
     params: Dict[str, Any] = {}
 
 @click.command(name="serve")
 @click.option("--profile", help="Profile name to use")
-@click.option("--transport", type=click.Choice(["streamable-http", "sse", "stdio"]), default="streamable-http", help="Transport protocol to use (streamable-http, sse, or stdio)")
-@click.option("--port", type=int, default=8000, help="Port number to use for HTTP transport (default: 8000)")
+@click.option("--transport", type=click.Choice(["streamable-http", "sse", "stdio"]), help="Transport protocol to use (defaults to user config setting)")
+@click.option("--port", type=int, help="Port number to use for HTTP transport (defaults to user config setting)")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--no-sql-tools", is_flag=True, help="Disable built-in SQL querying and schema exploration tools (enabled by default in site config)")
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
-def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql_tools: bool, readonly: bool):
+@track_command_with_timing("serve")
+def serve(profile: Optional[str], transport: Optional[str], port: Optional[int], debug: bool, no_sql_tools: bool, readonly: bool):
     """Start the MXCP MCP server to expose endpoints via HTTP or stdio.
     
     This command starts a server that exposes your MXCP endpoints as an MCP-compatible
-    interface. By default, it runs an HTTP server on port 8000, but can also use stdio
-    for integration with other tools.
+    interface. By default, it uses the transport configuration from your user config,
+    but can also be overridden with command line options.
     
     Examples:
-        mxcp serve                   # Start HTTP server on default port 8000
-        mxcp serve --port 9000       # Start HTTP server on port 9000
-        mxcp serve --transport stdio # Use stdio transport instead of HTTP
+        mxcp serve                   # Use transport settings from user config
+        mxcp serve --port 9000       # Override port from user config
+        mxcp serve --transport stdio # Override transport from user config
         mxcp serve --profile dev     # Use the 'dev' profile configuration
         mxcp serve --no-sql-tools    # Disable built-in SQL querying and schema exploration tools
         mxcp serve --readonly        # Open database connection in read-only mode
@@ -46,23 +47,19 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql
         site_config = load_site_config()
         user_config = load_user_config(site_config)
 
-        # Track server start
-        track_event("server_started", {
-            "transport": transport,
-            "port": port if transport != "stdio" else None,
-            "sql_tools_enabled": not no_sql_tools,
-            "readonly": readonly
-        })
+        # Get transport settings from user config, with CLI overrides
+        transport_config = user_config.get("transport", {})
+        final_transport = transport or transport_config.get("provider", "streamable-http")
+        
+        # Get port from user config if not specified via CLI
+        if port is None:
+            http_config = transport_config.get("http", {})
+            final_port = http_config.get("port", 8000)
+        else:
+            final_port = port
 
         # Set up signal handler for graceful shutdown
         def signal_handler(signum, frame):
-            track_event("server_stopped", {
-                "transport": transport,
-                "port": port if transport != "stdio" else None,
-                "signal": signal.Signals(signum).name,
-                "sql_tools_enabled": not no_sql_tools,
-                "readonly": readonly
-            })
             raise KeyboardInterrupt()
 
         # Register signal handlers
@@ -74,21 +71,13 @@ def serve(profile: Optional[str], transport: str, port: int, debug: bool, no_sql
             user_config, 
             site_config, 
             profile=profile, 
-            port=port, 
+            port=final_port, 
             enable_sql_tools=None if not no_sql_tools else False,
             readonly=readonly
         )
-        server.run(transport=transport)
+        server.run(transport=final_transport)
     except KeyboardInterrupt:
         # Server was stopped gracefully
         pass
     except Exception as e:
-        # Track server start failure
-        track_event("server_start_failed", {
-            "transport": transport,
-            "port": port if transport != "stdio" else None,
-            "error": str(e),
-            "sql_tools_enabled": not no_sql_tools,
-            "readonly": readonly
-        })
         output_error(e, json_output=False, debug=debug)
