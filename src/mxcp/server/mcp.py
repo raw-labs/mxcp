@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Literal, Union
 import json
 import logging
 import traceback
@@ -16,6 +16,9 @@ from mxcp.auth.middleware import AuthenticationMiddleware
 from mxcp.auth.context import get_user_context
 from mxcp.auth.url_utils import create_url_builder
 from mcp.types import ToolAnnotations
+from pydantic import Field, BaseModel, create_model
+from typing import Annotated
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -176,41 +179,221 @@ class RAWMCP:
             # Use explicitly provided value
             self.enable_sql_tools = enable_sql_tools
             
-    def _json_schema_to_python_type(self, param_def: Dict[str, Any]) -> str:
-        """Convert JSON Schema type to Python type annotation string.
+        # Cache for dynamically created models
+        self._model_cache = {}
+
+    def _sanitize_model_name(self, name: str) -> str:
+        """Sanitize a name to be a valid Python class name."""
+        # Replace non-alphanumeric characters with underscores
+        name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+        # Ensure it starts with a letter or underscore
+        if name and name[0].isdigit():
+            name = f"_{name}"
+        # Capitalize first letter for class name convention
+        return name.title().replace('_', '')
+
+    def _create_pydantic_model_from_schema(self, schema_def: Dict[str, Any], model_name: str) -> Any:
+        """Create a Pydantic model from a JSON Schema definition.
+        
+        Args:
+            schema_def: JSON Schema definition
+            model_name: Name for the generated model
+            
+        Returns:
+            Pydantic model class or type annotation
+        """
+        # Cache key for this schema
+        cache_key = f"{model_name}_{hash(json.dumps(schema_def, sort_keys=True))}"
+        if cache_key in self._model_cache:
+            return self._model_cache[cache_key]
+        
+        json_type = schema_def.get("type", "string")
+        
+        # Handle primitive types
+        if json_type == "string":
+            # Handle enums
+            if "enum" in schema_def:
+                enum_values = schema_def["enum"]
+                if all(isinstance(v, str) for v in enum_values):
+                    result = Literal[tuple(enum_values)]
+                    self._model_cache[cache_key] = result
+                    return result
+            
+            # Create Field with constraints
+            field_kwargs = self._extract_field_constraints(schema_def)
+            if field_kwargs:
+                result = Annotated[str, Field(**field_kwargs)]
+            else:
+                result = str
+            self._model_cache[cache_key] = result
+            return result
+            
+        elif json_type == "integer":
+            field_kwargs = self._extract_field_constraints(schema_def)
+            if field_kwargs:
+                result = Annotated[int, Field(**field_kwargs)]
+            else:
+                result = int
+            self._model_cache[cache_key] = result
+            return result
+            
+        elif json_type == "number":
+            field_kwargs = self._extract_field_constraints(schema_def)
+            if field_kwargs:
+                result = Annotated[float, Field(**field_kwargs)]
+            else:
+                result = float
+            self._model_cache[cache_key] = result
+            return result
+            
+        elif json_type == "boolean":
+            field_kwargs = self._extract_field_constraints(schema_def)
+            if field_kwargs:
+                result = Annotated[bool, Field(**field_kwargs)]
+            else:
+                result = bool
+            self._model_cache[cache_key] = result
+            return result
+            
+        elif json_type == "array":
+            items_schema = schema_def.get("items", {"type": "string"})
+            item_type = self._create_pydantic_model_from_schema(items_schema, f"{model_name}Item")
+            
+            field_kwargs = self._extract_field_constraints(schema_def)
+            if field_kwargs:
+                result = Annotated[List[item_type], Field(**field_kwargs)]
+            else:
+                result = List[item_type]
+            self._model_cache[cache_key] = result
+            return result
+            
+        elif json_type == "object":
+            # Handle complex objects with properties
+            properties = schema_def.get("properties", {})
+            required_fields = set(schema_def.get("required", []))
+            additional_properties = schema_def.get("additionalProperties", True)
+            
+            if not properties:
+                # Generic object
+                field_kwargs = self._extract_field_constraints(schema_def)
+                if field_kwargs:
+                    result = Annotated[Dict[str, Any], Field(**field_kwargs)]
+                else:
+                    result = Dict[str, Any]
+                self._model_cache[cache_key] = result
+                return result
+            
+            # Create fields for the model
+            model_fields = {}
+            for prop_name, prop_schema in properties.items():
+                prop_type = self._create_pydantic_model_from_schema(
+                    prop_schema, 
+                    f"{model_name}{self._sanitize_model_name(prop_name)}"
+                )
+                
+                # Extract field constraints for this property
+                field_kwargs = self._extract_field_constraints(prop_schema)
+                
+                # Handle required vs optional fields
+                if prop_name in required_fields:
+                    if field_kwargs:
+                        model_fields[prop_name] = (prop_type, Field(**field_kwargs))
+                    else:
+                        model_fields[prop_name] = (prop_type, ...)
+                else:
+                    # Optional field
+                    if field_kwargs:
+                        model_fields[prop_name] = (Optional[prop_type], Field(None, **field_kwargs))
+                    else:
+                        model_fields[prop_name] = (Optional[prop_type], None)
+            
+            # Create the model
+            model_config = {}
+            if not additional_properties:
+                model_config["extra"] = "forbid"
+            else:
+                model_config["extra"] = "allow"
+            
+            result = create_model(
+                self._sanitize_model_name(model_name),
+                **model_fields,
+                __config__=type("Config", (), model_config)
+            )
+            
+            self._model_cache[cache_key] = result
+            return result
+        
+        # Fallback to Any for unknown types
+        result = Any
+        self._model_cache[cache_key] = result
+        return result
+
+    def _extract_field_constraints(self, schema_def: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract Pydantic Field constraints from JSON Schema definition."""
+        field_kwargs = {}
+        
+        # Description
+        if "description" in schema_def:
+            field_kwargs["description"] = schema_def["description"]
+        
+        # Default value
+        if "default" in schema_def:
+            field_kwargs["default"] = schema_def["default"]
+        
+        # Examples
+        if "examples" in schema_def and schema_def["examples"]:
+            field_kwargs["examples"] = schema_def["examples"]
+        
+        # String constraints
+        if "minLength" in schema_def:
+            field_kwargs["min_length"] = schema_def["minLength"]
+        if "maxLength" in schema_def:
+            field_kwargs["max_length"] = schema_def["maxLength"]
+        if "pattern" in schema_def:
+            field_kwargs["pattern"] = schema_def["pattern"]
+        
+        # Numeric constraints
+        if "minimum" in schema_def:
+            field_kwargs["ge"] = schema_def["minimum"]
+        if "maximum" in schema_def:
+            field_kwargs["le"] = schema_def["maximum"]
+        if "exclusiveMinimum" in schema_def:
+            field_kwargs["gt"] = schema_def["exclusiveMinimum"]
+        if "exclusiveMaximum" in schema_def:
+            field_kwargs["lt"] = schema_def["exclusiveMaximum"]
+        if "multipleOf" in schema_def:
+            field_kwargs["multiple_of"] = schema_def["multipleOf"]
+        
+        # Array constraints
+        if "minItems" in schema_def:
+            field_kwargs["min_length"] = schema_def["minItems"]
+        if "maxItems" in schema_def:
+            field_kwargs["max_length"] = schema_def["maxItems"]
+        
+        return field_kwargs
+
+    def _create_pydantic_field_annotation(self, param_def: Dict[str, Any]) -> Any:
+        """Create a Pydantic type annotation from parameter definition.
         
         Args:
             param_def: Parameter definition from endpoint YAML
             
         Returns:
-            Python type annotation string
+            Pydantic type annotation (class or Annotated type)
         """
-        json_type = param_def.get("type", "string")
+        param_name = param_def.get("name", "param")
+        return self._create_pydantic_model_from_schema(param_def, param_name)
+
+    def _json_schema_to_python_type(self, param_def: Dict[str, Any]) -> Any:
+        """Convert JSON Schema type to Python type annotation.
         
-        if json_type == "string":
-            return "str"
-        elif json_type == "integer":
-            return "int"
-        elif json_type == "number":
-            return "float"
-        elif json_type == "boolean":
-            return "bool"
-        elif json_type == "array":
-            items_type = param_def.get("items", {}).get("type", "Any")
-            if items_type == "string":
-                return "List[str]"
-            elif items_type == "integer":
-                return "List[int]"
-            elif items_type == "number":
-                return "List[float]"
-            elif items_type == "boolean":
-                return "List[bool]"
-            else:
-                return "List[Any]"
-        elif json_type == "object":
-            return "Dict[str, Any]"
-        else:
-            return "Any"
+        Args:
+            param_def: Parameter definition from endpoint YAML
+            
+        Returns:
+            Python type annotation
+        """
+        return self._create_pydantic_field_annotation(param_def)
 
     def _create_tool_annotations(self, tool_def: Dict[str, Any]) -> Optional[ToolAnnotations]:
         """Create ToolAnnotations from tool definition.
@@ -302,12 +485,15 @@ class RAWMCP:
         # Get parameter definitions
         parameters = endpoint_def.get("parameters", [])
         
-        # Create function signature with proper type annotations
+        # Create function signature with proper Pydantic type annotations
+        param_annotations = {}
         param_signatures = []
         for param in parameters:
             param_name = param["name"]
             param_type = self._json_schema_to_python_type(param)
-            param_signatures.append(f"{param_name}: {param_type}")
+            param_annotations[param_name] = param_type
+            # Create string representation for makefun
+            param_signatures.append(f"{param_name}")
         
         signature = f"({', '.join(param_signatures)})"
 
@@ -353,13 +539,17 @@ class RAWMCP:
         authenticated_body = self.auth_middleware.require_auth(_body)
 
         # -------------------------------------------------------------------
-        # Dynamically create an *async* function whose signature is
-        #   (param1: type1, param2: type2, ...)
+        # Create function with proper signature and annotations using makefun
         # -------------------------------------------------------------------
         func_name = endpoint_def.get("name", endpoint_def.get("uri", "handler"))
         if endpoint_key == "resource":
             func_name = self._clean_uri_for_func_name(func_name)
+        
+        # Create the function with proper signature
         handler = create_function(signature, authenticated_body, func_name=func_name)
+        
+        # Set the annotations for Pydantic introspection
+        handler.__annotations__ = param_annotations
 
         # Finally register the function with FastMCP -------------------------
         decorator(handler)
