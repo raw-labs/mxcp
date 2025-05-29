@@ -22,7 +22,7 @@ from mcp.server.auth.provider import (
     construct_redirect_uri,
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
-from mxcp.config.types import AuthConfig
+from mxcp.config.types import UserAuthConfig
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ class ExternalOAuthHandler(ABC):
 class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
     """OAuth authorization server that bridges external OAuth providers with MCP."""
 
-    def __init__(self, handler: ExternalOAuthHandler, auth_config: Optional[AuthConfig] = None):
+    def __init__(self, handler: ExternalOAuthHandler, auth_config: Optional[UserAuthConfig] = None):
         self.handler = handler
         self._clients: dict[str, OAuthClientInformationFull] = {}
         self._tokens: dict[str, AccessToken] = {}
@@ -142,7 +142,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
         if auth_config:
             self._register_configured_clients(auth_config)
 
-    def _register_configured_clients(self, auth_config: AuthConfig):
+    def _register_configured_clients(self, auth_config: UserAuthConfig):
         """Register pre-configured OAuth clients from user config."""
         clients = auth_config.get("clients", [])
         
@@ -343,7 +343,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
             self._token_mapping.pop(token, None)
 
 
-def create_oauth_handler(auth_config: AuthConfig, host: str = "localhost", port: int = 8000, user_config: Optional[Dict[str, Any]] = None) -> Optional[ExternalOAuthHandler]:
+def create_oauth_handler(auth_config: UserAuthConfig, host: str = "localhost", port: int = 8000, user_config: Optional[Dict[str, Any]] = None) -> Optional[ExternalOAuthHandler]:
     """Create an OAuth handler based on the auth configuration.
     
     Args:

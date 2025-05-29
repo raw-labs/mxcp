@@ -1,78 +1,83 @@
 from typing import TypedDict, List, Dict, Optional, Literal, Any, Union
 
-# Site Config Types
-class ExtensionDefinition(TypedDict, total=False):
+# Site Config Types (mxcp-site.yml)
+class SiteExtensionDefinition(TypedDict, total=False):
     name: str
     repo: Optional[str]  # Optional repo name for community/nightly extensions
 
-class PluginDefinition(TypedDict):
+class SitePluginDefinition(TypedDict):
     name: str
     module: str
     config: Optional[str]
 
-class DbtConfig(TypedDict):
+class SiteDbtConfig(TypedDict, total=False):
     enabled: Optional[bool]
     models: Optional[str]
     manifest_path: Optional[str]
 
-class SqlToolsConfig(TypedDict):
+class SiteSqlToolsConfig(TypedDict, total=False):
     enabled: Optional[bool]
 
-class PythonConfig(TypedDict):
+class SitePythonConfig(TypedDict, total=False):
     path: Optional[str]
 
-class DuckDBConfig(TypedDict):
+class SiteDuckDBConfig(TypedDict, total=False):
     path: Optional[str]
     readonly: Optional[bool]
 
-class DriftConfig(TypedDict):
+class SiteDriftConfig(TypedDict, total=False):
     path: Optional[str]
 
-class SecretDefinition(TypedDict):
-    name: str
-    type: str
-    parameters: Dict[str, str]
-
-class PluginConfig(TypedDict):
-    config: Dict[str, Dict[str, str]]
-
-class ProfileConfig(TypedDict):
-    duckdb: Optional[DuckDBConfig]
-    drift: Optional[DriftConfig]
-    secrets: Optional[List[SecretDefinition]]
-    plugin: Optional[PluginConfig]
+class SiteProfileConfig(TypedDict, total=False):
+    duckdb: Optional[SiteDuckDBConfig]
+    drift: Optional[SiteDriftConfig]
 
 class SiteConfig(TypedDict):
     mxcp: str
     project: str
     profile: str
-    secrets: Optional[List[str]]
-    plugin: Optional[List[PluginDefinition]]
-    extensions: Optional[List[Union[str, ExtensionDefinition]]]
-    dbt: Optional[DbtConfig]
-    python: Optional[PythonConfig]
-    sql_tools: Optional[SqlToolsConfig]
-    profiles: Dict[str, ProfileConfig]
+    secrets: Optional[List[str]]  # List of secret names (not definitions)
+    plugin: Optional[List[SitePluginDefinition]]
+    extensions: Optional[List[Union[str, SiteExtensionDefinition]]]
+    dbt: Optional[SiteDbtConfig]
+    python: Optional[SitePythonConfig]
+    sql_tools: Optional[SiteSqlToolsConfig]
+    profiles: Dict[str, SiteProfileConfig]
 
-# User Config Types
-class VaultConfig(TypedDict):
+# User Config Types (~/.mxcp/config.yml)
+class UserSecretDefinition(TypedDict):
+    name: str
+    type: str
+    parameters: Dict[str, Any]  # Can contain strings or nested objects
+
+class UserPluginConfig(TypedDict, total=False):
+    config: Dict[str, Dict[str, str]]
+
+class UserProfileConfig(TypedDict, total=False):
+    secrets: Optional[List[UserSecretDefinition]]
+    plugin: Optional[UserPluginConfig]
+
+class UserProjectConfig(TypedDict):
+    profiles: Dict[str, UserProfileConfig]
+    default: Optional[str]
+
+class UserVaultConfig(TypedDict):
     enabled: bool
     address: Optional[str]
     token_env: Optional[str]
 
-class HttpTransportConfig(TypedDict):
+class UserHttpTransportConfig(TypedDict, total=False):
     port: Optional[int]
     host: Optional[str]
     scheme: Optional[Literal["http", "https"]]
     base_url: Optional[str]
     trust_proxy: Optional[bool]
 
-class TransportConfig(TypedDict):
-    provider: Optional[str]
-    http: Optional[HttpTransportConfig]
+class UserTransportConfig(TypedDict, total=False):
+    provider: Optional[Literal["streamable-http", "sse", "stdio"]]
+    http: Optional[UserHttpTransportConfig]
 
-# Auth Config Types
-class OAuthClientConfig(TypedDict):
+class UserOAuthClientConfig(TypedDict):
     client_id: str
     name: str
     client_secret: Optional[str]
@@ -80,7 +85,7 @@ class OAuthClientConfig(TypedDict):
     grant_types: Optional[List[Literal["authorization_code", "refresh_token"]]]
     scopes: Optional[List[str]]
 
-class GitHubAuthConfig(TypedDict):
+class UserGitHubAuthConfig(TypedDict):
     client_id: str
     client_secret: str
     scope: Optional[str]
@@ -88,18 +93,14 @@ class GitHubAuthConfig(TypedDict):
     auth_url: str
     token_url: str
 
-class AuthConfig(TypedDict):
+class UserAuthConfig(TypedDict, total=False):
     provider: Optional[Literal["none", "github"]]
-    clients: Optional[List[OAuthClientConfig]]
-    github: Optional[GitHubAuthConfig]
-
-class ProjectConfig(TypedDict):
-    default: Optional[str]
-    profiles: Dict[str, ProfileConfig]
+    clients: Optional[List[UserOAuthClientConfig]]
+    github: Optional[UserGitHubAuthConfig]
 
 class UserConfig(TypedDict):
     mxcp: str
-    auth: Optional[AuthConfig]
-    vault: Optional[VaultConfig]
-    transport: Optional[TransportConfig]
-    projects: Dict[str, ProjectConfig]
+    projects: Dict[str, UserProjectConfig]
+    auth: Optional[UserAuthConfig]
+    vault: Optional[UserVaultConfig]
+    transport: Optional[UserTransportConfig]

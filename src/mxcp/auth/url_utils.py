@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """URL generation utilities for OAuth authentication with reverse proxy support."""
 import logging
+import os
 from typing import Optional, Dict, Any
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse, urljoin
 
 from starlette.requests import Request
-from mxcp.config.types import AuthConfig, HttpTransportConfig
+from mxcp.config.types import UserAuthConfig, UserHttpTransportConfig
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class URLBuilder:
     - Fallback to request scheme
     """
     
-    def __init__(self, transport_config: Optional[HttpTransportConfig] = None):
+    def __init__(self, transport_config: Optional[UserHttpTransportConfig] = None):
         """Initialize URL builder with transport configuration.
         
         Args:

@@ -2,19 +2,24 @@
 """GitHub OAuth provider implementation for MXCP authentication."""
 import logging
 import secrets
+import string
 from typing import Dict, Any, Optional
 from urllib.parse import urlencode, parse_qs, urlparse
 
 import httpx
+from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import RedirectResponse, HTMLResponse, Response
+from starlette.responses import RedirectResponse, HTMLResponse, Response, JSONResponse
+from starlette.routing import Route
+from starlette.middleware import Middleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
 from .providers import ExternalOAuthHandler, ExternalUserInfo, StateMeta, UserContext, MCP_SCOPE
-from mxcp.config.types import AuthConfig
-from .url_utils import URLBuilder
+from mxcp.config.types import UserAuthConfig
+from mxcp.auth.url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +27,7 @@ logger = logging.getLogger(__name__)
 class GitHubOAuthHandler(ExternalOAuthHandler):
     """GitHub OAuth provider implementation."""
 
-    def __init__(self, auth_config: AuthConfig, host: str = "localhost", port: int = 8000):
+    def __init__(self, auth_config: UserAuthConfig, host: str = "localhost", port: int = 8000):
         """Initialize GitHub OAuth handler.
         
         Args:
