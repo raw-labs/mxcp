@@ -1,8 +1,8 @@
 import logging
-from typing import List, Union, Dict, Any
-from mxcp.config.types import ExtensionDefinition
+from typing import List, Union
+from mxcp.config.types import SiteExtensionDefinition
 
-def load_extensions(con, extensions: List[Union[str, ExtensionDefinition]] = None):
+def load_extensions(con, extensions: List[Union[str, SiteExtensionDefinition]] = None):
     """Load DuckDB extensions based on configuration.
     
     Args:

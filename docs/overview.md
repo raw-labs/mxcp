@@ -111,5 +111,6 @@ The MXCP CLI ties everything together:
 - [Quickstart Guide](quickstart.md) - Get up and running with MXCP
 - [Type System](type-system.md) - Learn about MXCP's type system
 - [Configuration](configuration.md) - Configure your MXCP project
+- [Authentication](authentication.md) - Set up OAuth authentication
 - [CLI Reference](cli.md) - Explore available commands
 - [Integrations](integrations.md) - Connect with other tools and services 

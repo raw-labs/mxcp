@@ -321,7 +321,6 @@ To use secure connections, configure secrets in `~/.mxcp/config.yml`. Here's an 
 mxcp: "1.0.0"
 projects:
   my_project:
-    default: dev
     profiles:
       dev:
         secrets:

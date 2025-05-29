@@ -149,8 +149,10 @@ def _apply_defaults(config: dict) -> dict:
         http_config["port"] = 8000
     if "host" not in http_config:
         http_config["host"] = "localhost"
+    if "stateless" not in http_config:
+        http_config["stateless"] = False
 
-    # Ensure each profile has at least empty secrets and plugin config
+    # Ensure each profile has at least empty secrets, plugin, and auth config
     for project in config.get("projects", {}).values():
         for profile in project.get("profiles", {}).values():
             if profile is None:
@@ -161,6 +163,8 @@ def _apply_defaults(config: dict) -> dict:
                 profile["plugin"] = {"config": {}}
             elif "config" not in profile["plugin"]:
                 profile["plugin"]["config"] = {}
+            if "auth" not in profile:
+                profile["auth"] = {"provider": "none"}
     
     return config
 

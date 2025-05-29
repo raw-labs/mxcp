@@ -12,7 +12,6 @@ def test_env_var_interpolation(tmp_path):
     mxcp: "1.0.0"
     projects:
       test_project:
-        default: "dev"
         profiles:
           dev:
             secrets:
@@ -59,7 +58,6 @@ def test_missing_env_var(tmp_path):
     mxcp: "1.0.0"
     projects:
       test_project:
-        default: "dev"
         profiles:
           dev:
             secrets:
@@ -94,7 +92,6 @@ def test_env_var_in_nested_structures(tmp_path):
     mxcp: "1.0.0"
     projects:
       test_project:
-        default: "dev"
         profiles:
           dev:
             secrets:

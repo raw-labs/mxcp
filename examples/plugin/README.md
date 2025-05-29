@@ -34,7 +34,6 @@ mxcp: 1.0.0
 
 projects:
   demo-plugin:
-    default: dev
     profiles:
       dev:
         plugin:

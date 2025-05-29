@@ -1,6 +1,6 @@
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Any, Optional, Union, List
+from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING
 import duckdb
 import yaml
 from datetime import datetime
@@ -13,6 +13,12 @@ from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
 import re
 import numpy as np
+
+if TYPE_CHECKING:
+    from mxcp.auth.providers import UserContext
+
+# Import the context function
+from mxcp.auth.context import get_user_context
 
 class EndpointType(Enum):
     TOOL = "tool"
