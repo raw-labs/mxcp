@@ -53,13 +53,6 @@ class UserSecretDefinition(TypedDict):
 class UserPluginConfig(TypedDict, total=False):
     config: Dict[str, Dict[str, str]]
 
-class UserProfileConfig(TypedDict, total=False):
-    secrets: Optional[List[UserSecretDefinition]]
-    plugin: Optional[UserPluginConfig]
-
-class UserProjectConfig(TypedDict):
-    profiles: Dict[str, UserProfileConfig]
-
 class UserVaultConfig(TypedDict):
     enabled: bool
     address: Optional[str]
@@ -97,9 +90,16 @@ class UserAuthConfig(TypedDict, total=False):
     clients: Optional[List[UserOAuthClientConfig]]
     github: Optional[UserGitHubAuthConfig]
 
+class UserProfileConfig(TypedDict, total=False):
+    secrets: Optional[List[UserSecretDefinition]]
+    plugin: Optional[UserPluginConfig]
+    auth: Optional[UserAuthConfig]
+
+class UserProjectConfig(TypedDict):
+    profiles: Dict[str, UserProfileConfig]
+
 class UserConfig(TypedDict):
     mxcp: str
     projects: Dict[str, UserProjectConfig]
-    auth: Optional[UserAuthConfig]
     vault: Optional[UserVaultConfig]
     transport: Optional[UserTransportConfig]

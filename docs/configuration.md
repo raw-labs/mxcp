@@ -61,6 +61,13 @@ projects:
               database: "mydb"
               username: "user"
               password: "pass"
+        auth:  # Authentication configuration for this profile
+          provider: "github"
+          github:
+            client_id: "your_github_client_id"
+            client_secret: "your_github_client_secret"
+            auth_url: "https://github.com/login/oauth/authorize"
+            token_url: "https://github.com/login/oauth/access_token"
 ```
 
 ### Vault Integration (Optional)

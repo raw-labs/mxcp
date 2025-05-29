@@ -40,8 +40,14 @@ class RAWMCP:
                             If None, uses the value from site_config.sql_tools.enabled (defaults to True)
             readonly: Whether to open DuckDB connection in read-only mode
         """
-        # Initialize OAuth authentication
-        auth_config = user_config.get("auth", {})
+        # Initialize basic configuration first
+        self.user_config = user_config
+        self.site_config = site_config
+        self.profile_name = profile or site_config["profile"]
+        self.active_profile = get_active_profile(self.user_config, self.site_config, profile)
+        
+        # Initialize OAuth authentication using profile-specific auth config
+        auth_config = self.active_profile.get("auth", {})
         self.oauth_handler = create_oauth_handler(auth_config, host=host, port=port, user_config=user_config)
         self.oauth_server = None
         auth_settings = None
@@ -153,10 +159,6 @@ class RAWMCP:
                     headers={"Content-Type": "application/json"}
                 )
         
-        self.user_config = user_config
-        self.site_config = site_config
-        self.profile_name = profile or site_config["profile"]
-        self.active_profile = get_active_profile(self.user_config, self.site_config, profile)
         self.loader = EndpointLoader(self.site_config)
         self.readonly = readonly
         

@@ -4,15 +4,19 @@ MXCP supports OAuth authentication to protect your endpoints and tools. When aut
 
 ## Configuration
 
-Authentication is configured in your user configuration file (`~/.mxcp/config.yml`) under the `auth` section.
+Authentication is configured in your user configuration file (`~/.mxcp/config.yml`) under each profile's `auth` section.
 
 ### Disable Authentication (Default)
 
 By default, authentication is disabled:
 
 ```yaml
-auth:
-  provider: none
+projects:
+  my_project:
+    profiles:
+      dev:
+        auth:
+          provider: none
 ```
 
 ### GitHub OAuth
@@ -20,15 +24,19 @@ auth:
 To enable GitHub OAuth authentication:
 
 ```yaml
-auth:
-  provider: github
-  github:
-    client_id: "${GITHUB_CLIENT_ID}"
-    client_secret: "${GITHUB_CLIENT_SECRET}"
-    scope: "user:email"
-    callback_path: "/github/callback"
-    auth_url: "https://github.com/login/oauth/authorize"
-    token_url: "https://github.com/login/oauth/access_token"
+projects:
+  my_project:
+    profiles:
+      dev:
+        auth:
+          provider: github
+          github:
+            client_id: "${GITHUB_CLIENT_ID}"
+            client_secret: "${GITHUB_CLIENT_SECRET}"
+            scope: "user:email"
+            callback_path: "/github/callback"
+            auth_url: "https://github.com/login/oauth/authorize"
+            token_url: "https://github.com/login/oauth/access_token"
 ```
 
 ## OAuth Client Registration
@@ -40,35 +48,39 @@ MXCP supports multiple ways for OAuth clients to register and authenticate:
 You can pre-register OAuth clients in your configuration file. This is the most straightforward approach for development and testing:
 
 ```yaml
-auth:
-  provider: github
-  
-  # Pre-registered OAuth clients
-  clients:
-    # MCP CLI client (public client)
-    - client_id: "aa27466a-fd71-4c2a-9ecf-8b5db5d34384"
-      name: "MCP CLI Development Client"
-      redirect_uris:
-        - "http://127.0.0.1:49153/oauth/callback"
-        - "http://localhost:49153/oauth/callback"
-      scopes:
-        - "mxcp:access"
-    
-    # Custom application (confidential client)
-    - client_id: "my-custom-app-client-id"
-      client_secret: "${MY_APP_CLIENT_SECRET}"
-      name: "My Custom Application"
-      redirect_uris:
-        - "https://myapp.example.com/oauth/callback"
-      grant_types:
-        - "authorization_code"
-        - "refresh_token"
-      scopes:
-        - "mxcp:access"
-        - "mxcp:admin"
-  
-  github:
-    # ... GitHub configuration
+projects:
+  my_project:
+    profiles:
+      dev:
+        auth:
+          provider: github
+          
+          # Pre-registered OAuth clients
+          clients:
+            # MCP CLI client (public client)
+            - client_id: "aa27466a-fd71-4c2a-9ecf-8b5db5d34384"
+              name: "MCP CLI Development Client"
+              redirect_uris:
+                - "http://127.0.0.1:49153/oauth/callback"
+                - "http://localhost:49153/oauth/callback"
+              scopes:
+                - "mxcp:access"
+            
+            # Custom application (confidential client)
+            - client_id: "my-custom-app-client-id"
+              client_secret: "${MY_APP_CLIENT_SECRET}"
+              name: "My Custom Application"
+              redirect_uris:
+                - "https://myapp.example.com/oauth/callback"
+              grant_types:
+                - "authorization_code"
+                - "refresh_token"
+              scopes:
+                - "mxcp:access"
+                - "mxcp:admin"
+          
+          github:
+            # ... GitHub configuration
 ```
 
 **Client Configuration Options:**
@@ -121,22 +133,26 @@ For production deployments:
 Example production configuration:
 
 ```yaml
-auth:
-  provider: github
-  
-  clients:
-    - client_id: "${PROD_CLIENT_ID}"
-      client_secret: "${PROD_CLIENT_SECRET}"
-      name: "Production Application"
-      redirect_uris:
-        - "https://myapp.example.com/oauth/callback"
-      scopes:
-        - "mxcp:access"
-  
-  github:
-    client_id: "${GITHUB_CLIENT_ID}"
-    client_secret: "${GITHUB_CLIENT_SECRET}"
-    # ... other GitHub config
+projects:
+  my_project:
+    profiles:
+      prod:
+        auth:
+          provider: github
+          
+          clients:
+            - client_id: "${PROD_CLIENT_ID}"
+              client_secret: "${PROD_CLIENT_SECRET}"
+              name: "Production Application"
+              redirect_uris:
+                - "https://myapp.example.com/oauth/callback"
+              scopes:
+                - "mxcp:access"
+          
+          github:
+            client_id: "${GITHUB_CLIENT_ID}"
+            client_secret: "${GITHUB_CLIENT_SECRET}"
+            # ... other GitHub config
 ```
 
 #### GitHub OAuth Setup
@@ -165,17 +181,6 @@ Example MXCP configuration with GitHub OAuth authentication:
 ```yaml
 mxcp: "1.0.0"
 
-# Authentication configuration
-auth:
-  provider: github
-  github:
-    client_id: "${GITHUB_CLIENT_ID}"
-    client_secret: "${GITHUB_CLIENT_SECRET}"
-    scope: "user:email"
-    callback_path: "/github/callback"
-    auth_url: "https://github.com/login/oauth/authorize"
-    token_url: "https://github.com/login/oauth/access_token"
-
 # Transport configuration
 transport:
   provider: streamable-http
@@ -188,6 +193,15 @@ projects:
   my-project:
     profiles:
       dev:
+        auth:
+          provider: github
+          github:
+            client_id: "${GITHUB_CLIENT_ID}"
+            client_secret: "${GITHUB_CLIENT_SECRET}"
+            scope: "user:email"
+            callback_path: "/github/callback"
+            auth_url: "https://github.com/login/oauth/authorize"
+            token_url: "https://github.com/login/oauth/access_token"
         secrets: []
         plugin:
           config: {} 
@@ -402,4 +416,4 @@ auth:
 
 ## Configuration
 
-Authentication is configured in your user configuration file (`~/.mxcp/config.yml`) under the `auth` section. 
+Authentication is configured in your user configuration file (`~/.mxcp/config.yml`) under each profile's `auth` section. 

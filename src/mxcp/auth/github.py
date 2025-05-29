@@ -2,18 +2,11 @@
 """GitHub OAuth provider implementation for MXCP authentication."""
 import logging
 import secrets
-import string
-from typing import Dict, Any, Optional
-from urllib.parse import urlencode, parse_qs, urlparse
+from typing import Dict, Any
 
-import httpx
-from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import RedirectResponse, HTMLResponse, Response, JSONResponse
-from starlette.routing import Route
-from starlette.middleware import Middleware
-from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import RedirectResponse, HTMLResponse, Response
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
