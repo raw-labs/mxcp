@@ -2,9 +2,45 @@
 
 MXCP supports OAuth authentication to protect your endpoints and tools. When authentication is enabled, all tools, resources, prompts, and built-in SQL features require valid authentication tokens.
 
-## Configuration
+## Overview
 
-Authentication is configured in your user configuration file (`~/.mxcp/config.yml`) under each profile's `auth` section.
+Authentication is configured in your user configuration file (`~/.mxcp/config.yml`) under each profile's `auth` section. MXCP supports multiple OAuth providers and can be easily extended to support additional providers.
+
+### How It Works
+
+When authentication is enabled:
+
+1. **Server Startup**: The MXCP server initializes with OAuth support
+2. **Client Registration**: MCP clients can register with the OAuth server
+3. **Authorization Flow**: Clients are redirected to the OAuth provider for authentication
+4. **Token Exchange**: Provider auth codes are exchanged for access tokens
+5. **Protected Access**: All endpoints require valid tokens
+
+### Protected Features
+
+When authentication is enabled, the following features require authentication:
+
+- **Custom Endpoints**: All tools, resources, and prompts defined in your YAML files
+- **SQL Tools**: Built-in DuckDB querying and schema exploration tools
+
+### User Information Logging
+
+When OAuth authentication is enabled, MXCP automatically logs detailed user information for each authenticated request, including:
+
+- Username and user ID
+- OAuth provider (e.g., GitHub, Atlassian)
+- User's display name and email (when available)
+
+This information appears in the server logs whenever an authenticated user executes any tool, resource, or prompt.
+
+## Supported Providers
+
+Currently supported providers:
+- `none` (default, no authentication)
+- `github` (GitHub OAuth)
+- `atlassian` (Atlassian Cloud - JIRA & Confluence)
+
+## Provider Configuration
 
 ### Disable Authentication (Default)
 
@@ -21,7 +57,29 @@ projects:
 
 ### GitHub OAuth
 
-To enable GitHub OAuth authentication:
+#### Creating a GitHub OAuth App
+
+1. **Create a GitHub OAuth App**:
+   - Go to GitHub Settings > Developer settings > OAuth Apps
+   - Click "New OAuth App"
+   - Set the Authorization callback URL to: `http://localhost:8000/github/callback` (adjust host/port as needed)
+
+2. **Get Your Credentials**:
+   - Copy your **Client ID** and **Client Secret**
+   - Store these securely as environment variables
+
+#### Environment Variables
+
+Set these environment variables with your GitHub OAuth credentials:
+
+```bash
+export GITHUB_CLIENT_ID="your_github_client_id"
+export GITHUB_CLIENT_SECRET="your_github_client_secret"
+```
+
+#### MXCP Configuration
+
+Configure GitHub OAuth in your profile's auth section:
 
 ```yaml
 projects:
@@ -30,6 +88,14 @@ projects:
       dev:
         auth:
           provider: github
+          clients:
+            - client_id: "${GITHUB_CLIENT_ID}"
+              client_secret: "${GITHUB_CLIENT_SECRET}"
+              name: "My MXCP Application"
+              redirect_uris:
+                - "http://localhost:8000/github/callback"
+              scopes:
+                - "mxcp:access"
           github:
             client_id: "${GITHUB_CLIENT_ID}"
             client_secret: "${GITHUB_CLIENT_SECRET}"
@@ -39,11 +105,238 @@ projects:
             token_url: "https://github.com/login/oauth/access_token"
 ```
 
+#### Configuration Options
+
+- `client_id`: Your GitHub OAuth app client ID
+- `client_secret`: Your GitHub OAuth app client secret
+- `scope`: OAuth scope to request (default: "user:email")
+- `callback_path`: Callback path for OAuth flow (default: "/github/callback")
+- `auth_url`: GitHub authorization URL
+- `token_url`: GitHub token exchange URL
+
+#### Testing Your Configuration
+
+1. Start your MXCP server:
+   ```bash
+   mxcp serve --debug
+   ```
+
+2. The authentication flow will begin when a client connects
+3. Users will be redirected to GitHub for authorization
+4. After approval, they'll be redirected back to your callback URL
+5. Check the logs for successful authentication
+
+#### Troubleshooting
+
+**Common Issues:**
+
+1. **Invalid Client Configuration**:
+   ```
+   ValueError: GitHub OAuth configuration is incomplete
+   ```
+   - Ensure all required GitHub configuration fields are provided
+
+2. **Environment Variables Not Set**:
+   ```
+   ValueError: Environment variable GITHUB_CLIENT_ID is not set
+   ```
+   - Set the required environment variables before starting the server
+
+3. **Callback URL Mismatch**:
+   ```
+   HTTPException: Invalid state parameter
+   ```
+   - Ensure the callback URL in your GitHub OAuth app matches the configured callback_path
+
+### Atlassian OAuth (JIRA & Confluence Cloud)
+
+MXCP supports OAuth authentication with Atlassian Cloud products including JIRA and Confluence. This allows your MCP server to authenticate users and access Atlassian APIs on their behalf.
+
+#### Creating an Atlassian OAuth App
+
+Before configuring MXCP, you need to create an OAuth 2.0 (3LO) app in the Atlassian Developer Console:
+
+**Step 1: Access the Developer Console**
+
+1. Go to [developer.atlassian.com](https://developer.atlassian.com)
+2. Sign in with your Atlassian account
+3. Click your profile icon in the top-right corner
+4. Select **Developer console** from the dropdown
+
+**Step 2: Create a New App**
+
+1. Click **Create** and select **OAuth 2.0 (3LO)**
+2. Enter your app details:
+   - **App name**: A descriptive name for your application
+   - **Description**: Brief description of what your app does
+
+**Step 3: Configure OAuth 2.0**
+
+1. In your app, select **Authorization** from the left menu
+2. Next to **OAuth 2.0 (3LO)**, click **Configure**
+3. Set the **Callback URL** to match your MXCP server:
+   - For local development: `http://localhost:8000/atlassian/callback`
+   - For production: `https://your-domain.com/atlassian/callback`
+4. Click **Save changes**
+
+**Step 4: Add API Permissions**
+
+1. Select **Permissions** from the left menu
+2. Add the APIs you need:
+   - **Jira platform REST API** - for JIRA access
+   - **Confluence Cloud REST API** - for Confluence access
+   - **User Identity API** - for user profile information
+3. For each API, click **Add** and configure the required scopes.
+
+**Step 5: Get Your Credentials**
+
+1. Go to **Settings** in the left menu
+2. Copy your **Client ID** and **Secret**
+3. Store these securely as environment variables
+
+#### Environment Variables
+
+Set these environment variables with your Atlassian OAuth credentials:
+
+```bash
+export ATLASSIAN_CLIENT_ID="your_client_id_here"
+export ATLASSIAN_CLIENT_SECRET="your_client_secret_here"
+```
+
+#### MXCP Configuration
+
+Configure Atlassian OAuth in your profile's auth section:
+
+```yaml
+projects:
+  my_project:
+    profiles:
+      production:
+        auth:
+          provider: atlassian
+          clients:
+            - client_id: "${ATLASSIAN_CLIENT_ID}"
+              client_secret: "${ATLASSIAN_CLIENT_SECRET}"
+              name: "My MXCP Application"
+              redirect_uris:
+                - "https://your-domain.com/atlassian/callback"
+              scopes:
+                - "mxcp:access"
+          atlassian:
+            client_id: "${ATLASSIAN_CLIENT_ID}"
+            client_secret: "${ATLASSIAN_CLIENT_SECRET}"
+            scope: "read:jira-work read:jira-user read:confluence-content.all read:confluence-user offline_access"
+            callback_path: "/atlassian/callback"
+            auth_url: "https://auth.atlassian.com/authorize"
+            token_url: "https://auth.atlassian.com/oauth/token"
+```
+
+#### OAuth Scopes
+
+Atlassian uses granular scopes to control access. Common scopes include:
+
+**JIRA Scopes:**
+- `read:jira-work` - Read issues, projects, and work items
+- `write:jira-work` - Create and update issues
+- `read:jira-user` - Read user information
+- `manage:jira-project` - Manage projects (admin level)
+- `manage:jira-configuration` - Manage JIRA configuration (admin level)
+
+**Confluence Scopes:**
+- `read:confluence-content.all` - Read all Confluence content
+- `write:confluence-content` - Create and update content
+- `read:confluence-user` - Read user information
+- `manage:confluence-configuration` - Manage Confluence settings (admin level)
+
+**Universal Scopes:**
+- `read:me` - Read user profile information
+- `offline_access` - Enable refresh tokens for long-term access
+
+#### Accessing Multiple Sites
+
+Atlassian OAuth grants access to all sites where your app is installed. To work with specific sites:
+
+1. **Get accessible resources**:
+   ```bash
+   curl -H "Authorization: Bearer ACCESS_TOKEN" \
+        https://api.atlassian.com/oauth/token/accessible-resources
+   ```
+
+2. **Use the cloud ID** in API requests:
+   ```bash
+   # JIRA API example
+   curl -H "Authorization: Bearer ACCESS_TOKEN" \
+        https://api.atlassian.com/ex/jira/{cloudid}/rest/api/2/project
+   
+   # Confluence API example  
+   curl -H "Authorization: Bearer ACCESS_TOKEN" \
+        https://api.atlassian.com/ex/confluence/{cloudid}/rest/api/space
+   ```
+
+#### Testing Your Configuration
+
+1. Start your MXCP server:
+   ```bash
+   mxcp serve --debug
+   ```
+
+2. The authentication flow will begin when a client connects
+3. Users will be redirected to Atlassian for authorization
+4. After approval, they'll be redirected back to your callback URL
+5. Check the logs for successful authentication
+
+#### Troubleshooting
+
+**Common Issues:**
+
+1. **Invalid Client Configuration**:
+   ```
+   ValueError: Atlassian OAuth configuration is incomplete
+   ```
+   - Ensure `client_id` and `client_secret` are provided
+   - Check that environment variables are set correctly
+
+2. **Callback URL Mismatch**:
+   ```
+   HTTPException: Invalid state parameter
+   ```
+   - Verify the callback URL in your Atlassian app matches your MXCP configuration
+   - Ensure the URL scheme (http/https) is correct
+
+3. **Insufficient Permissions**:
+   ```
+   403 Forbidden
+   ```
+   - Check that your app has the required API permissions in the Developer Console
+   - Verify the user has access to the requested resources
+
+4. **Site Access Issues**:
+   ```
+   No accessible resources found
+   ```
+   - Ensure your app is installed on the Atlassian site
+   - Check that the user has granted access to your app
+
+**Debug Tips:**
+
+- Enable debug logging: `mxcp serve --debug`
+- Check the Atlassian Developer Console for app installation status
+- Verify OAuth scopes match your API requirements
+- Test with a simple scope like `read:me` first
+
+#### Security Best Practices
+
+- **Store credentials securely**: Use environment variables, not config files
+- **Use HTTPS**: Required for production OAuth flows
+- **Minimal scopes**: Request only the permissions you need
+- **Token management**: Implement proper token refresh logic
+- **Site validation**: Verify users have access to required Atlassian sites
+
 ## OAuth Client Registration
 
 MXCP supports multiple ways for OAuth clients to register and authenticate:
 
-### 1. Pre-registered Clients (Recommended for Development)
+### Pre-registered Clients (Recommended for Development)
 
 You can pre-register OAuth clients in your configuration file. This is the most straightforward approach for development and testing:
 
@@ -91,7 +384,7 @@ projects:
 - `grant_types` (optional): Allowed OAuth grant types (defaults to `["authorization_code"]`)
 - `scopes` (optional): Allowed OAuth scopes (defaults to `["mxcp:access"]`)
 
-### 2. Dynamic Client Registration (RFC 7591)
+### Dynamic Client Registration (RFC 7591)
 
 MXCP implements RFC 7591 Dynamic Client Registration. Clients can register themselves at runtime by making a POST request to `/register`:
 
@@ -120,7 +413,7 @@ The server will respond with client credentials:
 }
 ```
 
-### 3. Production Recommendations
+### Production Recommendations
 
 For production deployments:
 
@@ -155,85 +448,6 @@ projects:
             # ... other GitHub config
 ```
 
-#### GitHub OAuth Setup
-
-1. **Create a GitHub OAuth App**:
-   - Go to GitHub Settings > Developer settings > OAuth Apps
-   - Click "New OAuth App"
-   - Set the Authorization callback URL to: `http://localhost:8000/github/callback` (adjust host/port as needed)
-
-2. **Set Environment Variables**:
-   ```bash
-   export GITHUB_CLIENT_ID="your_github_client_id"
-   export GITHUB_CLIENT_SECRET="your_github_client_secret"
-   ```
-
-3. **Configuration Options**:
-   - `client_id`: Your GitHub OAuth app client ID
-   - `client_secret`: Your GitHub OAuth app client secret
-   - `scope`: OAuth scope to request (default: "user:email")
-   - `callback_path`: Callback path for OAuth flow (default: "/github/callback")
-   - `auth_url`: GitHub authorization URL
-   - `token_url`: GitHub token exchange URL
-
-Example MXCP configuration with GitHub OAuth authentication:
-
-```yaml
-mxcp: "1.0.0"
-
-# Transport configuration
-transport:
-  provider: streamable-http
-  http:
-    port: 8000
-    host: localhost
-
-# Project configuration
-projects:
-  my-project:
-    profiles:
-      dev:
-        auth:
-          provider: github
-          github:
-            client_id: "${GITHUB_CLIENT_ID}"
-            client_secret: "${GITHUB_CLIENT_SECRET}"
-            scope: "user:email"
-            callback_path: "/github/callback"
-            auth_url: "https://github.com/login/oauth/authorize"
-            token_url: "https://github.com/login/oauth/access_token"
-        secrets: []
-        plugin:
-          config: {} 
-```
-
-## How It Works
-
-When authentication is enabled:
-
-1. **Server Startup**: The MXCP server initializes with OAuth support
-2. **Client Registration**: MCP clients can register with the OAuth server
-3. **Authorization Flow**: Clients are redirected to GitHub for authentication
-4. **Token Exchange**: GitHub auth codes are exchanged for access tokens
-5. **Protected Access**: All endpoints require valid tokens
-
-## Protected Features
-
-When authentication is enabled, the following features require authentication:
-
-- **Custom Endpoints**: All tools, resources, and prompts defined in your YAML files
-- **SQL Tools**: Built-in DuckDB querying and schema exploration tools
-
-## User Information Logging
-
-When OAuth authentication is enabled, MXCP automatically logs detailed user information for each authenticated request, including:
-
-- Username and user ID
-- OAuth provider (e.g., GitHub)
-- User's display name and email (when available)
-
-This information appears in the server logs whenever an authenticated user executes any tool, resource, or prompt.
-
 ## Security Considerations
 
 - **Environment Variables**: Store sensitive credentials in environment variables, not in config files
@@ -241,27 +455,7 @@ This information appears in the server logs whenever an authenticated user execu
 - **Scope Limitation**: Request only the minimum required OAuth scopes
 - **Token Expiration**: Tokens have a default expiration of 1 hour
 
-## Troubleshooting
-
-### Common Issues
-
-1. **Invalid Client Configuration**:
-   ```
-   ValueError: GitHub OAuth configuration is incomplete
-   ```
-   - Ensure all required GitHub configuration fields are provided
-
-2. **Environment Variables Not Set**:
-   ```
-   ValueError: Environment variable GITHUB_CLIENT_ID is not set
-   ```
-   - Set the required environment variables before starting the server
-
-3. **Callback URL Mismatch**:
-   ```
-   HTTPException: Invalid state parameter
-   ```
-   - Ensure the callback URL in your GitHub OAuth app matches the configured callback_path
+## General Troubleshooting
 
 ### Debug Logging
 
@@ -271,17 +465,15 @@ Enable debug logging to troubleshoot authentication issues:
 mxcp serve --debug
 ```
 
-## Future Providers
+### Common Patterns
 
-The authentication system is designed to be extensible. Future OAuth providers can be added by:
+Most authentication issues fall into these categories:
 
-1. Implementing the `ExternalOAuthHandler` interface in a new provider file
-2. Adding provider-specific configuration to the schema
-3. Updating the `create_oauth_handler` factory function
-
-Currently supported providers:
-- `none` (default, no authentication)
-- `github` (GitHub OAuth)
+1. **Configuration Issues**: Missing or incorrect OAuth app settings
+2. **Environment Variables**: Credentials not properly set
+3. **URL Mismatches**: Callback URLs don't match between provider and MXCP
+4. **Permission Issues**: Insufficient scopes or user permissions
+5. **Network Issues**: Connectivity problems with OAuth providers
 
 ## Reverse Proxy Deployment
 
@@ -414,6 +606,19 @@ auth:
 - URLs use HTTPS in production environments
 - No port numbers in URLs when using standard ports (80/443)
 
-## Configuration
+## Adding New Providers
 
-Authentication is configured in your user configuration file (`~/.mxcp/config.yml`) under each profile's `auth` section. 
+The authentication system is designed to be extensible. Future OAuth providers can be added by:
+
+1. Implementing the `ExternalOAuthHandler` interface in a new provider file
+2. Adding provider-specific configuration to the schema
+3. Updating the `create_oauth_handler` factory function
+4. Adding documentation following the same structure as existing providers
+
+Each new provider should follow the same documentation structure:
+- **Creating an OAuth App**: Step-by-step provider setup
+- **Environment Variables**: Required credentials
+- **MXCP Configuration**: Configuration examples
+- **Configuration Options**: Available settings
+- **Testing**: How to verify the setup
+- **Troubleshooting**: Common issues and solutions 

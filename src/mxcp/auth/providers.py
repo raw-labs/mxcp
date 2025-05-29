@@ -366,5 +366,12 @@ def create_oauth_handler(auth_config: UserAuthConfig, host: str = "localhost", p
         if user_config and "transport" in user_config:
             enhanced_auth_config["transport"] = user_config["transport"]
         return GitHubOAuthHandler(enhanced_auth_config, host=host, port=port)
+    elif provider == "atlassian":
+        from .atlassian import AtlassianOAuthHandler
+        # Pass transport config to Atlassian handler
+        enhanced_auth_config = dict(auth_config)
+        if user_config and "transport" in user_config:
+            enhanced_auth_config["transport"] = user_config["transport"]
+        return AtlassianOAuthHandler(enhanced_auth_config, host=host, port=port)
     else:
         raise ValueError(f"Unsupported auth provider: {provider}") 
