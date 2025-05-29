@@ -59,7 +59,6 @@ class UserProfileConfig(TypedDict, total=False):
 
 class UserProjectConfig(TypedDict):
     profiles: Dict[str, UserProfileConfig]
-    default: Optional[str]
 
 class UserVaultConfig(TypedDict):
     enabled: bool

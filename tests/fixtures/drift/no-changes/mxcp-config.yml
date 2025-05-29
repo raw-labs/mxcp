@@ -1,7 +1,6 @@
 mxcp: "1.0.0"
 projects:
   no-changes:
-    default: default
     profiles:
       default: {}
 vault:

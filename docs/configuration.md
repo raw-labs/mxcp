@@ -15,7 +15,6 @@ Example:
 mxcp: "1.0.0"
 projects:
   my_project:
-    default: "dev"
     profiles:
       dev:
         secrets:
@@ -51,7 +50,6 @@ The transport configuration sets the default behavior for the `mxcp serve` comma
 ```yaml
 projects:
   my_project:  # Project name
-    default: "dev"  # Default profile
     profiles:
       dev:  # Profile name
         secrets:  # List of secrets for this profile
@@ -88,7 +86,6 @@ vault:
   token_env: "VAULT_TOKEN"
 projects:
   my_project:
-    default: "dev"
     profiles:
       dev:
         secrets:

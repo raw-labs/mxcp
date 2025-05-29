@@ -180,10 +180,6 @@
           "type": "object",
           "required": ["profiles"],
           "properties": {
-            "default": {
-              "type": "string",
-              "description": "Default profile name for this project."
-            },
             "profiles": {
               "type": "object",
               "description": "Profiles under this project.",
