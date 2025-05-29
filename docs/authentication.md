@@ -225,7 +225,7 @@ projects:
           atlassian:
             client_id: "${ATLASSIAN_CLIENT_ID}"
             client_secret: "${ATLASSIAN_CLIENT_SECRET}"
-            scope: "read:jira-work read:jira-user read:confluence-content.all read:confluence-user offline_access"
+            scope: "read:me read:jira-work read:jira-user read:confluence-content.all read:confluence-user offline_access"
             callback_path: "/atlassian/callback"
             auth_url: "https://auth.atlassian.com/authorize"
             token_url: "https://auth.atlassian.com/oauth/token"

@@ -47,6 +47,7 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         
         # Default scopes for JIRA and Confluence access
         default_scopes = [
+            "read:me",
             "read:jira-work",
             "read:jira-user", 
             "read:confluence-content.all",
@@ -217,11 +218,25 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
     # ----- private helper -----
     async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
         """Fetch raw user profile from Atlassian User Identity API (private implementation detail)."""
+        logger.info(f"Fetching Atlassian user profile with token: {token[:10]}...")
+        
         async with create_mcp_http_client() as client:
             resp = await client.get(
                 "https://api.atlassian.com/me",
                 headers={"Authorization": f"Bearer {token}"},
             )
+        
+        logger.info(f"Atlassian User Identity API response: {resp.status_code}")
+        
         if resp.status_code != 200:
-            raise ValueError(f"Atlassian API error: {resp.status_code}")
-        return resp.json() 
+            error_body = ""
+            try:
+                error_body = resp.text
+                logger.error(f"Atlassian User Identity API error {resp.status_code}: {error_body}")
+            except Exception:
+                logger.error(f"Atlassian User Identity API error {resp.status_code}: Unable to read response body")
+            raise ValueError(f"Atlassian API error: {resp.status_code} - {error_body}")
+        
+        user_data = resp.json()
+        logger.info(f"Successfully fetched Atlassian user profile for account_id: {user_data.get('account_id', 'unknown')}")
+        return user_data 

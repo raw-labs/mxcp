@@ -249,6 +249,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
         
         # Debug logging for PKCE
         logger.info(f"Creating auth code with PKCE - code_challenge: {meta.code_challenge}")
+        logger.info(f"External token from provider: {user_info.raw_token[:10]}... for user: {user_info.id}")
         
         auth_code = AuthorizationCode(
             code=mcp_code,
@@ -263,6 +264,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
             self._auth_codes[mcp_code] = auth_code
             await self._store_token(user_info.raw_token, user_info.id, user_info.scopes, None)
             self._token_mapping[mcp_code] = user_info.raw_token
+            logger.info(f"Stored external token mapping: {mcp_code} -> {user_info.raw_token[:10]}...")
         
         logger.info(f"Created auth code: {mcp_code} for client: {meta.client_id}")
         return construct_redirect_uri(meta.redirect_uri, code=mcp_code, state=state)
@@ -300,8 +302,13 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
             async with self._lock:
                 await self._store_token(mcp_token, client.client_id, code_obj.scopes, 3600)
                 external = self._token_mapping.pop(code_obj.code, None)
+                logger.info(f"External token mapping lookup - code: {code_obj.code}, found: {external[:10] if external else 'None'}...")
                 if external:
                     self._token_mapping[mcp_token] = external
+                    logger.info(f"Mapped MCP token {mcp_token[:10]}... to external token {external[:10]}...")
+                else:
+                    logger.warning(f"No external token found for auth code {code_obj.code}")
+                    logger.warning(f"Available token mappings: {list(self._token_mapping.keys())}")
                 self._auth_codes.pop(code_obj.code, None)
             
             logger.info(f"Token exchange successful - mcp_token: {mcp_token[:10]}..., scopes: {code_obj.scopes}")

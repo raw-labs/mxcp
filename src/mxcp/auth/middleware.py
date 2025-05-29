@@ -42,11 +42,15 @@ class AuthenticationMiddleware:
                 logger.warning("No access token found in request context")
                 return None
                 
+            logger.info(f"Found access token: {access_token.token[:10]}...")
+                
             # Validate the token with the OAuth server
             token_info = await self.oauth_server.load_access_token(access_token.token)
             if not token_info:
                 logger.warning("Invalid or expired access token")
                 return None
+                
+            logger.info(f"Token validated successfully for client: {token_info.client_id}")
                 
             # Get the external token to fetch user context
             external_token = self.oauth_server._token_mapping.get(access_token.token)
@@ -54,9 +58,12 @@ class AuthenticationMiddleware:
                 logger.warning("No external token mapping found")
                 return None
                 
+            logger.info(f"Found external token mapping: {external_token[:10]}...")
+                
             # Get standardized user context from the provider
             try:
                 user_context = await self.oauth_handler.get_user_context(external_token)
+                logger.info(f"Successfully retrieved user context for {user_context.username} (provider: {user_context.provider})")
                 return user_context
             except Exception as e:
                 logger.error(f"Failed to get user context: {e}")
