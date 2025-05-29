@@ -149,6 +149,8 @@ def _apply_defaults(config: dict) -> dict:
         http_config["port"] = 8000
     if "host" not in http_config:
         http_config["host"] = "localhost"
+    if "stateless" not in http_config:
+        http_config["stateless"] = False
 
     # Ensure each profile has at least empty secrets, plugin, and auth config
     for project in config.get("projects", {}).values():

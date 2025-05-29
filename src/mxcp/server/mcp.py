@@ -18,6 +18,7 @@ from mxcp.auth.url_utils import create_url_builder
 from mcp.types import ToolAnnotations
 from pydantic import Field, BaseModel, create_model
 from typing import Annotated
+from starlette.responses import JSONResponse
 import re
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ class RAWMCP:
                 issuer_url=base_url,
                 client_registration_options=ClientRegistrationOptions(
                     enabled=True,
-                    valid_scopes=[MCP_SCOPE],
+                    valid_scopes=[MCP_SCOPE, "claudeai"],
                     default_scopes=[MCP_SCOPE],
                 ),
                 required_scopes=[MCP_SCOPE],
@@ -94,6 +95,7 @@ class RAWMCP:
         
         # Initialize authentication middleware
         self.auth_middleware = AuthenticationMiddleware(self.oauth_handler, self.oauth_server)
+        logger.info(f"Authentication middleware initialized with oauth_handler: {self.oauth_handler}, oauth_server: {self.oauth_server}")
         
         # Register OAuth callback route if authentication is enabled
         if self.oauth_handler and self.oauth_server:
@@ -104,37 +106,6 @@ class RAWMCP:
             @self.mcp.custom_route(callback_path, methods=["GET"])
             async def oauth_callback(request):
                 return await self.oauth_handler.on_callback(request, self.oauth_server)
-            
-            # Register Dynamic Client Registration endpoint
-            @self.mcp.custom_route("/register", methods=["POST"])
-            async def client_registration(request):
-                """Handle Dynamic Client Registration requests (RFC 7591)"""
-                import json
-                from starlette.responses import JSONResponse
-                
-                try:
-                    # Parse client metadata from request body
-                    body = await request.body()
-                    client_metadata = json.loads(body.decode('utf-8'))
-                    
-                    # Register the client dynamically
-                    registration_response = await self.oauth_server.register_client_dynamically(client_metadata)
-                    
-                    logger.info(f"Dynamically registered client: {registration_response['client_id']}")
-                    
-                    return JSONResponse(
-                        content=registration_response,
-                        status_code=201,
-                        headers={"Content-Type": "application/json"}
-                    )
-                    
-                except Exception as e:
-                    logger.error(f"Error in client registration: {e}")
-                    return JSONResponse(
-                        content={"error": "invalid_client_metadata", "error_description": str(e)},
-                        status_code=400,
-                        headers={"Content-Type": "application/json"}
-                    )
             
             # Register OAuth Protected Resource metadata endpoint
             @self.mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])

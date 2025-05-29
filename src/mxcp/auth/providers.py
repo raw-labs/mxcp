@@ -188,36 +188,68 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
         import secrets
         import time
         
-        # Generate client credentials
-        client_id = secrets.token_urlsafe(32)
-        client_secret = secrets.token_urlsafe(64)
+        logger.info(f"=== register_client_dynamically called ===")
+        logger.info(f"Input client_metadata: {client_metadata}")
+        logger.info(f"Input type: {type(client_metadata)}")
         
-        # Create a proper client object
-        client_info = OAuthClientInformationFull(
-            client_id=client_id,
-            client_secret=client_secret,
-            redirect_uris=client_metadata.get('redirect_uris', []),
-            grant_types=client_metadata.get('grant_types', ['authorization_code']),
-            response_types=client_metadata.get('response_types', ['code']),
-            scope=client_metadata.get('scope', 'mxcp:access'),
-            client_name=client_metadata.get('client_name', 'MCP Client')
-        )
-        
-        # Register the client
-        await self.register_client(client_info)
-        
-        # Return registration response
-        return {
-            'client_id': client_id,
-            'client_secret': client_secret,
-            'client_id_issued_at': int(time.time()),
-            'client_secret_expires_at': 0,  # Never expires
-            'redirect_uris': client_info.redirect_uris,
-            'grant_types': client_info.grant_types,
-            'response_types': client_info.response_types,
-            'scope': client_info.scope,
-            'client_name': client_info.client_name
-        }
+        try:
+            # Generate client credentials
+            client_id = secrets.token_urlsafe(32)
+            client_secret = secrets.token_urlsafe(64)
+            logger.info(f"Generated client_id: {client_id}")
+            
+            # Extract and validate metadata
+            redirect_uris = client_metadata.get('redirect_uris', [])
+            grant_types = client_metadata.get('grant_types', ['authorization_code'])
+            response_types = client_metadata.get('response_types', ['code'])
+            scope = client_metadata.get('scope', 'mxcp:access')
+            client_name = client_metadata.get('client_name', 'MCP Client')
+            
+            logger.info(f"Extracted values:")
+            logger.info(f"  redirect_uris: {redirect_uris} (type: {type(redirect_uris)})")
+            logger.info(f"  grant_types: {grant_types} (type: {type(grant_types)})")
+            logger.info(f"  response_types: {response_types} (type: {type(response_types)})")
+            logger.info(f"  scope: {scope} (type: {type(scope)})")
+            logger.info(f"  client_name: {client_name} (type: {type(client_name)})")
+            
+            # Create a proper client object
+            logger.info("Creating OAuthClientInformationFull object...")
+            client_info = OAuthClientInformationFull(
+                client_id=client_id,
+                client_secret=client_secret,
+                redirect_uris=redirect_uris,
+                grant_types=grant_types,
+                response_types=response_types,
+                scope=scope,
+                client_name=client_name
+            )
+            logger.info(f"Created client_info: {client_info}")
+            
+            # Register the client
+            logger.info("Registering client...")
+            await self.register_client(client_info)
+            
+            # Return registration response
+            response = {
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'client_id_issued_at': int(time.time()),
+                'client_secret_expires_at': 0,  # Never expires
+                'redirect_uris': client_info.redirect_uris,
+                'grant_types': client_info.grant_types,
+                'response_types': client_info.response_types,
+                'scope': client_info.scope,
+                'client_name': client_info.client_name
+            }
+            logger.info(f"Returning response: {response}")
+            return response
+            
+        except Exception as e:
+            logger.error(f"Exception in register_client_dynamically: {e}")
+            logger.error(f"Exception type: {type(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
 
     # ----- authorize URL -----
     async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:

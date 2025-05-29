@@ -42,9 +42,35 @@ transport:
   http:
     port: 8000      # Default port for HTTP transport
     host: "localhost"  # Default host for HTTP transport
+    stateless: false  # Enable stateless HTTP mode (default: false)
 ```
 
 The transport configuration sets the default behavior for the `mxcp serve` command. You can override these settings using command-line options.
+
+**Transport Options:**
+
+- **provider**: The transport protocol to use
+  - `streamable-http`: HTTP with streaming support (default)
+  - `sse`: Server-sent events
+  - `stdio`: Standard input/output
+
+- **http**: HTTP-specific configuration
+  - **port**: Port number to bind to (default: 8000)
+  - **host**: Host address to bind to (default: "localhost")
+  - **stateless**: Enable stateless HTTP mode (default: false)
+    - When `true`, no session state is maintained between requests
+    - Required for serverless deployments
+    - Can be overridden with `mxcp serve --stateless`
+
+**Example with stateless mode for serverless deployment:**
+```yaml
+transport:
+  provider: "streamable-http"
+  http:
+    port: 8080
+    host: "0.0.0.0"
+    stateless: true
+```
 
 ### Projects Configuration
 ```yaml

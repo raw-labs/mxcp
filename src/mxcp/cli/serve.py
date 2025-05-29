@@ -18,8 +18,9 @@ class EndpointRequest(BaseModel):
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--no-sql-tools", is_flag=True, help="Disable built-in SQL querying and schema exploration tools (enabled by default in site config)")
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
+@click.option("--stateless", is_flag=True, help="Enable stateless HTTP mode (for serverless deployments)")
 @track_command_with_timing("serve")
-def serve(profile: Optional[str], transport: Optional[str], port: Optional[int], debug: bool, no_sql_tools: bool, readonly: bool):
+def serve(profile: Optional[str], transport: Optional[str], port: Optional[int], debug: bool, no_sql_tools: bool, readonly: bool, stateless: bool):
     """Start the MXCP MCP server to expose endpoints via HTTP or stdio.
     
     This command starts a server that exposes your MXCP endpoints as an MCP-compatible
@@ -33,6 +34,7 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
         mxcp serve --profile dev     # Use the 'dev' profile configuration
         mxcp serve --no-sql-tools    # Disable built-in SQL querying and schema exploration tools
         mxcp serve --readonly        # Open database connection in read-only mode
+        mxcp serve --stateless       # Enable stateless HTTP mode
     """
     # Get values from environment variables if not set by flags
     if not profile:
@@ -60,6 +62,11 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
             
         # Get host from user config (defaults to localhost)
         final_host = http_config.get("host", "localhost")
+        
+        # Get stateless setting from user config, with CLI override
+        # CLI flag takes precedence over config setting
+        config_stateless = http_config.get("stateless", False)
+        final_stateless = stateless if stateless else config_stateless
 
         # Set up signal handler for graceful shutdown
         def signal_handler(signum, frame):
@@ -77,7 +84,8 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
             host=final_host,
             port=final_port, 
             enable_sql_tools=None if not no_sql_tools else False,
-            readonly=readonly
+            readonly=readonly,
+            stateless_http=final_stateless
         )
         server.run(transport=final_transport)
     except KeyboardInterrupt:

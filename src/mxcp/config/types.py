@@ -64,6 +64,7 @@ class UserHttpTransportConfig(TypedDict, total=False):
     scheme: Optional[Literal["http", "https"]]
     base_url: Optional[str]
     trust_proxy: Optional[bool]
+    stateless: Optional[bool]
 
 class UserTransportConfig(TypedDict, total=False):
     provider: Optional[Literal["streamable-http", "sse", "stdio"]]
