@@ -448,6 +448,61 @@ projects:
             # ... other GitHub config
 ```
 
+## Authorization Configuration
+
+MXCP supports configurable scope-based authorization to control access to your endpoints and tools. You can specify which OAuth scopes are required for accessing your server's resources.
+
+### Required Scopes
+
+Configure authorization requirements using the `authorization` section in your auth configuration:
+
+```yaml
+projects:
+  my_project:
+    profiles:
+      dev:
+        auth:
+          provider: github
+          
+          # Authorization configuration
+          authorization:
+            required_scopes:
+              - "mxcp:access"  # Require this scope for all endpoint access
+              - "mxcp:admin"   # Also require admin scope
+          
+          clients:
+            - client_id: "${CLIENT_ID}"
+              # ... client config
+```
+
+**Configuration Options:**
+
+- `required_scopes`: List of OAuth scopes that users must have to access protected endpoints
+- If `required_scopes` is empty (`[]`), only authentication is required (no authorization)
+- If omitted entirely, defaults to no authorization requirements
+
+**Example Configurations:**
+
+```yaml
+# Authentication only (no scope requirements)
+authorization:
+  required_scopes: []
+
+# Require basic access scope
+authorization:
+  required_scopes:
+    - "mxcp:access"
+
+# Require multiple scopes (user must have ALL listed scopes)
+authorization:
+  required_scopes:
+    - "mxcp:access"
+    - "mxcp:admin"
+    - "mxcp:write"
+```
+
+When authorization is configured, all protected endpoints (tools, resources, prompts, SQL features) will verify that the authenticated user's token contains the required scopes before allowing access.
+
 ## Security Considerations
 
 - **Environment Variables**: Store sensitive credentials in environment variables, not in config files

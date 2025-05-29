@@ -94,11 +94,16 @@ class UserAtlassianAuthConfig(TypedDict):
     auth_url: str
     token_url: str
 
+
+class UserAuthorizationConfig(TypedDict, total=False):
+    required_scopes: Optional[List[str]]
+
 class UserAuthConfig(TypedDict, total=False):
     provider: Optional[Literal["none", "github", "atlassian"]]
     clients: Optional[List[UserOAuthClientConfig]]
     github: Optional[UserGitHubAuthConfig]
     atlassian: Optional[UserAtlassianAuthConfig]
+    authorization: Optional[UserAuthorizationConfig]
 
 class UserProfileConfig(TypedDict, total=False):
     secrets: Optional[List[UserSecretDefinition]]

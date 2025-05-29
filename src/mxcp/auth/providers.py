@@ -26,9 +26,6 @@ from mxcp.config.types import UserAuthConfig
 
 logger = logging.getLogger(__name__)
 
-# Global MCP scope for MXCP server
-MCP_SCOPE = "mxcp:access"
-
 # ────────────────────────────────────────────────────────────────────────────
 # OAuth Client implementation
 # ────────────────────────────────────────────────────────────────────────────
@@ -159,7 +156,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
                 ]),
                 grant_types=client_config.get("grant_types", ["authorization_code"]),
                 response_types=client_config.get("response_types", ["code"]),
-                scope=" ".join(client_config.get("scopes", ["mxcp:access"])),
+                scope=" ".join(client_config.get("scopes", [])),  # No default scopes
                 client_name=client_config["name"]
             )
             

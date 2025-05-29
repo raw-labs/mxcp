@@ -10,7 +10,7 @@ from starlette.responses import RedirectResponse, HTMLResponse, Response
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
-from .providers import ExternalOAuthHandler, ExternalUserInfo, StateMeta, UserContext, MCP_SCOPE
+from .providers import ExternalOAuthHandler, ExternalUserInfo, StateMeta, UserContext
 from mxcp.config.types import UserAuthConfig
 from mxcp.auth.url_utils import URLBuilder
 
@@ -141,7 +141,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
         
         return ExternalUserInfo(
             id=meta.client_id,
-            scopes=[MCP_SCOPE],
+            scopes=[],
             raw_token=payload["access_token"],
             provider="github",
         )

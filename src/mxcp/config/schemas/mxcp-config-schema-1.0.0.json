@@ -142,13 +142,25 @@
                     },
                     "auth": {
                       "type": "object",
-                      "description": "Authentication configuration for this profile.",
+                      "description": "Authentication configuration for this profile",
                       "properties": {
                         "provider": {
                           "type": "string",
                           "enum": ["none", "github", "atlassian"],
                           "default": "none",
-                          "description": "Authentication provider to use."
+                          "description": "OAuth provider to use for authentication"
+                        },
+                        "authorization": {
+                          "type": "object",
+                          "description": "Authorization settings for controlling access to MCP functionality",
+                          "properties": {
+                            "required_scopes": {
+                              "type": "array",
+                              "items": {"type": "string"},
+                              "default": [],
+                              "description": "List of scopes required to access any MCP endpoint. Empty list means no scopes required (authentication only)."
+                            }
+                          }
                         },
                         "clients": {
                           "type": "array",

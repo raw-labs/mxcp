@@ -11,7 +11,7 @@ from mxcp.config.site_config import SiteConfig, get_active_profile
 from mxcp.endpoints.schema import validate_endpoint
 from makefun import create_function
 from mxcp.engine.duckdb_session import DuckDBSession
-from mxcp.auth.providers import create_oauth_handler, GeneralOAuthAuthorizationServer, MCP_SCOPE
+from mxcp.auth.providers import create_oauth_handler, GeneralOAuthAuthorizationServer
 from mxcp.auth.middleware import AuthenticationMiddleware
 from mxcp.auth.context import get_user_context
 from mxcp.auth.url_utils import create_url_builder
@@ -60,14 +60,23 @@ class RAWMCP:
             url_builder = create_url_builder(user_config)
             base_url = url_builder.get_base_url(host=host, port=port)
             
+            # Get authorization configuration
+            auth_authorization = auth_config.get("authorization", {})
+            required_scopes = auth_authorization.get("required_scopes", [])
+            
+            logger.info(f"Authorization configured - required scopes: {required_scopes or 'none (authentication only)'}")
+            
             auth_settings = AuthSettings(
                 issuer_url=base_url,
                 client_registration_options=ClientRegistrationOptions(
                     enabled=True,
-                    valid_scopes=[MCP_SCOPE, "claudeai"],
-                    default_scopes=[MCP_SCOPE],
+                    # Accept any scope during client registration
+                    valid_scopes=None,  # Always None = accept any scope
+                    # Set default scopes to match required scopes so new clients get the right permissions
+                    default_scopes=required_scopes if required_scopes else None,
                 ),
-                required_scopes=[MCP_SCOPE],
+                # Use the configured required scopes (empty list = no scopes required)
+                required_scopes=required_scopes if required_scopes else None,
             )
             logger.info(f"OAuth authentication enabled with provider: {auth_config.get('provider')}")
         else:
@@ -117,10 +126,14 @@ class RAWMCP:
                 url_builder = create_url_builder(user_config)
                 base_url = url_builder.get_base_url(request)
                 
+                # Get supported scopes from configuration
+                auth_authorization = auth_config.get("authorization", {})
+                supported_scopes = auth_authorization.get("required_scopes", [])
+                
                 metadata = {
                     "resource": base_url,
                     "authorization_servers": [base_url],
-                    "scopes_supported": [MCP_SCOPE],
+                    "scopes_supported": supported_scopes,
                     "bearer_methods_supported": ["header"],
                     "resource_documentation": f"{base_url}/docs"
                 }
