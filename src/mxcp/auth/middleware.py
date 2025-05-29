@@ -99,9 +99,9 @@ class AuthenticationMiddleware:
                     
                     logger.info(f"Executing {func.__name__} for authenticated {', '.join(log_parts)}")
                 else:
-                    logger.warning(f"Unauthenticated access attempt to {func.__name__}")
-                    # For now, we'll continue execution but log the warning
-                    # In a production system, you might want to raise an exception here
+                    logger.error(f"Authentication required but failed for {func.__name__}")
+                    from starlette.exceptions import HTTPException
+                    raise HTTPException(401, "Authentication required")
             else:
                 logger.debug(f"Executing {func.__name__} (authentication disabled)")
             
