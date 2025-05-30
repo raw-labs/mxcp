@@ -18,9 +18,28 @@ def check_existing_duckdb(target_dir: Path, profile: str = "default") -> bool:
     """Check if there's a .duckdb file for the given profile in the target directory."""
     return (target_dir / f"db-{profile}.duckdb").exists()
 
-def check_project_exists(user_config: dict, project_name: str) -> bool:
-    """Check if the project name already exists in the user config."""
-    return project_name in user_config.get("projects", {})
+def check_project_exists_in_user_config(project_name: str) -> bool:
+    """Check if the project name already exists in the user config file.
+    
+    This function directly reads the config file without modifying it,
+    unlike load_user_config which always ensures projects/profiles exist.
+    """
+    config_path = Path(os.environ.get("MXCP_CONFIG", Path.home() / ".mxcp" / "config.yml"))
+    
+    if not config_path.exists():
+        return False
+    
+    try:
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+        
+        if not config:
+            return False
+            
+        return project_name in config.get("projects", {})
+    except Exception:
+        # If we can't read the config, assume project doesn't exist
+        return False
 
 def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str):
     """Create the mxcp-site.yml file with the given project and profile names."""
@@ -125,14 +144,9 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
             profile = "default"
             
         # Check if project exists in user config
-        try:
-            user_config = load_user_config({"project": project, "profile": profile}, generate_default=False)
-            if check_project_exists(user_config, project):
-                if not click.confirm(f"Project '{project}' already exists in your config. Continue?"):
-                    return
-        except FileNotFoundError:
-            # No user config yet, that's fine
-            pass
+        if check_project_exists_in_user_config(project):
+            if not click.confirm(f"Project '{project}' already exists in your config. Continue?"):
+                return
             
         # Create mxcp-site.yml
         create_mxcp_site_yml(target_dir, project, profile)
