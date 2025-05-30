@@ -138,7 +138,7 @@
                 },
                 "path": {
                   "type": "string",
-                  "description": "Path to the audit log DuckDB file for this profile."
+                  "description": "Path to the audit log JSONL file for this profile."
                 }
               },
               "additionalProperties": false

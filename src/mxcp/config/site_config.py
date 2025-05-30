@@ -69,7 +69,7 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
         
     # Set default audit log path for the profile if not specified
     if "path" not in config["profiles"][profile]["audit"]:
-        config["profiles"][profile]["audit"]["path"] = str(repo_root / f"logs-{profile}.duckdb")
+        config["profiles"][profile]["audit"]["path"] = str(repo_root / f"logs-{profile}.jsonl")
 
     # Initialize extensions section if not present
     if "extensions" not in config:
@@ -132,3 +132,45 @@ def get_active_profile(user_config: UserConfig, site_config: SiteConfig, profile
         raise ValueError(f"Profile '{profile_name}' not found in project '{project_name}'")
     
     return project["profiles"][profile_name]
+
+def apply_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Apply default values to the configuration.
+    
+    Args:
+        config: Raw configuration dictionary
+        
+    Returns:
+        Configuration with defaults applied
+    """
+    # Apply global defaults
+    config.setdefault("server", {})
+    config["server"].setdefault("host", "127.0.0.1")
+    config["server"].setdefault("port", 3000)
+    
+    config.setdefault("authentication", {"enabled": False})
+    config.setdefault("profile", "default")
+    
+    # Apply profile defaults
+    if "profiles" in config:
+        for profile_name, profile_config in config["profiles"].items():
+            # Apply drift detection defaults
+            if "drift_detection" in profile_config:
+                drift_config = profile_config["drift_detection"]
+                drift_config.setdefault("enabled", True)
+                drift_config.setdefault("auto_apply", False)
+                drift_config.setdefault("check_interval", 300)  # 5 minutes
+                drift_config.setdefault("state_file", f"drift-state-{profile_name}.json")
+            
+            # Apply audit logging defaults
+            if "audit" in profile_config:
+                audit_config = profile_config["audit"]
+                audit_config.setdefault("enabled", False)
+                audit_config.setdefault("path", f"logs-{profile_name}.jsonl")
+            else:
+                # Add default audit configuration if not present
+                profile_config["audit"] = {
+                    "enabled": False,
+                    "path": f"logs-{profile_name}.jsonl"
+                }
+    
+    return config

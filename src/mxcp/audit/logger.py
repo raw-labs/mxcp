@@ -1,4 +1,4 @@
-"""Audit logger for MXCP with DuckDB backend and thread-safe operation."""
+"""Audit logger for MXCP with JSONL backend and thread-safe operation."""
 
 import atexit
 import json
@@ -8,8 +8,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any, Optional, Literal
-import duckdb
+from typing import Dict, Any, Optional, Literal, List
 from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)
@@ -34,13 +33,29 @@ class LogEvent:
     reason: Optional[str]
     status: Status
     error: Optional[str]
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "timestamp": self.timestamp.isoformat(),
+            "caller": self.caller,
+            "type": self.type,
+            "name": self.name,
+            "input_json": self.input_json,
+            "duration_ms": self.duration_ms,
+            "policy_decision": self.policy_decision,
+            "reason": self.reason,
+            "status": self.status,
+            "error": self.error
+        }
 
 
 class AuditLogger:
-    """Thread-safe audit logger that writes to DuckDB.
+    """Thread-safe audit logger that writes to JSONL files.
     
     This logger uses a background thread to write events asynchronously,
-    ensuring no performance impact on endpoint execution.
+    ensuring no performance impact on endpoint execution. JSONL format
+    allows concurrent appends without locking issues.
     
     Shutdown behavior:
     - The logger should be explicitly shut down by calling shutdown()
@@ -59,55 +74,33 @@ class AuditLogger:
                 cls._instance = super().__new__(cls)
             return cls._instance
     
-    def __init__(self, db_path: Path, enabled: bool = True):
+    def __init__(self, log_path: Path, enabled: bool = True):
         """Initialize the audit logger.
         
         Args:
-            db_path: Path to the DuckDB database file
+            log_path: Path to the JSONL log file
             enabled: Whether audit logging is enabled
         """
         # Avoid re-initialization
         if hasattr(self, '_initialized'):
             return
             
-        self.db_path = db_path
+        self.log_path = log_path
         self.enabled = enabled
         self._queue = queue.Queue()
         self._writer_thread = None
         self._stop_event = threading.Event()
         self._initialized = True
+        self._file_lock = threading.Lock()
         
         if self.enabled:
-            self._setup_database()
+            # Ensure parent directory exists
+            self.log_path.parent.mkdir(parents=True, exist_ok=True)
             self._start_writer_thread()
             self._register_shutdown_handlers()
-            logger.info(f"Audit logging initialized with database: {self.db_path}")
+            logger.info(f"Audit logging initialized with file: {self.log_path}")
         else:
             logger.info("Audit logging is disabled")
-    
-    def _setup_database(self):
-        """Create the audit logs table if it doesn't exist."""
-        try:
-            conn = duckdb.connect(str(self.db_path))
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS logs (
-                    timestamp TIMESTAMP NOT NULL,
-                    caller TEXT NOT NULL,
-                    type TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    input_json TEXT NOT NULL,
-                    duration_ms INTEGER NOT NULL,
-                    policy_decision TEXT NOT NULL,
-                    reason TEXT,
-                    status TEXT NOT NULL,
-                    error TEXT
-                )
-            """)
-            conn.close()
-            logger.debug("Database schema initialized")
-        except Exception as e:
-            logger.error(f"Failed to setup database: {e}")
-            self.enabled = False
     
     def _start_writer_thread(self):
         """Start the background writer thread."""
@@ -116,70 +109,72 @@ class AuditLogger:
         logger.debug("Background writer thread started")
     
     def _writer_loop(self):
-        """Background thread that writes log events to DuckDB."""
-        conn = None
-        try:
-            conn = duckdb.connect(str(self.db_path))
-            logger.debug("Writer thread connected to database")
-            
-            while not self._stop_event.is_set():
+        """Background thread that writes log events to JSONL file."""
+        logger.debug("Writer thread started")
+        
+        while not self._stop_event.is_set():
+            try:
+                # Collect events for batch writing
+                events = []
+                
+                # Get first event with timeout
                 try:
-                    # Get events from queue with timeout
                     event = self._queue.get(timeout=0.1)
-                    self._write_event(conn, event)
+                    events.append(event)
                     self._queue.task_done()
                 except queue.Empty:
                     continue
-                except Exception as e:
-                    logger.error(f"Error writing log event: {e}")
-            
-            # Drain remaining events before shutdown
-            self._drain_queue(conn)
-            
-        except Exception as e:
-            logger.error(f"Fatal error in writer thread: {e}")
-        finally:
-            if conn:
-                conn.close()
-            logger.debug("Writer thread terminated")
+                
+                # Collect additional events for up to 50ms for batching
+                batch_start = time.time()
+                while (time.time() - batch_start) < 0.05 and len(events) < 100:
+                    try:
+                        event = self._queue.get_nowait()
+                        events.append(event)
+                        self._queue.task_done()
+                    except queue.Empty:
+                        break
+                
+                # Write batch to file
+                if events:
+                    self._write_events_batch(events)
+                    
+            except Exception as e:
+                logger.error(f"Error in writer loop: {e}")
+        
+        # Drain remaining events before shutdown
+        self._drain_queue_final()
+        logger.debug("Writer thread terminated")
     
-    def _write_event(self, conn: duckdb.DuckDBPyConnection, event: LogEvent):
-        """Write a single event to the database."""
+    def _write_events_batch(self, events: List[LogEvent]):
+        """Write a batch of events to the JSONL file."""
         try:
-            conn.execute("""
-                INSERT INTO logs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                event.timestamp,
-                event.caller,
-                event.type,
-                event.name,
-                event.input_json,
-                event.duration_ms,
-                event.policy_decision,
-                event.reason,
-                event.status,
-                event.error
-            ))
-            logger.debug(f"Wrote log event: {event.type} {event.name}")
+            with self._file_lock:
+                with open(self.log_path, 'a', encoding='utf-8') as f:
+                    for event in events:
+                        json.dump(event.to_dict(), f, ensure_ascii=False)
+                        f.write('\n')
+                    f.flush()
+            
+            logger.debug(f"Wrote batch of {len(events)} log events")
+            
         except Exception as e:
-            logger.error(f"Failed to write event to database: {e}")
+            logger.error(f"Failed to write event batch: {e}")
     
-    def _drain_queue(self, conn: duckdb.DuckDBPyConnection):
+    def _drain_queue_final(self):
         """Drain all remaining events from the queue."""
-        count = 0
+        events = []
         while not self._queue.empty():
             try:
                 event = self._queue.get_nowait()
-                self._write_event(conn, event)
+                events.append(event)
                 self._queue.task_done()
-                count += 1
             except queue.Empty:
                 break
-            except Exception as e:
-                logger.error(f"Error draining queue: {e}")
         
-        if count > 0:
-            logger.info(f"Drained {count} remaining log events")
+        if events:
+            self._write_events_batch(events)
+            logger.debug(f"Drained {len(events)} events during shutdown")
     
     def _register_shutdown_handlers(self):
         """Register handlers for graceful shutdown."""

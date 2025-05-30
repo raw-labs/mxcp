@@ -19,7 +19,8 @@ from mxcp.audit.query import AuditQuery
 @click.option("--status", type=click.Choice(["success", "error"]), help="Filter by execution status")
 @click.option("--since", help="Show logs since (e.g., 10m, 2h, 1d)")
 @click.option("--limit", type=int, default=100, help="Maximum number of results (default: 100)")
-@click.option("--export", "export_path", type=click.Path(), help="Export results to CSV file")
+@click.option("--export-csv", "export_csv_path", type=click.Path(), help="Export results to CSV file")
+@click.option("--export-duckdb", "export_duckdb_path", type=click.Path(), help="Export all logs to DuckDB database file")
 @click.option("--json", "json_output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 def log(
@@ -32,7 +33,8 @@ def log(
     status: Optional[str],
     since: Optional[str],
     limit: int,
-    export_path: Optional[str],
+    export_csv_path: Optional[str],
+    export_duckdb_path: Optional[str],
     json_output: bool,
     debug: bool
 ):
@@ -47,7 +49,8 @@ def log(
         mxcp log --policy denied           # Show blocked executions
         mxcp log --since 10m               # Logs from last 10 minutes
         mxcp log --since 2h --status error # Errors from last 2 hours
-        mxcp log --export audit.csv        # Export to CSV file
+        mxcp log --export-csv audit.csv    # Export to CSV file
+        mxcp log --export-duckdb audit.db  # Export to DuckDB database
         mxcp log --json                    # Output as JSON
     
     Time formats for --since:
@@ -55,6 +58,9 @@ def log(
         5m   - 5 minutes
         2h   - 2 hours
         1d   - 1 day
+    
+    Note: Audit logs are stored in JSONL format for concurrent access.
+    The log file can be read while the server is running.
     """
     # Configure logging
     configure_logging(debug)
@@ -90,27 +96,36 @@ def log(
                 click.echo(f"Enable it in mxcp-site.yml under profiles.{profile_name}.audit.enabled", err=True)
             return
         
-        # Get audit database path
-        db_path = Path(audit_config["path"])
+        # Get audit log file path
+        log_path = Path(audit_config["path"])
         
-        if not db_path.exists():
+        if not log_path.exists():
             if json_output:
                 click.echo(json.dumps({
                     "status": "error",
-                    "error": f"Audit database not found at {db_path}. The database is created when audit logging is enabled and events are logged."
+                    "error": f"Audit log file not found at {log_path}. The log file is created when audit logging is enabled and events are logged."
                 }))
             else:
-                click.echo(f"Audit database not found at {db_path}.", err=True)
-                click.echo("The database is created when audit logging is enabled and events are logged.", err=True)
+                click.echo(f"Audit log file not found at {log_path}.", err=True)
+                click.echo("The log file is created when audit logging is enabled and events are logged.", err=True)
             return
         
         # Create query interface
-        query_interface = AuditQuery(db_path)
+        query_interface = AuditQuery(log_path)
         
-        # Handle export
-        if export_path:
+        # Handle export to DuckDB
+        if export_duckdb_path:
+            row_count = query_interface.export_to_duckdb(Path(export_duckdb_path))
+            output_result(
+                f"Exported {row_count} log entries to DuckDB database: {export_duckdb_path}",
+                json_output
+            )
+            return
+        
+        # Handle export to CSV
+        if export_csv_path:
             row_count = query_interface.export_to_csv(
-                Path(export_path),
+                Path(export_csv_path),
                 tool=tool,
                 resource=resource,
                 prompt=prompt,
@@ -120,7 +135,7 @@ def log(
                 since=since
             )
             output_result(
-                f"Exported {row_count} log entries to {export_path}",
+                f"Exported {row_count} log entries to {export_csv_path}",
                 json_output
             )
             return

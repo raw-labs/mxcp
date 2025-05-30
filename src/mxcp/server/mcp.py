@@ -171,26 +171,26 @@ class RAWMCP:
         # Cache for dynamically created models
         self._model_cache = {}
 
-        # Initialize AuditLogger based on profile configuration
-        profile_audit_config = self.site_config["profiles"][self.profile_name].get("audit", {})
-        audit_enabled = profile_audit_config.get("enabled", False)
-        audit_path = Path(profile_audit_config.get("path", f"logs-{self.profile_name}.duckdb"))
-        
-        self.audit_logger = AuditLogger(audit_path, enabled=audit_enabled)
-        if audit_enabled:
-            logger.info(f"Audit logging enabled for profile '{self.profile_name}' at {audit_path}")
+        # Initialize audit logger if enabled
+        profile_config = self.site_config["profiles"][self.profile_name]
+        audit_config = profile_config.get("audit", {})
+        if audit_config.get("enabled", False):
+            self.audit_logger = AuditLogger(
+                log_path=Path(audit_config["path"]),
+                enabled=True
+            )
         else:
-            logger.info(f"Audit logging disabled for profile '{self.profile_name}'")
+            self.audit_logger = None
 
     def shutdown(self):
-        """Gracefully shut down the server and all associated resources."""
-        logger.info("Shutting down MXCP server...")
+        """Shutdown the server gracefully."""
+        logger.info("Shutting down RAWMCP server...")
         
-        # Shutdown audit logger if enabled
-        if hasattr(self, 'audit_logger') and self.audit_logger:
+        # Shutdown audit logger if initialized
+        if self.audit_logger:
             self.audit_logger.shutdown()
         
-        logger.info("MXCP server shutdown complete")
+        logger.info("RAWMCP server shutdown complete")
 
     def _sanitize_model_name(self, name: str) -> str:
         """Sanitize a name to be a valid Python class name."""

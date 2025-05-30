@@ -1,4 +1,4 @@
-"""Query interface for MXCP audit logs."""
+"""Query interface for MXCP audit logs stored in JSONL format."""
 
 import logging
 from datetime import datetime, timedelta, timezone
@@ -16,18 +16,18 @@ Status = Literal["success", "error"]
 
 
 class AuditQuery:
-    """Query interface for reading audit logs from DuckDB."""
+    """Query interface for reading audit logs from JSONL files using DuckDB."""
     
-    def __init__(self, db_path: Path):
+    def __init__(self, log_path: Path):
         """Initialize the query interface.
         
         Args:
-            db_path: Path to the DuckDB database file
+            log_path: Path to the JSONL log file
         """
-        self.db_path = db_path
+        self.log_path = log_path
         
-        if not self.db_path.exists():
-            raise FileNotFoundError(f"Audit database not found: {self.db_path}")
+        if not self.log_path.exists():
+            raise FileNotFoundError(f"Audit log file not found: {self.log_path}")
     
     def _parse_since(self, since_str: str) -> datetime:
         """Parse a 'since' string into a datetime.
@@ -66,77 +66,59 @@ class AuditQuery:
         tool: Optional[str] = None,
         resource: Optional[str] = None,
         prompt: Optional[str] = None,
-        event_type: Optional[EventType] = None,
-        policy: Optional[PolicyDecision] = None,
-        status: Optional[Status] = None,
+        event_type: Optional[str] = None,
+        policy: Optional[str] = None,
+        status: Optional[str] = None,
         since: Optional[str] = None,
         limit: int = 100
-    ) -> List[Dict[str, Any]]:
-        """Query audit logs with various filters.
-        
-        Args:
-            tool: Filter by specific tool name
-            resource: Filter by specific resource URI
-            prompt: Filter by specific prompt name
-            event_type: Filter by event type (tool, resource, prompt)
-            policy: Filter by policy decision (allow, deny, warn, n/a)
-            status: Filter by status (success, error)
-            since: Time filter like '10m', '2h', '1d'
-            limit: Maximum number of results to return
-            
-        Returns:
-            List of log entries as dictionaries
-        """
+    ) -> List[Dict]:
+        """Query audit logs with optional filters."""
         conn = None
         try:
-            # Open connection in read-only mode
-            conn = duckdb.connect(str(self.db_path), read_only=True)
+            # Use DuckDB in-memory to query the JSONL file
+            conn = duckdb.connect(':memory:')
             
             # Build WHERE clause
             conditions = []
-            params = []
             
             # Name-based filters (tool/resource/prompt)
             if tool:
-                conditions.append("type = 'tool' AND name = ?")
-                params.append(tool)
+                conditions.append(f"type = 'tool' AND name = '{tool}'")
             elif resource:
-                conditions.append("type = 'resource' AND name = ?")
-                params.append(resource)
+                conditions.append(f"type = 'resource' AND name = '{resource}'")
             elif prompt:
-                conditions.append("type = 'prompt' AND name = ?")
-                params.append(prompt)
+                conditions.append(f"type = 'prompt' AND name = '{prompt}'")
             
             # Type filter
             if event_type:
-                conditions.append("type = ?")
-                params.append(event_type)
+                conditions.append(f"type = '{event_type}'")
             
             # Policy filter
             if policy:
-                conditions.append("policy_decision = ?")
-                params.append(policy)
+                conditions.append(f"policy_decision = '{policy}'")
             
             # Status filter
             if status:
-                conditions.append("status = ?")
-                params.append(status)
+                conditions.append(f"status = '{status}'")
             
             # Time filter
             if since:
-                since_time = self._parse_since(since)
-                conditions.append("timestamp >= ?")
-                params.append(since_time)
+                since_time = self._parse_since(since).isoformat()
+                conditions.append(f"timestamp >= '{since_time}'")
             
-            # Build query
-            query = "SELECT * FROM logs"
+            # Build query using read_json_auto
+            query = f"""
+                SELECT * FROM read_json_auto('{self.log_path}')
+            """
+            
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
+            
             query += " ORDER BY timestamp DESC"
             query += f" LIMIT {limit}"
             
             # Execute query
-            result = conn.execute(query, params).fetchall()
+            result = conn.execute(query).fetchall()
             
             # Get column names
             columns = [desc[0] for desc in conn.description]
@@ -145,9 +127,6 @@ class AuditQuery:
             logs = []
             for row in result:
                 log_entry = dict(zip(columns, row))
-                # Convert timestamp to ISO format string
-                if 'timestamp' in log_entry and log_entry['timestamp']:
-                    log_entry['timestamp'] = log_entry['timestamp'].isoformat()
                 logs.append(log_entry)
             
             return logs
@@ -162,74 +141,108 @@ class AuditQuery:
     def export_to_csv(
         self,
         output_path: Path,
-        **filter_kwargs
+        tool: Optional[str] = None,
+        resource: Optional[str] = None,
+        prompt: Optional[str] = None,
+        event_type: Optional[str] = None,
+        policy: Optional[str] = None,
+        status: Optional[str] = None,
+        since: Optional[str] = None
     ) -> int:
-        """Export filtered logs to CSV file.
+        """Export audit logs to CSV file."""
+        conn = None
+        try:
+            conn = duckdb.connect(':memory:')
+            
+            # Build WHERE clause
+            conditions = []
+            
+            # Name-based filters (tool/resource/prompt)
+            if tool:
+                conditions.append(f"type = 'tool' AND name = '{tool}'")
+            elif resource:
+                conditions.append(f"type = 'resource' AND name = '{resource}'")
+            elif prompt:
+                conditions.append(f"type = 'prompt' AND name = '{prompt}'")
+            
+            # Type filter
+            if event_type:
+                conditions.append(f"type = '{event_type}'")
+            
+            # Policy filter
+            if policy:
+                conditions.append(f"policy_decision = '{policy}'")
+            
+            # Status filter
+            if status:
+                conditions.append(f"status = '{status}'")
+            
+            # Time filter
+            if since:
+                since_time = self._parse_since(since).isoformat()
+                conditions.append(f"timestamp >= '{since_time}'")
+            
+            # Build query
+            query = f"""
+                SELECT * FROM read_json_auto('{self.log_path}')
+            """
+            
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            
+            query += " ORDER BY timestamp DESC"
+            
+            # Export directly to CSV
+            export_query = f"COPY ({query}) TO '{output_path}' (HEADER, DELIMITER ',')"
+            conn.execute(export_query)
+            
+            # Get row count
+            count_query = f"SELECT COUNT(*) FROM ({query}) AS subquery"
+            row_count = conn.execute(count_query).fetchone()[0]
+            
+            return row_count
+            
+        except Exception as e:
+            logger.error(f"Failed to export logs: {e}")
+            raise
+        finally:
+            if conn:
+                conn.close()
+    
+    def export_to_duckdb(self, output_path: Path) -> int:
+        """Export all audit logs to a DuckDB database file.
         
         Args:
-            output_path: Path to write CSV file
-            **filter_kwargs: Same filters as query_logs()
+            output_path: Path to the output DuckDB file
             
         Returns:
             Number of rows exported
         """
         conn = None
         try:
-            # Get logs using the same filters but without limit
-            filter_kwargs.pop('limit', None)  # Remove limit for export
+            # Connect to the output database
+            conn = duckdb.connect(str(output_path))
             
-            # Open connection in read-only mode
-            conn = duckdb.connect(str(self.db_path), read_only=True)
-            
-            # Build WHERE clause (same logic as query_logs)
-            conditions = []
-            params = []
-            
-            if filter_kwargs.get('tool'):
-                conditions.append("type = 'tool' AND name = ?")
-                params.append(filter_kwargs['tool'])
-            elif filter_kwargs.get('resource'):
-                conditions.append("type = 'resource' AND name = ?")
-                params.append(filter_kwargs['resource'])
-            elif filter_kwargs.get('prompt'):
-                conditions.append("type = 'prompt' AND name = ?")
-                params.append(filter_kwargs['prompt'])
-            
-            if filter_kwargs.get('event_type'):
-                conditions.append("type = ?")
-                params.append(filter_kwargs['event_type'])
-            
-            if filter_kwargs.get('policy'):
-                conditions.append("policy_decision = ?")
-                params.append(filter_kwargs['policy'])
-            
-            if filter_kwargs.get('status'):
-                conditions.append("status = ?")
-                params.append(filter_kwargs['status'])
-            
-            if filter_kwargs.get('since'):
-                since_time = self._parse_since(filter_kwargs['since'])
-                conditions.append("timestamp >= ?")
-                params.append(since_time)
-            
-            # Build query
-            query = "SELECT * FROM logs"
-            if conditions:
-                query += " WHERE " + " AND ".join(conditions)
-            query += " ORDER BY timestamp DESC"
-            
-            # Export directly to CSV
-            export_query = f"COPY ({query}) TO '{output_path}' (HEADER, DELIMITER ',')"
-            result = conn.execute(export_query, params)
+            # Create table and import all data
+            conn.execute(f"""
+                CREATE TABLE logs AS 
+                SELECT * FROM read_json_auto('{self.log_path}')
+                ORDER BY timestamp DESC
+            """)
             
             # Get row count
-            count_query = f"SELECT COUNT(*) FROM ({query})"
-            row_count = conn.execute(count_query, params).fetchone()[0]
+            row_count = conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
+            
+            # Create indexes for better query performance
+            conn.execute("CREATE INDEX idx_timestamp ON logs(timestamp)")
+            conn.execute("CREATE INDEX idx_type ON logs(type)")
+            conn.execute("CREATE INDEX idx_status ON logs(status)")
+            conn.execute("CREATE INDEX idx_policy ON logs(policy_decision)")
             
             return row_count
             
         except Exception as e:
-            logger.error(f"Failed to export logs: {e}")
+            logger.error(f"Failed to export to DuckDB: {e}")
             raise
         finally:
             if conn:
@@ -243,7 +256,13 @@ class AuditQuery:
         """
         conn = None
         try:
-            conn = duckdb.connect(str(self.db_path), read_only=True)
+            conn = duckdb.connect(':memory:')
+            
+            # Create a view for the JSONL data
+            conn.execute(f"""
+                CREATE VIEW logs AS 
+                SELECT * FROM read_json_auto('{self.log_path}')
+            """)
             
             stats = {}
             
@@ -281,8 +300,8 @@ class AuditQuery:
             """).fetchone()
             
             if time_range[0] and time_range[1]:
-                stats['earliest_event'] = time_range[0].isoformat()
-                stats['latest_event'] = time_range[1].isoformat()
+                stats['earliest_event'] = time_range[0]
+                stats['latest_event'] = time_range[1]
             
             return stats
             

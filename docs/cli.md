@@ -274,7 +274,8 @@ mxcp log [OPTIONS]
 - `--status`: Filter by execution status (success or error)
 - `--since`: Show logs since specified time (e.g., 10m, 2h, 1d)
 - `--limit`: Maximum number of results (default: 100)
-- `--export`: Export results to CSV file
+- `--export-csv`: Export results to CSV file
+- `--export-duckdb`: Export all logs to DuckDB database file
 - `--json`: Output in JSON format
 - `--debug`: Show detailed debug information
 
@@ -285,7 +286,8 @@ mxcp log --tool my_tool            # Filter by specific tool
 mxcp log --policy denied           # Show blocked executions
 mxcp log --since 10m               # Logs from last 10 minutes
 mxcp log --since 2h --status error # Errors from last 2 hours
-mxcp log --export audit.csv        # Export to CSV file
+mxcp log --export-csv audit.csv    # Export to CSV file
+mxcp log --export-duckdb audit.db  # Export to DuckDB database
 mxcp log --json                    # Output as JSON
 ```
 
@@ -296,7 +298,9 @@ mxcp log --json                    # Output as JSON
 - `1d` - 1 day
 
 **Description:**
-Queries the audit log database to show execution history for tools, resources, and prompts. Audit logging must be enabled in your profile configuration. The command displays results in a tabular format by default, showing timestamp, type, name, status, policy decision, duration, and caller. 
+Queries the audit logs to show execution history for tools, resources, and prompts. Audit logging must be enabled in your profile configuration. The command displays results in a tabular format by default, showing timestamp, type, name, status, policy decision, duration, and caller. 
+
+Audit logs are stored in JSONL (JSON Lines) format, which allows concurrent reading while the server is running - no database locking issues. The `--export-duckdb` option allows you to convert the logs to a DuckDB database for complex SQL analysis.
 
 For more information, see the [Audit Logging Guide](auditing.md).
 

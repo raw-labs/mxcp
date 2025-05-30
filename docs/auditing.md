@@ -1,272 +1,253 @@
 # Audit Logging
 
-MXCP provides enterprise-grade audit logging to track every tool, resource, and prompt execution. This feature helps with security compliance, debugging, and usage analytics.
+MXCP provides enterprise-grade audit logging to track all tool, resource, and prompt executions across your organization. Audit logs are essential for security, compliance, debugging, and understanding usage patterns.
 
 ## Overview
 
-The audit logging system records:
-- All tool, resource, and prompt executions
-- Input parameters (with sensitive data redacted)
-- Execution duration
-- Success/failure status
-- Policy decisions (if applicable)
-- Error messages (if any)
+When enabled, MXCP logs every execution with:
+- **Timestamp**: When the execution occurred (UTC)
+- **Caller**: Who initiated the execution (cli, http, stdio)
+- **Type**: What was executed (tool, resource, prompt)
+- **Name**: The specific item executed
+- **Input**: Parameters passed (with sensitive data redacted)
+- **Duration**: Execution time in milliseconds
+- **Policy Decision**: Whether it was allowed, denied, or warned
+- **Status**: Success or error
+- **Error Details**: If the execution failed
 
-All logs are stored in a DuckDB database for efficient querying and analysis.
+## Storage Format
+
+Audit logs are stored in **JSONL (JSON Lines)** format - one JSON object per line. This format offers several advantages:
+
+- **No locking issues**: Multiple processes can append concurrently
+- **Human-readable**: Can be inspected with standard text tools
+- **Streaming-friendly**: Can be tailed in real-time
+- **Tool-compatible**: Works with many log analysis tools
+- **Query-able**: Can be efficiently queried using DuckDB
 
 ## Configuration
 
-Audit logging is configured per-profile in your `mxcp-site.yml` file:
-
-```yaml
-profiles:
-  default:
-    audit:
-      enabled: true  # false by default
-      path: logs-default.duckdb  # optional, defaults to logs-<profile>.duckdb
-```
-
-### Enabling Audit Logging
-
-To enable audit logging for a profile:
+Enable audit logging in your `mxcp-site.yml`:
 
 ```yaml
 profiles:
   production:
     audit:
       enabled: true
+      path: logs-production.jsonl  # Optional, defaults to logs-{profile}.jsonl
 ```
 
-### Custom Log Database Path
-
-You can specify a custom path for the audit log database:
-
-```yaml
-profiles:
-  production:
-    audit:
-      enabled: true
-      path: /var/log/mxcp/audit-prod.duckdb
-```
-
-## Log Schema
-
-Each log entry contains the following fields:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `timestamp` | TIMESTAMP | UTC time of execution |
-| `caller` | TEXT | Source of call (cli, http, stdio) |
-| `type` | TEXT | One of: tool, resource, prompt |
-| `name` | TEXT | Name of the entity executed |
-| `input_json` | TEXT | JSON string of input parameters (with redactions) |
-| `duration_ms` | INTEGER | Execution time in milliseconds |
-| `policy_decision` | TEXT | One of: allow, deny, warn, n/a |
-| `reason` | TEXT | Explanation if denied or warned |
-| `status` | TEXT | success or error |
-| `error` | TEXT | Error message (if status is error) |
-
-## Security and Privacy
-
-### Sensitive Data Redaction
-
-The audit logger automatically redacts common sensitive fields from input parameters:
-- Passwords (`password`, `passwd`, `pwd`)
-- Secrets (`secret`, `token`, `key`)
-- API keys (`api_key`, `apikey`)
-- Authentication data (`auth`, `authorization`, `credential`)
-- Personal data (`ssn`, `credit_card`, `card_number`)
-
-Example:
-```json
-{
-  "username": "john_doe",
-  "password": "[REDACTED]",
-  "api_key": "[REDACTED]"
-}
-```
-
-### Thread-Safe Operation
-
-All audit logs are written asynchronously via a background thread to ensure:
-- No performance impact on endpoint execution
-- Thread-safe concurrent writes
-- Graceful shutdown with queue draining
-
-The audit logger handles shutdown gracefully:
-- When `mxcp serve` receives a shutdown signal (Ctrl+C), it calls the audit logger's shutdown method
-- The shutdown process ensures all queued log events are written before terminating
-- An `atexit` handler provides additional safety to ensure logs are flushed on normal program exit
-- The logger deliberately does not register its own signal handlers to avoid conflicts with the application
+The log file will be created automatically when the first event is logged.
 
 ## Querying Logs
 
 Use the `mxcp log` command to query audit logs:
 
-### Basic Usage
-
 ```bash
 # Show recent logs
 mxcp log
 
-# Show logs for a specific profile
-mxcp log --profile production
-```
+# Filter by tool
+mxcp log --tool my_tool
 
-### Filtering Options
-
-```bash
-# Filter by tool name
-mxcp log --tool my_analysis_tool
-
-# Filter by resource URI
-mxcp log --resource "reports/{report_id}"
-
-# Filter by prompt name
-mxcp log --prompt generate_summary
-
-# Filter by event type
-mxcp log --type tool
-
-# Filter by policy decision
-mxcp log --policy denied
-
-# Filter by status
+# Show only errors
 mxcp log --status error
 
-# Filter by time
-mxcp log --since 10m  # Last 10 minutes
-mxcp log --since 2h   # Last 2 hours
-mxcp log --since 1d   # Last 1 day
+# Show denied executions
+mxcp log --policy deny
+
+# Show logs from last 10 minutes
+mxcp log --since 10m
 
 # Combine filters
 mxcp log --type tool --status error --since 1h
 ```
 
-### Export Options
+### Time Filters
+
+The `--since` option accepts:
+- `10s` - 10 seconds
+- `5m` - 5 minutes  
+- `2h` - 2 hours
+- `1d` - 1 day
+
+### Output Formats
 
 ```bash
-# Export to CSV
-mxcp log --export audit-report.csv
+# Default table format
+mxcp log
 
-# Export with filters
-mxcp log --policy denied --export denied-requests.csv
-
-# Output as JSON
+# JSON output for programmatic use
 mxcp log --json
+
+# Export to CSV
+mxcp log --export-csv audit.csv
+
+# Export to DuckDB for complex analysis
+mxcp log --export-duckdb audit.db
 ```
 
-### Pagination
+## Concurrent Access
 
-By default, `mxcp log` shows the most recent 100 entries:
+One of the key advantages of JSONL format is that logs can be queried while the server is running. There are no locking issues - the writer appends to the file while readers can safely query it.
+
+## Log Fields
+
+Each log entry contains:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| timestamp | ISO 8601 timestamp (UTC) | 2024-01-15T10:30:45.123Z |
+| caller | Source of the request | cli, http, stdio |
+| type | Type of execution | tool, resource, prompt |
+| name | Name of the item | my_sql_tool |
+| input_json | JSON string of parameters | {"query": "SELECT *..."} |
+| duration_ms | Execution time | 145 |
+| policy_decision | Policy engine result | allow, deny, warn, n/a |
+| reason | Explanation if denied/warned | "Blocked by policy" |
+| status | Execution result | success, error |
+| error | Error message if failed | "Connection timeout" |
+
+## Security
+
+### Sensitive Data Redaction
+
+The audit logger automatically redacts sensitive fields in input parameters:
+- Passwords
+- API keys
+- Tokens
+- Private keys
+- Credit card numbers
+- SSNs
+
+Example:
+```json
+{
+  "api_key": "[REDACTED]",
+  "query": "SELECT * FROM users"
+}
+```
+
+### Access Control
+
+Audit logs may contain sensitive information. Ensure:
+- Log files are stored securely
+- Access is restricted to authorized personnel
+- Regular rotation and archival policies are in place
+
+## Performance
+
+The audit logger uses:
+- **Background thread**: No impact on request latency
+- **Async queue**: Requests return immediately
+- **Batch writing**: Efficient I/O operations
+- **Graceful shutdown**: Ensures all events are written
+
+## Analysis Examples
+
+### Using DuckDB for Complex Queries
+
+Export to DuckDB for SQL analysis:
 
 ```bash
-# Show more results
-mxcp log --limit 500
+# Export to DuckDB
+mxcp log --export-duckdb audit.db
 
-# Show fewer results
-mxcp log --limit 20
+# Query with DuckDB CLI
+duckdb audit.db
+
+-- Top 10 most used tools
+SELECT name, COUNT(*) as count
+FROM logs
+WHERE type = 'tool'
+GROUP BY name
+ORDER BY count DESC
+LIMIT 10;
+
+-- Error rate by hour
+SELECT 
+  DATE_TRUNC('hour', timestamp) as hour,
+  COUNT(CASE WHEN status = 'error' THEN 1 END) as errors,
+  COUNT(*) as total,
+  ROUND(100.0 * COUNT(CASE WHEN status = 'error' THEN 1 END) / COUNT(*), 2) as error_rate
+FROM logs
+GROUP BY hour
+ORDER BY hour DESC;
+
+-- Policy violations by user
+SELECT 
+  caller,
+  COUNT(*) as violations
+FROM logs
+WHERE policy_decision = 'deny'
+GROUP BY caller
+ORDER BY violations DESC;
 ```
 
-## Example Workflows
+### Real-time Monitoring
 
-### Security Audit
+Since JSONL files can be tailed, you can monitor in real-time:
 
-Find all denied executions in the last week:
 ```bash
-mxcp log --policy denied --since 7d --export security-audit.csv
+# Watch for errors
+tail -f logs-production.jsonl | grep '"status":"error"'
+
+# Watch for policy denials
+tail -f logs-production.jsonl | grep '"policy_decision":"deny"'
+
+# Pretty-print recent entries
+tail -n 10 logs-production.jsonl | jq .
 ```
 
-### Error Investigation
+### Integration with Log Analysis Tools
 
-Find all errors for a specific tool:
+JSONL format is compatible with many tools:
+
 ```bash
-mxcp log --tool data_processor --status error --since 1d
-```
+# Import into Elasticsearch
+cat logs-production.jsonl | curl -X POST "localhost:9200/_bulk" --data-binary @-
 
-### Usage Analytics
+# Analyze with jq
+cat logs-production.jsonl | jq 'select(.status == "error") | .name' | sort | uniq -c
 
-Export all successful tool executions:
-```bash
-mxcp log --type tool --status success --export tool-usage.csv
-```
-
-### Performance Analysis
-
-Find slow-running tools (you'll need to analyze the CSV):
-```bash
-mxcp log --type tool --export performance.csv
-# Then analyze duration_ms column in the CSV
-```
-
-## Database Management
-
-### Location
-
-The audit database is stored at the path specified in your configuration, defaulting to:
-- `logs-<profile>.duckdb` in your repository root
-
-### Backup
-
-Since the audit database is a DuckDB file, you can back it up by copying the file:
-```bash
-cp logs-production.duckdb logs-production-backup-$(date +%Y%m%d).duckdb
-```
-
-### Retention
-
-Currently, MXCP does not automatically rotate or purge old logs. To manage database size:
-
-1. Export old logs to CSV for archival:
-```bash
-mxcp log --export archive-2024.csv
-```
-
-2. Manually truncate old logs using DuckDB:
-```sql
-DELETE FROM logs WHERE timestamp < '2024-01-01';
+# Convert to CSV with Miller
+mlr --ijson --ocsv cat logs-production.jsonl > logs.csv
 ```
 
 ## Best Practices
 
-1. **Enable in Production**: Always enable audit logging in production environments for security and compliance.
-
-2. **Monitor Database Size**: Regularly check the size of your audit database and implement retention policies.
-
-3. **Secure the Database**: Ensure proper file permissions on the audit database file.
-
-4. **Regular Reviews**: Schedule regular reviews of denied executions and errors.
-
-5. **Export for Analysis**: Export logs to CSV for analysis in tools like Excel or pandas.
+1. **Enable in Production**: Always enable audit logging in production environments
+2. **Regular Review**: Set up alerts for errors and policy violations
+3. **Retention Policy**: Define how long to keep logs based on compliance requirements
+4. **Backup**: Include audit logs in your backup strategy
+5. **Monitoring**: Track log file size and implement rotation if needed
 
 ## Troubleshooting
 
-### Audit Logging Not Working
+### Logs Not Appearing
 
 1. Check if audit logging is enabled:
-```yaml
-profiles:
-  your_profile:
-    audit:
-      enabled: true
-```
+   ```yaml
+   profiles:
+     production:
+       audit:
+         enabled: true
+   ```
 
-2. Check file permissions on the database path.
+2. Verify the log file path exists and is writable
 
-3. Look for errors in the MXCP logs when running with `--debug`:
-```bash
-mxcp serve --debug
-```
+3. Check MXCP server logs for any errors
 
-### Database Not Found
+### Large Log Files
 
-If you see "Audit database not found", it means:
-- Audit logging is not enabled for the profile
-- No events have been logged yet (database is created on first write)
+JSONL files can grow large over time. Consider:
+- Implementing log rotation (e.g., with logrotate)
+- Archiving old logs to compressed storage
+- Exporting to DuckDB and querying the database instead
 
-### Performance Impact
+### Query Performance
 
-The audit logger uses a background thread and should have minimal performance impact. If you notice issues:
-- Check disk I/O on the database location
-- Consider moving the database to a faster disk
-- Monitor the background writer thread in debug logs 
+For better query performance on large datasets:
+1. Export to DuckDB format
+2. Use the DuckDB database for queries
+3. Add appropriate indexes for your query patterns 
