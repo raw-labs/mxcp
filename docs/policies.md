@@ -109,6 +109,129 @@ For anonymous users (when no authentication is configured), the user context def
 }
 ```
 
+## CEL Context Structure
+
+### Input Policies
+
+For input policies, the CEL evaluation context contains:
+
+- **`user`** - User context object (see above)
+- **All query parameters at the top level** - Direct access to endpoint parameters
+
+Example context for an endpoint with parameters `employee_id` and `department`:
+```json
+{
+  "user": {
+    "user_id": "123",
+    "role": "admin",
+    "permissions": ["employee.read"]
+  },
+  "employee_id": "emp456",
+  "department": "engineering"
+}
+```
+
+This means you can reference query parameters directly:
+```yaml
+# Check if user is viewing their own profile
+condition: "employee_id != user.user_id && user.role != 'admin'"
+```
+
+### Output Policies
+
+For output policies, the CEL evaluation context contains:
+
+- **`user`** - User context object
+- **`response`** - The complete response data from the endpoint
+
+Example context for an employee endpoint response:
+```json
+{
+  "user": {
+    "user_id": "123",
+    "role": "user",
+    "permissions": ["employee.read"]
+  },
+  "response": {
+    "id": "emp456",
+    "name": "John Doe",
+    "department": "HR",
+    "salary": 95000,
+    "ssn": "123-45-6789"
+  }
+}
+```
+
+This allows policies based on response content:
+```yaml
+# Filter salary for HR department employees viewed by non-HR users
+condition: "response.department == 'HR' && user.role != 'hr_manager'"
+action: filter_fields
+fields: ["salary"]
+```
+
+### Variable Namespacing
+
+**Important**: There is no overlap between user context and query parameters/response data because:
+
+1. **User context is always nested under `user`**
+2. **Query parameters are available at the top level** (input policies only)
+3. **Response data is nested under `response`** (output policies only)
+
+This prevents naming conflicts. For example, if an endpoint has a parameter called `role`, it won't conflict with `user.role`:
+
+```yaml
+# This condition checks the user's role vs a query parameter
+condition: "user.role == 'admin' && role == 'manager'"
+```
+
+## Field Filtering and Masking Behavior
+
+### Non-existent Fields
+
+When using `filter_fields` or `mask_fields` actions, **non-existent fields are silently ignored**. This allows you to define consistent policies across endpoints that may have different schemas:
+
+```yaml
+# This policy works on any endpoint, even if some fields don't exist
+output:
+  - condition: "user.role != 'admin'"
+    action: filter_fields
+    fields: ["salary", "ssn", "internal_notes", "performance_rating"]
+    # Only existing fields will be filtered
+```
+
+This behavior is thoroughly tested in the test suite to ensure reliability across different endpoint schemas.
+
+### Data Structure Support
+
+Field operations work with:
+
+- **Single objects** (dictionaries)
+- **Arrays of objects** (list of dictionaries)
+- **Scalar values** (passed through unchanged)
+
+Example with array data:
+```yaml
+# Will filter 'salary' from each employee object in the array
+output:
+  - condition: "user.role != 'hr_manager'"
+    action: filter_fields
+    fields: ["salary"]
+```
+
+### Masking Behavior
+
+The `mask_fields` action replaces field values with the string `"****"`:
+
+```yaml
+# Original: {"ssn": "123-45-6789", "phone": "555-1234"}
+# After masking: {"ssn": "****", "phone": "****"}
+output:
+  - condition: "!('pii.view' in user.permissions)"
+    action: mask_fields
+    fields: ["ssn", "phone"]
+```
+
 ## CEL Expression Examples
 
 ### Basic Role Checks

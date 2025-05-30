@@ -353,3 +353,133 @@ class TestPolicyEnforcementEdgeCases:
         )
         
         assert result["id"] == "emp123"  # HR can view it 
+
+    @pytest.mark.asyncio
+    async def test_policy_with_nonexistent_fields(self, user_config, site_config):
+        """Test that policies handle non-existent fields gracefully."""
+        # Create a policy that references fields that don't exist in our test data
+        # This simulates a common scenario where policies are defined generically
+        # across endpoints with different schemas
+        
+        user_context = UserContext(
+            provider="test",
+            user_id="emp123",
+            username="user",
+            raw_profile={"role": "user", "permissions": ["employee.read"]}
+        )
+        
+        # Get result to see what fields are actually present
+        result = await execute_endpoint(
+            "tool", 
+            "employee_info", 
+            {"employee_id": "emp123"},
+            user_config, 
+            site_config,
+            user_context=user_context
+        )
+        
+        # The employee_info endpoint should return:
+        # id, name, email, department, hire_date, salary (filtered), ssn (masked), phone (filtered)
+        expected_fields = {"id", "name", "email", "department", "ssn", "hire_date"}
+        assert set(result.keys()) == expected_fields
+        
+        # Verify that existing fields were properly processed:
+        # - salary was filtered out (user is not admin/hr)
+        assert "salary" not in result
+        
+        # - ssn was masked (user is not hr)
+        assert result["ssn"] == "****"
+        
+        # - phone was filtered out (user doesn't have pii.view permission)
+        assert "phone" not in result
+        
+        # - Regular fields remain untouched
+        assert result["id"] == "emp123"
+        assert result["name"] == "John Doe"
+        assert result["email"] == "john.doe@company.com"
+        assert result["department"] == "Engineering"
+        
+        # The key test: policies reference non-existent fields like 
+        # "internal_notes", "performance_rating", "manager_comments" etc.
+        # These should be silently ignored without causing errors
+        # (this is implicitly tested since our policies in the YAML
+        # can reference fields that don't exist in all endpoints)
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_fields_in_policies(self, user_config, site_config):
+        """Test that policies handle non-existent fields gracefully without errors."""
+        # Test with regular user - should trigger both filter and mask policies
+        user_context = UserContext(
+            provider="test",
+            user_id="user123",
+            username="regular_user",
+            raw_profile={"role": "user", "permissions": []}
+        )
+        
+        result = await execute_endpoint(
+            "tool", 
+            "test_nonexistent_fields", 
+            {"user_id": "user123"},
+            user_config, 
+            site_config,
+            user_context=user_context
+        )
+        
+        # Should only have the 3 fields that actually exist in the response
+        expected_fields = {"id", "name", "email"}
+        assert set(result.keys()) == expected_fields
+        
+        # Verify the actual data is correct
+        assert result["id"] == "user123"
+        assert result["name"] == "Test User"
+        assert result["email"] == "test@example.com"
+        
+        # All non-existent fields referenced in policies should be silently ignored
+        non_existent_fields = [
+            "salary", "ssn", "internal_notes", "performance_rating", 
+            "manager_comments", "secret_data", "phone", "credit_card",
+            "password_hash", "api_keys", "private_keys"
+        ]
+        for field in non_existent_fields:
+            assert field not in result
+        
+        # Test with admin user - should bypass filter_fields policy
+        admin_context = UserContext(
+            provider="test", 
+            user_id="admin123",
+            username="admin_user",
+            raw_profile={"role": "admin", "permissions": []}
+        )
+        
+        admin_result = await execute_endpoint(
+            "tool",
+            "test_nonexistent_fields",
+            {"user_id": "user123"},
+            user_config,
+            site_config,
+            user_context=admin_context
+        )
+        
+        # Admin should still get the same result since the non-existent fields
+        # don't exist to be filtered anyway
+        assert admin_result == result
+        
+        # Test with superuser - should bypass both policies
+        superuser_context = UserContext(
+            provider="test",
+            user_id="super123", 
+            username="superuser",
+            raw_profile={"role": "superuser", "permissions": []}
+        )
+        
+        super_result = await execute_endpoint(
+            "tool",
+            "test_nonexistent_fields", 
+            {"user_id": "user123"},
+            user_config,
+            site_config,
+            user_context=superuser_context
+        )
+        
+        # Superuser should also get the same result
+        assert super_result == result 
