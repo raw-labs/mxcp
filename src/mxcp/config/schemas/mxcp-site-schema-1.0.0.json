@@ -93,17 +93,6 @@
       },
       "additionalProperties": false
     },
-    "python": {
-      "type": "object",
-      "description": "Optional Python bootstrap configuration.",
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "Path to a Python file to execute at runtime (to define user-defined functions or context)."
-        }
-      },
-      "additionalProperties": false
-    },
     "profiles": {
       "type": "object",
       "description": "Profile-specific configuration settings.",

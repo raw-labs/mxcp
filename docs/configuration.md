@@ -188,12 +188,6 @@ dbt:
 > - DuckDB persistent tables
 > - External caching layers
 
-### Python Configuration
-```yaml
-python:
-  path: "bootstrap.py"  # Path to Python bootstrap file
-```
-
 ### Profile-Specific Settings
 ```yaml
 profiles:
