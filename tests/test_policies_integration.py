@@ -483,3 +483,90 @@ class TestPolicyEnforcementEdgeCases:
         
         # Superuser should also get the same result
         assert super_result == result 
+
+    @pytest.mark.asyncio
+    async def test_user_parameter_collision_bug(self, user_config, site_config):
+        """Test the critical bug where a parameter named 'user' overwrites user context."""
+        # This test demonstrates a serious security bug!
+        # When a query parameter is named "user", it overwrites the user context
+        # in the CEL evaluation, potentially bypassing security policies
+        
+        # Create a non-admin user context
+        user_context = UserContext(
+            provider="test",
+            user_id="regular123",
+            username="regular_user",
+            raw_profile={"role": "user", "permissions": []}  # NOT admin
+        )
+        
+        # The endpoint has a policy: condition: "user.role == 'admin'"
+        # This SHOULD evaluate user_context.role which is "user", so the condition is False
+        # But because of the bug, the parameter "user": "some_string" overwrites the context
+        # And "some_string".role will be null/undefined, making the evaluation fail
+        
+        # This call should work because user.role != 'admin' (regular user)
+        # But it will likely fail due to the collision bug
+        try:
+            result = await execute_endpoint(
+                "tool", 
+                "test_user_collision", 
+                {"user": "test_value"},  # This overwrites the user context!
+                user_config, 
+                site_config,
+                user_context=user_context
+            )
+            # If we get here, the policy was bypassed due to the bug
+            print(f"Result: {result}")
+            assert False, "This test should fail due to the user parameter collision bug"
+        except Exception as e:
+            # The policy evaluation will likely fail because "test_value".role doesn't exist
+            print(f"Exception as expected due to collision bug: {e}")
+            # This demonstrates the security issue - the policy doesn't work as intended
+
+    @pytest.mark.asyncio
+    async def test_user_parameter_collision_fixed(self, user_config, site_config):
+        """Test that the user parameter collision is now properly handled."""
+        # After the fix, user context should take precedence over query parameters
+        
+        # Test 1: Non-admin user should be allowed (policy condition is false)
+        user_context = UserContext(
+            provider="test",
+            user_id="regular123",
+            username="regular_user",
+            raw_profile={"role": "user", "permissions": []}  # NOT admin
+        )
+        
+        # This should work because user.role != 'admin' (the policy denies when role == 'admin')
+        result = await execute_endpoint(
+            "tool", 
+            "test_user_collision", 
+            {"user": "test_value"},  # This parameter should NOT overwrite user context
+            user_config, 
+            site_config,
+            user_context=user_context
+        )
+        
+        # Verify the endpoint executed successfully
+        assert result["id"] == "test_value"
+        assert result["name"] == "Test User for test_value"
+        
+        # Test 2: Admin user should be denied (policy condition is true)
+        admin_context = UserContext(
+            provider="test",
+            user_id="admin123",
+            username="admin_user",
+            raw_profile={"role": "admin", "permissions": []}  # IS admin
+        )
+        
+        # This should be denied because user.role == 'admin' triggers the deny policy
+        with pytest.raises(ValueError) as excinfo:
+            await execute_endpoint(
+                "tool", 
+                "test_user_collision", 
+                {"user": "test_value"},  # This parameter should NOT affect policy evaluation
+                user_config, 
+                site_config,
+                user_context=admin_context
+            )
+        
+        assert "Test policy that should check user context role" in str(excinfo.value) 

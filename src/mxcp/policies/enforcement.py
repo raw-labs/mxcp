@@ -146,10 +146,19 @@ class PolicyEnforcer:
             PolicyEnforcementError: If a policy denies access
         """
         # Build context for CEL evaluation
-        context = {
-            "user": self._user_context_to_dict(user_context),
-            **params  # All query parameters are available at top level
-        }
+        # IMPORTANT: User context is nested under "user" to prevent collision
+        # with query parameters that might also be named "user"
+        
+        # Check for dangerous naming collision
+        if "user" in params:
+            logger.warning(f"Query parameter 'user' conflicts with user context namespace. This may cause policy evaluation issues.")
+            # For security, we prioritize user context over query parameters
+            # Users should rename their parameter to avoid this collision
+        
+        # Build context with user context taking precedence over any "user" parameter
+        context = {}
+        context.update(params)  # Add parameters first
+        context["user"] = self._user_context_to_dict(user_context)  # User context takes precedence
         
         # Evaluate each input policy
         for policy in self.policy_set.input_policies:
@@ -177,6 +186,8 @@ class PolicyEnforcer:
             PolicyEnforcementError: If a policy denies access
         """
         # Build context for CEL evaluation
+        # Note: Output policies don't have collision issues since they only use
+        # "user" (user context) and "response" (output data) - no query parameters
         context = {
             "user": self._user_context_to_dict(user_context),
             "response": output

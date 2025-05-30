@@ -185,6 +185,50 @@ This prevents naming conflicts. For example, if an endpoint has a parameter call
 condition: "user.role == 'admin' && role == 'manager'"
 ```
 
+### ⚠️ Critical Security Warning: "user" Parameter Collision
+
+**NEVER name a query parameter "user"** as this can cause a serious security vulnerability!
+
+If you have a query parameter named `user`, it will be overridden by the user context during policy evaluation. While MXCP now detects and handles this collision (user context takes precedence), this can still cause confusion and potential security issues.
+
+```yaml
+# BAD: Don't do this!
+parameters:
+  - name: user          # This conflicts with user context!
+    type: string
+
+# GOOD: Use a different name
+parameters:
+  - name: user_id       # Clear and no collision
+    type: string
+  - name: username      # Alternative naming
+    type: string  
+  - name: target_user   # Descriptive naming
+    type: string
+```
+
+**What happens if you use "user" as a parameter name:**
+- MXCP will log a warning about the collision
+- The user context will take precedence (secure behavior)
+- Your policies will work correctly, but may be confusing
+- CLI usage becomes ambiguous (`--param user=...` vs user context)
+
+**Best practice:** Choose descriptive parameter names that don't conflict with reserved namespaces (`user`, `response`).
+
+### Reserved Namespaces
+
+The following variable names are reserved in policy evaluation contexts:
+
+**Input Policies:**
+- `user` - User context object (always reserved)
+- Any other names are available for query parameters
+
+**Output Policies:**  
+- `user` - User context object (always reserved)
+- `response` - Response data object (always reserved)
+
+**Future-proofing:** While only `user` and `response` are currently reserved, avoid using system-like names such as `system`, `config`, `env`, `request`, `context`, etc. for query parameters to prevent potential conflicts in future versions.
+
 ## Field Filtering and Masking Behavior
 
 ### Non-existent Fields
