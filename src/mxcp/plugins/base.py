@@ -1,12 +1,15 @@
 import inspect
 import logging
-from typing import get_type_hints, get_origin, get_args, Any, List, Dict, Union, Optional, Annotated, Type, TypeVar, Callable, cast
+from typing import get_type_hints, get_origin, get_args, Any, List, Dict, Union, Optional, Annotated, Type, TypeVar, Callable, cast, TYPE_CHECKING
 from datetime import date, time, datetime, timedelta
 from decimal import Decimal
 from functools import wraps
 from duckdb import DuckDBPyConnection
 from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
+
+if TYPE_CHECKING:
+    from mxcp.auth.providers import UserContext
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -51,13 +54,64 @@ class MXCPBasePlugin:
                 return a + b
     """
     
-    def __init__(self, config: Dict[str, Any]):
-        """Initialize the plugin with configuration.
+    def __init__(self, config: Dict[str, Any], user_context: Optional['UserContext'] = None):
+        """Initialize the plugin with configuration and optional user context.
         
         Args:
             config: Plugin configuration dictionary
+            user_context: Optional authenticated user context containing user info and tokens
         """
         self._config = config
+        self._user_context = user_context
+
+    @property
+    def user_context(self) -> Optional['UserContext']:
+        """Get the authenticated user context.
+        
+        Returns:
+            UserContext if user is authenticated, None otherwise
+        """
+        return self._user_context
+
+    def get_user_token(self) -> Optional[str]:
+        """Get the user's external OAuth token (e.g., GitHub token).
+        
+        Returns:
+            External OAuth token if user is authenticated, None otherwise
+        """
+        return self._user_context.external_token if self._user_context else None
+
+    def get_username(self) -> Optional[str]:
+        """Get the authenticated user's username.
+        
+        Returns:
+            Username if user is authenticated, None otherwise
+        """
+        return self._user_context.username if self._user_context else None
+
+    def get_user_email(self) -> Optional[str]:
+        """Get the authenticated user's email.
+        
+        Returns:
+            Email if user is authenticated and email is available, None otherwise
+        """
+        return self._user_context.email if self._user_context else None
+
+    def get_user_provider(self) -> Optional[str]:
+        """Get the OAuth provider name (e.g., 'github', 'atlassian').
+        
+        Returns:
+            Provider name if user is authenticated, None otherwise
+        """
+        return self._user_context.provider if self._user_context else None
+        
+    def is_authenticated(self) -> bool:
+        """Check if a user is currently authenticated.
+        
+        Returns:
+            True if user is authenticated, False otherwise
+        """
+        return self._user_context is not None
 
     def _get_duckdb_type(self, python_type) -> str:
         """Map a Python type to a DuckDB type string.

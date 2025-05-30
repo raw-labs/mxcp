@@ -159,6 +159,7 @@ Now that you have MXCP running, here are some next steps:
 2. **Learn More**
    - [Type System](type-system.md) - Understand MXCP's type system
    - [Configuration](configuration.md) - Configure your project
+   - [Plugins](plugins.md) - Extend DuckDB with custom Python functions  
    - [Integrations](integrations.md) - Connect with dbt and DuckDB
    - [Drift Detection](drift-detection.md) - Monitor changes across environments
 

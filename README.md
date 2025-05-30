@@ -131,6 +131,7 @@ For specific setup instructions, see:
 - [Quickstart](docs/quickstart.md) — Get up and running
 - [CLI Reference](docs/cli.md) — Command-line tools
 - [Configuration](docs/configuration.md) — Project setup
+- [Plugins](docs/plugins.md) — Extend DuckDB with custom Python functions
 - [Authentication](docs/authentication.md) — OAuth authentication setup
 - [Type System](docs/type-system.md) — Data types and validation
 - [Integrations](docs/integrations.md) — Data sources and tools

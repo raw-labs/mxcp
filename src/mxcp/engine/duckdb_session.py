@@ -77,7 +77,8 @@ class DuckDBSession:
         inject_secrets(self.conn, self.site_config, self.user_config, profile_name)
         
         # Load plugins
-        self.plugins = load_plugins(self.site_config, self.user_config, project, profile_name, self.conn)
+        user_context = get_user_context()
+        self.plugins = load_plugins(self.site_config, self.user_config, project, profile_name, self.conn, user_context)
         
         # Create user token UDFs if user is authenticated
         self._create_user_token_udfs()
