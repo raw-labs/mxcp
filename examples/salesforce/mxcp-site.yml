@@ -1,0 +1,11 @@
+mxcp: 1.0.0
+project: acorn
+profile: dev
+
+extensions:
+  - json
+
+plugin:
+  - name: salesforce
+    module: mxcp_plugin_salesforce
+    config: salesforce
