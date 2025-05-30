@@ -1,10 +1,13 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from mxcp.endpoints.executor import EndpointExecutor, EndpointType
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
 
-async def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: str, validate_output: bool = True, readonly: Optional[bool] = None) -> List[Dict[str, Any]]:
+if TYPE_CHECKING:
+    from mxcp.auth.providers import UserContext
+
+async def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: str, validate_output: bool = True, readonly: Optional[bool] = None, user_context: Optional['UserContext'] = None) -> List[Dict[str, Any]]:
     """
     Run an endpoint with the given arguments, using EndpointLoader for consistency.
     Args:
@@ -16,6 +19,7 @@ async def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user
         profile: Profile name
         validate_output: Whether to validate the output against the return type definition
         readonly: Whether to open DuckDB connection in read-only mode
+        user_context: Optional user context for policy enforcement
     Returns:
         List of result rows as dictionaries
     """
@@ -28,7 +32,7 @@ async def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user
 
         # Use EndpointExecutor for execution
         executor = EndpointExecutor(EndpointType(endpoint_type), name, user_config, site_config, profile, readonly=readonly)
-        result = await executor.execute(args, validate_output=validate_output)
+        result = await executor.execute(args, validate_output=validate_output, user_context=user_context)
         return result
     except Exception as e:
         raise RuntimeError(f"Error running endpoint: {str(e)}")

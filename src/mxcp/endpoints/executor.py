@@ -11,6 +11,7 @@ from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.endpoints.loader import find_repo_root, EndpointLoader
 from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
+from mxcp.policies import PolicyEnforcer, PolicyEnforcementError, parse_policies_from_config
 import re
 import numpy as np
 
@@ -229,6 +230,7 @@ class EndpointExecutor:
         self.user_config = user_config
         self.site_config = site_config
         self.session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
+        self.policy_enforcer: Optional[PolicyEnforcer] = None
         
     def _load_endpoint(self):
         """Load the endpoint definition from YAML file"""
@@ -245,6 +247,14 @@ class EndpointExecutor:
         if self.endpoint_type.value not in self.endpoint:
             raise ValueError(f"Endpoint type {self.endpoint_type.value} not found in definition")
             
+        # Initialize policy enforcer if policies are defined
+        endpoint_def = self.endpoint[self.endpoint_type.value]
+        policies_config = endpoint_def.get("policies")
+        if policies_config:
+            policy_set = parse_policies_from_config(policies_config)
+            if policy_set:
+                self.policy_enforcer = PolicyEnforcer(policy_set)
+
     def _validate_parameters(self, params: Dict[str, Any]):
         """Validate input parameters against endpoint definition"""
         if not self.endpoint:
@@ -329,12 +339,13 @@ class EndpointExecutor:
         repo_root = find_repo_root()
         return get_endpoint_source_code(self.endpoint, self.endpoint_type.value, self.endpoint_file_path, repo_root)
             
-    async def execute(self, params: Dict[str, Any], validate_output: bool = True) -> EndpointResult:
+    async def execute(self, params: Dict[str, Any], validate_output: bool = True, user_context: Optional['UserContext'] = None) -> EndpointResult:
         """Execute the endpoint with given parameters.
         
         Args:
             params: Dictionary of parameter name/value pairs
             validate_output: Whether to validate the output against the return type definition (default: True)
+            user_context: Optional user context for policy enforcement
         
         Returns:
             For tools and resources: 
@@ -352,6 +363,14 @@ class EndpointExecutor:
         
         # Validate parameters
         self._validate_parameters(params)
+        
+        # Enforce input policies
+        if self.policy_enforcer:
+            try:
+                self.policy_enforcer.enforce_input_policies(user_context, params)
+            except PolicyEnforcementError as e:
+                # Re-raise with more context
+                raise ValueError(f"Policy enforcement failed: {e.reason}")
         
         # Get DuckDB connection
         conn = self.session.connect()
@@ -394,6 +413,15 @@ class EndpointExecutor:
                 # Validate the output against the return type definition if enabled
                 if validate_output:
                     self._validate_return(result)
+                
+                # Enforce output policies
+                if self.policy_enforcer:
+                    try:
+                        result = self.policy_enforcer.enforce_output_policies(user_context, result)
+                    except PolicyEnforcementError as e:
+                        # Re-raise with more context
+                        raise ValueError(f"Output policy enforcement failed: {e.reason}")
+                
                 return result
                 
             else:  # PROMPT
@@ -412,6 +440,14 @@ class EndpointExecutor:
                         "type": msg.get("type")
                     }
                     processed_messages.append(processed_msg)
+                
+                # Enforce output policies for prompts too
+                if self.policy_enforcer:
+                    try:
+                        processed_messages = self.policy_enforcer.enforce_output_policies(user_context, processed_messages)
+                    except PolicyEnforcementError as e:
+                        # Re-raise with more context
+                        raise ValueError(f"Output policy enforcement failed: {e.reason}")
                 
                 return processed_messages
                 
@@ -442,7 +478,7 @@ class EndpointExecutor:
             error_msg = f"Output validation failed: Expected return type '{expected_type}', but received '{actual_type}'"
             raise SchemaError(error_msg) from e
 
-async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, readonly: Optional[bool] = None) -> EndpointResult:
+async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, readonly: Optional[bool] = None, user_context: Optional['UserContext'] = None) -> EndpointResult:
     """Execute an endpoint by type and name.
     
     Args:
@@ -453,6 +489,7 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
         site_config: The site configuration
         profile: Optional profile name to override the default profile
         readonly: Whether to open DuckDB connection in read-only mode
+        user_context: Optional user context for policy enforcement
         
     Returns:
         For tools and resources: List[Dict[str, Any]] where each dict represents a row with column names as keys
@@ -464,4 +501,4 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
         raise ValueError(f"Invalid endpoint type: {endpoint_type}. Must be one of: {', '.join(t.value for t in EndpointType)}")
         
     executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config, profile, readonly=readonly)
-    return await executor.execute(params) 
+    return await executor.execute(params, user_context=user_context) 

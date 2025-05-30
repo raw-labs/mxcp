@@ -23,7 +23,8 @@ dependencies = [
     "pandas>=2.0.0",  # Required for DuckDB DataFrame operations
     "posthog>=3.0.0",  # For anonymous usage analytics
     "dbt-core>=1.6.0",  # dbt core for data transformations
-    "dbt-duckdb>=1.6.0"  # dbt DuckDB adapter
+    "dbt-duckdb>=1.6.0",  # dbt DuckDB adapter
+    "cel-python>=0.2.0"  # Common Expression Language for policy enforcement
 ]
 
 [project.scripts]
@@ -48,7 +49,7 @@ vault = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["mxcp", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.server"]
+packages = ["mxcp", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.server", "mxcp.auth", "mxcp.drift", "mxcp.endpoints", "mxcp.engine", "mxcp.lsp", "mxcp.plugins", "mxcp.policies"]
 include-package-data = true
 
 [tool.setuptools.package-data]
