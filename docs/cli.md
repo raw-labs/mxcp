@@ -191,6 +191,34 @@ mxcp list --json-output     # Output in JSON format
 mxcp list --profile dev     # List endpoints in dev profile
 ```
 
+### `mxcp lsp`
+
+Start the MXCP LSP server for language server features.
+
+```bash
+mxcp lsp [OPTIONS]
+```
+
+**Options:**
+- `--profile`: Profile name to use
+- `--port`: Port number for LSP server (defaults to 3000)
+- `--debug`: Show detailed debug information
+- `--readonly`: Open database connection in read-only mode
+
+**Examples:**
+```bash
+mxcp lsp                     # Start LSP server on default port 3000
+mxcp lsp --port 4000         # Start LSP server on port 4000  
+mxcp lsp --profile dev       # Use the 'dev' profile configuration
+mxcp lsp --readonly          # Open database connection in read-only mode
+mxcp lsp --debug             # Start with detailed debug logging
+```
+
+**Description:**
+Starts an LSP (Language Server Protocol) server that provides language features like code completion, hover information, and go-to-definition for MXCP endpoints and SQL queries. The server integrates with your DuckDB database to provide context-aware suggestions based on your database schema and available endpoints.
+
+The LSP server can be used with any LSP-compatible editor or IDE to enhance the development experience when working with MXCP projects.
+
 ### `mxcp drift-snapshot`
 
 Generate a drift snapshot of the current state for change detection.
