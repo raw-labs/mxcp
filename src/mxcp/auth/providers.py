@@ -62,6 +62,7 @@ class UserContext:
     name: Optional[str] = None       # User's display name
     avatar_url: Optional[str] = None # User's profile picture URL
     raw_profile: Optional[Dict[str, Any]] = None  # Raw profile data for debugging
+    external_token: Optional[str] = None  # Original OAuth provider token
 
 
 @dataclass
@@ -148,12 +149,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
             client = OAuthClientInformationFull(
                 client_id=client_id,
                 client_secret=client_config.get("client_secret"),  # None for public clients
-                redirect_uris=client_config.get("redirect_uris", [
-                    "http://127.0.0.1:49153/oauth/callback",
-                    "https://127.0.0.1:49153/oauth/callback",
-                    "http://localhost:49153/oauth/callback", 
-                    "https://localhost:49153/oauth/callback"
-                ]),
+                redirect_uris=client_config.get("redirect_uris", []),
                 grant_types=client_config.get("grant_types", ["authorization_code"]),
                 response_types=client_config.get("response_types", ["code"]),
                 scope=" ".join(client_config.get("scopes", [])),  # No default scopes

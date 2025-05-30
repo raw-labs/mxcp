@@ -63,6 +63,8 @@ class AuthenticationMiddleware:
             # Get standardized user context from the provider
             try:
                 user_context = await self.oauth_handler.get_user_context(external_token)
+                # Add external token to the user context for use in DuckDB functions
+                user_context.external_token = external_token
                 logger.info(f"Successfully retrieved user context for {user_context.username} (provider: {user_context.provider})")
                 return user_context
             except Exception as e:

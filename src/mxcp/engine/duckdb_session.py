@@ -5,6 +5,7 @@ from mxcp.engine.secret_injection import inject_secrets
 from mxcp.engine.extension_loader import load_extensions
 from mxcp.engine.plugin_loader import load_plugins
 from mxcp.plugins import MXCPBasePlugin
+from mxcp.auth.context import get_user_context
 import logging
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,51 @@ class DuckDBSession:
         # Load plugins
         self.plugins = load_plugins(self.site_config, self.user_config, project, profile_name, self.conn)
         
+        # Create user token UDFs if user is authenticated
+        self._create_user_token_udfs()
+        
         return self.conn
+        
+    def _create_user_token_udfs(self):
+        """Create UDFs for accessing user tokens if authentication is enabled."""
+        user_context = get_user_context()
+        if not user_context:
+            logger.debug("No user context available, skipping token UDF creation")
+            return
+            
+        logger.info(f"Creating user token UDFs for {user_context.username}")
+        
+        def get_user_external_token() -> str:
+            """Return the current user's OAuth provider token (e.g., GitHub token)."""
+            if user_context and user_context.external_token:
+                return user_context.external_token
+            return ""
+            
+        def get_username() -> str:
+            """Return the current user's username."""
+            if user_context:
+                return user_context.username
+            return ""
+            
+        def get_user_provider() -> str:
+            """Return the current user's OAuth provider (e.g., 'github', 'atlassian')."""
+            if user_context:
+                return user_context.provider
+            return ""
+            
+        def get_user_email() -> str:
+            """Return the current user's email address."""
+            if user_context and user_context.email:
+                return user_context.email
+            return ""
+        
+        # Register the UDFs with DuckDB
+        if self.conn:
+            self.conn.create_function("get_user_external_token", get_user_external_token, [], "VARCHAR")
+            self.conn.create_function("get_username", get_username, [], "VARCHAR")
+            self.conn.create_function("get_user_provider", get_user_provider, [], "VARCHAR")
+            self.conn.create_function("get_user_email", get_user_email, [], "VARCHAR")
+            logger.info("Created user token UDFs: get_user_external_token(), get_username(), get_user_provider(), get_user_email()")
         
     def close(self):
         """Close the DuckDB connection"""

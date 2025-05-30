@@ -503,6 +503,67 @@ authorization:
 
 When authorization is configured, all protected endpoints (tools, resources, prompts, SQL features) will verify that the authenticated user's token contains the required scopes before allowing access.
 
+## User Token Access in SQL
+
+When authentication is enabled, MXCP automatically creates several built-in SQL functions that allow your DuckDB queries to access information about the authenticated user and their tokens. This enables SQL queries to make authenticated API calls or access user-specific data.
+
+### Available User Functions
+
+The following functions are automatically available in all SQL queries when a user is authenticated:
+
+```sql
+-- Get the user's original OAuth provider token (e.g., GitHub token)
+SELECT get_user_external_token() as external_token;
+
+-- Get user information
+SELECT get_username() as username;
+SELECT get_user_provider() as provider;  -- 'github', 'atlassian', etc.
+SELECT get_user_email() as email;
+```
+
+### Example Use Cases
+
+**Making API calls from SQL using httpfs extension:**
+
+```sql
+-- Use the user's GitHub token to fetch their repositories
+SELECT *
+FROM read_json_auto(
+    'https://api.github.com/user/repos',
+    headers = MAP {
+        'Authorization': 'Bearer ' || get_user_external_token(),
+        'User-Agent': 'MXCP-' || get_username()
+    }
+);
+
+-- Filter data based on the authenticated user
+SELECT *
+FROM my_data_table
+WHERE owner = get_username();
+```
+
+**User-specific data filtering:**
+
+```sql
+-- Only show records owned by the current user
+SELECT *
+FROM user_documents
+WHERE created_by = get_username();
+
+-- Log user activity
+INSERT INTO audit_log (user_id, action, timestamp)
+VALUES (get_username(), 'data_query', NOW());
+```
+
+### Function Behavior
+
+- **When authentication is disabled**: All functions return empty strings (`""`)
+- **When user is not authenticated**: All functions return empty strings (`""`)
+- **When user is authenticated**: Functions return the actual user data
+- **Token security**: Tokens are only available within the SQL context and are not logged
+
+These functions enable powerful user-aware SQL queries while maintaining security through the authentication layer.
+
 ## Security Considerations
 
 - **Environment Variables**: Store sensitive credentials in environment variables, not in config files
@@ -668,12 +729,4 @@ The authentication system is designed to be extensible. Future OAuth providers c
 1. Implementing the `ExternalOAuthHandler` interface in a new provider file
 2. Adding provider-specific configuration to the schema
 3. Updating the `create_oauth_handler` factory function
-4. Adding documentation following the same structure as existing providers
-
-Each new provider should follow the same documentation structure:
-- **Creating an OAuth App**: Step-by-step provider setup
-- **Environment Variables**: Required credentials
-- **MXCP Configuration**: Configuration examples
-- **Configuration Options**: Available settings
-- **Testing**: How to verify the setup
-- **Troubleshooting**: Common issues and solutions 
+4. Adding documentation following the same structure as existing providers 
