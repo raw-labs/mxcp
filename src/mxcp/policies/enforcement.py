@@ -21,6 +21,7 @@ class PolicyAction(Enum):
     DENY = "deny"
     FILTER_FIELDS = "filter_fields"
     MASK_FIELDS = "mask_fields"
+    FILTER_SENSITIVE_FIELDS = "filter_sensitive_fields"
 
 
 @dataclass
@@ -171,16 +172,18 @@ class PolicyEnforcer:
     def enforce_output_policies(
         self, 
         user_context: Optional['UserContext'], 
-        output: Any
-    ) -> Any:
+        output: Any,
+        endpoint_def: Optional[Dict[str, Any]] = None
+    ) -> tuple[Any, Optional[str]]:
         """Enforce output policies.
         
         Args:
             user_context: The user context from authentication
             output: The output data (can be list, dict, or scalar)
+            endpoint_def: The endpoint definition containing type information
             
         Returns:
-            Modified output after applying policies
+            Tuple of (modified output, policy action applied)
             
         Raises:
             PolicyEnforcementError: If a policy denies access
@@ -193,6 +196,8 @@ class PolicyEnforcer:
             "response": output
         }
         
+        applied_action = None
+        
         # Evaluate each output policy
         for policy in self.policy_set.output_policies:
             if self._evaluate_condition(policy.condition, context):
@@ -203,11 +208,20 @@ class PolicyEnforcer:
                 
                 elif policy.action == PolicyAction.FILTER_FIELDS and policy.fields:
                     output = self._filter_fields(output, policy.fields)
+                    applied_action = "filter_fields"
                 
                 elif policy.action == PolicyAction.MASK_FIELDS and policy.fields:
                     output = self._mask_fields(output, policy.fields)
+                    applied_action = "mask_fields"
+                
+                elif policy.action == PolicyAction.FILTER_SENSITIVE_FIELDS:
+                    if endpoint_def and "return" in endpoint_def:
+                        output = self._filter_sensitive_fields(output, endpoint_def["return"])
+                        applied_action = "filter_sensitive_fields"
+                    else:
+                        logger.warning("filter_sensitive_fields policy requires endpoint definition with return type")
         
-        return output
+        return output, applied_action
     
     def _filter_fields(self, data: Any, fields: List[str]) -> Any:
         """Remove specified fields from the output.
@@ -262,6 +276,59 @@ class PolicyEnforcer:
             if field in result:
                 result[field] = "****"
         return result
+    
+    def _filter_sensitive_fields(self, data: Any, type_def: Dict[str, Any]) -> Any:
+        """Recursively filter out fields marked as sensitive in the type definition.
+        
+        Args:
+            data: The data to filter
+            type_def: The type definition with sensitive flags
+            
+        Returns:
+            Data with sensitive fields removed
+        """
+        # If the entire type is marked sensitive, remove it
+        if type_def.get("sensitive", False):
+            return None
+        
+        type_name = type_def.get("type")
+        
+        if type_name == "object" and isinstance(data, dict):
+            # Handle object types
+            properties = type_def.get("properties", {})
+            result = {}
+            
+            for key, value in data.items():
+                if key in properties:
+                    # Check if this specific property is sensitive
+                    prop_def = properties[key]
+                    if not prop_def.get("sensitive", False):
+                        # Recursively filter nested data
+                        filtered = self._filter_sensitive_fields(value, prop_def)
+                        if filtered is not None:
+                            result[key] = filtered
+                else:
+                    # Keep non-defined properties if additionalProperties is true
+                    if type_def.get("additionalProperties", True):
+                        result[key] = value
+                        
+            return result
+            
+        elif type_name == "array" and isinstance(data, list):
+            # Handle array types
+            items_def = type_def.get("items", {})
+            result = []
+            
+            for item in data:
+                filtered = self._filter_sensitive_fields(item, items_def)
+                if filtered is not None:
+                    result.append(filtered)
+                    
+            return result
+            
+        else:
+            # For scalar types, return as-is (they're not sensitive at this level)
+            return data
 
 
 def parse_policies_from_config(policies_config: Optional[Dict[str, Any]]) -> Optional[PolicySet]:

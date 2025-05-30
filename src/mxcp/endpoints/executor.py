@@ -262,6 +262,10 @@ class EndpointExecutor:
         self.session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
         self.policy_enforcer: Optional[PolicyEnforcer] = None
         
+        # Track policy decisions for audit logging
+        self.last_policy_decision: str = "n/a"
+        self.last_policy_reason: Optional[str] = None
+        
     def _load_endpoint(self):
         """Load the endpoint definition from YAML file"""
         # Use EndpointLoader to find the endpoint file
@@ -398,7 +402,11 @@ class EndpointExecutor:
         if self.policy_enforcer:
             try:
                 self.policy_enforcer.enforce_input_policies(user_context, params)
+                self.last_policy_decision = "allow"  # If we get here, policies allowed it
             except PolicyEnforcementError as e:
+                # Track the denial
+                self.last_policy_decision = "deny"
+                self.last_policy_reason = e.reason
                 # Re-raise with more context
                 raise ValueError(f"Policy enforcement failed: {e.reason}")
         
@@ -454,9 +462,14 @@ class EndpointExecutor:
                 if self.policy_enforcer:
                     try:
                         logger.debug(f"Enforcing output policies on result: {result}")
-                        result = self.policy_enforcer.enforce_output_policies(user_context, result)
+                        result, action = self.policy_enforcer.enforce_output_policies(user_context, result, endpoint_def)
+                        if action:
+                            self.last_policy_decision = action
                         logger.debug(f"Result after policy enforcement: {result}")
                     except PolicyEnforcementError as e:
+                        # Track the denial
+                        self.last_policy_decision = "deny"
+                        self.last_policy_reason = e.reason
                         # Re-raise with more context
                         raise ValueError(f"Output policy enforcement failed: {e.reason}")
                 
@@ -482,8 +495,13 @@ class EndpointExecutor:
                 # Enforce output policies for prompts too
                 if self.policy_enforcer:
                     try:
-                        processed_messages = self.policy_enforcer.enforce_output_policies(user_context, processed_messages)
+                        processed_messages, action = self.policy_enforcer.enforce_output_policies(user_context, processed_messages, prompt_def)
+                        if action:
+                            self.last_policy_decision = action
                     except PolicyEnforcementError as e:
+                        # Track the denial
+                        self.last_policy_decision = "deny"
+                        self.last_policy_reason = e.reason
                         # Re-raise with more context
                         raise ValueError(f"Output policy enforcement failed: {e.reason}")
                 

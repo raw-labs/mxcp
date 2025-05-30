@@ -198,7 +198,8 @@ class AuditLogger:
         policy_decision: PolicyDecision = "n/a",
         reason: Optional[str] = None,
         status: Status = "success",
-        error: Optional[str] = None
+        error: Optional[str] = None,
+        endpoint_def: Optional[Dict[str, Any]] = None
     ):
         """Log an audit event.
         
@@ -212,13 +213,14 @@ class AuditLogger:
             reason: Explanation if denied or warned
             status: Execution status (success, error)
             error: Error message if status is error
+            endpoint_def: Optional endpoint definition for schema-based redaction
         """
         if not self.enabled:
             return
         
         try:
             # Redact sensitive data from input parameters
-            redacted_params = self._redact_sensitive_data(input_params)
+            redacted_params = self._redact_sensitive_data(input_params, endpoint_def)
             
             # Create log event
             event = LogEvent(
@@ -241,41 +243,75 @@ class AuditLogger:
         except Exception as e:
             logger.error(f"Failed to queue log event: {e}")
     
-    def _redact_sensitive_data(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _redact_sensitive_data(self, params: Dict[str, Any], endpoint_def: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Redact sensitive data from parameters.
         
         Args:
             params: Input parameters
+            endpoint_def: Optional endpoint definition for schema-based redaction
             
         Returns:
             Parameters with sensitive data redacted
         """
-        # Common sensitive field names to redact
-        sensitive_fields = {
-            'password', 'passwd', 'pwd', 'secret', 'token', 'key', 
-            'api_key', 'apikey', 'auth', 'authorization', 'credential',
-            'private', 'ssn', 'credit_card', 'card_number'
-        }
+        # If we have endpoint definition, use schema-based redaction
+        if endpoint_def and "parameters" in endpoint_def:
+            param_defs = {p['name']: p for p in endpoint_def.get('parameters', [])}
+            return self._redact_with_schema(params, param_defs)
         
-        def redact_dict(d: Dict[str, Any]) -> Dict[str, Any]:
-            """Recursively redact sensitive fields in a dictionary."""
-            result = {}
-            for key, value in d.items():
-                # Check if field name contains sensitive keywords
-                if any(sensitive in key.lower() for sensitive in sensitive_fields):
+        # Otherwise, return data as-is (no redaction without schema)
+        return params
+    
+    def _redact_with_schema(self, data: Dict[str, Any], param_defs: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Redact data based on parameter definitions with sensitive flags."""
+        result = {}
+        
+        for key, value in data.items():
+            if key in param_defs:
+                param_def = param_defs[key]
+                # Check if this parameter is marked as sensitive
+                if param_def.get('sensitive', False):
                     result[key] = "[REDACTED]"
-                elif isinstance(value, dict):
-                    result[key] = redact_dict(value)
-                elif isinstance(value, list):
-                    result[key] = [
-                        redact_dict(item) if isinstance(item, dict) else item
-                        for item in value
-                    ]
                 else:
-                    result[key] = value
-            return result
+                    # Recursively handle nested structures
+                    result[key] = self._redact_value_by_type(value, param_def)
+            else:
+                # For unknown parameters, no redaction
+                result[key] = value
         
-        return redact_dict(params)
+        return result
+    
+    def _redact_value_by_type(self, value: Any, type_def: Dict[str, Any]) -> Any:
+        """Recursively redact values based on type definition."""
+        # If the type itself is marked sensitive, redact it
+        if type_def.get('sensitive', False):
+            return "[REDACTED]"
+        
+        type_name = type_def.get('type')
+        
+        if type_name == 'object' and isinstance(value, dict):
+            properties = type_def.get('properties', {})
+            result = {}
+            
+            for k, v in value.items():
+                if k in properties:
+                    prop_def = properties[k]
+                    if prop_def.get('sensitive', False):
+                        result[k] = "[REDACTED]"
+                    else:
+                        result[k] = self._redact_value_by_type(v, prop_def)
+                else:
+                    # No redaction for unknown properties
+                    result[k] = v
+            
+            return result
+            
+        elif type_name == 'array' and isinstance(value, list):
+            items_def = type_def.get('items', {})
+            return [self._redact_value_by_type(item, items_def) for item in value]
+        
+        else:
+            # For scalar types, return as-is (they're not sensitive at this level)
+            return value
     
     def shutdown(self):
         """Gracefully shut down the audit logger."""

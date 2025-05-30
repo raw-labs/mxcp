@@ -106,21 +106,41 @@ Each log entry contains:
 
 ### Sensitive Data Redaction
 
-The audit logger automatically redacts sensitive fields in input parameters:
-- Passwords
-- API keys
-- Tokens
-- Private keys
-- Credit card numbers
-- SSNs
+The audit logger automatically redacts fields marked as `sensitive` in the endpoint schema. This provides precise control over which data should be protected in logs.
 
-Example:
+Example endpoint definition:
+```yaml
+parameters:
+  - name: username
+    type: string
+    description: User's username
+  - name: api_key
+    type: string
+    sensitive: true  # This field will be redacted in audit logs
+    description: API key for authentication
+  - name: config
+    type: object
+    properties:
+      host:
+        type: string
+      password:
+        type: string
+        sensitive: true  # Nested sensitive field
+```
+
+Resulting audit log entry:
 ```json
 {
+  "username": "john_doe",
   "api_key": "[REDACTED]",
-  "query": "SELECT * FROM users"
+  "config": {
+    "host": "example.com",
+    "password": "[REDACTED]"
+  }
 }
 ```
+
+**Important**: Only fields explicitly marked with `sensitive: true` in the endpoint schema will be redacted. If no schema is provided or fields are not marked as sensitive, they will appear in plain text in the audit logs.
 
 ### Access Control
 

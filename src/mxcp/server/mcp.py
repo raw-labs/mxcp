@@ -556,18 +556,28 @@ class RAWMCP:
                 # This is a simplified approach - in production you might want to detect this more accurately
                 caller = "http"  # Default to http, could be enhanced to detect stdio vs http
                 
+                # Get policy decision from executor if available
+                policy_decision = "n/a"
+                policy_reason = None
+                if hasattr(exec_, 'last_policy_decision'):
+                    policy_decision = exec_.last_policy_decision
+                if hasattr(exec_, 'last_policy_reason'):
+                    policy_reason = exec_.last_policy_reason
+                
                 # Log the audit event
-                self.audit_logger.log_event(
-                    caller=caller,
-                    event_type=endpoint_key,  # "tool", "resource", or "prompt"
-                    name=endpoint_def.get('name', endpoint_def.get('uri', 'unknown')),
-                    input_params=kwargs,
-                    duration_ms=duration_ms,
-                    policy_decision="n/a",  # Could be enhanced with actual policy evaluation
-                    reason=None,
-                    status=status,
-                    error=error_msg
-                )
+                if self.audit_logger:
+                    self.audit_logger.log_event(
+                        caller=caller,
+                        event_type=endpoint_key,  # "tool", "resource", or "prompt"
+                        name=endpoint_def.get('name', endpoint_def.get('uri', 'unknown')),
+                        input_params=kwargs,
+                        duration_ms=duration_ms,
+                        policy_decision=policy_decision,
+                        reason=policy_reason,
+                        status=status,
+                        error=error_msg,
+                        endpoint_def=endpoint_def  # Pass the endpoint definition for schema-based redaction
+                    )
 
         # -------------------------------------------------------------------
         # Wrap with authentication middleware
@@ -699,17 +709,18 @@ class RAWMCP:
             finally:
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)
-                self.audit_logger.log_event(
-                    caller="http",  # Could be enhanced to detect actual transport
-                    event_type="tool",
-                    name="execute_sql_query",
-                    input_params={"sql": sql},
-                    duration_ms=duration_ms,
-                    policy_decision="n/a",
-                    reason=None,
-                    status=status,
-                    error=error_msg
-                )
+                if self.audit_logger:
+                    self.audit_logger.log_event(
+                        caller="http",  # Could be enhanced to detect actual transport
+                        event_type="tool",
+                        name="execute_sql_query",
+                        input_params={"sql": sql},
+                        duration_ms=duration_ms,
+                        policy_decision="n/a",
+                        reason=None,
+                        status=status,
+                        error=error_msg
+                    )
 
         # Register table list tool with proper metadata
         @self.mcp.tool(
@@ -761,17 +772,18 @@ class RAWMCP:
             finally:
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)
-                self.audit_logger.log_event(
-                    caller="http",
-                    event_type="tool",
-                    name="list_tables",
-                    input_params={},
-                    duration_ms=duration_ms,
-                    policy_decision="n/a",
-                    reason=None,
-                    status=status,
-                    error=error_msg
-                )
+                if self.audit_logger:
+                    self.audit_logger.log_event(
+                        caller="http",
+                        event_type="tool",
+                        name="list_tables",
+                        input_params={},
+                        duration_ms=duration_ms,
+                        policy_decision="n/a",
+                        reason=None,
+                        status=status,
+                        error=error_msg
+                    )
 
         # Register schema tool with proper metadata
         @self.mcp.tool(
@@ -827,17 +839,18 @@ class RAWMCP:
             finally:
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)
-                self.audit_logger.log_event(
-                    caller="http",
-                    event_type="tool",
-                    name="get_table_schema",
-                    input_params={"table_name": table_name},
-                    duration_ms=duration_ms,
-                    policy_decision="n/a",
-                    reason=None,
-                    status=status,
-                    error=error_msg
-                )
+                if self.audit_logger:
+                    self.audit_logger.log_event(
+                        caller="http",
+                        event_type="tool",
+                        name="get_table_schema",
+                        input_params={"table_name": table_name},
+                        duration_ms=duration_ms,
+                        policy_decision="n/a",
+                        reason=None,
+                        status=status,
+                        error=error_msg
+                    )
 
         logger.info("Registered built-in DuckDB features")
 
