@@ -59,6 +59,18 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
     if "path" not in config["profiles"][profile]["drift"]:
         config["profiles"][profile]["drift"]["path"] = str(repo_root / f"drift-{profile}.json")
 
+    # Initialize audit config for the profile if not present
+    if "audit" not in config["profiles"][profile]:
+        config["profiles"][profile]["audit"] = {}
+        
+    # Set default audit enabled state for the profile if not specified
+    if "enabled" not in config["profiles"][profile]["audit"]:
+        config["profiles"][profile]["audit"]["enabled"] = False
+        
+    # Set default audit log path for the profile if not specified
+    if "path" not in config["profiles"][profile]["audit"]:
+        config["profiles"][profile]["audit"]["path"] = str(repo_root / f"logs-{profile}.duckdb")
+
     # Initialize extensions section if not present
     if "extensions" not in config:
         config["extensions"] = []

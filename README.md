@@ -111,6 +111,7 @@ mxcp dbt-config      # Configure dbt integration
 mxcp dbt             # Run dbt commands
 mxcp drift-snapshot  # Create drift detection baseline
 mxcp drift-check     # Check for schema and endpoint drift
+mxcp log             # Query audit logs
 ```
 
 ## 🔌 LLM Integration
@@ -134,6 +135,7 @@ For specific setup instructions, see:
 - [Plugins](docs/plugins.md) — Extend DuckDB with custom Python functions
 - [Authentication](docs/authentication.md) — OAuth authentication setup
 - [Policy Enforcement](docs/policies.md) — Access control and data filtering
+- [Audit Logging](docs/auditing.md) — Enterprise-grade execution logging
 - [Type System](docs/type-system.md) — Data types and validation
 - [Integrations](docs/integrations.md) — Data sources and tools
 - [Drift Detection](docs/drift-detection.md) — Schema and endpoint change monitoring
