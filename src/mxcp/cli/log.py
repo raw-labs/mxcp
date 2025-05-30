@@ -66,7 +66,13 @@ def log(
         
         # Check if profile exists
         if profile_name not in site_config["profiles"]:
-            output_error(f"Profile '{profile_name}' not found in configuration", json_output, debug)
+            if json_output:
+                click.echo(json.dumps({
+                    "status": "error",
+                    "error": f"Profile '{profile_name}' not found in configuration"
+                }))
+            else:
+                click.echo(f"Error: Profile '{profile_name}' not found in configuration", err=True)
             return
         
         # Get audit configuration
@@ -74,24 +80,28 @@ def log(
         audit_config = profile_config.get("audit", {})
         
         if not audit_config.get("enabled", False):
-            output_error(
-                f"Audit logging is not enabled for profile '{profile_name}'. "
-                "Enable it in mxcp-site.yml under profiles.<profile>.audit.enabled",
-                json_output,
-                debug
-            )
+            if json_output:
+                click.echo(json.dumps({
+                    "status": "error",
+                    "error": f"Audit logging is not enabled for profile '{profile_name}'. Enable it in mxcp-site.yml under profiles.{profile_name}.audit.enabled"
+                }))
+            else:
+                click.echo(f"Audit logging is not enabled for profile '{profile_name}'.", err=True)
+                click.echo(f"Enable it in mxcp-site.yml under profiles.{profile_name}.audit.enabled", err=True)
             return
         
         # Get audit database path
         db_path = Path(audit_config["path"])
         
         if not db_path.exists():
-            output_error(
-                f"Audit database not found at {db_path}. "
-                "The database is created when audit logging is enabled and events are logged.",
-                json_output,
-                debug
-            )
+            if json_output:
+                click.echo(json.dumps({
+                    "status": "error",
+                    "error": f"Audit database not found at {db_path}. The database is created when audit logging is enabled and events are logged."
+                }))
+            else:
+                click.echo(f"Audit database not found at {db_path}.", err=True)
+                click.echo("The database is created when audit logging is enabled and events are logged.", err=True)
             return
         
         # Create query interface
