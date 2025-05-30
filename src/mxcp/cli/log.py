@@ -4,7 +4,7 @@ import click
 import json
 from pathlib import Path
 from typing import Optional
-from mxcp.cli.utils import output_error, output_success, configure_logging
+from mxcp.cli.utils import output_error, output_result, configure_logging
 from mxcp.config.site_config import load_site_config
 from mxcp.audit.query import AuditQuery
 
@@ -109,7 +109,7 @@ def log(
                 status=status,
                 since=since
             )
-            output_success(
+            output_result(
                 f"Exported {row_count} log entries to {export_path}",
                 json_output
             )
