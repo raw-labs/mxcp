@@ -184,13 +184,13 @@ class RAWMCP:
 
     def shutdown(self):
         """Shutdown the server gracefully."""
-        logger.info("Shutting down RAWMCP server...")
+        logger.info("Shutting down MXCP server...")
         
         # Shutdown audit logger if initialized
         if self.audit_logger:
             self.audit_logger.shutdown()
         
-        logger.info("RAWMCP server shutdown complete")
+        logger.info("MXCP server shutdown complete")
 
     def _sanitize_model_name(self, name: str) -> str:
         """Sanitize a name to be a valid Python class name."""

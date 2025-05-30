@@ -19,11 +19,9 @@ When enabled, MXCP logs every execution with:
 
 Audit logs are stored in **JSONL (JSON Lines)** format - one JSON object per line. This format offers several advantages:
 
-- **No locking issues**: Multiple processes can append concurrently
 - **Human-readable**: Can be inspected with standard text tools
 - **Streaming-friendly**: Can be tailed in real-time
 - **Tool-compatible**: Works with many log analysis tools
-- **Query-able**: Can be efficiently queried using DuckDB
 
 ## Configuration
 
@@ -87,26 +85,22 @@ mxcp log --export-csv audit.csv
 mxcp log --export-duckdb audit.db
 ```
 
-## Concurrent Access
-
-One of the key advantages of JSONL format is that logs can be queried while the server is running. There are no locking issues - the writer appends to the file while readers can safely query it.
-
 ## Log Fields
 
 Each log entry contains:
 
-| Field | Description | Example |
-|-------|-------------|---------|
-| timestamp | ISO 8601 timestamp (UTC) | 2024-01-15T10:30:45.123Z |
-| caller | Source of the request | cli, http, stdio |
-| type | Type of execution | tool, resource, prompt |
-| name | Name of the item | my_sql_tool |
-| input_json | JSON string of parameters | {"query": "SELECT *..."} |
-| duration_ms | Execution time | 145 |
-| policy_decision | Policy engine result | allow, deny, warn, n/a |
-| reason | Explanation if denied/warned | "Blocked by policy" |
-| status | Execution result | success, error |
-| error | Error message if failed | "Connection timeout" |
+| Field           | Description                  | Example                  |
+|-----------------|------------------------------|--------------------------|
+| timestamp       | ISO 8601 timestamp (UTC)     | 2024-01-15T10:30:45.123Z |
+| caller          | Source of the request        | cli, http, stdio         |
+| type            | Type of execution            | tool, resource, prompt   |
+| name            | Name of the item             | my_sql_tool              |
+| input_json      | JSON string of parameters    | {"query": "SELECT *..."} |
+| duration_ms     | Execution time               | 145                      |
+| policy_decision | Policy engine result         | allow, deny, warn, n/a   |
+| reason          | Explanation if denied/warned | "Blocked by policy"      |
+| status          | Execution result             | success, error           |
+| error           | Error message if failed      | "Connection timeout"     |
 
 ## Security
 
