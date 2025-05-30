@@ -49,6 +49,16 @@ class ParamDefinition(TypedDict):
     properties: Optional[dict[str, TypeDefinition]]
     required: Optional[List[str]]
 
+class PolicyRule(TypedDict):
+    condition: str
+    action: Literal["deny", "filter_fields", "mask_fields"]
+    reason: Optional[str]
+    fields: Optional[List[str]]  # For filter_fields and mask_fields actions
+
+class PoliciesDefinition(TypedDict):
+    input: Optional[List[PolicyRule]]
+    output: Optional[List[PolicyRule]]
+
 class ToolDefinition(TypedDict):
     name: str
     description: Optional[str]
@@ -60,6 +70,7 @@ class ToolDefinition(TypedDict):
     source: SourceDefinition
     enabled: Optional[bool]
     tests: Optional[List[TestDefinition]]
+    policies: Optional[PoliciesDefinition]
 
 class ResourceDefinition(TypedDict):
     uri: str
@@ -72,6 +83,7 @@ class ResourceDefinition(TypedDict):
     source: SourceDefinition
     enabled: Optional[bool]
     tests: Optional[List[TestDefinition]]
+    policies: Optional[PoliciesDefinition]
 
 class PromptMessage(TypedDict):
     prompt: str
@@ -87,6 +99,7 @@ class PromptDefinition(TypedDict):
     messages: List[PromptMessage]
     enabled: Optional[bool]
     tests: Optional[List[TestDefinition]]
+    policies: Optional[PoliciesDefinition]
 
 class EndpointDefinition(TypedDict):
     mxcp: str

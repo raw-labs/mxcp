@@ -133,6 +133,7 @@ For specific setup instructions, see:
 - [Configuration](docs/configuration.md) — Project setup
 - [Plugins](docs/plugins.md) — Extend DuckDB with custom Python functions
 - [Authentication](docs/authentication.md) — OAuth authentication setup
+- [Policy Enforcement](docs/policies.md) — Access control and data filtering
 - [Type System](docs/type-system.md) — Data types and validation
 - [Integrations](docs/integrations.md) — Data sources and tools
 - [Drift Detection](docs/drift-detection.md) — Schema and endpoint change monitoring

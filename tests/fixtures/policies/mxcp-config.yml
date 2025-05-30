@@ -1,0 +1,7 @@
+mxcp: "1.0.0"
+
+projects:
+  policies_test:
+    profiles:
+      test:
+        secrets: [] 

@@ -511,7 +511,7 @@ class RAWMCP:
                     self.profile_name,
                     readonly=self.readonly
                 )
-                result = await exec_.execute(converted)
+                result = await exec_.execute(converted, user_context=user_context)
                 logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                 return result
 
