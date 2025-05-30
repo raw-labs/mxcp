@@ -1,0 +1,21 @@
+mxcp: 1.0.0
+
+tool:
+  name: list_spaces
+  description: |
+    List all accessible Confluence spaces.
+    Returns a JSON string containing space keys and names.
+  type: tool
+  annotations:
+    title: List Spaces
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  return:
+    type: string
+    description: |
+      A JSON string containing an array of spaces.
+  language: "sql"
+  source:
+    file: "list_spaces.sql" 

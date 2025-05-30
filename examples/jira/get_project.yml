@@ -1,0 +1,32 @@
+mxcp: 1.0.0
+
+tool:
+  name: get_project
+  description: |
+    Get details for a specific project in your Jira instance by its project key.
+    Returns a JSON string containing the project's details.
+  type: tool
+  annotations:
+    title: Get Project Details
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  parameters:
+    - name: project_key
+      type: string
+      description: |
+        The project key to search for. This is the short identifier for the project (e.g., 'TEST' for project TEST).
+        Project keys are typically uppercase and contain only letters and numbers.
+      examples: [
+        "TEST",
+        "PROJ",
+        "DEV"
+      ]
+  return:
+    type: string
+    description: |
+      A JSON string containing the project's details.
+  language: "sql"
+  source:
+    file: "get_project.sql" 

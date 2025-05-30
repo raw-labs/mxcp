@@ -1,0 +1,12 @@
+mxcp: 1.0.0
+
+projects:
+  confluence-demo:
+    profiles:
+      dev:
+        plugin:
+          config:
+            confluence:
+              url: "https://your-domain.atlassian.net/wiki"
+              username: "your-email@example.com"
+              password: "your-api-token" 

@@ -1,0 +1,28 @@
+mxcp: 1.0.0
+
+tool:
+  name: get_children
+  description: |
+    List direct children of a Confluence page.
+    Returns a JSON string containing the child pages.
+  type: tool
+  annotations:
+    title: Get Children
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  parameters:
+    - name: page_id
+      type: string
+      description: |
+        The ID of the parent page.
+        This is typically a numeric ID found in the page URL.
+      examples: ["123456", "789012"]
+  return:
+    type: string
+    description: |
+      A JSON string containing an array of child pages.
+  language: "sql"
+  source:
+    file: "get_children.sql" 
