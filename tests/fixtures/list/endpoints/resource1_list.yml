@@ -1,0 +1,9 @@
+mxcp: "1.0.0"
+
+resource:
+  name: resource1_list
+  description: A list of all resources
+  uri: "test://resource1/list"
+  source:
+    code: |
+      SELECT 1 as value 
