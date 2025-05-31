@@ -87,7 +87,12 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
             readonly=readonly,
             stateless_http=final_stateless
         )
-        server.run(transport=final_transport)
+        try:
+            server.run(transport=final_transport)
+        except KeyboardInterrupt:
+            # Gracefully shutdown the server
+            server.shutdown()
+            raise
     except KeyboardInterrupt:
         # Server was stopped gracefully
         pass

@@ -162,6 +162,7 @@ Now that you have MXCP running, here are some next steps:
    - [Plugins](plugins.md) - Extend DuckDB with custom Python functions  
    - [Authentication](authentication.md) - Set up OAuth authentication
    - [Policy Enforcement](policies.md) - Control access and filter sensitive data
+   - [Audit Logging](auditing.md) - Track and monitor all executions
    - [Integrations](integrations.md) - Connect with dbt and DuckDB
    - [Drift Detection](drift-detection.md) - Monitor changes across environments
 

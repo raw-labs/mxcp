@@ -79,6 +79,7 @@ Available actions for output policies:
 - `deny`: Blocks the response and returns an error
 - `filter_fields`: Removes specified fields from the response
 - `mask_fields`: Replaces field values with `"****"`
+- `filter_sensitive_fields`: Removes all fields marked as `sensitive` in the schema
 
 ## User Context
 
@@ -518,3 +519,30 @@ Common issues:
 - Keep CEL expressions simple for better performance
 - Filter fields at the output stage rather than fetching and then denying
 - Consider caching policy evaluation results for repeated queries
+
+## Filter Sensitive Fields Example
+
+The `filter_sensitive_fields` action is particularly powerful because it automatically removes all fields marked with `sensitive: true` in your endpoint's type definition. This means you define sensitivity once in the schema rather than maintaining lists of fields in policies.
+
+Example endpoint with sensitive fields:
+```yaml
+policies:
+  output:
+    - condition: "user.role != 'admin'"
+      action: filter_sensitive_fields
+      reason: "Non-admin users cannot see sensitive data"
+
+return:
+  type: object
+  properties:
+    username:
+      type: string
+    email:
+      type: string
+    api_key:
+      type: string
+      sensitive: true  # This field will be filtered
+    internal_id:
+      type: string
+      sensitive: true  # This field will also be filtered
+```

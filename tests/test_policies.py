@@ -162,11 +162,12 @@ class TestPolicyEnforcement:
             "ssn": "123-45-6789"
         }
         
-        result = enforcer.enforce_output_policies(user_context, output)
+        result, action = enforcer.enforce_output_policies(user_context, output)
         assert "name" in result
         assert "email" in result
         assert "salary" not in result
         assert "ssn" not in result
+        assert action == "filter_fields"
     
     def test_output_policy_mask_fields(self):
         """Test output policy that masks fields."""
@@ -205,7 +206,7 @@ class TestPolicyEnforcement:
             }
         ]
         
-        result = enforcer.enforce_output_policies(user_context, output)
+        result, action = enforcer.enforce_output_policies(user_context, output)
         assert len(result) == 2
         assert result[0]["name"] == "John Doe"
         assert result[0]["phone"] == "****"
@@ -213,6 +214,7 @@ class TestPolicyEnforcement:
         assert result[1]["name"] == "Jane Smith"
         assert result[1]["phone"] == "****"
         assert result[1]["address"] == "****"
+        assert action == "mask_fields"
     
     def test_permission_check_policy(self):
         """Test policy with permission checks."""
@@ -316,4 +318,544 @@ class TestPolicyEnforcement:
         with pytest.raises(PolicyEnforcementError) as excinfo:
             enforcer.enforce_input_policies(None, {})
         
-        assert "Authentication required" in str(excinfo.value) 
+        assert "Authentication required" in str(excinfo.value)
+    
+    def test_output_policy_filter_sensitive_fields(self):
+        """Test filter_sensitive_fields policy action."""
+        # Define a type with sensitive fields
+        type_def = {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string"},
+                "api_key": {"type": "string", "sensitive": True},
+                "email": {"type": "string"}
+            }
+        }
+        
+        # Create policy set with filter_sensitive_fields
+        policy_set = PolicySet(
+            input_policies=[],
+            output_policies=[
+                PolicyDefinition(
+                    condition="true",  # Always apply
+                    action=PolicyAction.FILTER_SENSITIVE_FIELDS
+                )
+            ]
+        )
+        
+        enforcer = PolicyEnforcer(policy_set)
+        
+        # Test data
+        data = {
+            "username": "john_doe",
+            "api_key": "secret123",
+            "email": "john@example.com"
+        }
+        
+        # Apply policy
+        result, action = enforcer.enforce_output_policies(
+            user_context=None,
+            output=data,
+            endpoint_def={"return": type_def}
+        )
+        
+        # Verify sensitive field was removed
+        assert "username" in result
+        assert "email" in result
+        assert "api_key" not in result
+        assert action == "filter_sensitive_fields"
+    
+    def test_filter_sensitive_fields_nested(self):
+        """Test filtering sensitive fields from nested objects."""
+        type_def = {
+            "type": "object",
+            "properties": {
+                "user": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "credentials": {
+                            "type": "object",
+                            "sensitive": True,  # Entire object is sensitive
+                            "properties": {
+                                "password": {"type": "string"},
+                                "token": {"type": "string"}
+                            }
+                        }
+                    }
+                },
+                "metadata": {
+                    "type": "object",
+                    "properties": {
+                        "created": {"type": "string"},
+                        "secret": {"type": "string", "sensitive": True}
+                    }
+                }
+            }
+        }
+        
+        policy_set = PolicySet(
+            input_policies=[],
+            output_policies=[
+                PolicyDefinition(
+                    condition="true",
+                    action=PolicyAction.FILTER_SENSITIVE_FIELDS
+                )
+            ]
+        )
+        
+        enforcer = PolicyEnforcer(policy_set)
+        
+        data = {
+            "user": {
+                "name": "John",
+                "credentials": {
+                    "password": "pass123",
+                    "token": "tok456"
+                }
+            },
+            "metadata": {
+                "created": "2024-01-01",
+                "secret": "hidden"
+            }
+        }
+        
+        result, _ = enforcer.enforce_output_policies(
+            user_context=None,
+            output=data,
+            endpoint_def={"return": type_def}
+        )
+        
+        # Verify nested sensitive data was removed
+        assert result["user"]["name"] == "John"
+        assert "credentials" not in result["user"]
+        assert result["metadata"]["created"] == "2024-01-01"
+        assert "secret" not in result["metadata"]
+    
+    def test_filter_sensitive_fields_array(self):
+        """Test filtering sensitive fields from arrays."""
+        type_def = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "token": {"type": "string", "sensitive": True},
+                    "data": {"type": "string"}
+                }
+            }
+        }
+        
+        policy_set = PolicySet(
+            input_policies=[],
+            output_policies=[
+                PolicyDefinition(
+                    condition="true",
+                    action=PolicyAction.FILTER_SENSITIVE_FIELDS
+                )
+            ]
+        )
+        
+        enforcer = PolicyEnforcer(policy_set)
+        
+        data = [
+            {"id": 1, "token": "tok1", "data": "data1"},
+            {"id": 2, "token": "tok2", "data": "data2"}
+        ]
+        
+        result, _ = enforcer.enforce_output_policies(
+            user_context=None,
+            output=data,
+            endpoint_def={"return": type_def}
+        )
+        
+        # Verify sensitive fields removed from all array items
+        assert len(result) == 2
+        for item in result:
+            assert "id" in item
+            assert "data" in item
+            assert "token" not in item
+    
+    def test_filter_sensitive_fields_conditional(self):
+        """Test conditional application of filter_sensitive_fields."""
+        type_def = {
+            "type": "object",
+            "properties": {
+                "public_data": {"type": "string"},
+                "admin_token": {"type": "string", "sensitive": True}
+            }
+        }
+        
+        # Only filter for non-admin users
+        policy_set = PolicySet(
+            input_policies=[],
+            output_policies=[
+                PolicyDefinition(
+                    condition="user.role != 'admin'",
+                    action=PolicyAction.FILTER_SENSITIVE_FIELDS
+                )
+            ]
+        )
+        
+        enforcer = PolicyEnforcer(policy_set)
+        
+        data = {
+            "public_data": "visible",
+            "admin_token": "secret"
+        }
+        
+        # Test with regular user
+        regular_user = UserContext(
+            user_id="1",
+            username="user",
+            email="user@example.com",
+            provider="test",
+            raw_profile={"role": "user"}
+        )
+        
+        result, action = enforcer.enforce_output_policies(
+            user_context=regular_user,
+            output=data.copy(),
+            endpoint_def={"return": type_def}
+        )
+        
+        assert "public_data" in result
+        assert "admin_token" not in result
+        assert action == "filter_sensitive_fields"
+        
+        # Test with admin user
+        admin_user = UserContext(
+            user_id="2",
+            username="admin",
+            email="admin@example.com",
+            provider="test",
+            raw_profile={"role": "admin"}
+        )
+        
+        result, action = enforcer.enforce_output_policies(
+            user_context=admin_user,
+            output=data.copy(),
+            endpoint_def={"return": type_def}
+        )
+        
+        # Admin should see everything
+        assert "public_data" in result
+        assert "admin_token" in result
+        assert action is None
+
+
+class TestPolicyConfigParsing:
+    """Test parsing of filter_sensitive_fields from configuration."""
+    
+    def test_parse_filter_sensitive_fields_policy(self):
+        """Test parsing filter_sensitive_fields action from config."""
+        config = {
+            "output": [
+                {
+                    "condition": "user.role != 'admin'",
+                    "action": "filter_sensitive_fields",
+                    "reason": "Non-admin users cannot see sensitive data"
+                }
+            ]
+        }
+        
+        policy_set = parse_policies_from_config(config)
+        
+        assert len(policy_set.output_policies) == 1
+        policy = policy_set.output_policies[0]
+        assert policy.action == PolicyAction.FILTER_SENSITIVE_FIELDS
+        assert policy.condition == "user.role != 'admin'"
+        assert policy.reason == "Non-admin users cannot see sensitive data"
+        assert policy.fields is None  # No fields needed for this action
+    
+    def test_filter_sensitive_scalar_types(self):
+        """Test that scalar types can be marked as sensitive and filtered."""
+        type_def = {
+            "type": "object",
+            "properties": {
+                "public_info": {"type": "string"},
+                "secret_key": {"type": "string", "sensitive": True},
+                "balance": {"type": "number", "sensitive": True},
+                "user_id": {"type": "integer", "sensitive": True},
+                "is_admin": {"type": "boolean", "sensitive": True}
+            }
+        }
+        
+        policy_set = PolicySet(
+            input_policies=[],
+            output_policies=[
+                PolicyDefinition(
+                    condition="true",
+                    action=PolicyAction.FILTER_SENSITIVE_FIELDS
+                )
+            ]
+        )
+        
+        enforcer = PolicyEnforcer(policy_set)
+        
+        data = {
+            "public_info": "This is public",
+            "secret_key": "sk-123456",
+            "balance": 1234.56,
+            "user_id": 42,
+            "is_admin": True
+        }
+        
+        result, action = enforcer.enforce_output_policies(
+            user_context=None,
+            output=data,
+            endpoint_def={"return": type_def}
+        )
+        
+        # Only public_info should remain
+        assert "public_info" in result
+        assert result["public_info"] == "This is public"
+        
+        # All sensitive fields should be removed
+        assert "secret_key" not in result
+        assert "balance" not in result  
+        assert "user_id" not in result
+        assert "is_admin" not in result
+        
+        assert action == "filter_sensitive_fields"
+
+
+class TestAuditLoggerSensitiveRedaction:
+    """Test sensitive field redaction in audit logging."""
+    
+    def test_schema_based_redaction(self):
+        """Test redaction based on endpoint schema."""
+        import tempfile
+        import time
+        import json
+        from pathlib import Path
+        from mxcp.audit.logger import AuditLogger
+        
+        # Reset singleton instance
+        AuditLogger._instance = None
+        
+        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
+            log_path = Path(f.name)
+        
+        try:
+            logger = AuditLogger(log_path, enabled=True)
+            
+            endpoint_def = {
+                "parameters": [
+                    {"name": "username", "type": "string"},
+                    {"name": "password", "type": "string", "sensitive": True},
+                    {"name": "query", "type": "string"}
+                ]
+            }
+            
+            logger.log_event(
+                caller="cli",
+                event_type="tool",
+                name="test_tool",
+                input_params={
+                    "username": "john",
+                    "password": "secret123",
+                    "query": "SELECT * FROM users"
+                },
+                duration_ms=100,
+                endpoint_def=endpoint_def
+            )
+            
+            time.sleep(0.5)
+            logger.shutdown()
+            
+            # Read and verify log
+            with open(log_path, 'r') as f:
+                log_entry = json.loads(f.readline())
+                input_data = json.loads(log_entry['input_json'])
+                
+                assert input_data['username'] == "john"
+                assert input_data['password'] == "[REDACTED]"
+                assert input_data['query'] == "SELECT * FROM users"
+                
+        finally:
+            log_path.unlink(missing_ok=True)
+            AuditLogger._instance = None  # Clean up singleton
+    
+    def test_nested_schema_redaction(self):
+        """Test redaction of nested sensitive fields."""
+        import tempfile
+        import time
+        import json
+        from pathlib import Path
+        from mxcp.audit.logger import AuditLogger
+        
+        # Reset singleton instance
+        AuditLogger._instance = None
+        
+        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
+            log_path = Path(f.name)
+        
+        try:
+            logger = AuditLogger(log_path, enabled=True)
+            
+            endpoint_def = {
+                "parameters": [
+                    {
+                        "name": "config",
+                        "type": "object",
+                        "properties": {
+                            "host": {"type": "string"},
+                            "credentials": {
+                                "type": "object",
+                                "properties": {
+                                    "username": {"type": "string"},
+                                    "api_key": {"type": "string", "sensitive": True}
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+            
+            logger.log_event(
+                caller="http",
+                event_type="tool",
+                name="connect",
+                input_params={
+                    "config": {
+                        "host": "example.com",
+                        "credentials": {
+                            "username": "admin",
+                            "api_key": "sk-12345"
+                        }
+                    }
+                },
+                duration_ms=50,
+                endpoint_def=endpoint_def
+            )
+            
+            time.sleep(0.5)  # Increased wait time
+            logger.shutdown()
+            
+            with open(log_path, 'r') as f:
+                content = f.read()
+                assert content, "Log file is empty"
+                log_entry = json.loads(content.strip())
+                input_data = json.loads(log_entry['input_json'])
+                
+                assert input_data['config']['host'] == "example.com"
+                assert input_data['config']['credentials']['username'] == "admin"
+                assert input_data['config']['credentials']['api_key'] == "[REDACTED]"
+                
+        finally:
+            log_path.unlink(missing_ok=True)
+            AuditLogger._instance = None  # Clean up singleton
+    
+    def test_no_redaction_without_schema(self):
+        """Test that no redaction happens without schema."""
+        import tempfile
+        import time
+        import json
+        from pathlib import Path
+        from mxcp.audit.logger import AuditLogger
+        
+        # Reset singleton instance
+        AuditLogger._instance = None
+        
+        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
+            log_path = Path(f.name)
+        
+        try:
+            logger = AuditLogger(log_path, enabled=True)
+            
+            # No endpoint_def provided
+            logger.log_event(
+                caller="stdio",
+                event_type="resource",
+                name="user_data",
+                input_params={
+                    "user_id": "123",
+                    "api_key": "secret",
+                    "password": "hidden",
+                    "data": "public"
+                },
+                duration_ms=25
+            )
+            
+            time.sleep(0.5)  # Increased wait time
+            logger.shutdown()
+            
+            with open(log_path, 'r') as f:
+                content = f.read()
+                assert content, "Log file is empty"
+                log_entry = json.loads(content.strip())
+                input_data = json.loads(log_entry['input_json'])
+                
+                # Without schema, nothing should be redacted
+                assert input_data['user_id'] == "123"
+                assert input_data['api_key'] == "secret"
+                assert input_data['password'] == "hidden"
+                assert input_data['data'] == "public"
+                
+        finally:
+            log_path.unlink(missing_ok=True)
+            AuditLogger._instance = None  # Clean up singleton
+    
+    def test_scalar_types_redaction(self):
+        """Test redaction of scalar types marked as sensitive."""
+        import tempfile
+        import time
+        import json
+        from pathlib import Path
+        from mxcp.audit.logger import AuditLogger
+        
+        # Reset singleton instance
+        AuditLogger._instance = None
+        
+        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
+            log_path = Path(f.name)
+        
+        try:
+            logger = AuditLogger(log_path, enabled=True)
+            
+            endpoint_def = {
+                "parameters": [
+                    {"name": "public_info", "type": "string"},
+                    {"name": "secret_key", "type": "string", "sensitive": True},
+                    {"name": "balance", "type": "number", "sensitive": True},
+                    {"name": "user_id", "type": "integer", "sensitive": True},
+                    {"name": "is_admin", "type": "boolean", "sensitive": True}
+                ]
+            }
+            
+            logger.log_event(
+                caller="cli",
+                event_type="tool",
+                name="test_scalars",
+                input_params={
+                    "public_info": "This is public",
+                    "secret_key": "sk-123456",
+                    "balance": 1234.56,
+                    "user_id": 42,
+                    "is_admin": True
+                },
+                duration_ms=100,
+                endpoint_def=endpoint_def
+            )
+            
+            time.sleep(0.5)
+            logger.shutdown()
+            
+            # Read and verify log
+            with open(log_path, 'r') as f:
+                log_entry = json.loads(f.readline())
+                input_data = json.loads(log_entry['input_json'])
+                
+                # Public info should remain
+                assert input_data['public_info'] == "This is public"
+                
+                # All sensitive scalars should be redacted
+                assert input_data['secret_key'] == "[REDACTED]"
+                assert input_data['balance'] == "[REDACTED]"
+                assert input_data['user_id'] == "[REDACTED]"
+                assert input_data['is_admin'] == "[REDACTED]"
+                
+        finally:
+            log_path.unlink(missing_ok=True)
+            AuditLogger._instance = None  # Clean up singleton 

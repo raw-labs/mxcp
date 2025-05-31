@@ -314,6 +314,11 @@
           "enum": ["email", "uri", "date", "time", "date-time", "duration", "timestamp"],
           "description": "Expected format for string values."
         },
+        "sensitive": {
+          "type": "boolean",
+          "description": "Whether this field contains sensitive data that should be redacted in logs and filtered by policies.",
+          "default": false
+        },
         "minLength": { 
           "type": "integer", 
           "minimum": 0, 
@@ -410,7 +415,7 @@
         },
         "action": {
           "type": "string",
-          "enum": ["deny", "filter_fields", "mask_fields"],
+          "enum": ["deny", "filter_fields", "mask_fields", "filter_sensitive_fields"],
           "description": "Action to take when the condition is true."
         },
         "reason": {

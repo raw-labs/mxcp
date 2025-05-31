@@ -174,4 +174,157 @@ Error: Invalid email format: not-an-email
 Error: Value must be >= 0
 Error: String must be at least 3 characters long
 Error: Missing required properties: name, email
-``` 
+```
+
+## Sensitive Data Marking
+
+Fields containing sensitive data can be marked with the `sensitive` flag. This provides:
+
+1. **Automatic redaction** in audit logs
+2. **Policy-based filtering** for access control
+3. **Clear documentation** of sensitive data
+
+The `sensitive` flag can be applied to **any type** - strings, numbers, integers, booleans, arrays, or objects. When a type is marked as sensitive, it will be completely redacted in logs and can be filtered out by policies.
+
+### Example: Marking Sensitive Fields
+
+```yaml
+parameters:
+  - name: username
+    type: string
+    description: User's username
+  - name: password
+    type: string
+    sensitive: true  # This field will be redacted in logs
+    description: User's password
+  - name: balance
+    type: number
+    sensitive: true  # Numbers can also be sensitive
+    description: Account balance
+  - name: config
+    type: object
+    properties:
+      host:
+        type: string
+      api_key:
+        type: string
+        sensitive: true  # Nested sensitive field
+```
+
+### Marking Entire Objects as Sensitive
+
+You can mark an entire object or array as sensitive:
+
+```yaml
+return:
+  type: object
+  properties:
+    user_info:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+    credentials:
+      type: object
+      sensitive: true  # Entire object is sensitive
+      properties:
+        token:
+          type: string
+        refresh_token:
+          type: string
+```
+
+### Using with Policies
+
+The `filter_sensitive_fields` policy action automatically removes all fields marked as sensitive:
+
+```yaml
+policies:
+  output:
+    - condition: "user.role != 'admin'"
+      action: filter_sensitive_fields
+      reason: "Non-admin users cannot see sensitive data"
+```
+
+This is more maintainable than `filter_fields` as sensitive fields are defined once in the schema rather than repeated in policies.
+
+## Examples
+
+### Simple Parameter Types
+
+```yaml
+parameters:
+  - name: user_id
+    type: integer
+    description: Unique user identifier
+    minimum: 1
+  
+  - name: email
+    type: string
+    format: email
+    description: User's email address
+  
+  - name: is_active
+    type: boolean
+    description: Whether the user is active
+    default: true
+```
+
+### Complex Object Types
+
+```yaml
+parameters:
+  - name: filter
+    type: object
+    description: Filter criteria
+    properties:
+      status:
+        type: string
+        enum: ["active", "inactive", "pending"]
+      created_after:
+        type: string
+        format: date-time
+      tags:
+        type: array
+        items:
+          type: string
+        minItems: 1
+    required: ["status"]
+```
+
+### Return Type Definition
+
+```yaml
+return:
+  type: array
+  description: List of matching users
+  items:
+    type: object
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+      email:
+        type: string
+        format: email
+      api_token:
+        type: string
+        sensitive: true  # Automatically filtered for non-admin users
+      created_at:
+        type: string
+        format: date-time
+    required: ["id", "name", "email"]
+```
+
+## Best Practices
+
+1. **Always define types** - Even for simple parameters
+2. **Use constraints** - They provide validation and documentation
+3. **Mark sensitive fields** - Use the `sensitive` flag for any data that should be protected
+4. **Provide descriptions** - Help users understand what each field is for
+5. **Use enums** - When there's a fixed set of valid values
+6. **Define return types** - Helps with validation and client code generation
+7. **Group sensitive data** - Consider putting all sensitive fields in a dedicated object that can be marked sensitive as a whole 

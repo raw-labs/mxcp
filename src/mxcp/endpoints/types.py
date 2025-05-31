@@ -17,6 +17,7 @@ class TestDefinition(TypedDict):
 class TypeDefinition(TypedDict):
     type: str
     format: Optional[str]  # email, uri, date, time, date-time, duration, timestamp
+    sensitive: Optional[bool]  # Whether this field contains sensitive data
     minLength: Optional[int]
     maxLength: Optional[int]
     minimum: Optional[float]
@@ -41,6 +42,7 @@ class ParamDefinition(TypedDict):
     enum: Optional[List[object]]
     # Type constraints inherited from TypeDefinition
     format: Optional[str]
+    sensitive: Optional[bool]  # Whether this parameter contains sensitive data
     minLength: Optional[int]
     maxLength: Optional[int]
     minItems: Optional[int]
@@ -51,7 +53,7 @@ class ParamDefinition(TypedDict):
 
 class PolicyRule(TypedDict):
     condition: str
-    action: Literal["deny", "filter_fields", "mask_fields"]
+    action: Literal["deny", "filter_fields", "mask_fields", "filter_sensitive_fields"]
     reason: Optional[str]
     fields: Optional[List[str]]  # For filter_fields and mask_fields actions
 
