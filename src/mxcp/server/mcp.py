@@ -181,6 +181,9 @@ class RAWMCP:
             )
         else:
             self.audit_logger = None
+        
+        # Store transport mode (will be set during run())
+        self.transport_mode = None
 
     def shutdown(self):
         """Shutdown the server gracefully."""
@@ -553,8 +556,15 @@ class RAWMCP:
                 duration_ms = int((time.time() - start_time) * 1000)
                 
                 # Determine caller type based on transport
-                # This is a simplified approach - in production you might want to detect this more accurately
-                caller = "http"  # Default to http, could be enhanced to detect stdio vs http
+                # Check if we're in HTTP mode by looking for transport_mode
+                if hasattr(self, 'transport_mode') and self.transport_mode:
+                    if self.transport_mode == "stdio":
+                        caller = "stdio"
+                    else:
+                        caller = "http"  # streamable-http or other HTTP transports
+                else:
+                    # Fallback to http if transport mode not set
+                    caller = "http"
                 
                 # Get policy decision from executor if available
                 policy_decision = "n/a"
@@ -710,8 +720,10 @@ class RAWMCP:
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)
                 if self.audit_logger:
+                    # Determine caller type
+                    caller = "stdio" if self.transport_mode == "stdio" else "http"
                     self.audit_logger.log_event(
-                        caller="http",  # Could be enhanced to detect actual transport
+                        caller=caller,
                         event_type="tool",
                         name="execute_sql_query",
                         input_params={"sql": sql},
@@ -773,8 +785,10 @@ class RAWMCP:
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)
                 if self.audit_logger:
+                    # Determine caller type
+                    caller = "stdio" if self.transport_mode == "stdio" else "http"
                     self.audit_logger.log_event(
-                        caller="http",
+                        caller=caller,
                         event_type="tool",
                         name="list_tables",
                         input_params={},
@@ -840,8 +854,10 @@ class RAWMCP:
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)
                 if self.audit_logger:
+                    # Determine caller type
+                    caller = "stdio" if self.transport_mode == "stdio" else "http"
                     self.audit_logger.log_event(
-                        caller="http",
+                        caller=caller,
                         event_type="tool",
                         name="get_table_schema",
                         input_params={"table_name": table_name},
@@ -906,6 +922,8 @@ class RAWMCP:
         """
         try:
             logger.info("Starting MCP server...")
+            # Store transport mode for use in handlers
+            self.transport_mode = transport
             # Register all endpoints
             self.register_endpoints()
             logger.info("Endpoints registered successfully.")

@@ -327,7 +327,8 @@ class PolicyEnforcer:
             return result
             
         else:
-            # For scalar types, return as-is (they're not sensitive at this level)
+            # For scalar types, they should have been filtered at the property level
+            # But we already checked sensitive at the top, so return as-is
             return data
 
 

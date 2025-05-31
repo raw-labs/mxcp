@@ -567,6 +567,57 @@ class TestPolicyConfigParsing:
         assert policy.condition == "user.role != 'admin'"
         assert policy.reason == "Non-admin users cannot see sensitive data"
         assert policy.fields is None  # No fields needed for this action
+    
+    def test_filter_sensitive_scalar_types(self):
+        """Test that scalar types can be marked as sensitive and filtered."""
+        type_def = {
+            "type": "object",
+            "properties": {
+                "public_info": {"type": "string"},
+                "secret_key": {"type": "string", "sensitive": True},
+                "balance": {"type": "number", "sensitive": True},
+                "user_id": {"type": "integer", "sensitive": True},
+                "is_admin": {"type": "boolean", "sensitive": True}
+            }
+        }
+        
+        policy_set = PolicySet(
+            input_policies=[],
+            output_policies=[
+                PolicyDefinition(
+                    condition="true",
+                    action=PolicyAction.FILTER_SENSITIVE_FIELDS
+                )
+            ]
+        )
+        
+        enforcer = PolicyEnforcer(policy_set)
+        
+        data = {
+            "public_info": "This is public",
+            "secret_key": "sk-123456",
+            "balance": 1234.56,
+            "user_id": 42,
+            "is_admin": True
+        }
+        
+        result, action = enforcer.enforce_output_policies(
+            user_context=None,
+            output=data,
+            endpoint_def={"return": type_def}
+        )
+        
+        # Only public_info should remain
+        assert "public_info" in result
+        assert result["public_info"] == "This is public"
+        
+        # All sensitive fields should be removed
+        assert "secret_key" not in result
+        assert "balance" not in result  
+        assert "user_id" not in result
+        assert "is_admin" not in result
+        
+        assert action == "filter_sensitive_fields"
 
 
 class TestAuditLoggerSensitiveRedaction:
@@ -741,6 +792,69 @@ class TestAuditLoggerSensitiveRedaction:
                 assert input_data['api_key'] == "secret"
                 assert input_data['password'] == "hidden"
                 assert input_data['data'] == "public"
+                
+        finally:
+            log_path.unlink(missing_ok=True)
+            AuditLogger._instance = None  # Clean up singleton
+    
+    def test_scalar_types_redaction(self):
+        """Test redaction of scalar types marked as sensitive."""
+        import tempfile
+        import time
+        import json
+        from pathlib import Path
+        from mxcp.audit.logger import AuditLogger
+        
+        # Reset singleton instance
+        AuditLogger._instance = None
+        
+        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
+            log_path = Path(f.name)
+        
+        try:
+            logger = AuditLogger(log_path, enabled=True)
+            
+            endpoint_def = {
+                "parameters": [
+                    {"name": "public_info", "type": "string"},
+                    {"name": "secret_key", "type": "string", "sensitive": True},
+                    {"name": "balance", "type": "number", "sensitive": True},
+                    {"name": "user_id", "type": "integer", "sensitive": True},
+                    {"name": "is_admin", "type": "boolean", "sensitive": True}
+                ]
+            }
+            
+            logger.log_event(
+                caller="cli",
+                event_type="tool",
+                name="test_scalars",
+                input_params={
+                    "public_info": "This is public",
+                    "secret_key": "sk-123456",
+                    "balance": 1234.56,
+                    "user_id": 42,
+                    "is_admin": True
+                },
+                duration_ms=100,
+                endpoint_def=endpoint_def
+            )
+            
+            time.sleep(0.5)
+            logger.shutdown()
+            
+            # Read and verify log
+            with open(log_path, 'r') as f:
+                log_entry = json.loads(f.readline())
+                input_data = json.loads(log_entry['input_json'])
+                
+                # Public info should remain
+                assert input_data['public_info'] == "This is public"
+                
+                # All sensitive scalars should be redacted
+                assert input_data['secret_key'] == "[REDACTED]"
+                assert input_data['balance'] == "[REDACTED]"
+                assert input_data['user_id'] == "[REDACTED]"
+                assert input_data['is_admin'] == "[REDACTED]"
                 
         finally:
             log_path.unlink(missing_ok=True)

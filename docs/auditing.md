@@ -4,9 +4,9 @@ MXCP provides enterprise-grade audit logging to track all tool, resource, and pr
 
 ## Overview
 
-When enabled, MXCP logs every execution with:
+When enabled, MXCP logs every execution that goes through the server (`mxcp serve`) with:
 - **Timestamp**: When the execution occurred (UTC)
-- **Caller**: Who initiated the execution (cli, http, stdio)
+- **Caller**: Who initiated the execution (http, stdio)
 - **Type**: What was executed (tool, resource, prompt)
 - **Name**: The specific item executed
 - **Input**: Parameters passed (with sensitive data redacted)
@@ -14,6 +14,8 @@ When enabled, MXCP logs every execution with:
 - **Policy Decision**: Whether it was allowed, denied, or warned
 - **Status**: Success or error
 - **Error Details**: If the execution failed
+
+**Note**: Audit logging only occurs when endpoints are executed through the MXCP server (`mxcp serve`). Direct CLI execution via `mxcp run` does not generate audit logs as it bypasses the server layer.
 
 ## Storage Format
 
@@ -101,6 +103,12 @@ Each log entry contains:
 | reason          | Explanation if denied/warned | "Blocked by policy"      |
 | status          | Execution result             | success, error           |
 | error           | Error message if failed      | "Connection timeout"     |
+
+### Caller Types
+
+The `caller` field indicates how the endpoint was invoked:
+- **http**: HTTP API request (when running `mxcp serve` with default transport)
+- **stdio**: Standard I/O protocol (when running `mxcp serve --transport stdio`)
 
 ## Security
 

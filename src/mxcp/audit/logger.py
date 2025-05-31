@@ -310,7 +310,8 @@ class AuditLogger:
             return [self._redact_value_by_type(item, items_def) for item in value]
         
         else:
-            # For scalar types, return as-is (they're not sensitive at this level)
+            # For scalar types, they should have been redacted at the top check
+            # if marked sensitive, so return as-is
             return value
     
     def shutdown(self):

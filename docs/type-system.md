@@ -184,6 +184,8 @@ Fields containing sensitive data can be marked with the `sensitive` flag. This p
 2. **Policy-based filtering** for access control
 3. **Clear documentation** of sensitive data
 
+The `sensitive` flag can be applied to **any type** - strings, numbers, integers, booleans, arrays, or objects. When a type is marked as sensitive, it will be completely redacted in logs and can be filtered out by policies.
+
 ### Example: Marking Sensitive Fields
 
 ```yaml
@@ -195,6 +197,10 @@ parameters:
     type: string
     sensitive: true  # This field will be redacted in logs
     description: User's password
+  - name: balance
+    type: number
+    sensitive: true  # Numbers can also be sensitive
+    description: Account balance
   - name: config
     type: object
     properties:
