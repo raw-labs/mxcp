@@ -41,31 +41,41 @@ MXCP's editor tooling transforms the development experience from a terminal-heav
 
 ## Project Structure & File Support
 
-MXCP tooling supports the complete project structure:
+MXCP tooling supports flexible project organization. Schema detection is based on file content rather than directory structure, giving users complete freedom in organizing their files.
 
 ```
 your-project/
-├── mxcp-site.yml           # Site config (mxcp-site-schema-1.0.0.json)
-├── tools/                  # Tool definitions (endpoint-schema-1.0.0.json)
-│   ├── query_earthquakes.yml
-│   └── analyze_sales.yml
-├── resources/              # Resource definitions (endpoint-schema-1.0.0.json)
-│   ├── earthquake_data.yml
-│   └── sales_cache.yml
-├── prompts/                # Prompt templates (endpoint-schema-1.0.0.json)
-│   └── analysis_prompt.yml
+├── mxcp-site.yml           # Site config (detected by filename)
+├── earthquake_tool.yml     # Tool definition (detected by 'tool:' key)
+├── sales_analysis.yml      # Tool definition (detected by 'tool:' key)
+├── data/
+│   ├── earthquake_feed.yml # Resource definition (detected by 'resource:' key)
+│   └── sales_cache.yml     # Resource definition (detected by 'resource:' key)
+├── prompts/
+│   └── analysis.yml        # Prompt template (detected by 'prompt:' key)
+├── tools/                  # Alternative organization
+│   └── custom_tool.yml     # Tool definition (detected by 'tool:' key)
 └── models/                 # dbt models (SQL language support)
     ├── staging/
     └── marts/
 ```
 
-| File Pattern      | Schema Applied                | LSP Features                                            |
-| ----------------- | ----------------------------- | ------------------------------------------------------- |
-| `mxcp-site.yml`   | `mxcp-site-schema-1.0.0.json` | Site config validation, profile completion              |
-| `tools/*.yml`     | `endpoint-schema-1.0.0.json`  | Tool validation, parameter completion, SQL highlighting |
-| `resources/*.yml` | `endpoint-schema-1.0.0.json`  | Resource validation, URI completion                     |
-| `prompts/*.yml`   | `endpoint-schema-1.0.0.json`  | Prompt validation, template variable checking           |
-| `models/**/*.sql` | SQL language support          | dbt model validation, ref() completion                  |
+| Detection Method | Schema Applied | LSP Features |
+| ---------------- | ----------------------------- | ------------------------------------------------------- |
+| **Filename**: `mxcp-site.yml` | `mxcp-site-schema-1.0.0.json` | Site config validation, profile completion |
+| **Content**: Contains `tool:` key | `endpoint-schema-1.0.0.json` | Tool validation, parameter completion, SQL highlighting |
+| **Content**: Contains `resource:` key | `endpoint-schema-1.0.0.json` | Resource validation, URI completion |
+| **Content**: Contains `prompt:` key | `endpoint-schema-1.0.0.json` | Prompt validation, template variable checking |
+| **Extension**: `*.sql` files | SQL language support | dbt model validation, ref() completion |
+
+**Schema Detection Logic**:
+1. **Site Config**: Files named `mxcp-site.yml` (exact match)
+2. **Endpoint Types**: Parse YAML content and detect root-level keys:
+   - `tool:` → Tool endpoint schema
+   - `resource:` → Resource endpoint schema  
+   - `prompt:` → Prompt endpoint schema
+3. **SQL Files**: Any `.sql` file gets SQL language support
+4. **Fallback**: Unknown YAML files get basic YAML support without MXCP schemas
 
 ---
 
@@ -77,11 +87,11 @@ your-project/
 
 | #     | Feature                        | Implementation Specification                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1** | **Multi-schema registration**  | **Definition**: Load MXCP JSON schemas directly from internal schema registry and register with YAML language service.<br>**Implementation**: <br>• Use existing `mxcp.config.schemas` module to load schemas<br>• Register with patterns: `yamlLanguageService.addSchema()`<br>• Map `tools/*.yml` → endpoint schema, `mxcp-site.yml` → site schema<br>• Leverage MXCP's existing schema validation logic<br>**User Experience**: Real-time validation, autocomplete for YAML keys, hover documentation  |
+| **1** | **Content-based schema detection** | **Definition**: Dynamically detect and apply MXCP schemas based on file content rather than directory patterns.<br>**Implementation**: <br>• Parse YAML on file open/change to detect root keys (`tool:`, `resource:`, `prompt:`)<br>• Use filename detection for `mxcp-site.yml`<br>• Register schemas dynamically: `yamlLanguageService.addSchema()` per file<br>• Cache detection results for performance<br>**User Experience**: Schema validation works regardless of file organization |
 | **2** | **SQL semantic highlighting**  | **Definition**: Detect SQL blocks in YAML (`source.code: \|`) and apply SQL syntax highlighting.<br>**Implementation**:<br>• Use MXCP's existing YAML parsing from `mxcp.endpoints.loader`<br>• Return semantic tokens for SQL keywords, strings, identifiers<br>• Integrate with DuckDB session for SQL validation<br>**User Experience**: SQL code blocks look identical to `.sql` files                                                                                                                |
 | **3** | **Intelligent autocompletion** | **Definition**: Context-aware completion for SQL and YAML using MXCP internals.<br>**Implementation**:<br>• **SQL**: Use existing `DuckDBSession` to query `INFORMATION_SCHEMA`<br>• **YAML**: Leverage `mxcp.endpoints.schema` validation for completions<br>• **dbt**: Use MXCP's dbt integration to parse `manifest.json`<br>• **Template vars**: Extract parameters from tool definitions using existing parsers<br>**User Experience**: Typing `SEL` completes to `SELECT`, table names autocomplete |
 | **4** | **Real-time diagnostics**      | **Definition**: Use MXCP's validation engine for comprehensive error checking.<br>**Implementation**:<br>• **SQL**: Use `DuckDBSession.execute()` with `EXPLAIN` for syntax validation<br>• **YAML**: Call `mxcp.endpoints.schema.validate_endpoint_payload()` directly<br>• **Config**: Use `mxcp.config.site_config.load_site_config()` for site validation<br>• Map validation errors to LSP diagnostic format<br>**User Experience**: Red squiggles under errors, hover for details                   |
-| **5** | **CodeLens integration**       | **Definition**: Provide executable actions above tools and tests.<br>**Implementation**:<br>• Use MXCP's endpoint discovery from `mxcp.endpoints.discovery`<br>• Parse tools and tests using existing `mxcp.endpoints.loader`<br>• Return CodeLens at line positions: "▶ Run Tool", "🧪 Run Tests", "✓ Validate"<br>• Register `workspace/executeCommand` handlers<br>**User Experience**: Clickable gray links above each tool definition                                                                |
+| **5** | **CodeLens integration**       | **Definition**: Provide executable actions above tools and tests.<br>**Implementation**:<br>• Use content-based detection to identify tools and test blocks<br>• Parse tools and tests using existing `mxcp.endpoints.loader`<br>• Return CodeLens at line positions: "▶ Run Tool", "🧪 Run Tests", "✓ Validate"<br>• Register `workspace/executeCommand` handlers<br>**User Experience**: Clickable gray links above each tool definition                                                                |
 
 ### Phase 2: Execution & Integration
 
@@ -135,57 +145,58 @@ MXCP uses a simplified distribution approach: the LSP server is built into the m
 ```typescript
 // Extension activation pseudocode
 async function activate(context: ExtensionContext) {
-  let mxcpPath = await discoverMXCP();
-
-  if (!mxcpPath) {
-    mxcpPath = await installMXCPIsolated(context);
-  }
-
-  await startLSPClient(mxcpPath);
-  registerCommands(mxcpPath);
+    let mxcpPath = await discoverMXCP();
+    
+    if (!mxcpPath) {
+        mxcpPath = await installMXCPIsolated(context);
+    }
+    
+    await startLSPClient(mxcpPath);
+    registerCommands(mxcpPath);
 }
 
 async function discoverMXCP(): Promise<string | null> {
-  // 1. Check user setting: mxcp.cliPath
-  // 2. Check PATH for existing installation
-  // 3. Verify version compatibility with `mxcp --version`
-  // 4. Test LSP support with `mxcp lsp --help`
-  return foundPath;
+    // 1. Check user setting: mxcp.cliPath
+    // 2. Check PATH for existing installation
+    // 3. Verify version compatibility with `mxcp --version`
+    // 4. Test LSP support with `mxcp lsp --help`
+    return foundPath;
 }
 
 async function installMXCPIsolated(context: ExtensionContext): Promise<string> {
-  const venvPath = path.join(context.globalStorageUri.fsPath, "mxcp-venv");
+   const venvPath = path.join(context.globalStorageUri.fsPath, "mxcp-venv");
 
-  // Create isolated virtual environment
-  await exec("python3", ["-m", "venv", venvPath]);
+   // Create isolated virtual environment
+   await exec("python3", ["-m", "venv", venvPath]);
 
-  // Install specific MXCP version
-  const pythonPath = path.join(venvPath, "bin", "python");
-  await exec(pythonPath, ["-m", "pip", "install", `mxcp==${REQUIRED_VERSION}`]);
+   // Install specific MXCP version
+   const pythonPath = path.join(venvPath, "bin", "python");
+   await exec(pythonPath, ["-m", "pip", "install", `mxcp==${REQUIRED_VERSION}`]);
 
-  return path.join(venvPath, "bin", "mxcp");
+   return path.join(venvPath, "bin", "mxcp");
 }
 
 async function startLSPClient(mxcpPath: string) {
-  // Start LSP server using mxcp lsp subcommand
-  const client = new LanguageClient(
-    "mxcp-lsp",
-    "MXCP Language Server",
-    {
-      command: mxcpPath,
-      args: ["lsp", "--stdio"], // Use stdio mode for LSP communication
-    },
-    {
-      documentSelector: [
-        { scheme: "file", pattern: "**/mxcp-site.yml" },
-        { scheme: "file", pattern: "**/tools/*.yml" },
-        { scheme: "file", pattern: "**/resources/*.yml" },
-        { scheme: "file", pattern: "**/prompts/*.yml" },
-      ],
-    }
-  );
-
-  await client.start();
+    // Start LSP server using mxcp lsp subcommand
+    const client = new LanguageClient(
+     "mxcp-lsp",
+     "MXCP Language Server",
+     {
+       command: mxcpPath,
+       args: ["lsp", "--stdio"], // Use stdio mode for LSP communication
+     },
+     {
+       documentSelector: [
+         // Content-based detection - any YAML file could be an MXCP file
+         { scheme: "file", language: "yaml" },
+         { scheme: "file", language: "sql" },
+         // Site config by filename
+         { scheme: "file", pattern: "**/mxcp-site.yml" },
+       ],
+     }
+   );
+   
+   await client.start();
 }
 ```
 
@@ -204,12 +215,19 @@ async function startLSPClient(mxcpPath: string) {
 ```json
 // VS Code settings
 {
-  "mxcp.cliPath": "", // Manual path override
-  "mxcp.profile": "dev", // Default profile for LSP
-  "mxcp.autoValidate": true, // Validate on save
-  "mxcp.showInlayHints": true, // Show parameter defaults
-  "mxcp.logLevel": "info", // LSP logging level
-  "mxcp.enableTelemetry": false // Usage analytics
+   "mxcp.cliPath": "", // Manual path override
+   "mxcp.profile": "dev", // Default profile for LSP
+   "mxcp.autoValidate": true, // Validate on save
+   "mxcp.showInlayHints": true, // Show parameter defaults
+   "mxcp.logLevel": "info", // LSP logging level
+   "mxcp.enableTelemetry": false, // Usage analytics
+   "mxcp.fileDetection": {
+     "enableContentBasedDetection": true, // Detect schemas from file content
+     "customPatterns": { // Optional: user-defined patterns for schema detection
+       "tools": ["**/my-tools/*.yml"],
+       "resources": ["**/data/*.yml"]
+     }
+   }
 }
 ```
 
@@ -217,200 +235,132 @@ async function startLSPClient(mxcpPath: string) {
 
 ## Technical Specifications
 
-### LSP Server Interface
+### Content-Based Schema Detection
 
 ```python
-# LSP server as mxcp subcommand
-# mxcp/cli/lsp.py
+# LSP server schema detection logic
+class SchemaDetector:
+    @staticmethod
+    def detect_schema_from_content(file_path: str, content: str) -> Optional[str]:
+        """Detect MXCP schema based on file content"""
+        
+        # Site config detection by filename
+        if file_path.endswith('mxcp-site.yml'):
+            return 'mxcp-site-schema-1.0.0.json'
+        
+        # Parse YAML content for endpoint types
+        try:
+            data = yaml.safe_load(content)
+            if not isinstance(data, dict):
+                return None
+                
+            # Check for endpoint type keys
+            if 'tool' in data:
+                return 'endpoint-schema-1.0.0.json'
+            elif 'resource' in data:
+                return 'endpoint-schema-1.0.0.json'
+            elif 'prompt' in data:
+                return 'endpoint-schema-1.0.0.json'
+            elif 'mxcp' in data and ('project' in data or 'profile' in data):
+                # User config file
+                return 'mxcp-config-schema-1.0.0.json'
+                
+        except yaml.YAMLError:
+            # Invalid YAML, no schema detection
+            pass
+            
+        return None
+    
+    @staticmethod
+    def get_endpoint_type(content: str) -> Optional[str]:
+        """Extract endpoint type from YAML content"""
+        try:
+            data = yaml.safe_load(content)
+            if isinstance(data, dict):
+                for endpoint_type in ['tool', 'resource', 'prompt']:
+                    if endpoint_type in data:
+                        return endpoint_type
+        except yaml.YAMLError:
+            pass
+        return None
 
-@click.command(name="lsp")
-@click.option("--stdio", is_flag=True, help="Use stdio for LSP communication")
-@click.option("--port", type=int, help="Port for TCP LSP server (for testing)")
-@click.option("--profile", help="Profile to use for validation and execution")
-@click.option("--log-level", default="info", help="Logging level")
-def lsp(stdio: bool, port: Optional[int], profile: Optional[str], log_level: str):
-    """Start MXCP Language Server Protocol server"""
-
-    # Load MXCP configuration
-    site_config = load_site_config()
-    user_config = load_user_config(site_config)
-
-    # Initialize LSP server with full MXCP context
-    server = MXCPLSPServer(
-        user_config=user_config,
-        site_config=site_config,
-        profile=profile
-    )
-
-    if stdio:
-        server.start_io()  # Standard LSP stdio mode
-    else:
-        server.start_tcp(port or 3000)  # For testing/debugging
-
-# Core LSP server with MXCP integration
+# LSP server integration
 class MXCPLSPServer:
-    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str]):
-        self.user_config = user_config
-        self.site_config = site_config
-        self.profile = profile
-
-        # Direct access to MXCP components
-        self.db_session = DuckDBSession(user_config, site_config, profile)
-        self.validator = EndpointValidator(user_config, site_config)
-        self.executor = EndpointExecutor(user_config, site_config, profile)
-
-        # LSP capabilities using MXCP internals
-        self.capabilities = {
-            "textDocumentSync": TextDocumentSyncKind.Incremental,
-            "completionProvider": {"triggerCharacters": [".", "$", "{", "}"]},
-            "hoverProvider": True,
-            "definitionProvider": True,
-            "diagnosticsProvider": True,
-            "codeLensProvider": {"resolveProvider": True},
-            "executeCommandProvider": {
-                "commands": ["mxcp.runTool", "mxcp.runTests", "mxcp.validate"]
-            }
-        }
+    def on_document_open(self, document_uri: str):
+        """Handle document open and apply appropriate schema"""
+        content = self.get_document_content(document_uri)
+        schema = SchemaDetector.detect_schema_from_content(document_uri, content)
+        
+        if schema:
+            # Register schema for this specific document
+            self.yaml_service.add_schema_for_document(document_uri, schema)
+            
+    def on_document_change(self, document_uri: str, changes: List[TextDocumentContentChangeEvent]):
+        """Re-detect schema on content changes"""
+        # Only re-detect if changes might affect root-level keys
+        if self.might_affect_schema_detection(changes):
+            content = self.get_updated_content(document_uri, changes)
+            schema = SchemaDetector.detect_schema_from_content(document_uri, content)
+            
+            if schema:
+                self.yaml_service.update_schema_for_document(document_uri, schema)
 ```
 
-### Extension Commands
+### VS Code Extension Schema Contributions
 
 ```typescript
-// VS Code command contributions
-{
-    "commands": [
-        {
-            "command": "mxcp.runTool",
-            "title": "Run MXCP Tool",
-            "icon": "$(play)"
-        },
-        {
-            "command": "mxcp.runTests",
-            "title": "Run MXCP Tests",
-            "icon": "$(beaker)"
-        },
-        {
-            "command": "mxcp.validate",
-            "title": "Validate MXCP Project",
-            "icon": "$(check)"
-        },
-        {
-            "command": "mxcp.installGlobally",
-            "title": "Install MXCP Globally (pipx)"
-        }
-    ]
+// Dynamic schema registration in VS Code extension
+export function activate(context: vscode.ExtensionContext) {
+    // Register schema provider for dynamic detection
+    const schemaProvider = vscode.workspace.registerTextDocumentContentProvider(
+        'mxcp-schema',
+        new MXCPSchemaProvider()
+    );
+    
+    context.subscriptions.push(schemaProvider);
 }
 
-// Command execution using mxcp CLI
-async function executeMXCPCommand(command: string, args: string[]): Promise<void> {
-    const mxcpPath = await getMXCPPath();
-    const process = spawn(mxcpPath, [command, ...args], {
-        cwd: workspace.workspaceFolders?.[0]?.uri.fsPath
-    });
+class MXCPSchemaProvider implements vscode.TextDocumentContentProvider {
+    provideTextDocumentContent(uri: vscode.Uri): string {
+        // Provide schema content based on URI
+        const schemaName = uri.path;
+        return this.getSchemaContent(schemaName);
+    }
+    
+    private getSchemaContent(schemaName: string): string {
+        // Load schema from embedded resources or LSP server
+        switch (schemaName) {
+            case 'endpoint-schema-1.0.0.json':
+                return this.loadEndpointSchema();
+            case 'mxcp-site-schema-1.0.0.json':
+                return this.loadSiteSchema();
+            default:
+                return '{}';
+        }
+    }
+}
 
-    // Stream output to MXCP Results panel
-    process.stdout.on('data', (data) => {
-        outputChannel.append(data.toString());
-    });
-
-    process.stderr.on('data', (data) => {
-        outputChannel.append(data.toString());
-    });
+// Package.json contributions - simplified since we use content detection
+{
+    "contributes": {
+        "yamlValidation": [
+            {
+                "fileMatch": ["mxcp-site.yml"],
+                "url": "mxcp-schema:///mxcp-site-schema-1.0.0.json"
+            }
+        ],
+        "languages": [
+            {
+                "id": "mxcp-yaml",
+                "aliases": ["MXCP YAML"],
+                "extensions": [".yml", ".yaml"],
+                "filenames": ["mxcp-site.yml"]
+            }
+        ]
+    }
 }
 ```
 
 ### Error Handling & Diagnostics
 
-```python
-# Direct integration with MXCP error handling
-from mxcp.endpoints.schema import SchemaError
-from mxcp.engine.duckdb_session import SQLError
-
-class LSPDiagnosticsMapper:
-    @staticmethod
-    def map_mxcp_error_to_diagnostic(error: Exception, document_uri: str) -> Diagnostic:
-        if isinstance(error, SchemaError):
-            return Diagnostic(
-                range=error.location_range,  # MXCP provides location info
-                message=error.message,
-                severity=DiagnosticSeverity.Error,
-                source="mxcp-schema",
-                code=error.error_code
-            )
-        elif isinstance(error, SQLError):
-            return Diagnostic(
-                range=error.sql_range,
-                message=f"SQL Error: {error.message}",
-                severity=DiagnosticSeverity.Error,
-                source="mxcp-sql"
-            )
-        # ... handle other MXCP error types
 ```
-
----
-
-## Implementation Priorities
-
-### Minimum Viable Product (MVP)
-
-**Goal**: Eliminate terminal dependency for basic MXCP development
-
-**Must Have**:
-
-- Schema validation using MXCP internals (Features 1, 4)
-- SQL highlighting and completion via DuckDBSession (Features 2, 3)
-- Direct execution using MXCP executor (Features 5, 6)
-- VS Code integration (Features 9, 10, 11)
-- Simplified installation (Distribution Phase 1-2)
-
-**Success Criteria**: Developer can create, validate, and test MXCP tools entirely within VS Code using the same engine as the CLI
-
-### Version 1.0
-
-**Goal**: Production-ready development environment
-
-**Adds**:
-
-- Advanced error mapping (Feature 7)
-- Profile management via MXCP config (Feature 8)
-- Progress indicators (Feature 12)
-- Complete installation flow (Distribution Phase 3)
-
-### Future Versions
-
-**Goal**: Advanced productivity features
-
-**Adds**:
-
-- Embedded MCP server testing (Feature 13)
-- dbt lineage via MXCP integration (Feature 14)
-- Drift detection using MXCP drift system (Feature 15)
-- Notebook-style result viewer
-- CI workflow generation
-
----
-
-## Development Guidelines
-
-### Testing Strategy
-
-- **LSP Server**: Unit tests using existing MXCP test infrastructure
-- **Integration Tests**: Real MXCP projects with various configurations
-- **VS Code Extension**: Extension development host testing, automated UI tests
-- **Installation**: Test matrix across Python versions and operating systems
-
-### Documentation Requirements
-
-- **README**: Installation, basic usage, troubleshooting
-- **CONTRIBUTING**: Local development setup leveraging existing MXCP dev tools
-- **API Reference**: LSP capabilities, extension commands, configuration options
-
-### Release Process
-
-1. Version bump in MXCP package (LSP included automatically)
-2. Automated testing across platforms using existing MXCP CI
-3. PyPI release for MXCP package (includes LSP server)
-4. VS Code Marketplace release for extension
-5. Update compatibility matrix and documentation
-
-**Key Advantage**: Since the LSP server is part of MXCP, it automatically stays in sync with CLI features and has access to the complete MXCP ecosystem without any inter-process communication overhead.
