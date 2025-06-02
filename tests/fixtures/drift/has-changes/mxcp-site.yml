@@ -1,0 +1,7 @@
+mxcp: 1.0.0
+profile: default
+project: has-changes
+profiles:
+  default:
+    drift:
+      path: "drift-default.json"

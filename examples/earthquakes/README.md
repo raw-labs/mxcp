@@ -14,14 +14,94 @@ This example demonstrates how to use MXCP to create a real-time earthquake data 
 
 ## Getting Started
 
-1. Start the MCP server:
+### Prerequisites
+
+Make sure you have MXCP installed:
+```bash
+# Option 1: Install globally
+pip install mxcp
+
+# Option 2: Install in development mode (if you cloned the repo)
+cd /path/to/mxcp
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
+```
+
+### Running the Example
+
+1. Navigate to the earthquakes example:
+   ```bash
+   cd examples/earthquakes
+   ```
+
+2. Start the MCP server:
    ```bash
    mxcp serve
    ```
 
-2. Connect using your preferred MCP client:
-   - [Claude Desktop](https://docs.anthropic.com/claude/docs/claude-desktop)
-   - [mcp-cli](https://github.com/chrishayuk/mcp-cli)
+## 🔌 Claude Desktop Integration
+
+To use this example with Claude Desktop:
+
+### 1. Locate Claude's Configuration
+
+Find your Claude Desktop configuration file:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+### 2. Configure the MCP Server
+
+Add this configuration to your `claude_desktop_config.json`:
+
+#### If you installed MXCP globally:
+```json
+{
+  "mcpServers": {
+    "earthquakes": {
+      "command": "mxcp",
+      "args": ["serve", "--transport", "stdio"],
+      "cwd": "/absolute/path/to/mxcp/examples/earthquakes"
+    }
+  }
+}
+```
+
+#### If you're using a virtual environment:
+```json
+{
+  "mcpServers": {
+    "earthquakes": {
+      "command": "/bin/bash",
+      "args": [
+        "-c",
+        "cd /absolute/path/to/mxcp/examples/earthquakes && source ../../.venv/bin/activate && mxcp serve --transport stdio"
+      ]
+    }
+  }
+}
+```
+
+**Important**: Replace `/absolute/path/to/mxcp` with the actual path to your MXCP installation.
+
+### 3. Restart Claude Desktop
+
+After saving the configuration, restart Claude Desktop to load the new MCP server.
+
+### 4. Test the Integration
+
+In Claude Desktop, try asking:
+- "Show me recent earthquakes above magnitude 5.0"
+- "What was the strongest earthquake in the last 24 hours?"
+- "List earthquakes near California"
+
+Claude will automatically use the earthquake data tools to answer your questions.
+
+## 🛠️ Other MCP Clients
+
+This example also works with other MCP-compatible tools:
+
+- **mcp-cli**: `pip install mcp-cli` then use the same server config
+- **Custom integrations**: Use the MCP specification to build your own client
 
 ## Example Usage
 

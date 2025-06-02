@@ -1,6 +1,168 @@
 # MXCP Integrations
 
-MXCP provides seamless integration with two powerful tools: dbt for data transformation and DuckDB for data access. This guide explains how to use these integrations effectively.
+MXCP provides seamless integration with AI platforms and data tools to create powerful, production-ready AI applications. This guide covers how to connect MXCP with LLMs, transform data with dbt, and access diverse data sources through DuckDB.
+
+## Table of Contents
+
+- [LLM Integration](#llm-integration) — Connect with Claude Desktop, OpenAI, and other AI platforms
+- [dbt Integration](#dbt-integration) — Transform and prepare data for AI consumption
+- [DuckDB Integration](#duckdb-integration) — Access diverse data sources with powerful SQL capabilities
+
+## LLM Integration
+
+MXCP implements the Model Context Protocol (MCP), making it compatible with various AI platforms and tools. This section covers how to integrate MXCP with different LLM providers and clients.
+
+### Claude Desktop
+
+Claude Desktop has native MCP support, making it the easiest way to get started with MXCP.
+
+#### Configuration
+
+1. **Locate Claude's Configuration File**:
+   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+2. **Add Your MXCP Server**:
+
+   For global installations:
+   ```json
+   {
+     "mcpServers": {
+       "my-project": {
+         "command": "mxcp",
+         "args": ["serve", "--transport", "stdio"],
+         "cwd": "/absolute/path/to/your/mxcp/project"
+       }
+     }
+   }
+   ```
+
+   For virtual environment installations:
+   ```json
+   {
+     "mcpServers": {
+       "my-project": {
+         "command": "bash",
+         "args": [
+           "-c",
+           "cd /absolute/path/to/your/project && source /path/to/.venv/bin/activate && mxcp serve --transport stdio"
+         ]
+       }
+     }
+   }
+   ```
+
+3. **Restart Claude Desktop** to load the new configuration.
+
+#### Best Practices
+
+- Use descriptive server names that reflect your project's purpose
+- Test your configuration with simple queries first
+- Monitor Claude's developer console for connection issues
+
+### OpenAI and Other Providers
+
+While MXCP uses the MCP protocol, you can integrate with OpenAI and other providers using MCP adapters or custom implementations.
+
+#### Custom Integration
+
+For custom integrations, you can:
+
+1. **Use MXCP's HTTP mode**:
+   ```bash
+   mxcp serve --transport http --port 8000
+   ```
+
+2. **Call endpoints directly**:
+   ```python
+   import requests
+   
+   response = requests.post("http://localhost:8000/tools/call", json={
+       "name": "get_earthquakes",
+       "arguments": {"magnitude_min": 5.0}
+   })
+   ```
+
+### Command Line Tools
+
+#### mcp-cli
+
+A command-line interface for interacting with MCP servers:
+
+```bash
+# Install
+pip install mcp-cli
+
+# Configure (same server config as Claude Desktop)
+echo '{
+  "mcpServers": {
+    "local": {
+      "command": "mxcp",
+      "args": ["serve", "--transport", "stdio"],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}' > server_config.json
+
+# Use
+mcp-cli tools list
+mcp-cli tools call get_earthquakes --magnitude_min 5.0
+```
+
+#### Direct stdio Integration
+
+For custom scripts, you can interact directly with MXCP's stdio interface:
+
+```python
+import subprocess
+import json
+
+# Start MXCP server
+process = subprocess.Popen(
+    ["mxcp", "serve", "--transport", "stdio"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+    cwd="/path/to/your/project"
+)
+
+# Send MCP request
+request = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+        "name": "get_earthquakes",
+        "arguments": {"magnitude_min": 5.0}
+    }
+}
+
+process.stdin.write(json.dumps(request) + "\n")
+process.stdin.flush()
+
+# Read response
+response = process.stdout.readline()
+result = json.loads(response)
+```
+
+#### Debugging
+
+Enable debug logging:
+```bash
+# Set environment variable
+export MXCP_LOG_LEVEL=DEBUG
+
+# Or use CLI flag
+mxcp serve --log-level DEBUG
+```
+
+Check server status:
+```bash
+mxcp list
+mxcp validate
+mxcp test
+```
 
 ## dbt Integration
 
@@ -159,7 +321,6 @@ To use secure connections, configure secrets in `~/.mxcp/config.yml`. Here's an 
 mxcp: "1.0.0"
 projects:
   my_project:
-    default: dev
     profiles:
       dev:
         secrets:
@@ -208,4 +369,4 @@ For more details on secret management, see the [Configuration Guide](configurati
 4. **Data Quality**
    - Use tests to ensure data consistency
    - Implement data validation in your models
-   - Monitor for schema drift 
+   - Monitor for schema drift using MXCP's [drift detection](drift-detection.md) 

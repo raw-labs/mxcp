@@ -26,6 +26,59 @@
       },
       "additionalProperties": false
     },
+    "transport": {
+      "type": "object",
+      "description": "Default transport configuration for serving endpoints.",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["streamable-http", "sse", "stdio"],
+          "default": "streamable-http",
+          "description": "Default transport protocol to use."
+        },
+        "http": {
+          "type": "object",
+          "description": "HTTP transport specific configuration.",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "default": 8000,
+              "description": "Default port number for HTTP transport."
+            },
+            "host": {
+              "type": "string",
+              "default": "localhost",
+              "description": "Default host to bind the HTTP server to."
+            },
+            "scheme": {
+              "type": "string",
+              "enum": ["http", "https"],
+              "default": "http",
+              "description": "URL scheme to use for generating callback URLs and OAuth endpoints. Use 'https' when behind SSL-terminating reverse proxy."
+            },
+            "base_url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Complete base URL for the server (e.g., 'https://api.example.com'). When provided, overrides scheme, host, and port for URL generation."
+            },
+            "trust_proxy": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether to trust X-Forwarded-* headers from reverse proxies for scheme detection."
+            },
+            "stateless": {
+              "type": "boolean",
+              "default": false,
+              "description": "Enable stateless HTTP mode for serverless deployments. In stateless mode, no session state is maintained between requests."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "projects": {
       "type": "object",
       "description": "All configured RAW projects.",
@@ -34,10 +87,6 @@
           "type": "object",
           "required": ["profiles"],
           "properties": {
-            "default": {
-              "type": "string",
-              "description": "Default profile name for this project."
-            },
             "profiles": {
               "type": "object",
               "description": "Profiles under this project.",
@@ -84,6 +133,154 @@
                               "additionalProperties": {
                                 "type": "string"
                               }
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "auth": {
+                      "type": "object",
+                      "description": "Authentication configuration for this profile",
+                      "properties": {
+                        "provider": {
+                          "type": "string",
+                          "enum": ["none", "github", "atlassian"],
+                          "default": "none",
+                          "description": "OAuth provider to use for authentication"
+                        },
+                        "authorization": {
+                          "type": "object",
+                          "description": "Authorization settings for controlling access to MCP functionality",
+                          "properties": {
+                            "required_scopes": {
+                              "type": "array",
+                              "items": {"type": "string"},
+                              "default": [],
+                              "description": "List of scopes required to access any MCP endpoint. Empty list means no scopes required (authentication only)."
+                            }
+                          }
+                        },
+                        "clients": {
+                          "type": "array",
+                          "description": "Pre-registered OAuth clients for development and testing.",
+                          "items": {
+                            "type": "object",
+                            "required": ["client_id", "name"],
+                            "properties": {
+                              "client_id": {
+                                "type": "string",
+                                "description": "OAuth client ID."
+                              },
+                              "client_secret": {
+                                "type": "string",
+                                "description": "OAuth client secret (optional for public clients)."
+                              },
+                              "name": {
+                                "type": "string",
+                                "description": "Human-readable name for this client."
+                              },
+                              "redirect_uris": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uri"
+                                },
+                                "description": "Allowed redirect URIs for this client.",
+                                "default": ["http://127.0.0.1:49153/oauth/callback"]
+                              },
+                              "grant_types": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": ["authorization_code", "refresh_token"]
+                                },
+                                "description": "Allowed OAuth grant types.",
+                                "default": ["authorization_code"]
+                              },
+                              "scopes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Allowed OAuth scopes.",
+                                "default": ["mxcp:access"]
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "github": {
+                          "type": "object",
+                          "description": "GitHub OAuth configuration (required when provider is 'github').",
+                          "required": ["client_id", "client_secret", "callback_path", "auth_url", "token_url"],
+                          "properties": {
+                            "client_id": {
+                              "type": "string",
+                              "description": "GitHub OAuth client ID."
+                            },
+                            "client_secret": {
+                              "type": "string",
+                              "description": "GitHub OAuth client secret."
+                            },
+                            "scope": {
+                              "type": "string",
+                              "description": "OAuth scope to request (optional).",
+                              "default": "user:email"
+                            },
+                            "callback_path": {
+                              "type": "string",
+                              "description": "Callback path for OAuth flow.",
+                              "default": "/github/callback"
+                            },
+                            "auth_url": {
+                              "type": "string",
+                              "format": "uri",
+                              "description": "GitHub authorization URL."
+                            },
+                            "token_url": {
+                              "type": "string",
+                              "format": "uri",
+                              "description": "GitHub token exchange URL."
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "atlassian": {
+                          "type": "object",
+                          "description": "Atlassian OAuth configuration (required when provider is 'atlassian').",
+                          "required": ["client_id", "client_secret", "callback_path", "auth_url", "token_url"],
+                          "properties": {
+                            "client_id": {
+                              "type": "string",
+                              "description": "Atlassian OAuth client ID."
+                            },
+                            "client_secret": {
+                              "type": "string",
+                              "description": "Atlassian OAuth client secret."
+                            },
+                            "scope": {
+                              "type": "string",
+                              "description": "OAuth scopes to request (space-separated).",
+                              "default": "read:jira-work read:jira-user read:confluence-content.all read:confluence-user offline_access"
+                            },
+                            "callback_path": {
+                              "type": "string",
+                              "description": "Callback path for OAuth flow.",
+                              "default": "/atlassian/callback"
+                            },
+                            "auth_url": {
+                              "type": "string",
+                              "format": "uri",
+                              "description": "Atlassian authorization URL.",
+                              "default": "https://auth.atlassian.com/authorize"
+                            },
+                            "token_url": {
+                              "type": "string",
+                              "format": "uri",
+                              "description": "Atlassian token exchange URL.",
+                              "default": "https://auth.atlassian.com/oauth/token"
                             }
                           },
                           "additionalProperties": false

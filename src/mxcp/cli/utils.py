@@ -1,6 +1,7 @@
 import json
 import traceback
 import os
+import shutil
 from typing import Any, Dict, Optional
 import click
 import logging
@@ -26,6 +27,17 @@ def get_env_profile() -> Optional[str]:
         Profile name from MXCP_PROFILE environment variable, or None if not set
     """
     return os.environ.get("MXCP_PROFILE")
+
+def check_command_available(command: str) -> bool:
+    """Check if a command is available in the system PATH.
+    
+    Args:
+        command: The command name to check
+        
+    Returns:
+        True if command is available, False otherwise
+    """
+    return shutil.which(command) is not None
 
 def configure_logging(debug: bool = False) -> None:
     """Configure logging for all modules.

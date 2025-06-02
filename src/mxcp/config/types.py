@@ -1,76 +1,116 @@
 from typing import TypedDict, List, Dict, Optional, Literal, Any, Union
 
-# Site Config Types
-class ExtensionDefinition(TypedDict, total=False):
+# Site Config Types (mxcp-site.yml)
+class SiteExtensionDefinition(TypedDict, total=False):
     name: str
     repo: Optional[str]  # Optional repo name for community/nightly extensions
 
-class PluginDefinition(TypedDict):
+class SitePluginDefinition(TypedDict):
     name: str
     module: str
     config: Optional[str]
 
-class DbtConfig(TypedDict):
+class SiteDbtConfig(TypedDict, total=False):
     enabled: Optional[bool]
     models: Optional[str]
     manifest_path: Optional[str]
 
-class PythonConfig(TypedDict):
-    path: Optional[str]
+class SiteSqlToolsConfig(TypedDict, total=False):
+    enabled: Optional[bool]
 
-class DuckDBConfig(TypedDict):
+class SiteDuckDBConfig(TypedDict, total=False):
     path: Optional[str]
     readonly: Optional[bool]
 
-class DriftConfig(TypedDict):
+class SiteDriftConfig(TypedDict, total=False):
     path: Optional[str]
 
-class GitHubCloudConfig(TypedDict):
-    prefix_with_branch_name: Optional[bool]
-    skip_prefix_for_branches: Optional[List[str]]
-
-class SecretDefinition(TypedDict):
-    name: str
-    type: str
-    parameters: Dict[str, str]
-
-class PluginConfig(TypedDict):
-    config: Dict[str, Dict[str, str]]
-
-class ProfileConfig(TypedDict):
-    duckdb: Optional[DuckDBConfig]
-    drift: Optional[DriftConfig]
-    secrets: Optional[List[SecretDefinition]]
-    plugin: Optional[PluginConfig]
-
-class CloudConfig(TypedDict):
-    github: Optional[Dict[str, Any]]
+class SiteProfileConfig(TypedDict, total=False):
+    duckdb: Optional[SiteDuckDBConfig]
+    drift: Optional[SiteDriftConfig]
 
 class SiteConfig(TypedDict):
     mxcp: str
     project: str
     profile: str
-    base_url: Optional[str]
-    enabled: Optional[bool]
-    secrets: Optional[List[str]]
-    plugin: Optional[List[PluginDefinition]]
-    extensions: Optional[List[Union[str, ExtensionDefinition]]]
-    dbt: Optional[DbtConfig]
-    python: Optional[PythonConfig]
-    profiles: Dict[str, ProfileConfig]
-    cloud: Optional[CloudConfig]
+    secrets: Optional[List[str]]  # List of secret names (not definitions)
+    plugin: Optional[List[SitePluginDefinition]]
+    extensions: Optional[List[Union[str, SiteExtensionDefinition]]]
+    dbt: Optional[SiteDbtConfig]
+    sql_tools: Optional[SiteSqlToolsConfig]
+    profiles: Dict[str, SiteProfileConfig]
 
-# User Config Types
-class VaultConfig(TypedDict):
+# User Config Types (~/.mxcp/config.yml)
+class UserSecretDefinition(TypedDict):
+    name: str
+    type: str
+    parameters: Dict[str, Any]  # Can contain strings or nested objects
+
+class UserPluginConfig(TypedDict, total=False):
+    config: Dict[str, Dict[str, str]]
+
+class UserVaultConfig(TypedDict):
     enabled: bool
     address: Optional[str]
     token_env: Optional[str]
 
-class ProjectConfig(TypedDict):
-    default: Optional[str]
-    profiles: Dict[str, ProfileConfig]
+class UserHttpTransportConfig(TypedDict, total=False):
+    port: Optional[int]
+    host: Optional[str]
+    scheme: Optional[Literal["http", "https"]]
+    base_url: Optional[str]
+    trust_proxy: Optional[bool]
+    stateless: Optional[bool]
+
+class UserTransportConfig(TypedDict, total=False):
+    provider: Optional[Literal["streamable-http", "sse", "stdio"]]
+    http: Optional[UserHttpTransportConfig]
+
+class UserOAuthClientConfig(TypedDict):
+    client_id: str
+    name: str
+    client_secret: Optional[str]
+    redirect_uris: Optional[List[str]]
+    grant_types: Optional[List[Literal["authorization_code", "refresh_token"]]]
+    scopes: Optional[List[str]]
+
+class UserGitHubAuthConfig(TypedDict):
+    client_id: str
+    client_secret: str
+    scope: Optional[str]
+    callback_path: str
+    auth_url: str
+    token_url: str
+
+class UserAtlassianAuthConfig(TypedDict):
+    client_id: str
+    client_secret: str
+    scope: Optional[str]
+    callback_path: str
+    auth_url: str
+    token_url: str
+
+
+class UserAuthorizationConfig(TypedDict, total=False):
+    required_scopes: Optional[List[str]]
+
+class UserAuthConfig(TypedDict, total=False):
+    provider: Optional[Literal["none", "github", "atlassian"]]
+    clients: Optional[List[UserOAuthClientConfig]]
+    github: Optional[UserGitHubAuthConfig]
+    atlassian: Optional[UserAtlassianAuthConfig]
+    authorization: Optional[UserAuthorizationConfig]
+
+class UserProfileConfig(TypedDict, total=False):
+    secrets: Optional[List[UserSecretDefinition]]
+    plugin: Optional[UserPluginConfig]
+    auth: Optional[UserAuthConfig]
+
+class UserProjectConfig(TypedDict):
+    profiles: Dict[str, UserProfileConfig]
 
 class UserConfig(TypedDict):
     mxcp: str
-    vault: Optional[VaultConfig]
-    projects: Dict[str, ProjectConfig]
+    projects: Dict[str, UserProjectConfig]
+    vault: Optional[UserVaultConfig]
+    transport: Optional[UserTransportConfig]

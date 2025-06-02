@@ -13,19 +13,102 @@ logger = logging.getLogger(__name__)
 # Regular expression to match ${ENV_VAR} patterns
 ENV_VAR_PATTERN = re.compile(r'\${([A-Za-z0-9_]+)}')
 
-def _interpolate_env_vars(value: Any) -> Any:
-    """Interpolate environment variables in string values.
+# Regular expression to match vault://path/to/secret#key patterns
+VAULT_URL_PATTERN = re.compile(r'vault://([^#]+)(?:#(.+))?')
+
+def _resolve_vault_url(vault_url: str, vault_config: Optional[Dict[str, Any]]) -> str:
+    """Resolve a vault:// URL to retrieve the secret value.
+    
+    Args:
+        vault_url: The vault:// URL to resolve (e.g., vault://secret/myapp#password)
+        vault_config: The vault configuration from user config
+        
+    Returns:
+        The resolved secret value
+        
+    Raises:
+        ValueError: If vault is not configured or URL is invalid
+        ImportError: If hvac library is not available
+        Exception: If vault connection or secret retrieval fails
+    """
+    if not vault_config or not vault_config.get('enabled', False):
+        raise ValueError(f"Vault URL '{vault_url}' found but Vault is not enabled in configuration")
+    
+    # Parse the vault URL
+    match = VAULT_URL_PATTERN.match(vault_url)
+    if not match:
+        raise ValueError(f"Invalid vault URL format: '{vault_url}'. Expected format: vault://path/to/secret#key")
+    
+    secret_path = match.group(1)
+    secret_key = match.group(2)
+    
+    if not secret_key:
+        raise ValueError(f"Vault URL '{vault_url}' must specify a key after '#'. Expected format: vault://path/to/secret#key")
+    
+    try:
+        import hvac
+    except ImportError:
+        raise ImportError("hvac library is required for Vault integration. Install with: pip install hvac")
+    
+    # Get Vault configuration
+    vault_address = vault_config.get('address')
+    if not vault_address:
+        raise ValueError("Vault address must be configured when using vault:// URLs")
+    
+    token_env = vault_config.get('token_env', 'VAULT_TOKEN')
+    vault_token = os.environ.get(token_env)
+    if not vault_token:
+        raise ValueError(f"Vault token not found in environment variable '{token_env}'")
+    
+    # Initialize Vault client
+    try:
+        client = hvac.Client(url=vault_address, token=vault_token)
+        
+        if not client.is_authenticated():
+            raise ValueError("Failed to authenticate with Vault")
+        
+        # Read the secret
+        # Try KV v2 first, then fall back to KV v1
+        try:
+            # KV v2 format
+            response = client.secrets.kv.v2.read_secret_version(path=secret_path)
+            secret_data = response['data']['data']
+        except Exception:
+            try:
+                # KV v1 format
+                response = client.secrets.kv.v1.read_secret(path=secret_path)
+                secret_data = response['data']
+            except Exception as e:
+                raise ValueError(f"Failed to read secret from Vault path '{secret_path}': {e}")
+        
+        if secret_key not in secret_data:
+            raise ValueError(f"Key '{secret_key}' not found in Vault secret at path '{secret_path}'")
+        
+        return secret_data[secret_key]
+        
+    except Exception as e:
+        if isinstance(e, ValueError):
+            raise
+        raise ValueError(f"Error connecting to Vault: {e}")
+
+def _interpolate_values(value: Any, vault_config: Optional[Dict[str, Any]] = None) -> Any:
+    """Interpolate environment variables and vault URLs in string values.
     
     Args:
         value: The value to process. Can be a string, dict, list, or other type.
+        vault_config: Optional vault configuration for resolving vault:// URLs
         
     Returns:
-        The processed value with environment variables interpolated.
+        The processed value with environment variables and vault URLs interpolated.
         
     Raises:
-        ValueError: If an environment variable is referenced but not set.
+        ValueError: If an environment variable is referenced but not set, or vault resolution fails.
     """
     if isinstance(value, str):
+        # Check for vault:// URLs first
+        if value.startswith('vault://'):
+            return _resolve_vault_url(value, vault_config)
+        
         # Find all environment variable references
         matches = ENV_VAR_PATTERN.findall(value)
         if not matches:
@@ -39,9 +122,9 @@ def _interpolate_env_vars(value: Any) -> Any:
             result = result.replace(f"${{{env_var}}}", os.environ[env_var])
         return result
     elif isinstance(value, dict):
-        return {k: _interpolate_env_vars(v) for k, v in value.items()}
+        return {k: _interpolate_values(v, vault_config) for k, v in value.items()}
     elif isinstance(value, list):
-        return [_interpolate_env_vars(item) for item in value]
+        return [_interpolate_values(item, vault_config) for item in value]
     else:
         return value
 
@@ -50,7 +133,26 @@ def _apply_defaults(config: dict) -> dict:
     # Create a copy to avoid modifying the input
     config = config.copy()
 
-    # Ensure each profile has at least empty secrets and plugin config
+    # Apply transport defaults
+    if "transport" not in config:
+        config["transport"] = {}
+    
+    transport = config["transport"]
+    if "provider" not in transport:
+        transport["provider"] = "streamable-http"
+    
+    if "http" not in transport:
+        transport["http"] = {}
+    
+    http_config = transport["http"]
+    if "port" not in http_config:
+        http_config["port"] = 8000
+    if "host" not in http_config:
+        http_config["host"] = "localhost"
+    if "stateless" not in http_config:
+        http_config["stateless"] = False
+
+    # Ensure each profile has at least empty secrets, plugin, and auth config
     for project in config.get("projects", {}).values():
         for profile in project.get("profiles", {}).values():
             if profile is None:
@@ -61,6 +163,8 @@ def _apply_defaults(config: dict) -> dict:
                 profile["plugin"] = {"config": {}}
             elif "config" not in profile["plugin"]:
                 profile["plugin"]["config"] = {}
+            if "auth" not in profile:
+                profile["auth"] = {"provider": "none"}
     
     return config
 
@@ -127,8 +231,9 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
             config = yaml.safe_load(f)
             logger.debug(f"Loaded user config from file: {config}")
             
-        # Interpolate environment variables in the config
-        config = _interpolate_env_vars(config)
+        # Interpolate environment variables and vault URLs in the config
+        vault_config = config.get('vault')
+        config = _interpolate_values(config, vault_config)
             
         # Ensure project and profile exist in config
         project_name = site_config["project"]

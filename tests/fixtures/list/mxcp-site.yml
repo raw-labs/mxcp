@@ -2,5 +2,4 @@ mxcp: "1.0.0"
 project: test_project
 profile: test
 secrets:
-  - test_secret
-enabled: true 
+  - test_secret 

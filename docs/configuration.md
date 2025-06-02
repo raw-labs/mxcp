@@ -15,7 +15,6 @@ Example:
 mxcp: "1.0.0"
 projects:
   my_project:
-    default: "dev"
     profiles:
       dev:
         secrets:
@@ -36,11 +35,47 @@ If any referenced environment variable is not set, MXCP will raise an error when
 mxcp: "1.0.0"  # Always use this version
 ```
 
+### Transport Configuration
+```yaml
+transport:
+  provider: "streamable-http"  # Default transport: streamable-http, sse, or stdio
+  http:
+    port: 8000      # Default port for HTTP transport
+    host: "localhost"  # Default host for HTTP transport
+    stateless: false  # Enable stateless HTTP mode (default: false)
+```
+
+The transport configuration sets the default behavior for the `mxcp serve` command. You can override these settings using command-line options.
+
+**Transport Options:**
+
+- **provider**: The transport protocol to use
+  - `streamable-http`: HTTP with streaming support (default)
+  - `sse`: Server-sent events
+  - `stdio`: Standard input/output
+
+- **http**: HTTP-specific configuration
+  - **port**: Port number to bind to (default: 8000)
+  - **host**: Host address to bind to (default: "localhost")
+  - **stateless**: Enable stateless HTTP mode (default: false)
+    - When `true`, no session state is maintained between requests
+    - Required for serverless deployments
+    - Can be overridden with `mxcp serve --stateless`
+
+**Example with stateless mode for serverless deployment:**
+```yaml
+transport:
+  provider: "streamable-http"
+  http:
+    port: 8080
+    host: "0.0.0.0"
+    stateless: true
+```
+
 ### Projects Configuration
 ```yaml
 projects:
   my_project:  # Project name
-    default: "dev"  # Default profile
     profiles:
       dev:  # Profile name
         secrets:  # List of secrets for this profile
@@ -52,15 +87,64 @@ projects:
               database: "mydb"
               username: "user"
               password: "pass"
+        auth:  # Authentication configuration for this profile
+          provider: "github"
+          github:
+            client_id: "your_github_client_id"
+            client_secret: "your_github_client_secret"
+            auth_url: "https://github.com/login/oauth/authorize"
+            token_url: "https://github.com/login/oauth/access_token"
 ```
 
 ### Vault Integration (Optional)
+
+MXCP supports HashiCorp Vault for secure secret management. When enabled, you can use `vault://` URLs in your configuration to retrieve secrets from Vault.
+
 ```yaml
 vault:
   enabled: true
   address: "https://vault.example.com"
   token_env: "VAULT_TOKEN"  # Environment variable containing the Vault token
 ```
+
+#### Using Vault URLs
+
+Once Vault is configured, you can use `vault://` URLs anywhere in your configuration where you would normally put sensitive values:
+
+```yaml
+mxcp: "1.0.0"
+vault:
+  enabled: true
+  address: "https://vault.example.com"
+  token_env: "VAULT_TOKEN"
+projects:
+  my_project:
+    profiles:
+      dev:
+        secrets:
+          - name: "db_credentials"
+            type: "database"
+            parameters:
+              host: "localhost"
+              port: "5432"
+              database: "mydb"
+              username: "vault://secret/database#username"
+              password: "vault://secret/database#password"
+```
+
+**Vault URL Format:** `vault://path/to/secret#key`
+
+- `path/to/secret`: The path to the secret in Vault
+- `key`: The specific key within that secret
+
+**Requirements:**
+- The `hvac` Python library must be installed: `pip install "mxcp[vault]"` or `pip install hvac`
+- Vault must be configured with `enabled: true`
+- The Vault token must be available in the specified environment variable (default: `VAULT_TOKEN`)
+
+**Supported Secret Engines:**
+- KV Secrets Engine v2 (default)
+- KV Secrets Engine v1 (fallback)
 
 ## Repository Configuration
 
@@ -71,8 +155,6 @@ The repository configuration file (`mxcp-site.yml`) defines project-specific set
 mxcp: "1.0.0"  # Schema version
 project: "my_project"  # Must match a project in ~/.mxcp/config.yml
 profile: "dev"  # Profile to use
-base_url: "demo"  # Optional base URL for serving endpoints
-enabled: true  # Whether this repo is enabled
 ```
 
 ### Secrets
@@ -106,12 +188,6 @@ dbt:
 > - DuckDB persistent tables
 > - External caching layers
 
-### Python Configuration
-```yaml
-python:
-  path: "bootstrap.py"  # Path to Python bootstrap file
-```
-
 ### Profile-Specific Settings
 ```yaml
 profiles:
@@ -125,17 +201,27 @@ profiles:
     duckdb:
       path: "db-prod.duckdb"
       readonly: true
+    drift:
+      path: "drift-prod.json"
 ```
 
-### Cloud Settings
+#### Drift Detection Configuration
+
+The `drift` section configures drift detection for each profile:
+
 ```yaml
-cloud:
-  github:
-    prefix_with_branch_name: true
-    skip_prefix_for_branches:
-      - "main"
-      - "master"
+profiles:
+  default:
+    drift:
+      path: "drift-default.json"  # Path to drift snapshot file
 ```
+
+- **path**: Path to the drift snapshot file (relative to project root)
+  - Used as the default baseline for `mxcp drift-check`
+  - Created by `mxcp drift-snapshot`
+  - Should be unique per profile to avoid conflicts
+
+For more details on drift detection, see the [Drift Detection Guide](drift-detection.md).
 
 ### SQL Tools
 ```yaml
@@ -189,6 +275,15 @@ tool:
         - key: "param2"
           value: 42
       result: "expected result"
+  policies:  # Optional: Define access control policies
+    input:
+      - condition: "user.role in ['admin', 'user']"
+        action: deny
+        reason: "Only admins and users can access this tool"
+    output:
+      - condition: "user.role != 'admin'"
+        action: filter_fields
+        fields: ["sensitive_data"]
 ```
 
 ### Resource Definition
@@ -214,6 +309,11 @@ resource:
   source:
     file: "my_resource.sql"
   enabled: true
+  policies:  # Optional: Define access control policies
+    input:
+      - condition: "!('resource.read' in user.permissions)"
+        action: deny
+        reason: "Missing resource.read permission"
 ```
 
 ### Prompt Definition
@@ -234,7 +334,24 @@ prompt:
     - role: "user"
       type: "text"
       prompt: "Hello, {{ name }}!"
+  policies:  # Optional: Define access control policies
+    input:
+      - condition: "user.role == 'guest'"
+        action: deny
+        reason: "Guests cannot use AI prompts"
 ```
+
+### Policy Enforcement
+
+MXCP supports policy-based access control for endpoints. Policies can control who can access endpoints and what data they can see.
+
+**Key features:**
+- Input policies: Control access before execution
+- Output policies: Filter or mask sensitive data
+- CEL expressions: Flexible condition evaluation
+- User context: Role-based and permission-based access
+
+For detailed information on policy configuration and examples, see the [Policy Enforcement Guide](policies.md).
 
 ## SQL Source Files
 

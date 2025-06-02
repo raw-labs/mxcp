@@ -159,12 +159,18 @@ Now that you have MXCP running, here are some next steps:
 2. **Learn More**
    - [Type System](type-system.md) - Understand MXCP's type system
    - [Configuration](configuration.md) - Configure your project
+   - [Plugins](plugins.md) - Extend DuckDB with custom Python functions  
+   - [Authentication](authentication.md) - Set up OAuth authentication
+   - [Policy Enforcement](policies.md) - Control access and filter sensitive data
+   - [Audit Logging](auditing.md) - Track and monitor all executions
    - [Integrations](integrations.md) - Connect with dbt and DuckDB
+   - [Drift Detection](drift-detection.md) - Monitor changes across environments
 
 3. **Create Your Own Endpoints**
    - Start with simple SQL queries
    - Add type definitions
    - Test your endpoints
+   - Set up drift detection for production monitoring
    - Iterate and improve
 
 ## Common Patterns
@@ -205,11 +211,14 @@ JOIN source_c c ON a.id = c.id;
 ```yaml
 parameters:
   - name: "date"
-    type: "date"
+    type: "string"
+    format: "date"
     description: "Date to filter by"
+    examples: ["2024-01-15"]
   - name: "threshold"
     type: "number"
     description: "Minimum value"
+    minimum: 0
 ```
 
 ## Need Help?

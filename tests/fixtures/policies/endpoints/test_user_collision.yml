@@ -1,0 +1,33 @@
+mxcp: "1.0.0"
+
+tool:
+  name: "test_user_collision"
+  description: "Test endpoint with a parameter called 'user' to test naming collision"
+  parameters:
+    - name: user
+      type: string
+      description: "A parameter unfortunately named 'user'"
+      examples: ["test_user"]
+  
+  return:
+    type: object
+    properties:
+      id:
+        type: string
+        description: "User ID"
+      name:
+        type: string
+        description: "User name"
+  
+  source:
+    code: |
+      -- Simple test data that uses the 'user' parameter
+      SELECT $user as id, 'Test User for ' || $user as name
+
+  policies:
+    input:
+      # This policy should check the user context role, but if there's a collision
+      # it might check the query parameter instead!
+      - condition: "user.role == 'admin'"
+        action: deny
+        reason: "Test policy that should check user context role" 

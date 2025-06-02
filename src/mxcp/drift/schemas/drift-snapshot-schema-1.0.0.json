@@ -1,0 +1,144 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MXCP Drift Snapshot",
+  "type": "object",
+  "required": ["version", "generated_at", "tables", "resources"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Version of the drift snapshot format",
+      "pattern": "^1\\.0\\.0$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the snapshot was generated"
+    },
+
+    "tables": {
+      "type": "array",
+      "description": "List of tables in the DuckDB catalog",
+      "items": {
+        "type": "object",
+        "required": ["name", "columns"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the table"
+          },
+          "columns": {
+            "type": "array",
+            "description": "List of columns in the table",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name of the column"
+                },
+                "type": {
+                  "type": "string",
+                  "description": "DuckDB data type of the column"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "array",
+      "description": "List of resources with validation results, test results, and definition",
+      "items": {
+        "type": "object",
+        "required": ["validation_results"],
+        "properties": {
+          "validation_results": {
+            "type": "object",
+            "required": ["status", "path"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["ok", "error"],
+                "description": "Validation status"
+              },
+              "path": {
+                "type": "string",
+                "description": "Path to the endpoint file (relative to repository root)"
+              },
+              "message": {
+                "type": "string",
+                "description": "Error message if validation failed"
+              }
+            },
+            "description": "Results of validation for the resource"
+          },
+          "test_results": {
+            "type": "object",
+            "required": ["status", "tests_run"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["ok", "error", "failed"],
+                "description": "Test execution status"
+              },
+              "tests_run": {
+                "type": "integer",
+                "description": "Number of tests run"
+              },
+              "tests": {
+                "type": "array",
+                "description": "List of per-test results",
+                "items": {
+                  "type": "object",
+                  "required": ["name", "status", "time"],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Name of the test"
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "Description of the test"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["passed", "failed", "error"],
+                      "description": "Test status"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Error message if test failed"
+                    },
+                    "time": {
+                      "type": "number",
+                      "description": "Time taken to run the test in seconds"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Results of tests for the resource"
+          },
+          "definition": {
+            "oneOf": [
+              { "$ref": "../../endpoints/schemas/endpoint-schema-1.0.0.json#/definitions/toolDefinition" },
+              { "$ref": "../../endpoints/schemas/endpoint-schema-1.0.0.json#/definitions/resourceDefinition" },
+              { "$ref": "../../endpoints/schemas/endpoint-schema-1.0.0.json#/definitions/promptDefinition" }
+            ],
+            "description": "Endpoint definition"
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string", "description": "Short display title" },
+              "description": { "type": "string", "description": "Longer description" }
+            },
+            "description": "Optional metadata for documentation purposes"
+          }
+        }
+      }
+    }
+  }
+} 

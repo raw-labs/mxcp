@@ -1,0 +1,23 @@
+mxcp: 1.0.0
+
+tool:
+  name: "get_sobject"
+  description: "Use this tool when you have a specific Salesforce record ID and need to retrieve all fields for that record. This is ideal for getting complete details about a known record, like when you have an Account ID from a previous query and need all its information. The tool requires both the object type (e.g., 'Account', 'Contact') and the record's unique ID. This is different from search or SOQL queries which find records based on field values - this tool is for direct record lookup by ID."
+  parameters:
+    - name: sobject_name
+      type: string
+      description: "The API name of the Salesforce object (e.g., 'Account', 'Contact', 'CustomObject__c'). The name is case-sensitive and must match exactly how it appears in Salesforce. You can use list_sobjects() to see all available object names."
+      examples:
+        - "Account"
+        - "Contact"
+        - "Opportunity"
+    - name: record_id
+      type: string
+      description: "The unique identifier (ID) of the record to retrieve. This is the 15 or 18 character ID assigned by Salesforce when the record is created. You can get these IDs from other queries or from the Salesforce UI."
+      examples:
+        - "001xx000003DIloAAG"
+        - "003xx000004TmiAAE"
+  source:
+    code: SELECT get_sobject_salesforce($sobject_name, $record_id);
+  annotations:
+    readOnlyHint: true 

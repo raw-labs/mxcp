@@ -21,7 +21,10 @@ dependencies = [
     "starlette>=0.27.0",  # Required for MCP HTTP transport
     "makefun",
     "pandas>=2.0.0",  # Required for DuckDB DataFrame operations
-    "posthog>=3.0.0"  # For anonymous usage analytics
+    "posthog>=3.0.0",  # For anonymous usage analytics
+    "dbt-core>=1.6.0",  # dbt core for data transformations
+    "dbt-duckdb>=1.6.0",  # dbt DuckDB adapter
+    "cel-python>=0.2.0"  # Common Expression Language for policy enforcement
 ]
 
 [project.scripts]
@@ -34,15 +37,19 @@ dev = [
     "pytest-cov",  # For test coverage
     "pytest-mock",  # For better mock integration with pytest
     "pytest-timeout",  # For test timeout protection
-    "aiohttp-client-mock",  # For mocking HTTP requests
+    "aioresponses",  # For mocking HTTP requests
     "black",  # For code formatting
     "isort",  # For import sorting
     "mypy",  # For type checking
+    "hvac>=2.0.0",  # For testing Vault integration
+]
+vault = [
+    "hvac>=2.0.0",  # HashiCorp Vault client for vault:// URL support
 ]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["mxcp", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.server"]
+packages = ["mxcp", "mxcp.audit", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.server", "mxcp.auth", "mxcp.drift", "mxcp.endpoints", "mxcp.engine", "mxcp.plugins", "mxcp.policies"]
 include-package-data = true
 
 [tool.setuptools.package-data]

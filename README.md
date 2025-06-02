@@ -11,7 +11,7 @@
 
 ## ✨ Why MXCP?
 
-MXCP (Model Execution + Context Protocol) is a developer-first tool that bridges the gap between your operational data and AI applications. It lets you:
+MXCP (Model eXecution + Context Protocol) is a developer-first tool that bridges the gap between your operational data and AI applications. It lets you:
 
 - 🚀 **Go from data to AI in minutes** — Define interfaces in YAML + SQL, serve instantly
 - 🔒 **Keep control of your data** — Run locally, with full observability and type safety
@@ -23,6 +23,9 @@ MXCP (Model Execution + Context Protocol) is a developer-first tool that bridges
 ```bash
 # Install globally
 pip install mxcp
+
+# Install with Vault support (optional)
+pip install "mxcp[vault]"
 
 # Or develop locally
 git clone https://github.com/raw-labs/mxcp.git && cd mxcp
@@ -76,6 +79,7 @@ tool:
 - **dbt integration** — Use your data models directly
 - **Git-based workflow** — Version control and collaboration
 - **Validation tools** — Type checking, SQL linting, and testing
+- **Drift detection** — Monitor schema and endpoint changes across environments
 
 ## 🛠️ Core Concepts
 
@@ -97,37 +101,30 @@ your-project/
 
 ### CLI Commands
 ```bash
-mxcp serve        # Start local MCP server
-mxcp list         # List all endpoints
-mxcp validate     # Check types, SQL, and references
-mxcp test         # Run endpoint tests
-mxcp query        # Execute SQL queries
-mxcp init         # Initialize new project
-mxcp dbt-config   # Configure dbt integration
-mxcp dbt          # Run dbt commands
+mxcp serve           # Start local MCP server
+mxcp list            # List all endpoints
+mxcp validate        # Check types, SQL, and references
+mxcp test            # Run endpoint tests
+mxcp query           # Execute SQL queries
+mxcp init            # Initialize new project
+mxcp dbt-config      # Configure dbt integration
+mxcp dbt             # Run dbt commands
+mxcp drift-snapshot  # Create drift detection baseline
+mxcp drift-check     # Check for schema and endpoint drift
+mxcp log             # Query audit logs
 ```
 
-## 🔌 Integration with Claude
+## 🔌 LLM Integration
 
-Connect your MXCP server to Claude Desktop by configuring `server_config.json`:
+MXCP implements the Model Context Protocol (MCP), making it compatible with:
 
-```json
-{
-  "mcpServers": {
-    "local": {
-      "command": "bash",
-      "args": [
-        "-c",
-        "cd ~/your-project && source ../../.venv/bin/activate && mxcp serve --transport stdio"
-      ],
-      "env": {
-        "PATH": "/your/path/to/.venv/bin:/usr/local/bin:/usr/bin",
-        "HOME": "/your/home"
-      }
-    }
-  }
-}
-```
+- **Claude Desktop** — Native MCP support
+- **OpenAI-compatible tools** — Via MCP adapters
+- **Custom integrations** — Using the MCP specification
+
+For specific setup instructions, see:
+- [Earthquakes Example](examples/earthquakes/README.md) — Complete Claude Desktop setup walkthrough
+- [Integration Guide](docs/integrations.md) — Claude Desktop, OpenAI, mcp-cli, and custom integrations
 
 ## 📚 Documentation
 
@@ -135,8 +132,13 @@ Connect your MXCP server to Claude Desktop by configuring `server_config.json`:
 - [Quickstart](docs/quickstart.md) — Get up and running
 - [CLI Reference](docs/cli.md) — Command-line tools
 - [Configuration](docs/configuration.md) — Project setup
+- [Plugins](docs/plugins.md) — Extend DuckDB with custom Python functions
+- [Authentication](docs/authentication.md) — OAuth authentication setup
+- [Policy Enforcement](docs/policies.md) — Access control and data filtering
+- [Audit Logging](docs/auditing.md) — Enterprise-grade execution logging
 - [Type System](docs/type-system.md) — Data types and validation
 - [Integrations](docs/integrations.md) — Data sources and tools
+- [Drift Detection](docs/drift-detection.md) — Schema and endpoint change monitoring
 
 ## 🤝 Contributing
 

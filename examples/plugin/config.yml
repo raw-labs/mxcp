@@ -1,0 +1,12 @@
+mxcp: 1.0.0
+
+projects:
+  demo-plugin:
+    profiles:
+      dev:
+        plugin:
+          config:
+            rot1:
+              rotation: "1"  # Rotate by 1 position (A->B, B->C, etc.)
+            rot10:
+              rotation: "10"  # Rotate by 10 positions (A->K, B->L, etc.)

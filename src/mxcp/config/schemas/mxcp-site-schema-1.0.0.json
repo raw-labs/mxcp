@@ -16,14 +16,6 @@
       "type": "string",
       "description": "Profile name under the given project."
     },
-    "base_url": {
-      "type": "string",
-      "description": "Optional base URL to use for serving endpoints (e.g., 'demo', 'prod', etc.)"
-    },
-    "enabled": {
-      "type": "boolean",
-      "description": "If false, disables this repo from being served or validated by default."
-    },
     "secrets": {
       "type": "array",
       "description": "List of secret names used by this repo (resolved from ~/.mxcp/config.yml).",
@@ -101,17 +93,6 @@
       },
       "additionalProperties": false
     },
-    "python": {
-      "type": "object",
-      "description": "Optional Python bootstrap configuration.",
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "Path to a Python file to execute at runtime (to define user-defined functions or context)."
-        }
-      },
-      "additionalProperties": false
-    },
     "profiles": {
       "type": "object",
       "description": "Profile-specific configuration settings.",
@@ -145,31 +126,22 @@
                 }
               },
               "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    "cloud": {
-      "type": "object",
-      "description": "Settings specific to the SaaS/Cloud deployment behavior.",
-      "properties": {
-        "github": {
-          "type": "object",
-          "description": "Settings related to GitHub integration in cloud mode.",
-          "properties": {
-            "prefix_with_branch_name": {
-              "type": "boolean",
-              "description": "Whether to prefix endpoint URLs with the current branch name."
             },
-            "skip_prefix_for_branches": {
-              "type": "array",
-              "description": "List of branch names that will not be prefixed (e.g., main, master).",
-              "items": {
-                "type": "string"
-              }
+            "audit": {
+              "type": "object",
+              "description": "Profile-specific audit logging configuration.",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether to enable audit logging for this profile (defaults to false).",
+                  "default": false
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Path to the audit log JSONL file for this profile."
+                }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false

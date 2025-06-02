@@ -53,6 +53,21 @@ class EndpointLoader:
         self._site_config = site_config
         self._endpoints = {}
     
+    def _is_endpoint_enabled(self, endpoint_data: Dict[str, any]) -> bool:
+        """Check if an endpoint is enabled.
+        
+        Args:
+            endpoint_data: The endpoint dictionary
+            
+        Returns:
+            True if the endpoint is enabled (default), False otherwise
+        """
+        # Check each endpoint type for the enabled field
+        for endpoint_type in ["tool", "resource", "prompt"]:
+            if endpoint_type in endpoint_data:
+                return endpoint_data[endpoint_type].get("enabled", True)
+        return True
+    
     def discover_endpoints(self) -> List[tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
         """Discover all endpoint files and load their metadata, returning (file_path, endpoint_dict, error_message) tuples.
         
@@ -91,6 +106,12 @@ class EndpointLoader:
                         
                     # Validate against schema only if it's a mxcp endpoint file
                     validate(instance=data, schema=schema)
+                    
+                    # Check if endpoint is enabled
+                    if not self._is_endpoint_enabled(data):
+                        logger.info(f"Skipping disabled endpoint: {f}")
+                        continue
+                    
                     endpoints.append((f, data, None))
                     self._endpoints[str(f)] = data
             except Exception as e:
@@ -164,6 +185,12 @@ class EndpointLoader:
                             (endpoint_type == "prompt" and data["prompt"]["name"] == name)
                         ):
                             logger.debug(f"Found matching endpoint in {f}")
+                            
+                            # Check if endpoint is enabled
+                            if not self._is_endpoint_enabled(data):
+                                logger.info(f"Skipping disabled endpoint: {f}")
+                                continue
+                            
                             # Validate against schema
                             schema_path = Path(__file__).parent / "schemas" / "endpoint-schema-1.0.0.json"
                             with open(schema_path) as schema_file:

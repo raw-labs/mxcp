@@ -55,11 +55,12 @@ def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, A
         has_errors = False
         
         for path, endpoint, error in endpoints:
+            path_str = str(path)  # Convert PosixPath to string
             if error:
-                results.append({"status": "error", "path": path, "message": error})
+                results.append({"status": "error", "path": path_str, "message": error})
                 has_errors = True
             else:
-                result = validate_endpoint_payload(endpoint, path, user_config, site_config, profile, readonly=readonly)
+                result = validate_endpoint_payload(endpoint, path_str, user_config, site_config, profile, readonly=readonly)
                 results.append(result)
                 if result["status"] == "error":
                     has_errors = True
@@ -125,7 +126,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
     
     Args:
         endpoint: The loaded endpoint dictionary
-        path: Path to the endpoint file (for error reporting)
+        path: Path to the endpoint file (for file operations)
         user_config: User configuration
         site_config: Site configuration
         profile: Profile name
@@ -134,7 +135,29 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
     Returns:
         Dictionary with validation status and details
     """
+    # Calculate relative path for results
     try:
+        repo_root = find_repo_root()
+        path_obj = Path(path).resolve()
+        relative_path = str(path_obj.relative_to(repo_root))
+    except ValueError:
+        # If path is not relative to repo_root, use the filename
+        relative_path = Path(path).name
+    except Exception:
+        # If we can't find repo root or resolve path, use filename as fallback
+        relative_path = Path(path).name
+    
+    try:
+        # First, validate against JSON schema
+        schema_path = Path(__file__).parent / "schemas" / "endpoint-schema-1.0.0.json"
+        with open(schema_path) as schema_file:
+            schema = json.load(schema_file)
+        
+        try:
+            jsonschema_validate(instance=endpoint, schema=schema)
+        except Exception as e:
+            return {"status": "error", "path": relative_path, "message": f"Schema validation error: {str(e)}"}
+        
         # Determine endpoint type and name
         endpoint_type = None
         name = None
@@ -150,21 +173,17 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
                 break
                 
         if not endpoint_type or not name:
-            return {"status": "error", "path": path, "message": "No valid endpoint type (tool/resource/prompt) found"}
-
-        # Find repo root and endpoint file path
-        repo_root = find_repo_root()
-        endpoint_file_path = Path(path).resolve()
+            return {"status": "error", "path": relative_path, "message": "No valid endpoint type (tool/resource/prompt) found"}
 
         # For prompts, validate messages structure and template variables
         if endpoint_type == "prompt":
             prompt_def = endpoint["prompt"]
             if "messages" not in prompt_def:
-                return {"status": "error", "path": path, "message": "No messages found in prompt definition"}
+                return {"status": "error", "path": relative_path, "message": "No messages found in prompt definition"}
             
             messages = prompt_def["messages"]
             if not isinstance(messages, list) or not messages:
-                return {"status": "error", "path": path, "message": "Messages must be a non-empty array"}
+                return {"status": "error", "path": relative_path, "message": "Messages must be a non-empty array"}
             
             # Get defined parameters
             defined_params = {p["name"] for p in prompt_def.get("parameters", [])}
@@ -172,11 +191,11 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
             # Check each message
             for i, msg in enumerate(messages):
                 if not isinstance(msg, dict):
-                    return {"status": "error", "path": path, "message": f"Message {i} must be an object"}
+                    return {"status": "error", "path": relative_path, "message": f"Message {i} must be an object"}
                 if "prompt" not in msg:
-                    return {"status": "error", "path": path, "message": f"Message {i} missing required 'prompt' field"}
+                    return {"status": "error", "path": relative_path, "message": f"Message {i} missing required 'prompt' field"}
                 if not isinstance(msg["prompt"], str):
-                    return {"status": "error", "path": path, "message": f"Message {i} prompt must be a string"}
+                    return {"status": "error", "path": relative_path, "message": f"Message {i} prompt must be a string"}
                 
                 # Extract and validate template variables
                 template_vars = extract_template_variables(msg["prompt"])
@@ -184,25 +203,25 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
                 if undefined_vars:
                     return {
                         "status": "error", 
-                        "path": path, 
+                        "path": relative_path, 
                         "message": f"Message {i} uses undefined template variables: {', '.join(sorted(undefined_vars))}"
                     }
             
-            return {"status": "ok", "path": path}
+            return {"status": "ok", "path": relative_path}
         
         # For resources, validate URI vs parameters
         if endpoint_type == "resource":
-            err = validate_resource_uri_vs_params(endpoint["resource"], path)
+            err = validate_resource_uri_vs_params(endpoint["resource"], relative_path)
             if err:
                 return err
 
         # For tools and resources, validate SQL
         try:
-            sql_query = get_endpoint_source_code(endpoint, endpoint_type, endpoint_file_path, repo_root)
+            sql_query = get_endpoint_source_code(endpoint, endpoint_type, path_obj, repo_root)
         except Exception as e:
-            return {"status": "error", "path": path, "message": f"Error resolving source code: {str(e)}"}
+            return {"status": "error", "path": relative_path, "message": f"Error resolving source code: {str(e)}"}
         if not sql_query:
-            return {"status": "error", "path": path, "message": "No SQL query found"}
+            return {"status": "error", "path": relative_path, "message": "No SQL query found"}
 
         # Use DuckDBSession for proper secret injection and type inference
         session = DuckDBSession(user_config, site_config, readonly=readonly)
@@ -210,7 +229,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         try:
             con.execute("PREPARE my_query AS " + sql_query)
         except Exception as e:
-            return {"status": "error", "path": path, "message": f"SQL parsing error: {str(e)}"}
+            return {"status": "error", "path": relative_path, "message": f"SQL parsing error: {str(e)}"}
 
         # Get parameter names using duckdb.extract_statements
         sql_param_names = duckdb.extract_statements(sql_query)[0].named_parameters
@@ -226,7 +245,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         if missing_params or extra_params:
             return {
                 "status": "error",
-                "path": path,
+                "path": relative_path,
                 "message": f"Parameter mismatch: missing={missing_params}, extra={extra_params}"
             }
 
@@ -240,12 +259,12 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
             pass
 
         if type_mismatches:
-            return {"status": "error", "path": path, "message": "Type mismatches: " + ", ".join(type_mismatches)}
+            return {"status": "error", "path": relative_path, "message": "Type mismatches: " + ", ".join(type_mismatches)}
 
-        return {"status": "ok", "path": path}
+        return {"status": "ok", "path": relative_path}
 
     except Exception as e:
-        return {"status": "error", "path": path, "message": str(e)}
+        return {"status": "error", "path": relative_path, "message": str(e)}
 
 def validate_endpoint(path: str, user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str, readonly: Optional[bool] = None) -> Dict[str, Any]:
     """Validate a single endpoint file.

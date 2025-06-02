@@ -39,12 +39,21 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
             
         logger.debug(f"Processing file: {file_path}")
         
+        # Calculate relative path for results
+        try:
+            relative_path = str(file_path.relative_to(repo_root))
+        except ValueError:
+            relative_path = file_path.name
+        
         if error_msg is not None:
             # This endpoint failed to load
             results["endpoints"].append({
-                "status": "error",
                 "endpoint": str(file_path),
-                "message": error_msg
+                "path": relative_path,
+                "test_results": {
+                    "status": "error",
+                    "message": error_msg
+                }
             })
             results["status"] = "error"
             continue
@@ -65,31 +74,40 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
                 continue
                 
             # Run tests for this endpoint
-            endpoint_results = await run_tests(f"{kind}/{name}", user_config, site_config, profile, readonly)
-            results["endpoints"].append(endpoint_results)
-            results["tests_run"] += endpoint_results.get("tests_run", 0)
+            test_results = await run_tests(kind, name, user_config, site_config, profile, readonly)
+            
+            # Wrap test results with endpoint context
+            endpoint_result = {
+                "endpoint": f"{kind}/{name}",
+                "path": relative_path,
+                "test_results": test_results
+            }
+            
+            results["endpoints"].append(endpoint_result)
+            results["tests_run"] += test_results.get("tests_run", 0)
             
             # Update overall status
-            if endpoint_results.get("status") == "error":
+            if test_results.get("status") == "error":
                 results["status"] = "error"
-            elif endpoint_results.get("status") == "failed" and results["status"] != "error":
+            elif test_results.get("status") == "failed" and results["status"] != "error":
                 results["status"] = "failed"
         except Exception as e:
             logger.error(f"Error processing file {file_path}: {str(e)}")
             results["endpoints"].append({
-                "status": "error",
                 "endpoint": str(file_path),
-                "message": str(e)
+                "path": relative_path,
+                "test_results": {
+                    "status": "error",
+                    "message": str(e)
+                }
             })
             results["status"] = "error"
             
     return results
 
-async def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str], readonly: Optional[bool] = None) -> Dict[str, Any]:
-    """Run tests for a specific endpoint"""
+async def run_tests(endpoint_type: str, name: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str], readonly: Optional[bool] = None) -> Dict[str, Any]:
+    """Run tests for a specific endpoint type and name."""
     try:
-        # Split endpoint into type and name
-        endpoint_type, name = endpoint.split("/", 1)
         endpoint_type_enum = EndpointType(endpoint_type.lower())
         logger.info(f"Running tests for endpoint: {endpoint_type}/{name}")
         
@@ -98,11 +116,10 @@ async def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteCon
         result = loader.load_endpoint(endpoint_type, name)
         
         if result is None:
-            logger.error(f"Endpoint not found: {endpoint}")
+            logger.error(f"Endpoint not found: {endpoint_type}/{name}")
             return {
                 "status": "error",
-                "endpoint": endpoint,
-                "message": f"Endpoint not found: {endpoint}"
+                "message": f"Endpoint not found: {endpoint_type}/{name}"
             }
             
         endpoint_file_path, endpoint_def = result
@@ -121,7 +138,6 @@ async def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteCon
             logger.warning("No tests defined")
             return {
                 "status": "ok",
-                "endpoint": endpoint,
                 "tests_run": 0,
                 "message": "No tests defined"
             }
@@ -200,16 +216,13 @@ async def run_tests(endpoint: str, user_config: UserConfig, site_config: SiteCon
         
         return {
             "status": status,
-            "endpoint": endpoint,
-            "tests_run": len(test_results),
+            "tests_run": len(tests),
             "tests": test_results
         }
-        
     except Exception as e:
         logger.error(f"Error in run_tests: {str(e)}")
         return {
             "status": "error",
-            "endpoint": endpoint,
             "message": str(e)
         }
 

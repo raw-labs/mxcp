@@ -42,7 +42,8 @@ def test_list_endpoints(test_repo_path, test_config):
         assert len(failed_endpoints) == 0, f"Found failed endpoints: {failed_endpoints}"
         
         # Verify we found all our test endpoints (including those in subfolder)
-        assert len(endpoints) == 5  # tool1, resource1, prompt1, tool2, prompt2
+        # Note: disabled_tool.yml should be filtered out due to enabled: false
+        assert len(endpoints) == 7  # tool1, resource1, resource1_detail, prompt1, tool2, prompt2, disabled_tool (disabled_tool filtered out)
         
         # Verify root directory endpoints
         tool1_path = test_repo_path / "endpoints" / "tool1.yml"
@@ -95,6 +96,10 @@ def test_list_endpoints(test_repo_path, test_config):
         assert messages[1]["role"] == "user"
         assert messages[1]["type"] == "text"
         assert messages[1]["prompt"] == "{{message}}"
+        
+        # Verify disabled endpoint is filtered out
+        disabled_tool_path = test_repo_path / "endpoints" / "disabled_tool.yml"
+        assert str(disabled_tool_path) not in endpoint_dict, "Disabled endpoint should be filtered out"
     finally:
         os.chdir(original_dir)
 
@@ -112,7 +117,8 @@ def test_list_endpoints_from_subfolder(test_repo_path, test_config):
         endpoint_dict = {str(path): data for path, data, error_msg in endpoints if error_msg is None}
         
         # Should still find all endpoints, not just those in subfolder
-        assert len(endpoints) == 5  # tool1, resource1, prompt1, tool2, prompt2
+        # Note: disabled_tool.yml should be filtered out due to enabled: false
+        assert len(endpoints) == 7  # tool1, resource1, resource1_detail, prompt1, tool2, prompt2 (disabled_tool filtered out)
         
         # Verify root directory endpoints are still accessible
         tool1_path = test_repo_path / "endpoints" / "tool1.yml"

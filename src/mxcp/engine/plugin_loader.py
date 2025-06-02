@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 import importlib
 import logging
 import duckdb
@@ -6,17 +6,20 @@ import sys
 import os
 from mxcp.config.types import SiteConfig, UserConfig
 from mxcp.plugins import MXCPBasePlugin
+import inspect
+
+if TYPE_CHECKING:
+    from mxcp.auth.providers import UserContext
 
 logger = logging.getLogger(__name__)
 
-def _load_plugin(module_path: str, name: str, config: Dict[str, str], conn: duckdb.DuckDBPyConnection) -> MXCPBasePlugin:
+def _load_plugin(module_path: str, config: Dict[str, str], user_context: Optional['UserContext'] = None) -> MXCPBasePlugin:
     """Load and instantiate a plugin.
     
     Args:
         module_path: The Python module path containing the plugin
-        name: The name of the plugin instance
         config: The resolved configuration for the plugin
-        conn: The DuckDB connection object
+        user_context: Optional authenticated user context
         
     Returns:
         An instantiated MXCPBasePlugin
@@ -35,13 +38,24 @@ def _load_plugin(module_path: str, name: str, config: Dict[str, str], conn: duck
         plugin_class = getattr(module, "MXCPPlugin")
         if not issubclass(plugin_class, MXCPBasePlugin):
             raise AttributeError(f"Plugin class in {module_path} must inherit from MXCPBasePlugin")
-        return plugin_class(name, config, conn)
+        
+        # Check if the plugin constructor supports user_context parameter
+        constructor_sig = inspect.signature(plugin_class.__init__)
+        supports_user_context = 'user_context' in constructor_sig.parameters
+        
+        if supports_user_context:
+            logger.debug(f"Plugin {module_path} supports user context")
+            return plugin_class(config, user_context=user_context)
+        else:
+            logger.debug(f"Plugin {module_path} does not support user context (backward compatibility mode)")
+            return plugin_class(config)
+            
     except ImportError as e:
         raise ImportError(f"Failed to import plugin module {module_path}: {e}")
     except AttributeError as e:
         raise AttributeError(f"Module {module_path} must contain an MXCPPlugin class: {e}")
 
-def load_plugins(site_config: SiteConfig, user_config: UserConfig, project: str, profile: str, conn: duckdb.DuckDBPyConnection) -> Dict[str, MXCPBasePlugin]:
+def load_plugins(site_config: SiteConfig, user_config: UserConfig, project: str, profile: str, conn: duckdb.DuckDBPyConnection, user_context: Optional['UserContext'] = None) -> Dict[str, MXCPBasePlugin]:
     """Load all plugins specified in the site config.
     
     Args:
@@ -50,6 +64,7 @@ def load_plugins(site_config: SiteConfig, user_config: UserConfig, project: str,
         project: The current project name
         profile: The current profile name
         conn: The DuckDB connection object
+        user_context: Optional authenticated user context
         
     Returns:
         Dictionary mapping plugin names to their instances
@@ -79,9 +94,19 @@ def load_plugins(site_config: SiteConfig, user_config: UserConfig, project: str,
         else:
             plugin_config_dict = {}
         
-        # Load and instantiate the plugin
-        plugin = _load_plugin(module, name, plugin_config_dict, conn)
+        # Load and instantiate the plugin with user context
+        plugin = _load_plugin(module, plugin_config_dict, user_context)
         plugins[name] = plugin
-        logger.info(f"Loaded plugin {name} from {module}")
         
+        if user_context:
+            logger.info(f"Loaded plugin {name} from {module} with user context for {user_context.username}")
+        else:
+            logger.info(f"Loaded plugin {name} from {module}")
+        
+        udfs = plugin.udfs()
+        
+        for udf in udfs:
+            method_name = udf['name']
+            db_name = f"{method_name}_{name}"
+            conn.create_function(db_name, udf['method'], udf['args'], udf['return_type'])
     return plugins 
