@@ -17,6 +17,7 @@ class TestDefinition(TypedDict):
 class TypeDefinition(TypedDict):
     type: str
     format: Optional[str]  # email, uri, date, time, date-time, duration, timestamp
+    sensitive: Optional[bool]  # Whether this field contains sensitive data
     minLength: Optional[int]
     maxLength: Optional[int]
     minimum: Optional[float]
@@ -41,6 +42,7 @@ class ParamDefinition(TypedDict):
     enum: Optional[List[object]]
     # Type constraints inherited from TypeDefinition
     format: Optional[str]
+    sensitive: Optional[bool]  # Whether this parameter contains sensitive data
     minLength: Optional[int]
     maxLength: Optional[int]
     minItems: Optional[int]
@@ -48,6 +50,16 @@ class ParamDefinition(TypedDict):
     items: Optional[TypeDefinition]
     properties: Optional[dict[str, TypeDefinition]]
     required: Optional[List[str]]
+
+class PolicyRule(TypedDict):
+    condition: str
+    action: Literal["deny", "filter_fields", "mask_fields", "filter_sensitive_fields"]
+    reason: Optional[str]
+    fields: Optional[List[str]]  # For filter_fields and mask_fields actions
+
+class PoliciesDefinition(TypedDict):
+    input: Optional[List[PolicyRule]]
+    output: Optional[List[PolicyRule]]
 
 class ToolDefinition(TypedDict):
     name: str
@@ -60,6 +72,7 @@ class ToolDefinition(TypedDict):
     source: SourceDefinition
     enabled: Optional[bool]
     tests: Optional[List[TestDefinition]]
+    policies: Optional[PoliciesDefinition]
 
 class ResourceDefinition(TypedDict):
     uri: str
@@ -72,6 +85,7 @@ class ResourceDefinition(TypedDict):
     source: SourceDefinition
     enabled: Optional[bool]
     tests: Optional[List[TestDefinition]]
+    policies: Optional[PoliciesDefinition]
 
 class PromptMessage(TypedDict):
     prompt: str
@@ -87,6 +101,7 @@ class PromptDefinition(TypedDict):
     messages: List[PromptMessage]
     enabled: Optional[bool]
     tests: Optional[List[TestDefinition]]
+    policies: Optional[PoliciesDefinition]
 
 class EndpointDefinition(TypedDict):
     mxcp: str

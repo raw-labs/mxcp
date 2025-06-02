@@ -148,6 +148,16 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         relative_path = Path(path).name
     
     try:
+        # First, validate against JSON schema
+        schema_path = Path(__file__).parent / "schemas" / "endpoint-schema-1.0.0.json"
+        with open(schema_path) as schema_file:
+            schema = json.load(schema_file)
+        
+        try:
+            jsonschema_validate(instance=endpoint, schema=schema)
+        except Exception as e:
+            return {"status": "error", "path": relative_path, "message": f"Schema validation error: {str(e)}"}
+        
         # Determine endpoint type and name
         endpoint_type = None
         name = None

@@ -18,9 +18,6 @@ class SiteDbtConfig(TypedDict, total=False):
 class SiteSqlToolsConfig(TypedDict, total=False):
     enabled: Optional[bool]
 
-class SitePythonConfig(TypedDict, total=False):
-    path: Optional[str]
-
 class SiteDuckDBConfig(TypedDict, total=False):
     path: Optional[str]
     readonly: Optional[bool]
@@ -40,7 +37,6 @@ class SiteConfig(TypedDict):
     plugin: Optional[List[SitePluginDefinition]]
     extensions: Optional[List[Union[str, SiteExtensionDefinition]]]
     dbt: Optional[SiteDbtConfig]
-    python: Optional[SitePythonConfig]
     sql_tools: Optional[SiteSqlToolsConfig]
     profiles: Dict[str, SiteProfileConfig]
 

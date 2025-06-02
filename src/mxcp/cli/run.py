@@ -9,28 +9,35 @@ from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config, get_active_profile
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.config.analytics import track_command_with_timing
+from mxcp.auth.providers import UserContext
 
 @click.command(name="run")
 @click.argument("endpoint_type", type=click.Choice([t.value for t in EndpointType]))
 @click.argument("name")
 @click.option("--param", "-p", multiple=True, help="Parameter in format name=value or name=@file.json for complex values")
+@click.option("--user-context", "-u", help="User context as JSON string or @file.json")
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--skip-output-validation", is_flag=True, help="Skip output validation against the return type definition")
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("run")
-def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool, readonly: bool):
+def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_context: Optional[str], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool, readonly: bool):
     """Run an endpoint (tool, resource, or prompt).
     
     Parameters can be provided in two ways:
     1. Simple values: --param name=value
     2. Complex values from JSON file: --param name=@file.json
     
+    User context can be provided for policy enforcement:
+    --user-context '{"user_id": "123", "role": "admin", "permissions": ["read", "write"]}'
+    --user-context @user_context.json
+    
     Examples:
         mxcp run tool my_tool --param name=value
         mxcp run tool my_tool --param complex=@data.json
         mxcp run tool my_tool --readonly
+        mxcp run tool my_tool --user-context '{"role": "admin"}'
     """
     # Get values from environment variables if not set by flags
     if not profile:
@@ -47,6 +54,37 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
         user_config = load_user_config(site_config)
         
         profile_name = profile or site_config["profile"]
+        
+        # Parse user context if provided
+        user_context_obj = None
+        if user_context:
+            if user_context.startswith("@"):
+                # Load from file
+                file_path = Path(user_context[1:])
+                if not file_path.exists():
+                    raise click.BadParameter(f"User context file not found: {file_path}")
+                try:
+                    with open(file_path) as f:
+                        context_data = json.load(f)
+                except json.JSONDecodeError as e:
+                    raise click.BadParameter(f"Invalid JSON in user context file {file_path}: {e}")
+            else:
+                # Parse as JSON string
+                try:
+                    context_data = json.loads(user_context)
+                except json.JSONDecodeError as e:
+                    raise click.BadParameter(f"Invalid JSON in user context: {e}")
+            
+            # Create UserContext object from the data
+            user_context_obj = UserContext(
+                provider="cli",  # Special provider for CLI usage
+                user_id=context_data.get("user_id", "cli_user"),
+                username=context_data.get("username", "cli_user"),
+                email=context_data.get("email"),
+                name=context_data.get("name"),
+                avatar_url=context_data.get("avatar_url"),
+                raw_profile=context_data  # Store full context for policy access
+            )
         
         # Parse parameters
         params: Dict[str, Any] = {}
@@ -74,7 +112,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], profile:
             params[key] = value
             
         # Execute endpoint
-        result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name, validate_output=not skip_output_validation, readonly=readonly))
+        result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name, validate_output=not skip_output_validation, readonly=readonly, user_context=user_context_obj))
         
         # Output result
         output_result(result, json_output, debug)

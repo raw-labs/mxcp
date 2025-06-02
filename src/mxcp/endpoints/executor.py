@@ -11,14 +11,20 @@ from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.endpoints.loader import find_repo_root, EndpointLoader
 from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
+from mxcp.policies import PolicyEnforcer, PolicyEnforcementError, parse_policies_from_config
 import re
 import numpy as np
+import asyncio
+import logging
+import pandas as pd
 
 if TYPE_CHECKING:
     from mxcp.auth.providers import UserContext
 
 # Import the context function
 from mxcp.auth.context import get_user_context
+
+logger = logging.getLogger(__name__)
 
 class EndpointType(Enum):
     TOOL = "tool"
@@ -76,13 +82,32 @@ class TypeConverter:
             return None
             
         if param_type == "string":
+            # Handle pandas Timestamp objects that come from DuckDB
+            if hasattr(value, 'strftime'):
+                # It's a datetime-like object (pandas Timestamp, datetime, etc.)
+                if param_format == "date":
+                    return value.strftime("%Y-%m-%d")
+                elif param_format == "date-time":
+                    return value.isoformat()
+                elif param_format == "time":
+                    return value.strftime("%H:%M:%S")
+                else:
+                    # Default to ISO format for datetime objects
+                    return value.isoformat()
+            
             # Handle string format annotations
             if param_format == "date-time":
                 return datetime.fromisoformat(value.replace("Z", "+00:00"))
             elif param_format == "date":
-                return datetime.strptime(value, "%Y-%m-%d").date()
+                if isinstance(value, str):
+                    return datetime.strptime(value, "%Y-%m-%d").date()
+                else:
+                    return value  # Already a date object
             elif param_format == "time":
-                return datetime.strptime(value, "%H:%M:%S").time()
+                if isinstance(value, str):
+                    return datetime.strptime(value, "%H:%M:%S").time()
+                else:
+                    return value  # Already a time object
             elif param_format == "email":
                 if not re.match(r"[^@]+@[^@]+\.[^@]+", value):
                     raise SchemaError(f"Invalid email format: {value}")
@@ -205,7 +230,13 @@ class TypeConverter:
                 elif not param_def.get("additionalProperties", True):
                     raise SchemaError(f"Unexpected property: {k}")
                 else:
-                    result[k] = v
+                    # For additional properties, handle special types like pandas Timestamp
+                    if isinstance(v, pd.Timestamp):
+                        result[k] = v.strftime("%Y-%m-%d")
+                    elif hasattr(v, 'isoformat'):
+                        result[k] = v.isoformat()
+                    else:
+                        result[k] = v
             
             return result
             
@@ -229,6 +260,11 @@ class EndpointExecutor:
         self.user_config = user_config
         self.site_config = site_config
         self.session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
+        self.policy_enforcer: Optional[PolicyEnforcer] = None
+        
+        # Track policy decisions for audit logging
+        self.last_policy_decision: str = "n/a"
+        self.last_policy_reason: Optional[str] = None
         
     def _load_endpoint(self):
         """Load the endpoint definition from YAML file"""
@@ -245,6 +281,14 @@ class EndpointExecutor:
         if self.endpoint_type.value not in self.endpoint:
             raise ValueError(f"Endpoint type {self.endpoint_type.value} not found in definition")
             
+        # Initialize policy enforcer if policies are defined
+        endpoint_def = self.endpoint[self.endpoint_type.value]
+        policies_config = endpoint_def.get("policies")
+        if policies_config:
+            policy_set = parse_policies_from_config(policies_config)
+            if policy_set:
+                self.policy_enforcer = PolicyEnforcer(policy_set)
+
     def _validate_parameters(self, params: Dict[str, Any]):
         """Validate input parameters against endpoint definition"""
         if not self.endpoint:
@@ -329,12 +373,13 @@ class EndpointExecutor:
         repo_root = find_repo_root()
         return get_endpoint_source_code(self.endpoint, self.endpoint_type.value, self.endpoint_file_path, repo_root)
             
-    async def execute(self, params: Dict[str, Any], validate_output: bool = True) -> EndpointResult:
+    async def execute(self, params: Dict[str, Any], validate_output: bool = True, user_context: Optional['UserContext'] = None) -> EndpointResult:
         """Execute the endpoint with given parameters.
         
         Args:
             params: Dictionary of parameter name/value pairs
             validate_output: Whether to validate the output against the return type definition (default: True)
+            user_context: Optional user context for policy enforcement
         
         Returns:
             For tools and resources: 
@@ -353,6 +398,18 @@ class EndpointExecutor:
         # Validate parameters
         self._validate_parameters(params)
         
+        # Enforce input policies
+        if self.policy_enforcer:
+            try:
+                self.policy_enforcer.enforce_input_policies(user_context, params)
+                self.last_policy_decision = "allow"  # If we get here, policies allowed it
+            except PolicyEnforcementError as e:
+                # Track the denial
+                self.last_policy_decision = "deny"
+                self.last_policy_reason = e.reason
+                # Re-raise with more context
+                raise ValueError(f"Policy enforcement failed: {e.reason}")
+        
         # Get DuckDB connection
         conn = self.session.connect()
         
@@ -369,11 +426,14 @@ class EndpointExecutor:
                 
                 # Convert to DataFrame and then to list of dicts to preserve column names
                 result = conn.execute(source, params).fetchdf().to_dict("records")
+                logger.debug(f"SQL query returned {len(result)} rows")
+                logger.debug(f"First row (if any): {result[0] if result else 'No rows'}")
                 
                 # Transform result based on return type if specified
                 endpoint_def = self.endpoint[self.endpoint_type.value]
                 if "return" in endpoint_def:
                     return_type = endpoint_def["return"].get("type")
+                    logger.debug(f"Expected return type: {return_type}")
                     
                     if return_type != "array":
                         if len(result) == 0:
@@ -386,14 +446,33 @@ class EndpointExecutor:
                         
                         if return_type == "object":
                             result = row
+                            logger.debug(f"Transformed to object: {result}")
                         else:  # scalar type
                             if len(row) != 1:
                                 raise ValueError(f"SQL query returned multiple columns ({len(row)}), but return type is '{return_type}'")
                             result = next(iter(row.values()))
+                            logger.debug(f"Transformed to scalar: {result}")
                 
                 # Validate the output against the return type definition if enabled
                 if validate_output:
+                    logger.debug(f"Validating output of type {type(result).__name__}")
                     self._validate_return(result)
+                
+                # Enforce output policies
+                if self.policy_enforcer:
+                    try:
+                        logger.debug(f"Enforcing output policies on result: {result}")
+                        result, action = self.policy_enforcer.enforce_output_policies(user_context, result, endpoint_def)
+                        if action:
+                            self.last_policy_decision = action
+                        logger.debug(f"Result after policy enforcement: {result}")
+                    except PolicyEnforcementError as e:
+                        # Track the denial
+                        self.last_policy_decision = "deny"
+                        self.last_policy_reason = e.reason
+                        # Re-raise with more context
+                        raise ValueError(f"Output policy enforcement failed: {e.reason}")
+                
                 return result
                 
             else:  # PROMPT
@@ -413,6 +492,19 @@ class EndpointExecutor:
                     }
                     processed_messages.append(processed_msg)
                 
+                # Enforce output policies for prompts too
+                if self.policy_enforcer:
+                    try:
+                        processed_messages, action = self.policy_enforcer.enforce_output_policies(user_context, processed_messages, prompt_def)
+                        if action:
+                            self.last_policy_decision = action
+                    except PolicyEnforcementError as e:
+                        # Track the denial
+                        self.last_policy_decision = "deny"
+                        self.last_policy_reason = e.reason
+                        # Re-raise with more context
+                        raise ValueError(f"Output policy enforcement failed: {e.reason}")
+                
                 return processed_messages
                 
         finally:
@@ -430,19 +522,24 @@ class EndpointExecutor:
         return_def = endpoint_def["return"]
         return_type = return_def.get("type")
         
+        logger.debug(f"_validate_return: output={output}, type={type(output).__name__}")
+        logger.debug(f"_validate_return: return_def={return_def}")
+        
         try:
             TypeConverter.convert_value(output, return_def)
         except SchemaError as e:
             # Schema errors are already user-friendly
+            logger.error(f"_validate_return: SchemaError: {e}")
             raise e
         except Exception as e:
             # For any other errors, provide a generic type mismatch message
             expected_type = return_def.get("type", "unknown")
             actual_type = TypeConverter.python_type_to_schema_type(type(output).__name__)
             error_msg = f"Output validation failed: Expected return type '{expected_type}', but received '{actual_type}'"
+            logger.error(f"_validate_return: Generic error: {e}, error_msg={error_msg}")
             raise SchemaError(error_msg) from e
 
-async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, readonly: Optional[bool] = None) -> EndpointResult:
+async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, readonly: Optional[bool] = None, user_context: Optional['UserContext'] = None) -> EndpointResult:
     """Execute an endpoint by type and name.
     
     Args:
@@ -453,6 +550,7 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
         site_config: The site configuration
         profile: Optional profile name to override the default profile
         readonly: Whether to open DuckDB connection in read-only mode
+        user_context: Optional user context for policy enforcement
         
     Returns:
         For tools and resources: List[Dict[str, Any]] where each dict represents a row with column names as keys
@@ -464,4 +562,4 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
         raise ValueError(f"Invalid endpoint type: {endpoint_type}. Must be one of: {', '.join(t.value for t in EndpointType)}")
         
     executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config, profile, readonly=readonly)
-    return await executor.execute(params) 
+    return await executor.execute(params, user_context=user_context) 

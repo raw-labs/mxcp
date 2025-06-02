@@ -2,6 +2,8 @@ from typing import Any, Dict, Optional, List, Literal, Union
 import json
 import logging
 import traceback
+import time
+from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mxcp.endpoints.loader import EndpointLoader
@@ -15,6 +17,7 @@ from mxcp.auth.providers import create_oauth_handler, GeneralOAuthAuthorizationS
 from mxcp.auth.middleware import AuthenticationMiddleware
 from mxcp.auth.context import get_user_context
 from mxcp.auth.url_utils import create_url_builder
+from mxcp.audit import AuditLogger
 from mcp.types import ToolAnnotations
 from pydantic import Field, BaseModel, create_model
 from typing import Annotated
@@ -167,6 +170,30 @@ class RAWMCP:
             
         # Cache for dynamically created models
         self._model_cache = {}
+
+        # Initialize audit logger if enabled
+        profile_config = self.site_config["profiles"][self.profile_name]
+        audit_config = profile_config.get("audit", {})
+        if audit_config.get("enabled", False):
+            self.audit_logger = AuditLogger(
+                log_path=Path(audit_config["path"]),
+                enabled=True
+            )
+        else:
+            self.audit_logger = None
+        
+        # Store transport mode (will be set during run())
+        self.transport_mode = None
+
+    def shutdown(self):
+        """Shutdown the server gracefully."""
+        logger.info("Shutting down MXCP server...")
+        
+        # Shutdown audit logger if initialized
+        if self.audit_logger:
+            self.audit_logger.shutdown()
+        
+        logger.info("MXCP server shutdown complete")
 
     def _sanitize_model_name(self, name: str) -> str:
         """Sanitize a name to be a valid Python class name."""
@@ -487,6 +514,10 @@ class RAWMCP:
         # Body of the handler: receives **kwargs with those exact names
         # -------------------------------------------------------------------
         async def _body(**kwargs):
+            start_time = time.time()
+            status = "success"
+            error_msg = None
+            
             try:
                 # Get the user context from the context variable (set by auth middleware)
                 user_context = get_user_context()
@@ -511,13 +542,52 @@ class RAWMCP:
                     self.profile_name,
                     readonly=self.readonly
                 )
-                result = await exec_.execute(converted)
+                result = await exec_.execute(converted, user_context=user_context)
                 logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                 return result
 
             except Exception as e:
+                status = "error"
+                error_msg = str(e)
                 logger.error(f"Error executing {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))}:\n{traceback.format_exc()}")
                 raise
+            finally:
+                # Calculate duration
+                duration_ms = int((time.time() - start_time) * 1000)
+                
+                # Determine caller type based on transport
+                # Check if we're in HTTP mode by looking for transport_mode
+                if hasattr(self, 'transport_mode') and self.transport_mode:
+                    if self.transport_mode == "stdio":
+                        caller = "stdio"
+                    else:
+                        caller = "http"  # streamable-http or other HTTP transports
+                else:
+                    # Fallback to http if transport mode not set
+                    caller = "http"
+                
+                # Get policy decision from executor if available
+                policy_decision = "n/a"
+                policy_reason = None
+                if hasattr(exec_, 'last_policy_decision'):
+                    policy_decision = exec_.last_policy_decision
+                if hasattr(exec_, 'last_policy_reason'):
+                    policy_reason = exec_.last_policy_reason
+                
+                # Log the audit event
+                if self.audit_logger:
+                    self.audit_logger.log_event(
+                        caller=caller,
+                        event_type=endpoint_key,  # "tool", "resource", or "prompt"
+                        name=endpoint_def.get('name', endpoint_def.get('uri', 'unknown')),
+                        input_params=kwargs,
+                        duration_ms=duration_ms,
+                        policy_decision=policy_decision,
+                        reason=policy_reason,
+                        status=status,
+                        error=error_msg,
+                        endpoint_def=endpoint_def  # Pass the endpoint definition for schema-based redaction
+                    )
 
         # -------------------------------------------------------------------
         # Wrap with authentication middleware
@@ -625,20 +695,44 @@ class RAWMCP:
             Returns:
                 List of records as dictionaries
             """
-            user_context = get_user_context()
-            if user_context:
-                logger.info(f"User {user_context.username} executing SQL query")
+            start_time = time.time()
+            status = "success"
+            error_msg = None
             
-            session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
             try:
-                conn = session.connect()
-                result = conn.execute(sql).fetchdf()
-                return result.to_dict("records")
-            except Exception as e:
-                logger.error(f"Error executing SQL query: {e}")
-                raise
+                user_context = get_user_context()
+                if user_context:
+                    logger.info(f"User {user_context.username} executing SQL query")
+                
+                session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
+                try:
+                    conn = session.connect()
+                    result = conn.execute(sql).fetchdf()
+                    return result.to_dict("records")
+                except Exception as e:
+                    status = "error"
+                    error_msg = str(e)
+                    logger.error(f"Error executing SQL query: {e}")
+                    raise
+                finally:
+                    session.close()
             finally:
-                session.close()
+                # Log audit event
+                duration_ms = int((time.time() - start_time) * 1000)
+                if self.audit_logger:
+                    # Determine caller type
+                    caller = "stdio" if self.transport_mode == "stdio" else "http"
+                    self.audit_logger.log_event(
+                        caller=caller,
+                        event_type="tool",
+                        name="execute_sql_query",
+                        input_params={"sql": sql},
+                        duration_ms=duration_ms,
+                        policy_decision="n/a",
+                        reason=None,
+                        status=status,
+                        error=error_msg
+                    )
 
         # Register table list tool with proper metadata
         @self.mcp.tool(
@@ -659,27 +753,51 @@ class RAWMCP:
             Returns:
                 List of tables with their names and types
             """
-            user_context = get_user_context()
-            if user_context:
-                logger.info(f"User {user_context.username} listing tables")
-                
-            session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
+            start_time = time.time()
+            status = "success"
+            error_msg = None
+            
             try:
-                conn = session.connect()
-                result = conn.execute("""
-                    SELECT 
-                        table_name as name,
-                        table_type as type
-                    FROM information_schema.tables
-                    WHERE table_schema = 'main'
-                    ORDER BY table_name
-                """).fetchdf()
-                return result.to_dict("records")
-            except Exception as e:
-                logger.error(f"Error listing tables: {e}")
-                raise
+                user_context = get_user_context()
+                if user_context:
+                    logger.info(f"User {user_context.username} listing tables")
+                    
+                session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
+                try:
+                    conn = session.connect()
+                    result = conn.execute("""
+                        SELECT 
+                            table_name as name,
+                            table_type as type
+                        FROM information_schema.tables
+                        WHERE table_schema = 'main'
+                        ORDER BY table_name
+                    """).fetchdf()
+                    return result.to_dict("records")
+                except Exception as e:
+                    status = "error"
+                    error_msg = str(e)
+                    logger.error(f"Error listing tables: {e}")
+                    raise
+                finally:
+                    session.close()
             finally:
-                session.close()
+                # Log audit event
+                duration_ms = int((time.time() - start_time) * 1000)
+                if self.audit_logger:
+                    # Determine caller type
+                    caller = "stdio" if self.transport_mode == "stdio" else "http"
+                    self.audit_logger.log_event(
+                        caller=caller,
+                        event_type="tool",
+                        name="list_tables",
+                        input_params={},
+                        duration_ms=duration_ms,
+                        policy_decision="n/a",
+                        reason=None,
+                        status=status,
+                        error=error_msg
+                    )
 
         # Register schema tool with proper metadata
         @self.mcp.tool(
@@ -703,28 +821,52 @@ class RAWMCP:
             Returns:
                 List of columns with their names and types
             """
-            user_context = get_user_context()
-            if user_context:
-                logger.info(f"User {user_context.username} getting schema for table {table_name}")
-                
-            session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
+            start_time = time.time()
+            status = "success"
+            error_msg = None
+            
             try:
-                conn = session.connect()
-                result = conn.execute("""
-                    SELECT 
-                        column_name as name,
-                        data_type as type,
-                        is_nullable as nullable
-                    FROM information_schema.columns
-                    WHERE table_name = ?
-                    ORDER BY ordinal_position
-                """, [table_name]).fetchdf()
-                return result.to_dict("records")
-            except Exception as e:
-                logger.error(f"Error getting table schema: {e}")
-                raise
+                user_context = get_user_context()
+                if user_context:
+                    logger.info(f"User {user_context.username} getting schema for table {table_name}")
+                    
+                session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
+                try:
+                    conn = session.connect()
+                    result = conn.execute("""
+                        SELECT 
+                            column_name as name,
+                            data_type as type,
+                            is_nullable as nullable
+                        FROM information_schema.columns
+                        WHERE table_name = ?
+                        ORDER BY ordinal_position
+                    """, [table_name]).fetchdf()
+                    return result.to_dict("records")
+                except Exception as e:
+                    status = "error"
+                    error_msg = str(e)
+                    logger.error(f"Error getting table schema: {e}")
+                    raise
+                finally:
+                    session.close()
             finally:
-                session.close()
+                # Log audit event
+                duration_ms = int((time.time() - start_time) * 1000)
+                if self.audit_logger:
+                    # Determine caller type
+                    caller = "stdio" if self.transport_mode == "stdio" else "http"
+                    self.audit_logger.log_event(
+                        caller=caller,
+                        event_type="tool",
+                        name="get_table_schema",
+                        input_params={"table_name": table_name},
+                        duration_ms=duration_ms,
+                        policy_decision="n/a",
+                        reason=None,
+                        status=status,
+                        error=error_msg
+                    )
 
         logger.info("Registered built-in DuckDB features")
 
@@ -780,6 +922,8 @@ class RAWMCP:
         """
         try:
             logger.info("Starting MCP server...")
+            # Store transport mode for use in handlers
+            self.transport_mode = transport
             # Register all endpoints
             self.register_endpoints()
             logger.info("Endpoints registered successfully.")

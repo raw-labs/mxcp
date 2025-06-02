@@ -188,12 +188,6 @@ dbt:
 > - DuckDB persistent tables
 > - External caching layers
 
-### Python Configuration
-```yaml
-python:
-  path: "bootstrap.py"  # Path to Python bootstrap file
-```
-
 ### Profile-Specific Settings
 ```yaml
 profiles:
@@ -281,6 +275,15 @@ tool:
         - key: "param2"
           value: 42
       result: "expected result"
+  policies:  # Optional: Define access control policies
+    input:
+      - condition: "user.role in ['admin', 'user']"
+        action: deny
+        reason: "Only admins and users can access this tool"
+    output:
+      - condition: "user.role != 'admin'"
+        action: filter_fields
+        fields: ["sensitive_data"]
 ```
 
 ### Resource Definition
@@ -306,6 +309,11 @@ resource:
   source:
     file: "my_resource.sql"
   enabled: true
+  policies:  # Optional: Define access control policies
+    input:
+      - condition: "!('resource.read' in user.permissions)"
+        action: deny
+        reason: "Missing resource.read permission"
 ```
 
 ### Prompt Definition
@@ -326,7 +334,24 @@ prompt:
     - role: "user"
       type: "text"
       prompt: "Hello, {{ name }}!"
+  policies:  # Optional: Define access control policies
+    input:
+      - condition: "user.role == 'guest'"
+        action: deny
+        reason: "Guests cannot use AI prompts"
 ```
+
+### Policy Enforcement
+
+MXCP supports policy-based access control for endpoints. Policies can control who can access endpoints and what data they can see.
+
+**Key features:**
+- Input policies: Control access before execution
+- Output policies: Filter or mask sensitive data
+- CEL expressions: Flexible condition evaluation
+- User context: Role-based and permission-based access
+
+For detailed information on policy configuration and examples, see the [Policy Enforcement Guide](policies.md).
 
 ## SQL Source Files
 

@@ -26,6 +26,7 @@ dependencies = [
     "dbt-duckdb>=1.6.0",  # dbt DuckDB adapter
     "pygls>=1.0.0",  # Python Language Server Protocol implementation
     "lsprotocol>=2023.0.0",  # Language Server Protocol types for pygls
+    "cel-python>=0.2.0"  # Common Expression Language for policy enforcement
 ]
 
 [project.scripts]
@@ -50,7 +51,7 @@ vault = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["mxcp", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.server", "mxcp.lsp"]
+packages = ["mxcp", "mxcp.audit", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.server", "mxcp.auth", "mxcp.drift", "mxcp.endpoints", "mxcp.engine", "mxcp.plugins", "mxcp.policies", "mxcp.lsp"]
 include-package-data = true
 
 [tool.setuptools.package-data]

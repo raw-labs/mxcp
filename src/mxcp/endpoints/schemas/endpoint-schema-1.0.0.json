@@ -135,6 +135,10 @@
               "result": { "description": "Expected result." }
             }
           }
+        },
+        "policies": {
+          "$ref": "#/definitions/policySet",
+          "description": "Policy definitions for access control and data filtering."
         }
       }
     },
@@ -215,6 +219,10 @@
               "result": { "description": "Expected result." }
             }
           }
+        },
+        "policies": {
+          "$ref": "#/definitions/policySet",
+          "description": "Policy definitions for access control and data filtering."
         }
       }
     },
@@ -306,6 +314,11 @@
           "enum": ["email", "uri", "date", "time", "date-time", "duration", "timestamp"],
           "description": "Expected format for string values."
         },
+        "sensitive": {
+          "type": "boolean",
+          "description": "Whether this field contains sensitive data that should be redacted in logs and filtered by policies.",
+          "default": false
+        },
         "minLength": { 
           "type": "integer", 
           "minimum": 0, 
@@ -371,6 +384,51 @@
           "description": "Whether to allow additional properties not defined in the schema. Defaults to true if not specified."
         }
       }
+    },
+
+    "policySet": {
+      "type": "object",
+      "description": "Policy definitions for endpoint access control and data filtering.",
+      "properties": {
+        "input": {
+          "type": "array",
+          "description": "Input policies evaluated before endpoint execution.",
+          "items": { "$ref": "#/definitions/policyDefinition" }
+        },
+        "output": {
+          "type": "array", 
+          "description": "Output policies evaluated after endpoint execution.",
+          "items": { "$ref": "#/definitions/policyDefinition" }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "policyDefinition": {
+      "type": "object",
+      "required": ["condition", "action"],
+      "description": "A single policy rule definition.",
+      "properties": {
+        "condition": {
+          "type": "string",
+          "description": "CEL expression that determines when this policy applies."
+        },
+        "action": {
+          "type": "string",
+          "enum": ["deny", "filter_fields", "mask_fields", "filter_sensitive_fields"],
+          "description": "Action to take when the condition is true."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable explanation for the policy action."
+        },
+        "fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of field names for filter_fields and mask_fields actions."
+        }
+      },
+      "additionalProperties": false
     }
   }
 }
