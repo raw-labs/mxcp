@@ -7,6 +7,7 @@ from mxcp.engine.plugin_loader import load_plugins
 from mxcp.plugins import MXCPBasePlugin
 from mxcp.auth.context import get_user_context
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,16 @@ class DuckDBSession:
         readonly = self.readonly
         if readonly is None:
             readonly = self.site_config["profiles"][profile]["duckdb"].get("readonly", False)
+            
+        # Handle read-only mode when database file doesn't exist
+        if readonly and db_path != ":memory:":
+            db_file = Path(db_path)
+            if not db_file.exists():
+                logger.info(f"Database file {db_path} doesn't exist. Creating it first before opening in read-only mode.")
+                # Create the database file first
+                temp_conn = duckdb.connect(db_path)
+                temp_conn.close()
+                logger.info(f"Created database file {db_path}")
             
         # Open connection with readonly flag if specified
         if readonly:
