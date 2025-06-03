@@ -56,7 +56,8 @@ class MXCPPlugin(MXCPBasePlugin):
             JSON string containing matching pages
         """
         logger.info(
-            f"Executing CQL query: {query} in space={space_key} with max_results={max_results}"
+            "Executing CQL query: %s in space=%s with max_results=%s",
+            query, space_key, max_results
         )
 
         # Build the CQL query
@@ -100,7 +101,7 @@ class MXCPPlugin(MXCPBasePlugin):
         Returns:
             JSON string containing matching pages
         """
-        logger.info(f"Searching pages with query: {query}, limit: {limit}")
+        logger.info("Searching pages with query: %s, limit: %s", query, limit)
 
         results = self.confluence.cql(cql=f'text ~ "{query}"', limit=limit, expand="version,space")
 
@@ -116,7 +117,7 @@ class MXCPPlugin(MXCPBasePlugin):
         Returns:
             JSON string containing page content
         """
-        logger.info(f"Getting page content for ID: {page_id}")
+        logger.info("Getting page content for ID: %s", page_id)
 
         page = self.confluence.get_page_by_id(page_id=page_id, expand="body.storage,body.view")
 
@@ -132,7 +133,7 @@ class MXCPPlugin(MXCPBasePlugin):
         Returns:
             JSON string containing child pages
         """
-        logger.info(f"Getting children for page ID: {page_id}")
+        logger.info("Getting children for page ID: %s", page_id)
 
         children = self.confluence.get_child_pages(page_id=page_id, expand="version,space")
 
@@ -161,7 +162,7 @@ class MXCPPlugin(MXCPBasePlugin):
         Returns:
             JSON string containing page metadata
         """
-        logger.info(f"Getting metadata for page ID: {page_id}")
+        logger.info("Getting metadata for page ID: %s", page_id)
 
         page = self.confluence.get_page_by_id(
             page_id=page_id, expand="version,space,metadata.labels"

@@ -49,7 +49,7 @@ class MXCPPlugin(MXCPBasePlugin):
         Returns:
             JSON string containing Jira issues matching the query
         """
-        logger.info(f"Executing JQL query: {query} with start={start}, limit={limit}")
+        logger.info("Executing JQL query: %s with start=%s, limit=%s", query, start, limit)
 
         raw = self.jira.jql(
             jql=query,
@@ -104,7 +104,7 @@ class MXCPPlugin(MXCPBasePlugin):
         Returns:
             JSON string containing the user details
         """
-        logger.info(f"Getting user details for username: {username}")
+        logger.info("Getting user details for username: %s", username)
         return json.dumps(self.jira.user_find_by_user_string(query=username))
 
     @udf
@@ -143,5 +143,5 @@ class MXCPPlugin(MXCPBasePlugin):
         Returns:
             JSON string containing the project details
         """
-        logger.info(f"Getting project details for key: {project_key}")
+        logger.info("Getting project details for key: %s", project_key)
         return json.dumps(self.jira.project(project_key))
