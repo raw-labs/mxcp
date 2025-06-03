@@ -12,12 +12,13 @@ from mxcp.plugins import MXCPBasePlugin, udf
 
 logger = logging.getLogger(__name__)
 
+
 class MXCPPlugin(MXCPBasePlugin):
     """Jira plugin that provides JQL query functionality."""
-    
+
     def __init__(self, config: Dict[str, Any]):
         """Initialize the Jira plugin.
-        
+
         Args:
             config: Plugin configuration containing Jira API credentials
                 Required keys:
@@ -26,35 +27,29 @@ class MXCPPlugin(MXCPBasePlugin):
                 - password: Your Jira API token/password
         """
         super().__init__(config)
-        self.url = config.get('url', '')
-        self.username = config.get('username', '')
-        self.password = config.get('password', '')
-        
+        self.url = config.get("url", "")
+        self.username = config.get("username", "")
+        self.password = config.get("password", "")
+
         if not all([self.url, self.username, self.password]):
             raise ValueError("Jira plugin requires url, username, and password in configuration")
-        
+
         # Initialize Jira client
-        self.jira = Jira(
-            url=self.url,
-            username=self.username,
-            password=self.password,
-            cloud=True
-        )
-        
+        self.jira = Jira(url=self.url, username=self.username, password=self.password, cloud=True)
+
     @udf
     def jql_query(self, query: str, start: Optional[int] = 0, limit: Optional[int] = None) -> str:
         """Execute a JQL query against Jira.
-        
+
         Args:
             query: The JQL query string
             start: Starting index for pagination (default: 0)
             limit: Maximum number of results to return (default: None, meaning no limit)
-            
+
         Returns:
             JSON string containing Jira issues matching the query
         """
         logger.info(f"Executing JQL query: {query} with start={start}, limit={limit}")
-        
 
         raw = self.jira.jql(
             jql=query,
@@ -98,13 +93,14 @@ class MXCPPlugin(MXCPBasePlugin):
             )
 
         return json.dumps(cleaned)
+
     @udf
     def get_user(self, username: str) -> str:
         """Get details for a specific user by username.
-        
+
         Args:
             username: The username to search for
-            
+
         Returns:
             JSON string containing the user details
         """
@@ -129,20 +125,21 @@ class MXCPPlugin(MXCPBasePlugin):
                 {
                     "key": p.get("key"),
                     "name": p.get("name"),
-                    "type": p.get("projectTypeKey"),          # e.g. software, business
+                    "type": p.get("projectTypeKey"),  # e.g. software, business
                     "lead": safe_name(p.get("lead")),
-                    "url": p.get("self"),                    # REST URL (or None)
+                    "url": p.get("self"),  # REST URL (or None)
                 }
             )
 
         return json.dumps(concise)
+
     @udf
     def get_project(self, project_key: str) -> str:
         """Get details for a specific project by its key.
-        
+
         Args:
             project_key: The project key (e.g., 'TEST' for project TEST)
-            
+
         Returns:
             JSON string containing the project details
         """

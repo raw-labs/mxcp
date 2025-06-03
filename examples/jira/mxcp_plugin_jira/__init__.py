@@ -6,4 +6,4 @@ This plugin provides UDFs for querying Atlassian Jira using JQL.
 
 from .plugin import MXCPPlugin
 
-__all__ = ['MXCPPlugin'] 
+__all__ = ["MXCPPlugin"]
