@@ -3,11 +3,13 @@ import json
 import logging
 import traceback
 import time
+import threading
+import atexit
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mxcp.endpoints.loader import EndpointLoader
-from mxcp.endpoints.executor import EndpointExecutor, EndpointType
+from mxcp.endpoints.executor import EndpointExecutor, EndpointType, EndpointResult
 from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig, get_active_profile
 from mxcp.endpoints.schema import validate_endpoint
@@ -23,6 +25,7 @@ from pydantic import Field, BaseModel, create_model
 from typing import Annotated
 from starlette.responses import JSONResponse
 import re
+from mxcp.policies import PolicyEnforcementError
 
 logger = logging.getLogger(__name__)
 
@@ -184,16 +187,50 @@ class RAWMCP:
         
         # Store transport mode (will be set during run())
         self.transport_mode = None
+        
+        # Create shared DuckDB session and lock for thread-safety
+        logger.info("Creating shared DuckDB session for server...")
+        self.db_session = DuckDBSession(user_config, site_config, profile, readonly)
+        self.db_connection = self.db_session.connect()
+        self.db_lock = threading.Lock()
+        logger.info("Shared DuckDB session created successfully")
+        
+        # Register cleanup handler for atexit as a safety net
+        atexit.register(self.shutdown)
+        
+        # Track if we've already shut down to avoid double cleanup
+        self._shutdown_called = False
 
     def shutdown(self):
         """Shutdown the server gracefully."""
+        # Prevent double shutdown
+        if self._shutdown_called:
+            return
+        self._shutdown_called = True
+        
         logger.info("Shutting down MXCP server...")
         
-        # Shutdown audit logger if initialized
-        if self.audit_logger:
-            self.audit_logger.shutdown()
-        
-        logger.info("MXCP server shutdown complete")
+        try:
+            # Close DuckDB session first (most important)
+            if self.db_session:
+                try:
+                    self.db_session.close()
+                    logger.info("Closed DuckDB session and connection")
+                except Exception as e:
+                    logger.error(f"Error closing DuckDB session: {e}")
+            
+            # Shutdown audit logger if initialized
+            if self.audit_logger:
+                try:
+                    self.audit_logger.shutdown()
+                    logger.info("Closed audit logger")
+                except Exception as e:
+                    logger.error(f"Error closing audit logger: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}")
+        finally:
+            logger.info("MXCP server shutdown complete")
 
     def _sanitize_model_name(self, name: str) -> str:
         """Sanitize a name to be a valid Python class name."""
@@ -540,7 +577,9 @@ class RAWMCP:
                     self.user_config,
                     self.site_config,
                     self.profile_name,
-                    readonly=self.readonly
+                    readonly=self.readonly,
+                    session=self.db_session,
+                    db_lock=self.db_lock
                 )
                 result = await exec_.execute(converted, user_context=user_context)
                 logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
@@ -704,18 +743,15 @@ class RAWMCP:
                 if user_context:
                     logger.info(f"User {user_context.username} executing SQL query")
                 
-                session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
-                try:
-                    conn = session.connect()
-                    result = conn.execute(sql).fetchdf()
+                # Use shared connection with thread-safety
+                with self.db_lock:
+                    result = self.db_connection.execute(sql).fetchdf()
                     return result.to_dict("records")
-                except Exception as e:
-                    status = "error"
-                    error_msg = str(e)
-                    logger.error(f"Error executing SQL query: {e}")
-                    raise
-                finally:
-                    session.close()
+            except Exception as e:
+                status = "error"
+                error_msg = str(e)
+                logger.error(f"Error executing SQL query: {e}")
+                raise
             finally:
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)
@@ -762,10 +798,9 @@ class RAWMCP:
                 if user_context:
                     logger.info(f"User {user_context.username} listing tables")
                     
-                session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
-                try:
-                    conn = session.connect()
-                    result = conn.execute("""
+                # Use shared connection with thread-safety
+                with self.db_lock:
+                    result = self.db_connection.execute("""
                         SELECT 
                             table_name as name,
                             table_type as type
@@ -774,13 +809,11 @@ class RAWMCP:
                         ORDER BY table_name
                     """).fetchdf()
                     return result.to_dict("records")
-                except Exception as e:
-                    status = "error"
-                    error_msg = str(e)
-                    logger.error(f"Error listing tables: {e}")
-                    raise
-                finally:
-                    session.close()
+            except Exception as e:
+                status = "error"
+                error_msg = str(e)
+                logger.error(f"Error listing tables: {e}")
+                raise
             finally:
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)
@@ -830,10 +863,9 @@ class RAWMCP:
                 if user_context:
                     logger.info(f"User {user_context.username} getting schema for table {table_name}")
                     
-                session = DuckDBSession(self.user_config, self.site_config, self.profile_name, readonly=self.readonly)
-                try:
-                    conn = session.connect()
-                    result = conn.execute("""
+                # Use shared connection with thread-safety
+                with self.db_lock:
+                    result = self.db_connection.execute("""
                         SELECT 
                             column_name as name,
                             data_type as type,
@@ -843,13 +875,11 @@ class RAWMCP:
                         ORDER BY ordinal_position
                     """, [table_name]).fetchdf()
                     return result.to_dict("records")
-                except Exception as e:
-                    status = "error"
-                    error_msg = str(e)
-                    logger.error(f"Error getting table schema: {e}")
-                    raise
-                finally:
-                    session.close()
+            except Exception as e:
+                status = "error"
+                error_msg = str(e)
+                logger.error(f"Error getting table schema: {e}")
+                raise
             finally:
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)

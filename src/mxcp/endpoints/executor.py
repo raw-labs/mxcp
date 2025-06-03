@@ -17,6 +17,7 @@ import numpy as np
 import asyncio
 import logging
 import pandas as pd
+import threading
 
 if TYPE_CHECKING:
     from mxcp.auth.providers import UserContext
@@ -243,7 +244,9 @@ class TypeConverter:
         return value
 
 class EndpointExecutor:
-    def __init__(self, endpoint_type: EndpointType, name: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, readonly: Optional[bool] = None):
+    def __init__(self, endpoint_type: EndpointType, name: str, user_config: UserConfig, site_config: SiteConfig, 
+                 profile: Optional[str] = None, readonly: Optional[bool] = None, session: Optional[DuckDBSession] = None,
+                 db_lock: Optional[threading.Lock] = None):
         """Initialize the endpoint executor.
         
         Args:
@@ -253,13 +256,24 @@ class EndpointExecutor:
             site_config: The site configuration
             profile: Optional profile name to override the default profile
             readonly: Whether to open DuckDB connection in read-only mode
+            session: Optional existing DuckDB session to reuse (if not provided, creates a new one)
+            db_lock: Optional threading lock for thread-safe database access (only needed with shared session)
         """
         self.endpoint_type = endpoint_type
         self.name = name
         self.endpoint: Optional[EndpointDefinition] = None
         self.user_config = user_config
         self.site_config = site_config
-        self.session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
+        
+        # Handle session creation or reuse
+        if session is not None:
+            self.session = session
+            self.owns_session = False  # Don't close a session we didn't create
+        else:
+            self.session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
+            self.owns_session = True  # We created it, so we should close it
+        
+        self.db_lock = db_lock  # Store the lock for thread-safe access
         self.policy_enforcer: Optional[PolicyEnforcer] = None
         
         # Track policy decisions for audit logging
@@ -424,8 +438,13 @@ class EndpointExecutor:
                 if missing_params:
                     raise ValueError(f"Required parameter missing: {', '.join(missing_params)}")
                 
-                # Convert to DataFrame and then to list of dicts to preserve column names
-                result = conn.execute(source, params).fetchdf().to_dict("records")
+                # Execute query with thread-safety if lock is provided
+                if self.db_lock:
+                    with self.db_lock:
+                        result = conn.execute(source, params).fetchdf().to_dict("records")
+                else:
+                    result = conn.execute(source, params).fetchdf().to_dict("records")
+                    
                 logger.debug(f"SQL query returned {len(result)} rows")
                 logger.debug(f"First row (if any): {result[0] if result else 'No rows'}")
                 
@@ -508,7 +527,8 @@ class EndpointExecutor:
                 return processed_messages
                 
         finally:
-            self.session.close()
+            if self.owns_session:
+                self.session.close()
             
     def _validate_return(self, output: EndpointResult) -> None:
         """Validate the output against the return type definition if present."""

@@ -22,6 +22,23 @@ class DuckDBSession:
         self.readonly = readonly
         self.plugins: Dict[str, MXCPBasePlugin] = {}
         
+    def __enter__(self):
+        """Context manager entry"""
+        self.connect()
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensure connection is closed"""
+        self.close()
+        
+    def __del__(self):
+        """Destructor - ensure connection is closed if object is garbage collected"""
+        try:
+            self.close()
+        except Exception:
+            # Ignore errors during cleanup in destructor
+            pass
+        
     def _get_project_profile(self) -> tuple[str, str]:
         """Get the current project and profile from site config"""
         if not self.site_config:
@@ -140,5 +157,10 @@ class DuckDBSession:
     def close(self):
         """Close the DuckDB connection"""
         if self.conn:
-            self.conn.close()
-            self.conn = None
+            try:
+                self.conn.close()
+                logger.debug("DuckDB connection closed successfully")
+            except Exception as e:
+                logger.error(f"Error closing DuckDB connection: {e}")
+            finally:
+                self.conn = None
