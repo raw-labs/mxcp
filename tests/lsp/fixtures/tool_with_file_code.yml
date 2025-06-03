@@ -1,0 +1,26 @@
+mxcp: 1.0.0
+
+tool:
+  name: "query_recent_earthquakes"
+  description: "Query earthquakes over a given magnitude threshold."
+  tags: ["earthquake", "filter"]
+  parameters:
+    - name: min_magnitude
+      type: number
+      description: "Minimum magnitude"
+      default: 2.5
+  return:
+    type: array
+    items:
+      type: object
+  source: test.sql
+  annotations:
+    title: "Query Significant Earthquakes"
+    readOnlyHint: true
+    idempotentHint: true
+    openWorldHint: true
+  tests:
+    - name: filter-mag
+      arguments:
+        - key: min_magnitude
+          value: 5.5
