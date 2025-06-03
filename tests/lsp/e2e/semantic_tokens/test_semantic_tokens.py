@@ -7,6 +7,30 @@ from lsprotocol.types import (
 )
 from pytest_lsp import LanguageClient
 from pathlib import Path
+import tempfile
+import os
+from contextlib import contextmanager
+
+
+@contextmanager
+def temporary_yaml_file(content: str, filename: str = None):
+    """Context manager for creating temporary YAML files in the test directory"""
+    if filename is None:
+        # Use a temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
+            f.write(content)
+            temp_path = Path(f.name)
+    else:
+        # Use a specific filename in current directory
+        temp_path = Path(filename)
+        with open(temp_path, 'w') as f:
+            f.write(content)
+    
+    try:
+        yield temp_path
+    finally:
+        # Always clean up the temporary file
+        temp_path.unlink(missing_ok=True)
 
 
 @pytest.mark.asyncio
@@ -71,52 +95,39 @@ async def test_semantic_tokens_multiline(client: LanguageClient):
 @pytest.mark.asyncio
 async def test_semantic_tokens_empty_document(client: LanguageClient):
     """Test semantic tokens with an empty document."""
-    # Create a temporary empty YAML file in the e2e config directory
-    empty_yaml = """
-mxcp: 1.0.0
+    empty_yaml = """mxcp: 1.0.0
 tool:
   name: "empty_tool"
   source:
     code: |
     # Empty code block
 """
-    uri = Path("./empty_tool.yml").resolve().as_uri()
-
-    # Write the empty YAML to a file in the e2e config directory
-    with open("./empty_tool.yml", "w") as f:
-        f.write(empty_yaml)
-
-    try:
+    
+    with temporary_yaml_file(empty_yaml, "empty_tool.yml") as temp_path:
+        uri = temp_path.resolve().as_uri()
+        
         result = await client.text_document_semantic_tokens_full_async(
             params=SemanticTokensParams(text_document=TextDocumentIdentifier(uri=uri))
         )
 
         assert result is not None
         assert len(result.data) == 0, "Empty document should return no tokens"
-    finally:
-        # Clean up the temporary file
-        Path("./empty_tool.yml").unlink(missing_ok=True)
 
 
 @pytest.mark.asyncio
 async def test_semantic_tokens_invalid_sql(client: LanguageClient):
     """Test semantic tokens with invalid SQL syntax."""
-    # Create a temporary YAML file with invalid SQL in the e2e config directory
-    invalid_sql_yaml = """
-mxcp: 1.0.0
+    invalid_sql_yaml = """mxcp: 1.0.0
 tool:
   name: "invalid_sql_tool"
   source:
     code: |
       SELECT * FROM WHERE INVALID SQL SYNTAX
 """
-    uri = Path("./invalid_sql_tool.yml").resolve().as_uri()
-
-    # Write the invalid SQL YAML to a file in the e2e config directory
-    with open("./invalid_sql_tool.yml", "w") as f:
-        f.write(invalid_sql_yaml)
-
-    try:
+    
+    with temporary_yaml_file(invalid_sql_yaml, "invalid_sql_tool.yml") as temp_path:
+        uri = temp_path.resolve().as_uri()
+        
         result = await client.text_document_semantic_tokens_full_async(
             params=SemanticTokensParams(text_document=TextDocumentIdentifier(uri=uri))
         )
@@ -124,9 +135,6 @@ tool:
         assert result is not None
         # Even with invalid SQL, we should still get some tokens
         assert len(result.data) > 0, "Should still tokenize invalid SQL"
-    finally:
-        # Clean up the temporary file
-        Path("./invalid_sql_tool.yml").unlink(missing_ok=True)
 
 
 @pytest.mark.asyncio

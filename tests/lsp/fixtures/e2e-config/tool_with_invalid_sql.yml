@@ -1,0 +1,23 @@
+mxcp: 1.0.0
+
+tool:
+  name: "invalid_sql_tool"
+  description: "A tool with invalid SQL to test diagnostics"
+  tags: ["test", "invalid"]
+  parameters:
+    - name: test_param
+      type: string
+      description: "Test parameter"
+      default: "test"
+  return:
+    type: array
+    items:
+      type: object
+  source:
+    code: |
+      SELECT * FROM non_existent_table
+      WHERE invalid_syntax =
+      AND another_error
+  annotations:
+    title: "Invalid SQL Tool"
+    readOnlyHint: true 
