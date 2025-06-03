@@ -1,7 +1,8 @@
 import pytest
 from unittest.mock import Mock
-from utils.duckdb_connector import DuckDBConnector
-from features.semantic_tokens.semantic_tokens_classifier import (
+from mxcp.lsp.utils.duckdb_connector import DuckDBConnector
+from mxcp.lsp.features.semantic_tokens.semantic_tokens_classifier import (
+    TokenModifier,
     SemanticTokensParser,
     Token
 )

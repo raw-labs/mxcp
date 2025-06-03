@@ -1,16 +1,18 @@
 """Unit tests for semantic tokens functionality."""
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from lsprotocol import types
+from unittest.mock import Mock, MagicMock, patch
 
-from features.semantic_tokens.semantic_tokens_classifier import (
+from mxcp.lsp.features.semantic_tokens.semantic_tokens_classifier import (
+    TokenModifier,
     Token, 
     SemanticTokensParser,
     TokenExtractor
 )
-from features.semantic_tokens.semantic_tokens_config import SemanticTokensConfig
-from features.semantic_tokens.token_processor import TokenProcessor
-from utils.duckdb_connector import DuckDBConnector
+from mxcp.lsp.features.semantic_tokens.semantic_tokens_config import SemanticTokensConfig
+from mxcp.lsp.features.semantic_tokens.token_processor import TokenProcessor
+from mxcp.lsp.utils.duckdb_connector import DuckDBConnector
 
 
 @pytest.fixture

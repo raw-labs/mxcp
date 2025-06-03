@@ -9,7 +9,7 @@ from pytest_lsp import ClientServerConfig, LanguageClient
 
 
 @pytest_lsp.fixture(
-    config=ClientServerConfig(server_command=[sys.executable, "-m", "mxcp", "lsp"]),
+    config=ClientServerConfig(server_command=["mxcp", "lsp"]),
 )
 async def client(lsp_client: LanguageClient):
     # Setup

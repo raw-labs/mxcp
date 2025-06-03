@@ -1,4 +1,5 @@
-from utils.duckdb_connector import DuckDBConnector
+from mxcp.lsp.utils.duckdb_connector import DuckDBConnector
+import pytest
 
 def test_get_completions_with_none_values():
     """Test that get_completions handles None values in query results."""

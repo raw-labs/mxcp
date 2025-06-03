@@ -88,10 +88,10 @@ class MXCPLSPServer:
             """Handle LSP initialize request"""
             logger.info("LSP: Handling initialize request")
             
-            # Initialize DuckDB session when client initializes
+            # Initialize DuckDB session during startup
             self._initialize_duckdb_session()
             
-            # Register features with the new logic
+            # Register features during startup
             self._register_features()
             
             return {
@@ -159,16 +159,35 @@ class MXCPLSPServer:
             logger.error(f"Error registering LSP features: {e}")
             raise
     
-    def start(self):
-        """Start the LSP server"""
+    def start(self, host: str = "localhost", use_tcp: bool = False):
+        """Start the LSP server
+        
+        Args:
+            host: Host to bind to when using TCP (default: localhost)
+            use_tcp: Whether to use TCP instead of stdio (default: False for backwards compatibility)
+        """
         logger.info("Starting MXCP LSP Server...")
         
         try:
-            # Start the language server on stdio
-            # Use the synchronous version to avoid event loop conflicts
-            self.ls.start_io()
+            if use_tcp:
+                logger.info(f"Starting LSP TCP server on {host}:{self.port}...")
+                self.ls.start_tcp(host, self.port)
+                logger.info("LSP TCP server finished")
+            else:
+                # Start the language server on stdio (original behavior)
+                logger.info("Starting LSP IO server...")
+                self.ls.start_io()
+                logger.info("LSP IO server finished")
         except KeyboardInterrupt:
             logger.info("Received shutdown signal")
+        except BrokenPipeError:
+            logger.info("Broken pipe - client disconnected")
+        except EOFError:
+            logger.info("EOF - no more input from client")
+        except Exception as e:
+            logger.error(f"Error in LSP server: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
         finally:
             self.shutdown()
     

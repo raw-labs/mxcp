@@ -1,6 +1,6 @@
 import pytest
 from lsprotocol import types
-from features.diagnostics.diagnostics import DiagnosticsService
+from mxcp.lsp.features.diagnostics.diagnostics import DiagnosticsService
 
 
 def test_should_provide_lsp_for_valid_yaml(yaml_manager_inlined):
@@ -60,7 +60,7 @@ mxcp: 1.0.0
     assert isinstance(diagnostic, types.Diagnostic), "Expected diagnostic to be a Diagnostic object"
     assert diagnostic.severity in [types.DiagnosticSeverity.Error, types.DiagnosticSeverity.Warning], \
         "Expected diagnostic severity to be Error or Warning"
-    assert diagnostic.source == "raw-lsp", "Expected diagnostic source to be 'raw-lsp'"
+    assert diagnostic.source == "mxcp-lsp", "Expected diagnostic source to be 'mxcp-lsp'"
     assert len(diagnostic.message) > 0, "Expected diagnostic message to be non-empty"
 
 

@@ -1,8 +1,8 @@
-from utils.models import Parameter
+from mxcp.lsp.utils.models import Parameter
+import pytest
 from lsprotocol import types
-from pygls.server import LanguageServer
-from utils.duckdb_connector import DuckDBConnector
-from features.completion.completion import register_completion
+from mxcp.lsp.utils.duckdb_connector import DuckDBConnector
+from mxcp.lsp.features.completion.completion import register_completion
 
 
 def test_span(yaml_manager_inlined):

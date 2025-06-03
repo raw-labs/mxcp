@@ -1,4 +1,4 @@
-from utils.yaml_parser import YamlParser
+from mxcp.lsp.utils.yaml_parser import YamlParser
 import pytest
 
 def test_get_parameters_with_missing_tool():

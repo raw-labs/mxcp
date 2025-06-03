@@ -1,9 +1,9 @@
 import pytest
 import tempfile
 import os
-from utils.yaml_parser import YamlParser
-from utils.duckdb_connector import DuckDBConnector
-from features.diagnostics.diagnostics import DiagnosticsService
+from mxcp.lsp.utils.yaml_parser import YamlParser
+from mxcp.lsp.utils.duckdb_connector import DuckDBConnector
+from mxcp.lsp.features.diagnostics.diagnostics import DiagnosticsService
 
 
 @pytest.fixture
@@ -49,8 +49,8 @@ def duckdb_connector():
     os.unlink(db_path)
     
     try:
-        # Create DuckDB connector with the temporary database path
-        duckdb_connector = DuckDBConnector(db_path)
+        # Create DuckDB connector with the temporary database path (no session)
+        duckdb_connector = DuckDBConnector(session=None, db_path=db_path)
         yield duckdb_connector
     finally:
         # Clean up: close connection and remove the temporary database file
