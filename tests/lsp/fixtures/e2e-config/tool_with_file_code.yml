@@ -23,4 +23,4 @@ tool:
     - name: filter-mag
       arguments:
         - key: min_magnitude
-          value: 5.5
+          value: 5.5 

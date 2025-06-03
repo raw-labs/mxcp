@@ -12,8 +12,8 @@ from pathlib import Path
 @pytest.mark.asyncio
 async def test_semantic_tokens_basic(client: LanguageClient):
     """Test basic semantic token functionality with a simple SQL query."""
-    # Arrange
-    uri = Path("./tests/lsp/fixtures/tool_with_inlined_code.yml").resolve().as_uri()
+    # Arrange - Reference file from isolated e2e config directory
+    uri = Path("./tool_with_inlined_code.yml").resolve().as_uri()
 
     # Act
     result = await client.text_document_semantic_tokens_full_async(
@@ -38,7 +38,7 @@ async def test_semantic_tokens_basic(client: LanguageClient):
 @pytest.mark.asyncio
 async def test_semantic_tokens_keywords(client: LanguageClient):
     """Test that SQL keywords are properly tokenized."""
-    uri = Path("./tests/lsp/fixtures/tool_with_inlined_code.yml").resolve().as_uri()
+    uri = Path("./tool_with_inlined_code.yml").resolve().as_uri()
 
     result = await client.text_document_semantic_tokens_full_async(
         params=SemanticTokensParams(text_document=TextDocumentIdentifier(uri=uri))
@@ -56,7 +56,7 @@ async def test_semantic_tokens_keywords(client: LanguageClient):
 @pytest.mark.asyncio
 async def test_semantic_tokens_multiline(client: LanguageClient):
     """Test semantic tokens in a multiline SQL query."""
-    uri = Path("./tests/lsp/fixtures/tool_with_inlined_code.yml").resolve().as_uri()
+    uri = Path("./tool_with_inlined_code.yml").resolve().as_uri()
 
     result = await client.text_document_semantic_tokens_full_async(
         params=SemanticTokensParams(text_document=TextDocumentIdentifier(uri=uri))
@@ -71,7 +71,7 @@ async def test_semantic_tokens_multiline(client: LanguageClient):
 @pytest.mark.asyncio
 async def test_semantic_tokens_empty_document(client: LanguageClient):
     """Test semantic tokens with an empty document."""
-    # Create a temporary empty YAML file
+    # Create a temporary empty YAML file in the e2e config directory
     empty_yaml = """
 mxcp: 1.0.0
 tool:
@@ -80,10 +80,10 @@ tool:
     code: |
     # Empty code block
 """
-    uri = Path("./tests/lsp/fixtures/empty_tool.yml").resolve().as_uri()
+    uri = Path("./empty_tool.yml").resolve().as_uri()
 
-    # Write the empty YAML to a file
-    with open("./tests/lsp/fixtures/empty_tool.yml", "w") as f:
+    # Write the empty YAML to a file in the e2e config directory
+    with open("./empty_tool.yml", "w") as f:
         f.write(empty_yaml)
 
     try:
@@ -95,13 +95,13 @@ tool:
         assert len(result.data) == 0, "Empty document should return no tokens"
     finally:
         # Clean up the temporary file
-        Path("./tests/lsp/fixtures/empty_tool.yml").unlink(missing_ok=True)
+        Path("./empty_tool.yml").unlink(missing_ok=True)
 
 
 @pytest.mark.asyncio
 async def test_semantic_tokens_invalid_sql(client: LanguageClient):
     """Test semantic tokens with invalid SQL syntax."""
-    # Create a temporary YAML file with invalid SQL
+    # Create a temporary YAML file with invalid SQL in the e2e config directory
     invalid_sql_yaml = """
 mxcp: 1.0.0
 tool:
@@ -110,10 +110,10 @@ tool:
     code: |
       SELECT * FROM WHERE INVALID SQL SYNTAX
 """
-    uri = Path("./tests/lsp/fixtures/invalid_sql_tool.yml").resolve().as_uri()
+    uri = Path("./invalid_sql_tool.yml").resolve().as_uri()
 
-    # Write the invalid SQL YAML to a file
-    with open("./tests/lsp/fixtures/invalid_sql_tool.yml", "w") as f:
+    # Write the invalid SQL YAML to a file in the e2e config directory
+    with open("./invalid_sql_tool.yml", "w") as f:
         f.write(invalid_sql_yaml)
 
     try:
@@ -126,14 +126,14 @@ tool:
         assert len(result.data) > 0, "Should still tokenize invalid SQL"
     finally:
         # Clean up the temporary file
-        Path("./tests/lsp/fixtures/invalid_sql_tool.yml").unlink(missing_ok=True)
+        Path("./invalid_sql_tool.yml").unlink(missing_ok=True)
 
 
 @pytest.mark.asyncio
 async def test_semantic_tokens_positions(client: LanguageClient):
     """Test that token positions are correctly adjusted based on the code section's position in the YAML file."""
     # Arrange
-    uri = Path("./tests/lsp/fixtures/tool_with_inlined_code.yml").resolve().as_uri()
+    uri = Path("./tool_with_inlined_code.yml").resolve().as_uri()
 
     # Act
     result = await client.text_document_semantic_tokens_full_async(

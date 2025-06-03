@@ -8,7 +8,7 @@ from mxcp.lsp.features.diagnostics.diagnostics import DiagnosticsService
 
 @pytest.fixture
 def yaml_manager_inlined():
-    with open("./tests/lsp/fixtures/tool_with_inlined_code.yml") as f:
+    with open("./tests/lsp/fixtures/e2e-config/tool_with_inlined_code.yml") as f:
         yaml_text = f.read()
         yaml_parser = YamlParser(yaml_text)
     return yaml_parser

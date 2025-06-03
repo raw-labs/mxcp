@@ -7,7 +7,7 @@ from mxcp.lsp.utils.duckdb_connector import DuckDBConnector
 
 @pytest.fixture
 def yaml_manager_inlined():
-    with open("./tests/lsp/fixtures/tool_with_inlined_code.yml") as f:
+    with open("./tests/lsp/fixtures/e2e-config/tool_with_inlined_code.yml") as f:
         yaml_text = f.read()
         yaml_parser = YamlParser(yaml_text)
     return yaml_parser
@@ -15,7 +15,7 @@ def yaml_manager_inlined():
 
 @pytest.fixture
 def yaml_manager_file():
-    with open("./tests/lsp/fixtures/tool_with_file_code.yml") as f:
+    with open("./tests/lsp/fixtures/e2e-config/tool_with_file_code.yml") as f:
         yaml_text = f.read()
         yaml_parser = YamlParser(yaml_text)
     return yaml_parser

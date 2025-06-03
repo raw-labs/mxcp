@@ -1,0 +1,12 @@
+mxcp: "1.0.0"
+project: lsp-e2e-test
+profile: test
+profiles:
+  test:
+    duckdb:
+      path: ":memory:"    # Use in-memory database for tests - no file persistence
+    audit:
+      enabled: false      # Disable audit logging for tests
+    drift:
+      path: ""           # No drift tracking needed for tests
+extensions: []           # No extensions for basic LSP tests 

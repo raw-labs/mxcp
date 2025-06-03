@@ -13,7 +13,8 @@ from pathlib import Path
 async def test_completions(client: LanguageClient):
     """Ensure that the server implements completions correctly."""
 
-    uri = Path("./tests/lsp/fixtures/tool_with_inlined_code.yml").resolve().as_uri()
+    # Reference the file from the isolated e2e config directory
+    uri = Path("./tool_with_inlined_code.yml").resolve().as_uri()
     results = await client.text_document_completion_async(
         params=CompletionParams(
             position=Position(line=21, character=8),
