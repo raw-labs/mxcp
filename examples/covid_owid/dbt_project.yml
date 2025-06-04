@@ -1,0 +1,20 @@
+analysis-paths:
+- analyses
+clean-targets:
+- target
+- dbt_packages
+config-version: 2
+macro-paths:
+- macros
+model-paths:
+- models
+name: covid_owid
+profile: covid_owid_default
+seed-paths:
+- seeds
+snapshot-paths:
+- snapshots
+target-path: target
+test-paths:
+- tests
+version: 1.0.0

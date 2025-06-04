@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: github_covid_data
+    description: "COVID-19 data loaded directly from Our World in Data GitHub repository"
+    meta:
+      urls:
+        owid_covid_data: "https://github.com/owid/covid-19-data/raw/master/public/data/owid-covid-data.csv"
+        covid_hospitalizations: "https://github.com/owid/covid-19-data/raw/master/public/data/hospitalizations/covid-hospitalizations.csv"
