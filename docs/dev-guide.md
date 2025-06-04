@@ -29,6 +29,126 @@ Welcome to the MXCP development community! This guide will help you get started 
    pip install -e ".[dev]"
    ```
 
+## Architecture Patterns
+
+### Configuration Loading Pattern
+
+MXCP follows a specific configuration loading pattern across all CLI commands:
+
+1. **Site config loaded first**: Always load `mxcp-site.yml` from the repository root first
+2. **User config loaded second**: Load `~/.mxcp/config.yml` based on site config requirements
+3. **Auto-generation**: User config is optional and auto-generated in memory from site config defaults if missing
+4. **CLI layer ownership**: Configuration loading is done at the CLI layer, not in business logic
+
+```python
+# Standard pattern used across all CLI commands
+try:
+    site_config = load_site_config()
+    user_config = load_user_config(site_config)  # Generates defaults if needed
+    
+    # Business logic here
+    
+except Exception as e:
+    output_error(e, json_output, debug)
+```
+
+**Why this pattern?**
+- Site config defines project requirements and structure
+- User config provides personal settings and secrets
+- Auto-generation allows projects to work out-of-the-box without requiring manual setup
+- CLI layer ownership keeps configuration concerns separate from business logic
+
+### DuckDB Session Management
+
+MXCP uses a specific pattern for DuckDB connection management:
+
+- **No connection pooling**: DuckDB is embedded, so we use single connections per session
+- **One connection per operation**: Each CLI command creates its own session
+- **Session-scoped setup**: All Python functions, secrets, and plugins are loaded per session at startup
+- **Context manager pattern**: Ensures proper cleanup of connections
+
+```python
+# Session creation and management pattern
+with DuckDBSession(user_config, site_config, profile, readonly=readonly) as session:
+    # All database operations happen here
+    result = session.conn.execute(sql, params).fetchdf()
+    
+# Connection automatically closed when context exits
+```
+
+**Server vs CLI sessions:**
+- **CLI commands**: Create new session per operation
+- **Server mode**: Single shared session with thread-safe locking
+- **Session initialization**: Extensions, secrets, and plugins loaded once per session
+
+### Common CLI Patterns
+
+All MXCP CLI commands follow consistent patterns for maintainability and user experience:
+
+#### Standard Command Structure
+
+```python
+@click.command(name="command_name")
+@click.option("--profile", help="Profile name to use")
+@click.option("--json-output", is_flag=True, help="Output in JSON format")
+@click.option("--debug", is_flag=True, help="Show detailed debug information")
+@click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
+@track_command_with_timing("command_name")  # Analytics tracking
+def command_name(profile: Optional[str], json_output: bool, debug: bool, readonly: bool):
+    """Command description with examples in docstring."""
+    
+    # 1. Environment variable fallback
+    if not profile:
+        profile = get_env_profile()
+    if not readonly:
+        readonly = get_env_flag("MXCP_READONLY")
+    
+    # 2. Configure logging early
+    configure_logging(debug)
+    
+    try:
+        # 3. Load configurations
+        site_config = load_site_config()
+        user_config = load_user_config(site_config)
+        
+        # 4. Business logic here
+        result = do_work(...)
+        
+        # 5. Output results consistently
+        output_result(result, json_output, debug)
+        
+    except Exception as e:
+        # 6. Error handling with consistent format
+        output_error(e, json_output, debug)
+```
+
+#### Key Patterns
+
+1. **Environment variable support**: All commands support `MXCP_PROFILE`, `MXCP_DEBUG`, `MXCP_READONLY`
+2. **Consistent options**: `--profile`, `--json-output`, `--debug`, `--readonly` across commands
+3. **Early logging setup**: Call `configure_logging(debug)` before any operations
+4. **Structured output**: Use `output_result()` and `output_error()` for consistent formatting
+5. **Analytics tracking**: `@track_command_with_timing()` decorator for usage analytics
+
+#### JSON Output Format
+
+All commands support `--json-output` with standardized format:
+
+```python
+# Success response
+{
+  "status": "ok",
+  "result": <command-specific-data>
+}
+
+# Error response  
+{
+  "status": "error",
+  "error": "Error message",
+  "traceback": "Full traceback (if --debug enabled)"
+}
+```
+
 ## Development Workflow
 
 ### 1. Branch Management
@@ -56,6 +176,77 @@ Welcome to the MXCP development community! This guide will help you get started 
 
 ### 3. Testing
 
+#### Test Fixture Organization
+
+MXCP uses a specific pattern for organizing test fixtures:
+
+- **Per-test fixtures**: Each test has its own fixture directory at `/test/fixtures/{test_name}/`
+- **Complete repositories**: Each fixture contains a complete MXCP repository with `mxcp-site.yml` and `mxcp-config.yml`
+- **Isolated environments**: Tests use environment variables to point to their specific config files
+
+```python
+# Standard test setup pattern
+@pytest.fixture(scope="session", autouse=True)
+def set_mxcp_config_env():
+    """Point to test-specific config file."""
+    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "test_name" / "mxcp-config.yml")
+
+@pytest.fixture
+def test_repo_path():
+    """Path to the test repository fixture."""
+    return Path(__file__).parent / "fixtures" / "test_name"
+
+@pytest.fixture
+def test_config(test_repo_path):
+    """Load test configuration with proper chdir."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        site_config = load_site_config()
+        return load_user_config(site_config)
+    finally:
+        os.chdir(original_dir)
+
+def test_something(test_repo_path, test_config):
+    """Test function with fixture setup."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)  # Critical: change to test repo directory
+    try:
+        # Test logic here - runs in context of test repository
+        result = function_under_test()
+        assert result == expected
+    finally:
+        os.chdir(original_dir)  # Always restore original directory
+```
+
+#### Test Directory Structure
+
+```
+tests/
+├── fixtures/
+│   ├── test_name_1/          # Fixture for test_name_1
+│   │   ├── mxcp-site.yml     # Test site configuration
+│   │   ├── mxcp-config.yml   # Test user configuration  
+│   │   ├── endpoints/        # Test endpoints
+│   │   └── queries/          # Test SQL files
+│   ├── test_name_2/          # Fixture for test_name_2
+│   │   └── ...
+│   └── ...
+├── test_name_1.py            # Tests using fixtures/test_name_1/
+├── test_name_2.py            # Tests using fixtures/test_name_2/
+└── ...
+```
+
+#### Key Testing Principles
+
+1. **Repository context**: Tests must `chdir` to the test repository fixture directory
+2. **Config isolation**: Each test uses its own config files via `MXCP_CONFIG` environment variable  
+3. **Complete fixtures**: Include all necessary files (site config, user config, endpoints, SQL)
+4. **Cleanup**: Always restore the original working directory using try/finally
+5. **Independence**: Tests should not depend on each other or share state
+
+#### Running Tests
+
 - Write tests for all new features and bugfixes
 - Run the test suite:
   ```bash
@@ -70,6 +261,58 @@ Welcome to the MXCP development community! This guide will help you get started 
 - Add docstrings to new functions and classes
 - Update examples if they're affected by your changes
 - Follow the existing documentation style
+
+## Implementation Details
+
+### Object Lifecycle Management
+
+CLI commands follow a consistent pattern for object construction and destruction:
+
+1. **CLI owns objects**: Command functions create and manage all objects
+2. **Context managers**: Use `with` statements for resources that need cleanup
+3. **Exception safety**: Ensure cleanup happens even if exceptions occur
+4. **Explicit cleanup**: Don't rely on garbage collection for resource cleanup
+
+```python
+def cli_command():
+    try:
+        # Create session with context manager
+        with DuckDBSession(user_config, site_config) as session:
+            # Use session for operations
+            result = session.conn.execute(sql)
+            
+        # Session automatically cleaned up here
+        
+    except Exception as e:
+        # Error handling
+        output_error(e, json_output, debug)
+```
+
+### Error Handling Patterns
+
+Consistent error handling across all commands:
+
+```python
+from mxcp.cli.utils import output_error, configure_logging
+
+def cli_command(debug: bool, json_output: bool):
+    configure_logging(debug)  # Set up logging first
+    
+    try:
+        # Command logic
+        pass
+    except Exception as e:
+        # Unified error output
+        output_error(e, json_output, debug)
+        raise click.Abort()  # Exit with error code
+```
+
+### Debug and Logging
+
+- **Early setup**: Configure logging before any operations
+- **Consistent levels**: Use standard logging levels (DEBUG, INFO, WARNING, ERROR)
+- **Structured output**: Debug info includes full tracebacks when `--debug` is enabled
+- **Environment support**: `MXCP_DEBUG=1` environment variable support
 
 ## Pull Request Process
 
@@ -101,7 +344,18 @@ Welcome to the MXCP development community! This guide will help you get started 
 mxcp/
 ├── src/              # Source code
 │   └── mxcp/        # Main package
+│       ├── cli/     # CLI command implementations
+│       ├── config/  # Configuration loading and validation
+│       ├── engine/  # DuckDB session and execution engine
+│       ├── endpoints/ # Endpoint loading and execution
+│       ├── auth/    # Authentication and authorization
+│       ├── audit/   # Audit logging
+│       ├── drift/   # Schema drift detection
+│       ├── policies/ # Policy enforcement
+│       ├── plugins/ # Plugin system
+│       └── server/  # MCP server implementation
 ├── tests/           # Test suite
+│   └── fixtures/    # Test repository fixtures
 ├── docs/            # Documentation
 ├── examples/        # Example projects
 └── pyproject.toml   # Project configuration
