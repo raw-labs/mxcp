@@ -13,23 +13,15 @@ TEST_CONFIG_DIR = Path(__file__).parent.parent.parent / "fixtures" / "e2e-config
 
 @pytest_lsp.fixture(
     config=ClientServerConfig(
-        server_command=["mxcp", "lsp"],
+        server_command=["sh", "-c", f"cd {TEST_CONFIG_DIR} && mxcp lsp"],
     ),
 )
 async def client(lsp_client: LanguageClient):
-    # Change to the test config directory before starting the test
-    original_cwd = os.getcwd()
-    os.chdir(str(TEST_CONFIG_DIR))
-    
-    try:
-        # Setup
-        params = InitializeParams(capabilities=ClientCapabilities())
-        await lsp_client.initialize_session(params)
+    # Setup
+    params = InitializeParams(capabilities=ClientCapabilities())
+    await lsp_client.initialize_session(params)
 
-        yield
+    yield
 
-        # Teardown
-        await lsp_client.shutdown_session()
-    finally:
-        # Always restore the original working directory
-        os.chdir(original_cwd)
+    # Teardown
+    await lsp_client.shutdown_session()

@@ -11,6 +11,8 @@ import tempfile
 import os
 from contextlib import contextmanager
 
+# Get the path to the e2e config directory with isolated test configuration
+TEST_CONFIG_DIR = Path(__file__).parent.parent.parent / "fixtures" / "e2e-config"
 
 @contextmanager
 def temporary_yaml_file(content: str, filename: str = None):
@@ -21,8 +23,8 @@ def temporary_yaml_file(content: str, filename: str = None):
             f.write(content)
             temp_path = Path(f.name)
     else:
-        # Use a specific filename in current directory
-        temp_path = Path(filename)
+        # Use a specific filename in the test config directory
+        temp_path = TEST_CONFIG_DIR / filename
         with open(temp_path, 'w') as f:
             f.write(content)
     
@@ -37,7 +39,7 @@ def temporary_yaml_file(content: str, filename: str = None):
 async def test_semantic_tokens_basic(client: LanguageClient):
     """Test basic semantic token functionality with a simple SQL query."""
     # Arrange - Reference file from isolated e2e config directory
-    uri = Path("./tool_with_inlined_code.yml").resolve().as_uri()
+    uri = (TEST_CONFIG_DIR / "tool_with_inlined_code.yml").resolve().as_uri()
 
     # Act
     result = await client.text_document_semantic_tokens_full_async(
@@ -62,7 +64,7 @@ async def test_semantic_tokens_basic(client: LanguageClient):
 @pytest.mark.asyncio
 async def test_semantic_tokens_keywords(client: LanguageClient):
     """Test that SQL keywords are properly tokenized."""
-    uri = Path("./tool_with_inlined_code.yml").resolve().as_uri()
+    uri = (TEST_CONFIG_DIR / "tool_with_inlined_code.yml").resolve().as_uri()
 
     result = await client.text_document_semantic_tokens_full_async(
         params=SemanticTokensParams(text_document=TextDocumentIdentifier(uri=uri))
@@ -80,7 +82,7 @@ async def test_semantic_tokens_keywords(client: LanguageClient):
 @pytest.mark.asyncio
 async def test_semantic_tokens_multiline(client: LanguageClient):
     """Test semantic tokens in a multiline SQL query."""
-    uri = Path("./tool_with_inlined_code.yml").resolve().as_uri()
+    uri = (TEST_CONFIG_DIR / "tool_with_inlined_code.yml").resolve().as_uri()
 
     result = await client.text_document_semantic_tokens_full_async(
         params=SemanticTokensParams(text_document=TextDocumentIdentifier(uri=uri))
@@ -141,7 +143,7 @@ tool:
 async def test_semantic_tokens_positions(client: LanguageClient):
     """Test that token positions are correctly adjusted based on the code section's position in the YAML file."""
     # Arrange
-    uri = Path("./tool_with_inlined_code.yml").resolve().as_uri()
+    uri = (TEST_CONFIG_DIR / "tool_with_inlined_code.yml").resolve().as_uri()
 
     # Act
     result = await client.text_document_semantic_tokens_full_async(

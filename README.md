@@ -139,7 +139,7 @@ For specific setup instructions, see:
 - [Type System](docs/type-system.md) — Data types and validation
 - [Integrations](docs/integrations.md) — Data sources and tools
 - [Drift Detection](docs/drift-detection.md) — Schema and endpoint change monitoring
-- [Language Server Protocol](src/mxcp/lsp/readme.md) — LSP implementation for IDE support
+- [Language Server Protocol](src/mxcp/lsp/README.md) — LSP implementation for IDE support
 
 ## 🤝 Contributing
 

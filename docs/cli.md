@@ -207,8 +207,8 @@ mxcp lsp [OPTIONS]
 
 **Examples:**
 ```bash
-mxcp lsp                     # Start LSP server on default port 3000
-mxcp lsp --port 4000         # Start LSP server on port 4000  
+mxcp lsp                     # Start LSP server using stdio (default)
+mxcp lsp --port 4000         # Start LSP server using TCP on port 4000  
 mxcp lsp --profile dev       # Use the 'dev' profile configuration
 mxcp lsp --readonly          # Open database connection in read-only mode
 mxcp lsp --debug             # Start with detailed debug logging

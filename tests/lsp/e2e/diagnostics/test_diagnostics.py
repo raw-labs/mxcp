@@ -10,16 +10,18 @@ from pytest_lsp import LanguageClient
 from pathlib import Path
 import asyncio
 
+# Get the path to the e2e config directory with isolated test configuration
+TEST_CONFIG_DIR = Path(__file__).parent.parent.parent / "fixtures" / "e2e-config"
 
 @pytest.mark.asyncio
 async def test_diagnostics_invalid_sql(client: LanguageClient):
     """Test that invalid SQL generates diagnostics"""
     
     # Reference the file with invalid SQL
-    uri = Path("./tool_with_invalid_sql.yml").resolve().as_uri()
+    uri = (TEST_CONFIG_DIR / "tool_with_invalid_sql.yml").resolve().as_uri()
     
     # Read the file content
-    with open("./tool_with_invalid_sql.yml", "r") as f:
+    with open(TEST_CONFIG_DIR / "tool_with_invalid_sql.yml", "r") as f:
         content = f.read()
     
     # Start waiting for diagnostics before opening the document
@@ -71,10 +73,10 @@ async def test_diagnostics_valid_sql(client: LanguageClient):
     """Test that valid SQL does not generate diagnostics (or generates fewer diagnostics)"""
     
     # Reference the file with valid SQL
-    uri = Path("./tool_with_inlined_code.yml").resolve().as_uri()
+    uri = (TEST_CONFIG_DIR / "tool_with_inlined_code.yml").resolve().as_uri()
     
     # Read the file content
-    with open("./tool_with_inlined_code.yml", "r") as f:
+    with open(TEST_CONFIG_DIR / "tool_with_inlined_code.yml", "r") as f:
         content = f.read()
     
     # Start waiting for diagnostics before opening the document

@@ -2,15 +2,18 @@ import pytest
 import tempfile
 import os
 from unittest.mock import Mock
+from pathlib import Path
 import duckdb
 from mxcp.lsp.utils.yaml_parser import YamlParser
 from mxcp.lsp.utils.duckdb_connector import DuckDBConnector
 from mxcp.lsp.features.diagnostics.diagnostics import DiagnosticsService
 
+# Get the path to the e2e config directory with isolated test configuration
+TEST_CONFIG_DIR = Path(__file__).parent.parent.parent / "fixtures" / "e2e-config"
 
 @pytest.fixture
 def yaml_manager_inlined():
-    with open("./tests/lsp/fixtures/e2e-config/tool_with_inlined_code.yml") as f:
+    with open(TEST_CONFIG_DIR / "tool_with_inlined_code.yml") as f:
         yaml_text = f.read()
         yaml_parser = YamlParser(yaml_text)
     return yaml_parser

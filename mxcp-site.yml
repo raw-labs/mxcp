@@ -1,7 +1,0 @@
-mxcp: 1.0.0
-project: test-lsp
-profile: default
-profiles:
-  default:
-    duckdb:
-      path: ":memory:" 
