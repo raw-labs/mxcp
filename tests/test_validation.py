@@ -94,6 +94,18 @@ def test_validate_invalid_type(validation_repo_path, site_config, user_config, t
     finally:
         os.chdir(original_dir)
 
+def test_validate_invalid_parameter_name(validation_repo_path, site_config, user_config, test_profile):
+    """Test validation of an endpoint with an invalid parameter name."""
+    original_dir = os.getcwd()
+    os.chdir(validation_repo_path)
+    try:
+        endpoint_path = "endpoints/invalid_parameter_name.yml"
+        result = validate_endpoint(endpoint_path, user_config, site_config, test_profile)
+        assert result["status"] == "error"
+        assert "schema validation error: 'user/id' does not match" in result["message"].lower()
+    finally:
+        os.chdir(original_dir)
+
 def test_validate_missing_param(validation_repo_path, site_config, user_config, test_profile):
     """Test validation of an endpoint with missing parameter."""
     original_dir = os.getcwd()

@@ -43,7 +43,11 @@
       "type": "object",
       "required": ["name", "source"],
       "properties": {
-        "name": { "type": "string", "description": "Name of this tool." },
+        "name": { 
+          "type": "string", 
+          "description": "Name of this tool.",
+          "minLength": 1
+        },
         "description": { "type": "string", "description": "Description of this tool." },
         "tags": {
           "type": "array",
@@ -154,6 +158,11 @@
           "minLength": 1,
           "maxLength": 255
         },
+        "name": { 
+          "type": "string", 
+          "description": "Name of this resource.",
+          "minLength": 1
+        },
         "description": { "type": "string", "description": "Description of this resource." },
         "tags": {
           "type": "array",
@@ -231,7 +240,11 @@
       "type": "object",
       "required": ["name"],
       "properties": {
-        "name": { "type": "string", "description": "Logical name identifying this prompt." },
+        "name": { 
+          "type": "string", 
+          "description": "Logical name identifying this prompt.",
+          "minLength": 1
+        },
         "description": { "type": "string", "description": "Description of this prompt." },
         "tags": {
           "type": "array",
@@ -275,7 +288,9 @@
       "properties": {
         "name": { 
           "type": "string", 
-          "description": "Parameter name." 
+          "description": "Parameter name.",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+          "minLength": 1
         },
         "description": { 
           "type": "string", 
