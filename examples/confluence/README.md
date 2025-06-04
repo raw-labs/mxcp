@@ -1,15 +1,17 @@
 # MXCP Confluence Plugin Example
 
-This example demonstrates how to use the MXCP Confluence plugin to interact with Confluence.
+This example demonstrates how to use MXCP with Confluence data. It shows how to:
+- Create and use a custom MXCP plugin for Confluence integration
+- Query Confluence content using SQL
+- Combine Confluence data with other data sources
 
 ## Overview
 
 The plugin provides several UDFs that allow you to:
-- Search pages using keywords
-- Fetch page content
-- List child pages
-- List spaces
-- Get page metadata
+- Search pages using keywords and CQL queries
+- Fetch page content and metadata
+- List child pages and spaces
+- Navigate the Confluence content hierarchy
 
 ## Configuration
 
@@ -77,6 +79,31 @@ SELECT list_spaces_confluence() as result;
 -- Show metadata about a page
 SELECT describe_page_confluence($page_id) as result;
 ```
+
+## Example Queries
+
+1. Search and analyze page content:
+```sql
+WITH pages AS (
+  SELECT * FROM search_pages_confluence('important documentation', 50)
+)
+SELECT 
+  p.title as page_title,
+  p.space.name as space_name,
+  p.version.number as version,
+  p.metadata.created as created_date
+FROM pages p
+ORDER BY p.metadata.created DESC;
+```
+
+## Plugin Development
+
+The `mxcp_plugin_confluence` directory contains a complete MXCP plugin implementation that you can use as a reference for creating your own plugins. It demonstrates:
+
+- Plugin class structure
+- Type conversion
+- UDF implementation
+- Configuration handling
 
 ## Running the Example
 

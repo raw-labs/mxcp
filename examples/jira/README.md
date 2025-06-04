@@ -1,14 +1,17 @@
 # MXCP Jira Plugin Example
 
-This example demonstrates how to use the MXCP Jira plugin to interact with Jira.
+This example demonstrates how to use MXCP with Jira data. It shows how to:
+- Create and use a custom MXCP plugin for Jira integration
+- Query Jira data using SQL
+- Combine Jira data with other data sources
 
 ## Overview
 
 The plugin provides several UDFs that allow you to:
-- Execute JQL queries
+- Execute JQL queries to search issues
 - Get user information
-- List projects
-- Get project details
+- List projects and their details
+- Get project metadata
 
 ## Configuration
 
@@ -49,7 +52,7 @@ plugin:
 
 ### JQL Query
 ```sql
--- Execute a JQL query
+-- Execute a JQL query to search issues
 SELECT jql_query_jira($jql, $limit) as result;
 ```
 
@@ -70,6 +73,29 @@ SELECT list_projects_jira($project_name) as result;
 -- Get project details
 SELECT get_project_jira($project_key) as result;
 ```
+
+## Example Queries
+
+1. Query issues with their assignees:
+```sql
+WITH issues AS (
+  SELECT * FROM jql_query_jira('project = "PROJ" ORDER BY created DESC', 100)
+)
+SELECT 
+  i.key as issue_key,
+  i.fields.summary as summary,
+  i.fields.assignee.displayName as assignee
+FROM issues i;
+```
+
+## Plugin Development
+
+The `mxcp_plugin_jira` directory contains a complete MXCP plugin implementation that you can use as a reference for creating your own plugins. It demonstrates:
+
+- Plugin class structure
+- Type conversion
+- UDF implementation
+- Configuration handling
 
 ## Running the Example
 

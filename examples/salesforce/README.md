@@ -7,14 +7,7 @@ This example demonstrates how to use MXCP with Salesforce data. It shows how to:
 
 ## Setup
 
-1. First, install the Salesforce plugin:
-   ```bash
-   cd mxcp_plugin_salesforce
-   pip install -e .
-   cd ..
-   ```
-
-2. Configure your Salesforce credentials:
+1. Configure your Salesforce credentials:
    Add the following to your MXCP user config (`~/.mxcp/config.yml`). You can use the example `config.yml` in this directory as a template:
 
    ```yaml
@@ -34,7 +27,7 @@ This example demonstrates how to use MXCP with Salesforce data. It shows how to:
                  client_id: "your-client-id"
    ```
 
-3. Create an `mxcp-site.yml` file:
+2. Create an `mxcp-site.yml` file:
 
    ```yaml
    mxcp: 1.0.0
@@ -46,7 +39,7 @@ This example demonstrates how to use MXCP with Salesforce data. It shows how to:
        config: salesforce
    ```
 
-4. Start the MXCP server:
+3. Start the MXCP server:
    ```bash
    mxcp serve
    ```
