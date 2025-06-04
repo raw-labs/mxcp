@@ -58,27 +58,34 @@ class MXCPLSPServer:
         if readonly:
             logger.info("Running in read-only mode")
     
+    def _setup_duckdb_session(self):
+        """Create DuckDB session with the provided configurations."""
+        self.session = DuckDBSession(
+            user_config=self.user_config,
+            site_config=self.site_config,
+            profile=self.profile,
+            readonly=self.readonly
+        )
+        logger.info("DuckDB session created successfully")
+        return self.session.connect()
+    
+    def _setup_duckdb_connector(self):
+        """Create DuckDB connector - requires valid session or fails."""
+        if not self.session:
+            raise RuntimeError("Cannot create DuckDB connector: no session available")
+        
+        self.duck_db_connector = DuckDBConnector(session=self.session)
+        logger.info("DuckDB connector initialized successfully")
+    
     def _initialize_duckdb_session(self):
-        """Initialize the DuckDB session with configs"""
+        """Initialize the DuckDB session and connector."""
         try:
-            self.session = DuckDBSession(
-                user_config=self.user_config,
-                site_config=self.site_config,
-                profile=self.profile,
-                readonly=self.readonly
-            )
-            
-            # Create DuckDB connector that uses the MXCP session
-            self.duck_db_connector = DuckDBConnector(session=self.session)
-            
-            logger.info("DuckDB session initialized successfully")
-            return self.session.connect()
+            self._setup_duckdb_session()
+            self._setup_duckdb_connector()
+            logger.info("DuckDB initialization completed successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize DuckDB session: {e}")
-            # Create fallback connector without session
-            self.duck_db_connector = DuckDBConnector()
-            logger.warning("Using fallback DuckDB connector")
-            raise
+            logger.error(f"Failed to initialize DuckDB: {e}")
+            raise RuntimeError(f"LSP server cannot start without DuckDB connection: {e}")
     
     def _register_handlers(self):
         """Register LSP protocol handlers"""
@@ -88,7 +95,7 @@ class MXCPLSPServer:
             """Handle LSP initialize request"""
             logger.info("LSP: Handling initialize request")
             
-            # Initialize DuckDB session during startup
+            # Initialize DuckDB session during startup - fail if this fails
             self._initialize_duckdb_session()
             
             # Register features during startup
@@ -116,9 +123,7 @@ class MXCPLSPServer:
         def shutdown(params=None):
             """Handle LSP shutdown request"""
             logger.info("LSP: Handling shutdown request")
-            if self.session:
-                self.session.close()
-                logger.info("DuckDB session closed")
+            self._cleanup_resources()
             return None
 
         @self.ls.feature("exit")
@@ -129,8 +134,7 @@ class MXCPLSPServer:
     def _register_features(self):
         """Register LSP features with the server using the new feature definition logic"""
         if not self.duck_db_connector:
-            logger.error("Cannot register features: DuckDB connector not initialized")
-            return
+            raise RuntimeError("Cannot register features: DuckDB connector not initialized")
         
         try:
             logger.info("LSP: Registering features...")
@@ -158,6 +162,15 @@ class MXCPLSPServer:
         except Exception as e:
             logger.error(f"Error registering LSP features: {e}")
             raise
+    
+    def _cleanup_resources(self):
+        """Clean up server resources."""
+        if self.duck_db_connector:
+            self.duck_db_connector.close()
+        
+        if self.session:
+            self.session.close()
+            logger.info("DuckDB session closed")
     
     def start(self, host: str = "localhost", use_tcp: bool = False):
         """Start the LSP server
@@ -194,10 +207,4 @@ class MXCPLSPServer:
     def shutdown(self):
         """Shutdown the LSP server and cleanup resources"""
         logger.info("Shutting down MXCP LSP Server...")
-        
-        if self.duck_db_connector:
-            self.duck_db_connector.close()
-        
-        if self.session:
-            self.session.close()
-            logger.info("DuckDB session closed") 
+        self._cleanup_resources() 

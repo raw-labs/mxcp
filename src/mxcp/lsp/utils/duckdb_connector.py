@@ -10,32 +10,33 @@ logger = logging.getLogger(__name__)
 
 
 class DuckDBConnector:
-    """DuckDB connector adapted for MXCP LSP that uses existing DuckDBSession."""
+    """DuckDB connector for MXCP LSP that provides SQL operations and completions."""
     
-    def __init__(self, session: Optional[DuckDBSession] = None, db_path: str = ":memory:"):
+    def __init__(self, session: DuckDBSession):
         """
-        Initialize DuckDB connector.
+        Initialize DuckDB connector with a required session.
         
         Args:
-            session: Existing MXCP DuckDBSession to use, or None to create new connection
-            db_path: Database path for fallback connection if session is None
+            session: MXCP DuckDBSession to use (required)
+            
+        Raises:
+            ValueError: If session is None or invalid
         """
-        self.session = session
-        self.__fallback_connection = None
-        
         if not session:
-            logger.info(f"Creating fallback DuckDB connection to {db_path}")
-            self.__fallback_connection = duckdb.connect(database=db_path)
+            raise ValueError("DuckDBSession is required - no fallback available")
+        
+        if not hasattr(session, 'conn') or not session.conn:
+            raise ValueError("DuckDBSession must have a valid connection")
+        
+        self.session = session
+        logger.info("DuckDB connector initialized with session")
     
     @property
     def connection(self):
         """Get the active DuckDB connection."""
-        if self.session and self.session.conn:
-            return self.session.conn
-        elif self.__fallback_connection:
-            return self.__fallback_connection
-        else:
-            raise RuntimeError("No DuckDB connection available")
+        if not self.session or not self.session.conn:
+            raise RuntimeError("No active DuckDB session connection available")
+        return self.session.conn
 
     def execute_query(self, query: str):
         """Execute a query and return results."""
@@ -51,6 +52,7 @@ class DuckDBConnector:
             # Use DuckDB's sql_auto_complete function
             result = self.execute_query(f'SELECT * FROM sql_auto_complete("{code}");')
             
+            query_result_items = []
             if result:
                 query_result_items = [
                     types.CompletionItem(
@@ -60,8 +62,6 @@ class DuckDBConnector:
                     for row in result
                     if row[0] is not None
                 ]
-            else:
-                query_result_items = []
 
             # Add parameters as completion items if provided
             parameter_items = []
@@ -113,8 +113,5 @@ class DuckDBConnector:
             return SQLValidation(error_result, code)
 
     def close(self):
-        """Close the DuckDB connection."""
-        if self.__fallback_connection:
-            self.__fallback_connection.close()
-            logger.info("Closed fallback DuckDB connection")
-        # Don't close the session connection as it's managed by MXCP 
+        """Close managed by MXCP session - no action needed."""
+        logger.debug("DuckDB connector close requested - managed by MXCP session") 

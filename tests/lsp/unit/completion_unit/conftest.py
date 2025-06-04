@@ -1,6 +1,8 @@
 import pytest
 import tempfile
 import os
+from unittest.mock import Mock
+import duckdb
 from mxcp.lsp.utils.yaml_parser import YamlParser
 from mxcp.lsp.utils.duckdb_connector import DuckDBConnector
 
@@ -29,23 +31,19 @@ def yaml_manager_empty():
 
 @pytest.fixture
 def duckdb_connector():
-    """Create a temporary DuckDB database for each test to ensure isolation."""
-    # Create a temporary file path for the database (don't create the file yet)
-    # Use NamedTemporaryFile to get a unique path, but delete it immediately
-    # so DuckDB can create a fresh database file
-    with tempfile.NamedTemporaryFile(suffix='.duckdb', prefix='test_completion_', delete=False) as temp_file:
-        db_path = temp_file.name
+    """Create a mock session with a real DuckDB connection for testing."""
+    # Create a temporary in-memory DuckDB connection
+    connection = duckdb.connect(":memory:")
     
-    # Remove the empty file that was created, so DuckDB can create a fresh database
-    os.unlink(db_path)
+    # Create a mock session that behaves like DuckDBSession
+    mock_session = Mock()
+    mock_session.conn = connection
     
     try:
-        # Create DuckDB connector with the temporary database path (no session)
-        duckdb_connector = DuckDBConnector(session=None, db_path=db_path)
+        # Create DuckDB connector with the mock session
+        duckdb_connector = DuckDBConnector(session=mock_session)
         yield duckdb_connector
     finally:
-        # Clean up: close connection and remove the temporary database file
-        if 'duckdb_connector' in locals():
-            duckdb_connector.close()
-        if os.path.exists(db_path):
-            os.unlink(db_path)
+        # Clean up: close the connection
+        if connection:
+            connection.close()

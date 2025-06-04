@@ -1,6 +1,7 @@
 import pytest
 from lsprotocol import types
 from mxcp.lsp.features.diagnostics.diagnostics import DiagnosticsService
+from mxcp.lsp.utils.coordinate_transformer import CoordinateTransformer
 
 
 def test_should_provide_lsp_for_valid_yaml(yaml_manager_inlined):
@@ -79,26 +80,26 @@ key: value
     assert len(diagnostics) == 0, "Expected no diagnostics for YAML without SQL"
 
 
-def test_adjust_position_to_document(diagnostics_service):
-    """Test the position adjustment from SQL coordinates to document coordinates."""
+def test_coordinate_transformer_sql_to_document():
+    """Test the coordinate transformation from SQL coordinates to document coordinates."""
     # Mock code span - SQL starts at line 4, character 6 (typical YAML indentation)
     code_span = (types.Position(line=4, character=6), types.Position(line=6, character=10))
     
     # Test position on the first line of SQL
     sql_position = types.Position(line=0, character=5)
-    adjusted = diagnostics_service._adjust_position_to_document(sql_position, code_span)
+    adjusted = CoordinateTransformer.sql_to_document_position(sql_position, code_span)
     assert adjusted.line == 4, f"Expected adjusted line to be 4, got {adjusted.line}"
     assert adjusted.character == 11, f"Expected adjusted character to be 11, got {adjusted.character}"
     
     # Test position on a subsequent line of SQL - this is the key fix
     sql_position = types.Position(line=1, character=3)
-    adjusted = diagnostics_service._adjust_position_to_document(sql_position, code_span)
+    adjusted = CoordinateTransformer.sql_to_document_position(sql_position, code_span)
     assert adjusted.line == 5, f"Expected adjusted line to be 5, got {adjusted.line}"
     assert adjusted.character == 9, f"Expected adjusted character to be 9 (6 + 3), got {adjusted.character}"
     
     # Test position on a third line to ensure consistency
     sql_position = types.Position(line=2, character=0)
-    adjusted = diagnostics_service._adjust_position_to_document(sql_position, code_span)
+    adjusted = CoordinateTransformer.sql_to_document_position(sql_position, code_span)
     assert adjusted.line == 6, f"Expected adjusted line to be 6, got {adjusted.line}"
     assert adjusted.character == 6, f"Expected adjusted character to be 6 (6 + 0), got {adjusted.character}"
 

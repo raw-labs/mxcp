@@ -8,6 +8,7 @@ from pygls.server import LanguageServer
 
 from mxcp.lsp.utils.duckdb_connector import DuckDBConnector
 from mxcp.lsp.utils.yaml_parser import YamlParser
+from mxcp.lsp.utils.coordinate_transformer import CoordinateTransformer
 
 
 logger = logging.getLogger(__name__)
@@ -74,19 +75,14 @@ class DiagnosticsService:
             diagnostics = []
             
             if validation.is_error():
-                # Convert the error position to document coordinates
-                # The error position is relative to the SQL code, we need to adjust it
-                # to be relative to the YAML document
-                adjusted_position = self._adjust_position_to_document(
-                    validation.error_position, yaml_parser.code_span
+                # Convert the error position to document coordinates using the transformer
+                adjusted_position = CoordinateTransformer.sql_to_document_position(
+                    validation.error_position, 
+                    yaml_parser.code_span
                 )
                 
                 # Determine severity based on error type
-                severity = types.DiagnosticSeverity.Error
-                if validation.error_type in ["SYNTAX_ERROR", "PARSER_ERROR"]:
-                    severity = types.DiagnosticSeverity.Error
-                elif validation.error_type in ["SEMANTIC_ERROR"]:
-                    severity = types.DiagnosticSeverity.Warning
+                severity = self._get_diagnostic_severity(validation.error_type)
                 
                 diagnostic = types.Diagnostic(
                     message=validation.error_message,
@@ -108,35 +104,22 @@ class DiagnosticsService:
             logger.error(f"Error parsing document {document_uri}: {e}")
             self._diagnostics[document_uri] = (document_version, [])
 
-    def _adjust_position_to_document(
-        self, 
-        sql_position: types.Position, 
-        code_span: Tuple[types.Position, types.Position]
-    ) -> types.Position:
+    def _get_diagnostic_severity(self, error_type: str) -> types.DiagnosticSeverity:
         """
-        Adjust a position from SQL code coordinates to document coordinates.
+        Determine diagnostic severity based on error type.
         
         Args:
-            sql_position: Position within the SQL code
-            code_span: Start and end positions of the SQL code in the document
+            error_type: Type of SQL validation error
             
         Returns:
-            Position adjusted to document coordinates
+            Appropriate diagnostic severity
         """
-        # Add the SQL code's start position to the error position
-        adjusted_line = code_span[0].line + sql_position.line
-        
-        # For block scalars (like `code: |`), all lines have the same base indentation
-        # The code_span[0].character gives us the indentation level after the YAML structure
-        if sql_position.line == 0:
-            # First line: add both the YAML indentation and the SQL position
-            adjusted_character = code_span[0].character + sql_position.character
+        if error_type in ["SYNTAX_ERROR", "PARSER_ERROR"]:
+            return types.DiagnosticSeverity.Error
+        elif error_type in ["SEMANTIC_ERROR"]:
+            return types.DiagnosticSeverity.Warning
         else:
-            # Subsequent lines: add the YAML base indentation and the SQL position
-            # The base indentation is the same for all lines in a block scalar
-            adjusted_character = code_span[0].character + sql_position.character
-        
-        return types.Position(line=adjusted_line, character=adjusted_character)
+            return types.DiagnosticSeverity.Error
 
     def get_diagnostics(self, document_uri: str) -> Tuple[int, List[types.Diagnostic]]:
         """

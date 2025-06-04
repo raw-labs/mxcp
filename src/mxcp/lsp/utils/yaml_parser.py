@@ -30,43 +30,51 @@ class YamlParser:
     def should_provide_lsp(
         self, cursor_position: Optional[types.Position] = None
     ) -> bool:
-        """Check if the YAML object is a raw YAML."""
+        """Check if LSP should be provided for this YAML document."""
+        return (
+            self._is_valid_mxcp_structure()
+            and self._has_inline_sql_code()
+            and self._cursor_in_code_range(cursor_position)
+        )
+
+    def _is_valid_mxcp_structure(self) -> bool:
+        """Check if the YAML has the basic MXCP tool structure."""
         return (
             self.yaml_object is not None
             and "mxcp" in self.yaml_object
             and "tool" in self.yaml_object
             and "source" in self.yaml_object["tool"]
             and "code" in self.yaml_object["tool"]["source"]
-            and isinstance(self.yaml_object["tool"]["source"]["code"], str)
-            and not self.yaml_object["tool"]["source"]["code"]
-            .strip()
-            .lower()
-            .endswith(".sql")
-            and (
-                cursor_position is None
-                or (
-                    self.code_span[0].line - 1 <= cursor_position.line
-                    and self.code_span[1].line + 1 >= cursor_position.line
-                )
-            )
+        )
+
+    def _has_inline_sql_code(self) -> bool:
+        """Check if the code is inline SQL (not a .sql file reference)."""
+        if not self._is_valid_mxcp_structure():
+            return False
+        
+        code = self.yaml_object["tool"]["source"]["code"]
+        return (
+            isinstance(code, str)
+            and not code.strip().lower().endswith(".sql")
+        )
+
+    def _cursor_in_code_range(self, cursor_position: Optional[types.Position]) -> bool:
+        """Check if the cursor position is within the code block range."""
+        if cursor_position is None:
+            return True
+        
+        if self.code_span is None:
+            return False
+        
+        return (
+            self.code_span[0].line - 1 <= cursor_position.line <= self.code_span[1].line + 1
         )
 
     def __get_code(self):
         """Get the code from the YAML object."""
-        if (
-            self.yaml_object is not None
-            and "mxcp" in self.yaml_object
-            and "tool" in self.yaml_object
-            and "source" in self.yaml_object["tool"]
-            and "code" in self.yaml_object["tool"]["source"]
-            and isinstance(self.yaml_object["tool"]["source"]["code"], str)
-            and not self.yaml_object["tool"]["source"]["code"]
-            .strip()
-            .lower()
-            .endswith(".sql")
-        ):
-            return self.yaml_object["tool"]["source"]["code"]
-        return None
+        if not self._has_inline_sql_code():
+            return None
+        return self.yaml_object["tool"]["source"]["code"]
 
     def __get_code_span(
         self, yaml_text: str
