@@ -92,6 +92,7 @@ class AuditLogger:
         self._stop_event = threading.Event()
         self._initialized = True
         self._file_lock = threading.Lock()
+        self._shutdown_called = False
         
         if self.enabled:
             # Ensure parent directory exists
@@ -104,7 +105,7 @@ class AuditLogger:
     
     def _start_writer_thread(self):
         """Start the background writer thread."""
-        self._writer_thread = threading.Thread(target=self._writer_loop, daemon=False)
+        self._writer_thread = threading.Thread(target=self._writer_loop, daemon=True)
         self._writer_thread.start()
         logger.debug("Background writer thread started")
     
@@ -182,10 +183,6 @@ class AuditLogger:
             logger.info("Shutting down audit logger...")
             self.shutdown()
         
-        # Register atexit handler as a safety net
-        # Note: We don't register signal handlers here because they would
-        # override the ones set by mxcp serve. Instead, the server should
-        # call shutdown() explicitly or rely on __del__ or atexit.
         atexit.register(shutdown_handler)
     
     def log_event(
@@ -316,8 +313,9 @@ class AuditLogger:
     
     def shutdown(self):
         """Gracefully shut down the audit logger."""
-        if not self.enabled or not self._writer_thread:
+        if self._shutdown_called or not self.enabled or not self._writer_thread:
             return
+        self._shutdown_called = True
         
         logger.info("Shutting down audit logger...")
         

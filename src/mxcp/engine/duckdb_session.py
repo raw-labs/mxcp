@@ -7,6 +7,7 @@ from mxcp.engine.plugin_loader import load_plugins
 from mxcp.plugins import MXCPBasePlugin
 from mxcp.auth.context import get_user_context
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,23 @@ class DuckDBSession:
         self.profile = profile
         self.readonly = readonly
         self.plugins: Dict[str, MXCPBasePlugin] = {}
+        
+    def __enter__(self):
+        """Context manager entry"""
+        self.connect()
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensure connection is closed"""
+        self.close()
+        
+    def __del__(self):
+        """Destructor - ensure connection is closed if object is garbage collected"""
+        try:
+            self.close()
+        except Exception:
+            # Ignore errors during cleanup in destructor
+            pass
         
     def _get_project_profile(self) -> tuple[str, str]:
         """Get the current project and profile from site config"""
@@ -59,6 +77,16 @@ class DuckDBSession:
         readonly = self.readonly
         if readonly is None:
             readonly = self.site_config["profiles"][profile]["duckdb"].get("readonly", False)
+            
+        # Handle read-only mode when database file doesn't exist
+        if readonly and db_path != ":memory:":
+            db_file = Path(db_path)
+            if not db_file.exists():
+                logger.info(f"Database file {db_path} doesn't exist. Creating it first before opening in read-only mode.")
+                # Create the database file first
+                temp_conn = duckdb.connect(db_path)
+                temp_conn.close()
+                logger.info(f"Created database file {db_path}")
             
         # Open connection with readonly flag if specified
         if readonly:
@@ -129,5 +157,10 @@ class DuckDBSession:
     def close(self):
         """Close the DuckDB connection"""
         if self.conn:
-            self.conn.close()
-            self.conn = None
+            try:
+                self.conn.close()
+                logger.debug("DuckDB connection closed successfully")
+            except Exception as e:
+                logger.error(f"Error closing DuckDB connection: {e}")
+            finally:
+                self.conn = None

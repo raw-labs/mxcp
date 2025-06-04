@@ -1,0 +1,37 @@
+mxcp: 1.0.0
+
+tool:
+  name: "owid_covid"
+  description: "Query COVID-19 data from Our World in Data (OWID) including cases, deaths, vaccinations, and testing data for any country."
+  tags: ["owid", "covid", "epidemiology"]
+  parameters:
+    - name: country_code
+      type: string
+      description: "ISO 3-letter country code to filter by (e.g., 'USA' for United States, 'GBR' for United Kingdom, 'DEU' for Germany)"
+    - parameter:
+      name: start_date
+      type: string
+      description: "Start date to filter data from, in YYYY-MM-DD format (e.g., '2020-03-01')"
+      default: "2020-01-01"
+    - parameter:
+      name: end_date
+      type: string
+      description: "End date to filter data to, in YYYY-MM-DD format (e.g., '2023-12-31')"
+      default: "2025-01-01"
+  return:
+    type: array
+    items:
+      type: object
+  source:
+    code: |
+      SELECT 
+        *
+      FROM covid_data 
+      WHERE iso_code = $country_code 
+        AND date BETWEEN $start_date AND $end_date
+      ORDER BY date ASC;
+  annotations:
+    title: "Our World in Data COVID-19 Dataset"
+    readOnlyHint: true
+    idempotentHint: true
+    openWorldHint: true
