@@ -3,14 +3,13 @@
 This example demonstrates how to use MXCP to create a COVID-19 data analysis API. It shows how to:
 - Fetch and cache COVID-19 data from Our World in Data (OWID)
 - Transform data using dbt and DuckDB
-- Create natural language interfaces for data exploration
+- Create a natural language interface for data exploration using generic SQL tools
 
 ## Features
 
 - **Comprehensive Data**: Global COVID-19 statistics from OWID
 - **Data Transformation**: dbt models for efficient querying
-- **Natural Language**: LLM-friendly query interface
-- **Type Safety**: Strongly typed endpoints
+- **Natural Language**: LLM-friendly query interface (prompt only)
 
 ## Getting Started
 
@@ -103,7 +102,6 @@ In Claude Desktop, try asking:
 ## 🛠️ Other MCP Clients
 
 This example works with any MCP-compatible tool:
-
 - **mcp-cli**: Interactive command-line interface
 - **Custom integrations**: Build your own using the MCP specification
 
@@ -115,6 +113,11 @@ The LLM can help you analyze:
 - Hospital occupancy
 - Regional comparisons
 - Policy effectiveness
+
+All queries are handled through the generic SQL query interface. You can:
+- Use `list_tables` to see available tables
+- Use `get_table_schema` to inspect table structure
+- Use `execute_sql_query` to run custom SQL queries
 
 ## Implementation Details
 
@@ -129,9 +132,7 @@ The example uses:
 ```
 covid_owid/
 ├── endpoints/                # MCP endpoint definitions
-│   ├── prompt.yml           # LLM system prompt
-│   ├── hospitalizations.yml # Hospital data endpoint
-│   └── owid-covid.yml      # Main COVID data endpoint
+│   └── prompt.yml           # LLM system prompt (generic query interface only)
 ├── models/                  # dbt transformations
 │   ├── covid_data.sql      # Main COVID-19 statistics
 │   ├── hospitalizations.sql # Hospital/ICU data
