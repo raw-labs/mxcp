@@ -1,0 +1,12 @@
+mxcp: 1.0.0
+
+projects:
+  jira-demo:
+    profiles:
+      dev:
+        plugin:
+          config:
+            jira:
+              url: "https://your-domain.atlassian.net"
+              username: "your-email@example.com"
+              password: "your-api-token" 

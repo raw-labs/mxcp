@@ -1,0 +1,7 @@
+mxcp: 1.0.0
+project: confluence-demo
+profile: dev
+plugin:
+  - name: confluence
+    module: mxcp_plugin_confluence
+    config: confluence

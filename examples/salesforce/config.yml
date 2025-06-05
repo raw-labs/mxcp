@@ -1,0 +1,14 @@
+mxcp: 1.0.0
+
+projects:
+  salesforce-demo:
+    profiles:
+      dev:
+        plugin:
+          config:
+            salesforce:
+              instance_url: "https://your-instance.salesforce.com"
+              username: "your-username@example.com"
+              password: "your-password"
+              security_token: "your-security-token"
+              client_id: "your-client-id" 
