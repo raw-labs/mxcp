@@ -113,7 +113,7 @@ def validate(endpoint: Optional[str], profile: Optional[str], json_output: bool,
                 result = validate_endpoint(endpoint, user_config, site_config, profile, session)
             else:
                 result = validate_all_endpoints(user_config, site_config, profile, session)
-                
+            
             if json_output:
                 output_result(result, json_output, debug)
             else:

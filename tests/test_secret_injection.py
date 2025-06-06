@@ -5,6 +5,7 @@ import os
 from mxcp.endpoints.executor import EndpointExecutor, EndpointType
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
+from mxcp.engine.duckdb_session import DuckDBSession
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
@@ -42,25 +43,33 @@ def test_profile():
     return "test_profile"
 
 @pytest.fixture
-def executor(test_repo_path, user_config, site_config, test_profile):
+def test_session(user_config, site_config, test_profile):
+    """Create a test DuckDB session."""
+    session = DuckDBSession(user_config, site_config, test_profile, readonly=True)
+    session.connect()
+    yield session
+    session.close()
+
+@pytest.fixture
+def executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for secret injection tests."""
     # Change to test repo directory
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "secret_test", user_config, site_config, test_profile)
+        executor = EndpointExecutor(EndpointType.TOOL, "secret_test", user_config, site_config, test_session, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)
 
 @pytest.fixture
-def http_headers_executor(test_repo_path, user_config, site_config, test_profile):
+def http_headers_executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for HTTP headers injection tests."""
     # Change to test repo directory
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "http_headers_test", user_config, site_config, test_profile)
+        executor = EndpointExecutor(EndpointType.TOOL, "http_headers_test", user_config, site_config, test_session, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)

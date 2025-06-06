@@ -10,6 +10,7 @@ from mxcp.config.site_config import load_site_config, get_active_profile
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.config.analytics import track_command_with_timing
 from mxcp.auth.providers import UserContext
+from mxcp.engine.duckdb_session import DuckDBSession
 
 @click.command(name="run")
 @click.argument("endpoint_type", type=click.Choice([t.value for t in EndpointType]))
@@ -111,11 +112,18 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
             
             params[key] = value
             
-        # Execute endpoint
-        result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, profile_name, validate_output=not skip_output_validation, readonly=readonly, user_context=user_context_obj))
+        # Create DuckDB session explicitly for better resource control
+        session = DuckDBSession(user_config, site_config, profile_name, readonly=readonly)
+        session.connect()
         
-        # Output result
-        output_result(result, json_output, debug)
+        try:
+            # Execute endpoint with explicit session
+            result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, session, profile_name, validate_output=not skip_output_validation, user_context=user_context_obj))
+            
+            # Output result
+            output_result(result, json_output, debug)
+        finally:
+            session.close()
             
     except Exception as e:
         output_error(e, json_output, debug)

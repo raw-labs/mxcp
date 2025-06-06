@@ -609,9 +609,9 @@ class RAWMCP:
                     endpoint_def["name"] if endpoint_key != "resource" else endpoint_def["uri"],
                     self.user_config,
                     self.site_config,
+                    self.db_session,
                     self.profile_name,
                     readonly=self.readonly,
-                    session=self.db_session,
                     db_lock=self.db_lock
                 )
                 result = await exec_.execute(converted, user_context=user_context)

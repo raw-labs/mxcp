@@ -38,7 +38,7 @@ def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, A
         user_config: User configuration
         site_config: Site configuration
         profile: Profile name
-        readonly: Whether to open DuckDB connection in read-only mode
+        shared_session: DuckDB session to use for validation
         
     Returns:
         Dictionary with validation status and details for each endpoint
@@ -130,7 +130,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         user_config: User configuration
         site_config: Site configuration
         profile: Profile name
-        readonly: Whether to open DuckDB connection in read-only mode
+        shared_session: DuckDB session to use for validation
         
     Returns:
         Dictionary with validation status and details

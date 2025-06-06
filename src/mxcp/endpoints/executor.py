@@ -245,7 +245,7 @@ class TypeConverter:
 
 class EndpointExecutor:
     def __init__(self, endpoint_type: EndpointType, name: str, user_config: UserConfig, site_config: SiteConfig, 
-                 profile: Optional[str] = None, readonly: Optional[bool] = None, session: Optional[DuckDBSession] = None,
+                 session: DuckDBSession, profile: Optional[str] = None,
                  db_lock: Optional[threading.Lock] = None):
         """Initialize the endpoint executor.
         
@@ -254,9 +254,8 @@ class EndpointExecutor:
             name: The name of the endpoint
             user_config: The user configuration
             site_config: The site configuration
+            session: DuckDB session to use for execution
             profile: Optional profile name to override the default profile
-            readonly: Whether to open DuckDB connection in read-only mode
-            session: Optional existing DuckDB session to reuse (if not provided, creates a new one)
             db_lock: Optional threading lock for thread-safe database access (only needed with shared session)
         """
         self.endpoint_type = endpoint_type
@@ -265,13 +264,8 @@ class EndpointExecutor:
         self.user_config = user_config
         self.site_config = site_config
         
-        # Handle session creation or reuse
-        if session is not None:
-            self.session = session
-            self.owns_session = False  # Don't close a session we didn't create
-        else:
-            self.session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
-            self.owns_session = True  # We created it, so we should close it
+        # Session is always provided from outside
+        self.session = session
         
         self.db_lock = db_lock  # Store the lock for thread-safe access
         self.policy_enforcer: Optional[PolicyEnforcer] = None
@@ -424,118 +418,108 @@ class EndpointExecutor:
                 # Re-raise with more context
                 raise ValueError(f"Policy enforcement failed: {e.reason}")
         
-        # Get DuckDB connection
-        # If we own the session (CLI mode), we need to connect/initialize it
-        # If we're using a shared session (server mode), it's already initialized
-        if self.owns_session:
-            conn = self.session.connect()
-        else:
-            conn = self.session.conn
-            if not conn:
-                raise RuntimeError("Shared DuckDB session not properly initialized")
+        # Get DuckDB connection - session is always provided and initialized externally
+        conn = self.session.conn
+        if not conn:
+            raise RuntimeError("DuckDB session not properly initialized")
         
-        try:
-            if self.endpoint_type in (EndpointType.TOOL, EndpointType.RESOURCE):
-                # For tools and resources, we execute SQL and return results as list of dicts
-                source = self._get_source_code()
-                
-                # Check for missing parameters in SQL
-                required_params = duckdb.extract_statements(source)[0].named_parameters
-                missing_params = set(required_params) - set(params.keys())
-                if missing_params:
-                    raise ValueError(f"Required parameter missing: {', '.join(missing_params)}")
-                
-                # Execute query with thread-safety if lock is provided
-                if self.db_lock:
-                    with self.db_lock:
-                        result = conn.execute(source, params).fetchdf().to_dict("records")
-                else:
+        if self.endpoint_type in (EndpointType.TOOL, EndpointType.RESOURCE):
+            # For tools and resources, we execute SQL and return results as list of dicts
+            source = self._get_source_code()
+            
+            # Check for missing parameters in SQL
+            required_params = duckdb.extract_statements(source)[0].named_parameters
+            missing_params = set(required_params) - set(params.keys())
+            if missing_params:
+                raise ValueError(f"Required parameter missing: {', '.join(missing_params)}")
+            
+            # Execute query with thread-safety if lock is provided
+            if self.db_lock:
+                with self.db_lock:
                     result = conn.execute(source, params).fetchdf().to_dict("records")
+            else:
+                result = conn.execute(source, params).fetchdf().to_dict("records")
+                
+            logger.debug(f"SQL query returned {len(result)} rows")
+            logger.debug(f"First row (if any): {result[0] if result else 'No rows'}")
+            
+            # Transform result based on return type if specified
+            endpoint_def = self.endpoint[self.endpoint_type.value]
+            if "return" in endpoint_def:
+                return_type = endpoint_def["return"].get("type")
+                logger.debug(f"Expected return type: {return_type}")
+                
+                if return_type != "array":
+                    if len(result) == 0:
+                        raise ValueError("SQL query returned no rows")
+                    if len(result) > 1:
+                        raise ValueError(f"SQL query returned multiple rows ({len(result)}), but return type is '{return_type}'")
                     
-                logger.debug(f"SQL query returned {len(result)} rows")
-                logger.debug(f"First row (if any): {result[0] if result else 'No rows'}")
-                
-                # Transform result based on return type if specified
-                endpoint_def = self.endpoint[self.endpoint_type.value]
-                if "return" in endpoint_def:
-                    return_type = endpoint_def["return"].get("type")
-                    logger.debug(f"Expected return type: {return_type}")
+                    # We have exactly one row
+                    row = result[0]
                     
-                    if return_type != "array":
-                        if len(result) == 0:
-                            raise ValueError("SQL query returned no rows")
-                        if len(result) > 1:
-                            raise ValueError(f"SQL query returned multiple rows ({len(result)}), but return type is '{return_type}'")
-                        
-                        # We have exactly one row
-                        row = result[0]
-                        
-                        if return_type == "object":
-                            result = row
-                            logger.debug(f"Transformed to object: {result}")
-                        else:  # scalar type
-                            if len(row) != 1:
-                                raise ValueError(f"SQL query returned multiple columns ({len(row)}), but return type is '{return_type}'")
-                            result = next(iter(row.values()))
-                            logger.debug(f"Transformed to scalar: {result}")
+                    if return_type == "object":
+                        result = row
+                        logger.debug(f"Transformed to object: {result}")
+                    else:  # scalar type
+                        if len(row) != 1:
+                            raise ValueError(f"SQL query returned multiple columns ({len(row)}), but return type is '{return_type}'")
+                        result = next(iter(row.values()))
+                        logger.debug(f"Transformed to scalar: {result}")
+            
+            # Validate the output against the return type definition if enabled
+            if validate_output:
+                logger.debug(f"Validating output of type {type(result).__name__}")
+                self._validate_return(result)
+            
+            # Enforce output policies
+            if self.policy_enforcer:
+                try:
+                    logger.debug(f"Enforcing output policies on result: {result}")
+                    result, action = self.policy_enforcer.enforce_output_policies(user_context, result, endpoint_def)
+                    if action:
+                        self.last_policy_decision = action
+                    logger.debug(f"Result after policy enforcement: {result}")
+                except PolicyEnforcementError as e:
+                    # Track the denial
+                    self.last_policy_decision = "deny"
+                    self.last_policy_reason = e.reason
+                    # Re-raise with more context
+                    raise ValueError(f"Output policy enforcement failed: {e.reason}")
+            
+            return result
+            
+        else:  # PROMPT
+            # For prompts, we process each message through Jinja2 templating
+            prompt_def = self.endpoint["prompt"]
+            messages = prompt_def["messages"]
+            
+            processed_messages = []
+            for msg in messages:
+                template = Template(msg["prompt"])
+                processed_prompt = template.render(**params)
                 
-                # Validate the output against the return type definition if enabled
-                if validate_output:
-                    logger.debug(f"Validating output of type {type(result).__name__}")
-                    self._validate_return(result)
-                
-                # Enforce output policies
-                if self.policy_enforcer:
-                    try:
-                        logger.debug(f"Enforcing output policies on result: {result}")
-                        result, action = self.policy_enforcer.enforce_output_policies(user_context, result, endpoint_def)
-                        if action:
-                            self.last_policy_decision = action
-                        logger.debug(f"Result after policy enforcement: {result}")
-                    except PolicyEnforcementError as e:
-                        # Track the denial
-                        self.last_policy_decision = "deny"
-                        self.last_policy_reason = e.reason
-                        # Re-raise with more context
-                        raise ValueError(f"Output policy enforcement failed: {e.reason}")
-                
-                return result
-                
-            else:  # PROMPT
-                # For prompts, we process each message through Jinja2 templating
-                prompt_def = self.endpoint["prompt"]
-                messages = prompt_def["messages"]
-                
-                processed_messages = []
-                for msg in messages:
-                    template = Template(msg["prompt"])
-                    processed_prompt = template.render(**params)
-                    
-                    processed_msg = {
-                        "prompt": processed_prompt,
-                        "role": msg.get("role"),
-                        "type": msg.get("type")
-                    }
-                    processed_messages.append(processed_msg)
-                
-                # Enforce output policies for prompts too
-                if self.policy_enforcer:
-                    try:
-                        processed_messages, action = self.policy_enforcer.enforce_output_policies(user_context, processed_messages, prompt_def)
-                        if action:
-                            self.last_policy_decision = action
-                    except PolicyEnforcementError as e:
-                        # Track the denial
-                        self.last_policy_decision = "deny"
-                        self.last_policy_reason = e.reason
-                        # Re-raise with more context
-                        raise ValueError(f"Output policy enforcement failed: {e.reason}")
-                
-                return processed_messages
-                
-        finally:
-            if self.owns_session:
-                self.session.close()
+                processed_msg = {
+                    "prompt": processed_prompt,
+                    "role": msg.get("role"),
+                    "type": msg.get("type")
+                }
+                processed_messages.append(processed_msg)
+            
+            # Enforce output policies for prompts too
+            if self.policy_enforcer:
+                try:
+                    processed_messages, action = self.policy_enforcer.enforce_output_policies(user_context, processed_messages, prompt_def)
+                    if action:
+                        self.last_policy_decision = action
+                except PolicyEnforcementError as e:
+                    # Track the denial
+                    self.last_policy_decision = "deny"
+                    self.last_policy_reason = e.reason
+                    # Re-raise with more context
+                    raise ValueError(f"Output policy enforcement failed: {e.reason}")
+            
+            return processed_messages
             
     def _validate_return(self, output: EndpointResult) -> None:
         """Validate the output against the return type definition if present."""
@@ -566,7 +550,7 @@ class EndpointExecutor:
             logger.error(f"_validate_return: Generic error: {e}, error_msg={error_msg}")
             raise SchemaError(error_msg) from e
 
-async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, readonly: Optional[bool] = None, user_context: Optional['UserContext'] = None) -> EndpointResult:
+async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, session: DuckDBSession, profile: Optional[str] = None, user_context: Optional['UserContext'] = None) -> EndpointResult:
     """Execute an endpoint by type and name.
     
     Args:
@@ -575,8 +559,8 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
         params: Dictionary of parameter name/value pairs
         user_config: The user configuration
         site_config: The site configuration
+        session: DuckDB session to use for execution
         profile: Optional profile name to override the default profile
-        readonly: Whether to open DuckDB connection in read-only mode
         user_context: Optional user context for policy enforcement
         
     Returns:
@@ -588,5 +572,5 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
     except ValueError:
         raise ValueError(f"Invalid endpoint type: {endpoint_type}. Must be one of: {', '.join(t.value for t in EndpointType)}")
         
-    executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config, profile, readonly=readonly)
+    executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config, session, profile)
     return await executor.execute(params, user_context=user_context) 

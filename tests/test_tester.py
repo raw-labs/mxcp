@@ -5,6 +5,7 @@ from pathlib import Path
 from mxcp.endpoints.tester import run_tests, run_all_tests
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
+from mxcp.engine.duckdb_session import DuckDBSession
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
