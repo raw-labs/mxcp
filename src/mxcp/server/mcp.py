@@ -243,22 +243,26 @@ class RAWMCP:
         # Capitalize first letter for class name convention
         return name.title().replace('_', '')
 
-    def _create_pydantic_model_from_schema(self, schema_def: Dict[str, Any], model_name: str) -> Any:
+    def _create_pydantic_model_from_schema(self, schema_def: Dict[str, Any], model_name: str, endpoint_type: Optional[EndpointType] = None) -> Any:
         """Create a Pydantic model from a JSON Schema definition.
         
         Args:
             schema_def: JSON Schema definition
             model_name: Name for the generated model
+            endpoint_type: Type of endpoint (affects whether parameters are Optional)
             
         Returns:
             Pydantic model class or type annotation
         """
-        # Cache key for this schema
-        cache_key = f"{model_name}_{hash(json.dumps(schema_def, sort_keys=True))}"
+        # Cache key for this schema (include endpoint_type to avoid conflicts)
+        cache_key = f"{model_name}_{hash(json.dumps(schema_def, sort_keys=True))}_{endpoint_type}"
         if cache_key in self._model_cache:
             return self._model_cache[cache_key]
         
         json_type = schema_def.get("type", "string")
+        
+        # Determine if parameters should be Optional (tools/prompts) or required (resources)
+        make_optional = endpoint_type in (EndpointType.TOOL, EndpointType.PROMPT)
         
         # Handle primitive types
         if json_type == "string":
@@ -266,49 +270,76 @@ class RAWMCP:
             if "enum" in schema_def:
                 enum_values = schema_def["enum"]
                 if all(isinstance(v, str) for v in enum_values):
-                    result = Literal[tuple(enum_values)]
+                    if make_optional:
+                        result = Optional[Literal[tuple(enum_values)]]
+                    else:
+                        result = Literal[tuple(enum_values)]
                     self._model_cache[cache_key] = result
                     return result
             
             # Create Field with constraints
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
-                result = Annotated[str, Field(**field_kwargs)]
+                if make_optional:
+                    result = Annotated[Optional[str], Field(**field_kwargs)]
+                else:
+                    result = Annotated[str, Field(**field_kwargs)]
             else:
-                result = str
+                if make_optional:
+                    result = Optional[str]
+                else:
+                    result = str
             self._model_cache[cache_key] = result
             return result
             
         elif json_type == "integer":
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
-                result = Annotated[int, Field(**field_kwargs)]
+                if make_optional:
+                    result = Annotated[Optional[int], Field(**field_kwargs)]
+                else:
+                    result = Annotated[int, Field(**field_kwargs)]
             else:
-                result = int
+                if make_optional:
+                    result = Optional[int]
+                else:
+                    result = int
             self._model_cache[cache_key] = result
             return result
             
         elif json_type == "number":
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
-                result = Annotated[float, Field(**field_kwargs)]
+                if make_optional:
+                    result = Annotated[Optional[float], Field(**field_kwargs)]
+                else:
+                    result = Annotated[float, Field(**field_kwargs)]
             else:
-                result = float
+                if make_optional:
+                    result = Optional[float]
+                else:
+                    result = float
             self._model_cache[cache_key] = result
             return result
             
         elif json_type == "boolean":
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
-                result = Annotated[bool, Field(**field_kwargs)]
+                if make_optional:
+                    result = Annotated[Optional[bool], Field(**field_kwargs)]
+                else:
+                    result = Annotated[bool, Field(**field_kwargs)]
             else:
-                result = bool
+                if make_optional:
+                    result = Optional[bool]
+                else:
+                    result = bool
             self._model_cache[cache_key] = result
             return result
             
         elif json_type == "array":
             items_schema = schema_def.get("items", {"type": "string"})
-            item_type = self._create_pydantic_model_from_schema(items_schema, f"{model_name}Item")
+            item_type = self._create_pydantic_model_from_schema(items_schema, f"{model_name}Item", endpoint_type)
             
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
@@ -339,7 +370,8 @@ class RAWMCP:
             for prop_name, prop_schema in properties.items():
                 prop_type = self._create_pydantic_model_from_schema(
                     prop_schema, 
-                    f"{model_name}{self._sanitize_model_name(prop_name)}"
+                    f"{model_name}{self._sanitize_model_name(prop_name)}",
+                    endpoint_type
                 )
                 
                 # Extract field constraints for this property
@@ -420,28 +452,30 @@ class RAWMCP:
         
         return field_kwargs
 
-    def _create_pydantic_field_annotation(self, param_def: Dict[str, Any]) -> Any:
+    def _create_pydantic_field_annotation(self, param_def: Dict[str, Any], endpoint_type: Optional[EndpointType] = None) -> Any:
         """Create a Pydantic type annotation from parameter definition.
         
         Args:
             param_def: Parameter definition from endpoint YAML
+            endpoint_type: Type of endpoint (affects whether parameters are Optional)
             
         Returns:
             Pydantic type annotation (class or Annotated type)
         """
         param_name = param_def.get("name", "param")
-        return self._create_pydantic_model_from_schema(param_def, param_name)
+        return self._create_pydantic_model_from_schema(param_def, param_name, endpoint_type)
 
-    def _json_schema_to_python_type(self, param_def: Dict[str, Any]) -> Any:
+    def _json_schema_to_python_type(self, param_def: Dict[str, Any], endpoint_type: Optional[EndpointType] = None) -> Any:
         """Convert JSON Schema type to Python type annotation.
         
         Args:
             param_def: Parameter definition from endpoint YAML
+            endpoint_type: Type of endpoint (affects whether parameters are Optional)
             
         Returns:
             Python type annotation
         """
-        return self._create_pydantic_field_annotation(param_def)
+        return self._create_pydantic_field_annotation(param_def, endpoint_type)
 
     def _create_tool_annotations(self, tool_def: Dict[str, Any]) -> Optional[ToolAnnotations]:
         """Create ToolAnnotations from tool definition.
@@ -573,7 +607,7 @@ class RAWMCP:
         param_signatures = []
         for param in parameters:
             param_name = param["name"]
-            param_type = self._json_schema_to_python_type(param)
+            param_type = self._json_schema_to_python_type(param, endpoint_type)
             param_annotations[param_name] = param_type
             # Create string representation for makefun
             param_signatures.append(f"{param_name}")
@@ -587,6 +621,7 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
+            exec_ = None  # Initialize to prevent NameError in finally block
             
             try:
                 # Get the user context from the context variable (set by auth middleware)
@@ -640,9 +675,9 @@ class RAWMCP:
                 # Get policy decision from executor if available
                 policy_decision = "n/a"
                 policy_reason = None
-                if hasattr(exec_, 'last_policy_decision'):
+                if exec_ is not None and hasattr(exec_, 'last_policy_decision'):
                     policy_decision = exec_.last_policy_decision
-                if hasattr(exec_, 'last_policy_reason'):
+                if exec_ is not None and hasattr(exec_, 'last_policy_reason'):
                     policy_reason = exec_.last_policy_reason
                 
                 # Log the audit event
