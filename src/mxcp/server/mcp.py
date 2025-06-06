@@ -6,6 +6,7 @@ import time
 import threading
 import atexit
 from pathlib import Path
+from pandas import NaT
 from mcp.server.fastmcp import FastMCP
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mxcp.endpoints.loader import EndpointLoader
@@ -813,7 +814,7 @@ class RAWMCP:
                 # Use shared connection with thread-safety
                 with self.db_lock:
                     result = self.db_connection.execute(sql).fetchdf()
-                    return result.to_dict("records")
+                    return result.replace({NaT: None}).to_dict("records")
             except Exception as e:
                 status = "error"
                 error_msg = str(e)

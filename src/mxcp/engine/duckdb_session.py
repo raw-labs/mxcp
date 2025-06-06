@@ -1,5 +1,5 @@
 import duckdb
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from mxcp.config.types import SiteConfig, UserConfig
 from mxcp.engine.secret_injection import inject_secrets
 from mxcp.engine.extension_loader import load_extensions
@@ -8,6 +8,7 @@ from mxcp.plugins import MXCPBasePlugin
 from mxcp.auth.context import get_user_context
 import logging
 from pathlib import Path
+from pandas import NaT
 
 logger = logging.getLogger(__name__)
 
@@ -173,3 +174,10 @@ class DuckDBSession:
             finally:
                 self.conn = None
                 self._initialized = False  # Reset initialization flag
+
+    def execute_query_to_dict(self, query: str, params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+        """
+        Execute a query with parameters and return the result as a list of dictionaries.
+        Replaces NaT values with None.
+        """
+        return self.conn.execute(query, params).fetchdf().replace({NaT: None}).to_dict("records")
