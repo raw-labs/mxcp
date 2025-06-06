@@ -4,12 +4,17 @@ from mxcp.config.types import SiteConfig, UserConfig
 from mxcp.engine.duckdb_session import DuckDBSession
 
 from pygls.server import LanguageServer
+from pygls.protocol import LanguageServerProtocol
 from lsprotocol.types import (
     InitializeParams,
     InitializedParams,
     ServerCapabilities,
     TextDocumentSyncOptions,
     TextDocumentSyncKind,
+    CompletionOptions,
+    SemanticTokensOptions,
+    SemanticTokensLegend,
+    TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL,
 )
 
 from .features.completion import register_completion
@@ -19,6 +24,27 @@ from .utils.duckdb_connector import DuckDBConnector
 from .utils.document_event_coordinator import DocumentEventCoordinator
 
 logger = logging.getLogger(__name__)
+
+
+class PatchedLanguageServerProtocol(LanguageServerProtocol):
+    """A patched version of the language server protocol to handle semantic tokens capabilities."""
+    
+    def __init__(self, *args, **kwargs):
+        self._server_capabilities = ServerCapabilities()
+        super().__init__(*args, **kwargs)
+    
+    @property
+    def server_capabilities(self):
+        return self._server_capabilities
+    
+    @server_capabilities.setter
+    def server_capabilities(self, value: ServerCapabilities):
+        # Check if semantic tokens full feature is registered and set the capability
+        if TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL in self.fm.features:
+            opts = self.fm.feature_options.get(TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL, None)
+            if opts:
+                value.semantic_tokens_provider = opts
+        self._server_capabilities = value
 
 
 class MXCPLSPServer:
@@ -43,14 +69,18 @@ class MXCPLSPServer:
         self.session: Optional[DuckDBSession] = None
         self.duck_db_connector: Optional[DuckDBConnector] = None
         
-        # Create the language server instance
-        self.ls = LanguageServer('mxcp-lsp', 'v0.1.0')
+        # Create the language server instance with patched protocol
+        self.ls = LanguageServer('mxcp-lsp', 'v0.1.0', protocol_cls=PatchedLanguageServerProtocol)
         
         # Document event coordinator
         self.document_coordinator = DocumentEventCoordinator()
         
-        # Register LSP handlers
+        # Register LSP handlers first
         self._register_handlers()
+        
+        # Try to initialize DuckDB and register features early
+        # This allows features to be available during capability generation
+        self._initialize_server_features()
         
         logger.info(f"Initializing MXCP LSP Server on port {self.port}")
         if profile:
@@ -87,32 +117,27 @@ class MXCPLSPServer:
             logger.error(f"Failed to initialize DuckDB: {e}")
             raise RuntimeError(f"LSP server cannot start without DuckDB connection: {e}")
     
+    def _initialize_server_features(self):
+        """Initialize server features early during server setup."""
+        try:
+            # Try to initialize DuckDB session during server setup
+            self._initialize_duckdb_session()
+            
+            # Register features during server setup so they're available for capability generation
+            self._register_features()
+            logger.info("LSP: Server features initialized during setup")
+            
+        except Exception as e:
+            logger.warning(f"LSP: Could not initialize features during setup: {e}")
+            logger.warning("LSP: Features will be initialized during client initialize request")
+    
+
+    
     def _register_handlers(self):
         """Register LSP protocol handlers"""
         
-        @self.ls.feature("initialize")
-        def initialize(params: InitializeParams):
-            """Handle LSP initialize request"""
-            logger.info("LSP: Handling initialize request")
-            
-            # Initialize DuckDB session during startup - fail if this fails
-            self._initialize_duckdb_session()
-            
-            # Register features during startup
-            self._register_features()
-            
-            return {
-                "capabilities": ServerCapabilities(
-                    # Text document sync - essential for document events
-                    text_document_sync=TextDocumentSyncOptions(
-                        open_close=True,
-                        change=TextDocumentSyncKind.Full,
-                    ),
-                    # Note: Other capabilities are declared by the individual features
-                    # when they register with @server.feature()
-                ),
-                "serverInfo": {"name": "MXCP LSP Server", "version": "0.1.0"},
-            }
+        # Don't override the initialize handler - let pygls handle it automatically
+        # Since features are registered during server setup, pygls will generate the correct capabilities
 
         @self.ls.feature("initialized")
         def initialized(params: InitializedParams):
@@ -136,32 +161,44 @@ class MXCPLSPServer:
         if not self.duck_db_connector:
             raise RuntimeError("Cannot register features: DuckDB connector not initialized")
         
+        logger.info("LSP: Registering features...")
+        features_registered = 0
+        
+        # Register completion feature
         try:
-            logger.info("LSP: Registering features...")
-            
-            # Register completion feature
             register_completion(self.ls, self.duck_db_connector)
             logger.info("LSP: Completion feature registered")
-            
-            # Register semantic tokens feature
+            features_registered += 1
+        except Exception as e:
+            logger.error(f"Failed to register completion feature: {e}")
+        
+        # Register diagnostics feature first (it registers document events)
+        # Diagnostics registers its own document event handlers directly following pygls best practices
+        diagnostics_service = None
+        try:
+            diagnostics_service = register_diagnostics(self.ls, self.duck_db_connector)
+            logger.info("LSP: Diagnostics feature registered")
+            features_registered += 1
+        except Exception as e:
+            logger.error(f"Failed to register diagnostics feature: {e}")
+        
+        # Register semantic tokens feature
+        try:
             semantic_tokens_service, semantic_tokens_handler = register_semantic_tokens(
                 self.ls, self.duck_db_connector
             )
-            self.document_coordinator.register_handler(semantic_tokens_handler)
+            if diagnostics_service:
+                diagnostics_service.add_document_handler(semantic_tokens_handler)
             logger.info("LSP: Semantic tokens feature registered")
-            
-            # Register diagnostics feature
-            diagnostics_service = register_diagnostics(self.ls, self.duck_db_connector)
-            self.document_coordinator.register_handler(diagnostics_service)
-            logger.info("LSP: Diagnostics feature registered")
-            
-            # Register document events with the server (only once)
-            self.document_coordinator.register_with_server(self.ls)
-            logger.info("LSP: Document event coordinator registered")
-                
+            features_registered += 1
         except Exception as e:
-            logger.error(f"Error registering LSP features: {e}")
-            raise
+            logger.error(f"Failed to register semantic tokens feature: {e}")
+        
+        expected_features = 3  # completion, diagnostics, semantic_tokens
+        logger.info(f"LSP: Features registration completed - {features_registered}/{expected_features} features registered")
+        
+        if features_registered == 0:
+            raise RuntimeError("No LSP features could be registered")
     
     def _cleanup_resources(self):
         """Clean up server resources."""

@@ -2,8 +2,12 @@ import pytest
 from lsprotocol.types import (
     SemanticTokens,
     SemanticTokensParams,
+    SemanticTokensRangeParams,
     TextDocumentIdentifier,
     Position,
+    Range,
+    DidOpenTextDocumentParams,
+    TextDocumentItem,
 )
 from pytest_lsp import LanguageClient
 from pathlib import Path
@@ -189,3 +193,49 @@ async def test_semantic_tokens_positions(client: LanguageClient):
     assert offset == 8, "Fifth token offset should be 8 (relative to end of '(')"
     assert length == 6, "Fifth token length should be 6"
     assert token_type == 0, "Fifth token type should be 0 (keyword)"
+
+
+@pytest.mark.asyncio
+async def test_semantic_tokens_range(client):
+    """Test semantic tokens range functionality."""
+    
+    # Create a test document with SQL code
+    yaml_content = """mxcp: 1.0.0
+
+tool:
+  name: "test_tool"
+  source:
+    code: |
+      SELECT id, name FROM users WHERE id = 1;
+"""
+    
+    uri = "file:///test_range.yaml"
+    client.text_document_did_open(
+        DidOpenTextDocumentParams(
+            text_document=TextDocumentItem(
+                uri=uri,
+                language_id="yaml",
+                version=1,
+                text=yaml_content
+            )
+        )
+    )
+    
+    # Test semantic tokens range request
+    result = await client.text_document_semantic_tokens_range_async(
+        SemanticTokensRangeParams(
+            text_document=TextDocumentIdentifier(uri=uri),
+            range=Range(
+                start=Position(line=4, character=0),
+                end=Position(line=4, character=40)
+            )
+        )
+    )
+    
+    # Should return semantic tokens for the SQL code
+    assert result is not None
+    assert isinstance(result, SemanticTokens)
+    assert len(result.data) > 0
+    
+    # Data should be in groups of 5 (line, char, length, type, modifier)
+    assert len(result.data) % 5 == 0

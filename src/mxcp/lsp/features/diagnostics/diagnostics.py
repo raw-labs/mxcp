@@ -1,7 +1,7 @@
 """Main diagnostics functionality for the LSP server."""
 
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 from lsprotocol import types
 from pygls.server import LanguageServer
@@ -22,10 +22,15 @@ class DiagnosticsService:
         self._duck_db_connector = duck_db_connector
         self._diagnostics: Dict[str, Tuple[int, List[types.Diagnostic]]] = {}
         self._server: LanguageServer = None
+        self._additional_handlers: List = []
 
     def set_server(self, server: LanguageServer) -> None:
         """Set the server instance for publishing diagnostics."""
         self._server = server
+
+    def add_document_handler(self, handler) -> None:
+        """Add an additional document event handler (e.g., for semantic tokens)."""
+        self._additional_handlers.append(handler)
 
     def handle_document_open(self, params: types.DidOpenTextDocumentParams) -> None:
         """Handle document open events."""
@@ -36,6 +41,13 @@ class DiagnosticsService:
             params.text_document.version
         )
         self.publish_diagnostics(params.text_document.uri)
+        
+        # Call additional handlers
+        for handler in self._additional_handlers:
+            try:
+                handler.handle_document_open(params)
+            except Exception as e:
+                logger.error(f"Error in additional document open handler: {e}")
 
     def handle_document_change(self, params: types.DidChangeTextDocumentParams) -> None:
         """Handle document change events."""
@@ -46,6 +58,21 @@ class DiagnosticsService:
             params.text_document.version
         )
         self.publish_diagnostics(params.text_document.uri)
+        
+        # Call additional handlers
+        for handler in self._additional_handlers:
+            try:
+                handler.handle_document_change(params)
+            except Exception as e:
+                logger.error(f"Error in additional document change handler: {e}")
+
+    def handle_document_close(self, params: types.DidCloseTextDocumentParams) -> None:
+        """Handle document close events by clearing diagnostics."""
+        # Clear diagnostics when document is closed
+        self._diagnostics.pop(params.text_document.uri, None)
+        # Send empty diagnostics to clear them in the client
+        if self._server:
+            self._server.publish_diagnostics(params.text_document.uri, [])
 
     def parse_document(self, document_uri: str, document_source: str, document_version: int) -> None:
         """
@@ -145,7 +172,12 @@ class DiagnosticsService:
             return
             
         version, diagnostics = self.get_diagnostics(document_uri)
-        self._server.publish_diagnostics(document_uri, diagnostics)
+        # Use publish_diagnostics with proper parameters matching pygls examples
+        self._server.publish_diagnostics(
+            uri=document_uri,
+            diagnostics=diagnostics,
+            version=version
+        )
 
 
 def register_diagnostics(
@@ -154,6 +186,8 @@ def register_diagnostics(
 ) -> DiagnosticsService:
     """
     Register diagnostics functionality with the LSP server.
+    
+    Following the pygls publish diagnostics example pattern.
     
     Args:
         server: The language server instance
@@ -165,6 +199,24 @@ def register_diagnostics(
     try:
         service = DiagnosticsService(duck_db_connector)
         service.set_server(server)
+        
+        # Register document lifecycle events for diagnostics
+        # This follows the pattern from the pygls publish diagnostics example
+        
+        @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
+        def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams):
+            """Parse each document when it is opened"""
+            service.handle_document_open(params)
+
+        @server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
+        def did_change(ls: LanguageServer, params: types.DidChangeTextDocumentParams):
+            """Parse each document when it is changed"""
+            service.handle_document_change(params)
+
+        @server.feature(types.TEXT_DOCUMENT_DID_CLOSE)
+        def did_close(ls: LanguageServer, params: types.DidCloseTextDocumentParams):
+            """Clear diagnostics when document is closed"""
+            service.handle_document_close(params)
         
         logger.info("Diagnostics functionality registered successfully")
         return service
