@@ -3,6 +3,7 @@ from mxcp.endpoints.executor import execute_endpoint, EndpointType, EndpointExec
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.config.site_config import SiteConfig, find_repo_root
 from mxcp.config.user_config import UserConfig
+from mxcp.engine.duckdb_session import DuckDBSession
 import time
 import json
 import logging
@@ -33,80 +34,96 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
         "endpoints": []
     }
     
-    for file_path, endpoint, error_msg in endpoints:
-        if file_path.name in ["mxcp-site.yml", "mxcp-config.yml"]:
-            continue
-            
-        logger.debug(f"Processing file: {file_path}")
-        
-        # Calculate relative path for results
-        try:
-            relative_path = str(file_path.relative_to(repo_root))
-        except ValueError:
-            relative_path = file_path.name
-        
-        if error_msg is not None:
-            # This endpoint failed to load
-            results["endpoints"].append({
-                "endpoint": str(file_path),
-                "path": relative_path,
-                "test_results": {
-                    "status": "error",
-                    "message": error_msg
-                }
-            })
-            results["status"] = "error"
-            continue
-            
-        try:
-            # Determine endpoint type and name
-            if "tool" in endpoint:
-                kind = "tool"
-                name = endpoint["tool"]["name"]
-            elif "resource" in endpoint:
-                kind = "resource"
-                name = endpoint["resource"]["uri"]
-            elif "prompt" in endpoint:
-                kind = "prompt"
-                name = endpoint["prompt"]["name"]
-            else:
-                logger.debug(f"Skipping file {file_path}: not a valid endpoint")
+    # Create a session for all tests
+    session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
+    
+    try:
+        for file_path, endpoint, error_msg in endpoints:
+            if file_path.name in ["mxcp-site.yml", "mxcp-config.yml"]:
                 continue
                 
-            # Run tests for this endpoint
-            test_results = await run_tests(kind, name, user_config, site_config, profile, readonly)
+            logger.debug(f"Processing file: {file_path}")
             
-            # Wrap test results with endpoint context
-            endpoint_result = {
-                "endpoint": f"{kind}/{name}",
-                "path": relative_path,
-                "test_results": test_results
-            }
+            # Calculate relative path for results
+            try:
+                relative_path = str(file_path.relative_to(repo_root))
+            except ValueError:
+                relative_path = file_path.name
             
-            results["endpoints"].append(endpoint_result)
-            results["tests_run"] += test_results.get("tests_run", 0)
-            
-            # Update overall status
-            if test_results.get("status") == "error":
+            if error_msg is not None:
+                # This endpoint failed to load
+                results["endpoints"].append({
+                    "endpoint": str(file_path),
+                    "path": relative_path,
+                    "test_results": {
+                        "status": "error",
+                        "message": error_msg
+                    }
+                })
                 results["status"] = "error"
-            elif test_results.get("status") == "failed" and results["status"] != "error":
-                results["status"] = "failed"
-        except Exception as e:
-            logger.error(f"Error processing file {file_path}: {str(e)}")
-            results["endpoints"].append({
-                "endpoint": str(file_path),
-                "path": relative_path,
-                "test_results": {
-                    "status": "error",
-                    "message": str(e)
+                continue
+                
+            try:
+                # Determine endpoint type and name
+                if "tool" in endpoint:
+                    kind = "tool"
+                    name = endpoint["tool"]["name"]
+                elif "resource" in endpoint:
+                    kind = "resource"
+                    name = endpoint["resource"]["uri"]
+                elif "prompt" in endpoint:
+                    kind = "prompt"
+                    name = endpoint["prompt"]["name"]
+                else:
+                    logger.debug(f"Skipping file {file_path}: not a valid endpoint")
+                    continue
+                    
+                # Run tests for this endpoint with the shared session
+                test_results = await run_tests_with_session(kind, name, user_config, site_config, session, profile)
+                
+                # Wrap test results with endpoint context
+                endpoint_result = {
+                    "endpoint": f"{kind}/{name}",
+                    "path": relative_path,
+                    "test_results": test_results
                 }
-            })
-            results["status"] = "error"
+                
+                results["endpoints"].append(endpoint_result)
+                results["tests_run"] += test_results.get("tests_run", 0)
+                
+                # Update overall status
+                if test_results.get("status") == "error":
+                    results["status"] = "error"
+                elif test_results.get("status") == "failed" and results["status"] != "error":
+                    results["status"] = "failed"
+            except Exception as e:
+                logger.error(f"Error processing file {file_path}: {str(e)}")
+                results["endpoints"].append({
+                    "endpoint": str(file_path),
+                    "path": relative_path,
+                    "test_results": {
+                        "status": "error",
+                        "message": str(e)
+                    }
+                })
+                results["status"] = "error"
+    finally:
+        session.close()
             
     return results
 
 async def run_tests(endpoint_type: str, name: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str], readonly: Optional[bool] = None) -> Dict[str, Any]:
     """Run tests for a specific endpoint type and name."""
+    # Create a session for this test run
+    session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
+    
+    try:
+        return await run_tests_with_session(endpoint_type, name, user_config, site_config, session, profile)
+    finally:
+        session.close()
+
+async def run_tests_with_session(endpoint_type: str, name: str, user_config: UserConfig, site_config: SiteConfig, session: DuckDBSession, profile: Optional[str]) -> Dict[str, Any]:
+    """Run tests for a specific endpoint type and name with an existing session."""
     try:
         endpoint_type_enum = EndpointType(endpoint_type.lower())
         logger.info(f"Running tests for endpoint: {endpoint_type}/{name}")
@@ -166,8 +183,8 @@ async def run_tests(endpoint_type: str, name: str, user_config: UserConfig, site
             logger.info(f"Expected result: {expected_result}")
             
             try:
-                # Use the proper execute_endpoint function with profile and readonly
-                result = await execute_endpoint(endpoint_type, name, params, user_config, site_config, profile, readonly=readonly)
+                # Use the execute_endpoint function with session and profile
+                result = await execute_endpoint(endpoint_type, name, params, user_config, site_config, session, profile)
                 logger.info(f"Execution result: {result}")
                 
                 # Normalize result for comparison

@@ -86,7 +86,7 @@ def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profi
 
         # Execute query
         session = DuckDBSession(user_config, site_config, readonly=readonly)
-        conn = session.connect()
+        conn = session.conn
         try:
             # Execute query and convert to DataFrame to preserve column names
             result = conn.execute(query_sql, params).fetchdf().to_dict("records")

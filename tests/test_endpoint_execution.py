@@ -4,6 +4,7 @@ from pathlib import Path
 from mxcp.endpoints.executor import EndpointExecutor, EndpointType
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
+from mxcp.engine.duckdb_session import DuckDBSession
 import duckdb
 import os
 
@@ -43,13 +44,20 @@ def test_profile():
     return "test_profile"
 
 @pytest.fixture
-def executor(test_repo_path, user_config, site_config, test_profile):
+def test_session(user_config, site_config, test_profile):
+    """Create a test DuckDB session."""
+    session = DuckDBSession(user_config, site_config, test_profile, readonly=True)
+    yield session
+    session.close()
+
+@pytest.fixture
+def executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for endpoint execution tests."""
     # Change to test repo directory
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "example", user_config, site_config, test_profile)
+        executor = EndpointExecutor(EndpointType.TOOL, "example", user_config, site_config, test_session, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)

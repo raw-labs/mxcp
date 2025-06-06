@@ -38,7 +38,7 @@ def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, A
         user_config: User configuration
         site_config: Site configuration
         profile: Profile name
-        readonly: Whether to open DuckDB connection in read-only mode
+        shared_session: DuckDB session to use for validation
         
     Returns:
         Dictionary with validation status and details for each endpoint
@@ -130,7 +130,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         user_config: User configuration
         site_config: Site configuration
         profile: Profile name
-        readonly: Whether to open DuckDB connection in read-only mode
+        shared_session: DuckDB session to use for validation
         
     Returns:
         Dictionary with validation status and details
@@ -223,7 +223,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         if not sql_query:
             return {"status": "error", "path": relative_path, "message": "No SQL query found"}
 
-        # Use the provided shared session - don't close it since we don't own it
+        # Use the provided shared session - guaranteed to be connected
         con = shared_session.conn
             
         try:
