@@ -9,6 +9,7 @@ from pygls.server import LanguageServer
 from mxcp.lsp.utils.duckdb_connector import DuckDBConnector
 from mxcp.lsp.utils.yaml_parser import YamlParser
 from mxcp.lsp.utils.coordinate_transformer import CoordinateTransformer
+from mxcp.lsp.utils.models import SQLErrorType
 
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ class DiagnosticsService:
             document_version: Version of the document
         """
         try:
-            yaml_parser = YamlParser(document_source)
+            yaml_parser = YamlParser(document_source, document_uri)
             
             if not yaml_parser.should_provide_lsp():
                 # Clear diagnostics for documents that don't need LSP
@@ -112,7 +113,7 @@ class DiagnosticsService:
                 severity = self._get_diagnostic_severity(validation.error_type)
                 
                 diagnostic = types.Diagnostic(
-                    message=validation.error_message,
+                    message=validation.get_diagnostic_message(),
                     severity=severity,
                     range=types.Range(
                         start=adjusted_position,
@@ -121,7 +122,8 @@ class DiagnosticsService:
                             character=adjusted_position.character + 1
                         )
                     ),
-                    source="mxcp-lsp"
+                    source="mxcp-lsp",
+                    code=validation.error_type if validation.error_type else "unknown"
                 )
                 diagnostics.append(diagnostic)
             
@@ -135,18 +137,15 @@ class DiagnosticsService:
         """
         Determine diagnostic severity based on error type.
         
+        Uses the centralized SQLErrorType class for consistent error handling.
+        
         Args:
             error_type: Type of SQL validation error
             
         Returns:
             Appropriate diagnostic severity
         """
-        if error_type in ["SYNTAX_ERROR", "PARSER_ERROR"]:
-            return types.DiagnosticSeverity.Error
-        elif error_type in ["SEMANTIC_ERROR"]:
-            return types.DiagnosticSeverity.Warning
-        else:
-            return types.DiagnosticSeverity.Error
+        return SQLErrorType.get_severity(error_type)
 
     def get_diagnostics(self, document_uri: str) -> Tuple[int, List[types.Diagnostic]]:
         """
@@ -205,18 +204,33 @@ def register_diagnostics(
         
         @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams):
-            """Parse each document when it is opened"""
-            service.handle_document_open(params)
+            """Parse each document when it is opened with error handling."""
+            try:
+                service.handle_document_open(params)
+            except Exception as e:
+                logger.error(f"Error handling document open for {params.text_document.uri}: {e}")
+                # Publish empty diagnostics to ensure client gets a response
+                ls.publish_diagnostics(params.text_document.uri, [])
 
         @server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
         def did_change(ls: LanguageServer, params: types.DidChangeTextDocumentParams):
-            """Parse each document when it is changed"""
-            service.handle_document_change(params)
+            """Parse each document when it is changed with error handling."""
+            try:
+                service.handle_document_change(params)
+            except Exception as e:
+                logger.error(f"Error handling document change for {params.text_document.uri}: {e}")
+                # Publish empty diagnostics to ensure client gets a response
+                ls.publish_diagnostics(params.text_document.uri, [])
 
         @server.feature(types.TEXT_DOCUMENT_DID_CLOSE)
         def did_close(ls: LanguageServer, params: types.DidCloseTextDocumentParams):
-            """Clear diagnostics when document is closed"""
-            service.handle_document_close(params)
+            """Clear diagnostics when document is closed with error handling."""
+            try:
+                service.handle_document_close(params)
+            except Exception as e:
+                logger.error(f"Error handling document close for {params.text_document.uri}: {e}")
+                # Ensure diagnostics are cleared even if handler fails
+                ls.publish_diagnostics(params.text_document.uri, [])
         
         logger.info("Diagnostics functionality registered successfully")
         return service

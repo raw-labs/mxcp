@@ -42,7 +42,7 @@ def register_completion(server: LanguageServer, duck_db_connector: DuckDBConnect
         
         try:
             document = ls.workspace.get_text_document(params.text_document.uri)
-            yaml_parser = YamlParser(document.source)
+            yaml_parser = YamlParser(document.source, params.text_document.uri)
             
             logger.debug(f"Checking if should provide LSP for position {params.position}")
             should_provide = yaml_parser.should_provide_lsp(

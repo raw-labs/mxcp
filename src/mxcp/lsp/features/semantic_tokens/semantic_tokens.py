@@ -52,7 +52,7 @@ class SemanticTokensService:
                 return None
             
             document = self._server.workspace.get_text_document(document_uri)
-            yaml_parser = YamlParser(document.source)
+            yaml_parser = YamlParser(document.source, document_uri)
             
             logger.debug(f"Checking if should provide LSP for semantic tokens")
             should_provide = yaml_parser.should_provide_lsp()
@@ -99,7 +99,7 @@ class SemanticTokensService:
                 return None
             
             document = self._server.workspace.get_text_document(document_uri)
-            yaml_parser = YamlParser(document.source)
+            yaml_parser = YamlParser(document.source, document_uri)
             
             if not yaml_parser.should_provide_lsp():
                 logger.debug("Not providing LSP for this document - returning None")
