@@ -935,8 +935,8 @@ class RAWMCP:
         """Register all discovered endpoints with MCP."""
         for path, endpoint_def in self.endpoints:
             try:
-                # Validate endpoint before registration
-                validation_result = validate_endpoint(str(path), self.user_config, self.site_config, self.active_profile)
+                # Validate endpoint before registration using shared session
+                validation_result = validate_endpoint(str(path), self.user_config, self.site_config, self.active_profile, self.db_session)
                 
                 if validation_result["status"] != "ok":
                     logger.warning(f"Skipping invalid endpoint {path}: {validation_result.get('message', 'Unknown error')}")

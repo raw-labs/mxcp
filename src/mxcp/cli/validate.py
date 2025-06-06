@@ -5,6 +5,7 @@ from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.config.analytics import track_command_with_timing
+from mxcp.engine.duckdb_session import DuckDBSession
 
 def format_validation_results(results):
     """Format validation results for human-readable output"""
@@ -101,14 +102,24 @@ def validate(endpoint: Optional[str], profile: Optional[str], json_output: bool,
     try:
         site_config = load_site_config()
         user_config = load_user_config(site_config)
-        if endpoint:
-            result = validate_endpoint(endpoint, user_config, site_config, profile, readonly=readonly)
-        else:
-            result = validate_all_endpoints(user_config, site_config, profile, readonly=readonly)
+        
+        # Create a shared DuckDB session for all validations
+        # This connects once and injects secrets once, then reuses for all endpoints
+        session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
+        session.connect()
+        
+        try:
+            if endpoint:
+                result = validate_endpoint(endpoint, user_config, site_config, profile, session)
+            else:
+                result = validate_all_endpoints(user_config, site_config, profile, session)
+                
+            if json_output:
+                output_result(result, json_output, debug)
+            else:
+                click.echo(format_validation_results(result))
+        finally:
+            session.close()
             
-        if json_output:
-            output_result(result, json_output, debug)
-        else:
-            click.echo(format_validation_results(result))
     except Exception as e:
         output_error(e, json_output, debug)
