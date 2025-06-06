@@ -289,7 +289,7 @@ class TestPolicyIntegration:
                 {"employee_id": "emp123"},
                 user_config, 
                 site_config,
-            test_session,
+                test_session,
                 user_context=None
             )
         
@@ -538,7 +538,7 @@ class TestPolicyEnforcementEdgeCases:
                 {"user": "test_value"},  # This overwrites the user context!
                 user_config, 
                 site_config,
-            test_session,
+                test_session,
                 user_context=user_context
             )
             # If we get here, the policy was bypassed due to the bug
