@@ -425,7 +425,14 @@ class EndpointExecutor:
                 raise ValueError(f"Policy enforcement failed: {e.reason}")
         
         # Get DuckDB connection
-        conn = self.session.connect()
+        # If we own the session (CLI mode), we need to connect/initialize it
+        # If we're using a shared session (server mode), it's already initialized
+        if self.owns_session:
+            conn = self.session.connect()
+        else:
+            conn = self.session.conn
+            if not conn:
+                raise RuntimeError("Shared DuckDB session not properly initialized")
         
         try:
             if self.endpoint_type in (EndpointType.TOOL, EndpointType.RESOURCE):
