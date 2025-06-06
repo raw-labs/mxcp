@@ -475,7 +475,9 @@ class RAWMCP:
             The converted value
         """
         try:
-            if param_type == "string":
+            if value is None:
+                return None
+            elif param_type == "string":
                 return str(value)
             elif param_type == "integer":
                 return int(value)
