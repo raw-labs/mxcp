@@ -611,7 +611,6 @@ class RAWMCP:
                     self.site_config,
                     self.db_session,
                     self.profile_name,
-                    readonly=self.readonly,
                     db_lock=self.db_lock
                 )
                 result = await exec_.execute(converted, user_context=user_context)
