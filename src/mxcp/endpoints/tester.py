@@ -36,7 +36,6 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
     
     # Create a session for all tests
     session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
-    session.connect()
     
     try:
         for file_path, endpoint, error_msg in endpoints:
@@ -117,7 +116,6 @@ async def run_tests(endpoint_type: str, name: str, user_config: UserConfig, site
     """Run tests for a specific endpoint type and name."""
     # Create a session for this test run
     session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
-    session.connect()
     
     try:
         return await run_tests_with_session(endpoint_type, name, user_config, site_config, session, profile)

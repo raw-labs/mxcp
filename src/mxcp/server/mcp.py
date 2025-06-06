@@ -192,7 +192,7 @@ class RAWMCP:
         # Create shared DuckDB session and lock for thread-safety
         logger.info("Creating shared DuckDB session for server...")
         self.db_session = DuckDBSession(user_config, site_config, profile, readonly)
-        self.db_connection = self.db_session.connect()
+        self.db_connection = self.db_session.conn
         self.db_lock = threading.Lock()
         logger.info("Shared DuckDB session created successfully")
         

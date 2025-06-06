@@ -104,9 +104,8 @@ def validate(endpoint: Optional[str], profile: Optional[str], json_output: bool,
         user_config = load_user_config(site_config)
         
         # Create a shared DuckDB session for all validations
-        # This connects once and injects secrets once, then reuses for all endpoints
+        # Connection will be established on-demand when needed
         session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
-        session.connect()
         
         try:
             if endpoint:

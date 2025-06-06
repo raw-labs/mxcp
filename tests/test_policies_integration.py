@@ -59,7 +59,6 @@ def chdir_to_fixtures(test_repo_path):
 def test_session(user_config, site_config):
     """Create a test DuckDB session."""
     session = DuckDBSession(user_config, site_config, None, readonly=True)
-    session.connect()
     yield session
     session.close()
 

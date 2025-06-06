@@ -47,7 +47,6 @@ def test_profile():
 def test_session(user_config, site_config, test_profile):
     """Create a test DuckDB session."""
     session = DuckDBSession(user_config, site_config, test_profile, readonly=True)
-    session.connect()
     yield session
     session.close()
 

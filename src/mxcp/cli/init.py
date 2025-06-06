@@ -165,8 +165,7 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
             site_config = load_site_config(target_dir)
             new_user_config = load_user_config(site_config)
             session = DuckDBSession(new_user_config, site_config)
-            session.connect()
-            session.close()
+            session.close()  # Database file is created when session connects in constructor
             click.echo("Initialize DuckDB database")
         except Exception as e:
             click.echo(f"Warning: Failed to initialize DuckDB database: {e}")

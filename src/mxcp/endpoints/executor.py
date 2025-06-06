@@ -418,10 +418,8 @@ class EndpointExecutor:
                 # Re-raise with more context
                 raise ValueError(f"Policy enforcement failed: {e.reason}")
         
-        # Get DuckDB connection - session is always provided and initialized externally
+        # Get DuckDB connection - guaranteed to be connected since session connects in constructor
         conn = self.session.conn
-        if not conn:
-            raise RuntimeError("DuckDB session not properly initialized")
         
         if self.endpoint_type in (EndpointType.TOOL, EndpointType.RESOURCE):
             # For tools and resources, we execute SQL and return results as list of dicts

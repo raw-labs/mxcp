@@ -112,9 +112,8 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
             
             params[key] = value
             
-        # Create DuckDB session explicitly for better resource control
+        # Create DuckDB session - connection will be established on-demand
         session = DuckDBSession(user_config, site_config, profile_name, readonly=readonly)
-        session.connect()
         
         try:
             # Execute endpoint with explicit session
