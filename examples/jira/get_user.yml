@@ -1,0 +1,30 @@
+mxcp: 1.0.0
+
+tool:
+  name: get_user
+  description: |
+    Get details for a specific user in your Jira instance by their username.
+    Returns a JSON string containing the user's details.
+  type: tool
+  annotations:
+    title: Get User Details
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  parameters:
+    - name: username
+      type: string
+      description: |
+        The username to search for. This is typically the user's email address or username in Jira.
+      examples: [
+        "john.doe@example.com",
+        "jane.smith"
+      ]
+  return:
+    type: string
+    description: |
+      A JSON string containing the user's details.
+  language: "sql"
+  source:
+    file: "get_user.sql" 

@@ -26,6 +26,7 @@ from typing import Annotated
 from starlette.responses import JSONResponse
 import re
 from mxcp.policies import PolicyEnforcementError
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -357,17 +358,14 @@ class RAWMCP:
                     else:
                         model_fields[prop_name] = (Optional[prop_type], None)
             
-            # Create the model
-            model_config = {}
-            if not additional_properties:
-                model_config["extra"] = "forbid"
-            else:
-                model_config["extra"] = "allow"
+            # Create the model with proper configuration
+            from pydantic import ConfigDict
+            model_config = ConfigDict(extra="allow" if additional_properties else "forbid")
             
             result = create_model(
                 self._sanitize_model_name(model_name),
                 **model_fields,
-                __config__=type("Config", (), model_config)
+                __config__=model_config
             )
             
             self._model_cache[cache_key] = result
@@ -521,6 +519,39 @@ class RAWMCP:
         name = "_".join(filter(None, name.split("_")))
         return name
 
+    def _sanitize_func_name(self, name: str) -> str:
+        """Sanitize a name to be used as a Python function name.
+        
+        Args:
+            name: The name to sanitize
+            
+        Returns:
+            A string suitable for use as a Python function name
+        """
+        # Replace any non-alphanumeric chars with _
+        name = "".join(c if c.isalnum() else "_" for c in name)
+        # Remove consecutive underscores
+        name = "_".join(filter(None, name.split("_")))
+        # Ensure it starts with a letter or underscore
+        if not name[0].isalpha() and name[0] != '_':
+            name = '_' + name
+        return name
+
+    def mcp_name_to_py(self, name: str) -> str:
+        """Convert MCP endpoint name to a valid Python function name.
+        
+        Example: 'get-user' → 'mcp_get_user__abc123'
+        
+        Args:
+            name: The original MCP endpoint name
+            
+        Returns:
+            A valid Python function name with hash suffix
+        """
+        base = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+        suffix = hashlib.sha1(name.encode()).hexdigest()[:6]
+        return f"mcp_{base}__{suffix}"
+
     # ---------------------------------------------------------------------------
     # helper that every register_* method will call
     # ---------------------------------------------------------------------------
@@ -636,9 +667,8 @@ class RAWMCP:
         # -------------------------------------------------------------------
         # Create function with proper signature and annotations using makefun
         # -------------------------------------------------------------------
-        func_name = endpoint_def.get("name", endpoint_def.get("uri", "handler"))
-        if endpoint_key == "resource":
-            func_name = self._clean_uri_for_func_name(func_name)
+        original_name = endpoint_def.get("name", endpoint_def.get("uri", "handler"))
+        func_name = self.mcp_name_to_py(original_name)
         
         # Create the function with proper signature
         handler = create_function(signature, authenticated_body, func_name=func_name)
@@ -647,8 +677,9 @@ class RAWMCP:
         handler.__annotations__ = param_annotations
 
         # Finally register the function with FastMCP -------------------------
+        # Use original name for FastMCP registration
         decorator(handler)
-        logger.info(f"Registered {log_name}: {func_name}")
+        logger.info(f"Registered {log_name}: {original_name} (function: {func_name})")
 
     def _register_tool(self, tool_def: Dict[str, Any]):
         """Register a tool endpoint with MCP.

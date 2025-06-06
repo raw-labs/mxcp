@@ -7,17 +7,36 @@ This example demonstrates how to use MXCP with Salesforce data. It shows how to:
 
 ## Setup
 
-1. First, install the Salesforce plugin:
-   ```bash
-   cd mxcp_plugin_salesforce
-   pip install -e .
-   cd ..
+1. Configure your Salesforce credentials:
+   Add the following to your MXCP user config (`~/.mxcp/config.yml`). You can use the example `config.yml` in this directory as a template:
+
+   ```yaml
+   mxcp: 1.0.0
+
+   projects:
+     salesforce-demo:
+       profiles:
+         dev:
+           plugin:
+             config:
+               salesforce:
+                 instance_url: "https://your-instance.salesforce.com"
+                 username: "your-username@example.com"
+                 password: "your-password"
+                 security_token: "your-security-token"
+                 client_id: "your-client-id"
    ```
 
-2. Create a configuration file with your Salesforce credentials:
-   ```bash
-   cp salesforce-config.example.yml salesforce-config.yml
-   # Edit salesforce-config.yml with your credentials
+2. Create an `mxcp-site.yml` file:
+
+   ```yaml
+   mxcp: 1.0.0
+   project: salesforce-demo
+   profile: dev
+   plugin:
+     - name: salesforce
+       module: mxcp_plugin_salesforce
+       config: salesforce
    ```
 
 3. Start the MXCP server:
@@ -27,37 +46,47 @@ This example demonstrates how to use MXCP with Salesforce data. It shows how to:
 
 ## Available Tools
 
-The example provides a tool that demonstrates various Salesforce operations:
+The example provides several tools for interacting with Salesforce:
 
-- List available Salesforce objects
-- Get object descriptions
-- Query specific objects
-- Execute SOQL queries
-
-Try these example queries:
-
-1. List all available objects:
+### List Objects
 ```sql
-SELECT * FROM list_sobjects();
+-- List all available Salesforce objects
+SELECT list_sobjects_salesforce() as result;
 ```
 
-2. Get field descriptions for Account:
+### Describe Object
 ```sql
-SELECT * FROM describe_sobject('Account');
+-- Get field descriptions for an object
+SELECT describe_sobject_salesforce($object_name) as result;
 ```
 
-3. Get a specific account:
+### Get Object
 ```sql
-SELECT * FROM get_sobject('Account', '001xx000003DIloAAG');
+-- Get a specific record
+SELECT get_sobject_salesforce($object_name, $record_id) as result;
 ```
 
-4. Query accounts with their contacts:
+### SOQL Query
+```sql
+-- Execute a SOQL query
+SELECT soql_salesforce($query) as result;
+```
+
+### SOSL Search
+```sql
+-- Execute a SOSL search
+SELECT sosl_salesforce($query) as result;
+```
+
+## Example Queries
+
+1. Query accounts with their contacts:
 ```sql
 WITH accounts AS (
-  SELECT * FROM soql('SELECT Id, Name FROM Account')
+  SELECT * FROM soql_salesforce('SELECT Id, Name FROM Account')
 ),
 contacts AS (
-  SELECT * FROM soql('SELECT Id, Name, AccountId FROM Contact')
+  SELECT * FROM soql_salesforce('SELECT Id, Name, AccountId FROM Contact')
 )
 SELECT 
   a.Name as account_name,
@@ -76,6 +105,8 @@ The `mxcp_plugin_salesforce` directory contains a complete MXCP plugin implement
 - UDF implementation
 - Configuration handling
 
-## Security Note
+## Notes
 
-Always ensure your Salesforce credentials are kept secure and never committed to version control. The example uses a separate configuration file that is git-ignored. 
+- Make sure to keep your Salesforce credentials secure and never commit them to version control.
+- The plugin requires proper authentication and API permissions to work with your Salesforce instance.
+- All functions return JSON strings containing the requested data. 

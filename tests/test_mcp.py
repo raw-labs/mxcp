@@ -193,10 +193,8 @@ def test_endpoint_registration(mcp_server):
     # Register endpoints
     mcp_server.register_endpoints()
     
-    # Verify endpoints were registered
-    # Note: This is a basic test - we'll need more comprehensive tests
-    # that verify the actual MCP server behavior
-    assert len(mcp_server.endpoints) > 0
+    # Verify no endpoints were skipped
+    assert len(mcp_server.skipped_endpoints) == 0
 
 @pytest.mark.asyncio
 async def test_server_transport(mcp_server):
