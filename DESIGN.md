@@ -157,8 +157,7 @@ extensions:
 # dbt integration
 dbt:
   enabled: true
-  models: "models"
-  manifest_path: "target/manifest.json"
+  model-paths: "models"
 
 # Profile-specific overrides
 profiles:

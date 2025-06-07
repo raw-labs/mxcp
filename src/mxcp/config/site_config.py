@@ -31,6 +31,32 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
         config["dbt"] = {"enabled": True}
     elif "enabled" not in config["dbt"]:
         config["dbt"]["enabled"] = True
+    
+    # Apply defaults for dbt configuration paths
+    dbt_config = config["dbt"]
+    if "model_paths" not in dbt_config:
+        dbt_config["model_paths"] = ["models"]
+    
+    if "analysis_paths" not in dbt_config:
+        dbt_config["analysis_paths"] = ["analyses"]
+    
+    if "test_paths" not in dbt_config:
+        dbt_config["test_paths"] = ["tests"]
+    
+    if "seed_paths" not in dbt_config:
+        dbt_config["seed_paths"] = ["seeds"]
+    
+    if "macro_paths" not in dbt_config:
+        dbt_config["macro_paths"] = ["macros"]
+    
+    if "snapshot_paths" not in dbt_config:
+        dbt_config["snapshot_paths"] = ["snapshots"]
+    
+    if "target_path" not in dbt_config:
+        dbt_config["target_path"] = "target"
+    
+    if "clean_targets" not in dbt_config:
+        dbt_config["clean_targets"] = ["target", "dbt_packages"]
         
     # Initialize profiles section if not present
     if "profiles" not in config:

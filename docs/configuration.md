@@ -179,8 +179,7 @@ extensions:
 ```yaml
 dbt:
   enabled: true
-  models: "models"  # Path to dbt models directory
-  manifest_path: "target/manifest.json"  # Path to dbt manifest
+  model_paths: ["models"]  # Paths to dbt model directories
 ```
 
 > **Note:** While MXCP doesn't provide built-in caching, you can implement caching strategies using:
