@@ -12,8 +12,15 @@ class SitePluginDefinition(TypedDict):
 
 class SiteDbtConfig(TypedDict, total=False):
     enabled: Optional[bool]
-    models: Optional[str]
-    manifest_path: Optional[str]
+    # dbt project configuration paths
+    model_paths: Optional[List[str]]
+    analysis_paths: Optional[List[str]]
+    test_paths: Optional[List[str]]
+    seed_paths: Optional[List[str]]
+    macro_paths: Optional[List[str]]
+    snapshot_paths: Optional[List[str]]
+    target_path: Optional[str]
+    clean_targets: Optional[List[str]]
 
 class SiteSqlToolsConfig(TypedDict, total=False):
     enabled: Optional[bool]

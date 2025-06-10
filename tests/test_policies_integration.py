@@ -8,6 +8,7 @@ from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.auth.providers import UserContext
 from mxcp.policies import PolicyEnforcementError
+from mxcp.engine.duckdb_session import DuckDBSession
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -54,11 +55,19 @@ def chdir_to_fixtures(test_repo_path):
     os.chdir(original_dir)
 
 
+@pytest.fixture
+def test_session(user_config, site_config):
+    """Create a test DuckDB session."""
+    session = DuckDBSession(user_config, site_config, None, readonly=True)
+    yield session
+    session.close()
+
+
 class TestPolicyIntegration:
     """Test policy enforcement integration with endpoints."""
     
     @pytest.mark.asyncio
-    async def test_guest_access_denied(self, user_config, site_config):
+    async def test_guest_access_denied(self, user_config, site_config, test_session):
         """Test that guest users are denied access."""
         user_context = UserContext(
             provider="test",
@@ -74,13 +83,14 @@ class TestPolicyIntegration:
                 {"employee_id": "emp123"}, 
                 user_config, 
                 site_config,
+                test_session,
                 user_context=user_context
             )
         
         assert "Guests cannot access employee information" in str(excinfo.value)
     
     @pytest.mark.asyncio
-    async def test_missing_permission_denied(self, user_config, site_config):
+    async def test_missing_permission_denied(self, user_config, site_config, test_session):
         """Test that users without required permissions are denied."""
         user_context = UserContext(
             provider="test",
@@ -96,13 +106,14 @@ class TestPolicyIntegration:
                 {"employee_id": "emp123"}, 
                 user_config, 
                 site_config,
+                test_session,
                 user_context=user_context
             )
         
         assert "Missing 'employee.read' permission" in str(excinfo.value)
     
     @pytest.mark.asyncio
-    async def test_user_viewing_others_profile_denied(self, user_config, site_config):
+    async def test_user_viewing_others_profile_denied(self, user_config, site_config, test_session):
         """Test that users cannot view other employees' profiles."""
         user_context = UserContext(
             provider="test",
@@ -118,13 +129,14 @@ class TestPolicyIntegration:
                 {"employee_id": "emp456"},  # Trying to view someone else's profile
                 user_config, 
                 site_config,
+                test_session,
                 user_context=user_context
             )
         
         assert "You can only view your own employee information" in str(excinfo.value)
     
     @pytest.mark.asyncio
-    async def test_user_viewing_own_profile(self, user_config, site_config):
+    async def test_user_viewing_own_profile(self, user_config, site_config, test_session):
         """Test that users can view their own profile with filtered data."""
         user_context = UserContext(
             provider="test",
@@ -139,6 +151,7 @@ class TestPolicyIntegration:
             {"employee_id": "emp123"},  # Viewing own profile
             user_config, 
             site_config,
+            test_session,
             user_context=user_context
         )
         
@@ -158,7 +171,7 @@ class TestPolicyIntegration:
         assert "phone" not in result
     
     @pytest.mark.asyncio
-    async def test_hr_user_access(self, user_config, site_config):
+    async def test_hr_user_access(self, user_config, site_config, test_session):
         """Test that HR users can view all employee data."""
         user_context = UserContext(
             provider="test",
@@ -174,6 +187,7 @@ class TestPolicyIntegration:
             {"employee_id": "emp123"},
             user_config, 
             site_config,
+            test_session,
             user_context=user_context
         )
         
@@ -199,6 +213,7 @@ class TestPolicyIntegration:
             {"employee_id": "emp456"},
             user_config, 
             site_config,
+            test_session,
             user_context=user_context
         )
         
@@ -207,7 +222,7 @@ class TestPolicyIntegration:
         assert result2["ssn"] == "987-65-4321"  # Real SSN
     
     @pytest.mark.asyncio
-    async def test_admin_user_access(self, user_config, site_config):
+    async def test_admin_user_access(self, user_config, site_config, test_session):
         """Test that admin users have appropriate access."""
         user_context = UserContext(
             provider="test",
@@ -223,6 +238,7 @@ class TestPolicyIntegration:
             {"employee_id": "emp123"},
             user_config, 
             site_config,
+            test_session,
             user_context=user_context
         )
         
@@ -236,7 +252,7 @@ class TestPolicyIntegration:
         assert result["ssn"] == "****"
     
     @pytest.mark.asyncio
-    async def test_user_without_pii_permission(self, user_config, site_config):
+    async def test_user_without_pii_permission(self, user_config, site_config, test_session):
         """Test that users without pii.view permission cannot see phone numbers."""
         user_context = UserContext(
             provider="test",
@@ -251,6 +267,7 @@ class TestPolicyIntegration:
             {"employee_id": "emp123"},
             user_config, 
             site_config,
+            test_session,
             user_context=user_context
         )
         
@@ -261,7 +278,7 @@ class TestPolicyIntegration:
         assert result["ssn"] == "123-45-6789"
     
     @pytest.mark.asyncio
-    async def test_anonymous_user_denied(self, user_config, site_config):
+    async def test_anonymous_user_denied(self, user_config, site_config, test_session):
         """Test that anonymous users (None context) are handled properly."""
         # Anonymous users have role="anonymous" and no permissions by default
         
@@ -272,6 +289,7 @@ class TestPolicyIntegration:
                 {"employee_id": "emp123"},
                 user_config, 
                 site_config,
+                test_session,
                 user_context=None
             )
         
@@ -283,7 +301,7 @@ class TestPolicyEnforcementEdgeCases:
     """Test edge cases in policy enforcement."""
     
     @pytest.mark.asyncio
-    async def test_multiple_filter_policies(self, user_config, site_config):
+    async def test_multiple_filter_policies(self, user_config, site_config, test_session):
         """Test that multiple output policies are applied correctly."""
         user_context = UserContext(
             provider="test",
@@ -298,6 +316,7 @@ class TestPolicyEnforcementEdgeCases:
             {"employee_id": "emp123"},
             user_config, 
             site_config,
+            test_session,
             user_context=user_context
         )
         
@@ -312,7 +331,7 @@ class TestPolicyEnforcementEdgeCases:
         assert "phone" not in result
     
     @pytest.mark.asyncio
-    async def test_policy_with_complex_conditions(self, user_config, site_config):
+    async def test_policy_with_complex_conditions(self, user_config, site_config, test_session):
         """Test policies with complex CEL conditions."""
         # Test the compound condition: employee_id != user.user_id && user.role != 'admin' && user.role != 'hr'
         
@@ -330,6 +349,7 @@ class TestPolicyEnforcementEdgeCases:
             {"employee_id": "emp456"},  # Not admin's ID
             user_config, 
             site_config,
+            test_session,
             user_context=admin_context
         )
         
@@ -349,13 +369,14 @@ class TestPolicyEnforcementEdgeCases:
             {"employee_id": "emp123"},  # Not HR's ID
             user_config, 
             site_config,
+            test_session,
             user_context=hr_context
         )
         
         assert result["id"] == "emp123"  # HR can view it 
 
     @pytest.mark.asyncio
-    async def test_policy_with_nonexistent_fields(self, user_config, site_config):
+    async def test_policy_with_nonexistent_fields(self, user_config, site_config, test_session):
         """Test that policies handle non-existent fields gracefully."""
         # Create a policy that references fields that don't exist in our test data
         # This simulates a common scenario where policies are defined generically
@@ -375,6 +396,7 @@ class TestPolicyEnforcementEdgeCases:
             {"employee_id": "emp123"},
             user_config, 
             site_config,
+            test_session,
             user_context=user_context
         )
         
@@ -406,7 +428,7 @@ class TestPolicyEnforcementEdgeCases:
         # can reference fields that don't exist in all endpoints)
 
     @pytest.mark.asyncio
-    async def test_nonexistent_fields_in_policies(self, user_config, site_config):
+    async def test_nonexistent_fields_in_policies(self, user_config, site_config, test_session):
         """Test that policies handle non-existent fields gracefully without errors."""
         # Test with regular user - should trigger both filter and mask policies
         user_context = UserContext(
@@ -422,6 +444,7 @@ class TestPolicyEnforcementEdgeCases:
             {"user_id": "user123"},
             user_config, 
             site_config,
+            test_session,
             user_context=user_context
         )
         
@@ -457,6 +480,7 @@ class TestPolicyEnforcementEdgeCases:
             {"user_id": "user123"},
             user_config,
             site_config,
+            test_session,
             user_context=admin_context
         )
         
@@ -478,6 +502,7 @@ class TestPolicyEnforcementEdgeCases:
             {"user_id": "user123"},
             user_config,
             site_config,
+            test_session,
             user_context=superuser_context
         )
         
@@ -485,7 +510,7 @@ class TestPolicyEnforcementEdgeCases:
         assert super_result == result 
 
     @pytest.mark.asyncio
-    async def test_user_parameter_collision_bug(self, user_config, site_config):
+    async def test_user_parameter_collision_bug(self, user_config, site_config, test_session):
         """Test the critical bug where a parameter named 'user' overwrites user context."""
         # This test demonstrates a serious security bug!
         # When a query parameter is named "user", it overwrites the user context
@@ -513,6 +538,7 @@ class TestPolicyEnforcementEdgeCases:
                 {"user": "test_value"},  # This overwrites the user context!
                 user_config, 
                 site_config,
+                test_session,
                 user_context=user_context
             )
             # If we get here, the policy was bypassed due to the bug
@@ -524,7 +550,7 @@ class TestPolicyEnforcementEdgeCases:
             # This demonstrates the security issue - the policy doesn't work as intended
 
     @pytest.mark.asyncio
-    async def test_user_parameter_collision_fixed(self, user_config, site_config):
+    async def test_user_parameter_collision_fixed(self, user_config, site_config, test_session):
         """Test that the user parameter collision is now properly handled."""
         # After the fix, user context should take precedence over query parameters
         
@@ -543,6 +569,7 @@ class TestPolicyEnforcementEdgeCases:
             {"user": "test_value"},  # This parameter should NOT overwrite user context
             user_config, 
             site_config,
+            test_session,
             user_context=user_context
         )
         
@@ -566,6 +593,7 @@ class TestPolicyEnforcementEdgeCases:
                 {"user": "test_value"},  # This parameter should NOT affect policy evaluation
                 user_config, 
                 site_config,
+                test_session,
                 user_context=admin_context
             )
         

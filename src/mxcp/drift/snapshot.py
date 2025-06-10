@@ -59,7 +59,7 @@ async def generate_snapshot(
         raise FileExistsError(f"Drift snapshot already exists at {drift_path}. Use --force to overwrite.")
 
     session = DuckDBSession(user_config, site_config, profile=profile_name, readonly=True)
-    conn = session.connect()
+    conn = session.conn
     try:
         loader = EndpointLoader(site_config)
         discovered = loader.discover_endpoints()
@@ -96,7 +96,7 @@ async def generate_snapshot(
                     continue
 
                 # Validate endpoint
-                validation_result = validate_endpoint_payload(endpoint, str(path), user_config, site_config, profile_name, readonly=True)
+                validation_result = validate_endpoint_payload(endpoint, str(path), user_config, site_config, profile_name, session)
                 # Run tests
                 test_result = await run_tests(endpoint_type, name, user_config, site_config, profile_name, readonly=True)
                 # Add to snapshot

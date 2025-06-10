@@ -31,14 +31,14 @@ def validate_resource_uri_vs_params(res_def, path):
         }
     return None
 
-def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str, readonly: Optional[bool] = None) -> Dict[str, Any]:
+def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
     """Validate all endpoints in the repository.
     
     Args:
         user_config: User configuration
         site_config: Site configuration
         profile: Profile name
-        readonly: Whether to open DuckDB connection in read-only mode
+        shared_session: DuckDB session to use for validation
         
     Returns:
         Dictionary with validation status and details for each endpoint
@@ -60,7 +60,7 @@ def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, A
                 results.append({"status": "error", "path": path_str, "message": error})
                 has_errors = True
             else:
-                result = validate_endpoint_payload(endpoint, path_str, user_config, site_config, profile, readonly=readonly)
+                result = validate_endpoint_payload(endpoint, path_str, user_config, site_config, profile, shared_session)
                 results.append(result)
                 if result["status"] == "error":
                     has_errors = True
@@ -121,7 +121,7 @@ def load_endpoint(path: str) -> Tuple[Dict[str, Any], str, str]:
     return endpoint, endpoint_type, name
 
 def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: Dict[str, Any], 
-                            site_config: Dict[str, Any], profile: str, readonly: Optional[bool] = None) -> Dict[str, Any]:
+                            site_config: Dict[str, Any], profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
     """Validate a single endpoint payload.
     
     Args:
@@ -130,7 +130,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         user_config: User configuration
         site_config: Site configuration
         profile: Profile name
-        readonly: Whether to open DuckDB connection in read-only mode
+        shared_session: DuckDB session to use for validation
         
     Returns:
         Dictionary with validation status and details
@@ -223,9 +223,9 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         if not sql_query:
             return {"status": "error", "path": relative_path, "message": "No SQL query found"}
 
-        # Use DuckDBSession for proper secret injection and type inference
-        session = DuckDBSession(user_config, site_config, readonly=readonly)
-        con = session.connect()
+        # Use the provided shared session - guaranteed to be connected
+        con = shared_session.conn
+            
         try:
             con.execute("PREPARE my_query AS " + sql_query)
         except Exception as e:
@@ -233,7 +233,6 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
 
         # Get parameter names using duckdb.extract_statements
         sql_param_names = duckdb.extract_statements(sql_query)[0].named_parameters
-        con.close()
 
         # Extract parameters from YAML
         yaml_params = endpoint[endpoint_type].get("parameters", [])
@@ -266,7 +265,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
     except Exception as e:
         return {"status": "error", "path": relative_path, "message": str(e)}
 
-def validate_endpoint(path: str, user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str, readonly: Optional[bool] = None) -> Dict[str, Any]:
+def validate_endpoint(path: str, user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
     """Validate a single endpoint file.
     
     This is a convenience function that combines loading and validation.
@@ -275,7 +274,7 @@ def validate_endpoint(path: str, user_config: Dict[str, Any], site_config: Dict[
     """
     try:
         endpoint, _, _ = load_endpoint(path)
-        return validate_endpoint_payload(endpoint, path, user_config, site_config, profile, readonly=readonly)
+        return validate_endpoint_payload(endpoint, path, user_config, site_config, profile, shared_session)
     except Exception as e:
         return {"status": "error", "path": path, "message": str(e)}
 

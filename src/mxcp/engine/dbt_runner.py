@@ -184,14 +184,14 @@ def _build_profile_block(
 def _build_dbt_project(
     project: str,
     profile: str,
-    models_path: Optional[str] = None
+    site_config: SiteConfig
 ) -> Dict[str, Any]:
     """Build dbt_project.yml configuration.
     
     Args:
         project: MXCP project name
         profile: MXCP profile name
-        models_path: Optional custom models path
+        site_config: Site configuration containing dbt settings
     
     Returns:
         dbt_project.yml configuration
@@ -203,20 +203,23 @@ def _build_dbt_project(
     # Create dbt profile name using sanitized values
     dbt_profile = f"{sanitized_project}_{sanitized_profile}"
     
-    # Build the minimal required configuration
+    # Get dbt configuration from site config (defaults already applied)
+    dbt_config = site_config.get("dbt", {})
+    
+    # Build the configuration using values from site config
     return {
         "name": sanitized_project,  # Use sanitized project name
         "profile": dbt_profile,  # Use combined profile name
         "version": "1.0.0",
         "config-version": 2,
-        "model-paths": [models_path or "models"],
-        "analysis-paths": ["analyses"],
-        "test-paths": ["tests"],
-        "seed-paths": ["seeds"],
-        "macro-paths": ["macros"],
-        "snapshot-paths": ["snapshots"],
-        "target-path": "target",
-        "clean-targets": ["target", "dbt_packages"]
+        "model-paths": dbt_config.get("model_paths", ["models"]),
+        "analysis-paths": dbt_config.get("analysis_paths", ["analyses"]),
+        "test-paths": dbt_config.get("test_paths", ["tests"]),
+        "seed-paths": dbt_config.get("seed_paths", ["seeds"]),
+        "macro-paths": dbt_config.get("macro_paths", ["macros"]),
+        "snapshot-paths": dbt_config.get("snapshot_paths", ["snapshots"]),
+        "target-path": dbt_config.get("target_path", "target"),
+        "clean-targets": dbt_config.get("clean_targets", ["target", "dbt_packages"])
     }
 
 def _merge_profile_blocks(existing: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
@@ -352,7 +355,7 @@ def configure_dbt(
     new_dbt_project = _build_dbt_project(
         project=project,
         profile=profile_name,
-        models_path=site_config.get("dbt", {}).get("models")
+        site_config=site_config
     )
     
     # 9. Check for existing profile

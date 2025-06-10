@@ -21,10 +21,13 @@ class DuckDBSession:
         self.profile = profile
         self.readonly = readonly
         self.plugins: Dict[str, MXCPBasePlugin] = {}
+        self._initialized = False  # Track whether session has been fully initialized
+        
+        # Connect automatically on construction
+        self._connect()
         
     def __enter__(self):
         """Context manager entry"""
-        self.connect()
         return self
         
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -66,8 +69,12 @@ class DuckDBSession:
             
         return profile_config
         
-    def connect(self) -> duckdb.DuckDBPyConnection:
+    def _connect(self):
         """Establish DuckDB connection and set up the session"""        
+        # If already initialized, don't re-initialize
+        if self._initialized and self.conn:
+            return
+        
         # Connect to DuckDB using path from config
         profile = self.profile or self.site_config["profile"]
         db_path = self.site_config["profiles"][profile]["duckdb"]["path"]
@@ -111,7 +118,8 @@ class DuckDBSession:
         # Create user token UDFs if user is authenticated
         self._create_user_token_udfs()
         
-        return self.conn
+        # Mark as initialized to prevent re-initialization
+        self._initialized = True
         
     def _create_user_token_udfs(self):
         """Create UDFs for accessing user tokens if authentication is enabled."""
@@ -164,3 +172,4 @@ class DuckDBSession:
                 logger.error(f"Error closing DuckDB connection: {e}")
             finally:
                 self.conn = None
+                self._initialized = False  # Reset initialization flag

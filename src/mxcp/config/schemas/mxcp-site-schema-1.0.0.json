@@ -82,13 +82,58 @@
           "type": "boolean",
           "description": "Whether to use dbt in this repo (defaults to true)."
         },
-        "models": {
-          "type": "string",
-          "description": "Path to the dbt models directory."
+        "model_paths": {
+          "type": "array",
+          "description": "Paths to dbt model directories (defaults to ['models']).",
+          "items": {
+            "type": "string"
+          }
         },
-        "manifest_path": {
+        "analysis_paths": {
+          "type": "array",
+          "description": "Paths to dbt analysis directories (defaults to ['analyses']).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "test_paths": {
+          "type": "array",
+          "description": "Paths to dbt test directories (defaults to ['tests']).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "seed_paths": {
+          "type": "array",
+          "description": "Paths to dbt seed directories (defaults to ['seeds']).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "macro_paths": {
+          "type": "array",
+          "description": "Paths to dbt macro directories (defaults to ['macros']).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "snapshot_paths": {
+          "type": "array",
+          "description": "Paths to dbt snapshot directories (defaults to ['snapshots']).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "target_path": {
           "type": "string",
-          "description": "Path to dbt's generated manifest.json file (used for validation)."
+          "description": "Path to dbt target directory (defaults to 'target')."
+        },
+        "clean_targets": {
+          "type": "array",
+          "description": "Paths to clean when running dbt clean (defaults to ['target', 'dbt_packages']).",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

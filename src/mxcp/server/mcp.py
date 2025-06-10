@@ -192,7 +192,7 @@ class RAWMCP:
         # Create shared DuckDB session and lock for thread-safety
         logger.info("Creating shared DuckDB session for server...")
         self.db_session = DuckDBSession(user_config, site_config, profile, readonly)
-        self.db_connection = self.db_session.connect()
+        self.db_connection = self.db_session.conn
         self.db_lock = threading.Lock()
         logger.info("Shared DuckDB session created successfully")
         
@@ -475,7 +475,9 @@ class RAWMCP:
             The converted value
         """
         try:
-            if param_type == "string":
+            if value is None:
+                return None
+            elif param_type == "string":
                 return str(value)
             elif param_type == "integer":
                 return int(value)
@@ -607,9 +609,8 @@ class RAWMCP:
                     endpoint_def["name"] if endpoint_key != "resource" else endpoint_def["uri"],
                     self.user_config,
                     self.site_config,
+                    self.db_session,
                     self.profile_name,
-                    readonly=self.readonly,
-                    session=self.db_session,
                     db_lock=self.db_lock
                 )
                 result = await exec_.execute(converted, user_context=user_context)
@@ -935,8 +936,8 @@ class RAWMCP:
         """Register all discovered endpoints with MCP."""
         for path, endpoint_def in self.endpoints:
             try:
-                # Validate endpoint before registration
-                validation_result = validate_endpoint(str(path), self.user_config, self.site_config, self.active_profile)
+                # Validate endpoint before registration using shared session
+                validation_result = validate_endpoint(str(path), self.user_config, self.site_config, self.active_profile, self.db_session)
                 
                 if validation_result["status"] != "ok":
                     logger.warning(f"Skipping invalid endpoint {path}: {validation_result.get('message', 'Unknown error')}")

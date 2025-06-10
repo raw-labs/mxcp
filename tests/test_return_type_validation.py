@@ -5,6 +5,7 @@ from pathlib import Path
 from mxcp.endpoints.executor import EndpointExecutor, EndpointType
 from mxcp.config.user_config import load_user_config, UserConfig
 from mxcp.config.site_config import load_site_config, SiteConfig
+from mxcp.engine.duckdb_session import DuckDBSession
 
 TEST_REPO_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "return-type-validation")
 
@@ -30,12 +31,23 @@ def test_repo_path():
 @pytest.fixture
 def site_config(test_repo_path):
     """Load site config for tests."""
-    return load_site_config(test_repo_path)
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        return load_site_config()
+    finally:
+        os.chdir(original_dir)
 
 @pytest.fixture
-def user_config(site_config):
+def user_config(test_repo_path):
     """Load user config for tests."""
-    return load_user_config(site_config)
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        site_config = load_site_config()
+        return load_user_config(site_config)
+    finally:
+        os.chdir(original_dir)
 
 @pytest.fixture
 def test_profile():
@@ -43,78 +55,85 @@ def test_profile():
     return "test_profile"
 
 @pytest.fixture
-def array_executor(test_repo_path, user_config, site_config, test_profile):
+def test_session(user_config, site_config, test_profile):
+    """Create a test DuckDB session."""
+    session = DuckDBSession(user_config, site_config, test_profile, readonly=True)
+    yield session
+    session.close()
+
+@pytest.fixture
+def array_executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for array endpoint tests."""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "array_endpoint", user_config, site_config, test_profile)
+        executor = EndpointExecutor(EndpointType.TOOL, "array_endpoint", user_config, site_config, test_session, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)
 
 @pytest.fixture
-def object_executor(test_repo_path, user_config, site_config, test_profile):
+def object_executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for object endpoint tests."""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "object_endpoint", user_config, site_config, test_profile)
+        executor = EndpointExecutor(EndpointType.TOOL, "object_endpoint", user_config, site_config, test_session, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)
 
 @pytest.fixture
-def scalar_executor(test_repo_path, user_config, site_config, test_profile):
+def scalar_executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for scalar endpoint tests."""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "scalar_endpoint", user_config, site_config, test_profile)
+        executor = EndpointExecutor(EndpointType.TOOL, "scalar_endpoint", user_config, site_config, test_session, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)
 
 @pytest.fixture
-def error_executor(test_repo_path, user_config, site_config, test_profile):
+def error_executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for error endpoint tests."""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "error_endpoint", user_config, site_config, test_profile)
+        executor = EndpointExecutor(EndpointType.TOOL, "error_endpoint", user_config, site_config, test_session, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)
 
 @pytest.fixture
-def strict_executor(test_repo_path, user_config, site_config, test_profile):
+def strict_executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for strict endpoint tests."""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "strict_endpoint", user_config, site_config, test_profile)
+        executor = EndpointExecutor(EndpointType.TOOL, "strict_endpoint", user_config, site_config, test_session, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)
 
 @pytest.fixture
-def strict_extra_executor(test_repo_path, user_config, site_config, test_profile):
+def strict_extra_executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for strict endpoint with extra column tests."""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "strict_endpoint_extra", user_config, site_config, test_profile)
+        executor = EndpointExecutor(EndpointType.TOOL, "strict_endpoint_extra", user_config, site_config, test_session, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)
 
 @pytest.fixture
-def flexible_executor(test_repo_path, user_config, site_config, test_profile):
+def flexible_executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for flexible endpoint tests."""
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "flexible_endpoint", user_config, site_config, test_profile)
+        executor = EndpointExecutor(EndpointType.TOOL, "flexible_endpoint", user_config, site_config, test_session, test_profile)
         yield executor
     finally:
         os.chdir(original_dir)
