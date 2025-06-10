@@ -31,7 +31,6 @@ The MXCP LSP provides intelligent language support for MXCP YAML files in code e
 src/mxcp/lsp/
 ├── __init__.py           # Package initialization
 ├── server.py             # Main LSP server implementation
-├── server_old.py         # Legacy server (backwards compatibility)
 ├── features/             # LSP feature implementations
 │   ├── __init__.py
 │   ├── completion/       # Code completion feature

@@ -6,7 +6,7 @@ for MXCP YAML files, offering SQL language support including completion,
 diagnostics, and semantic tokens.
 
 Key Components:
-- MXCPLSPServer: Main server with improved initialization and error handling
+- MXCPLSPServer: Production-ready LSP server with comprehensive features
 - Feature modules: Modular LSP features (completion, diagnostics, semantic tokens)
 - Utility modules: YAML parsing, database connectivity, and coordinate transformation
 
@@ -31,18 +31,18 @@ Usage Example:
     # Or start in TCP mode for testing
     server.start(use_tcp=True, host="localhost")
 
-Architecture Improvements:
+Architecture Features:
 - Clear initialization flow with state tracking
 - Robust error handling and resource cleanup
 - Comprehensive documentation and error codes
 - Thread-safe document event coordination
+- Security-hardened YAML processing and database connections
 """
 
 # Main MXCP LSP server with improved maintainability
 from .server import MXCPLSPServer, ServerInitializationState
 
-# Legacy server for backwards compatibility
-from .server_old import MXCPLSPServerOld
+
 
 # LSP features
 from .features import (
@@ -63,12 +63,9 @@ from .utils import (
 )
 
 __all__ = [
-    # Main server (recommended)
+    # Main server
     "MXCPLSPServer",
     "ServerInitializationState",
-    
-    # Legacy server (backwards compatibility)
-    "MXCPLSPServerOld",
     
     # Features
     "register_completion",

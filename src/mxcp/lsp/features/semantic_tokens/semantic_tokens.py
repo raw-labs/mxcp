@@ -54,26 +54,33 @@ class SemanticTokensService:
             document = self._server.workspace.get_text_document(document_uri)
             yaml_parser = YamlParser(document.source, document_uri)
             
-            logger.debug(f"Checking if should provide LSP for semantic tokens")
+            # Check if this is a valid MXCP document with code structure
+            if not yaml_parser._is_valid_mxcp_structure():
+                logger.debug("Not a valid MXCP document - returning None")
+                return None
+            
+            # Check if we should provide LSP features
             should_provide = yaml_parser.should_provide_lsp()
             logger.debug(f"Should provide LSP: {should_provide}")
             
-            if not should_provide:
-                logger.debug("Not providing LSP for this document - returning None")
-                return None
-            
-            # Get or parse tokens
-            logger.debug(f"Getting tokens for SQL code: {yaml_parser.code[:50]}...")
-            tokens = self._get_or_parse_tokens(yaml_parser, document_uri)
-            logger.debug(f"Found {len(tokens)} tokens")
-            
-            # Calculate relative positions
-            data = self._position_calculator.calculate_relative_positions(
-                tokens, yaml_parser.code_span
-            )
-            
-            logger.debug(f"Returning semantic tokens with {len(data)} data points")
-            return types.SemanticTokens(data=data)
+            if should_provide:
+                # Get or parse tokens for non-empty code
+                logger.debug(f"Getting tokens for SQL code: {yaml_parser.code[:50] if yaml_parser.code else 'empty'}...")
+                tokens = self._get_or_parse_tokens(yaml_parser, document_uri)
+                logger.debug(f"Found {len(tokens)} tokens")
+                
+                # Calculate relative positions
+                data = self._position_calculator.calculate_relative_positions(
+                    tokens, yaml_parser.code_span
+                )
+                
+                logger.debug(f"Returning semantic tokens with {len(data)} data points")
+                return types.SemanticTokens(data=data)
+            else:
+                # For empty code blocks in valid MXCP documents, return empty tokens
+                # This handles the case where we have a valid MXCP structure but empty/whitespace-only code
+                logger.debug("Empty code block in valid MXCP document - returning empty tokens")
+                return types.SemanticTokens(data=[])
             
         except Exception as e:
             logger.error(f"Error generating semantic tokens for {params.text_document.uri}: {e}")
@@ -101,21 +108,30 @@ class SemanticTokensService:
             document = self._server.workspace.get_text_document(document_uri)
             yaml_parser = YamlParser(document.source, document_uri)
             
-            if not yaml_parser.should_provide_lsp():
-                logger.debug("Not providing LSP for this document - returning None")
+            # Check if this is a valid MXCP document with code structure
+            if not yaml_parser._is_valid_mxcp_structure():
+                logger.debug("Not a valid MXCP document - returning None")
                 return None
             
-            # For now, we'll return the full tokens since our implementation is relatively simple
-            # In a more sophisticated implementation, you would filter tokens to the requested range
-            tokens = self._get_or_parse_tokens(yaml_parser, document_uri)
+            # Check if we should provide LSP features
+            should_provide = yaml_parser.should_provide_lsp()
             
-            # Calculate relative positions
-            data = self._position_calculator.calculate_relative_positions(
-                tokens, yaml_parser.code_span
-            )
-            
-            logger.debug(f"Returning semantic tokens range with {len(data)} data points")
-            return types.SemanticTokens(data=data)
+            if should_provide:
+                # For now, we'll return the full tokens since our implementation is relatively simple
+                # In a more sophisticated implementation, you would filter tokens to the requested range
+                tokens = self._get_or_parse_tokens(yaml_parser, document_uri)
+                
+                # Calculate relative positions
+                data = self._position_calculator.calculate_relative_positions(
+                    tokens, yaml_parser.code_span
+                )
+                
+                logger.debug(f"Returning semantic tokens range with {len(data)} data points")
+                return types.SemanticTokens(data=data)
+            else:
+                # For empty code blocks in valid MXCP documents, return empty tokens
+                logger.debug("Empty code block in valid MXCP document - returning empty tokens")
+                return types.SemanticTokens(data=[])
             
         except Exception as e:
             logger.error(f"Error generating semantic tokens range for {params.text_document.uri}: {e}")
