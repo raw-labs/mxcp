@@ -2,7 +2,6 @@ import click
 import json
 from typing import Dict, Any, Optional
 from pathlib import Path
-from pandas import NaT
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile

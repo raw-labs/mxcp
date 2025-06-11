@@ -4,7 +4,6 @@ from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING
 import duckdb
 import yaml
 from datetime import datetime
-from pandas import NaT
 import json
 from jinja2 import Template
 from mxcp.endpoints.types import EndpointDefinition

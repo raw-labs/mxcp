@@ -12,6 +12,23 @@ from pandas import NaT
 
 logger = logging.getLogger(__name__)
 
+
+def execute_query_to_dict(conn: duckdb.DuckDBPyConnection, query: str, params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    """
+    Execute a query with parameters and return the result as a list of dictionaries.
+    Replaces NaT values with None for JSON serialization.
+    
+    Args:
+        conn: DuckDB connection to use
+        query: SQL query to execute
+        params: Query parameters (optional)
+        
+    Returns:
+        List of dictionaries representing query results
+    """
+    return conn.execute(query, params).fetchdf().replace({NaT: None}).to_dict("records")
+
+
 class DuckDBSession:
     def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, readonly: Optional[bool] = None):
         if profile is not None and not isinstance(profile, str):
@@ -180,4 +197,4 @@ class DuckDBSession:
         Execute a query with parameters and return the result as a list of dictionaries.
         Replaces NaT values with None.
         """
-        return self.conn.execute(query, params).fetchdf().replace({NaT: None}).to_dict("records")
+        return execute_query_to_dict(self.conn, query, params)
