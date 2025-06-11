@@ -418,9 +418,6 @@ class EndpointExecutor:
                 # Re-raise with more context
                 raise ValueError(f"Policy enforcement failed: {e.reason}")
         
-        # Get DuckDB connection - guaranteed to be connected since session connects in constructor
-        conn = self.session.conn
-        
         if self.endpoint_type in (EndpointType.TOOL, EndpointType.RESOURCE):
             # For tools and resources, we execute SQL and return results as list of dicts
             source = self._get_source_code()
@@ -434,9 +431,9 @@ class EndpointExecutor:
             # Execute query with thread-safety if lock is provided
             if self.db_lock:
                 with self.db_lock:
-                    result = conn.execute(source, params).fetchdf().to_dict("records")
+                    result = self.session.execute_query_to_dict(source, params)
             else:
-                result = conn.execute(source, params).fetchdf().to_dict("records")
+                result = self.session.execute_query_to_dict(source, params)
                 
             logger.debug(f"SQL query returned {len(result)} rows")
             logger.debug(f"First row (if any): {result[0] if result else 'No rows'}")
