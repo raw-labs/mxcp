@@ -160,7 +160,6 @@ class MXCPLSPServer:
             profile=self.profile,
             readonly=self.readonly
         )
-        self.session.connect()
         logger.info("DuckDB session created successfully")
 
     def _setup_duckdb_connector(self):
@@ -288,13 +287,9 @@ class MXCPLSPServer:
         except Exception as e:
             logger.error(f"Error clearing document handlers: {e}")
         
-        # Close DuckDB connector
-        try:
-            if self.duck_db_connector:
-                self.duck_db_connector.close()
-                self.duck_db_connector = None
-        except Exception as e:
-            logger.error(f"Error closing DuckDB connector: {e}")
+        # Clear DuckDB connector reference (no cleanup needed - session is externally managed)
+        if self.duck_db_connector:
+            self.duck_db_connector = None
         
         # Close DuckDB session
         try:

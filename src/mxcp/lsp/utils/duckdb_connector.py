@@ -8,8 +8,7 @@ including SQL completions, validation, and tokenization with proper resource man
 import duckdb
 import json
 import logging
-from typing import Optional, List, Any, Generator
-from contextlib import contextmanager
+from typing import Optional, List, Any
 from lsprotocol import types
 from .models import Parameter, SQLValidation, SQLErrorType
 from mxcp.engine.duckdb_session import DuckDBSession
@@ -26,11 +25,8 @@ class DuckDBConnector:
     """
     DuckDB connector for MXCP LSP that provides SQL operations and completions.
     
-    This connector provides a safe interface to DuckDB operations with:
-    - Context managers for resource safety
-    - Comprehensive error handling
-    - Connection validation
-    - Resource cleanup on errors
+    This connector provides a safe interface to DuckDB operations with comprehensive
+    error handling for SQL operations. The session is externally managed.
     """
     
     def __init__(self, session: DuckDBSession):
@@ -38,65 +34,16 @@ class DuckDBConnector:
         Initialize DuckDB connector with a required session.
         
         Args:
-            session: MXCP DuckDBSession to use (required)
+            session: MXCP DuckDBSession to use (required, externally managed)
             
         Raises:
-            ValueError: If session is None or invalid
-            DuckDBConnectionError: If session connection is invalid
+            ValueError: If session is None
         """
         if not session:
-            raise ValueError("DuckDBSession is required - no fallback available")
-        
-        if not hasattr(session, 'conn'):
-            raise ValueError("DuckDBSession must have a 'conn' attribute")
-            
-        if not session.conn:
-            raise DuckDBConnectionError("DuckDBSession must have a valid connection")
+            raise ValueError("DuckDBSession is required")
         
         self.session = session
-        self._connection_validated = False
-        self._validate_connection()
-        logger.info("DuckDB connector initialized with session")
-    
-    def _validate_connection(self) -> None:
-        """
-        Validate the DuckDB connection is working.
-        
-        Raises:
-            DuckDBConnectionError: If connection validation fails
-        """
-        try:
-            # Test connection with a simple query
-            with self._get_connection() as conn:
-                conn.execute("SELECT 1").fetchone()
-            self._connection_validated = True
-            logger.debug("DuckDB connection validated successfully")
-            
-        except Exception as e:
-            raise DuckDBConnectionError(f"DuckDB connection validation failed: {e}")
-
-    @contextmanager
-    def _get_connection(self) -> Generator[Any, None, None]:
-        """
-        Get a DuckDB connection with proper resource management.
-        
-        This context manager ensures that any connection issues are properly
-        handled and logged, and provides a safe way to execute operations.
-        
-        Yields:
-            DuckDB connection object
-            
-        Raises:
-            DuckDBConnectionError: If connection is not available
-        """
-        if not self.session or not self.session.conn:
-            raise DuckDBConnectionError("No active DuckDB session connection available")
-        
-        try:
-            yield self.session.conn
-        except Exception as e:
-            logger.error(f"Error during DuckDB operation: {e}")
-            raise
+        logger.info("DuckDB connector initialized with externally managed session")
 
     @property
     def connection(self):
@@ -109,7 +56,7 @@ class DuckDBConnector:
         Raises:
             DuckDBConnectionError: If connection is not available
         """
-        if not self.session or not self.session.conn:
+        if not self.session or not hasattr(self.session, 'conn') or not self.session.conn:
             raise DuckDBConnectionError("No active DuckDB session connection available")
         return self.session.conn
 
@@ -129,12 +76,12 @@ class DuckDBConnector:
             return []
             
         try:
-            with self._get_connection() as conn:
-                if parameters:
-                    result = conn.execute(query, parameters)
-                else:
-                    result = conn.execute(query)
-                return result.fetchall()
+            conn = self.connection
+            if parameters:
+                result = conn.execute(query, parameters)
+            else:
+                result = conn.execute(query)
+            return result.fetchall()
                 
         except duckdb.Error as e:
             logger.error(f"DuckDB error executing query '{query[:50]}...': {e}")
@@ -244,19 +191,20 @@ class DuckDBConnector:
             return self._create_error_validation("Invalid input", code)
             
         try:
-            with self._get_connection() as conn:
-                # Escape single quotes properly for SQL string literal
-                escaped_code = code.replace("'", "''")
-                
-                # Use DuckDB's json_serialize_sql function
-                validation_query = f"SELECT json_serialize_sql('{escaped_code}')"
-                result = conn.execute(validation_query).fetchone()
-                
-                if not result or not result[0]:
-                    return self._create_error_validation("No validation result", code)
-                
-                validation_data = json.loads(result[0])
-                return SQLValidation(validation_data, code)
+            conn = self.connection
+            
+            # Escape single quotes properly for SQL string literal
+            escaped_code = code.replace("'", "''")
+            
+            # Use DuckDB's json_serialize_sql function
+            validation_query = f"SELECT json_serialize_sql('{escaped_code}')"
+            result = conn.execute(validation_query).fetchone()
+            
+            if not result or not result[0]:
+                return self._create_error_validation("No validation result", code)
+            
+            validation_data = json.loads(result[0])
+            return SQLValidation(validation_data, code)
                 
         except json.JSONDecodeError as e:
             logger.error(f"JSON decode error during SQL validation: {e}")
@@ -288,49 +236,4 @@ class DuckDBConnector:
             "error_subtype": "CONNECTOR_ERROR",
             "position": 0
         }
-        return SQLValidation(error_result, code)
-
-    def test_connection(self) -> bool:
-        """
-        Test if the DuckDB connection is working.
-        
-        Returns:
-            True if connection is working, False otherwise
-        """
-        try:
-            with self._get_connection() as conn:
-                conn.execute("SELECT 1").fetchone()
-            return True
-        except Exception as e:
-            logger.error(f"Connection test failed: {e}")
-            return False
-
-    def get_connection_info(self) -> dict:
-        """
-        Get information about the current connection.
-        
-        Returns:
-            Dictionary with connection information
-        """
-        info = {
-            "has_session": self.session is not None,
-            "has_connection": False,
-            "connection_validated": self._connection_validated,
-            "connection_working": False
-        }
-        
-        if self.session and hasattr(self.session, 'conn') and self.session.conn:
-            info["has_connection"] = True
-            info["connection_working"] = self.test_connection()
-        
-        return info
-
-    def close(self):
-        """
-        Close the connector and clean up resources.
-        
-        Note: The actual DuckDB connection is managed by the MXCP session
-        and should not be closed here.
-        """
-        logger.debug("DuckDB connector close requested - managed by MXCP session")
-        self._connection_validated = False 
+        return SQLValidation(error_result, code) 
