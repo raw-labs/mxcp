@@ -1,6 +1,6 @@
 # MXCP Quickstart Guide
 
-This guide will help you get started with MXCP quickly. We'll cover both creating a new project from scratch and exploring existing examples.
+This guide will help you get started with MXCP quickly, from basic setup to advanced enterprise features. We'll cover creating new projects, exploring examples, and leveraging MXCP's unique production capabilities.
 
 ## Installation
 
@@ -8,9 +8,14 @@ First, install MXCP:
 
 ```bash
 pip install mxcp
+
+# For advanced features (optional)
+pip install "mxcp[vault]"  # HashiCorp Vault integration
 ```
 
-## Option 1: Create a New Project
+## Path 1: Hello World (2 minutes)
+
+Perfect for understanding the basics:
 
 ### 1. Initialize a Project
 
@@ -58,173 +63,513 @@ SELECT 'Hello, ' || $name || '!' as greeting
 
 ### 3. Start the MCP Server
 
-Run the MCP server to expose your endpoints:
-
 ```bash
 mxcp serve
 ```
 
-The server starts in stdio mode by default, ready to be integrated with MCP-compatible tools. You can test your endpoint using:
+The server starts in stdio mode, ready for LLM integration.
 
-#### Option A: Claude Desktop Integration
+## Path 2: Real-World Data Pipeline (10 minutes)
 
-1. Create a `server_config.json` file:
+Experience MXCP's production capabilities with the COVID-19 + dbt example:
+
+### 1. Get the COVID Example
+
+```bash
+git clone https://github.com/raw-labs/mxcp.git
+cd mxcp/examples/covid_owid
+```
+
+### 2. Understand the dbt Integration
+
+This example showcases MXCP's killer feature: **dbt-native data caching**
+
+```yaml
+# dbt_project.yml - Standard dbt project
+name: 'covid_owid'
+version: '1.0.0'
+profile: 'covid_owid'
+model-paths: ["models"]
+target-path: "target"
+```
+
+```sql
+-- models/covid_data.sql - dbt model that creates covid_data table
+{{ config(materialized='table') }}
+
+select *
+from read_csv_auto('https://github.com/owid/covid-19-data/raw/master/public/data/owid-covid-data.csv')
+```
+
+**The magic**: This dbt model fetches COVID data from the web and creates a `covid_data` table in DuckDB. MXCP endpoints then query this table directly using standard SQL.
+
+### 3. Run the Data Pipeline
+
+```bash
+# Install dbt dependencies
+dbt deps
+
+# Run dbt transformations (this caches the data locally)
+dbt run
+
+# Start MXCP server
+mxcp serve
+```
+
+**What just happened?**
+1. `dbt run` fetched COVID data from OWID and created a `covid_data` table in DuckDB
+2. MXCP server exposes SQL query tools that can query this table directly
+3. LLMs can analyze months of COVID data instantly (no API calls!)
+
+### 4. Connect to Claude Desktop
+
+Add this to your Claude Desktop config:
+
 ```json
 {
   "mcpServers": {
-    "local": {
-      "command": "bash",
-      "args": [
-        "-c",
-        "cd ~/my-mxcp-project && source ../../.venv/bin/activate && mxcp serve --transport stdio"
-      ],
-      "env": {
-        "PATH": "/your/path/to/.venv/bin:/usr/local/bin:/usr/bin",
-        "HOME": "/your/home"
-      }
+    "covid": {
+      "command": "mxcp",
+      "args": ["serve", "--transport", "stdio"],
+      "cwd": "/absolute/path/to/mxcp/examples/covid_owid"
     }
   }
 }
 ```
 
-2. Configure Claude Desktop to use this server config
-3. Ask Claude to use your hello world tool:
-   ```
-   User: Can you greet me with the hello_world tool?
-   Claude: I'll use the hello_world tool to greet you.
-   [Tool Call: hello_world]
-   Parameters: {"name": "User"}
-   Result: "Hello, User!"
-   ```
+### 5. Test the Integration
 
-#### Option B: mcp-cli Integration
+Ask Claude:
+- *"Show me COVID cases in Germany vs France during 2021"*
+- *"What were the vaccination rates in the UK by month?"*
+- *"Compare hospitalization data between Italy and Spain"*
 
-1. Install mcp-cli:
+The responses are instant because the data is cached locally!
+
+**Built-in SQL Tools**: MXCP automatically provides SQL query tools (`execute_sql_query`, `list_tables`, `get_table_schema`) that let Claude explore and query your data directly - no custom endpoints needed for basic data exploration!
+
+## Path 3: Enterprise Features (15 minutes)
+
+Experience MXCP's production-grade security and governance:
+
+### 1. Policy Enforcement
+
+Create a new endpoint with access control:
+
+```yaml
+# endpoints/employee-data.yml
+mxcp: "1.0.0"
+tool:
+  name: employee_data
+  description: "Query employee information"
+  parameters:
+    - name: employee_id
+      type: string
+      description: "Employee ID to query"
+  return:
+    type: object
+    properties:
+      name: { type: string }
+      department: { type: string }
+      salary: { type: number }
+      ssn: { type: string, sensitive: true }
+  source:
+    code: |
+      SELECT 
+        'John Doe' as name,
+        'Engineering' as department,
+        95000 as salary,
+        '123-45-6789' as ssn
+
+# Add enterprise-grade policies
+policies:
+  input:
+    - condition: "!('hr.read' in user.permissions)"
+      action: deny
+      reason: "Missing HR read permission"
+  output:
+    - condition: "user.role != 'hr_manager'"
+      action: filter_fields
+      fields: ["salary", "ssn"]
+      reason: "Sensitive data restricted to HR managers"
+```
+
+### 2. Enable Audit Logging
+
+```yaml
+# mxcp-site.yml - Add audit configuration
+profiles:
+  production:
+    audit:
+      enabled: true
+      path: audit-logs.jsonl
+```
+
+### 3. Test with User Context
+
 ```bash
-pip install mcp-cli
+# Test as regular user (will filter sensitive data)
+mxcp run tool employee_data \
+  --param employee_id=123 \
+  --user-context '{"role": "user", "permissions": ["hr.read"]}'
+
+# Test as HR manager (will see all data)
+mxcp run tool employee_data \
+  --param employee_id=123 \
+  --user-context '{"role": "hr_manager", "permissions": ["hr.read", "pii.view"]}'
+
+# View audit logs
+mxcp log --since 10m
 ```
 
-2. Create a `server_config.json` file:
-```json
-{
-  "mcpServers": {
-    "local": {
-      "command": "bash",
-      "args": [
-        "-c",
-        "cd ~/my-mxcp-project && source ../../.venv/bin/activate && mxcp serve --transport stdio"
-      ],
-      "env": {
-        "PATH": "/your/path/to/.venv/bin:/usr/local/bin:/usr/bin",
-        "HOME": "/your/home"
-      }
-    }
-  }
-}
+### 4. Authentication Setup
+
+For production, enable OAuth authentication:
+
+```yaml
+# mxcp-site.yml
+profiles:
+  production:
+    auth:
+      enabled: true
+      provider: github
+      client_id: your_github_client_id
+      redirect_uri: http://localhost:8080/callback
 ```
 
-3. Use mcp-cli to interact with your endpoint:
-```bash
-mcp-cli tools call hello_world --name "World"
-```
+## Advanced Patterns
 
-## Option 2: Try an Example
+### 1. Multi-Source Data Pipeline
 
-MXCP comes with several example projects that demonstrate different features:
-
-### Earthquakes Example
-
-This example shows how to:
-- Query real-time earthquake data
-- Transform JSON data with SQL
-- Create type-safe endpoints
-
-```bash
-cd examples/earthquakes
-mxcp serve
-```
-
-
-## Next Steps
-
-Now that you have MXCP running, here are some next steps:
-
-1. **Explore the CLI**
-   ```bash
-   mxcp list         # List all endpoints
-   mxcp validate     # Check your endpoints
-   mxcp test         # Run endpoint tests
-   ```
-
-2. **Learn More**
-   - [Type System](type-system.md) - Understand MXCP's type system
-   - [Configuration](configuration.md) - Configure your project
-   - [Plugins](plugins.md) - Extend DuckDB with custom Python functions  
-   - [Authentication](authentication.md) - Set up OAuth authentication
-   - [Policy Enforcement](policies.md) - Control access and filter sensitive data
-   - [Audit Logging](auditing.md) - Track and monitor all executions
-   - [Integrations](integrations.md) - Connect with dbt and DuckDB
-   - [Drift Detection](drift-detection.md) - Monitor changes across environments
-
-3. **Create Your Own Endpoints**
-   - Start with simple SQL queries
-   - Add type definitions
-   - Test your endpoints
-   - Set up drift detection for production monitoring
-   - Iterate and improve
-
-## Common Patterns
-
-### 1. Reading Data
-
+**Step 1: dbt creates the tables**
 ```sql
--- Read from a CSV file
-SELECT * FROM read_csv('data/*.csv');
+-- models/sales_analysis.sql (dbt model)
+{{ config(materialized='table') }}
 
--- Read from a JSON API
-SELECT * FROM read_json_auto('https://api.example.com/data');
+WITH daily_sales AS (
+  SELECT * FROM {{ source('raw', 'sales_data') }}
+),
+customer_info AS (
+  SELECT * FROM {{ ref('customers') }}  -- Another dbt model
+),
+external_data AS (
+  SELECT * FROM 'https://api.example.com/market-data.json'
+)
+SELECT 
+  s.date,
+  s.amount,
+  c.segment,
+  e.market_trend
+FROM daily_sales s
+JOIN customer_info c ON s.customer_id = c.id
+JOIN external_data e ON s.date = e.date
 ```
 
-### 2. Transforming Data
+**Step 2: MXCP endpoint queries the table**
+```yaml
+# endpoints/sales-analysis.yml
+tool:
+  name: get_sales_analysis
+  source:
+    code: |
+      SELECT * FROM sales_analysis  -- Table created by dbt
+      WHERE date >= $start_date
+```
 
+### 2. Dynamic Caching Strategy
+
+**Step 1: dbt model combines live and historical data**
 ```sql
--- Aggregate data
-SELECT 
-  date,
-  COUNT(*) as count,
-  AVG(value) as average
-FROM data
-GROUP BY date;
+-- models/live_dashboard.sql (dbt model)
+{{ config(
+  materialized='table',
+  post_hook="PRAGMA optimize"
+) }}
 
--- Join multiple sources
-SELECT 
-  a.id,
-  b.name,
-  c.value
-FROM source_a a
-JOIN source_b b ON a.id = b.id
-JOIN source_c c ON a.id = c.id;
+-- Cache recent data every hour, historical data daily
+SELECT * FROM read_json('https://api.metrics.com/live-data')
+WHERE timestamp >= current_timestamp - interval '24 hours'
+
+UNION ALL
+
+SELECT * FROM {{ ref('historical_metrics') }}
+WHERE timestamp < current_timestamp - interval '24 hours'
 ```
 
-### 3. Type-Safe Parameters
+**Step 2: MXCP endpoint queries the combined table**
+```yaml
+# endpoints/dashboard.yml
+tool:
+  name: get_dashboard_metrics
+  source:
+    code: |
+      SELECT * FROM live_dashboard  -- Table created by dbt
+      WHERE metric_type = $metric_type
+      ORDER BY timestamp DESC
+```
+
+### 3. Common Data Transformation Patterns
+
+**Reading and Aggregating Data**
+```sql
+-- Aggregate data by time periods
+SELECT 
+  DATE_TRUNC('month', created_at) as month,
+  COUNT(*) as total_orders,
+  SUM(amount) as total_revenue,
+  AVG(amount) as avg_order_value
+FROM orders
+WHERE created_at >= $start_date
+GROUP BY DATE_TRUNC('month', created_at)
+ORDER BY month DESC;
+
+-- Join multiple data sources
+SELECT 
+  u.name,
+  u.email,
+  COUNT(o.id) as order_count,
+  SUM(o.amount) as total_spent
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE u.created_at >= $since_date
+GROUP BY u.id, u.name, u.email
+HAVING COUNT(o.id) > 0;
+```
+
+**Reading from Various Sources**
+```sql
+-- Read from CSV files
+SELECT * FROM read_csv('data/sales-*.csv') 
+WHERE region = $region;
+
+-- Read from JSON APIs
+SELECT * FROM read_json_auto('https://api.example.com/data')
+WHERE status = 'active';
+
+-- Read from Parquet files
+SELECT customer_id, SUM(amount) as total
+FROM read_parquet('s3://bucket/transactions/*.parquet')
+GROUP BY customer_id;
+```
+
+### 4. Type-Safe Parameter Validation
 
 ```yaml
 parameters:
-  - name: "date"
-    type: "string"
-    format: "date"
-    description: "Date to filter by"
-    examples: ["2024-01-15"]
-  - name: "threshold"
-    type: "number"
-    description: "Minimum value"
-    minimum: 0
+  - name: date_range
+    type: object
+    properties:
+      start_date:
+        type: string
+        format: date
+        description: "Start date (YYYY-MM-DD)"
+      end_date:
+        type: string
+        format: date
+        description: "End date (YYYY-MM-DD)"
+    required: ["start_date", "end_date"]
+    
+  - name: metrics
+    type: array
+    items:
+      type: string
+      enum: ["revenue", "users", "conversion"]
+    description: "Metrics to include"
+    minItems: 1
+    maxItems: 5
 ```
 
-## Need Help?
+## LLM Integration Options
 
-- Check the [CLI Reference](cli.md) for all available commands
-- Join our community for support
-- Report issues on GitHub
+### Option A: Claude Desktop Integration
 
-Remember: MXCP is designed to be simple but powerful. Start small, experiment, and gradually build more complex solutions. 
+Best for interactive development and testing:
+
+```json
+{
+  "mcpServers": {
+    "my-project": {
+      "command": "mxcp",
+      "args": ["serve", "--transport", "stdio"],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+### Option B: HTTP API Mode
+
+Perfect for web applications and custom integrations:
+
+```bash
+# Start HTTP server
+mxcp serve --transport http --port 8080
+
+# Test with curl
+curl -X POST http://localhost:8080/tools/employee_data \
+  -H "Content-Type: application/json" \
+  -d '{"employee_id": "123"}'
+```
+
+### Option C: Built-in SQL Tools (Auto-enabled)
+
+MXCP automatically provides SQL exploration tools that work with any MCP client:
+
+**Available Tools:**
+- `execute_sql_query` - Run custom SQL queries
+- `list_tables` - See all available tables
+- `get_table_schema` - Inspect table structure
+
+**Example Usage:**
+```bash
+# With mcp-cli
+pip install mcp-cli
+mcp-cli tools call list_tables
+mcp-cli tools call execute_sql_query --sql "SELECT COUNT(*) FROM users"
+
+# LLMs can use these directly
+"Show me what tables are available, then count the users created this month"
+```
+
+**Configure SQL Tools** (optional):
+```yaml
+# mxcp-site.yml
+sql_tools:
+  enabled: true  # Default: true
+```
+
+## Production Deployment
+
+### 1. Environment Configuration
+
+```yaml
+# mxcp-site.yml
+profiles:
+  development:
+    database: dev.duckdb
+    auth:
+      enabled: false
+      
+  staging:
+    database: staging.duckdb
+    auth:
+      enabled: true
+      provider: github
+    audit:
+      enabled: true
+      path: staging-audit.jsonl
+      
+  production:
+    database: production.duckdb
+    auth:
+      enabled: true
+      provider: atlassian
+    audit:
+      enabled: true
+      path: /var/log/mxcp/audit.jsonl
+    policies:
+      strict_mode: true
+```
+
+### 2. Monitoring and Alerting
+
+```bash
+# Monitor error rates
+mxcp log --since 1h --status error --export-duckdb errors.db
+
+# Set up alerts for policy violations
+mxcp log --policy deny --since 10m --export-csv violations.csv
+
+# Track performance
+mxcp log --since 1d | jq '.duration_ms' | awk '{sum+=$1; count++} END {print "Avg:", sum/count "ms"}'
+```
+
+### 3. Schema Drift Detection
+
+```bash
+# Create baseline snapshot
+mxcp drift-snapshot --profile production
+
+# Check for changes (run in CI/CD)
+mxcp drift-check --profile production
+```
+
+## Next Steps
+
+### Immediate Actions
+1. **Validate Your Setup**
+   ```bash
+   mxcp validate     # Check all endpoints
+   mxcp test         # Run endpoint tests
+   mxcp list         # Verify everything is loaded
+   ```
+
+2. **Explore the CLI**
+   ```bash
+   mxcp --help       # See all commands
+   mxcp run --help   # Understand execution options
+   mxcp log --help   # Learn about audit querying
+   ```
+
+### Dive Deeper
+1. **[Type System](type-system.md)** - Master MXCP's type safety features
+2. **[Policies](policies.md)** - Implement fine-grained access control
+3. **[Authentication](authentication.md)** - Set up OAuth for your organization
+4. **[Plugins](plugins.md)** - Extend DuckDB with custom Python functions
+5. **[Drift Detection](drift-detection.md)** - Monitor changes across environments
+
+### Build Your Own
+1. **Start Simple**: Begin with basic SQL queries
+2. **Add Types**: Implement comprehensive type definitions
+3. **Enable Security**: Add authentication and policies
+4. **Monitor**: Set up audit logging and drift detection
+5. **Scale**: Move to production with proper profiles and monitoring
+
+## Troubleshooting
+
+### Common Issues
+
+**dbt models not found:**
+```bash
+# Ensure dbt project is properly configured
+dbt debug
+dbt compile
+```
+
+**Policy errors:**
+```bash
+# Test with explicit user context
+mxcp run tool my_tool --user-context '{"role": "admin"}'
+```
+
+**Authentication issues:**
+```bash
+# Check OAuth configuration
+mxcp validate --profile production
+```
+
+### Getting Help
+
+- **Documentation**: All features are documented in the `docs/` directory
+- **Examples**: Check `examples/` for real-world patterns
+- **Community**: Join our community for support and discussions
+- **Issues**: Report bugs and feature requests on GitHub
+
+## Why MXCP?
+
+After completing this quickstart, you should understand MXCP's unique value:
+
+1. **dbt Integration**: dbt creates optimized tables in DuckDB, MXCP endpoints query them directly
+2. **Enterprise Security**: Policy enforcement, audit trails, authentication
+3. **Production Ready**: Type safety, monitoring, drift detection
+4. **Developer Experience**: Fast iteration, comprehensive validation
+5. **Scalability**: From prototype to production without re-architecting
+
+## Key Architecture Pattern
+
+**The MXCP + dbt Workflow:**
+1. **dbt models** (`models/*.sql`) → Create tables/views in DuckDB using dbt syntax
+2. **MXCP endpoints** (`endpoints/*.yml`) → Query the tables directly using standard SQL
+3. **Perfect separation**: dbt handles data transformation, MXCP handles AI interface
+
+Unlike simple data connectors, MXCP provides a complete **data-to-AI infrastructure** that grows with your needs. 
