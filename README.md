@@ -5,7 +5,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-BSL-green.svg)](LICENSE)
 
-**The only MCP server built for production: Transform your data into AI-ready interfaces with enterprise security, audit trails, and policy enforcement**
+**The MCP server built for production: Transform your data into AI-ready interfaces with enterprise security, audit trails, and policy enforcement**
 
 </div>
 
