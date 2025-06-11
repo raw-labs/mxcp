@@ -6,7 +6,6 @@ import time
 import threading
 import atexit
 from pathlib import Path
-from pandas import NaT
 from mcp.server.fastmcp import FastMCP
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mxcp.endpoints.loader import EndpointLoader
