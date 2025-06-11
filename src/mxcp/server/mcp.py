@@ -192,7 +192,6 @@ class RAWMCP:
         # Create shared DuckDB session and lock for thread-safety
         logger.info("Creating shared DuckDB session for server...")
         self.db_session = DuckDBSession(user_config, site_config, profile, readonly)
-        self.db_connection = self.db_session.conn
         self.db_lock = threading.Lock()
         logger.info("Shared DuckDB session created successfully")
         
@@ -812,8 +811,7 @@ class RAWMCP:
                 
                 # Use shared connection with thread-safety
                 with self.db_lock:
-                    result = self.db_connection.execute(sql).fetchdf()
-                    return result.to_dict("records")
+                    result = self.db_session.execute_query_to_dict(sql)
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
@@ -867,15 +865,14 @@ class RAWMCP:
                     
                 # Use shared connection with thread-safety
                 with self.db_lock:
-                    result = self.db_connection.execute("""
+                    return self.db_session.execute_query_to_dict("""
                         SELECT 
                             table_name as name,
                             table_type as type
                         FROM information_schema.tables
                         WHERE table_schema = 'main'
                         ORDER BY table_name
-                    """).fetchdf()
-                    return result.to_dict("records")
+                    """)
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
@@ -932,16 +929,15 @@ class RAWMCP:
                     
                 # Use shared connection with thread-safety
                 with self.db_lock:
-                    result = self.db_connection.execute("""
+                    return self.db_session.execute_query_to_dict("""
                         SELECT 
                             column_name as name,
                             data_type as type,
                             is_nullable as nullable
                         FROM information_schema.columns
-                        WHERE table_name = ?
+                        WHERE table_name = $table_name
                         ORDER BY ordinal_position
-                    """, [table_name]).fetchdf()
-                    return result.to_dict("records")
+                    """, {"table_name": table_name})
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
