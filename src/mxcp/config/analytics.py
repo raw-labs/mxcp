@@ -6,32 +6,42 @@ import functools
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-import posthog
+from posthog import Posthog
+
+try:
+    from importlib.metadata import version
+    PACKAGE_VERSION = version("mxcp")
+except ImportError:
+    # Fallback for Python < 3.8
+    try:
+        import pkg_resources
+        PACKAGE_VERSION = pkg_resources.get_distribution("mxcp").version
+    except Exception:
+        PACKAGE_VERSION = "unknown"
 
 POSTHOG_API_KEY = "phc_6BP2PRVBewZUihdpac9Qk6QHd4eXykdhrvoFncqBjl0"
-POSTHOG_HOST = "https://app.posthog.com"
+POSTHOG_HOST = "https://eu.i.posthog.com"  # Fixed: EU region
 POSTHOG_TIMEOUT = 0.4 # Timeout for analytics requests - analytics is non-critical
 
 # Create a thread pool for analytics
 analytics_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="analytics")
 
+# Global PostHog instance
+posthog_client = None
+
 def initialize_analytics() -> None:
     """
     Initialize PostHog analytics if not opted out.
     """
+    global posthog_client
     if not is_analytics_opted_out():
-        posthog.api_key = POSTHOG_API_KEY
-        posthog.host = POSTHOG_HOST
-        # Set default properties for all events
-        posthog.default_properties = {
-            "app": "mxcp-mcp",
-            "version": "0.1.0",  # TODO: Get this from package version
-        }
-        # Configure PostHog to be less verbose and more efficient
-        posthog.debug = False
-        posthog.sync_mode = False  # Use async mode for better performance
-        # Set a timeout for all requests
-        posthog.timeout = POSTHOG_TIMEOUT
+        posthog_client = Posthog(
+            project_api_key=POSTHOG_API_KEY,
+            host=POSTHOG_HOST,
+            debug=False,
+            sync_mode=False,  # Use async mode for better performance
+            timeout=POSTHOG_TIMEOUT
+        )
 
 def is_analytics_opted_out() -> bool:
     """
@@ -48,17 +58,24 @@ def track_event(event_name: str, properties: Optional[dict] = None) -> None:
         event_name: Name of the event to track
         properties: Optional properties to include with the event
     """
-    if not is_analytics_opted_out():
+    if not is_analytics_opted_out() and posthog_client:
         # Configure logging to be less verbose
         logging.getLogger('posthog').setLevel(logging.ERROR)
         logging.getLogger('urllib3').setLevel(logging.ERROR)
 
         def _track():
             try:
-                posthog.capture(
+                # Add default properties
+                event_properties = {
+                    "app": "mxcp-mcp",
+                    "version": PACKAGE_VERSION,  # Dynamic version from pyproject.toml
+                    **(properties or {})
+                }
+                
+                posthog_client.capture(
                     distinct_id="anonymous",  # We don't track individual users
                     event=event_name,
-                    properties=properties or {}
+                    properties=event_properties
                 )
             except Exception:
                 # Silently fail - analytics should never affect the main application
