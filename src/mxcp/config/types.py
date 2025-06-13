@@ -97,15 +97,24 @@ class UserAtlassianAuthConfig(TypedDict):
     auth_url: str
     token_url: str
 
+class UserSalesforceAuthConfig(TypedDict):
+    client_id: str
+    client_secret: str
+    scope: Optional[str]
+    callback_path: str
+    auth_url: str
+    token_url: str
+
 
 class UserAuthorizationConfig(TypedDict, total=False):
     required_scopes: Optional[List[str]]
 
 class UserAuthConfig(TypedDict, total=False):
-    provider: Optional[Literal["none", "github", "atlassian"]]
+    provider: Optional[Literal["none", "github", "atlassian", "salesforce"]]
     clients: Optional[List[UserOAuthClientConfig]]
     github: Optional[UserGitHubAuthConfig]
     atlassian: Optional[UserAtlassianAuthConfig]
+    salesforce: Optional[UserSalesforceAuthConfig]
     authorization: Optional[UserAuthorizationConfig]
 
 class UserProfileConfig(TypedDict, total=False):

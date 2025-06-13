@@ -39,6 +39,7 @@ Currently supported providers:
 - `none` (default, no authentication)
 - `github` (GitHub OAuth)
 - `atlassian` (Atlassian Cloud - JIRA & Confluence)
+- `salesforce` (Salesforce Cloud)
 
 ## Provider Configuration
 
@@ -331,6 +332,209 @@ Atlassian OAuth grants access to all sites where your app is installed. To work 
 - **Minimal scopes**: Request only the permissions you need
 - **Token management**: Implement proper token refresh logic
 - **Site validation**: Verify users have access to required Atlassian sites
+
+### Salesforce OAuth (Salesforce Cloud)
+
+MXCP supports OAuth authentication with Salesforce Cloud. This allows your MCP server to authenticate users and access Salesforce APIs on their behalf, enabling powerful integrations with CRM data, custom objects, and Salesforce automation.
+
+#### Creating a Salesforce Connected App
+
+Before configuring MXCP, you need to create a Connected App in your Salesforce org:
+
+**Step 1: Access Setup**
+
+1. Log in to your Salesforce org
+2. Click the **Setup** gear icon in the top-right corner
+3. In the Quick Find box, search for "App Manager"
+4. Click **App Manager** under Apps
+
+**Step 2: Create a Connected App**
+
+1. Click **New Connected App**
+2. Fill in the basic information:
+   - **Connected App Name**: A descriptive name for your application
+   - **API Name**: Will be auto-generated from the name
+   - **Contact Email**: Your email address
+
+**Step 3: Enable OAuth Settings**
+
+1. Check **Enable OAuth Settings**
+2. Set the **Callback URL** to match your MXCP server:
+   - For local development: `http://localhost:8000/salesforce/callback`
+   - For production: `https://your-domain.com/salesforce/callback`
+3. Select OAuth Scopes (move from Available to Selected):
+   - **Access the identity URL service (openid)**
+   - **Access your basic information (profile)**
+   - **Access and manage your data (api)**
+   - **Access your contact information (email)**
+   - **Perform requests on your behalf at any time (refresh_token, offline_access)**
+4. Click **Save**
+
+**Step 4: Configure Security Settings**
+
+1. After saving, click **Continue**
+2. In the API section, note down your **Consumer Key** and **Consumer Secret**
+3. Configure additional security settings as needed:
+   - **IP Restrictions**: Set to "Relax IP restrictions" for development
+   - **Permitted Users**: Set to "All users may self-authorize" or restrict as needed
+
+**Step 5: Deploy the Connected App**
+
+1. Go back to **Setup** > **App Manager**
+2. Find your Connected App and click the dropdown arrow
+3. Select **Edit Policies**
+4. Set **Permitted Users** as appropriate for your use case
+5. Click **Save**
+
+#### Environment Variables
+
+Set these environment variables with your Salesforce Connected App credentials:
+
+```bash
+export SALESFORCE_CLIENT_ID="your_consumer_key_here"
+export SALESFORCE_CLIENT_SECRET="your_consumer_secret_here"
+```
+
+#### MXCP Configuration
+
+Configure Salesforce OAuth in your profile's auth section:
+
+```yaml
+projects:
+  my_project:
+    profiles:
+      production:
+        auth:
+          provider: salesforce
+          clients:
+            - client_id: "${SALESFORCE_CLIENT_ID}"
+              client_secret: "${SALESFORCE_CLIENT_SECRET}"
+              name: "My MXCP Application"
+              redirect_uris:
+                - "https://your-domain.com/salesforce/callback"
+              scopes:
+                - "mxcp:access"
+          salesforce:
+            client_id: "${SALESFORCE_CLIENT_ID}"
+            client_secret: "${SALESFORCE_CLIENT_SECRET}"
+            scope: "api refresh_token openid profile email"
+            callback_path: "/salesforce/callback"
+            auth_url: "https://login.salesforce.com/services/oauth2/authorize"
+            token_url: "https://login.salesforce.com/services/oauth2/token"
+```
+
+#### OAuth Scopes
+
+Salesforce uses specific scopes to control access to different resources:
+
+**Core Scopes:**
+- `api` - Access to Salesforce APIs and data
+- `refresh_token` - Enable refresh tokens for long-term access
+- `openid` - OpenID Connect for user identification
+- `profile` - Access to user profile information
+- `email` - Access to user email address
+
+**Additional Scopes:**
+- `full` - Full access (equivalent to api scope)
+- `web` - Web-based access to Salesforce
+- `custom_permissions` - Access to custom permissions
+- `lightning` - Access to Lightning Platform APIs
+- `wave_api` - Access to Salesforce Analytics Cloud APIs
+
+#### Sandbox vs Production
+
+For development, you can use a Salesforce Sandbox:
+
+```yaml
+salesforce:
+  client_id: "${SALESFORCE_SANDBOX_CLIENT_ID}"
+  client_secret: "${SALESFORCE_SANDBOX_CLIENT_SECRET}"
+  # Use sandbox URLs for development
+  auth_url: "https://test.salesforce.com/services/oauth2/authorize"
+  token_url: "https://test.salesforce.com/services/oauth2/token"
+  scope: "api refresh_token openid profile email"
+  callback_path: "/salesforce/callback"
+```
+
+#### Testing Your Configuration
+
+1. Start your MXCP server:
+   ```bash
+   mxcp serve --debug
+   ```
+
+2. The authentication flow will begin when a client connects
+3. Users will be redirected to Salesforce for authorization
+4. After approval, they'll be redirected back to your callback URL
+5. Check the logs for successful authentication
+
+#### Troubleshooting
+
+**Common Issues:**
+
+1. **Invalid Client Configuration**:
+   ```
+   ValueError: Salesforce OAuth configuration is incomplete
+   ```
+   - Ensure `client_id` and `client_secret` are provided
+   - Check that environment variables are set correctly
+
+2. **Callback URL Mismatch**:
+   ```
+   HTTPException: Invalid state parameter
+   ```
+   - Verify the callback URL in your Connected App matches your MXCP configuration
+   - Ensure the URL scheme (http/https) is correct
+
+3. **Insufficient Permissions**:
+   ```
+   403 Forbidden
+   ```
+   - Check that your Connected App has the required OAuth scopes
+   - Verify the user has access to the Salesforce org
+
+4. **Sandbox vs Production Issues**:
+   ```
+   Authentication failed
+   ```
+   - Ensure you're using the correct login URL (`login.salesforce.com` vs `test.salesforce.com`)
+   - Verify your Connected App is deployed in the correct environment
+
+**Debug Tips:**
+
+- Enable debug logging: `mxcp serve --debug`
+- Check the Connected App deployment status in Salesforce Setup
+- Verify OAuth scopes match your API requirements
+- Test with minimal scopes like `openid profile` first
+
+#### Security Best Practices
+
+- **Store credentials securely**: Use environment variables, not config files
+- **Use HTTPS**: Required for production OAuth flows
+- **Minimal scopes**: Request only the permissions you need
+- **IP restrictions**: Configure IP restrictions in your Connected App for production
+- **User permissions**: Use Salesforce profiles and permission sets to control user access
+- **Token management**: Implement proper refresh token handling
+- **Org validation**: Verify users belong to the correct Salesforce org
+
+#### Working with Salesforce Data
+
+Once authenticated, you can use the user's Salesforce token to access their data:
+
+```sql
+-- Example: Query Salesforce accounts using the user's token
+SELECT *
+FROM read_json_auto(
+    'https://your-instance.salesforce.com/services/data/v58.0/sobjects/Account',
+    headers = MAP {
+        'Authorization': 'Bearer ' || get_user_external_token(),
+        'Content-Type': 'application/json'
+    }
+);
+```
+
+**Finding Your Salesforce Instance URL:**
+The instance URL is provided in the OAuth token response and varies by org (e.g., `https://na1.salesforce.com`, `https://eu2.salesforce.com`).
 
 ## OAuth Client Registration
 

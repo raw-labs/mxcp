@@ -133,11 +133,13 @@
                   "properties": {
                     "key": { "type": "string", "description": "Input parameter to pass to test." },
                     "value": { "description": "Value of the input parameter to test." }
-                  }
+                  },
+                  "additionalProperties": false
                 }
               },
               "result": { "description": "Expected result." }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "policies": {
@@ -222,11 +224,13 @@
                   "properties": {
                     "key": { "type": "string", "description": "Input parameter to pass to test." },
                     "value": { "description": "Value of the input parameter to test." }
-                  }
+                  },
+                  "additionalProperties": false
                 }
               },
               "result": { "description": "Expected result." }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "policies": {

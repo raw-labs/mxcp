@@ -146,7 +146,7 @@
                       "properties": {
                         "provider": {
                           "type": "string",
-                          "enum": ["none", "github", "atlassian"],
+                          "enum": ["none", "github", "atlassian", "salesforce"],
                           "default": "none",
                           "description": "OAuth provider to use for authentication"
                         },
@@ -281,6 +281,44 @@
                               "format": "uri",
                               "description": "Atlassian token exchange URL.",
                               "default": "https://auth.atlassian.com/oauth/token"
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "salesforce": {
+                          "type": "object",
+                          "description": "Salesforce OAuth configuration (required when provider is 'salesforce').",
+                          "required": ["client_id", "client_secret", "callback_path", "auth_url", "token_url"],
+                          "properties": {
+                            "client_id": {
+                              "type": "string",
+                              "description": "Salesforce OAuth client ID."
+                            },
+                            "client_secret": {
+                              "type": "string",
+                              "description": "Salesforce OAuth client secret."
+                            },
+                            "scope": {
+                              "type": "string",
+                              "description": "OAuth scopes to request (space-separated).",
+                              "default": "api refresh_token openid profile email"
+                            },
+                            "callback_path": {
+                              "type": "string",
+                              "description": "Callback path for OAuth flow.",
+                              "default": "/salesforce/callback"
+                            },
+                            "auth_url": {
+                              "type": "string",
+                              "format": "uri",
+                              "description": "Salesforce authorization URL.",
+                              "default": "https://login.salesforce.com/services/oauth2/authorize"
+                            },
+                            "token_url": {
+                              "type": "string",
+                              "format": "uri",
+                              "description": "Salesforce token exchange URL.",
+                              "default": "https://login.salesforce.com/services/oauth2/token"
                             }
                           },
                           "additionalProperties": false
