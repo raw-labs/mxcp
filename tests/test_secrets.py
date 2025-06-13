@@ -38,51 +38,36 @@ def user_config(secrets_repo_path):
 
 @pytest.mark.asyncio
 async def test_run_secrets_tool(secrets_repo_path, site_config, user_config):
-    """Test running tests for the secrets tool endpoint that returns complex DuckDB objects."""
+    """Test running tests for the secrets tool endpoint."""
     original_dir = os.getcwd()
     os.chdir(secrets_repo_path)
     try:
         result = await run_tests("tool", "list_secrets", user_config, site_config, None)
-        # The test should fail due to serialization issues with complex DuckDB objects
-        assert result["status"] == "error"
+        assert result["status"] == "ok"
         assert result["tests_run"] == 1
-        # Check that the error is related to serialization of complex objects
-        error_msg = str(result["tests"][0]["error"])
-        # The error could be about JSON serialization, object not serializable, etc.
-        assert any(keyword in error_msg.lower() for keyword in [
-            "json", "serial", "not serializable", "object", "array", "dump"
-        ]), f"Expected serialization error, but got: {error_msg}"
+        assert result["tests"][0]["status"] == "passed"
     finally:
         os.chdir(original_dir)
 
 @pytest.mark.asyncio
 async def test_run_all_secrets_tests(secrets_repo_path, site_config, user_config):
-    """Test running all tests in the secrets repository (equivalent to 'mxcp test' CLI)."""
+    """Test running all tests in the secrets repository."""
     original_dir = os.getcwd()
     os.chdir(secrets_repo_path)
     try:
         result = await run_all_tests(user_config, site_config, None)
-        # The overall test run should fail due to the secrets endpoint test failure
-        assert result["status"] == "error"
+        assert result["status"] == "ok"
         assert result["tests_run"] > 0
         assert len(result["endpoints"]) > 0
         
-        # Find the secrets endpoint in the results
         secrets_endpoint = None
         for endpoint in result["endpoints"]:
             if "list_secrets" in endpoint["endpoint"]:
                 secrets_endpoint = endpoint
                 break
         
-        assert secrets_endpoint is not None, "Could not find list_secrets endpoint in results"
-        assert secrets_endpoint["test_results"]["status"] == "error"
-        
-        # Check that the error is related to serialization of complex DuckDB objects
-        test_error = secrets_endpoint["test_results"]["tests"][0]["error"]
-        error_msg = str(test_error)
-        assert any(keyword in error_msg.lower() for keyword in [
-            "json", "serial", "not serializable", "object", "array", "dump"
-        ]), f"Expected serialization error, but got: {error_msg}"
-        
+        assert secrets_endpoint is not None
+        assert secrets_endpoint["test_results"]["status"] == "ok"
+        assert secrets_endpoint["test_results"]["tests"][0]["status"] == "passed"
     finally:
         os.chdir(original_dir) 

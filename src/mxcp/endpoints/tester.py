@@ -13,6 +13,7 @@ import yaml
 from jsonschema import validate
 import duckdb
 import asyncio
+import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -315,10 +316,32 @@ def compare_results(result, expected):
     # Handle None expected result
     if expected is None:
         return True
-        
-    # Convert both to JSON strings for comparison
-    # Use sort_keys to ensure consistency in dictionary key ordering
-    result_json = json.dumps(result, sort_keys=True)
-    expected_json = json.dumps(expected, sort_keys=True)
     
-    return result_json == expected_json
+    # For complex objects that can't be JSON serialized (like ndarray),
+    # convert to a more basic representation for comparison
+    def make_serializable(obj):
+        """Convert complex objects to serializable form for comparison"""
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {k: make_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [make_serializable(item) for item in obj]
+        else:
+            return obj
+    
+    try:
+        # Try to make both objects serializable
+        serializable_result = make_serializable(result)
+        serializable_expected = make_serializable(expected)
+        
+        # Convert both to JSON strings for comparison
+        # Use sort_keys to ensure consistency in dictionary key ordering
+        result_json = json.dumps(serializable_result, sort_keys=True)
+        expected_json = json.dumps(serializable_expected, sort_keys=True)
+        
+        return result_json == expected_json
+    except (TypeError, ValueError) as e:
+        # If serialization still fails, fall back to direct comparison
+        logger.warning(f"JSON serialization failed, falling back to direct comparison: {e}")
+        return result == expected
