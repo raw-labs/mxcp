@@ -177,7 +177,7 @@ tool:
       WHERE region = $region
 ```
 
-### 2. dbt Integration (Game Changer!)
+### 2. dbt Integration
 ```sql
 -- models/sales_summary.sql (dbt model)
 {{ config(materialized='table') }}
