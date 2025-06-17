@@ -1,4 +1,9 @@
+
 # MXCP: Enterprise-Grade Data-to-AI Infrastructure
+
+<div align="center">
+  <a href="https://mxcp.dev"><img src="docs/mxcp-logo.png" alt="MXCP Logo" width="350"></a>
+</div>
 
 <div align="center">
 
@@ -64,17 +69,19 @@ mxcp serve
 ```
 
 **What just happened?**
+
 1. **dbt models** fetch and transform COVID data from Our World in Data into DuckDB tables
-2. **DuckDB** stores the transformed data locally for lightning-fast queries  
+2. **DuckDB** stores the transformed data locally for lightning-fast queries
 3. **MCP endpoints** query the DuckDB tables directly (no dbt syntax needed)
 4. **Audit logs** track every query for compliance
 5. **Policies** can enforce who sees what data
 
-Ask Claude: *"Show me COVID vaccination rates in Germany vs France"* - and it queries the `covid_data` table instantly, with full audit trails.
+Ask Claude: _"Show me COVID vaccination rates in Germany vs France"_ - and it queries the `covid_data` table instantly, with full audit trails.
 
 ## 🛡️ Enterprise Features That Set Us Apart
 
 ### Policy Enforcement
+
 ```yaml
 # Control who can access what data
 policies:
@@ -89,6 +96,7 @@ policies:
 ```
 
 ### Audit Logging
+
 ```bash
 # Track every query with enterprise-grade logging
 mxcp log --since 1h --status error
@@ -96,6 +104,7 @@ mxcp log --tool employee_data --export-duckdb audit.db
 ```
 
 ### Authentication & Authorization
+
 - OAuth integration (GitHub, Atlassian, custom)
 - Role-based access control
 - Fine-grained permissions
@@ -119,6 +128,7 @@ mxcp log --tool employee_data --export-duckdb audit.db
 ```
 
 Unlike simple data connectors, MXCP provides:
+
 - **Security layer** between LLMs and your data
 - **Audit trail** for every query and result
 - **Policy engine** for fine-grained access control
@@ -141,6 +151,7 @@ pip install -e .
 ```
 
 Try the included examples:
+
 ```bash
 # Simple data queries
 cd examples/earthquakes && mxcp serve
@@ -152,6 +163,7 @@ cd examples/covid_owid && dbt run && mxcp serve
 ## 💡 Key Features
 
 ### 1. Declarative Interface Definition
+
 ```yaml
 # tools/analyze_sales.yml
 mxcp: "1.0.0"
@@ -178,11 +190,12 @@ tool:
 ```
 
 ### 2. dbt Integration
+
 ```sql
 -- models/sales_summary.sql (dbt model)
 {{ config(materialized='table') }}
 
-SELECT 
+SELECT
   region,
   product,
   SUM(amount) as amount,
@@ -195,6 +208,7 @@ GROUP BY region, product, sale_date
 **Why this matters**: dbt creates optimized tables in DuckDB, MXCP endpoints query them directly - perfect separation of concerns with caching, transformations, and governance built-in.
 
 ### 3. Production-Ready Security
+
 - **Authentication**: OAuth, API keys, session management
 - **Authorization**: Role-based access, permission checking
 - **Audit**: Every query logged with user context
@@ -204,12 +218,15 @@ GROUP BY region, product, sale_date
 ## 🛠️ Core Concepts
 
 ### Tools, Resources, Prompts
+
 Define your AI interface using MCP (Model Context Protocol) specs:
+
 - **Tools** — Functions that process data and return results
-- **Resources** — Data sources and caches  
+- **Resources** — Data sources and caches
 - **Prompts** — Templates for LLM interactions
 
 ### Project Structure
+
 ```
 your-project/
 ├── mxcp-site.yml    # Project configuration
@@ -220,6 +237,7 @@ your-project/
 ```
 
 ### CLI Commands
+
 ```bash
 mxcp serve           # Start production MCP server
 mxcp init            # Initialize new project
@@ -236,10 +254,11 @@ mxcp drift-check     # Check for schema changes
 MXCP implements the Model Context Protocol (MCP), making it compatible with:
 
 - **Claude Desktop** — Native MCP support
-- **OpenAI-compatible tools** — Via MCP adapters  
+- **OpenAI-compatible tools** — Via MCP adapters
 - **Custom integrations** — Using the MCP specification
 
 For specific setup instructions, see:
+
 - [Earthquakes Example](examples/earthquakes/README.md) — Complete Claude Desktop setup
 - [COVID + dbt Example](examples/covid_owid/README.md) — Advanced dbt integration
 - [Integration Guide](docs/integrations.md) — All client integrations
@@ -247,17 +266,20 @@ For specific setup instructions, see:
 ## 📚 Documentation
 
 **Get Started:**
+
 - [Quickstart](docs/quickstart.md) — Advanced features and patterns
 - [Configuration](docs/configuration.md) — Project setup and profiles
 - [CLI Reference](docs/cli.md) — All commands and options
 
 **Production Features:**
+
 - [Authentication](docs/authentication.md) — OAuth and security setup
-- [Policy Enforcement](docs/policies.md) — Access control and data filtering  
+- [Policy Enforcement](docs/policies.md) — Access control and data filtering
 - [Audit Logging](docs/auditing.md) — Enterprise-grade execution tracking
 - [Drift Detection](docs/drift-detection.md) — Schema monitoring
 
 **Advanced:**
+
 - [Type System](docs/type-system.md) — Data types and validation
 - [Plugins](docs/plugins.md) — Custom Python functions in DuckDB
 - [Integrations](docs/integrations.md) — Data sources and external tools
