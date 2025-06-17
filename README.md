@@ -1,6 +1,10 @@
 # MXCP: Enterprise-Grade Data-to-AI Infrastructure
 
 <div align="center">
+  <a href="https://mxcp.dev"><img src="docs/mxcp-logo.png" alt="MXCP Logo" width="350"></a>
+</div>
+
+<div align="center">
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-BSL-green.svg)](LICENSE)
