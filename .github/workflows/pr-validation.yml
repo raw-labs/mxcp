@@ -1,0 +1,72 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened ]
+
+jobs:
+  quick-checks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-3.11-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-3.11-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    - name: Quick format check
+      run: |
+        echo "🔍 Checking code formatting..."
+        black --check src tests || {
+          echo "❌ Code formatting issues found. Run 'black src tests' to fix."
+          exit 1
+        }
+
+    - name: Quick import check
+      run: |
+        echo "🔍 Checking import sorting..."
+        isort --check-only src tests || {
+          echo "❌ Import sorting issues found. Run 'isort src tests' to fix."
+          exit 1
+        }
+
+    - name: Quick syntax and import validation
+      run: |
+        echo "🔍 Validating Python syntax and imports..."
+        python -m py_compile src/mxcp/__main__.py
+        python -c "import mxcp; print('✅ Package imports successfully')"
+
+    - name: Run fast tests only
+      run: |
+        echo "🔍 Running fast tests..."
+        pytest tests/ -x -q --tb=short -m "not slow"
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Security scan
+      run: |
+        pip install bandit[toml]
+        bandit -r src/ -ll || echo "⚠️ Security issues found, please review" 

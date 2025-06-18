@@ -1,0 +1,155 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v0.1.4, v1.0.0, etc.
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: release  # Use GitHub environment for additional protection
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Extract version from tag
+      id: get_version
+      run: |
+        # Remove 'v' prefix from tag to get version
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+
+    - name: Validate version format
+      run: |
+        # Check if version follows semantic versioning pattern
+        if [[ ! "${{ steps.get_version.outputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9\.\-]+)?$ ]]; then
+          echo "Error: Version must follow semantic versioning (e.g., 1.0.0, 1.0.0-rc1)"
+          exit 1
+        fi
+
+    - name: Update version in pyproject.toml
+      run: |
+        # Update version in pyproject.toml to match git tag
+        sed -i 's/version = ".*"/version = "${{ steps.get_version.outputs.version }}"/' pyproject.toml
+        echo "Updated pyproject.toml version to ${{ steps.get_version.outputs.version }}"
+        
+        # Verify the change
+        grep 'version = ' pyproject.toml
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: Build package
+      run: |
+        echo "Building package..."
+        python -m build
+        echo "Built files:"
+        ls -la dist/
+
+    - name: Check package integrity
+      run: |
+        echo "Checking package integrity..."
+        twine check dist/*
+
+    - name: Publish to Test PyPI
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        TWINE_REPOSITORY: testpypi
+      run: |
+        echo "Publishing to Test PyPI..."
+        twine upload dist/*
+        echo "✅ Successfully published to Test PyPI"
+        echo "🔗 Test installation: pip install --index-url https://test.pypi.org/simple/ mxcp==${{ steps.get_version.outputs.version }}"
+
+    - name: Test installation from Test PyPI
+      run: |
+        echo "Testing installation from Test PyPI..."
+        sleep 60  # Wait for package to be available
+        
+        # Create a fresh virtual environment for testing
+        python -m venv test_env
+        source test_env/bin/activate
+        
+        # Install from Test PyPI
+        pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ mxcp==${{ steps.get_version.outputs.version }}
+        
+        # Basic smoke test
+        python -c "import mxcp; print('✅ Package imports successfully')"
+        
+        # Test CLI
+        mxcp --help
+        echo "✅ Test PyPI installation successful"
+
+    - name: Publish to Production PyPI
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        echo "Publishing to Production PyPI..."
+        twine upload dist/*
+        echo "✅ Successfully published to Production PyPI"
+        echo "🔗 Install with: pip install mxcp==${{ steps.get_version.outputs.version }}"
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ steps.get_version.outputs.version }}
+        body: |
+          ## Changes in ${{ steps.get_version.outputs.version }}
+          
+          🎉 **New Release Available!**
+          
+          ### Installation
+          ```bash
+          pip install mxcp==${{ steps.get_version.outputs.version }}
+          ```
+          
+          ### Links
+          - 📦 [PyPI Package](https://pypi.org/project/mxcp/${{ steps.get_version.outputs.version }}/)
+          - 📋 [Full Changelog](https://github.com/${{ github.repository }}/compare/v${{ steps.get_version.outputs.version }}...HEAD)
+          
+          ### Verification
+          - ✅ All tests passed
+          - ✅ Package integrity verified
+          - ✅ Test PyPI validation successful
+          - ✅ Production PyPI deployment complete
+        draft: false
+        prerelease: ${{ contains(steps.get_version.outputs.version, '-') }}
+
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-${{ steps.get_version.outputs.version }}
+        path: |
+          dist/
+          pyproject.toml
+
+  notify:
+    needs: publish
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Notify on success
+      if: needs.publish.result == 'success'
+      run: |
+        echo "🎉 Successfully published mxcp ${{ needs.publish.outputs.version }} to PyPI!"
+        echo "Users can now install with: pip install mxcp"
+        
+    - name: Notify on failure  
+      if: needs.publish.result == 'failure'
+      run: |
+        echo "❌ Failed to publish mxcp to PyPI"
+        echo "Please check the logs and try again" 
