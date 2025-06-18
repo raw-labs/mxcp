@@ -1,12 +1,14 @@
-import os
-import yaml
-from pathlib import Path
 import json
-from jsonschema import validate, ValidationError
-from mxcp.config.types import UserConfig, SiteConfig
 import logging
-from typing import Dict, Any, Optional
+import os
 import re
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import yaml
+from jsonschema import ValidationError, validate
+
+from mxcp.config.types import SiteConfig, UserConfig
 
 logger = logging.getLogger(__name__)
 

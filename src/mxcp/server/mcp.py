@@ -1,32 +1,33 @@
-from typing import Any, Dict, Optional, List, Literal, Union
+import atexit
+import hashlib
 import json
 import logging
-import traceback
-import time
-import threading
-import atexit
-from pathlib import Path
-from mcp.server.fastmcp import FastMCP
-from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
-from mxcp.endpoints.loader import EndpointLoader
-from mxcp.endpoints.executor import EndpointExecutor, EndpointType, EndpointResult
-from mxcp.config.user_config import UserConfig
-from mxcp.config.site_config import SiteConfig, get_active_profile
-from mxcp.endpoints.schema import validate_endpoint
-from makefun import create_function
-from mxcp.engine.duckdb_session import DuckDBSession
-from mxcp.auth.providers import create_oauth_handler, GeneralOAuthAuthorizationServer
-from mxcp.auth.middleware import AuthenticationMiddleware
-from mxcp.auth.context import get_user_context
-from mxcp.auth.url_utils import create_url_builder
-from mxcp.audit import AuditLogger
-from mcp.types import ToolAnnotations
-from pydantic import Field, BaseModel, create_model
-from typing import Annotated
-from starlette.responses import JSONResponse
 import re
+import threading
+import time
+import traceback
+from pathlib import Path
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
+
+from makefun import create_function
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
+from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from pydantic import BaseModel, Field, create_model
+from starlette.responses import JSONResponse
+
+from mxcp.audit import AuditLogger
+from mxcp.auth.context import get_user_context
+from mxcp.auth.middleware import AuthenticationMiddleware
+from mxcp.auth.providers import GeneralOAuthAuthorizationServer, create_oauth_handler
+from mxcp.auth.url_utils import create_url_builder
+from mxcp.config.site_config import SiteConfig, get_active_profile
+from mxcp.config.user_config import UserConfig
+from mxcp.endpoints.executor import EndpointExecutor, EndpointResult, EndpointType
+from mxcp.endpoints.loader import EndpointLoader
+from mxcp.endpoints.schema import validate_endpoint
+from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.policies import PolicyEnforcementError
-import hashlib
 
 logger = logging.getLogger(__name__)
 

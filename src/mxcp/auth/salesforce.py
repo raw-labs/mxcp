@@ -2,17 +2,18 @@
 """Salesforce OAuth provider implementation for MXCP authentication."""
 import logging
 import secrets
-from typing import Dict, Any
-
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import RedirectResponse, HTMLResponse, Response
+from typing import Any, Dict
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
-from .providers import ExternalOAuthHandler, ExternalUserInfo, StateMeta, UserContext
-from mxcp.config.types import UserAuthConfig
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
+from starlette.responses import HTMLResponse, RedirectResponse, Response
+
 from mxcp.auth.url_utils import URLBuilder
+from mxcp.config.types import UserAuthConfig
+
+from .providers import ExternalOAuthHandler, ExternalUserInfo, StateMeta, UserContext
 
 logger = logging.getLogger(__name__)
 

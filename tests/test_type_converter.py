@@ -1,6 +1,8 @@
+from datetime import date, datetime, time
+
 import pytest
+
 from mxcp.endpoints.executor import TypeConverter
-from datetime import datetime, date, time
 
 
 def test_string_formats():

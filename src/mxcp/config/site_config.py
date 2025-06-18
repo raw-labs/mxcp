@@ -1,10 +1,12 @@
-import os
-import yaml
 import json
-from jsonschema import validate, ValidationError
+import os
 from pathlib import Path
+from typing import Any, Dict, Optional
+
+import yaml
+from jsonschema import ValidationError, validate
+
 from mxcp.config.types import SiteConfig, UserConfig
-from typing import Optional, Dict, Any
 
 
 def find_repo_root() -> Path:

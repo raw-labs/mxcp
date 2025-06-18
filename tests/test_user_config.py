@@ -1,8 +1,10 @@
 import os
-import pytest
 from pathlib import Path
-from mxcp.config.user_config import load_user_config
+
+import pytest
+
 from mxcp.config.types import SiteConfig
+from mxcp.config.user_config import load_user_config
 
 
 def test_env_var_interpolation(tmp_path):

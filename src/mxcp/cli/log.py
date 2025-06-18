@@ -1,12 +1,14 @@
 """CLI command for querying MXCP audit logs."""
 
-import click
 import json
 from pathlib import Path
 from typing import Optional
-from mxcp.cli.utils import output_error, output_result, configure_logging
-from mxcp.config.site_config import load_site_config
+
+import click
+
 from mxcp.audit.query import AuditQuery
+from mxcp.cli.utils import configure_logging, output_error, output_result
+from mxcp.config.site_config import load_site_config
 
 
 @click.command(name="log")

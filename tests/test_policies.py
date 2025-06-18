@@ -1,13 +1,14 @@
 """Tests for policy enforcement functionality."""
 
 import pytest
+
 from mxcp.auth.providers import UserContext
 from mxcp.policies import (
     PolicyAction,
     PolicyDefinition,
-    PolicySet,
-    PolicyEnforcer,
     PolicyEnforcementError,
+    PolicyEnforcer,
+    PolicySet,
     parse_policies_from_config,
 )
 
@@ -560,10 +561,11 @@ class TestAuditLoggerSensitiveRedaction:
 
     def test_schema_based_redaction(self):
         """Test redaction based on endpoint schema."""
+        import json
         import tempfile
         import time
-        import json
         from pathlib import Path
+
         from mxcp.audit.logger import AuditLogger
 
         # Reset singleton instance
@@ -614,10 +616,11 @@ class TestAuditLoggerSensitiveRedaction:
 
     def test_nested_schema_redaction(self):
         """Test redaction of nested sensitive fields."""
+        import json
         import tempfile
         import time
-        import json
         from pathlib import Path
+
         from mxcp.audit.logger import AuditLogger
 
         # Reset singleton instance
@@ -681,10 +684,11 @@ class TestAuditLoggerSensitiveRedaction:
 
     def test_no_redaction_without_schema(self):
         """Test that no redaction happens without schema."""
+        import json
         import tempfile
         import time
-        import json
         from pathlib import Path
+
         from mxcp.audit.logger import AuditLogger
 
         # Reset singleton instance
@@ -731,10 +735,11 @@ class TestAuditLoggerSensitiveRedaction:
 
     def test_scalar_types_redaction(self):
         """Test redaction of scalar types marked as sensitive."""
+        import json
         import tempfile
         import time
-        import json
         from pathlib import Path
+
         from mxcp.audit.logger import AuditLogger
 
         # Reset singleton instance

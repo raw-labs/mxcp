@@ -1,10 +1,12 @@
 import os
-import pytest
 from contextlib import contextmanager
 from pathlib import Path
+
+import pytest
+
+from mxcp.config.site_config import SiteConfig, load_site_config
+from mxcp.config.user_config import UserConfig, load_user_config
 from mxcp.endpoints.executor import EndpointExecutor, EndpointType
-from mxcp.config.user_config import load_user_config, UserConfig
-from mxcp.config.site_config import load_site_config, SiteConfig
 from mxcp.engine.duckdb_session import DuckDBSession
 
 TEST_REPO_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "return-type-validation")

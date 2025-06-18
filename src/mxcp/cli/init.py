@@ -1,11 +1,13 @@
+import os
+from pathlib import Path
+from typing import Optional
+
 import click
 import yaml
-from pathlib import Path
-import os
-from mxcp.cli.utils import output_error, configure_logging, get_env_flag, get_env_profile
-from mxcp.config.user_config import load_user_config
+
+from mxcp.cli.utils import configure_logging, get_env_flag, get_env_profile, output_error
 from mxcp.config.analytics import track_command_with_timing
-from typing import Optional
+from mxcp.config.user_config import load_user_config
 
 
 def check_existing_mxcp_repo(target_dir: Path) -> bool:

@@ -1,8 +1,9 @@
-from typing import Dict, Any, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+from mxcp.config.site_config import SiteConfig
+from mxcp.config.user_config import UserConfig
 from mxcp.endpoints.executor import EndpointExecutor, EndpointType
 from mxcp.endpoints.loader import EndpointLoader
-from mxcp.config.user_config import UserConfig
-from mxcp.config.site_config import SiteConfig
 
 if TYPE_CHECKING:
     from mxcp.auth.providers import UserContext

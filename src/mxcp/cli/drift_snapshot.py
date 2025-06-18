@@ -1,20 +1,21 @@
 import asyncio
-import click
+import json
 from pathlib import Path
 from typing import Optional
-import json
 
-from mxcp.drift.snapshot import generate_snapshot
-from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config
+import click
+
 from mxcp.cli.utils import (
-    output_result,
-    output_error,
     configure_logging,
     get_env_flag,
     get_env_profile,
+    output_error,
+    output_result,
 )
 from mxcp.config.analytics import track_command_with_timing
+from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
+from mxcp.drift.snapshot import generate_snapshot
 
 
 @click.command(name="drift-snapshot")

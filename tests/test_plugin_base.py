@@ -1,9 +1,11 @@
-import pytest
-import duckdb
-from typing import Dict, Any, List, TypedDict
-from mxcp.plugins import MXCPBasePlugin, udf
 import base64
-from datetime import date, time, datetime, timedelta
+from datetime import date, datetime, time, timedelta
+from typing import Any, Dict, List, TypedDict
+
+import duckdb
+import pytest
+
+from mxcp.plugins import MXCPBasePlugin, udf
 
 
 class MyStruct(TypedDict):

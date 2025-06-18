@@ -1,7 +1,9 @@
-import pytest
 import os
-from unittest.mock import patch, MagicMock
-from mxcp.config.user_config import _resolve_vault_url, _interpolate_values
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from mxcp.config.user_config import _interpolate_values, _resolve_vault_url
 
 
 class TestVaultIntegration:

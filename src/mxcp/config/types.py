@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Dict, Optional, Literal, Any, Union
+from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
 
 
 # Site Config Types (mxcp-site.yml)

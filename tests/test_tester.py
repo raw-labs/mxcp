@@ -1,10 +1,12 @@
-import os
-import pytest
 import asyncio
+import os
 from pathlib import Path
-from mxcp.endpoints.tester import run_tests, run_all_tests
+
+import pytest
+
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
+from mxcp.endpoints.tester import run_all_tests, run_tests
 from mxcp.engine.duckdb_session import DuckDBSession
 
 

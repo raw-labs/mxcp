@@ -1,5 +1,6 @@
 import logging
 from typing import List, Union
+
 from mxcp.config.types import SiteExtensionDefinition
 
 

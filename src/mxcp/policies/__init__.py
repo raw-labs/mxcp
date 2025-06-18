@@ -4,9 +4,9 @@
 from .enforcement import (
     PolicyAction,
     PolicyDefinition,
-    PolicySet,
-    PolicyEnforcer,
     PolicyEnforcementError,
+    PolicyEnforcer,
+    PolicySet,
     parse_policies_from_config,
 )
 

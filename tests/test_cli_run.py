@@ -1,8 +1,10 @@
-import pytest
 import json
 import os
 from pathlib import Path
+
+import pytest
 from click.testing import CliRunner
+
 from mxcp.cli.run import run_endpoint
 
 

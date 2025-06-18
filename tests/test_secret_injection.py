@@ -1,10 +1,12 @@
-import pytest
 import asyncio
-from pathlib import Path
 import os
-from mxcp.endpoints.executor import EndpointExecutor, EndpointType
-from mxcp.config.user_config import load_user_config
+from pathlib import Path
+
+import pytest
+
 from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
+from mxcp.endpoints.executor import EndpointExecutor, EndpointType
 from mxcp.engine.duckdb_session import DuckDBSession
 
 

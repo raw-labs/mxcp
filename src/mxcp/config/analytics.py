@@ -1,10 +1,10 @@
-import os
-import time
-from typing import Optional, Any
-import logging
 import functools
+import logging
+import os
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Optional
 
 from posthog import Posthog
 

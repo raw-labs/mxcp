@@ -1,12 +1,14 @@
-from typing import Dict, Any, List, Optional, TYPE_CHECKING
 import importlib
+import inspect
 import logging
-import duckdb
-import sys
 import os
+import sys
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+import duckdb
+
 from mxcp.config.types import SiteConfig, UserConfig
 from mxcp.plugins import MXCPBasePlugin
-import inspect
 
 if TYPE_CHECKING:
     from mxcp.auth.providers import UserContext

@@ -1,16 +1,18 @@
-import duckdb
-from pathlib import Path
-from typing import Dict, Any, List, Tuple, Optional
-import yaml
 import json
-from jsonschema import validate as jsonschema_validate
-from mxcp.engine.duckdb_session import DuckDBSession
 import os
+import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import duckdb
+import yaml
+from jinja2 import Environment, meta
+from jsonschema import validate as jsonschema_validate
+
 from mxcp.config.site_config import find_repo_root
 from mxcp.endpoints.executor import get_endpoint_source_code
 from mxcp.endpoints.loader import EndpointLoader
-import re
-from jinja2 import Environment, meta
+from mxcp.engine.duckdb_session import DuckDBSession
 
 RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
 

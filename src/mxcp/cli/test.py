@@ -1,18 +1,20 @@
-import click
 import asyncio
-from typing import Dict, Any, Optional
-from mxcp.endpoints.tester import run_tests, run_all_tests
-from mxcp.endpoints.executor import EndpointType
-from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config
+from typing import Any, Dict, Optional
+
+import click
+
 from mxcp.cli.utils import (
-    output_result,
-    output_error,
     configure_logging,
     get_env_flag,
     get_env_profile,
+    output_error,
+    output_result,
 )
 from mxcp.config.analytics import track_command_with_timing
+from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
+from mxcp.endpoints.executor import EndpointType
+from mxcp.endpoints.tester import run_all_tests, run_tests
 
 
 def format_test_results(results, debug: bool = False):

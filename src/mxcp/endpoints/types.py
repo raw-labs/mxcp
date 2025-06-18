@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Optional, Union, Literal
+from typing import List, Literal, Optional, TypedDict, Union
 
 
 class SourceDefinition(TypedDict):

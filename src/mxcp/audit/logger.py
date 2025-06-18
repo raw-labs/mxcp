@@ -6,10 +6,10 @@ import logging
 import queue
 import threading
 import time
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any, Optional, Literal, List
-from dataclasses import dataclass, asdict
+from typing import Any, Dict, List, Literal, Optional
 
 logger = logging.getLogger(__name__)
 

@@ -1,11 +1,13 @@
 import os
-import sys
 import subprocess
+import sys
+
 import click
-from ..config.site_config import load_site_config, find_repo_root
+
+from ..config.site_config import find_repo_root, load_site_config
 from ..config.user_config import load_user_config
 from ..engine.dbt_runner import configure_dbt
-from .utils import configure_logging, check_command_available
+from .utils import check_command_available, configure_logging
 
 
 @click.command(name="dbt-config")

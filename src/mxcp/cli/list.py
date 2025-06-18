@@ -1,10 +1,12 @@
-import click
-from typing import Dict, List, Tuple, Optional
-from mxcp.endpoints.loader import EndpointLoader
 from pathlib import Path
-from mxcp.config.site_config import load_site_config
-from mxcp.cli.utils import output_result, output_error, configure_logging
+from typing import Dict, List, Optional, Tuple
+
+import click
+
+from mxcp.cli.utils import configure_logging, output_error, output_result
 from mxcp.config.analytics import track_command_with_timing
+from mxcp.config.site_config import load_site_config
+from mxcp.endpoints.loader import EndpointLoader
 
 
 def parse_endpoint(path: Path, endpoint: dict) -> Tuple[str, str, Optional[str]]:

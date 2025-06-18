@@ -1,21 +1,22 @@
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-import logging
-from jsonschema import validate, ValidationError, RefResolver
+from typing import Any, Dict, List, Optional, Tuple
 
-from mxcp.drift.types import (
-    DriftSnapshot,
-    DriftReport,
-    TableChange,
-    ResourceChange,
-    Table,
-    Column,
-    ResourceDefinition,
-)
-from mxcp.drift.snapshot import generate_snapshot
+from jsonschema import RefResolver, ValidationError, validate
+
 from mxcp.config.types import SiteConfig, UserConfig
+from mxcp.drift.snapshot import generate_snapshot
+from mxcp.drift.types import (
+    Column,
+    DriftReport,
+    DriftSnapshot,
+    ResourceChange,
+    ResourceDefinition,
+    Table,
+    TableChange,
+)
 
 logger = logging.getLogger(__name__)
 

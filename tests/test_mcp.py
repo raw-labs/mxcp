@@ -1,15 +1,17 @@
-import os
-import pytest
 import asyncio
-import aiohttp
-from pathlib import Path
-from mxcp.server.mcp import RAWMCP
-from mxcp.endpoints.executor import EndpointType
 import json
-from unittest.mock import Mock, patch, AsyncMock
+import os
 import time
-from mxcp.config.user_config import load_user_config
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
+
+import aiohttp
+import pytest
+
 from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
+from mxcp.endpoints.executor import EndpointType
+from mxcp.server.mcp import RAWMCP
 
 
 @pytest.fixture(scope="session", autouse=True)

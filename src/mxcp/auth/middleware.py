@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """Authentication middleware for MXCP endpoints."""
 import logging
-from typing import Any, Dict, Optional, Callable
 from functools import wraps
+from typing import Any, Callable, Dict, Optional
 
 from mcp.server.auth.middleware.auth_context import get_access_token
+
+from mxcp.auth.context import reset_user_context, set_user_context
 from mxcp.auth.providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer, UserContext
-from mxcp.auth.context import set_user_context, reset_user_context
 
 logger = logging.getLogger(__name__)
 

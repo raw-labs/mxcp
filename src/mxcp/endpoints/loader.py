@@ -1,13 +1,15 @@
-from pathlib import Path
-import yaml
-from typing import Dict, List, Optional
-from dataclasses import dataclass
-from mxcp.endpoints.types import EndpointDefinition
-from mxcp.config.site_config import SiteConfig
 import json
-from jsonschema import validate
-import os
 import logging
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional
+
+import yaml
+from jsonschema import validate
+
+from mxcp.config.site_config import SiteConfig
+from mxcp.endpoints.types import EndpointDefinition
 
 # Configure logging
 logger = logging.getLogger(__name__)

@@ -6,12 +6,7 @@ import secrets
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional, Dict
-
-from pydantic import AnyHttpUrl
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import Response
+from typing import Any, Dict, Optional
 
 from mcp.server.auth.provider import (
     AccessToken,
@@ -22,6 +17,11 @@ from mcp.server.auth.provider import (
     construct_redirect_uri,
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
+from pydantic import AnyHttpUrl
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
+from starlette.responses import Response
+
 from mxcp.config.types import UserAuthConfig
 
 logger = logging.getLogger(__name__)

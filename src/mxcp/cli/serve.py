@@ -1,12 +1,14 @@
-import click
 import signal
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
+import click
 from pydantic import BaseModel
-from mxcp.server.mcp import RAWMCP
-from mxcp.cli.utils import output_error, configure_logging, get_env_flag, get_env_profile
-from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config
+
+from mxcp.cli.utils import configure_logging, get_env_flag, get_env_profile, output_error
 from mxcp.config.analytics import track_command_with_timing
+from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
+from mxcp.server.mcp import RAWMCP
 
 
 class EndpointRequest(BaseModel):

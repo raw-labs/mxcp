@@ -1,12 +1,14 @@
+import logging
 import os
-import yaml
+import time
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 import click
+import yaml
+
 from ..config.site_config import find_repo_root
 from ..config.types import SiteConfig, UserConfig
-import time
-import logging
 
 
 def _get_dbt_profiles_dir() -> Path:

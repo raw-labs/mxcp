@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -6,14 +7,13 @@ from typing import Dict, List, Optional, Tuple
 import duckdb
 from pydantic import BaseModel
 
+from mxcp.config.site_config import find_repo_root
+from mxcp.config.types import SiteConfig, UserConfig
 from mxcp.drift.types import Column, DriftSnapshot, Table
 from mxcp.endpoints.loader import EndpointLoader
-import logging
-from mxcp.config.types import SiteConfig, UserConfig
-from mxcp.config.site_config import find_repo_root
-from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.endpoints.schema import validate_endpoint_payload
 from mxcp.endpoints.tester import run_tests
+from mxcp.engine.duckdb_session import DuckDBSession
 
 logger = logging.getLogger(__name__)
 

@@ -2,10 +2,11 @@
 """URL generation utilities for OAuth authentication with reverse proxy support."""
 import logging
 import os
-from typing import Optional, Dict, Any
-from urllib.parse import urlparse, urlunparse, urljoin
+from typing import Any, Dict, Optional
+from urllib.parse import urljoin, urlparse, urlunparse
 
 from starlette.requests import Request
+
 from mxcp.config.types import UserAuthConfig, UserHttpTransportConfig
 
 logger = logging.getLogger(__name__)

@@ -1,6 +1,7 @@
-from typing import Dict, Any
-from mxcp.config.types import SiteConfig, UserConfig
 import logging
+from typing import Any, Dict
+
+from mxcp.config.types import SiteConfig, UserConfig
 
 logger = logging.getLogger(__name__)
 

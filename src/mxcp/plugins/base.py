@@ -1,27 +1,29 @@
 import inspect
 import logging
-from typing import (
-    get_type_hints,
-    get_origin,
-    get_args,
-    Any,
-    List,
-    Dict,
-    Union,
-    Optional,
-    Annotated,
-    Type,
-    TypeVar,
-    Callable,
-    cast,
-    TYPE_CHECKING,
-)
-from datetime import date, time, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from functools import wraps
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
+
 from duckdb import DuckDBPyConnection
-from mxcp.config.user_config import UserConfig
+
 from mxcp.config.site_config import SiteConfig
+from mxcp.config.user_config import UserConfig
 
 if TYPE_CHECKING:
     from mxcp.auth.providers import UserContext

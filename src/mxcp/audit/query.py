@@ -1,11 +1,12 @@
 """Query interface for MXCP audit logs stored in JSONL format."""
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Literal
+from typing import Any, Dict, List, Literal, Optional
+
 import duckdb
-import re
 
 logger = logging.getLogger(__name__)
 
