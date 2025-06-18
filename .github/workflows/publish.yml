@@ -130,7 +130,7 @@ jobs:
         prerelease: ${{ contains(steps.get_version.outputs.version, '-') }}
 
     - name: Upload release artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: release-${{ steps.get_version.outputs.version }}
         path: |
