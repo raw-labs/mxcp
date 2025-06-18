@@ -7,33 +7,59 @@ from mxcp.endpoints.runner import run_endpoint as execute_endpoint
 from mxcp.endpoints.executor import EndpointType
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config, get_active_profile
-from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
+from mxcp.cli.utils import (
+    output_result,
+    output_error,
+    configure_logging,
+    get_env_flag,
+    get_env_profile,
+)
 from mxcp.config.analytics import track_command_with_timing
 from mxcp.auth.providers import UserContext
 from mxcp.engine.duckdb_session import DuckDBSession
 
+
 @click.command(name="run")
 @click.argument("endpoint_type", type=click.Choice([t.value for t in EndpointType]))
 @click.argument("name")
-@click.option("--param", "-p", multiple=True, help="Parameter in format name=value or name=@file.json for complex values")
+@click.option(
+    "--param",
+    "-p",
+    multiple=True,
+    help="Parameter in format name=value or name=@file.json for complex values",
+)
 @click.option("--user-context", "-u", help="User context as JSON string or @file.json")
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-@click.option("--skip-output-validation", is_flag=True, help="Skip output validation against the return type definition")
+@click.option(
+    "--skip-output-validation",
+    is_flag=True,
+    help="Skip output validation against the return type definition",
+)
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("run")
-def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_context: Optional[str], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool, readonly: bool):
+def run_endpoint(
+    endpoint_type: str,
+    name: str,
+    param: tuple[str, ...],
+    user_context: Optional[str],
+    profile: Optional[str],
+    json_output: bool,
+    debug: bool,
+    skip_output_validation: bool,
+    readonly: bool,
+):
     """Run an endpoint (tool, resource, or prompt).
-    
+
     Parameters can be provided in two ways:
     1. Simple values: --param name=value
     2. Complex values from JSON file: --param name=@file.json
-    
+
     User context can be provided for policy enforcement:
     --user-context '{"user_id": "123", "role": "admin", "permissions": ["read", "write"]}'
     --user-context @user_context.json
-    
+
     Examples:
         mxcp run tool my_tool --param name=value
         mxcp run tool my_tool --param complex=@data.json
@@ -45,7 +71,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
         profile = get_env_profile()
     if not readonly:
         readonly = get_env_flag("MXCP_READONLY")
-        
+
     # Configure logging
     configure_logging(debug)
 
@@ -53,9 +79,9 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
         # Load configs
         site_config = load_site_config()
         user_config = load_user_config(site_config)
-        
+
         profile_name = profile or site_config["profile"]
-        
+
         # Parse user context if provided
         user_context_obj = None
         if user_context:
@@ -75,7 +101,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
                     context_data = json.loads(user_context)
                 except json.JSONDecodeError as e:
                     raise click.BadParameter(f"Invalid JSON in user context: {e}")
-            
+
             # Create UserContext object from the data
             user_context_obj = UserContext(
                 provider="cli",  # Special provider for CLI usage
@@ -84,9 +110,9 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
                 email=context_data.get("email"),
                 name=context_data.get("name"),
                 avatar_url=context_data.get("avatar_url"),
-                raw_profile=context_data  # Store full context for policy access
+                raw_profile=context_data,  # Store full context for policy access
             )
-        
+
         # Parse parameters
         params: Dict[str, Any] = {}
         for p in param:
@@ -96,9 +122,9 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
                     output_error(click.BadParameter(error_msg), json_output, debug)
                 else:
                     raise click.BadParameter(error_msg)
-                    
+
             key, value = p.split("=", 1)
-            
+
             # Handle JSON file input
             if value.startswith("@"):
                 file_path = Path(value[1:])
@@ -109,20 +135,32 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
                         value = json.load(f)
                 except json.JSONDecodeError as e:
                     raise click.BadParameter(f"Invalid JSON in file {file_path}: {e}")
-            
+
             params[key] = value
-            
+
         # Create DuckDB session - connection will be established on-demand
         session = DuckDBSession(user_config, site_config, profile_name, readonly=readonly)
-        
+
         try:
             # Execute endpoint with explicit session
-            result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, session, profile_name, validate_output=not skip_output_validation, user_context=user_context_obj))
-            
+            result = asyncio.run(
+                execute_endpoint(
+                    endpoint_type,
+                    name,
+                    params,
+                    user_config,
+                    site_config,
+                    session,
+                    profile_name,
+                    validate_output=not skip_output_validation,
+                    user_context=user_context_obj,
+                )
+            )
+
             # Output result
             output_result(result, json_output, debug)
         finally:
             session.close()
-            
+
     except Exception as e:
         output_error(e, json_output, debug)

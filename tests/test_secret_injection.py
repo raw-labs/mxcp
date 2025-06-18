@@ -7,14 +7,19 @@ from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.engine.duckdb_session import DuckDBSession
 
+
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
-    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "secret-injection" / "mxcp-config.yml")
+    os.environ["MXCP_CONFIG"] = str(
+        Path(__file__).parent / "fixtures" / "secret-injection" / "mxcp-config.yml"
+    )
+
 
 @pytest.fixture
 def test_repo_path():
     """Path to the test repository."""
     return Path(__file__).parent / "fixtures" / "secret-injection"
+
 
 @pytest.fixture
 def user_config(test_repo_path):
@@ -27,6 +32,7 @@ def user_config(test_repo_path):
     finally:
         os.chdir(original_dir)
 
+
 @pytest.fixture
 def site_config(test_repo_path):
     """Load test site configuration."""
@@ -37,10 +43,12 @@ def site_config(test_repo_path):
     finally:
         os.chdir(original_dir)
 
+
 @pytest.fixture
 def test_profile():
     """Test profile name."""
     return "test_profile"
+
 
 @pytest.fixture
 def test_session(user_config, site_config, test_profile):
@@ -49,6 +57,7 @@ def test_session(user_config, site_config, test_profile):
     yield session
     session.close()
 
+
 @pytest.fixture
 def executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for secret injection tests."""
@@ -56,10 +65,13 @@ def executor(test_repo_path, user_config, site_config, test_profile, test_sessio
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "secret_test", user_config, site_config, test_session, test_profile)
+        executor = EndpointExecutor(
+            EndpointType.TOOL, "secret_test", user_config, site_config, test_session, test_profile
+        )
         yield executor
     finally:
         os.chdir(original_dir)
+
 
 @pytest.fixture
 def http_headers_executor(test_repo_path, user_config, site_config, test_profile, test_session):
@@ -68,10 +80,18 @@ def http_headers_executor(test_repo_path, user_config, site_config, test_profile
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "http_headers_test", user_config, site_config, test_session, test_profile)
+        executor = EndpointExecutor(
+            EndpointType.TOOL,
+            "http_headers_test",
+            user_config,
+            site_config,
+            test_session,
+            test_profile,
+        )
         yield executor
     finally:
         os.chdir(original_dir)
+
 
 @pytest.mark.asyncio
 async def test_secret_injection(executor):
@@ -80,6 +100,7 @@ async def test_secret_injection(executor):
     result = await executor.execute({})
     assert isinstance(result, dict)
     assert "bearer_token=bearer_token" in result["secret_value"]
+
 
 @pytest.mark.asyncio
 async def test_http_headers_injection(http_headers_executor):

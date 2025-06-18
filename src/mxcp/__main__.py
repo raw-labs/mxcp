@@ -12,12 +12,14 @@ from mxcp.cli.drift_snapshot import drift_snapshot
 from mxcp.cli.drift_check import drift_check
 from mxcp.cli.log import log
 
+
 @click.group()
 def cli():
     """MXCP CLI"""
     initialize_analytics()
     # Track when user runs just 'mxcp' without any command
     track_base_command()
+
 
 cli.add_command(list_endpoints)
 cli.add_command(run_endpoint)

@@ -8,14 +8,19 @@ from mxcp.engine.duckdb_session import DuckDBSession
 import duckdb
 import os
 
+
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
-    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "endpoint-execution" / "mxcp-config.yml")
+    os.environ["MXCP_CONFIG"] = str(
+        Path(__file__).parent / "fixtures" / "endpoint-execution" / "mxcp-config.yml"
+    )
+
 
 @pytest.fixture
 def test_repo_path():
     """Path to the test repository."""
     return Path(__file__).parent / "fixtures" / "endpoint-execution"
+
 
 @pytest.fixture
 def user_config(test_repo_path):
@@ -28,6 +33,7 @@ def user_config(test_repo_path):
     finally:
         os.chdir(original_dir)
 
+
 @pytest.fixture
 def site_config(test_repo_path):
     """Load test site configuration."""
@@ -38,10 +44,12 @@ def site_config(test_repo_path):
     finally:
         os.chdir(original_dir)
 
+
 @pytest.fixture
 def test_profile():
     """Test profile name."""
     return "test_profile"
+
 
 @pytest.fixture
 def test_session(user_config, site_config, test_profile):
@@ -50,6 +58,7 @@ def test_session(user_config, site_config, test_profile):
     yield session
     session.close()
 
+
 @pytest.fixture
 def executor(test_repo_path, user_config, site_config, test_profile, test_session):
     """Create an executor for endpoint execution tests."""
@@ -57,10 +66,13 @@ def executor(test_repo_path, user_config, site_config, test_profile, test_sessio
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
-        executor = EndpointExecutor(EndpointType.TOOL, "example", user_config, site_config, test_session, test_profile)
+        executor = EndpointExecutor(
+            EndpointType.TOOL, "example", user_config, site_config, test_session, test_profile
+        )
         yield executor
     finally:
         os.chdir(original_dir)
+
 
 def test_endpoint_loading(executor):
     """Test that endpoint definition is loaded correctly"""
@@ -70,41 +82,41 @@ def test_endpoint_loading(executor):
     assert "parameters" in executor.endpoint["tool"]
     assert "return" in executor.endpoint["tool"]
 
+
 def test_parameter_validation(executor):
     """Test parameter validation against schema"""
     executor._load_endpoint()
-    
+
     # Test valid parameters
     valid_params = {
         "name": "test",
         "age": 25,
         "is_active": True,
         "tags": ["tag1", "tag2"],
-        "preferences": {
-            "notifications": True,
-            "theme": "dark"
-        }
+        "preferences": {"notifications": True, "theme": "dark"},
     }
     executor._validate_parameters(valid_params)
-    
+
     # Test invalid parameters
     with pytest.raises(ValueError):
         executor._validate_parameters({"name": 123})  # Wrong type
-    
+
     with pytest.raises(ValueError):
         executor._validate_parameters({"age": "not a number"})  # Wrong type
-    
+
     with pytest.raises(ValueError):
         executor._validate_parameters({"tags": "not an array"})  # Wrong type
+
 
 @pytest.mark.asyncio
 async def test_sql_execution(executor):
     """Test SQL execution with parameter conversion"""
     executor._load_endpoint()
-    
+
     # Create test table
     conn = duckdb.connect(":memory:")
-    conn.execute("""
+    conn.execute(
+        """
         CREATE TABLE users (
             name VARCHAR,
             age INTEGER,
@@ -112,10 +124,12 @@ async def test_sql_execution(executor):
             tags VARCHAR[],
             preferences JSON
         )
-    """)
-    
+    """
+    )
+
     # Insert test data
-    conn.execute("""
+    conn.execute(
+        """
         INSERT INTO users VALUES (
             'test',
             25,
@@ -123,22 +137,20 @@ async def test_sql_execution(executor):
             ['tag1', 'tag2'],
             '{"notifications": true, "theme": "dark"}'
         )
-    """)
-    
+    """
+    )
+
     # Test execution
     params = {
         "name": "test",
         "age": 25,
         "is_active": True,
         "tags": ["tag1", "tag2"],
-        "preferences": {
-            "notifications": True,
-            "theme": "dark"
-        }
+        "preferences": {"notifications": True, "theme": "dark"},
     }
-    
+
     result = await executor.execute(params)
     assert len(result) > 0
     assert result[0]["name"] == "test"  # name column
-    assert result[0]["age"] == 25      # age column
-    assert result[0]["is_active"] is True    # is_active column 
+    assert result[0]["age"] == 25  # age column
+    assert result[0]["is_active"] is True  # is_active column

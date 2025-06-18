@@ -1,1 +1,1 @@
-# Auth module for MXCP OAuth integration 
+# Auth module for MXCP OAuth integration
