@@ -1,12 +1,9 @@
-<<<<<<< HEAD
-=======
 from pathlib import Path
 import yaml
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from mxcp.endpoints.models import EndpointDefinition
 from mxcp.config.site_config import SiteConfig
->>>>>>> ef3f8e3 (refactor(endpoints): rename types.py to models.py to avoid shadowing builtin)
 import json
 import logging
 import os
