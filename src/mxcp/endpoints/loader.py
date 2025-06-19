@@ -1,9 +1,3 @@
-from pathlib import Path
-import yaml
-from typing import Dict, List, Optional
-from dataclasses import dataclass
-from mxcp.endpoints.models import EndpointDefinition
-from mxcp.config.site_config import SiteConfig
 import json
 import logging
 import os
@@ -15,6 +9,7 @@ import yaml
 from jsonschema import validate
 
 from mxcp.config.site_config import SiteConfig
+from mxcp.endpoints.models import EndpointDefinition
 from mxcp.endpoints.types import EndpointDefinition
 
 # Configure logging
