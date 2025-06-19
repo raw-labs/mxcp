@@ -17,7 +17,7 @@ from jinja2 import Template
 from mxcp.config.site_config import SiteConfig
 from mxcp.config.user_config import UserConfig
 from mxcp.endpoints.loader import EndpointLoader, find_repo_root
-from mxcp.endpoints.types import EndpointDefinition
+from mxcp.endpoints.models import EndpointDefinition
 from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.policies import PolicyEnforcementError, PolicyEnforcer, parse_policies_from_config
 
