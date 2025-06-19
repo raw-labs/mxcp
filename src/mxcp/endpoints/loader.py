@@ -10,7 +10,6 @@ from jsonschema import validate
 
 from mxcp.config.site_config import SiteConfig
 from mxcp.endpoints.models import EndpointDefinition
-from mxcp.endpoints.types import EndpointDefinition
 
 # Configure logging
 logger = logging.getLogger(__name__)
