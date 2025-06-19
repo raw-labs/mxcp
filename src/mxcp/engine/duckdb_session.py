@@ -9,7 +9,6 @@ from mxcp.auth.context import get_user_context
 import logging
 from pathlib import Path
 from pandas import NaT
-import pandas
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +26,7 @@ def execute_query_to_dict(conn: duckdb.DuckDBPyConnection, query: str, params: D
     Returns:
         List of dictionaries representing query results
     """
-    df = conn.execute(query, params).fetchdf()
-
-    # Cast to object so None is allowed in datetime columns,
-    # then mask every pandas NA/NaT/NaN with Python None.
-    df = df.astype("object").where(pandas.notnull(df), None)
-    
-    return df.to_dict("records")
+    return conn.execute(query, params).fetchdf().replace({NaT: None}).to_dict("records")
 
 
 class DuckDBSession:
