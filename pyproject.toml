@@ -9,7 +9,7 @@ description = "MXCP: Model eXecution + Context Protocol"
 authors = [{ name = "RAW Labs SA", email = "mxcp@raw-labs.com" }]
 readme = "README.md"
 license = "BUSL-1.1"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.9.0",  # Official MCP Python SDK
     "click>=8.1.7",
@@ -67,15 +67,16 @@ asyncio_mode = "auto"  # Enable async test support
 
 [tool.black]
 line-length = 100
-target-version = ["py39"]
+target-version = ["py310"]
 
 [tool.isort]
 profile = "black"
 line_length = 100
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
+
