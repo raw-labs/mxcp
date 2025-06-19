@@ -7,9 +7,7 @@ from .providers import UserContext
 
 # Create a contextvar to store the user context
 # The default is None, indicating no authenticated user is present
-user_context_var = contextvars.ContextVar[Optional[UserContext]](
-    "user_context", default=None
-)
+user_context_var = contextvars.ContextVar[Optional[UserContext]]("user_context", default=None)
 
 
 def get_user_context() -> Optional[UserContext]:
@@ -25,10 +23,10 @@ def get_user_context() -> Optional[UserContext]:
 def set_user_context(user_context: Optional[UserContext]) -> contextvars.Token:
     """
     Set the user context in the current context.
-    
+
     Args:
         user_context: The UserContext to set
-        
+
     Returns:
         A token that can be used to reset the context
     """
@@ -38,8 +36,8 @@ def set_user_context(user_context: Optional[UserContext]) -> contextvars.Token:
 def reset_user_context(token: contextvars.Token) -> None:
     """
     Reset the user context using a token.
-    
+
     Args:
         token: The token returned by set_user_context
     """
-    user_context_var.reset(token) 
+    user_context_var.reset(token)

@@ -1,23 +1,25 @@
+import asyncio
+import json
+import logging
+import re
+import threading
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+
 import duckdb
+import numpy as np
+import pandas as pd
 import yaml
-from datetime import datetime
-import json
 from jinja2 import Template
+
+from mxcp.config.site_config import SiteConfig
+from mxcp.config.user_config import UserConfig
+from mxcp.endpoints.loader import EndpointLoader, find_repo_root
 from mxcp.endpoints.types import EndpointDefinition
 from mxcp.engine.duckdb_session import DuckDBSession
-from mxcp.endpoints.loader import find_repo_root, EndpointLoader
-from mxcp.config.user_config import UserConfig
-from mxcp.config.site_config import SiteConfig
-from mxcp.policies import PolicyEnforcer, PolicyEnforcementError, parse_policies_from_config
-import re
-import numpy as np
-import asyncio
-import logging
-import pandas as pd
-import threading
+from mxcp.policies import PolicyEnforcementError, PolicyEnforcer, parse_policies_from_config
 
 if TYPE_CHECKING:
     from mxcp.auth.providers import UserContext
@@ -27,15 +29,20 @@ from mxcp.auth.context import get_user_context
 
 logger = logging.getLogger(__name__)
 
+
 class EndpointType(Enum):
     TOOL = "tool"
     RESOURCE = "resource"
     PROMPT = "prompt"
 
+
 # Type alias for standardized endpoint results
 EndpointResult = List[Dict[str, Any]]
 
-def get_endpoint_source_code(endpoint_dict: dict, endpoint_type: str, endpoint_file_path: Path, repo_root: Path) -> str:
+
+def get_endpoint_source_code(
+    endpoint_dict: dict, endpoint_type: str, endpoint_file_path: Path, repo_root: Path
+) -> str:
     """Get the source code for the endpoint, resolving code vs file."""
     source = endpoint_dict[endpoint_type]["source"]
     if "code" in source:
@@ -50,13 +57,16 @@ def get_endpoint_source_code(endpoint_dict: dict, endpoint_type: str, endpoint_f
     else:
         raise ValueError("No source code found in endpoint definition")
 
+
 class SchemaError(ValueError):
     """Raised when a value doesn't match the expected schema."""
+
     pass
+
 
 class TypeConverter:
     """Handles conversion between Python types and DuckDB types"""
-    
+
     @staticmethod
     def python_type_to_schema_type(python_type: str) -> str:
         type_map = {
@@ -69,7 +79,7 @@ class TypeConverter:
             "datetime": "date-time",
             "date": "date",
             "time": "time",
-            "timedelta": "duration"
+            "timedelta": "duration",
         }
         return type_map.get(python_type, python_type)
 
@@ -78,13 +88,13 @@ class TypeConverter:
         """Convert a value to the appropriate type based on parameter definition"""
         param_type = param_def.get("type")
         param_format = param_def.get("format")
-        
+
         if value is None:
             return None
-            
+
         if param_type == "string":
             # Handle pandas Timestamp objects that come from DuckDB
-            if hasattr(value, 'strftime'):
+            if hasattr(value, "strftime"):
                 # It's a datetime-like object (pandas Timestamp, datetime, etc.)
                 if param_format == "date":
                     return value.strftime("%Y-%m-%d")
@@ -95,7 +105,7 @@ class TypeConverter:
                 else:
                     # Default to ISO format for datetime objects
                     return value.isoformat()
-            
+
             # Handle string format annotations
             if param_format == "date-time":
                 return datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -119,7 +129,9 @@ class TypeConverter:
                 return str(value)
             elif param_format == "duration":
                 # ISO 8601 duration format (e.g., P1DT2H)
-                if not re.match(r"^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$", value):
+                if not re.match(
+                    r"^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$", value
+                ):
                     raise SchemaError(f"Invalid duration format: {value}")
                 return str(value)
             elif param_format == "timestamp":
@@ -128,15 +140,19 @@ class TypeConverter:
                     return datetime.fromtimestamp(float(value))
                 except (ValueError, OSError):
                     raise SchemaError(f"Invalid timestamp: {value}")
-            
+
             # Validate string length constraints
             if "minLength" in param_def and len(value) < param_def["minLength"]:
-                raise SchemaError(f"String must be at least {param_def['minLength']} characters long")
+                raise SchemaError(
+                    f"String must be at least {param_def['minLength']} characters long"
+                )
             if "maxLength" in param_def and len(value) > param_def["maxLength"]:
-                raise SchemaError(f"String must be at most {param_def['maxLength']} characters long")
-            
+                raise SchemaError(
+                    f"String must be at most {param_def['maxLength']} characters long"
+                )
+
             return str(value)
-            
+
         elif param_type == "number":
             try:
                 result = float(value)
@@ -154,7 +170,7 @@ class TypeConverter:
             if "exclusiveMaximum" in param_def and result >= param_def["exclusiveMaximum"]:
                 raise SchemaError(f"Value must be < {param_def['exclusiveMaximum']}")
             return result
-            
+
         elif param_type == "integer":
             try:
                 result = int(value)
@@ -172,12 +188,12 @@ class TypeConverter:
             if "exclusiveMaximum" in param_def and result >= param_def["exclusiveMaximum"]:
                 raise SchemaError(f"Value must be < {param_def['exclusiveMaximum']}")
             return result
-            
+
         elif param_type == "boolean":
             if isinstance(value, str):
                 return value.lower() == "true"
             return bool(value)
-            
+
         elif param_type == "array":
             if not isinstance(value, (list, np.ndarray)):
                 if isinstance(value, str):
@@ -188,10 +204,10 @@ class TypeConverter:
                 else:
                     actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
                     raise SchemaError(f"Expected array, got {actual_type}")
-            
+
             if isinstance(value, np.ndarray):
                 value = value.tolist()
-            
+
             # Validate array constraints
             if "minItems" in param_def and len(value) < param_def["minItems"]:
                 raise SchemaError(f"Array must have at least {param_def['minItems']} items")
@@ -200,10 +216,10 @@ class TypeConverter:
             if "uniqueItems" in param_def and param_def["uniqueItems"]:
                 if len(value) != len(set(str(v) for v in value)):
                     raise SchemaError("Array must contain unique items")
-            
+
             items_def = param_def.get("items", {})
             return [TypeConverter.convert_value(item, items_def) for item in value]
-            
+
         elif param_type == "object":
             if not isinstance(value, dict):
                 if isinstance(value, str):
@@ -214,15 +230,15 @@ class TypeConverter:
                 else:
                     actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
                     raise SchemaError(f"Expected object, got {actual_type}")
-            
+
             properties = param_def.get("properties", {})
             required = param_def.get("required", [])
-            
+
             # Check required properties
             missing = [prop for prop in required if prop not in value]
             if missing:
                 raise SchemaError(f"Missing required properties: {', '.join(missing)}")
-            
+
             # Convert and validate each property
             result = {}
             for k, v in value.items():
@@ -234,21 +250,29 @@ class TypeConverter:
                     # For additional properties, handle special types like pandas Timestamp
                     if isinstance(v, pd.Timestamp):
                         result[k] = v.strftime("%Y-%m-%d")
-                    elif hasattr(v, 'isoformat'):
+                    elif hasattr(v, "isoformat"):
                         result[k] = v.isoformat()
                     else:
                         result[k] = v
-            
+
             return result
-            
+
         return value
 
+
 class EndpointExecutor:
-    def __init__(self, endpoint_type: EndpointType, name: str, user_config: UserConfig, site_config: SiteConfig, 
-                 session: DuckDBSession, profile: Optional[str] = None,
-                 db_lock: Optional[threading.Lock] = None):
+    def __init__(
+        self,
+        endpoint_type: EndpointType,
+        name: str,
+        user_config: UserConfig,
+        site_config: SiteConfig,
+        session: DuckDBSession,
+        profile: Optional[str] = None,
+        db_lock: Optional[threading.Lock] = None,
+    ):
         """Initialize the endpoint executor.
-        
+
         Args:
             endpoint_type: The type of endpoint (tool, resource, or prompt)
             name: The name of the endpoint
@@ -263,32 +287,32 @@ class EndpointExecutor:
         self.endpoint: Optional[EndpointDefinition] = None
         self.user_config = user_config
         self.site_config = site_config
-        
+
         # Session is always provided from outside
         self.session = session
-        
+
         self.db_lock = db_lock  # Store the lock for thread-safe access
         self.policy_enforcer: Optional[PolicyEnforcer] = None
-        
+
         # Track policy decisions for audit logging
         self.last_policy_decision: str = "n/a"
         self.last_policy_reason: Optional[str] = None
-        
+
     def _load_endpoint(self):
         """Load the endpoint definition from YAML file"""
         # Use EndpointLoader to find the endpoint file
         loader = EndpointLoader(self.site_config)
         result = loader.load_endpoint(self.endpoint_type.value, self.name)
-        
+
         if not result:
             raise FileNotFoundError(f"Endpoint {self.endpoint_type.value}/{self.name} not found")
-            
+
         self.endpoint_file_path, self.endpoint = result
-            
+
         # Validate basic structure
         if self.endpoint_type.value not in self.endpoint:
             raise ValueError(f"Endpoint type {self.endpoint_type.value} not found in definition")
-            
+
         # Initialize policy enforcer if policies are defined
         endpoint_def = self.endpoint[self.endpoint_type.value]
         policies_config = endpoint_def.get("policies")
@@ -301,96 +325,103 @@ class EndpointExecutor:
         """Validate input parameters against endpoint definition"""
         if not self.endpoint:
             raise RuntimeError("Endpoint not loaded")
-            
+
         endpoint_def = self.endpoint[self.endpoint_type.value]
         param_defs = endpoint_def.get("parameters", [])
-        
+
         # Convert param_defs list to dict for easier lookup
         param_schema = {p["name"]: p for p in param_defs}
-        
+
         # Check required parameters
         for param in param_defs:
             # A parameter is required if it does not have a default value
             if "default" not in param and param["name"] not in params:
                 raise ValueError(f"Required parameter missing: {param['name']}")
-                
+
         # Validate and convert each parameter
         for name, value in params.items():
             if name not in param_schema:
                 raise ValueError(f"Unknown parameter: {name}")
-                
+
             param_def = param_schema[name]
-            
+
             # Convert value to appropriate type
             try:
                 params[name] = TypeConverter.convert_value(value, param_def)
             except Exception as e:
                 raise ValueError(f"Error converting parameter {name}: {str(e)}")
-                
+
             # Validate enum values
             if "enum" in param_def and value not in param_def["enum"]:
                 raise ValueError(f"Invalid value for {name}. Must be one of: {param_def['enum']}")
-                
+
             # Validate array constraints
             if param_def["type"] == "array":
                 if "minItems" in param_def and len(value) < param_def["minItems"]:
                     raise ValueError(f"Array {name} has too few items")
                 if "maxItems" in param_def and len(value) > param_def["maxItems"]:
                     raise ValueError(f"Array {name} has too many items")
-                    
+
             # Validate string constraints
             if param_def["type"] == "string":
                 if "minLength" in param_def and len(value) < param_def["minLength"]:
                     raise ValueError(f"String {name} is too short")
                 if "maxLength" in param_def and len(value) > param_def["maxLength"]:
                     raise ValueError(f"String {name} is too long")
-        
+
     def _apply_defaults(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Apply default values from parameter definitions"""
         if not self.endpoint:
             raise RuntimeError("Endpoint not loaded")
-            
+
         endpoint_def = self.endpoint[self.endpoint_type.value]
         param_defs = endpoint_def.get("parameters", [])
-        
+
         # Create a copy of params to avoid modifying the input
         result = params.copy()
-        
+
         # Apply defaults for missing parameters
         for param in param_defs:
             name = param["name"]
             if name not in result and "default" in param:
                 result[name] = param["default"]
-                
+
         return result
-            
+
     def _get_source_code(self) -> str:
         """Get the source code for the endpoint"""
         if not self.endpoint:
             raise RuntimeError("Endpoint not loaded")
-        
+
         # For test fixtures with inline code, use that directly
         endpoint_type_value = self.endpoint_type.value
         if endpoint_type_value in self.endpoint and "source" in self.endpoint[endpoint_type_value]:
             source = self.endpoint[endpoint_type_value]["source"]
             if "code" in source:
                 return source["code"]
-                
+
         # Otherwise, try to load from file
         # Find repository root
         repo_root = find_repo_root()
-        return get_endpoint_source_code(self.endpoint, self.endpoint_type.value, self.endpoint_file_path, repo_root)
-            
-    async def execute(self, params: Dict[str, Any], validate_output: bool = True, user_context: Optional['UserContext'] = None) -> EndpointResult:
+        return get_endpoint_source_code(
+            self.endpoint, self.endpoint_type.value, self.endpoint_file_path, repo_root
+        )
+
+    async def execute(
+        self,
+        params: Dict[str, Any],
+        validate_output: bool = True,
+        user_context: Optional["UserContext"] = None,
+    ) -> EndpointResult:
         """Execute the endpoint with given parameters.
-        
+
         Args:
             params: Dictionary of parameter name/value pairs
             validate_output: Whether to validate the output against the return type definition (default: True)
             user_context: Optional user context for policy enforcement
-        
+
         Returns:
-            For tools and resources: 
+            For tools and resources:
                 - If return type is array: List[Dict[str, Any]] where each dict represents a row
                 - If return type is object: Dict[str, Any] representing a single row
                 - If return type is scalar: The scalar value from a single row, single column
@@ -399,13 +430,13 @@ class EndpointExecutor:
         # Load endpoint definition if not already loaded
         if self.endpoint is None:
             self._load_endpoint()
-        
+
         # Apply default values
         params = self._apply_defaults(params)
-        
+
         # Validate parameters
         self._validate_parameters(params)
-        
+
         # Enforce input policies
         if self.policy_enforcer:
             try:
@@ -417,61 +448,67 @@ class EndpointExecutor:
                 self.last_policy_reason = e.reason
                 # Re-raise with more context
                 raise ValueError(f"Policy enforcement failed: {e.reason}")
-        
+
         if self.endpoint_type in (EndpointType.TOOL, EndpointType.RESOURCE):
             # For tools and resources, we execute SQL and return results as list of dicts
             source = self._get_source_code()
-            
+
             # Check for missing parameters in SQL
             required_params = duckdb.extract_statements(source)[0].named_parameters
             missing_params = set(required_params) - set(params.keys())
             if missing_params:
                 raise ValueError(f"Required parameter missing: {', '.join(missing_params)}")
-            
+
             # Execute query with thread-safety if lock is provided
             if self.db_lock:
                 with self.db_lock:
                     result = self.session.execute_query_to_dict(source, params)
             else:
                 result = self.session.execute_query_to_dict(source, params)
-                
+
             logger.debug(f"SQL query returned {len(result)} rows")
             logger.debug(f"First row (if any): {result[0] if result else 'No rows'}")
-            
+
             # Transform result based on return type if specified
             endpoint_def = self.endpoint[self.endpoint_type.value]
             if "return" in endpoint_def:
                 return_type = endpoint_def["return"].get("type")
                 logger.debug(f"Expected return type: {return_type}")
-                
+
                 if return_type != "array":
                     if len(result) == 0:
                         raise ValueError("SQL query returned no rows")
                     if len(result) > 1:
-                        raise ValueError(f"SQL query returned multiple rows ({len(result)}), but return type is '{return_type}'")
-                    
+                        raise ValueError(
+                            f"SQL query returned multiple rows ({len(result)}), but return type is '{return_type}'"
+                        )
+
                     # We have exactly one row
                     row = result[0]
-                    
+
                     if return_type == "object":
                         result = row
                         logger.debug(f"Transformed to object: {result}")
                     else:  # scalar type
                         if len(row) != 1:
-                            raise ValueError(f"SQL query returned multiple columns ({len(row)}), but return type is '{return_type}'")
+                            raise ValueError(
+                                f"SQL query returned multiple columns ({len(row)}), but return type is '{return_type}'"
+                            )
                         result = next(iter(row.values()))
                         logger.debug(f"Transformed to scalar: {result}")
-            
+
             # Validate the output against the return type definition if enabled
             if validate_output:
                 logger.debug(f"Validating output of type {type(result).__name__}")
                 self._validate_return(result)
-            
+
             # Enforce output policies
             if self.policy_enforcer:
                 try:
                     logger.debug(f"Enforcing output policies on result: {result}")
-                    result, action = self.policy_enforcer.enforce_output_policies(user_context, result, endpoint_def)
+                    result, action = self.policy_enforcer.enforce_output_policies(
+                        user_context, result, endpoint_def
+                    )
                     if action:
                         self.last_policy_decision = action
                     logger.debug(f"Result after policy enforcement: {result}")
@@ -481,30 +518,32 @@ class EndpointExecutor:
                     self.last_policy_reason = e.reason
                     # Re-raise with more context
                     raise ValueError(f"Output policy enforcement failed: {e.reason}")
-            
+
             return result
-            
+
         else:  # PROMPT
             # For prompts, we process each message through Jinja2 templating
             prompt_def = self.endpoint["prompt"]
             messages = prompt_def["messages"]
-            
+
             processed_messages = []
             for msg in messages:
                 template = Template(msg["prompt"])
                 processed_prompt = template.render(**params)
-                
+
                 processed_msg = {
                     "prompt": processed_prompt,
                     "role": msg.get("role"),
-                    "type": msg.get("type")
+                    "type": msg.get("type"),
                 }
                 processed_messages.append(processed_msg)
-            
+
             # Enforce output policies for prompts too
             if self.policy_enforcer:
                 try:
-                    processed_messages, action = self.policy_enforcer.enforce_output_policies(user_context, processed_messages, prompt_def)
+                    processed_messages, action = self.policy_enforcer.enforce_output_policies(
+                        user_context, processed_messages, prompt_def
+                    )
                     if action:
                         self.last_policy_decision = action
                 except PolicyEnforcementError as e:
@@ -513,24 +552,24 @@ class EndpointExecutor:
                     self.last_policy_reason = e.reason
                     # Re-raise with more context
                     raise ValueError(f"Output policy enforcement failed: {e.reason}")
-            
+
             return processed_messages
-            
+
     def _validate_return(self, output: EndpointResult) -> None:
         """Validate the output against the return type definition if present."""
         if not self.endpoint:
             raise RuntimeError("Endpoint not loaded")
-        
+
         endpoint_def = self.endpoint[self.endpoint_type.value]
         if "return" not in endpoint_def:
             return
-        
+
         return_def = endpoint_def["return"]
         return_type = return_def.get("type")
-        
+
         logger.debug(f"_validate_return: output={output}, type={type(output).__name__}")
         logger.debug(f"_validate_return: return_def={return_def}")
-        
+
         try:
             TypeConverter.convert_value(output, return_def)
         except SchemaError as e:
@@ -545,9 +584,19 @@ class EndpointExecutor:
             logger.error(f"_validate_return: Generic error: {e}, error_msg={error_msg}")
             raise SchemaError(error_msg) from e
 
-async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, session: DuckDBSession, profile: Optional[str] = None, user_context: Optional['UserContext'] = None) -> EndpointResult:
+
+async def execute_endpoint(
+    endpoint_type: str,
+    name: str,
+    params: Dict[str, Any],
+    user_config: UserConfig,
+    site_config: SiteConfig,
+    session: DuckDBSession,
+    profile: Optional[str] = None,
+    user_context: Optional["UserContext"] = None,
+) -> EndpointResult:
     """Execute an endpoint by type and name.
-    
+
     Args:
         endpoint_type: The type of endpoint (tool, resource, or prompt)
         name: The name of the endpoint
@@ -557,7 +606,7 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
         session: DuckDB session to use for execution
         profile: Optional profile name to override the default profile
         user_context: Optional user context for policy enforcement
-        
+
     Returns:
         For tools and resources: List[Dict[str, Any]] where each dict represents a row with column names as keys
         For prompts: List[Dict[str, Any]] where each dict represents a message with role, prompt, and type
@@ -565,7 +614,11 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
     try:
         endpoint_type_enum = EndpointType(endpoint_type.lower())
     except ValueError:
-        raise ValueError(f"Invalid endpoint type: {endpoint_type}. Must be one of: {', '.join(t.value for t in EndpointType)}")
-        
-    executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config, session, profile)
-    return await executor.execute(params, user_context=user_context) 
+        raise ValueError(
+            f"Invalid endpoint type: {endpoint_type}. Must be one of: {', '.join(t.value for t in EndpointType)}"
+        )
+
+    executor = EndpointExecutor(
+        endpoint_type_enum, name, user_config, site_config, session, profile
+    )
+    return await executor.execute(params, user_context=user_context)

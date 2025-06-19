@@ -2,4 +2,4 @@
 
 from .logger import AuditLogger, LogEvent
 
-__all__ = ["AuditLogger", "LogEvent"] 
+__all__ = ["AuditLogger", "LogEvent"]

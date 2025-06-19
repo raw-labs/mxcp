@@ -4,17 +4,17 @@
 from .enforcement import (
     PolicyAction,
     PolicyDefinition,
-    PolicySet,
-    PolicyEnforcer,
     PolicyEnforcementError,
-    parse_policies_from_config
+    PolicyEnforcer,
+    PolicySet,
+    parse_policies_from_config,
 )
 
 __all__ = [
     "PolicyAction",
-    "PolicyDefinition", 
+    "PolicyDefinition",
     "PolicySet",
     "PolicyEnforcer",
     "PolicyEnforcementError",
-    "parse_policies_from_config"
-] 
+    "parse_policies_from_config",
+]
