@@ -812,6 +812,7 @@ class RAWMCP:
                 # Use shared connection with thread-safety
                 with self.db_lock:
                     result = self.db_session.execute_query_to_dict(sql)
+                    return result
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
