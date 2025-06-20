@@ -215,13 +215,18 @@ class RAWMCP:
             if self.oauth_server:
                 try:
                     import asyncio
+                    import concurrent.futures
                     # Check if there's an event loop running
                     try:
                         loop = asyncio.get_running_loop()
-                        # We're in an existing loop, create a task
-                        # Note: We can't wait for it since shutdown() is synchronous
-                        task = loop.create_task(self.oauth_server.close())
-                        logger.info("OAuth server close scheduled (async)")
+                        # We're in an existing loop, use run_coroutine_threadsafe to wait for completion
+                        future = asyncio.run_coroutine_threadsafe(self.oauth_server.close(), loop)
+                        try:
+                            # Wait for the async operation to complete with a timeout
+                            future.result(timeout=5.0)  # 5 second timeout
+                            logger.info("Closed OAuth server persistence")
+                        except concurrent.futures.TimeoutError:
+                            logger.error("Timeout waiting for OAuth server to close")
                     except RuntimeError:
                         # No event loop running, use asyncio.run()
                         asyncio.run(self.oauth_server.close())
@@ -1058,28 +1063,28 @@ class RAWMCP:
             # Initialize OAuth server before starting FastMCP
             if self.oauth_server:
                 import asyncio
+                import concurrent.futures
                 try:
                     # Check if there's already an event loop running
                     try:
                         loop = asyncio.get_running_loop()
-                        # We're in an existing loop, create a task but don't block
-                        # The server will start without waiting for initialization to complete
-                        task = loop.create_task(self._initialize_oauth_server())
-                        # Add a callback to log completion
-                        def log_completion(future):
-                            try:
-                                future.result()
-                                logger.info("OAuth server initialized successfully (async)")
-                            except Exception as e:
-                                logger.error(f"Failed to initialize OAuth server (async): {e}")
-                        task.add_done_callback(log_completion)
+                        # We're in an existing loop, use run_coroutine_threadsafe to wait for completion
+                        future = asyncio.run_coroutine_threadsafe(self._initialize_oauth_server(), loop)
+                        try:
+                            # Wait for the async operation to complete with a timeout
+                            future.result(timeout=10.0)  # 10 second timeout for initialization
+                            logger.info("OAuth server initialized successfully")
+                        except concurrent.futures.TimeoutError:
+                            logger.error("Timeout waiting for OAuth server to initialize")
+                            raise RuntimeError("OAuth server initialization timed out")
                     except RuntimeError:
                         # No event loop running, safe to use asyncio.run()
                         asyncio.run(self._initialize_oauth_server())
                         logger.info("OAuth server initialized successfully")
                 except Exception as e:
                     logger.error(f"Failed to initialize OAuth server: {e}")
-                    # Continue anyway - server can still function without persistence
+                    # Don't continue if OAuth is enabled but initialization failed
+                    raise RuntimeError(f"OAuth server initialization failed: {e}")
             
             # Start server using MCP's built-in run method
             self.mcp.run(transport=transport)
