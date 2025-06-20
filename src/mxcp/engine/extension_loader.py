@@ -36,7 +36,7 @@ def _load_extension(con, name: str, repo: str = None):
     """
     try:
         if repo:
-            con.sql(f"INSTALL {name} FROM '{repo}'; LOAD {name};")
+            con.sql(f"INSTALL {name} FROM {repo}; LOAD {name};")
             logging.info(f"DuckDB extension '{name}' from '{repo}' loaded.")
         else:
             con.sql(f"INSTALL {name}; LOAD {name};")
