@@ -7,7 +7,7 @@
 <div align="center">
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-BSL-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-BSL-green.svg)](https://github.com/raw-labs/mxcp/blob/main/LICENSE)
 
 **The MCP server built for production: Transform your data into AI-ready interfaces with enterprise security, audit trails, and policy enforcement**
 
@@ -244,33 +244,33 @@ MXCP implements the Model Context Protocol (MCP), making it compatible with:
 - **Custom integrations** — Using the MCP specification
 
 For specific setup instructions, see:
-- [Earthquakes Example](examples/earthquakes/README.md) — Complete Claude Desktop setup
-- [COVID + dbt Example](examples/covid_owid/README.md) — Advanced dbt integration
+- [Earthquakes Example](https://github.com/raw-labs/mxcp/blob/main/examples/earthquakes/README.md) — Complete Claude Desktop setup
+- [COVID + dbt Example](https://github.com/raw-labs/mxcp/blob/main/examples/covid_owid/README.md) — Advanced dbt integration
 
 ## 📚 Documentation
 
 ### 📚 Getting Started
-- **[Overview](docs/getting-started/overview.md)** - Introduction to MXCP and its core architecture
-- **[Quickstart Guide](docs/getting-started/quickstart.md)** - Get up and running quickly with examples
+- **[Overview](https://github.com/raw-labs/mxcp/blob/main/docs/getting-started/overview.md)** - Introduction to MXCP and its core architecture
+- **[Quickstart Guide](https://github.com/raw-labs/mxcp/blob/main/docs/getting-started/quickstart.md)** - Get up and running quickly with examples
 
 ### 📖 Guides
-- **[Configuration Guide](docs/guides/configuration.md)** - Complete configuration reference
-- **[Authentication](docs/guides/authentication.md)** - OAuth setup and security
-- **[Integrations](docs/guides/integrations.md)** - LLM platforms, dbt, and data sources
+- **[Configuration Guide](https://github.com/raw-labs/mxcp/blob/main/docs/guides/configuration.md)** - Complete configuration reference
+- **[Authentication](https://github.com/raw-labs/mxcp/blob/main/docs/guides/authentication.md)** - OAuth setup and security
+- **[Integrations](https://github.com/raw-labs/mxcp/blob/main/docs/guides/integrations.md)** - LLM platforms, dbt, and data sources
 
 ### ⚡ Features
-- **[Policy Enforcement](docs/features/policies.md)** - Access control and data filtering
-- **[Drift Detection](docs/features/drift-detection.md)** - Monitor schema and endpoint changes
-- **[Audit Logging](docs/features/auditing.md)** - Enterprise-grade logging and compliance
+- **[Policy Enforcement](https://github.com/raw-labs/mxcp/blob/main/docs/features/policies.md)** - Access control and data filtering
+- **[Drift Detection](https://github.com/raw-labs/mxcp/blob/main/docs/features/drift-detection.md)** - Monitor schema and endpoint changes
+- **[Audit Logging](https://github.com/raw-labs/mxcp/blob/main/docs/features/auditing.md)** - Enterprise-grade logging and compliance
 
 ### 📋 Reference
-- **[CLI Reference](docs/reference/cli.md)** - Complete command-line interface documentation
-- **[Type System](docs/reference/type-system.md)** - Data validation and type definitions
-- **[Plugins](docs/reference/plugins.md)** - Custom Python extensions and UDFs
+- **[CLI Reference](https://github.com/raw-labs/mxcp/blob/main/docs/reference/cli.md)** - Complete command-line interface documentation
+- **[Type System](https://github.com/raw-labs/mxcp/blob/main/docs/reference/type-system.md)** - Data validation and type definitions
+- **[Plugins](https://github.com/raw-labs/mxcp/blob/main/docs/reference/plugins.md)** - Custom Python extensions and UDFs
 
 ## 🤝 Contributing
 
-We welcome contributions! See our [development guide](docs/contributors/dev-guide.md) to get started.
+We welcome contributions! See our [development guide](https://github.com/raw-labs/mxcp/blob/main/docs/contributors/dev-guide.md) to get started.
 
 ## 🏢 Enterprise Support
 
