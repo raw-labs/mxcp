@@ -425,7 +425,7 @@ Please read and follow our [Code of Conduct](https://github.com/raw-labs/mxcp/bl
 
 ## License
 
-MXCP is released under the Business Source License 1.1. See [LICENSE](../../LICENSE) for details. This license allows for non-production use and will convert to MIT after four years from the first public release.
+MXCP is released under the Business Source License 1.1. See [LICENSE](https://github.com/raw-labs/mxcp/blob/main/LICENSE) for details. This license allows for non-production use and will convert to MIT after four years from the first public release.
 
 ---
 
