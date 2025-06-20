@@ -143,5 +143,69 @@ async def test_string_assertions(user_config, site_config):
     assert test_names["Exact string match"]["status"] == "passed"
 
 
+@pytest.mark.asyncio
+async def test_result_contains_assertions(user_config, site_config):
+    """Test result_contains assertion with various data types including primitives."""
+    results = await run_tests("prompt", "test_result_contains_primitives", user_config, site_config, "test")
+    
+    # All tests should pass
+    assert results["status"] == "ok"
+    assert results["tests_run"] == 6
+    
+    # Check individual test results
+    tests = results["tests"]
+    test_names = {test["name"]: test for test in tests}
+    
+    # Verify all tests passed
+    assert test_names["String array contains banana"]["status"] == "passed"
+    assert test_names["Number array contains 3"]["status"] == "passed"
+    assert test_names["Mixed array contains true"]["status"] == "passed"
+    assert test_names["Mixed array contains null"]["status"] == "passed"
+    assert test_names["Dict contains name John"]["status"] == "passed"
+    assert test_names["Dict array contains Bob"]["status"] == "passed"
+
+
+@pytest.mark.asyncio
+async def test_result_contains_error_messages(user_config, site_config):
+    """Test that result_contains assertion produces correct error messages."""
+    results = await run_tests("prompt", "test_result_contains_failures_prompt", user_config, site_config, "test")
+    
+    # All tests should fail (they're designed to)
+    assert results["status"] == "failed"
+    assert results["tests_run"] == 7
+    
+    # Check individual test results and error messages
+    tests = results["tests"]
+    test_names = {test["name"]: test for test in tests}
+    
+    # Test 1: Array missing primitive
+    assert test_names["Array missing primitive value"]["status"] == "failed"
+    assert "Array does not contain expected value: grape" in test_names["Array missing primitive value"]["error"]
+    
+    # Test 2: Dict missing field
+    assert test_names["Dict missing field"]["status"] == "failed"
+    assert "Expected field 'email' not found in result" in test_names["Dict missing field"]["error"]
+    
+    # Test 3: Dict field wrong value
+    assert test_names["Dict field wrong value"]["status"] == "failed"
+    assert "Field 'age' has value 25, expected 30" in test_names["Dict field wrong value"]["error"]
+    
+    # Test 4: Array of dicts no match
+    assert test_names["Array of dicts no match"]["status"] == "failed"
+    assert "No item in array contains the expected fields" in test_names["Array of dicts no match"]["error"]
+    
+    # Test 5: Wrong result type
+    assert test_names["String result with dict pattern"]["status"] == "failed"
+    assert "result_contains assertion requires dict or array result" in test_names["String result with dict pattern"]["error"]
+    
+    # Test 6: Empty array
+    assert test_names["Empty array check"]["status"] == "failed"
+    assert "Array does not contain expected value: anything" in test_names["Empty array check"]["error"]
+    
+    # Test 7: Number array missing value
+    assert test_names["Number array missing value"]["status"] == "failed"
+    assert "Array does not contain expected value: 10" in test_names["Number array missing value"]["error"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"]) 

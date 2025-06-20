@@ -305,9 +305,42 @@ def normalize_result(result, column_names, endpoint_type):
         
     # Handle prompt results
     if endpoint_type == "prompt":
-        # Prompts typically return [(messages,)]
+        # Modern prompts return a list of message objects
+        if isinstance(result, list) and len(result) > 0:
+            # Check if this is a list of message objects
+            if all(isinstance(msg, dict) and 'role' in msg for msg in result):
+                # Find the last assistant message
+                for msg in reversed(result):
+                    if msg.get('role') == 'assistant' and 'prompt' in msg:
+                        assistant_response = msg['prompt'].strip()
+                        # Try to parse JSON if the result looks like JSON
+                        if (assistant_response.startswith('[') and assistant_response.endswith(']')) or \
+                           (assistant_response.startswith('{') and assistant_response.endswith('}')):
+                            try:
+                                return json.loads(assistant_response)
+                            except json.JSONDecodeError:
+                                # If JSON parsing fails, return the string as is
+                                pass
+                        return assistant_response
+                # If no assistant message found, return the full result
+                return result
+            
+        # Legacy format: Prompts typically return [(messages,)]
         if isinstance(result, list) and len(result) == 1 and isinstance(result[0], tuple) and len(result[0]) == 1:
-            return result[0][0]  # Extract the messages directly
+            prompt_result = result[0][0]  # Extract the messages directly
+            
+            # Try to parse JSON if the result looks like JSON
+            if isinstance(prompt_result, str):
+                prompt_result = prompt_result.strip()
+                if (prompt_result.startswith('[') and prompt_result.endswith(']')) or \
+                   (prompt_result.startswith('{') and prompt_result.endswith('}')):
+                    try:
+                        return json.loads(prompt_result)
+                    except json.JSONDecodeError:
+                        # If JSON parsing fails, return the string as is
+                        pass
+            
+            return prompt_result
     
     # Handle tool/resource results (list of tuples)
     if isinstance(result, list) and column_names:
@@ -379,23 +412,29 @@ def compare_results(result, test_def):
                     return False, f"Expected field '{key}' not found in result"
                 if result[key] != expected_value:
                     return False, f"Field '{key}' has value {result[key]}, expected {expected_value}"
-        elif isinstance(result, list) and not isinstance(expected_contains, list):
-            # For arrays, check if any item contains the expected fields
-            found = False
-            for item in result:
-                if isinstance(item, dict) and isinstance(expected_contains, dict):
-                    matches = True
-                    for key, expected_value in expected_contains.items():
-                        if key not in item or item[key] != expected_value:
-                            matches = False
+        elif isinstance(result, list):
+            # For arrays, support both dict patterns and primitive values
+            if isinstance(expected_contains, dict):
+                # Check if any item contains the expected fields
+                found = False
+                for item in result:
+                    if isinstance(item, dict):
+                        matches = True
+                        for key, expected_value in expected_contains.items():
+                            if key not in item or item[key] != expected_value:
+                                matches = False
+                                break
+                        if matches:
+                            found = True
                             break
-                    if matches:
-                        found = True
-                        break
-            if not found:
-                return False, f"No item in array contains the expected fields: {expected_contains}"
+                if not found:
+                    return False, f"No item in array contains the expected fields: {expected_contains}"
+            else:
+                # For non-dict patterns, check if the value exists in the array
+                if expected_contains not in result:
+                    return False, f"Array does not contain expected value: {expected_contains}"
         else:
-            return False, f"result_contains assertion requires dict result or dict pattern, got {type(result)} and {type(expected_contains)}"
+            return False, f"result_contains assertion requires dict or array result, got {type(result)}"
     
     # Field exclusion with 'result_not_contains'
     if "result_not_contains" in test_def:
