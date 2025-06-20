@@ -688,6 +688,6 @@ Complete working examples are available in the `examples/plugin/` directory:
 ## Next Steps
 
 - Explore the `examples/plugin/` directory for hands-on examples
-- Read the [Authentication Guide](authentication.md) to understand user context integration
-- Check the [Configuration Guide](configuration.md) for advanced config management
+- Read the [Authentication Guide](../guides/authentication.md) to understand user context integration
+- Check the [Configuration Guide](../guides/configuration.md) for advanced config management
 - Review the [Type System](type-system.md) documentation for complex type mappings 
