@@ -1,0 +1,7 @@
+{
+  "label": "Reference",
+  "position": 4,
+  "collapsible": true,
+  "collapsed": true,
+  "description": "Complete API reference, CLI commands, type system documentation, and plugin development guides"
+} 

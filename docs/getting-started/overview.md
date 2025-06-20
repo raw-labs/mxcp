@@ -1,5 +1,5 @@
 ---
-title: "MXCP Overview"
+title: "Overview"
 description: "Learn about MXCP (Model Execution + Context Protocol), a developer-first toolkit for serving operational data to AI applications through a well-governed, testable interface."
 keywords: 
   - mxcp
