@@ -26,4 +26,4 @@ The documentation is organized into logical categories:
 - **[Plugins](reference/plugins.md)** - Custom Python extensions and UDFs
 
 ### 👥 Contributors
-- **[Development Guide](guides/dev-guide.md)** - Contributing to MXCP development
+- **[Development Guide](contributors/dev-guide.md)** - Contributing to MXCP development
