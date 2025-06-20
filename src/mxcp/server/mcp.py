@@ -204,9 +204,9 @@ class RAWMCP:
     def _ensure_async_completes(self, coro, timeout: float = 10.0, operation_name: str = "operation"):
         """Ensure an async operation completes, even when called from sync context with active event loop.
         
-        This method handles the tricky case where we need to wait for an async operation
-        to complete from a synchronous context, but there's already an event loop running
-        in the current thread (which would cause a deadlock if we tried to block on it).
+        This method safely runs an async operation from a synchronous context, handling the case
+        where there's already an event loop running in the current thread (which would cause
+        a deadlock if we tried to use asyncio.run()).
         
         Args:
             coro: The coroutine to run
@@ -214,63 +214,47 @@ class RAWMCP:
             operation_name: Name of the operation for logging
             
         Raises:
-            RuntimeError: If the operation fails or times out
+            TimeoutError: If the operation times out
+            Exception: If the operation fails
         """
         import asyncio
         import concurrent.futures
-        import threading
         
+        async def with_timeout():
+            """Wrap the coroutine with a timeout."""
+            return await asyncio.wait_for(coro, timeout=timeout)
+        
+        # Check if there's an active event loop in the current thread
         try:
-            # Check if there's an event loop running in the current thread
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
+            # There is an active loop - we must run in a separate thread to avoid deadlock
+            logger.info(f"Running {operation_name} with active event loop - using separate thread")
             
-            # There's an event loop in this thread. We need to ensure the operation
-            # completes without blocking the current thread (which would deadlock).
-            # We'll use a thread pool to wait for the result.
+            def run_in_new_loop():
+                """Run the coroutine in a new event loop in this thread."""
+                # asyncio.run() creates a new event loop, runs the coroutine, and cleans up
+                return asyncio.run(with_timeout())
             
-            logger.info(f"Running {operation_name} with active event loop - using thread pool to wait")
-            
-            # Create a future to track completion
-            completion_future = concurrent.futures.Future()
-            
-            async def run_and_signal():
-                """Run the coroutine and signal completion."""
-                try:
-                    result = await coro
-                    completion_future.set_result(result)
-                except Exception as e:
-                    completion_future.set_exception(e)
-            
-            # Schedule the task
-            task = asyncio.create_task(run_and_signal())
-            
-            # Use a thread to wait for completion
-            def wait_for_completion():
-                try:
-                    return completion_future.result(timeout=timeout)
-                except concurrent.futures.TimeoutError:
-                    # Cancel the task if it's still running
-                    if not task.done():
-                        task.cancel()
-                    raise TimeoutError(f"{operation_name} timed out after {timeout} seconds")
-            
+            # Execute in a separate thread
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(wait_for_completion)
+                future = executor.submit(run_in_new_loop)
                 try:
-                    result = future.result(timeout=timeout + 1)  # Add 1 second buffer
+                    result = future.result(timeout=timeout + 1)  # Add buffer for thread overhead
                     logger.info(f"{operation_name} completed successfully")
                     return result
+                except concurrent.futures.TimeoutError:
+                    # The thread itself timed out - this is a fatal error
+                    raise TimeoutError(f"{operation_name} thread timed out after {timeout + 1} seconds")
+                except asyncio.TimeoutError:
+                    # The asyncio.wait_for timed out (this gets wrapped in the future)
+                    raise TimeoutError(f"{operation_name} timed out after {timeout} seconds")
                 except Exception as e:
                     logger.error(f"{operation_name} failed: {e}")
                     raise
                     
         except RuntimeError:
-            # No event loop in current thread, safe to use asyncio.run()
+            # No event loop running, we can run directly
             logger.info(f"Running {operation_name} without active event loop - using asyncio.run")
-            
-            async def with_timeout():
-                return await asyncio.wait_for(coro, timeout=timeout)
-            
             try:
                 result = asyncio.run(with_timeout())
                 logger.info(f"{operation_name} completed successfully")
