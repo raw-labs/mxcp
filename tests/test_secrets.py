@@ -1,26 +1,19 @@
-import asyncio
 import os
-from pathlib import Path
-
 import pytest
-
+import asyncio
+from pathlib import Path
+from mxcp.endpoints.tester import run_tests, run_all_tests
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
-from mxcp.endpoints.tester import run_all_tests, run_tests
-
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
-    os.environ["MXCP_CONFIG"] = str(
-        Path(__file__).parent / "fixtures" / "secrets" / "mxcp-config.yml"
-    )
-
+    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "secrets" / "mxcp-config.yml")
 
 @pytest.fixture
 def secrets_repo_path():
     """Path to the secrets test repository."""
     return Path(__file__).parent / "fixtures" / "secrets"
-
 
 @pytest.fixture
 def site_config(secrets_repo_path):
@@ -32,7 +25,6 @@ def site_config(secrets_repo_path):
     finally:
         os.chdir(original_dir)
 
-
 @pytest.fixture
 def user_config(secrets_repo_path):
     """Load test user configuration."""
@@ -43,7 +35,6 @@ def user_config(secrets_repo_path):
         return load_user_config(site_config)
     finally:
         os.chdir(original_dir)
-
 
 @pytest.mark.asyncio
 async def test_run_secrets_tool(secrets_repo_path, site_config, user_config):
@@ -58,7 +49,6 @@ async def test_run_secrets_tool(secrets_repo_path, site_config, user_config):
     finally:
         os.chdir(original_dir)
 
-
 @pytest.mark.asyncio
 async def test_run_all_secrets_tests(secrets_repo_path, site_config, user_config):
     """Test running all tests in the secrets repository."""
@@ -69,15 +59,15 @@ async def test_run_all_secrets_tests(secrets_repo_path, site_config, user_config
         assert result["status"] == "ok"
         assert result["tests_run"] > 0
         assert len(result["endpoints"]) > 0
-
+        
         secrets_endpoint = None
         for endpoint in result["endpoints"]:
             if "list_secrets" in endpoint["endpoint"]:
                 secrets_endpoint = endpoint
                 break
-
+        
         assert secrets_endpoint is not None
         assert secrets_endpoint["test_results"]["status"] == "ok"
         assert secrets_endpoint["test_results"]["tests"][0]["status"] == "passed"
     finally:
-        os.chdir(original_dir)
+        os.chdir(original_dir) 

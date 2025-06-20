@@ -7,4 +7,4 @@ with custom data processing capabilities.
 
 from mxcp.plugins.base import MXCPBasePlugin, udf
 
-__all__ = ["MXCPBasePlugin", "udf"]
+__all__ = ['MXCPBasePlugin', 'udf'] 

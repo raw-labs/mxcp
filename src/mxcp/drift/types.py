@@ -1,16 +1,13 @@
+from typing import TypedDict, List, Dict, Any, Optional, Union, Literal
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
-
 
 class Column(TypedDict):
     name: str
     type: str
 
-
 class Table(TypedDict):
     name: str
     columns: List[Column]
-
 
 class TypeDefinition(TypedDict):
     type: Literal["string", "number", "integer", "boolean", "array", "object"]
@@ -25,11 +22,10 @@ class TypeDefinition(TypedDict):
     minItems: Optional[int]
     maxItems: Optional[int]
     uniqueItems: Optional[bool]
-    items: Optional["TypeDefinition"]
-    properties: Optional[Dict[str, "TypeDefinition"]]
+    items: Optional['TypeDefinition']
+    properties: Optional[Dict[str, 'TypeDefinition']]
     required: Optional[List[str]]
     additionalProperties: Optional[bool]
-
 
 class Parameter(TypeDefinition):
     name: str
@@ -38,11 +34,9 @@ class Parameter(TypeDefinition):
     examples: Optional[List[Any]]
     enum: Optional[List[Any]]
 
-
 class TestArgument(TypedDict):
     key: str
     value: Any
-
 
 class Test(TypedDict):
     name: str
@@ -50,14 +44,12 @@ class Test(TypedDict):
     arguments: List[TestArgument]
     result: Optional[Any]
 
-
 class Annotations(TypedDict, total=False):
     title: str
     readOnlyHint: bool
     destructiveHint: bool
     idempotentHint: bool
     openWorldHint: bool
-
 
 class Tool(TypedDict):
     name: str
@@ -68,7 +60,6 @@ class Tool(TypedDict):
     return_: TypeDefinition
     tests: Optional[List[Test]]
 
-
 class Resource(TypedDict):
     uri: str
     description: str
@@ -78,12 +69,10 @@ class Resource(TypedDict):
     return_: TypeDefinition
     tests: Optional[List[Test]]
 
-
 class PromptMessage(TypedDict):
     role: Optional[str]
     type: Optional[str]
     prompt: str
-
 
 class Prompt(TypedDict):
     name: str
@@ -92,12 +81,10 @@ class Prompt(TypedDict):
     parameters: List[Parameter]
     messages: List[PromptMessage]
 
-
 class ValidationResults(TypedDict):
     status: Literal["ok", "error"]
     path: str
     message: Optional[str]
-
 
 class TestResult(TypedDict):
     name: str
@@ -106,13 +93,11 @@ class TestResult(TypedDict):
     error: Optional[str]
     time: float
 
-
 class TestResults(TypedDict):
     status: Literal["ok", "error", "failed"]
     tests_run: int
     tests: Optional[List[TestResult]]
     message: Optional[str]
-
 
 class ResourceDefinition(TypedDict):
     validation_results: ValidationResults
@@ -120,13 +105,11 @@ class ResourceDefinition(TypedDict):
     definition: Optional[Union[Tool, Resource, Prompt]]
     metadata: Optional[Dict[str, Any]]
 
-
 class DriftSnapshot(TypedDict):
     version: str
     generated_at: str
     tables: List[Table]
     resources: List[ResourceDefinition]
-
 
 # Drift Report Types
 class TableChange(TypedDict):
@@ -135,7 +118,6 @@ class TableChange(TypedDict):
     columns_added: Optional[List[Column]]
     columns_removed: Optional[List[Column]]
     columns_modified: Optional[List[Dict[str, Any]]]  # old/new column info
-
 
 class ResourceChange(TypedDict):
     path: str
@@ -146,7 +128,6 @@ class ResourceChange(TypedDict):
     definition_changed: Optional[bool]
     details: Optional[Dict[str, Any]]  # specific change details
 
-
 class DriftReport(TypedDict):
     version: str
     generated_at: str
@@ -156,4 +137,4 @@ class DriftReport(TypedDict):
     has_drift: bool
     summary: Dict[str, int]  # counts of changes by type
     table_changes: List[TableChange]
-    resource_changes: List[ResourceChange]
+    resource_changes: List[ResourceChange] 
