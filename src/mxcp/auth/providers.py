@@ -189,21 +189,38 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
         try:
             persisted_clients = await self.persistence.list_clients()
             for client_data in persisted_clients:
-                # Convert string URLs back to AnyHttpUrl objects for OAuthClientInformationFull
-                from pydantic import AnyHttpUrl
-                redirect_uris_pydantic = [AnyHttpUrl(uri) for uri in client_data.redirect_uris]
-                
-                client = OAuthClientInformationFull(
-                    client_id=client_data.client_id,
-                    client_secret=client_data.client_secret,
-                    redirect_uris=redirect_uris_pydantic,  # Convert strings back to AnyHttpUrl
-                    grant_types=client_data.grant_types,
-                    response_types=client_data.response_types,
-                    scope=client_data.scope,
-                    client_name=client_data.client_name
-                )
-                self._clients[client_data.client_id] = client
-                logger.info(f"Loaded persisted OAuth client: {client_data.client_id} ({client_data.client_name})")
+                try:
+                    # Convert string URLs back to AnyHttpUrl objects for OAuthClientInformationFull
+                    from pydantic import AnyHttpUrl, ValidationError
+                    redirect_uris_pydantic = []
+                    
+                    # Validate each redirect URI individually
+                    for uri in client_data.redirect_uris:
+                        try:
+                            redirect_uris_pydantic.append(AnyHttpUrl(uri))
+                        except ValidationError as ve:
+                            logger.warning(f"Skipping malformed redirect URI for client {client_data.client_id}: {uri} - {ve}")
+                            # Skip malformed URIs but continue loading the client
+                    
+                    # Skip client if no valid redirect URIs remain
+                    if not redirect_uris_pydantic and client_data.redirect_uris:
+                        logger.error(f"Skipping client {client_data.client_id}: no valid redirect URIs")
+                        continue
+                    
+                    client = OAuthClientInformationFull(
+                        client_id=client_data.client_id,
+                        client_secret=client_data.client_secret,
+                        redirect_uris=redirect_uris_pydantic,  # Use validated URIs
+                        grant_types=client_data.grant_types,
+                        response_types=client_data.response_types,
+                        scope=client_data.scope,
+                        client_name=client_data.client_name
+                    )
+                    self._clients[client_data.client_id] = client
+                    logger.info(f"Loaded persisted OAuth client: {client_data.client_id} ({client_data.client_name})")
+                except Exception as e:
+                    logger.error(f"Failed to load client {client_data.client_id}: {e}")
+                    # Continue with next client instead of failing entirely
         except Exception as e:
             logger.error(f"Failed to load clients from persistence: {e}")
 
@@ -246,13 +263,26 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
                     if persisted_client:
                         # Load into memory cache
                         # Convert string URLs back to AnyHttpUrl objects for OAuthClientInformationFull
-                        from pydantic import AnyHttpUrl
-                        redirect_uris_pydantic = [AnyHttpUrl(uri) for uri in persisted_client.redirect_uris]
+                        from pydantic import AnyHttpUrl, ValidationError
+                        redirect_uris_pydantic = []
+                        
+                        # Validate each redirect URI individually
+                        for uri in persisted_client.redirect_uris:
+                            try:
+                                redirect_uris_pydantic.append(AnyHttpUrl(uri))
+                            except ValidationError as ve:
+                                logger.warning(f"Skipping malformed redirect URI for client {client_id}: {uri} - {ve}")
+                                # Skip malformed URIs but continue loading the client
+                        
+                        # Return None if no valid redirect URIs remain
+                        if not redirect_uris_pydantic and persisted_client.redirect_uris:
+                            logger.error(f"Cannot load client {client_id}: no valid redirect URIs")
+                            return None
                         
                         client = OAuthClientInformationFull(
                             client_id=persisted_client.client_id,
                             client_secret=persisted_client.client_secret,
-                            redirect_uris=redirect_uris_pydantic,  # Convert strings back to AnyHttpUrl
+                            redirect_uris=redirect_uris_pydantic,  # Use validated URIs
                             grant_types=persisted_client.grant_types,
                             response_types=persisted_client.response_types,
                             scope=persisted_client.scope,
@@ -402,10 +432,18 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
         
         logger.info(f"Creating authorization code for client: {meta.client_id}")
         
+        # Validate redirect URI
+        try:
+            from pydantic import ValidationError
+            redirect_uri = AnyHttpUrl(meta.redirect_uri)
+        except ValidationError as ve:
+            logger.error(f"Invalid redirect URI in callback: {meta.redirect_uri} - {ve}")
+            raise HTTPException(400, f"Invalid redirect URI: {meta.redirect_uri}")
+        
         auth_code = AuthorizationCode(
             code=mcp_code,
             client_id=meta.client_id,  # Use the original MCP client ID, not user_info.id
-            redirect_uri=AnyHttpUrl(meta.redirect_uri),
+            redirect_uri=redirect_uri,
             redirect_uri_provided_explicitly=meta.redirect_uri_provided_explicitly,
             expires_at=time.time() + 300,
             scopes=user_info.scopes,
@@ -459,10 +497,19 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
                             return None
                         
                         # Load into memory cache
+                        try:
+                            from pydantic import ValidationError
+                            redirect_uri = AnyHttpUrl(persisted_code.redirect_uri)
+                        except ValidationError as ve:
+                            logger.error(f"Malformed redirect URI in auth code {code}: {persisted_code.redirect_uri} - {ve}")
+                            # Delete the malformed auth code
+                            await self.persistence.delete_auth_code(code)
+                            return None
+                        
                         auth_code = AuthorizationCode(
                             code=persisted_code.code,
                             client_id=persisted_code.client_id,
-                            redirect_uri=AnyHttpUrl(persisted_code.redirect_uri),
+                            redirect_uri=redirect_uri,
                             redirect_uri_provided_explicitly=persisted_code.redirect_uri_provided_explicitly,
                             expires_at=persisted_code.expires_at,
                             scopes=persisted_code.scopes,
