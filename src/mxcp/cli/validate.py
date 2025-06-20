@@ -84,8 +84,9 @@ def validate(endpoint: Optional[str], profile: Optional[str], json_output: bool,
     This command validates the schema and configuration of endpoints.
     If no endpoint is specified, all endpoints are validated.
     
+    \b
     Examples:
-        mxcp validate                    # Validate all endpoints
+        mxcp validate                   # Validate all endpoints
         mxcp validate my_endpoint       # Validate specific endpoint
         mxcp validate --json-output     # Output results in JSON format
         mxcp validate --readonly        # Open database connection in read-only mode

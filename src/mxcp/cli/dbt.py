@@ -57,6 +57,7 @@ def dbt_config(profile: str, dry_run: bool, force: bool, embed_secrets: bool, de
 def dbt_wrapper(ctx, debug: bool):
     """Wrapper that injects secrets as env vars, then delegates to the real dbt CLI.
     
+    \b
     Example:
         mxcp dbt run --select my_model
     """

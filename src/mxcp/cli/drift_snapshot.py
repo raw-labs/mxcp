@@ -26,21 +26,22 @@ def drift_snapshot(
 ) -> None:
     """Generate a drift snapshot of the current state.
     
+    \b
     This command creates a snapshot of the current state of your MXCP repository,
     including:
-    
     - Database schema (tables and columns)
     - Endpoint definitions (tools, resources, prompts)
     - Test results
     
     The snapshot is used to detect drift between different environments or over time.
     
+    \b
     Examples:
-        mxcp drift-snapshot                    # Generate snapshot using default profile
-        mxcp drift-snapshot --profile prod     # Generate snapshot using prod profile
-        mxcp drift-snapshot --force           # Overwrite existing snapshot
-        mxcp drift-snapshot --dry-run         # Show what would be done
-        mxcp drift-snapshot --json-output     # Output results in JSON format
+        mxcp drift-snapshot                 # Generate snapshot using default profile
+        mxcp drift-snapshot --profile prod  # Generate snapshot using prod profile
+        mxcp drift-snapshot --force         # Overwrite existing snapshot
+        mxcp drift-snapshot --dry-run       # Show what would be done
+        mxcp drift-snapshot --json-output   # Output results in JSON format
     """
     # Get values from environment variables if not set by flags
     if not profile:

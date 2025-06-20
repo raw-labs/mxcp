@@ -26,14 +26,17 @@ from mxcp.engine.duckdb_session import DuckDBSession
 def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_context: Optional[str], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool, readonly: bool):
     """Run an endpoint (tool, resource, or prompt).
     
+    \b
     Parameters can be provided in two ways:
     1. Simple values: --param name=value
     2. Complex values from JSON file: --param name=@file.json
     
+    \b
     User context can be provided for policy enforcement:
     --user-context '{"user_id": "123", "role": "admin", "permissions": ["read", "write"]}'
     --user-context @user_context.json
     
+    \b
     Examples:
         mxcp run tool my_tool --param name=value
         mxcp run tool my_tool --param complex=@data.json

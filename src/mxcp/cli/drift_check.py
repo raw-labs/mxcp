@@ -125,12 +125,13 @@ def drift_check(profile: Optional[str], baseline: Optional[str], json_output: bo
     This command compares the current state of your database and endpoints
     against a previously generated baseline snapshot to detect any changes.
     
+    \b
     Examples:
-        mxcp drift-check                           # Check against default baseline
-        mxcp drift-check --baseline path/to/snap   # Check against specific baseline
-        mxcp drift-check --json-output             # Output results in JSON format
-        mxcp drift-check --debug                   # Show detailed change information
-        mxcp drift-check --readonly                # Open database in read-only mode
+        mxcp drift-check                            # Check against default baseline
+        mxcp drift-check --baseline path/to/snap    # Check against specific baseline
+        mxcp drift-check --json-output              # Output results in JSON format
+        mxcp drift-check --debug                    # Show detailed change information
+        mxcp drift-check --readonly                 # Open database in read-only mode
     """
     # Get values from environment variables if not set by flags
     if not profile:

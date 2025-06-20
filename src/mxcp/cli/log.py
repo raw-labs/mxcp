@@ -43,6 +43,7 @@ def log(
     Show execution history for tools, resources, and prompts with various filters.
     By default, shows the most recent 100 log entries.
     
+    \b
     Examples:
         mxcp log                           # Show recent logs
         mxcp log --tool my_tool            # Filter by specific tool
@@ -53,6 +54,7 @@ def log(
         mxcp log --export-duckdb audit.db  # Export to DuckDB database
         mxcp log --json                    # Output as JSON
     
+    \b
     Time formats for --since:
         10s  - 10 seconds
         5m   - 5 minutes

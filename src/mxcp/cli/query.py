@@ -19,12 +19,14 @@ from mxcp.config.analytics import track_command_with_timing
 @track_command_with_timing("query")
 def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool, readonly: bool):
     """Execute a SQL query directly against the database.
-    
+
+    \b
     The query can be provided either directly as an argument or from a file.
     Parameters can be provided in two ways:
     1. Simple values: --param name=value
     2. Complex values from JSON file: --param name=@file.json
     
+    \b
     Examples:
         mxcp query "SELECT * FROM users WHERE age > 18" --param age=18
         mxcp query --file complex_query.sql --param start_date=@dates.json

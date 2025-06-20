@@ -27,6 +27,7 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
     interface. By default, it uses the transport configuration from your user config,
     but can also be overridden with command line options.
     
+    \b
     Examples:
         mxcp serve                   # Use transport settings from user config
         mxcp serve --port 9000       # Override port from user config

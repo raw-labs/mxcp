@@ -120,14 +120,15 @@ def test(endpoint_type: Optional[str], name: Optional[str], profile: Optional[st
     
     This command executes the test cases defined in endpoint configurations.
     If no endpoint type and name are provided, it will run all tests.
-    
+
+    \b
     Examples:
-        mxcp test                    # Run all tests
-        mxcp test tool my_tool       # Test a specific tool
-        mxcp test resource my_resource # Test a specific resource
-        mxcp test prompt my_prompt   # Test a specific prompt
-        mxcp test --json-output     # Output results in JSON format
-        mxcp test --readonly        # Open database connection in read-only mode
+        mxcp test                       # Run all tests
+        mxcp test tool my_tool          # Test a specific tool
+        mxcp test resource my_resource  # Test a specific resource
+        mxcp test prompt my_prompt      # Test a specific prompt
+        mxcp test --json-output         # Output results in JSON format
+        mxcp test --readonly            # Open database connection in read-only mode
     """
     # Get values from environment variables if not set by flags
     if not profile:

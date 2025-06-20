@@ -104,12 +104,14 @@ def create_hello_world_files(target_dir: Path):
 def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
     """Initialize a new MXCP repository.
     
+    \b
     This command creates a new MXCP repository by:
     1. Creating a mxcp-site.yml file with project and profile configuration
     2. Optionally creating example endpoint files
     
+    \b
     Examples:
-        mxcp init                    # Initialize in current directory
+        mxcp init                   # Initialize in current directory
         mxcp init my-project        # Initialize in my-project directory
         mxcp init --project=test    # Initialize with specific project name
         mxcp init --bootstrap       # Initialize with example endpoint

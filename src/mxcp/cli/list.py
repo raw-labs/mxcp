@@ -32,8 +32,9 @@ def list_endpoints(profile: str, json_output: bool, debug: bool):
     This command discovers and lists all endpoints in the current repository.
     Endpoints can be tools, resources, or prompts.
     
+    \b
     Examples:
-        mxcp list                    # List all endpoints
+        mxcp list                   # List all endpoints
         mxcp list --json-output     # Output in JSON format
         mxcp list --profile dev     # List endpoints in dev profile
     """
