@@ -215,8 +215,17 @@ class RAWMCP:
             if self.oauth_server:
                 try:
                     import asyncio
-                    asyncio.run(self.oauth_server.close())
-                    logger.info("Closed OAuth server persistence")
+                    # Check if there's an event loop running
+                    try:
+                        loop = asyncio.get_running_loop()
+                        # We're in an existing loop, create a task
+                        # Note: We can't wait for it since shutdown() is synchronous
+                        task = loop.create_task(self.oauth_server.close())
+                        logger.info("OAuth server close scheduled (async)")
+                    except RuntimeError:
+                        # No event loop running, use asyncio.run()
+                        asyncio.run(self.oauth_server.close())
+                        logger.info("Closed OAuth server persistence")
                 except Exception as e:
                     logger.error(f"Error closing OAuth server: {e}")
             
@@ -1027,8 +1036,6 @@ class RAWMCP:
                 logger.error(f"Failed to initialize OAuth server: {e}")
                 raise
 
-
-
     def run(self, transport: str = "streamable-http"):
         """Run the MCP server.
         
@@ -1052,8 +1059,24 @@ class RAWMCP:
             if self.oauth_server:
                 import asyncio
                 try:
-                    asyncio.run(self._initialize_oauth_server())
-                    logger.info("OAuth server initialized successfully")
+                    # Check if there's already an event loop running
+                    try:
+                        loop = asyncio.get_running_loop()
+                        # We're in an existing loop, create a task but don't block
+                        # The server will start without waiting for initialization to complete
+                        task = loop.create_task(self._initialize_oauth_server())
+                        # Add a callback to log completion
+                        def log_completion(future):
+                            try:
+                                future.result()
+                                logger.info("OAuth server initialized successfully (async)")
+                            except Exception as e:
+                                logger.error(f"Failed to initialize OAuth server (async): {e}")
+                        task.add_done_callback(log_completion)
+                    except RuntimeError:
+                        # No event loop running, safe to use asyncio.run()
+                        asyncio.run(self._initialize_oauth_server())
+                        logger.info("OAuth server initialized successfully")
                 except Exception as e:
                     logger.error(f"Failed to initialize OAuth server: {e}")
                     # Continue anyway - server can still function without persistence
