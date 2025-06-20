@@ -246,29 +246,31 @@ MXCP implements the Model Context Protocol (MCP), making it compatible with:
 For specific setup instructions, see:
 - [Earthquakes Example](examples/earthquakes/README.md) — Complete Claude Desktop setup
 - [COVID + dbt Example](examples/covid_owid/README.md) — Advanced dbt integration
-- [Integration Guide](docs/integrations.md) — All client integrations
 
 ## 📚 Documentation
 
-**Get Started:**
-- [Quickstart](docs/quickstart.md) — Advanced features and patterns
-- [Configuration](docs/configuration.md) — Project setup and profiles
-- [CLI Reference](docs/cli.md) — All commands and options
+### 📚 Getting Started
+- **[Overview](docs/getting-started/overview.md)** - Introduction to MXCP and its core architecture
+- **[Quickstart Guide](docs/getting-started/quickstart.md)** - Get up and running quickly with examples
 
-**Production Features:**
-- [Authentication](docs/authentication.md) — OAuth and security setup
-- [Policy Enforcement](docs/policies.md) — Access control and data filtering  
-- [Audit Logging](docs/auditing.md) — Enterprise-grade execution tracking
-- [Drift Detection](docs/drift-detection.md) — Schema monitoring
+### 📖 Guides
+- **[Configuration Guide](docs/guides/configuration.md)** - Complete configuration reference
+- **[Authentication](docs/guides/authentication.md)** - OAuth setup and security
+- **[Integrations](docs/guides/integrations.md)** - LLM platforms, dbt, and data sources
 
-**Advanced:**
-- [Type System](docs/type-system.md) — Data types and validation
-- [Plugins](docs/plugins.md) — Custom Python functions in DuckDB
-- [Integrations](docs/integrations.md) — Data sources and external tools
+### ⚡ Features
+- **[Policy Enforcement](docs/features/policies.md)** - Access control and data filtering
+- **[Drift Detection](docs/features/drift-detection.md)** - Monitor schema and endpoint changes
+- **[Audit Logging](docs/features/auditing.md)** - Enterprise-grade logging and compliance
+
+### 📋 Reference
+- **[CLI Reference](docs/reference/cli.md)** - Complete command-line interface documentation
+- **[Type System](docs/reference/type-system.md)** - Data validation and type definitions
+- **[Plugins](docs/reference/plugins.md)** - Custom Python extensions and UDFs
 
 ## 🤝 Contributing
 
-We welcome contributions! See our [development guide](docs/dev-guide.md) to get started.
+We welcome contributions! See our [development guide](docs/contributors/dev-guide.md) to get started.
 
 ## 🏢 Enterprise Support
 
