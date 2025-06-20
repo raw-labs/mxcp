@@ -1,3 +1,17 @@
+---
+title: "Integrations"
+description: "Integrate MXCP with AI platforms, dbt, and data sources. Connect with Claude Desktop, OpenAI, and other LLM providers. Access diverse data sources through DuckDB."
+keywords:
+  - mxcp integrations
+  - claude desktop integration
+  - dbt integration
+  - duckdb extensions
+  - llm integration
+  - ai data integration
+sidebar_position: 3
+slug: /guides/integrations
+---
+
 # MXCP Integrations
 
 MXCP provides seamless integration with AI platforms and data tools to create powerful, production-ready AI applications. This guide covers how to connect MXCP with LLMs, transform data with dbt, and access diverse data sources through DuckDB.

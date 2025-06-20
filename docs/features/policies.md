@@ -1,3 +1,17 @@
+---
+title: "Policy Enforcement"
+description: "Control access to MXCP endpoints and filter sensitive data with policy enforcement. Learn to use CEL expressions for fine-grained authorization and data filtering."
+keywords:
+  - mxcp policies
+  - policy enforcement
+  - access control
+  - data filtering
+  - cel expressions
+  - user authorization
+sidebar_position: 1
+slug: /features/policies
+---
+
 # Policy Enforcement
 
 MXCP supports policy enforcement to control access to endpoints and filter sensitive data based on user context. Policies are defined using the Common Expression Language (CEL) and can be applied at both input and output stages of endpoint execution.

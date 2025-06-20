@@ -1,3 +1,17 @@
+---
+title: "MXCP Quickstart Guide"
+description: "Get started with MXCP quickly - from basic setup to advanced enterprise features. Learn to create projects, integrate with dbt, and deploy production-ready AI data pipelines."
+keywords:
+  - mxcp quickstart
+  - mxcp tutorial
+  - ai data pipeline
+  - dbt integration
+  - claude desktop setup
+  - mcp server
+sidebar_position: 2
+slug: /quickstart
+---
+
 # MXCP Quickstart Guide
 
 This guide will help you get started with MXCP quickly, from basic setup to advanced enterprise features. We'll cover creating new projects, exploring examples, and leveraging MXCP's unique production capabilities.
@@ -495,8 +509,8 @@ mxcp drift-check --profile production
 ```
 
 ## Next Steps
-
 ### Immediate Actions
+
 1. **Validate Your Setup**
    ```bash
    mxcp validate     # Check all endpoints
@@ -512,11 +526,11 @@ mxcp drift-check --profile production
    ```
 
 ### Dive Deeper
-1. **[Type System](type-system.md)** - Master MXCP's type safety features
-2. **[Policies](policies.md)** - Implement fine-grained access control
-3. **[Authentication](authentication.md)** - Set up OAuth for your organization
-4. **[Plugins](plugins.md)** - Extend DuckDB with custom Python functions
-5. **[Drift Detection](drift-detection.md)** - Monitor changes across environments
+1. **[Type System](../reference/type-system.md)** - Master MXCP's type safety features
+2. **[Policies](../features/policies.md)** - Implement fine-grained access control
+3. **[Authentication](../guides/authentication.md)** - Set up OAuth for your organization
+4. **[Plugins](../reference/plugins.md)** - Extend DuckDB with custom Python functions
+5. **[Drift Detection](../features/drift-detection.md)** - Monitor changes across environments
 
 ### Build Your Own
 1. **Start Simple**: Begin with basic SQL queries
@@ -572,4 +586,8 @@ After completing this quickstart, you should understand MXCP's unique value:
 2. **MXCP endpoints** (`endpoints/*.yml`) → Query the tables directly using standard SQL
 3. **Perfect separation**: dbt handles data transformation, MXCP handles AI interface
 
-Unlike simple data connectors, MXCP provides a complete **data-to-AI infrastructure** that grows with your needs. 
+### Learn More
+- **[Type System](../reference/type-system.md)** - Master MXCP's type validation system
+- **[dbt Integration](../guides/integrations.md#dbt-integration)** - Build robust data transformation pipelines
+- **[Drift Detection](../features/drift-detection.md)** - Monitor changes across environments
+- **[Plugin Development](../reference/plugins.md)** - Extend MXCP with custom functionality 

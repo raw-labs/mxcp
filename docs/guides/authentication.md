@@ -1,3 +1,17 @@
+---
+title: "Authentication"
+description: "Set up OAuth authentication in MXCP with GitHub, Atlassian, or Salesforce. Secure your endpoints and tools with enterprise-grade authentication."
+keywords:
+  - mxcp authentication
+  - oauth setup
+  - github oauth
+  - atlassian oauth
+  - salesforce oauth
+  - endpoint security
+sidebar_position: 2
+slug: /guides/authentication
+---
+
 # Authentication
 
 MXCP supports OAuth authentication to protect your endpoints and tools. When authentication is enabled, all tools, resources, prompts, and built-in SQL features require valid authentication tokens.

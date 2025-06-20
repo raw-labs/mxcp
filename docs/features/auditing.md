@@ -1,3 +1,17 @@
+---
+title: "Audit Logging"
+description: "Track all tool, resource, and prompt executions with MXCP's enterprise-grade audit logging. Essential for security, compliance, and usage analysis."
+keywords:
+  - mxcp audit logging
+  - compliance logging
+  - security auditing
+  - usage tracking
+  - jsonl logs
+  - enterprise security
+sidebar_position: 3
+slug: /features/auditing
+---
+
 # Audit Logging
 
 MXCP provides enterprise-grade audit logging to track all tool, resource, and prompt executions across your organization. Audit logs are essential for security, compliance, debugging, and understanding usage patterns.
@@ -34,7 +48,7 @@ profiles:
   production:
     audit:
       enabled: true
-      path: logs-production.jsonl  # Optional, defaults to logs-{profile}.jsonl
+      path: logs-production.jsonl  # Optional, defaults to logs-`{profile}`.jsonl
 ```
 
 The log file will be created automatically when the first event is logged.
@@ -91,18 +105,18 @@ mxcp log --export-duckdb audit.db
 
 Each log entry contains:
 
-| Field           | Description                  | Example                  |
-|-----------------|------------------------------|--------------------------|
-| timestamp       | ISO 8601 timestamp (UTC)     | 2024-01-15T10:30:45.123Z |
-| caller          | Source of the request        | cli, http, stdio         |
-| type            | Type of execution            | tool, resource, prompt   |
-| name            | Name of the item             | my_sql_tool              |
-| input_json      | JSON string of parameters    | {"query": "SELECT *..."} |
-| duration_ms     | Execution time               | 145                      |
-| policy_decision | Policy engine result         | allow, deny, warn, n/a   |
-| reason          | Explanation if denied/warned | "Blocked by policy"      |
-| status          | Execution result             | success, error           |
-| error           | Error message if failed      | "Connection timeout"     |
+| Field           | Description                  | Example                    |
+|-----------------|------------------------------|----------------------------|
+| timestamp       | ISO 8601 timestamp (UTC)     | 2024-01-15T10:30:45.123Z   |
+| caller          | Source of the request        | cli, http, stdio           |
+| type            | Type of execution            | tool, resource, prompt     |
+| name            | Name of the item             | my_sql_tool                |
+| input_json      | JSON string of parameters    | `{"query": "SELECT *..."}` |
+| duration_ms     | Execution time               | 145                        |
+| policy_decision | Policy engine result         | allow, deny, warn, n/a     |
+| reason          | Explanation if denied/warned | "Blocked by policy"        |
+| status          | Execution result             | success, error             |
+| error           | Error message if failed      | "Connection timeout"       |
 
 ### Caller Types
 

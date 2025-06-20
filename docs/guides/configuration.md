@@ -1,3 +1,17 @@
+---
+title: "Configuration Guide"
+description: "Complete guide to MXCP configuration including user settings, repository configuration, endpoint definitions, and environment variables."
+keywords:
+  - mxcp configuration
+  - user config
+  - site config
+  - endpoint configuration
+  - secrets management
+  - environment variables
+sidebar_position: 1
+slug: /guides/configuration
+---
+
 # MXCP Configuration Guide
 
 This guide covers all aspects of MXCP configuration, from user settings to endpoint definitions.
