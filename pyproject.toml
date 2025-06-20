@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mxcp"
-version = "0.1.5"
+version = "0.1.6"
 description = "MXCP: Model eXecution + Context Protocol"
 authors = [{ name = "RAW Labs SA", email = "mxcp@raw-labs.com" }]
 readme = "README.md"
