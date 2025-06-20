@@ -1,3 +1,8 @@
 mxcp: "1.0.0"
-project: test_project
-profile: test
+project: "tester_test"
+profile: "test"
+profiles:
+  test:
+    duckdb:
+      path: ":memory:"
+      readonly: false

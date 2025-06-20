@@ -1,0 +1,37 @@
+mxcp: 1.0.0
+
+tool:
+  name: test_string_assertions
+  description: Test endpoint for string assertions
+  parameters:
+    - name: status
+      type: string
+      description: Status to include in message
+      default: "OK"
+  return:
+    type: string
+    description: A status message
+  source:
+    code: |
+      SELECT 'The operation completed successfully with status: ' || $status as message
+  
+  tests:
+    # Test string contains
+    - name: String contains text
+      arguments:
+        - key: status
+          value: "OK"
+      result_contains_text: "successfully"
+    
+    - name: String contains status
+      arguments:
+        - key: status
+          value: "COMPLETE"
+      result_contains_text: "COMPLETE"
+    
+    # Test exact string match still works
+    - name: Exact string match
+      arguments:
+        - key: status
+          value: "DONE"
+      result: "The operation completed successfully with status: DONE" 

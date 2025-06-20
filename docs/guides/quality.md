@@ -230,51 +230,212 @@ tool:
 
 ### Testing Policy-Protected Endpoints
 
-When your endpoints use policies for access control, you need to test with different user contexts:
+When testing endpoints with policies that depend on user authentication:
+
+1. **Test-Level User Context**: Define user context in the test itself
+2. **Command-Line User Context**: Override with `--user-context` flag
+
+Example of policy testing:
 
 ```yaml
 tool:
-  name: employee_info
+  name: get_employee
   policies:
     input:
-      - condition: "user.role != 'admin' && user.role != 'hr'"
+      - condition: "user.role != 'admin' && employee_id != user.employee_id"
         action: deny
-        reason: "Only admin and HR can access employee data"
+        reason: "Can only view your own data unless admin"
   
   tests:
-    - name: Admin can access employee data
+    - name: Admin can view any employee
       user_context:
         role: admin
-        user_id: admin123
+        employee_id: "e001"
       arguments:
         - key: employee_id
-          value: emp456
-      result:
-        id: emp456
-        name: John Doe
-        salary: 85000
+          value: "e123"
+      result_contains:
+        employee_id: "e123"
     
-    - name: Regular user denied access
+    - name: User can only view self
       user_context:
         role: user
-        user_id: user123
+        employee_id: "e123"
       arguments:
         - key: employee_id
-          value: emp456
-      # Test will fail with policy denial
+          value: "e456"
+      # This test expects an error due to policy denial
 ```
 
-You can also provide user context via command line:
-
+Command-line override:
 ```bash
-# Test with admin role
-mxcp test tool employee_info --user-context '{"role": "admin"}'
+# Test with specific user context
+mxcp test tool get_employee --user-context '{"role": "admin", "employee_id": "e001"}'
 
-# Test with user context from file
-mxcp test --user-context @test_contexts/hr_user.json
+# Test with context from file
+mxcp test --user-context @test-contexts/admin.json
 ```
 
-The command-line user context overrides any context defined in the test specification, allowing you to quickly test different scenarios.
+### Flexible Test Assertions
+
+MXCP supports multiple assertion types for different testing scenarios:
+
+#### 1. Exact Match (Traditional)
+
+The `result` field expects an exact match of the entire output:
+
+```yaml
+tests:
+  - name: Exact match test
+    arguments:
+      - key: id
+        value: "123"
+    result:
+      id: "123"
+      name: "Test User"
+      status: "active"
+```
+
+#### 2. Partial Object Match
+
+The `result_contains` field checks that specific fields exist with expected values:
+
+```yaml
+tests:
+  - name: Check key fields only
+    arguments:
+      - key: id
+        value: "123"
+    result_contains:
+      id: "123"
+      status: "active"
+    # Ignores other fields like timestamps
+```
+
+#### 3. Field Exclusion
+
+The `result_not_contains` field ensures sensitive fields are NOT present:
+
+```yaml
+tests:
+  - name: Verify policy filtering
+    user_context:
+      role: user
+    arguments:
+      - key: user_id
+        value: "123"
+    result_not_contains:
+      - password
+      - ssn
+      - internal_api_key
+```
+
+#### 4. Array Assertions
+
+For endpoints returning arrays, several assertions are available:
+
+```yaml
+tests:
+  # Check if array contains a specific item
+  - name: Contains specific user
+    result_contains_item:
+      id: 123
+      name: "John Doe"
+  
+  # Check if array contains item with certain fields (partial match)
+  - name: Has admin user
+    result_contains_item:
+      role: "admin"
+  
+  # Check that all specified items exist (any order)
+  - name: Has all department heads
+    result_contains_all:
+      - department: "Engineering"
+        role: "head"
+      - department: "Sales"
+        role: "head"
+  
+  # Check array length
+  - name: Returns exactly 10 items
+    result_length: 10
+```
+
+#### 5. String Assertions
+
+For string results, check for substrings:
+
+```yaml
+tests:
+  - name: Success message
+    result_contains_text: "successfully"
+  
+  - name: Contains error code
+    result_contains_text: "ERR_403"
+```
+
+#### 6. Combining Assertions
+
+Multiple assertion types can be used together:
+
+```yaml
+tests:
+  - name: Complex validation
+    user_context:
+      role: manager
+    arguments:
+      - key: department
+        value: "sales"
+    # Check some fields exist with values
+    result_contains:
+      department: "sales"
+      status: "active"
+    # Ensure sensitive fields are filtered
+    result_not_contains:
+      - salary_details
+      - personal_notes
+```
+
+### Best Practices for Test Assertions
+
+1. **Use the Right Assertion Type**:
+   - `result` for stable, predictable outputs
+   - `result_contains` for dynamic data with timestamps
+   - `result_not_contains` for security/policy testing
+   - Array assertions for list endpoints
+
+2. **Test Policy Enforcement**:
+   ```yaml
+   tests:
+     - name: Admin sees all fields
+       user_context: {role: admin}
+       result_contains:
+         sensitive_field: "value"
+     
+     - name: User doesn't see sensitive fields
+       user_context: {role: user}
+       result_not_contains: ["sensitive_field"]
+   ```
+
+3. **Handle Dynamic Data**:
+   ```yaml
+   tests:
+     - name: Order created
+       result_contains:
+         status: "pending"
+         customer_id: "c123"
+       # Don't check timestamp or order_id
+   ```
+
+4. **Test Edge Cases**:
+   ```yaml
+   tests:
+     - name: Empty results
+       arguments:
+         - key: filter
+           value: "non_existent"
+       result: []
+       result_length: 0
+   ```
 
 ## Linting
 
