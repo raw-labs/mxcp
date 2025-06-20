@@ -1,5 +1,5 @@
 ---
-title: "MXCP Quickstart Guide"
+title: "Quickstart Guide"
 description: "Get started with MXCP quickly - from basic setup to advanced enterprise features. Learn to create projects, integrate with dbt, and deploy production-ready AI data pipelines."
 keywords:
   - mxcp quickstart
