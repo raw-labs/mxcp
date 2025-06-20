@@ -1,3 +1,17 @@
+---
+title: "Plugins"
+description: "Extend MXCP with custom Python plugins. Create User Defined Functions (UDFs) for DuckDB, integrate with external APIs, and add custom data processing logic."
+keywords:
+  - mxcp plugins
+  - python plugins
+  - user defined functions
+  - duckdb udfs
+  - plugin development
+  - custom functions
+sidebar_position: 3
+slug: /reference/plugins
+---
+
 # MXCP Plugins
 
 MXCP's plugin system allows you to extend DuckDB with custom User Defined Functions (UDFs) written in Python. Plugins provide a powerful way to add domain-specific functionality, integrate with external APIs, and implement custom data processing logic directly within your SQL queries.

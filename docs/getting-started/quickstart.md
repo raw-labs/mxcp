@@ -1,3 +1,17 @@
+---
+title: "MXCP Quickstart Guide"
+description: "Get started with MXCP quickly - from basic setup to advanced enterprise features. Learn to create projects, integrate with dbt, and deploy production-ready AI data pipelines."
+keywords:
+  - mxcp quickstart
+  - mxcp tutorial
+  - ai data pipeline
+  - dbt integration
+  - claude desktop setup
+  - mcp server
+sidebar_position: 2
+slug: /quickstart
+---
+
 # MXCP Quickstart Guide
 
 This guide will help you get started with MXCP quickly, from basic setup to advanced enterprise features. We'll cover creating new projects, exploring examples, and leveraging MXCP's unique production capabilities.
@@ -497,79 +511,13 @@ mxcp drift-check --profile production
 ## Next Steps
 
 ### Immediate Actions
-1. **Validate Your Setup**
-   ```bash
-   mxcp validate     # Check all endpoints
-   mxcp test         # Run endpoint tests
-   mxcp list         # Verify everything is loaded
-   ```
+1. **[Validate Your Setup](../reference/cli.md#mxcp-validate)** - Ensure your endpoints are working correctly
+2. **[Set up Authentication](../guides/authentication.md)** - Secure your endpoints for production use
+3. **[Configure Policies](../features/policies.md)** - Add access control and data filtering
+4. **[Enable Audit Logging](../features/auditing.md)** - Track usage and compliance
 
-2. **Explore the CLI**
-   ```bash
-   mxcp --help       # See all commands
-   mxcp run --help   # Understand execution options
-   mxcp log --help   # Learn about audit querying
-   ```
-
-### Dive Deeper
-1. **[Type System](type-system.md)** - Master MXCP's type safety features
-2. **[Policies](policies.md)** - Implement fine-grained access control
-3. **[Authentication](authentication.md)** - Set up OAuth for your organization
-4. **[Plugins](plugins.md)** - Extend DuckDB with custom Python functions
-5. **[Drift Detection](drift-detection.md)** - Monitor changes across environments
-
-### Build Your Own
-1. **Start Simple**: Begin with basic SQL queries
-2. **Add Types**: Implement comprehensive type definitions
-3. **Enable Security**: Add authentication and policies
-4. **Monitor**: Set up audit logging and drift detection
-5. **Scale**: Move to production with proper profiles and monitoring
-
-## Troubleshooting
-
-### Common Issues
-
-**dbt models not found:**
-```bash
-# Ensure dbt project is properly configured
-dbt debug
-dbt compile
-```
-
-**Policy errors:**
-```bash
-# Test with explicit user context
-mxcp run tool my_tool --user-context '{"role": "admin"}'
-```
-
-**Authentication issues:**
-```bash
-# Check OAuth configuration
-mxcp validate --profile production
-```
-
-### Getting Help
-
-- **Documentation**: All features are documented in the `docs/` directory
-- **Examples**: Check `examples/` for real-world patterns
-- **Community**: Join our community for support and discussions
-- **Issues**: Report bugs and feature requests on GitHub
-
-## Why MXCP?
-
-After completing this quickstart, you should understand MXCP's unique value:
-
-1. **dbt Integration**: dbt creates optimized tables in DuckDB, MXCP endpoints query them directly
-2. **Enterprise Security**: Policy enforcement, audit trails, authentication
-3. **Production Ready**: Type safety, monitoring, drift detection
-4. **Developer Experience**: Fast iteration, comprehensive validation
-5. **Scalability**: From prototype to production without re-architecting
-
-## Key Architecture Pattern
-
-**The MXCP + dbt Workflow:**
-1. **dbt models** (`models/*.sql`) → Create tables/views in DuckDB using dbt syntax
-2. **MXCP endpoints** (`endpoints/*.yml`) → Query the tables directly using standard SQL
-3. **Perfect separation**: dbt handles data transformation, MXCP handles AI interface
-
-Unlike simple data connectors, MXCP provides a complete **data-to-AI infrastructure** that grows with your needs. 
+### Learn More
+- **[Type System](../reference/type-system.md)** - Master MXCP's type validation system
+- **[dbt Integration](../guides/integrations.md#dbt-integration)** - Build robust data transformation pipelines
+- **[Drift Detection](../features/drift-detection.md)** - Monitor changes across environments
+- **[Plugin Development](../reference/plugins.md)** - Extend MXCP with custom functionality 

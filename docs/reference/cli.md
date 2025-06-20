@@ -1,3 +1,17 @@
+---
+title: "CLI Reference"
+description: "Complete command-line interface reference for MXCP. All commands, options, and usage examples for the mxcp CLI tool."
+keywords:
+  - mxcp cli
+  - command line interface
+  - cli commands
+  - mxcp serve
+  - mxcp run
+  - mxcp validate
+sidebar_position: 1
+slug: /reference/cli
+---
+
 # MXCP CLI Reference
 
 This document provides a comprehensive reference for all MXCP command-line interface (CLI) commands and their options.

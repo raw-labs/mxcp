@@ -1,3 +1,16 @@
+---
+title: "Development Guide"
+description: "Complete guide for contributing to MXCP development including setup, architecture patterns, testing, and pull request process."
+keywords:
+  - mxcp development
+  - contributing to mxcp
+  - mxcp development setup
+  - python development
+  - duckdb development
+sidebar_position: 1
+slug: /guides/development
+---
+
 # Development Guide
 
 Welcome to the MXCP development community! This guide will help you get started with contributing to the project.
@@ -401,18 +414,18 @@ pytest --cov=mxcp
 
 ## Getting Help
 
-- Check the [documentation](docs/)
+- Check the [documentation](../../)
 - Search existing issues and discussions
 - Join our community discussions
 - Email hello@raw-labs.com for private matters
 
 ## Code of Conduct
 
-Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md). We aim to maintain a welcoming and inclusive community.
+Please read and follow our [Code of Conduct](../../CODE_OF_CONDUCT.md). We aim to maintain a welcoming and inclusive community.
 
 ## License
 
-MXCP is released under the Business Source License 1.1. See [LICENSE](../LICENSE) for details. This license allows for non-production use and will convert to MIT after four years from the first public release.
+MXCP is released under the Business Source License 1.1. See [LICENSE](../../LICENSE) for details. This license allows for non-production use and will convert to MIT after four years from the first public release.
 
 ---
 

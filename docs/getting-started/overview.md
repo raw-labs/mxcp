@@ -1,3 +1,18 @@
+---
+title: "MXCP Overview"
+description: "Learn about MXCP (Model Execution + Context Protocol), a developer-first toolkit for serving operational data to AI applications through a well-governed, testable interface."
+keywords: 
+  - mxcp
+  - model context protocol
+  - ai data integration
+  - duckdb
+  - dbt
+  - sql ai tools
+  - llm data access
+sidebar_position: 1
+slug: /
+---
+
 # MXCP Overview
 
 MXCP (Model Execution + Context Protocol) is a developer-first toolkit that enables you to serve your operational data to AI applications through a well-governed, testable interface. It combines the power of SQL, the flexibility of DuckDB, and the reliability of dbt to create a complete solution for AI data integration.
@@ -109,8 +124,8 @@ The MXCP CLI ties everything together:
 ## Next Steps
 
 - [Quickstart Guide](quickstart.md) - Get up and running with MXCP
-- [Type System](type-system.md) - Learn about MXCP's type system
-- [Configuration](configuration.md) - Configure your MXCP project
-- [Authentication](authentication.md) - Set up OAuth authentication
-- [CLI Reference](cli.md) - Explore available commands
-- [Integrations](integrations.md) - Connect with other tools and services 
+- [Type System](../reference/type-system.md) - Learn about MXCP's type system
+- [Configuration](../guides/configuration.md) - Configure your MXCP project
+- [Authentication](../guides/authentication.md) - Set up OAuth authentication
+- [CLI Reference](../reference/cli.md) - Explore available commands
+- [Integrations](../guides/integrations.md) - Connect with other tools and services 
