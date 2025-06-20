@@ -137,7 +137,11 @@
                   "additionalProperties": false
                 }
               },
-              "result": { "description": "Expected result." }
+              "result": { "description": "Expected result." },
+              "user_context": { 
+                "type": "object",
+                "description": "User context for policy testing. Can include role, permissions, user_id, etc."
+              }
             },
             "additionalProperties": false
           }
@@ -228,7 +232,11 @@
                   "additionalProperties": false
                 }
               },
-              "result": { "description": "Expected result." }
+              "result": { "description": "Expected result." },
+              "user_context": { 
+                "type": "object",
+                "description": "User context for policy testing. Can include role, permissions, user_id, etc."
+              }
             },
             "additionalProperties": false
           }
