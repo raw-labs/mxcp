@@ -21,24 +21,36 @@ def format_validation_results(results):
     if "path" in results:
         path = results["path"]
         message = results.get("message", "")
-        output.append(f"File: {path}")
-        output.append(f"Status: {status.upper()}")
-        if message:
-            output.append(f"Error: {message}")
+        
+        if status == "ok":
+            output.append(f"{click.style('✅ Validation passed!', fg='green', bold=True)}")
+            output.append(f"\n{click.style('📄 File:', fg='cyan')} {path}")
+        else:
+            output.append(f"{click.style('❌ Validation failed!', fg='red', bold=True)}")
+            output.append(f"\n{click.style('📄 File:', fg='cyan')} {path}")
+            if message:
+                output.append(f"{click.style('Error:', fg='red')} {message}")
         return "\n".join(output)
     
     # Multiple endpoint validation
     validated = results.get("validated", [])
     if not validated:
-        output.append("No endpoints found to validate")
+        output.append(click.style("ℹ️  No endpoints found to validate", fg='blue'))
+        output.append(f"   Create endpoints in the {click.style('endpoints/', fg='cyan')} directory")
         return "\n".join(output)
         
     # Count valid and failed endpoints
     valid_count = sum(1 for r in validated if r.get("status") == "ok")
     failed_count = len(validated) - valid_count
     
-    output.append(f"Found {len(validated)} endpoint files ({valid_count} valid, {failed_count} failed):")
-    output.append("")
+    # Header
+    output.append(f"\n{click.style('🔍 Validation Results', fg='cyan', bold=True)}")
+    output.append(f"   Validated {click.style(str(len(validated)), fg='yellow')} endpoint files")
+    
+    if valid_count > 0:
+        output.append(f"   • {click.style(f'{valid_count} passed', fg='green')}")
+    if failed_count > 0:
+        output.append(f"   • {click.style(f'{failed_count} failed', fg='red')}")
     
     # Group by status
     valid_endpoints = []
@@ -56,18 +68,23 @@ def format_validation_results(results):
     
     # Show failed endpoints first
     if failed_endpoints:
-        output.append("Failed endpoints:")
-        for path, message in failed_endpoints:
-            output.append(f"  ✗ {path}")
+        output.append(f"\n{click.style('❌ Failed validation:', fg='red', bold=True)}")
+        for path, message in sorted(failed_endpoints):
+            output.append(f"  {click.style('✗', fg='red')} {path}")
             if message:
-                output.append(f"    Error: {message}")
-        output.append("")
+                output.append(f"    {click.style('Error:', fg='red')} {message}")
     
     # Then show valid endpoints
     if valid_endpoints:
-        output.append("Valid endpoints:")
-        for path, _ in valid_endpoints:
-            output.append(f"  ✓ {path}")
+        output.append(f"\n{click.style('✅ Passed validation:', fg='green', bold=True)}")
+        for path, _ in sorted(valid_endpoints):
+            output.append(f"  {click.style('✓', fg='green')} {path}")
+    
+    # Summary message
+    if failed_count == 0:
+        output.append(f"\n{click.style('🎉 All endpoints are valid!', fg='green', bold=True)}")
+    else:
+        output.append(f"\n{click.style('💡 Tip:', fg='yellow')} Fix validation errors to ensure endpoints work correctly")
         
     return "\n".join(output)
 

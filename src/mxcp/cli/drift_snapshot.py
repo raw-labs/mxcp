@@ -72,11 +72,36 @@ def drift_snapshot(
             }, json_output, debug)
         else:
             if not dry_run:
-                click.echo(f"Successfully generated drift snapshot at {path}")
+                click.echo(f"\n{click.style('✅ Drift snapshot generated successfully!', fg='green', bold=True)}")
+                click.echo(f"\n{click.style('📸 Snapshot Details:', fg='cyan', bold=True)}")
+                click.echo(f"   • Path: {click.style(str(path), fg='yellow')}")
+                click.echo(f"   • Hash: {click.style(snapshot['drift_hash'][:12] + '...', fg='yellow')}")
+                click.echo(f"   • Generated: {click.style(snapshot['generated_at'], fg='yellow')}")
+                
+                # Show what was captured
+                click.echo(f"\n{click.style('📊 Captured State:', fg='cyan', bold=True)}")
+                if 'schema' in snapshot and 'tables' in snapshot['schema']:
+                    table_count = len(snapshot['schema']['tables'])
+                    click.echo(f"   • Tables: {click.style(str(table_count), fg='green')}")
+                if 'resources' in snapshot:
+                    resource_count = len(snapshot['resources'])
+                    click.echo(f"   • Resources: {click.style(str(resource_count), fg='green')}")
+                
+                click.echo(f"\n{click.style('💡 Next Steps:', fg='yellow')}")
+                click.echo(f"   • Use {click.style('mxcp drift-check', fg='cyan')} to compare against this baseline")
+                click.echo(f"   • Commit the snapshot file to version control for team sharing\n")
             else:
+                click.echo(f"\n{click.style('🔍 Dry Run - Snapshot Preview:', fg='yellow', bold=True)}\n")
                 click.echo(json.dumps(snapshot, indent=2))
+                click.echo(f"\n{click.style('ℹ️  No files were written (dry run mode)', fg='blue')}\n")
             
     except FileExistsError as e:
-        output_error(e, json_output, debug)
+        if json_output:
+            output_error(e, json_output, debug)
+        else:
+            click.echo(f"\n{click.style('❌ Error:', fg='red', bold=True)} Snapshot file already exists!")
+            click.echo(f"   File: {e}")
+            click.echo(f"\n{click.style('💡 Tip:', fg='yellow')} Use {click.style('--force', fg='cyan')} to overwrite the existing snapshot\n")
+            click.get_current_context().exit(1)
     except Exception as e:
         output_error(e, json_output, debug) 

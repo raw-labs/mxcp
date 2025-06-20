@@ -53,6 +53,24 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
     configure_logging(debug)
 
     try:
+        # Show what we're running (only in non-JSON mode)
+        if not json_output:
+            click.echo(f"\n{click.style('🚀 Running', fg='cyan', bold=True)} {click.style(endpoint_type, fg='yellow')} {click.style(name, fg='green', bold=True)}")
+            if param:
+                click.echo(f"{click.style('📋 Parameters:', fg='cyan')}")
+                for p in param:
+                    if "=" in p:
+                        key, value = p.split("=", 1)
+                        if value.startswith("@"):
+                            click.echo(f"   • {key} = <from file: {value[1:]}>")
+                        else:
+                            # Truncate long values
+                            display_value = value if len(value) <= 50 else value[:47] + "..."
+                            click.echo(f"   • {key} = {display_value}")
+            if readonly:
+                click.echo(f"{click.style('🔒 Mode:', fg='yellow')} Read-only")
+            click.echo()  # Empty line for spacing
+
         # Load configs
         site_config = load_site_config()
         user_config = load_user_config(site_config)
@@ -123,9 +141,33 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
             result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, session, profile_name, validate_output=not skip_output_validation, user_context=user_context_obj))
             
             # Output result
-            output_result(result, json_output, debug)
+            if json_output:
+                output_result(result, json_output, debug)
+            else:
+                # Add success indicator
+                click.echo(f"{click.style('✅ Success!', fg='green', bold=True)}\n")
+                
+                # Format the result nicely
+                if isinstance(result, dict):
+                    click.echo(json.dumps(result, indent=2))
+                elif isinstance(result, list):
+                    click.echo(json.dumps(result, indent=2))
+                else:
+                    click.echo(str(result))
+                    
+                # Add execution time if available in debug mode
+                if debug:
+                    click.echo(f"\n{click.style('⏱️  Execution completed', fg='cyan')}")
         finally:
             session.close()
             
     except Exception as e:
-        output_error(e, json_output, debug)
+        if json_output:
+            output_error(e, json_output, debug)
+        else:
+            click.echo(f"\n{click.style('❌ Error:', fg='red', bold=True)} {str(e)}")
+            if debug:
+                import traceback
+                click.echo(f"\n{click.style('🔍 Stack trace:', fg='yellow')}")
+                click.echo(traceback.format_exc())
+            click.get_current_context().exit(1)

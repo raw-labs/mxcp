@@ -86,14 +86,110 @@ def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profi
             with open(file) as f:
                 query_sql = f.read()
 
+        # Show what we're executing (only in non-JSON mode)
+        if not json_output:
+            click.echo(f"\n{click.style('🔍 Executing Query', fg='cyan', bold=True)}")
+            if file:
+                click.echo(f"   • Source: {click.style(file, fg='yellow')}")
+            
+            # Show first few lines of query
+            query_lines = query_sql.strip().split('\n')
+            if len(query_lines) > 5:
+                preview = '\n'.join(query_lines[:5]) + '\n   ...'
+            else:
+                preview = query_sql.strip()
+            
+            click.echo(f"\n{click.style('📝 SQL:', fg='cyan')}")
+            for line in preview.split('\n'):
+                click.echo(f"   {line}")
+                
+            if params:
+                click.echo(f"\n{click.style('📋 Parameters:', fg='cyan')}")
+                for key, value in params.items():
+                    if isinstance(value, (dict, list)):
+                        click.echo(f"   • ${key} = {json.dumps(value)}")
+                    else:
+                        click.echo(f"   • ${key} = {value}")
+                        
+            if readonly:
+                click.echo(f"\n{click.style('🔒 Mode:', fg='yellow')} Read-only")
+            
+            click.echo(f"\n{click.style('⏳ Running...', fg='yellow')}")
+
         # Execute query
         session = DuckDBSession(user_config, site_config, readonly=readonly)
         try:
             # Execute query and convert to DataFrame to preserve column names
             result = session.execute_query_to_dict(query_sql, params)
-            output_result(result, json_output, debug)
+            
+            if json_output:
+                output_result(result, json_output, debug)
+            else:
+                # Show success and format results
+                click.echo(f"\n{click.style('✅ Query executed successfully!', fg='green', bold=True)}")
+                
+                if isinstance(result, list) and len(result) > 0:
+                    # Format as a table
+                    click.echo(f"\n{click.style(f'📊 Results ({len(result)} rows):', fg='cyan', bold=True)}\n")
+                    
+                    # Get column names
+                    columns = list(result[0].keys())
+                    
+                    # Calculate column widths
+                    col_widths = {}
+                    for col in columns:
+                        # Start with column name length
+                        col_widths[col] = len(str(col))
+                        # Check data widths (limit to first 100 rows for performance)
+                        for row in result[:100]:
+                            val_len = len(str(row.get(col, '')))
+                            if val_len > col_widths[col]:
+                                col_widths[col] = val_len
+                        # Cap column width at 50
+                        col_widths[col] = min(col_widths[col], 50)
+                    
+                    # Print header
+                    header_parts = []
+                    for col in columns:
+                        header_parts.append(str(col).ljust(col_widths[col]))
+                    header = ' │ '.join(header_parts)
+                    click.echo(header)
+                    click.echo('─' * len(header))
+                    
+                    # Print rows (limit to 100 for terminal display)
+                    display_rows = result[:100]
+                    for row in display_rows:
+                        row_parts = []
+                        for col in columns:
+                            val = str(row.get(col, ''))
+                            if len(val) > col_widths[col]:
+                                val = val[:col_widths[col]-3] + '...'
+                            row_parts.append(val.ljust(col_widths[col]))
+                        click.echo(' │ '.join(row_parts))
+                    
+                    if len(result) > 100:
+                        click.echo(f"\n{click.style(f'... and {len(result) - 100} more rows', fg='yellow')}")
+                        click.echo(f"{click.style('💡 Tip:', fg='yellow')} Use {click.style('--json-output', fg='cyan')} to export all results")
+                        
+                elif isinstance(result, list) and len(result) == 0:
+                    click.echo(f"\n{click.style('ℹ️  No results returned', fg='blue')}")
+                else:
+                    # Single value or other format
+                    click.echo(f"\n{click.style('📊 Result:', fg='cyan', bold=True)}")
+                    click.echo(json.dumps(result, indent=2))
+                    
+                click.echo()  # Empty line at end
+                
         finally:
             session.close()
             
     except Exception as e:
-        output_error(e, json_output, debug) 
+        if json_output:
+            output_error(e, json_output, debug)
+        else:
+            click.echo(f"\n{click.style('❌ Query failed:', fg='red', bold=True)} {str(e)}")
+            if debug:
+                import traceback
+                click.echo(f"\n{click.style('🔍 Stack trace:', fg='yellow')}")
+                click.echo(traceback.format_exc())
+            click.get_current_context().exit(1) 

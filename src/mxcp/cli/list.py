@@ -72,14 +72,22 @@ def list_endpoints(profile: str, json_output: bool, debug: bool):
             }, json_output, debug)
         else:
             if not results:
-                click.echo("No endpoints found")
+                click.echo(click.style("ℹ️  No endpoints found", fg='blue'))
+                click.echo(f"   Create endpoints in the {click.style('endpoints/', fg='cyan')} directory")
                 return
                 
             # Count valid and failed endpoints
             valid_count = sum(1 for r in results if r["error"] is None)
             failed_count = len(results) - valid_count
             
-            click.echo(f"Found {len(results)} endpoint files ({valid_count} valid, {failed_count} failed):")
+            # Header with emoji and color
+            click.echo(f"\n{click.style('📋 Endpoints Discovery', fg='cyan', bold=True)}")
+            click.echo(f"   Found {click.style(str(len(results)), fg='yellow')} endpoint files")
+            
+            if valid_count > 0:
+                click.echo(f"   • {click.style(f'{valid_count} valid', fg='green')}")
+            if failed_count > 0:
+                click.echo(f"   • {click.style(f'{failed_count} failed', fg='red')}")
             
             # Group by status
             valid_endpoints = []
@@ -93,18 +101,40 @@ def list_endpoints(profile: str, json_output: bool, debug: bool):
             
             # Show failed endpoints first
             if failed_endpoints:
-                click.echo("\nFailed endpoints:")
+                click.echo(f"\n{click.style('❌ Failed endpoints:', fg='red', bold=True)}")
                 for result in sorted(failed_endpoints, key=lambda r: r["path"]):
-                    click.echo(f"  ✗ {result['path']}")
-                    click.echo(f"    Error: {result['error']}")
+                    click.echo(f"  {click.style('✗', fg='red')} {result['path']}")
+                    click.echo(f"    {click.style('Error:', fg='red')} {result['error']}")
             
-            # Then show valid endpoints
+            # Then show valid endpoints grouped by type
             if valid_endpoints:
-                click.echo("\nValid endpoints:")
-                for result in sorted(valid_endpoints, key=lambda r: r["path"]):
-                    click.echo(f"  ✓ {result['path']}")
-                    click.echo(f"    Type: {result['kind']}")
-                    click.echo(f"    Name: {result['name']}")
+                # Group by type
+                tools = [r for r in valid_endpoints if r["kind"] == "tool"]
+                resources = [r for r in valid_endpoints if r["kind"] == "resource"]
+                prompts = [r for r in valid_endpoints if r["kind"] == "prompt"]
+                
+                click.echo(f"\n{click.style('✅ Valid endpoints:', fg='green', bold=True)}")
+                
+                if tools:
+                    click.echo(f"\n  {click.style('🔧 Tools:', fg='yellow')}")
+                    for result in sorted(tools, key=lambda r: r["name"]):
+                        click.echo(f"    {click.style('✓', fg='green')} {click.style(result['name'], fg='cyan')} ({result['path']})")
+                
+                if resources:
+                    click.echo(f"\n  {click.style('📦 Resources:', fg='yellow')}")
+                    for result in sorted(resources, key=lambda r: r["name"]):
+                        click.echo(f"    {click.style('✓', fg='green')} {click.style(result['name'], fg='cyan')} ({result['path']})")
+                
+                if prompts:
+                    click.echo(f"\n  {click.style('💬 Prompts:', fg='yellow')}")
+                    for result in sorted(prompts, key=lambda r: r["name"]):
+                        click.echo(f"    {click.style('✓', fg='green')} {click.style(result['name'], fg='cyan')} ({result['path']})")
+            
+            # Summary tips
+            if failed_count > 0:
+                click.echo(f"\n{click.style('💡 Tip:', fg='yellow')} Fix validation errors by checking endpoint YAML syntax")
+            
+            click.echo()  # Empty line at end
                     
     except Exception as e:
         output_error(e, json_output, debug)

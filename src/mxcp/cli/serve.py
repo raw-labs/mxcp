@@ -69,8 +69,70 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
         config_stateless = http_config.get("stateless", False)
         final_stateless = stateless if stateless else config_stateless
 
+        # Show startup banner (except for stdio mode which needs clean output)
+        if final_transport != "stdio":
+            click.echo("\n" + "="*60)
+            click.echo(click.style("🚀 MXCP Server Starting", fg='green', bold=True).center(70))
+            click.echo("="*60 + "\n")
+            
+            # Show configuration
+            click.echo(f"{click.style('📋 Configuration:', fg='cyan', bold=True)}")
+            click.echo(f"   • Project: {click.style(site_config['project'], fg='yellow')}")
+            click.echo(f"   • Profile: {click.style(profile or site_config['profile'], fg='yellow')}")
+            click.echo(f"   • Transport: {click.style(final_transport, fg='yellow')}")
+            
+            if final_transport in ["streamable-http", "sse"]:
+                click.echo(f"   • Host: {click.style(final_host, fg='yellow')}")
+                click.echo(f"   • Port: {click.style(str(final_port), fg='yellow')}")
+                
+            if readonly:
+                click.echo(f"   • Mode: {click.style('Read-only', fg='red')}")
+            else:
+                click.echo(f"   • Mode: {click.style('Read-write', fg='green')}")
+                
+            if final_stateless:
+                click.echo(f"   • HTTP Mode: {click.style('Stateless', fg='magenta')}")
+                
+            sql_tools_enabled = site_config.get("sql_tools", {}).get("enabled", True)
+            if not no_sql_tools and sql_tools_enabled:
+                click.echo(f"   • SQL Tools: {click.style('Enabled', fg='green')}")
+            else:
+                click.echo(f"   • SQL Tools: {click.style('Disabled', fg='red')}")
+            
+            # Count endpoints
+            from mxcp.endpoints.loader import EndpointLoader
+            loader = EndpointLoader(site_config)
+            endpoints = loader.discover_endpoints()
+            valid_endpoints = [e for e in endpoints if e[2] is None]
+            tool_count = sum(1 for e in valid_endpoints if "tool" in e[1])
+            resource_count = sum(1 for e in valid_endpoints if "resource" in e[1])
+            prompt_count = sum(1 for e in valid_endpoints if "prompt" in e[1])
+            
+            click.echo(f"\n{click.style('📊 Endpoints:', fg='cyan', bold=True)}")
+            if tool_count > 0:
+                click.echo(f"   • Tools: {click.style(str(tool_count), fg='green')}")
+            if resource_count > 0:
+                click.echo(f"   • Resources: {click.style(str(resource_count), fg='green')}")
+            if prompt_count > 0:
+                click.echo(f"   • Prompts: {click.style(str(prompt_count), fg='green')}")
+            
+            if not valid_endpoints:
+                click.echo(f"   {click.style('⚠️  No endpoints found!', fg='yellow')}")
+                click.echo(f"   Create endpoints in the 'endpoints/' directory")
+            
+            click.echo("\n" + "-"*60)
+            
+            if final_transport in ["streamable-http", "sse"]:
+                click.echo(f"\n{click.style('✅ Server ready!', fg='green', bold=True)}")
+                click.echo(f"   Listening on {click.style(f'http://{final_host}:{final_port}', fg='cyan', underline=True)}")
+                click.echo(f"\n{click.style('Press Ctrl+C to stop', fg='yellow')}\n")
+            else:
+                click.echo(f"\n{click.style('✅ Server starting...', fg='green', bold=True)}\n")
+
         # Set up signal handler for graceful shutdown
         def signal_handler(signum, frame):
+            if final_transport != "stdio":
+                click.echo(f"\n{click.style('🛑 Shutting down gracefully...', fg='yellow')}")
             raise KeyboardInterrupt()
 
         # Register signal handlers
@@ -93,6 +155,8 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
         except KeyboardInterrupt:
             # Gracefully shutdown the server
             server.shutdown()
+            if final_transport != "stdio":
+                click.echo(f"{click.style('👋 Server stopped', fg='cyan')}")
             raise
     except KeyboardInterrupt:
         # Server was stopped gracefully
