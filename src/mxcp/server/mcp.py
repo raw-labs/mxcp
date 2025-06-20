@@ -61,7 +61,7 @@ class RAWMCP:
         auth_settings = None
         
         if self.oauth_handler:
-            self.oauth_server = GeneralOAuthAuthorizationServer(self.oauth_handler, auth_config)
+            self.oauth_server = GeneralOAuthAuthorizationServer(self.oauth_handler, auth_config, user_config)
             
             # Use URL builder for OAuth endpoints
             url_builder = create_url_builder(user_config)
@@ -211,7 +211,16 @@ class RAWMCP:
         logger.info("Shutting down MXCP server...")
         
         try:
-            # Close DuckDB session first (most important)
+            # Close OAuth server persistence first
+            if self.oauth_server:
+                try:
+                    import asyncio
+                    asyncio.run(self.oauth_server.close())
+                    logger.info("Closed OAuth server persistence")
+                except Exception as e:
+                    logger.error(f"Error closing OAuth server: {e}")
+            
+            # Close DuckDB session
             if self.db_session:
                 try:
                     self.db_session.close()
@@ -1008,6 +1017,18 @@ class RAWMCP:
             for skipped in self.skipped_endpoints:
                 logger.warning(f"  - {skipped['path']}: {skipped['error']}")
 
+    async def _initialize_oauth_server(self):
+        """Initialize OAuth server persistence if enabled."""
+        if self.oauth_server:
+            try:
+                await self.oauth_server.initialize()
+                logger.info("OAuth server initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize OAuth server: {e}")
+                raise
+
+
+
     def run(self, transport: str = "streamable-http"):
         """Run the MCP server.
         
@@ -1018,6 +1039,7 @@ class RAWMCP:
             logger.info("Starting MCP server...")
             # Store transport mode for use in handlers
             self.transport_mode = transport
+            
             # Register all endpoints
             self.register_endpoints()
             logger.info("Endpoints registered successfully.")
@@ -1025,6 +1047,16 @@ class RAWMCP:
             # Add debug logging for uvicorn config if using streamable-http
             if transport == "streamable-http":
                 logger.info(f"About to start uvicorn with host={self.mcp.settings.host}, port={self.mcp.settings.port}")
+            
+            # Initialize OAuth server before starting FastMCP
+            if self.oauth_server:
+                import asyncio
+                try:
+                    asyncio.run(self._initialize_oauth_server())
+                    logger.info("OAuth server initialized successfully")
+                except Exception as e:
+                    logger.error(f"Failed to initialize OAuth server: {e}")
+                    # Continue anyway - server can still function without persistence
             
             # Start server using MCP's built-in run method
             self.mcp.run(transport=transport)

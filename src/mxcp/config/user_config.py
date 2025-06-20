@@ -165,6 +165,25 @@ def _apply_defaults(config: dict) -> dict:
                 profile["plugin"]["config"] = {}
             if "auth" not in profile:
                 profile["auth"] = {"provider": "none"}
+            elif profile["auth"] is None:
+                profile["auth"] = {"provider": "none"}
+            else:
+                # Ensure persistence defaults are set if auth is enabled and provider is not 'none'
+                auth = profile["auth"]
+                if auth.get("provider", "none") != "none":
+                    if "persistence" not in auth:
+                        # Add default persistence configuration
+                        auth["persistence"] = {
+                            "type": "sqlite",
+                            "path": str(Path.home() / ".mxcp" / "oauth.db")
+                        }
+                    else:
+                        # Apply defaults to existing persistence config
+                        persistence = auth["persistence"]
+                        if "type" not in persistence:
+                            persistence["type"] = "sqlite"
+                        if "path" not in persistence:
+                            persistence["path"] = str(Path.home() / ".mxcp" / "oauth.db")
     
     return config
 

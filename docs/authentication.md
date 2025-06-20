@@ -617,15 +617,107 @@ The server will respond with client credentials:
 }
 ```
 
-### Production Recommendations
+### OAuth State Persistence
+
+MXCP supports persistent storage of OAuth authentication state to maintain user sessions across server restarts. By default, OAuth state (access tokens, authorization codes, and dynamically registered clients) is stored in memory and lost when the server restarts.
+
+### Configuration
+
+Configure persistence in your user config file (`~/.mxcp/config.yml`):
+
+```yaml
+projects:
+  my_project:
+    profiles:
+      production:
+        auth:
+          provider: github
+          
+          # OAuth state persistence configuration
+          persistence:
+            type: sqlite
+            path: "/var/lib/mxcp/oauth.db"  # Optional, defaults to ~/.mxcp/oauth.db
+          
+          clients:
+            - client_id: "${GITHUB_CLIENT_ID}"
+              client_secret: "${GITHUB_CLIENT_SECRET}"
+              name: "Production Application"
+              redirect_uris:
+                - "https://myapp.example.com/oauth/callback"
+```
+
+### Configuration Options
+
+- **`type`**: Backend type for persistence. Currently only `"sqlite"` is supported.
+- **`path`**: Path to the SQLite database file. Optional, defaults to `~/.mxcp/oauth.db`.
+
+### What Gets Persisted
+
+The persistence system stores:
+
+1. **Access Tokens**: Internal MXCP tokens and their mappings to external provider tokens
+2. **Authorization Codes**: Temporary codes during OAuth flows (with automatic expiration cleanup)
+3. **Dynamically Registered Clients**: OAuth clients registered via RFC 7591 Dynamic Client Registration
+
+**Note**: Pre-configured clients from your config file are **not** persisted, as they are loaded from configuration on each startup.
+
+### Benefits
+
+- **Session Continuity**: User sessions survive server restarts
+- **Zero-Downtime Deployments**: Users don't need to re-authenticate during updates
+- **Better User Experience**: No interruption of OAuth flows during server maintenance
+- **Production Ready**: Supports scaling and disaster recovery scenarios
+
+### Security Considerations
+
+- The SQLite database contains sensitive OAuth tokens and should be protected with appropriate file permissions (600)
+- Consider encrypting the database file at rest in production environments
+- Implement regular cleanup of expired tokens (automatic cleanup happens during normal operations)
+- Back up the database for disaster recovery, but ensure backups are also secured
+
+### Example Production Setup
+
+```yaml
+# ~/.mxcp/config.yml
+projects:
+  my_project:
+    profiles:
+      production:
+        auth:
+          provider: github
+          
+          persistence:
+            type: sqlite
+            path: "/var/lib/mxcp/oauth.db"
+          
+          clients:
+            - client_id: "${GITHUB_CLIENT_ID}"
+              client_secret: "${GITHUB_CLIENT_SECRET}"
+              name: "Production Application"
+              redirect_uris:
+                - "https://myapp.example.com/oauth/callback"
+              scopes:
+                - "mxcp:access"
+          
+          github:
+            client_id: "${GITHUB_CLIENT_ID}"
+            client_secret: "${GITHUB_CLIENT_SECRET}"
+            scope: "user:email"
+            # ... other GitHub config
+```
+
+## Production Recommendations
 
 For production deployments:
 
-1. **Remove development clients**: Don't include test/development client IDs in production configs
-2. **Use environment variables**: Store client secrets in environment variables, not config files
-3. **Limit redirect URIs**: Only include production callback URLs
-4. **Scope restrictions**: Use minimal required scopes
-5. **HTTPS only**: Ensure all redirect URIs use HTTPS in production
+1. **Enable persistence**: Always configure OAuth persistence for production
+2. **Secure database**: Set appropriate file permissions (600) on the OAuth database
+3. **Remove development clients**: Don't include test/development client IDs in production configs
+4. **Use environment variables**: Store client secrets in environment variables, not config files
+5. **Limit redirect URIs**: Only include production callback URLs
+6. **Scope restrictions**: Use minimal required scopes
+7. **HTTPS only**: Ensure all redirect URIs use HTTPS in production
+8. **Monitor logs**: Watch for OAuth persistence errors in production logs
 
 Example production configuration:
 
@@ -636,6 +728,10 @@ projects:
       prod:
         auth:
           provider: github
+          
+          persistence:
+            type: sqlite
+            path: "/var/lib/mxcp/oauth.db"
           
           clients:
             - client_id: "${PROD_CLIENT_ID}"
