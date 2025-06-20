@@ -8,7 +8,7 @@ keywords:
   - duckdb extensions
   - llm integration
   - ai data integration
-sidebar_position: 4
+sidebar_position: 3
 slug: /guides/integrations
 ---
 

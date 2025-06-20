@@ -8,7 +8,7 @@ keywords:
   - python development
   - duckdb development
 sidebar_position: 1
-slug: /guides/development
+slug: /contributors/development
 ---
 
 # Development Guide

@@ -8,7 +8,7 @@ keywords:
   - endpoint configuration
   - secrets management
   - environment variables
-sidebar_position: 2
+sidebar_position: 1
 slug: /guides/configuration
 ---
 
