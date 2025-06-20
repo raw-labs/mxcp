@@ -185,6 +185,48 @@ mxcp test --json-output         # Output results in JSON format
 mxcp test --readonly            # Open database connection in read-only mode
 ```
 
+### `mxcp lint`
+
+Check endpoints for missing but recommended metadata that improves LLM performance.
+
+```bash
+mxcp lint [OPTIONS]
+```
+
+**Options:**
+- `--profile`: Profile name to use
+- `--json-output`: Output in JSON format
+- `--debug`: Show detailed debug information
+- `--severity`: Minimum severity level to report (all, warning, info) - default: all
+
+**Examples:**
+```bash
+mxcp lint                    # Check all endpoints for metadata issues
+mxcp lint --severity warning # Show only warnings (skip info-level suggestions)
+mxcp lint --json-output      # Output results in JSON format
+```
+
+**Description:**
+The lint command analyzes your endpoints and suggests improvements to make them more effective for LLM usage. It checks for:
+
+- **Missing descriptions** on endpoints, parameters, and return types
+- **Missing test cases** to ensure endpoint reliability
+- **Missing parameter examples** to guide LLM usage
+- **Missing type descriptions** in nested structures
+- **Missing tags** for better categorization
+- **Missing default values** on optional parameters
+- **Missing behavioral annotations** on tools
+
+The command reports issues at three severity levels:
+- **Warning**: Important metadata that significantly improves LLM understanding
+- **Info**: Nice-to-have metadata that further enhances the experience
+
+Good metadata is crucial for LLM performance because it helps the model understand:
+- What each endpoint does and when to use it
+- Valid parameter values and formats
+- Expected output structures
+- Safety considerations (e.g., read-only vs destructive operations)
+
 ### `mxcp list`
 
 List all available endpoints.

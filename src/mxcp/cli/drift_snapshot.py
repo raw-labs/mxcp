@@ -29,9 +29,9 @@ def drift_snapshot(
     \b
     This command creates a snapshot of the current state of your MXCP repository,
     including:
-    - Database schema (tables and columns)
-    - Endpoint definitions (tools, resources, prompts)
-    - Test results
+    • Database schema (tables and columns)
+    • Endpoint definitions (tools, resources, prompts)
+    • Test results
     
     The snapshot is used to detect drift between different environments or over time.
     
