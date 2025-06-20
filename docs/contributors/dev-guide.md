@@ -421,7 +421,7 @@ pytest --cov=mxcp
 
 ## Code of Conduct
 
-Please read and follow our [Code of Conduct](../../CODE_OF_CONDUCT.md). We aim to maintain a welcoming and inclusive community.
+Please read and follow our [Code of Conduct](https://github.com/raw-labs/mxcp/blob/main/CODE_OF_CONDUCT.md). We aim to maintain a welcoming and inclusive community.
 
 ## License
 

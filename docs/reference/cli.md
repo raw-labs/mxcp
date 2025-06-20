@@ -236,7 +236,7 @@ Creates a snapshot of the current state of your MXCP repository, including:
 - Validation results
 - Test results
 
-The snapshot is used as a baseline to detect drift between different environments or over time. For more information, see the [Drift Detection Guide](drift-detection.md).
+The snapshot is used as a baseline to detect drift between different environments or over time. For more information, see the [Drift Detection Guide](../features/drift-detection.md).
 
 ### `mxcp drift-check`
 
@@ -268,7 +268,7 @@ Compares the current state of your database and endpoints against a previously g
 - Added, removed, or modified endpoints
 - Changes in validation or test results
 
-Exit code is 1 if drift is detected, 0 if no drift. For more information, see the [Drift Detection Guide](drift-detection.md).
+Exit code is 1 if drift is detected, 0 if no drift. For more information, see the [Drift Detection Guide](../features/drift-detection.md).
 
 ### `mxcp log`
 
@@ -316,7 +316,7 @@ Queries the audit logs to show execution history for tools, resources, and promp
 
 Audit logs are stored in JSONL (JSON Lines) format, which allows concurrent reading while the server is running - no database locking issues. The `--export-duckdb` option allows you to convert the logs to a DuckDB database for complex SQL analysis.
 
-For more information, see the [Audit Logging Guide](auditing.md).
+For more information, see the [Audit Logging Guide](../features/auditing.md).
 
 ### `mxcp dbt-config`
 

@@ -234,7 +234,7 @@ profiles:
   - Created by `mxcp drift-snapshot`
   - Should be unique per profile to avoid conflicts
 
-For more details on drift detection, see the [Drift Detection Guide](drift-detection.md).
+For more details on drift detection, see the [Drift Detection Guide](../features/drift-detection.md).
 
 ### SQL Tools
 ```yaml
@@ -364,7 +364,7 @@ MXCP supports policy-based access control for endpoints. Policies can control wh
 - CEL expressions: Flexible condition evaluation
 - User context: Role-based and permission-based access
 
-For detailed information on policy configuration and examples, see the [Policy Enforcement Guide](policies.md).
+For detailed information on policy configuration and examples, see the [Policy Enforcement Guide](../features/policies.md).
 
 ## SQL Source Files
 
@@ -387,7 +387,7 @@ source:
 
 ## Type System
 
-MXCP uses a comprehensive type system for input validation and output conversion. See the [Type System](type-system.md) documentation for details.
+MXCP uses a comprehensive type system for input validation and output conversion. See the [Type System](../reference/type-system.md) documentation for details.
 
 ## Jinja Templates in Prompts
 
