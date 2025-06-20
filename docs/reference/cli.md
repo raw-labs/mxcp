@@ -136,8 +136,11 @@ mxcp query "SELECT * FROM users" --readonly
 
 ### `mxcp validate`
 
-Validate one or all endpoints.
+Validates endpoint YAML files for correctness.
 
+> 📖 For comprehensive validation, testing, and quality best practices, see the [Quality & Testing Guide](../guides/quality.md).
+
+**Usage:**
 ```bash
 mxcp validate [ENDPOINT] [OPTIONS]
 ```
@@ -161,8 +164,11 @@ mxcp validate --readonly        # Open database connection in read-only mode
 
 ### `mxcp test`
 
-Run tests for one or all endpoints.
+Runs tests for endpoints to verify they work correctly.
 
+> 📖 Learn how to write comprehensive tests and use assertion types in the [Quality & Testing Guide](../guides/quality.md#testing).
+
+**Usage:**
 ```bash
 mxcp test [ENDPOINT_TYPE] [NAME] [OPTIONS]
 ```
@@ -226,8 +232,11 @@ tests:
 
 ### `mxcp lint`
 
-Check endpoints for missing but recommended metadata that improves LLM performance.
+Checks endpoints for metadata quality issues and suggests improvements for better LLM performance.
 
+> 📖 See the [Quality & Testing Guide](../guides/quality.md#linting) for metadata best practices and LLM optimization tips.
+
+**Usage:**
 ```bash
 mxcp lint [OPTIONS]
 ```

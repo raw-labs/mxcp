@@ -197,6 +197,8 @@ MXCP uses a specific pattern for organizing test fixtures:
 - **Complete repositories**: Each fixture contains a complete MXCP repository with `mxcp-site.yml` and `mxcp-config.yml`
 - **Isolated environments**: Tests use environment variables to point to their specific config files
 
+> 📖 For endpoint testing best practices and writing tests for MXCP endpoints, see the [Quality & Testing Guide](../guides/quality.md).
+
 ```python
 # Standard test setup pattern
 @pytest.fixture(scope="session", autouse=True)

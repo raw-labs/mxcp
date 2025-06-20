@@ -257,6 +257,7 @@ For specific setup instructions, see:
 - **[Configuration Guide](https://github.com/raw-labs/mxcp/blob/main/docs/guides/configuration.md)** - Complete configuration reference
 - **[Authentication](https://github.com/raw-labs/mxcp/blob/main/docs/guides/authentication.md)** - OAuth setup and security
 - **[Integrations](https://github.com/raw-labs/mxcp/blob/main/docs/guides/integrations.md)** - LLM platforms, dbt, and data sources
+- **[Quality & Testing](https://github.com/raw-labs/mxcp/blob/main/docs/guides/quality.md)** - Validation, testing, and linting best practices
 
 ### ⚡ Features
 - **[Policy Enforcement](https://github.com/raw-labs/mxcp/blob/main/docs/features/policies.md)** - Access control and data filtering

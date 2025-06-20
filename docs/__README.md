@@ -14,6 +14,7 @@ The documentation is organized into logical categories:
 - **[Configuration Guide](guides/configuration.md)** - Complete configuration reference
 - **[Authentication](guides/authentication.md)** - OAuth setup and security
 - **[Integrations](guides/integrations.md)** - LLM platforms, dbt, and data sources
+- **[Quality & Testing](guides/quality.md)** - Validation, testing, and linting best practices
 
 ### ⚡ Features
 - **[Policy Enforcement](features/policies.md)** - Access control and data filtering

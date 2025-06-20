@@ -524,6 +524,8 @@ mxcp drift-check --profile production
    mxcp test         # Run endpoint tests
    mxcp list         # Verify everything is loaded
    ```
+   
+   > 💡 Learn more about writing tests and ensuring quality in the [Quality & Testing Guide](../guides/quality.md)
 
 2. **Explore the CLI**
    ```bash
@@ -534,10 +536,11 @@ mxcp drift-check --profile production
 
 ### Dive Deeper
 1. **[Type System](../reference/type-system.md)** - Master MXCP's type safety features
-2. **[Policies](../features/policies.md)** - Implement fine-grained access control
-3. **[Authentication](../guides/authentication.md)** - Set up OAuth for your organization
-4. **[Plugins](../reference/plugins.md)** - Extend DuckDB with custom Python functions
-5. **[Drift Detection](../features/drift-detection.md)** - Monitor changes across environments
+2. **[Quality & Testing](../guides/quality.md)** - Write comprehensive tests and ensure quality
+3. **[Policies](../features/policies.md)** - Implement fine-grained access control
+4. **[Authentication](../guides/authentication.md)** - Set up OAuth for your organization
+5. **[Plugins](../reference/plugins.md)** - Extend DuckDB with custom Python functions
+6. **[Drift Detection](../features/drift-detection.md)** - Monitor changes across environments
 
 ### Build Your Own
 1. **Start Simple**: Begin with basic SQL queries
