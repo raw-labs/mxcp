@@ -135,7 +135,7 @@ def create_and_push_tag(version):
     run_command(["git", "push", "origin", tag])
     
     print(f"✅ Tag '{tag}' created and pushed!")
-    print(f"🔗 Monitor the release at: https://github.com/your-org/mxcp/actions")
+    print(f"🔗 Monitor the release at: https://github.com/raw-labs/mxcp/actions")
     
 
 def list_recent_releases():
@@ -161,15 +161,31 @@ def get_next_version_suggestions(current_version=None):
         try:
             # Remove 'v' prefix if present
             version = current_version.lstrip('v')
-            major, minor, patch = map(int, version.split('.'))
             
-            print(f"Current version: {current_version}")
-            print("Suggested next versions:")
-            print(f"  Patch:  v{major}.{minor}.{patch + 1}")
-            print(f"  Minor:  v{major}.{minor + 1}.0")
-            print(f"  Major:  v{major + 1}.0.0")
-        except Exception:
-            print("Could not parse current version for suggestions")
+            # Split version and handle pre-release suffixes
+            version_parts = version.split('.')
+            if len(version_parts) >= 3:
+                major = int(version_parts[0])
+                minor = int(version_parts[1])
+                
+                # Handle patch version which might have pre-release suffix
+                patch_part = version_parts[2]
+                # Extract numeric part before any non-numeric characters
+                patch_match = re.match(r'^(\d+)', patch_part)
+                if patch_match:
+                    patch = int(patch_match.group(1))
+                else:
+                    patch = 0
+                
+                print(f"Current version: {current_version}")
+                print("Suggested next versions:")
+                print(f"  Patch:  v{major}.{minor}.{patch + 1}")
+                print(f"  Minor:  v{major}.{minor + 1}.0")
+                print(f"  Major:  v{major + 1}.0.0")
+            else:
+                print("Could not parse version format for suggestions")
+        except Exception as e:
+            print(f"Could not parse current version for suggestions: {e}")
 
 
 def main():

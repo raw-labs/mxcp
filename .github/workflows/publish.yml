@@ -9,6 +9,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     environment: release  # Use GitHub environment for additional protection
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
     
     steps:
     - uses: actions/checkout@v4
@@ -25,6 +27,11 @@ jobs:
         VERSION=${GITHUB_REF#refs/tags/v}
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Extracted version: $VERSION"
+        
+        # Get previous tag for changelog
+        PREVIOUS_TAG=$(git tag -l --sort=-version:refname | grep -v "^${GITHUB_REF#refs/tags/}$" | head -1)
+        echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+        echo "Previous tag: $PREVIOUS_TAG"
 
     - name: Validate version format
       run: |
@@ -119,7 +126,7 @@ jobs:
           
           ### Links
           - 📦 [PyPI Package](https://pypi.org/project/mxcp/${{ steps.get_version.outputs.version }}/)
-          - 📋 [Full Changelog](https://github.com/${{ github.repository }}/compare/v${{ steps.get_version.outputs.version }}...HEAD)
+          - 📋 [Full Changelog](https://github.com/${{ github.repository }}/compare/${{ steps.get_version.outputs.previous_tag }}...v${{ steps.get_version.outputs.version }})
           
           ### Verification
           - ✅ All tests passed
