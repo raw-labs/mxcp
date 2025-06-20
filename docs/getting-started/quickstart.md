@@ -46,6 +46,13 @@ This creates:
 - `mxcp-site.yml` - Project configuration
 - `endpoints/hello-world.yml` - A simple hello world tool
 - `endpoints/hello-world.sql` - The SQL implementation
+- `server_config.json` - Claude Desktop configuration (automatically generated!)
+
+The `--bootstrap` flag provides:
+- ✅ Properly formatted SQL files
+- ✅ Automatic `server_config.json` generation that handles virtualenvs
+- ✅ Clear, actionable next steps
+- ✅ Platform-specific Claude Desktop config paths
 
 ### 2. Explore the Generated Files
 
@@ -81,7 +88,7 @@ SELECT 'Hello, ' || $name || '!' as greeting
 mxcp serve
 ```
 
-The server starts in stdio mode, ready for LLM integration.
+The server starts in stdio mode, ready for LLM integration. If you used `--bootstrap`, the generated `server_config.json` is already configured correctly for your environment (virtualenv, poetry, or system-wide installation).
 
 ## Path 2: Real-World Data Pipeline (10 minutes)
 
