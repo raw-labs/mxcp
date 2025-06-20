@@ -141,33 +141,37 @@ class DuckDBSession:
         
     def _create_user_token_udfs(self):
         """Create UDFs for accessing user tokens if authentication is enabled."""
-        user_context = get_user_context()
-        if not user_context:
-            logger.debug("No user context available, skipping token UDF creation")
-            return
-            
-        logger.info(f"Creating user token UDFs for {user_context.username}")
+        # Note: We always create the UDFs, but they will return empty strings if no user is authenticated
+        logger.info("Creating user token UDFs")
         
         def get_user_external_token() -> str:
             """Return the current user's OAuth provider token (e.g., GitHub token)."""
+            # Get the user context dynamically when the function is called
+            user_context = get_user_context()
             if user_context and user_context.external_token:
                 return user_context.external_token
             return ""
             
         def get_username() -> str:
             """Return the current user's username."""
+            # Get the user context dynamically when the function is called
+            user_context = get_user_context()
             if user_context:
                 return user_context.username
             return ""
             
         def get_user_provider() -> str:
             """Return the current user's OAuth provider (e.g., 'github', 'atlassian')."""
+            # Get the user context dynamically when the function is called
+            user_context = get_user_context()
             if user_context:
                 return user_context.provider
             return ""
             
         def get_user_email() -> str:
             """Return the current user's email address."""
+            # Get the user context dynamically when the function is called
+            user_context = get_user_context()
             if user_context and user_context.email:
                 return user_context.email
             return ""

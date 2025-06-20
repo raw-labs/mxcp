@@ -32,9 +32,14 @@ class SiteDuckDBConfig(TypedDict, total=False):
 class SiteDriftConfig(TypedDict, total=False):
     path: Optional[str]
 
+class SiteAuditConfig(TypedDict, total=False):
+    enabled: Optional[bool]
+    path: Optional[str]
+
 class SiteProfileConfig(TypedDict, total=False):
     duckdb: Optional[SiteDuckDBConfig]
     drift: Optional[SiteDriftConfig]
+    audit: Optional[SiteAuditConfig]
 
 class SiteConfig(TypedDict):
     mxcp: str
@@ -105,6 +110,9 @@ class UserSalesforceAuthConfig(TypedDict):
     auth_url: str
     token_url: str
 
+class UserAuthPersistenceConfig(TypedDict, total=False):
+    type: Optional[Literal["sqlite"]]
+    path: Optional[str]
 
 class UserAuthorizationConfig(TypedDict, total=False):
     required_scopes: Optional[List[str]]
@@ -116,6 +124,7 @@ class UserAuthConfig(TypedDict, total=False):
     atlassian: Optional[UserAtlassianAuthConfig]
     salesforce: Optional[UserSalesforceAuthConfig]
     authorization: Optional[UserAuthorizationConfig]
+    persistence: Optional[UserAuthPersistenceConfig]
 
 class UserProfileConfig(TypedDict, total=False):
     secrets: Optional[List[UserSecretDefinition]]

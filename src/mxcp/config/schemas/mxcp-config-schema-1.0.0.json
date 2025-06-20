@@ -322,6 +322,24 @@
                             }
                           },
                           "additionalProperties": false
+                        },
+                        "persistence": {
+                          "type": "object",
+                          "description": "OAuth state persistence configuration for maintaining authentication state across server restarts.",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": ["sqlite"],
+                              "default": "sqlite",
+                              "description": "Type of persistence backend to use."
+                            },
+                            "path": {
+                              "type": "string",
+                              "description": "Path to the SQLite database file for storing OAuth state.",
+                              "default": "~/.mxcp/oauth.db"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false

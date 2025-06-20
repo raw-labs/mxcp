@@ -17,7 +17,7 @@ from mxcp.config.types import SiteConfig, UserConfig
 from mxcp.config.site_config import find_repo_root
 from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.endpoints.schema import validate_endpoint_payload
-from mxcp.endpoints.tester import run_tests
+from mxcp.endpoints.tester import run_tests_with_session
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +97,8 @@ async def generate_snapshot(
 
                 # Validate endpoint
                 validation_result = validate_endpoint_payload(endpoint, str(path), user_config, site_config, profile_name, session)
-                # Run tests
-                test_result = await run_tests(endpoint_type, name, user_config, site_config, profile_name, readonly=True)
+                # Run tests - use run_tests_with_session to reuse our existing session
+                test_result = await run_tests_with_session(endpoint_type, name, user_config, site_config, session, profile_name)
                 # Add to snapshot
                 resource_data = {
                     "validation_results": validation_result,

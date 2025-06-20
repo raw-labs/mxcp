@@ -61,7 +61,7 @@ class RAWMCP:
         auth_settings = None
         
         if self.oauth_handler:
-            self.oauth_server = GeneralOAuthAuthorizationServer(self.oauth_handler, auth_config)
+            self.oauth_server = GeneralOAuthAuthorizationServer(self.oauth_handler, auth_config, user_config)
             
             # Use URL builder for OAuth endpoints
             url_builder = create_url_builder(user_config)
@@ -201,6 +201,70 @@ class RAWMCP:
         # Track if we've already shut down to avoid double cleanup
         self._shutdown_called = False
 
+    def _ensure_async_completes(self, coro, timeout: float = 10.0, operation_name: str = "operation"):
+        """Ensure an async operation completes, even when called from sync context with active event loop.
+        
+        This method safely runs an async operation from a synchronous context, handling the case
+        where there's already an event loop running in the current thread (which would cause
+        a deadlock if we tried to use asyncio.run()).
+        
+        Args:
+            coro: The coroutine to run
+            timeout: Timeout in seconds
+            operation_name: Name of the operation for logging
+            
+        Raises:
+            TimeoutError: If the operation times out
+            Exception: If the operation fails
+        """
+        import asyncio
+        import concurrent.futures
+        
+        async def with_timeout():
+            """Wrap the coroutine with a timeout."""
+            return await asyncio.wait_for(coro, timeout=timeout)
+        
+        # Check if there's an active event loop in the current thread
+        try:
+            asyncio.get_running_loop()
+            # There is an active loop - we must run in a separate thread to avoid deadlock
+            logger.info(f"Running {operation_name} with active event loop - using separate thread")
+            
+            def run_in_new_loop():
+                """Run the coroutine in a new event loop in this thread."""
+                # asyncio.run() creates a new event loop, runs the coroutine, and cleans up
+                return asyncio.run(with_timeout())
+            
+            # Execute in a separate thread
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(run_in_new_loop)
+                try:
+                    result = future.result(timeout=timeout + 1)  # Add buffer for thread overhead
+                    logger.info(f"{operation_name} completed successfully")
+                    return result
+                except concurrent.futures.TimeoutError:
+                    # The thread itself timed out - this is a fatal error
+                    raise TimeoutError(f"{operation_name} thread timed out after {timeout + 1} seconds")
+                except asyncio.TimeoutError:
+                    # The asyncio.wait_for timed out (this gets wrapped in the future)
+                    raise TimeoutError(f"{operation_name} timed out after {timeout} seconds")
+                except Exception as e:
+                    logger.error(f"{operation_name} failed: {e}")
+                    raise
+                    
+        except RuntimeError:
+            # No event loop running, we can run directly
+            logger.info(f"Running {operation_name} without active event loop - using asyncio.run")
+            try:
+                result = asyncio.run(with_timeout())
+                logger.info(f"{operation_name} completed successfully")
+                return result
+            except asyncio.TimeoutError:
+                raise TimeoutError(f"{operation_name} timed out after {timeout} seconds")
+            except Exception as e:
+                logger.error(f"{operation_name} failed: {e}")
+                raise
+
     def shutdown(self):
         """Shutdown the server gracefully."""
         # Prevent double shutdown
@@ -211,7 +275,19 @@ class RAWMCP:
         logger.info("Shutting down MXCP server...")
         
         try:
-            # Close DuckDB session first (most important)
+            # Close OAuth server persistence first - ensure it completes
+            if self.oauth_server:
+                try:
+                    self._ensure_async_completes(
+                        self.oauth_server.close(),
+                        timeout=5.0,
+                        operation_name="OAuth server shutdown"
+                    )
+                except Exception as e:
+                    logger.error(f"Error closing OAuth server: {e}")
+                    # Continue with shutdown even if OAuth server close fails
+            
+            # Close DuckDB session
             if self.db_session:
                 try:
                     self.db_session.close()
@@ -1008,6 +1084,16 @@ class RAWMCP:
             for skipped in self.skipped_endpoints:
                 logger.warning(f"  - {skipped['path']}: {skipped['error']}")
 
+    async def _initialize_oauth_server(self):
+        """Initialize OAuth server persistence if enabled."""
+        if self.oauth_server:
+            try:
+                await self.oauth_server.initialize()
+                logger.info("OAuth server initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize OAuth server: {e}")
+                raise
+
     def run(self, transport: str = "streamable-http"):
         """Run the MCP server.
         
@@ -1018,6 +1104,7 @@ class RAWMCP:
             logger.info("Starting MCP server...")
             # Store transport mode for use in handlers
             self.transport_mode = transport
+            
             # Register all endpoints
             self.register_endpoints()
             logger.info("Endpoints registered successfully.")
@@ -1025,6 +1112,20 @@ class RAWMCP:
             # Add debug logging for uvicorn config if using streamable-http
             if transport == "streamable-http":
                 logger.info(f"About to start uvicorn with host={self.mcp.settings.host}, port={self.mcp.settings.port}")
+            
+            # Initialize OAuth server before starting FastMCP - ensure it completes
+            if self.oauth_server:
+                try:
+                    self._ensure_async_completes(
+                        self._initialize_oauth_server(),
+                        timeout=10.0,
+                        operation_name="OAuth server initialization"
+                    )
+                except TimeoutError:
+                    raise RuntimeError("OAuth server initialization timed out")
+                except Exception as e:
+                    # Don't continue if OAuth is enabled but initialization failed
+                    raise RuntimeError(f"OAuth server initialization failed: {e}")
             
             # Start server using MCP's built-in run method
             self.mcp.run(transport=transport)

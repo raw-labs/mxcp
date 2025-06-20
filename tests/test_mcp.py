@@ -15,7 +15,7 @@ from mxcp.config.site_config import load_site_config
 def set_mxcp_config_env():
     os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "mcp" / "mxcp-config.yml")
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def mcp_repo_path():
     """Get path to test repository."""
     return Path(__file__).parent / "fixtures" / "mcp"
@@ -29,7 +29,7 @@ def change_to_mcp_repo(mcp_repo_path):
     finally:
         os.chdir(original_dir)
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def test_user_config(mcp_repo_path):
     """Load test user configuration."""
     original_dir = os.getcwd()
@@ -40,7 +40,7 @@ def test_user_config(mcp_repo_path):
     finally:
         os.chdir(original_dir)
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def test_site_config(mcp_repo_path):
     """Load test site configuration."""
     original_dir = os.getcwd()
@@ -50,17 +50,27 @@ def test_site_config(mcp_repo_path):
     finally:
         os.chdir(original_dir)
 
-@pytest.fixture
-def mcp_server(test_user_config, test_site_config):
+@pytest.fixture(scope="module")
+def mcp_server(test_user_config, test_site_config, mcp_repo_path):
     """Create a RAWMCP instance for testing."""
-    return RAWMCP(
-        user_config=test_user_config,
-        site_config=test_site_config,
-        stateless_http=True,
-        json_response=True,
-        host="localhost",
-        port=8000
-    )
+    original_dir = os.getcwd()
+    os.chdir(mcp_repo_path)
+    try:
+        server = RAWMCP(
+            user_config=test_user_config,
+            site_config=test_site_config,
+            stateless_http=True,
+            json_response=True,
+            host="localhost",
+            port=8000
+        )
+        os.chdir(original_dir)
+        yield server
+        # Clean up - close the DuckDB session
+        if hasattr(server, 'db_session') and server.db_session:
+            server.db_session.close()
+    finally:
+        os.chdir(original_dir)
 
 @pytest.fixture
 async def http_server(mcp_server):
