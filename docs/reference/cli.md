@@ -168,21 +168,54 @@ mxcp test [ENDPOINT_TYPE] [NAME] [OPTIONS]
 ```
 
 **Arguments:**
-- `ENDPOINT_TYPE`: Type of endpoint (tool, resource, or prompt) (optional)
-- `NAME`: Name of endpoint to test (optional)
+- `ENDPOINT_TYPE`: Type of endpoint to test (tool, resource, or prompt)
+- `NAME`: Name of the specific endpoint to test
 
 **Options:**
+- `--user-context, -u`: User context as JSON string or @file.json for testing policy-protected endpoints
 - `--profile`: Profile name to use
-- `--json-output`: Output in JSON format
+- `--json-output`: Output results in JSON format
 - `--debug`: Show detailed debug information
 - `--readonly`: Open database connection in read-only mode
 
 **Examples:**
+
 ```bash
-mxcp test                        # Test all endpoints
-mxcp test tool my_tool          # Test specific tool endpoint
-mxcp test --json-output         # Output results in JSON format
-mxcp test --readonly            # Open database connection in read-only mode
+# Run all tests
+mxcp test
+
+# Test a specific endpoint
+mxcp test tool my_tool
+
+# Test with user context for policy testing
+mxcp test tool employee_info --user-context '{"role": "admin", "permissions": ["read", "write"]}'
+
+# Test with user context from file
+mxcp test --user-context @test_admin.json
+
+# Output results in JSON format
+mxcp test --json-output
+```
+
+**User Context in Tests:**
+
+The `--user-context` flag allows you to test endpoints with policies that depend on user authentication. The command-line context overrides any user_context defined in test specifications.
+
+You can also define user context directly in test specifications:
+
+```yaml
+tests:
+  - name: Admin can see all fields
+    user_context:
+      role: admin
+      permissions: ["employee:read:all"]
+    arguments:
+      - key: employee_id
+        value: "123"
+    result:
+      id: "123"
+      name: "John Doe"
+      salary: 100000  # Admin can see salary
 ```
 
 ### `mxcp lint`

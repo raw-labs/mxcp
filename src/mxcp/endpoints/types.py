@@ -13,6 +13,7 @@ class TestDefinition(TypedDict):
     description: Optional[str]
     arguments: List[TestArgument]
     result: Optional[object]
+    user_context: Optional[dict]  # User context for policy testing
 
 class TypeDefinition(TypedDict):
     type: str

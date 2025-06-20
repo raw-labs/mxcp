@@ -4,6 +4,7 @@ from mxcp.endpoints.loader import EndpointLoader
 from mxcp.config.site_config import SiteConfig, find_repo_root
 from mxcp.config.user_config import UserConfig
 from mxcp.engine.duckdb_session import DuckDBSession
+from mxcp.auth.providers import UserContext
 import time
 import json
 import logging
@@ -19,7 +20,7 @@ import numpy as np
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profile: Optional[str], readonly: Optional[bool] = None) -> Dict[str, Any]:
+async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profile: Optional[str], readonly: Optional[bool] = None, cli_user_context: Optional[UserContext] = None) -> Dict[str, Any]:
     """Run tests for all endpoints in the repository (async)"""
     repo_root = find_repo_root()
     logger.debug(f"Repository root: {repo_root}")
@@ -80,7 +81,7 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
                     continue
                     
                 # Run tests for this endpoint with the shared session
-                test_results = await run_tests_with_session(kind, name, user_config, site_config, session, profile)
+                test_results = await run_tests_with_session(kind, name, user_config, site_config, session, profile, cli_user_context)
                 
                 # Wrap test results with endpoint context
                 endpoint_result = {
@@ -113,17 +114,17 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
             
     return results
 
-async def run_tests(endpoint_type: str, name: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str], readonly: Optional[bool] = None) -> Dict[str, Any]:
+async def run_tests(endpoint_type: str, name: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str], readonly: Optional[bool] = None, cli_user_context: Optional[UserContext] = None) -> Dict[str, Any]:
     """Run tests for a specific endpoint type and name."""
     # Create a session for this test run
     session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
     
     try:
-        return await run_tests_with_session(endpoint_type, name, user_config, site_config, session, profile)
+        return await run_tests_with_session(endpoint_type, name, user_config, site_config, session, profile, cli_user_context)
     finally:
         session.close()
 
-async def run_tests_with_session(endpoint_type: str, name: str, user_config: UserConfig, site_config: SiteConfig, session: DuckDBSession, profile: Optional[str]) -> Dict[str, Any]:
+async def run_tests_with_session(endpoint_type: str, name: str, user_config: UserConfig, site_config: SiteConfig, session: DuckDBSession, profile: Optional[str], cli_user_context: Optional[UserContext] = None) -> Dict[str, Any]:
     """Run tests for a specific endpoint type and name with an existing session."""
     try:
         endpoint_type_enum = EndpointType(endpoint_type.lower())
@@ -183,9 +184,28 @@ async def run_tests_with_session(endpoint_type: str, name: str, user_config: Use
             expected_result = test_def.get("result")
             logger.info(f"Expected result: {expected_result}")
             
+            # Determine user context for this test
+            # CLI user context takes precedence over test-defined context
+            test_user_context = cli_user_context
+            if test_user_context is None and "user_context" in test_def:
+                # Create UserContext from test definition
+                test_context_data = test_def["user_context"]
+                test_user_context = UserContext(
+                    provider="test",  # Special provider for test-defined contexts
+                    user_id=test_context_data.get("user_id", "test_user"),
+                    username=test_context_data.get("username", "test_user"),
+                    email=test_context_data.get("email"),
+                    name=test_context_data.get("name"),
+                    avatar_url=test_context_data.get("avatar_url"),
+                    raw_profile=test_context_data  # Store full context for policy access
+                )
+                logger.info(f"Using test-defined user context: {test_context_data}")
+            elif test_user_context:
+                logger.info(f"Using CLI-provided user context")
+            
             try:
                 # Use the execute_endpoint function with session and profile
-                result = await execute_endpoint(endpoint_type, name, params, user_config, site_config, session, profile)
+                result = await execute_endpoint(endpoint_type, name, params, user_config, site_config, session, profile, user_context=test_user_context)
                 logger.info(f"Execution result: {result}")
                 
                 # Normalize result for comparison

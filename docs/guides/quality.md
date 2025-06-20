@@ -188,6 +188,94 @@ resource:
         }
 ```
 
+### Writing Good Tests
+
+When writing tests for your endpoints, consider:
+
+1. **Edge Cases**: Test boundary conditions and edge cases
+2. **Error Conditions**: Test what happens with invalid inputs
+3. **Different Scenarios**: Test various use cases
+4. **Expected Failures**: Some tests should verify that invalid inputs are rejected
+
+Example of comprehensive tests:
+
+```yaml
+tool:
+  name: calculate_discount
+  tests:
+    - name: Standard discount
+      arguments:
+        - key: price
+          value: 100
+        - key: discount_percent
+          value: 10
+      result: 90
+    
+    - name: Zero discount
+      arguments:
+        - key: price
+          value: 100
+        - key: discount_percent
+          value: 0
+      result: 100
+    
+    - name: Maximum discount
+      arguments:
+        - key: price
+          value: 100
+        - key: discount_percent
+          value: 100
+      result: 0
+```
+
+### Testing Policy-Protected Endpoints
+
+When your endpoints use policies for access control, you need to test with different user contexts:
+
+```yaml
+tool:
+  name: employee_info
+  policies:
+    input:
+      - condition: "user.role != 'admin' && user.role != 'hr'"
+        action: deny
+        reason: "Only admin and HR can access employee data"
+  
+  tests:
+    - name: Admin can access employee data
+      user_context:
+        role: admin
+        user_id: admin123
+      arguments:
+        - key: employee_id
+          value: emp456
+      result:
+        id: emp456
+        name: John Doe
+        salary: 85000
+    
+    - name: Regular user denied access
+      user_context:
+        role: user
+        user_id: user123
+      arguments:
+        - key: employee_id
+          value: emp456
+      # Test will fail with policy denial
+```
+
+You can also provide user context via command line:
+
+```bash
+# Test with admin role
+mxcp test tool employee_info --user-context '{"role": "admin"}'
+
+# Test with user context from file
+mxcp test --user-context @test_contexts/hr_user.json
+```
+
+The command-line user context overrides any context defined in the test specification, allowing you to quickly test different scenarios.
+
 ## Linting
 
 The lint command helps you write better metadata for optimal LLM performance.

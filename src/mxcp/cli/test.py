@@ -1,12 +1,15 @@
 import click
 import asyncio
+import json
 from typing import Dict, Any, Optional
+from pathlib import Path
 from mxcp.endpoints.tester import run_tests, run_all_tests
 from mxcp.endpoints.executor import EndpointType
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.config.analytics import track_command_with_timing
+from mxcp.auth.providers import UserContext
 
 def format_test_results(results, debug: bool = False):
     """Format test results for human-readable output"""
@@ -140,16 +143,24 @@ def format_test_results(results, debug: bool = False):
 @click.command(name="test")
 @click.argument("endpoint_type", type=click.Choice([t.value for t in EndpointType]), required=False)
 @click.argument("name", required=False)
+@click.option("--user-context", "-u", help="User context as JSON string or @file.json")
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("test")
-def test(endpoint_type: Optional[str], name: Optional[str], profile: Optional[str], json_output: bool, debug: bool, readonly: bool):
+def test(endpoint_type: Optional[str], name: Optional[str], user_context: Optional[str], profile: Optional[str], json_output: bool, debug: bool, readonly: bool):
     """Run tests for endpoints.
     
     This command executes the test cases defined in endpoint configurations.
     If no endpoint type and name are provided, it will run all tests.
+
+    \b
+    User context can be provided for testing policy-protected endpoints:
+    --user-context '{"user_id": "123", "role": "admin", "permissions": ["read", "write"]}'
+    --user-context @user_context.json
+    
+    The command-line user context will override any user_context defined in test specifications.
 
     \b
     Examples:
@@ -159,6 +170,7 @@ def test(endpoint_type: Optional[str], name: Optional[str], profile: Optional[st
         mxcp test prompt my_prompt      # Test a specific prompt
         mxcp test --json-output         # Output results in JSON format
         mxcp test --readonly            # Open database connection in read-only mode
+        mxcp test --user-context '{"role": "admin"}'  # Test with admin role
     """
     # Get values from environment variables if not set by flags
     if not profile:
@@ -173,10 +185,41 @@ def test(endpoint_type: Optional[str], name: Optional[str], profile: Optional[st
         site_config = load_site_config()
         user_config = load_user_config(site_config)
         
+        # Parse user context if provided
+        cli_user_context = None
+        if user_context:
+            if user_context.startswith("@"):
+                # Load from file
+                file_path = Path(user_context[1:])
+                if not file_path.exists():
+                    raise click.BadParameter(f"User context file not found: {file_path}")
+                try:
+                    with open(file_path) as f:
+                        context_data = json.load(f)
+                except json.JSONDecodeError as e:
+                    raise click.BadParameter(f"Invalid JSON in user context file {file_path}: {e}")
+            else:
+                # Parse as JSON string
+                try:
+                    context_data = json.loads(user_context)
+                except json.JSONDecodeError as e:
+                    raise click.BadParameter(f"Invalid JSON in user context: {e}")
+            
+            # Create UserContext object from the data
+            cli_user_context = UserContext(
+                provider="cli",  # Special provider for CLI usage
+                user_id=context_data.get("user_id", "cli_user"),
+                username=context_data.get("username", "cli_user"),
+                email=context_data.get("email"),
+                name=context_data.get("name"),
+                avatar_url=context_data.get("avatar_url"),
+                raw_profile=context_data  # Store full context for policy access
+            )
+        
         if endpoint_type and name:
-            results = asyncio.run(run_tests(endpoint_type, name, user_config, site_config, profile, readonly=readonly))
+            results = asyncio.run(run_tests(endpoint_type, name, user_config, site_config, profile, readonly=readonly, cli_user_context=cli_user_context))
         else:
-            results = asyncio.run(run_all_tests(user_config, site_config, profile, readonly=readonly))
+            results = asyncio.run(run_all_tests(user_config, site_config, profile, readonly=readonly, cli_user_context=cli_user_context))
             
         if json_output:
             output_result(results, json_output, debug)
