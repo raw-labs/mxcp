@@ -277,8 +277,8 @@ We welcome contributions! See our [development guide](https://github.com/raw-lab
 
 MXCP is developed by RAW Labs for production data-to-AI workflows. For enterprise support, custom integrations, or consulting:
 
-- 📧 Contact: [hello@raw-labs.com](mailto:hello@raw-labs.com)
-- 🌐 Website: [www.raw-labs.com](https://www.raw-labs.com)
+- 📧 Contact: [mxcp@raw-labs.com](mailto:mxcp@raw-labs.com)
+- 🌐 Website: [mxcp.dev](https://mxcp.dev)
 
 ---
 
