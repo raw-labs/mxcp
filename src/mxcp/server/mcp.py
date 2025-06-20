@@ -215,22 +215,30 @@ class RAWMCP:
             if self.oauth_server:
                 try:
                     import asyncio
-                    import concurrent.futures
-                    # Check if there's an event loop running
+                    
+                    # Try to get the running event loop
                     try:
                         loop = asyncio.get_running_loop()
-                        # We're in an existing loop, use run_coroutine_threadsafe to wait for completion
-                        future = asyncio.run_coroutine_threadsafe(self.oauth_server.close(), loop)
-                        try:
-                            # Wait for the async operation to complete with a timeout
-                            future.result(timeout=5.0)  # 5 second timeout
-                            logger.info("Closed OAuth server persistence")
-                        except concurrent.futures.TimeoutError:
-                            logger.error("Timeout waiting for OAuth server to close")
+                        # We're in a sync function but there's an event loop running
+                        # Schedule the close operation without waiting (to avoid deadlock)
+                        task = asyncio.create_task(self.oauth_server.close())
+                        
+                        # Add a callback to log completion/errors
+                        def log_completion(fut):
+                            try:
+                                fut.result()
+                                logger.info("OAuth server persistence closed successfully")
+                            except Exception as e:
+                                logger.error(f"Error closing OAuth server: {e}")
+                        
+                        task.add_done_callback(log_completion)
+                        logger.info("Scheduled OAuth server close task (non-blocking)")
+                        
                     except RuntimeError:
-                        # No event loop running, use asyncio.run()
+                        # No event loop running, safe to use asyncio.run()
                         asyncio.run(self.oauth_server.close())
                         logger.info("Closed OAuth server persistence")
+                        
                 except Exception as e:
                     logger.error(f"Error closing OAuth server: {e}")
             
@@ -1063,24 +1071,42 @@ class RAWMCP:
             # Initialize OAuth server before starting FastMCP
             if self.oauth_server:
                 import asyncio
-                import concurrent.futures
                 try:
-                    # Check if there's already an event loop running
+                    # In most cases, there shouldn't be an event loop running yet
+                    # since FastMCP hasn't started. But we'll check to be safe.
                     try:
                         loop = asyncio.get_running_loop()
-                        # We're in an existing loop, use run_coroutine_threadsafe to wait for completion
-                        future = asyncio.run_coroutine_threadsafe(self._initialize_oauth_server(), loop)
-                        try:
-                            # Wait for the async operation to complete with a timeout
-                            future.result(timeout=10.0)  # 10 second timeout for initialization
-                            logger.info("OAuth server initialized successfully")
-                        except concurrent.futures.TimeoutError:
-                            logger.error("Timeout waiting for OAuth server to initialize")
-                            raise RuntimeError("OAuth server initialization timed out")
+                        # Unexpected: event loop already running during initialization
+                        logger.warning("Unexpected: Event loop already running during OAuth server initialization")
+                        
+                        # Since we can't block waiting for the task (would cause deadlock),
+                        # we'll skip the initialization and let it happen lazily
+                        logger.warning("OAuth server initialization will be deferred")
+                        
+                        # Schedule it to run but don't wait
+                        task = asyncio.create_task(self._initialize_oauth_server())
+                        
+                        def log_init_completion(fut):
+                            try:
+                                fut.result()
+                                logger.info("OAuth server initialized successfully (deferred)")
+                            except Exception as e:
+                                logger.error(f"Failed to initialize OAuth server (deferred): {e}")
+                        
+                        task.add_done_callback(log_init_completion)
+                        
                     except RuntimeError:
-                        # No event loop running, safe to use asyncio.run()
-                        asyncio.run(self._initialize_oauth_server())
+                        # No event loop running - this is the expected case
+                        # Safe to use asyncio.run() with timeout
+                        async def init_with_timeout():
+                            return await asyncio.wait_for(self._initialize_oauth_server(), timeout=10.0)
+                        
+                        asyncio.run(init_with_timeout())
                         logger.info("OAuth server initialized successfully")
+                        
+                except asyncio.TimeoutError:
+                    logger.error("OAuth server initialization timed out")
+                    raise RuntimeError("OAuth server initialization timed out")
                 except Exception as e:
                     logger.error(f"Failed to initialize OAuth server: {e}")
                     # Don't continue if OAuth is enabled but initialization failed
