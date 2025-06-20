@@ -141,6 +141,30 @@
               "user_context": { 
                 "type": "object",
                 "description": "User context for policy testing. Can include role, permissions, user_id, etc."
+              },
+              "result_contains": { 
+                "description": "Partial match - result must contain these fields/values. For arrays, checks if array contains this item."
+              },
+              "result_not_contains": { 
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "List of field names that should NOT be present in the result."
+              },
+              "result_contains_item": { 
+                "description": "For array results - at least one array item must match this object/value."
+              },
+              "result_contains_all": { 
+                "type": "array",
+                "description": "For array results - all these items must be present (any order)."
+              },
+              "result_length": { 
+                "type": "integer",
+                "minimum": 0,
+                "description": "For array results - array must have exactly this many items."
+              },
+              "result_contains_text": { 
+                "type": "string",
+                "description": "For string results - result must contain this substring."
               }
             },
             "additionalProperties": false
@@ -236,6 +260,30 @@
               "user_context": { 
                 "type": "object",
                 "description": "User context for policy testing. Can include role, permissions, user_id, etc."
+              },
+              "result_contains": { 
+                "description": "Partial match - result must contain these fields/values. For arrays, checks if array contains this item."
+              },
+              "result_not_contains": { 
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "List of field names that should NOT be present in the result."
+              },
+              "result_contains_item": { 
+                "description": "For array results - at least one array item must match this object/value."
+              },
+              "result_contains_all": { 
+                "type": "array",
+                "description": "For array results - all these items must be present (any order)."
+              },
+              "result_length": { 
+                "type": "integer",
+                "minimum": 0,
+                "description": "For array results - array must have exactly this many items."
+              },
+              "result_contains_text": { 
+                "type": "string",
+                "description": "For string results - result must contain this substring."
               }
             },
             "additionalProperties": false

@@ -188,13 +188,19 @@ mxcp test
 mxcp test tool my_tool
 
 # Test with user context for policy testing
-mxcp test tool employee_info --user-context '{"role": "admin", "permissions": ["read", "write"]}'
+mxcp test tool employee_info --user-context '{"role": "admin", "user_id": "admin123"}'
 
-# Test with user context from file
-mxcp test --user-context @test_admin.json
+# Test with context from file
+mxcp test --user-context @contexts/hr_user.json
 
-# Output results in JSON format
+# Run tests with debugging
+mxcp test --debug
+
+# Run all tests in JSON output
 mxcp test --json-output
+
+# Test specific endpoint with user override
+mxcp test resource user_list --user-context '{"permissions": ["user.read", "user.write"]}'
 ```
 
 **User Context in Tests:**

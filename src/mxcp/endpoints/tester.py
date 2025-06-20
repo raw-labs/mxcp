@@ -212,17 +212,15 @@ async def run_tests_with_session(endpoint_type: str, name: str, user_config: Use
                 normalized_result = normalize_result(result, column_names, endpoint_type)
                 logger.info(f"Normalized result: {normalized_result}")
                 
-                # Compare with expected result
-                passed = compare_results(normalized_result, expected_result)
+                # Compare with various assertion types
+                passed, error_msg = compare_results(normalized_result, test_def)
                 
                 status = "passed" if passed else "failed"
-                error = None if passed else "Result does not match expected output"
+                error = error_msg if not passed else None
                 
                 if not passed:
                     has_failed = True
                     logger.error(f"Test failed: {error}")
-                    logger.error(f"Expected: {expected_result}")
-                    logger.error(f"Got: {normalized_result}")
                 
                 test_results.append({
                     "name": test_name,
@@ -307,9 +305,42 @@ def normalize_result(result, column_names, endpoint_type):
         
     # Handle prompt results
     if endpoint_type == "prompt":
-        # Prompts typically return [(messages,)]
+        # Modern prompts return a list of message objects
+        if isinstance(result, list) and len(result) > 0:
+            # Check if this is a list of message objects
+            if all(isinstance(msg, dict) and 'role' in msg for msg in result):
+                # Find the last assistant message
+                for msg in reversed(result):
+                    if msg.get('role') == 'assistant' and 'prompt' in msg:
+                        assistant_response = msg['prompt'].strip()
+                        # Try to parse JSON if the result looks like JSON
+                        if (assistant_response.startswith('[') and assistant_response.endswith(']')) or \
+                           (assistant_response.startswith('{') and assistant_response.endswith('}')):
+                            try:
+                                return json.loads(assistant_response)
+                            except json.JSONDecodeError:
+                                # If JSON parsing fails, return the string as is
+                                pass
+                        return assistant_response
+                # If no assistant message found, return the full result
+                return result
+            
+        # Legacy format: Prompts typically return [(messages,)]
         if isinstance(result, list) and len(result) == 1 and isinstance(result[0], tuple) and len(result[0]) == 1:
-            return result[0][0]  # Extract the messages directly
+            prompt_result = result[0][0]  # Extract the messages directly
+            
+            # Try to parse JSON if the result looks like JSON
+            if isinstance(prompt_result, str):
+                prompt_result = prompt_result.strip()
+                if (prompt_result.startswith('[') and prompt_result.endswith(']')) or \
+                   (prompt_result.startswith('{') and prompt_result.endswith('}')):
+                    try:
+                        return json.loads(prompt_result)
+                    except json.JSONDecodeError:
+                        # If JSON parsing fails, return the string as is
+                        pass
+            
+            return prompt_result
     
     # Handle tool/resource results (list of tuples)
     if isinstance(result, list) and column_names:
@@ -331,37 +362,159 @@ def normalize_result(result, column_names, endpoint_type):
     # Return as is if we can't normalize
     return result
 
-def compare_results(result, expected):
-    """Compare normalized result with expected result"""
-    # Handle None expected result
-    if expected is None:
-        return True
+def compare_results(result, test_def):
+    """Compare result with various assertion types in test definition.
     
-    # For complex objects that can't be JSON serialized (like ndarray),
-    # convert to a more basic representation for comparison
-    def make_serializable(obj):
-        """Convert complex objects to serializable form for comparison"""
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, dict):
-            return {k: make_serializable(v) for k, v in obj.items()}
-        elif isinstance(obj, (list, tuple)):
-            return [make_serializable(item) for item in obj]
+    Returns: (passed: bool, error_message: str or None)
+    """
+    # Exact match with 'result' field (original behavior)
+    if "result" in test_def:
+        expected = test_def["result"]
+        if expected is not None:
+            # For complex objects that can't be JSON serialized (like ndarray),
+            # convert to a more basic representation for comparison
+            def make_serializable(obj):
+                """Convert complex objects to serializable form for comparison"""
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, dict):
+                    return {k: make_serializable(v) for k, v in obj.items()}
+                elif isinstance(obj, (list, tuple)):
+                    return [make_serializable(item) for item in obj]
+                else:
+                    return obj
+            
+            try:
+                # Try to make both objects serializable
+                serializable_result = make_serializable(result)
+                serializable_expected = make_serializable(expected)
+                
+                # Convert both to JSON strings for comparison
+                # Use sort_keys to ensure consistency in dictionary key ordering
+                result_json = json.dumps(serializable_result, sort_keys=True)
+                expected_json = json.dumps(serializable_expected, sort_keys=True)
+                
+                if result_json != expected_json:
+                    return False, f"Result does not match expected output.\nExpected: {expected}\nGot: {result}"
+            except (TypeError, ValueError) as e:
+                # If serialization still fails, fall back to direct comparison
+                logger.warning(f"JSON serialization failed, falling back to direct comparison: {e}")
+                if result != expected:
+                    return False, f"Result does not match expected output.\nExpected: {expected}\nGot: {result}"
+    
+    # Partial object match with 'result_contains'
+    if "result_contains" in test_def:
+        expected_contains = test_def["result_contains"]
+        if isinstance(result, dict) and isinstance(expected_contains, dict):
+            # Check that all expected fields exist with expected values
+            for key, expected_value in expected_contains.items():
+                if key not in result:
+                    return False, f"Expected field '{key}' not found in result"
+                if result[key] != expected_value:
+                    return False, f"Field '{key}' has value {result[key]}, expected {expected_value}"
+        elif isinstance(result, list):
+            # For arrays, support both dict patterns and primitive values
+            if isinstance(expected_contains, dict):
+                # Check if any item contains the expected fields
+                found = False
+                for item in result:
+                    if isinstance(item, dict):
+                        matches = True
+                        for key, expected_value in expected_contains.items():
+                            if key not in item or item[key] != expected_value:
+                                matches = False
+                                break
+                        if matches:
+                            found = True
+                            break
+                if not found:
+                    return False, f"No item in array contains the expected fields: {expected_contains}"
+            else:
+                # For non-dict patterns, check if the value exists in the array
+                if expected_contains not in result:
+                    return False, f"Array does not contain expected value: {expected_contains}"
         else:
-            return obj
+            return False, f"result_contains assertion requires dict or array result, got {type(result)}"
     
-    try:
-        # Try to make both objects serializable
-        serializable_result = make_serializable(result)
-        serializable_expected = make_serializable(expected)
+    # Field exclusion with 'result_not_contains'
+    if "result_not_contains" in test_def:
+        excluded_fields = test_def["result_not_contains"]
+        if isinstance(result, dict):
+            for field in excluded_fields:
+                if field in result:
+                    return False, f"Field '{field}' should not be present in result but was found"
+        else:
+            return False, f"result_not_contains assertion requires dict result, got {type(result)}"
+    
+    # Array contains specific item with 'result_contains_item'
+    if "result_contains_item" in test_def:
+        expected_item = test_def["result_contains_item"]
+        if not isinstance(result, list):
+            return False, f"result_contains_item assertion requires array result, got {type(result)}"
         
-        # Convert both to JSON strings for comparison
-        # Use sort_keys to ensure consistency in dictionary key ordering
-        result_json = json.dumps(serializable_result, sort_keys=True)
-        expected_json = json.dumps(serializable_expected, sort_keys=True)
+        found = False
+        for item in result:
+            if item == expected_item:
+                found = True
+                break
+            # Also support partial match for dict items
+            elif isinstance(item, dict) and isinstance(expected_item, dict):
+                matches = True
+                for key, expected_value in expected_item.items():
+                    if key not in item or item[key] != expected_value:
+                        matches = False
+                        break
+                if matches:
+                    found = True
+                    break
         
-        return result_json == expected_json
-    except (TypeError, ValueError) as e:
-        # If serialization still fails, fall back to direct comparison
-        logger.warning(f"JSON serialization failed, falling back to direct comparison: {e}")
-        return result == expected
+        if not found:
+            return False, f"Array does not contain expected item: {expected_item}"
+    
+    # Array contains all items with 'result_contains_all'
+    if "result_contains_all" in test_def:
+        expected_items = test_def["result_contains_all"]
+        if not isinstance(result, list):
+            return False, f"result_contains_all assertion requires array result, got {type(result)}"
+        
+        for expected_item in expected_items:
+            found = False
+            for item in result:
+                if item == expected_item:
+                    found = True
+                    break
+                # Also support partial match for dict items (like result_contains_item)
+                elif isinstance(item, dict) and isinstance(expected_item, dict):
+                    matches = True
+                    for key, expected_value in expected_item.items():
+                        if key not in item or item[key] != expected_value:
+                            matches = False
+                            break
+                    if matches:
+                        found = True
+                        break
+            if not found:
+                return False, f"Array does not contain expected item: {expected_item}"
+    
+    # Array length check with 'result_length'
+    if "result_length" in test_def:
+        expected_length = test_def["result_length"]
+        if not isinstance(result, list):
+            return False, f"result_length assertion requires array result, got {type(result)}"
+        if len(result) != expected_length:
+            return False, f"Array has {len(result)} items, expected {expected_length}"
+    
+    # String contains with 'result_contains_text'
+    if "result_contains_text" in test_def:
+        expected_text = test_def["result_contains_text"]
+        if not isinstance(result, str):
+            # Try to convert to string for comparison
+            result_str = str(result)
+        else:
+            result_str = result
+        
+        if expected_text not in result_str:
+            return False, f"Result does not contain expected text: '{expected_text}'"
+    
+    # If no assertions are specified, consider the test passed
+    return True, None

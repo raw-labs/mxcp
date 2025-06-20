@@ -14,6 +14,12 @@ class TestDefinition(TypedDict):
     arguments: List[TestArgument]
     result: Optional[object]
     user_context: Optional[dict]  # User context for policy testing
+    result_contains: Optional[object]  # Partial match for objects/arrays
+    result_not_contains: Optional[List[str]]  # Fields that should NOT exist
+    result_contains_item: Optional[object]  # At least one array item matches
+    result_contains_all: Optional[List[object]]  # All items must be present (any order)
+    result_length: Optional[int]  # Array must have specific length
+    result_contains_text: Optional[str]  # Substring match for strings
 
 class TypeDefinition(TypedDict):
     type: str
