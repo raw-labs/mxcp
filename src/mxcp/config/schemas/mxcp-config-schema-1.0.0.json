@@ -79,6 +79,62 @@
       },
       "additionalProperties": false
     },
+    "models": {
+      "type": "object",
+      "description": "Configuration for LLM models used in evals.",
+      "properties": {
+        "default": {
+          "type": "string",
+          "description": "Default model to use when not specified in eval suite.",
+          "enum": ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "gpt-4-turbo", "gpt-4o", "gpt-3.5-turbo"]
+        },
+        "models": {
+          "type": "object",
+          "description": "Model-specific configurations.",
+          "patternProperties": {
+            "^(claude-3-opus|claude-3-sonnet|claude-3-haiku|gpt-4-turbo|gpt-4o|gpt-3.5-turbo)$": {
+              "type": "object",
+              "required": ["type"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["claude", "openai"],
+                  "description": "Provider type for this model."
+                },
+                "api_key": {
+                  "type": "string",
+                  "description": "API key for this model. Use api_key_env for better security."
+                },
+                "api_key_env": {
+                  "type": "string",
+                  "description": "Environment variable containing the API key."
+                },
+                "base_url": {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "Custom API endpoint URL."
+                },
+                "timeout": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 30,
+                  "description": "Request timeout in seconds."
+                },
+                "max_retries": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 3,
+                  "description": "Maximum number of retries for failed requests."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "projects": {
       "type": "object",
       "description": "All configured RAW projects.",

@@ -262,6 +262,58 @@ The lint command analyzes your endpoints and suggests improvements to make them 
 - **Missing parameter examples** to guide LLM usage
 - **Missing type descriptions** in nested structures
 - **Missing tags** for better categorization
+
+### `mxcp evals`
+
+Runs LLM evaluation tests to verify how AI models interact with your endpoints.
+
+> 📖 Learn about writing and running evals in the [Quality & Testing Guide](../guides/quality.md#llm-evaluation-evals).
+
+**Usage:**
+```bash
+mxcp evals [SUITE_NAME] [OPTIONS]
+```
+
+**Arguments:**
+- `SUITE_NAME`: Name of the eval suite to run (optional)
+
+**Options:**
+- `--user-context, -u`: User context as JSON string or @file.json
+- `--model, -m`: Override model to use for evaluation
+- `--profile`: Profile name to use
+- `--json-output`: Output results in JSON format
+- `--debug`: Show detailed debug information
+
+**Examples:**
+```bash
+# Run all eval suites
+mxcp evals
+
+# Run specific eval suite
+mxcp evals customer_analysis
+
+# Override model for testing
+mxcp evals --model gpt-4-turbo
+
+# Run with user context
+mxcp evals --user-context '{"role": "admin", "permissions": ["read:all"]}'
+
+# Load context from file
+mxcp evals --user-context @contexts/analyst.json
+
+# JSON output for CI/CD
+mxcp evals --json-output
+```
+
+**Description:**
+The evals command executes evaluation tests that verify LLM behavior. Unlike regular tests that execute endpoints directly, evals:
+
+1. Send prompts to an LLM
+2. Verify the LLM calls appropriate tools
+3. Check that responses contain expected information
+4. Ensure safety by verifying destructive operations aren't called inappropriately
+
+Eval files should have the suffix `-evals.yml` or `.evals.yml` and are automatically discovered in your repository.
 - **Missing default values** on optional parameters
 - **Missing behavioral annotations** on tools
 

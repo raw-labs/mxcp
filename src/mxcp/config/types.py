@@ -126,6 +126,18 @@ class UserAuthConfig(TypedDict, total=False):
     authorization: Optional[UserAuthorizationConfig]
     persistence: Optional[UserAuthPersistenceConfig]
 
+class UserModelConfig(TypedDict):
+    type: Literal["claude", "openai"]
+    api_key: Optional[str]
+    api_key_env: Optional[str]  # Environment variable containing API key
+    base_url: Optional[str]  # For custom endpoints
+    timeout: Optional[int]  # Request timeout in seconds
+    max_retries: Optional[int]
+    
+class UserModelsConfig(TypedDict, total=False):
+    default: Optional[str]  # Default model to use
+    models: Optional[Dict[str, UserModelConfig]]  # Model configurations
+
 class UserProfileConfig(TypedDict, total=False):
     secrets: Optional[List[UserSecretDefinition]]
     plugin: Optional[UserPluginConfig]
@@ -139,3 +151,4 @@ class UserConfig(TypedDict):
     projects: Dict[str, UserProjectConfig]
     vault: Optional[UserVaultConfig]
     transport: Optional[UserTransportConfig]
+    models: Optional[UserModelsConfig]
