@@ -103,11 +103,7 @@
                 },
                 "api_key": {
                   "type": "string",
-                  "description": "API key for this model. Use api_key_env for better security."
-                },
-                "api_key_env": {
-                  "type": "string",
-                  "description": "Environment variable containing the API key."
+                  "description": "API key for this model."
                 },
                 "base_url": {
                   "type": "string",

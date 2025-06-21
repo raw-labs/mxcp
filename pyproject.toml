@@ -24,7 +24,8 @@ dependencies = [
     "posthog>=3.0.0",  # For anonymous usage analytics
     "dbt-core>=1.6.0",  # dbt core for data transformations
     "dbt-duckdb>=1.6.0",  # dbt DuckDB adapter
-    "cel-python>=0.2.0"  # Common Expression Language for policy enforcement
+    "cel-python>=0.2.0",  # Common Expression Language for policy enforcement
+    "httpx>=0.25.0"  # For calling LLM APIs in evals
 ]
 
 [project.scripts]
@@ -51,13 +52,14 @@ vault = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["mxcp", "mxcp.audit", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.server", "mxcp.auth", "mxcp.drift", "mxcp.drift.schemas", "mxcp.endpoints", "mxcp.endpoints.schemas", "mxcp.engine", "mxcp.plugins", "mxcp.policies"]
+packages = ["mxcp", "mxcp.audit", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.server", "mxcp.auth", "mxcp.drift", "mxcp.drift.schemas", "mxcp.endpoints", "mxcp.endpoints.schemas", "mxcp.engine", "mxcp.plugins", "mxcp.policies", "mxcp.evals", "mxcp.evals.schemas"]
 include-package-data = true
 
 [tool.setuptools.package-data]
 "mxcp.config.schemas" = ["*.json"]
 "mxcp.endpoints.schemas" = ["*.json"]
 "mxcp.drift.schemas" = ["*.json"]
+"mxcp.evals.schemas" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

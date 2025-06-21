@@ -868,13 +868,13 @@ models:
   models:
     claude-3-opus:
       type: claude
-      api_key_env: ANTHROPIC_API_KEY  # Recommended: use env var
+      api_key: ${ANTHROPIC_API_KEY}
       timeout: 60
       max_retries: 3
     
     gpt-4-turbo:
       type: openai
-      api_key_env: OPENAI_API_KEY
+      api_key: ${OPENAI_API_KEY}
       base_url: https://api.openai.com/v1  # Optional custom endpoint
       timeout: 30
 

@@ -129,7 +129,6 @@ class UserAuthConfig(TypedDict, total=False):
 class UserModelConfig(TypedDict):
     type: Literal["claude", "openai"]
     api_key: Optional[str]
-    api_key_env: Optional[str]  # Environment variable containing API key
     base_url: Optional[str]  # For custom endpoints
     timeout: Optional[int]  # Request timeout in seconds
     max_retries: Optional[int]
