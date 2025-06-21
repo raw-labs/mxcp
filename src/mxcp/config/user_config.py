@@ -268,7 +268,7 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
             config["projects"][project_name]["profiles"] = {}
             
         if profile_name not in config["projects"][project_name]["profiles"]:
-            logger.warning(f"Project '{project_name}' and/or profile '{profile_name}' not found in user config at {path}, assuming empty configuration")
+            logger.debug(f"Project '{project_name}' and/or profile '{profile_name}' not found in user config at {path}, assuming empty configuration")
             config["projects"][project_name]["profiles"][profile_name] = {
                 "secrets": [],
                 "plugin": {
