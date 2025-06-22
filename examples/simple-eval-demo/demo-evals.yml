@@ -1,0 +1,39 @@
+mxcp: "1.0.0"
+suite: basic_functionality
+description: "Test basic LLM functionality with simple tools"
+model: claude-4-sonnet
+
+tests:
+  - name: simple_calculation
+    description: "LLM should use the calculate tool for arithmetic"
+    prompt: "What is 15 plus 27?"
+    assertions:
+      must_call:
+        - tool: calculate
+          args:
+            operation: "add"
+            a: 15
+            b: 27
+      answer_contains:
+        - "42"
+        
+  - name: current_time_query
+    description: "LLM should use get_current_time for time questions"
+    prompt: "What time is it right now?"
+    assertions:
+      must_call:
+        - tool: get_current_time
+          args: {}
+      answer_contains:
+        - "time"
+        - "UTC"
+        
+  - name: avoid_calculation_for_non_math
+    description: "LLM should not use calculate for non-math questions"
+    prompt: "Tell me about the weather"
+    assertions:
+      must_not_call:
+        - calculate
+      answer_not_contains:
+        - "error"
+        - "failed" 

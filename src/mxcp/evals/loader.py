@@ -2,19 +2,12 @@ from pathlib import Path
 import yaml
 from typing import Dict, List, Optional, Tuple
 from mxcp.evals.types import EvalSuite
+from mxcp.config.site_config import find_repo_root
 import json
 from jsonschema import validate
 import logging
 
 logger = logging.getLogger(__name__)
-
-def find_repo_root() -> Path:
-    """Find the repository root (where mxcp-site.yml is)"""
-    current = Path.cwd()
-    for parent in [current] + list(current.parents):
-        if (parent / "mxcp-site.yml").exists():
-            return parent
-    raise FileNotFoundError("mxcp-site.yml not found in current directory or any parent directory")
 
 def discover_eval_files() -> List[Tuple[Path, Optional[EvalSuite], Optional[str]]]:
     """Discover all eval files in the repository.

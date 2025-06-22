@@ -20,14 +20,12 @@
     },
     "model": {
       "type": "string",
-      "description": "Optional model to use for this suite (e.g., 'claude-3-opus')",
+      "description": "Optional model to use for this suite (e.g., 'claude-4-opus')",
       "enum": [
-        "claude-3-opus",
-        "claude-3-sonnet", 
-        "claude-3-haiku",
-        "gpt-4-turbo",
+        "claude-4-opus",
+        "claude-4-sonnet",
         "gpt-4o",
-        "gpt-3.5-turbo"
+        "gpt-4.1"
       ]
     },
     "tests": {

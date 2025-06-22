@@ -86,13 +86,13 @@
         "default": {
           "type": "string",
           "description": "Default model to use when not specified in eval suite.",
-          "enum": ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "gpt-4-turbo", "gpt-4o", "gpt-3.5-turbo"]
+          "enum": ["claude-4-sonnet", "claude-4-opus", "gpt-4o", "gpt-4.1"]
         },
         "models": {
           "type": "object",
           "description": "Model-specific configurations.",
           "patternProperties": {
-            "^(claude-3-opus|claude-3-sonnet|claude-3-haiku|gpt-4-turbo|gpt-4o|gpt-3.5-turbo)$": {
+            "^(claude-4-sonnet|claude-4-opus|gpt-4o|gpt-4\\.1)$": {
               "type": "object",
               "required": ["type"],
               "properties": {

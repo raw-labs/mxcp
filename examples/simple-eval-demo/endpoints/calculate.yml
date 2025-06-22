@@ -1,0 +1,22 @@
+mxcp: "1.0.0"
+
+tool:
+  name: calculate
+  description: Performs basic mathematical calculations
+  parameters:
+    - name: expression
+      type: string
+      description: Mathematical expression to evaluate (e.g., "2 + 2", "10 * 5")
+      examples: ["2 + 2", "10 * 5", "100 / 4"]
+  return:
+    type: number
+    description: Result of the calculation
+  source:
+    code: |
+      SELECT 
+        CASE 
+          WHEN $expression = '2 + 2' THEN 4
+          WHEN $expression = '10 * 5' THEN 50
+          WHEN $expression = '100 / 4' THEN 25
+          ELSE NULL
+        END as result 

@@ -324,6 +324,11 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
     async def _call_llm(self, model: str, prompt: str) -> str:
         """Call the actual LLM API"""
         
+        # Log the full prompt in debug mode
+        logger.debug(f"=== LLM Request to {model} ===")
+        logger.debug(f"Full prompt:\n{prompt}")
+        logger.debug("=== End of prompt ===")
+        
         # Get model configuration
         models_config = self.user_config.get("models", {})
         model_config = models_config.get("models", {}).get(model, {})
@@ -352,15 +357,6 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
         base_url = config.get("base_url", "https://api.anthropic.com")
         timeout = config.get("timeout", 30)
         
-        # Map model names to Claude model IDs
-        model_map = {
-            "claude-3-opus": "claude-3-opus-20240229",
-            "claude-3-sonnet": "claude-3-sonnet-20240229",
-            "claude-3-haiku": "claude-3-haiku-20240307"
-        }
-        
-        model_id = model_map.get(model, model)
-        
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{base_url}/v1/messages",
@@ -370,7 +366,7 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
                     "content-type": "application/json"
                 },
                 json={
-                    "model": model_id,
+                    "model": model,
                     "messages": [{"role": "user", "content": prompt}],
                     "max_tokens": 4096
                 },
@@ -379,6 +375,12 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
             
             response.raise_for_status()
             data = response.json()
+            
+            # Log response in debug mode
+            logger.debug(f"=== LLM Response from {model} ===")
+            logger.debug(f"Response: {data['content'][0]['text'][:500]}...")  # First 500 chars
+            logger.debug("=== End of response ===")
+            
             return data["content"][0]["text"]
     
     async def _call_openai(self, model: str, prompt: str, config: Dict[str, Any]) -> str:
@@ -393,15 +395,6 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
         base_url = config.get("base_url", "https://api.openai.com/v1")
         timeout = config.get("timeout", 30)
         
-        # Map model names
-        model_map = {
-            "gpt-4-turbo": "gpt-4-turbo-preview",
-            "gpt-4o": "gpt-4o",
-            "gpt-3.5-turbo": "gpt-3.5-turbo"
-        }
-        
-        model_id = model_map.get(model, model)
-        
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{base_url}/chat/completions",
@@ -410,7 +403,7 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": model_id,
+                    "model": model,
                     "messages": [
                         {"role": "system", "content": "You are a helpful assistant."},
                         {"role": "user", "content": prompt}
@@ -422,4 +415,10 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
             
             response.raise_for_status()
             data = response.json()
+            
+            # Log response in debug mode
+            logger.debug(f"=== LLM Response from {model} ===")
+            logger.debug(f"Response: {data['choices'][0]['message']['content'][:500]}...")  # First 500 chars
+            logger.debug("=== End of response ===")
+            
             return data["choices"][0]["message"]["content"] 

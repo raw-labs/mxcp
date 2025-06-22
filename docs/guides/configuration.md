@@ -427,34 +427,29 @@ Add model configuration to your user config file (`~/.mxcp/config.yml`):
 
 ```yaml
 models:
-  default: "claude-3-haiku"  # Default model to use for evals
+  default: "claude-4-sonnet"  # Default model to use for evals
   models:
-    claude-3-opus:
+    claude-4-opus:
       type: "claude"
       api_key: "${ANTHROPIC_API_KEY}"  # Environment variable containing API key
       timeout: 60  # Request timeout in seconds
       max_retries: 3  # Number of retries on failure
     
-    claude-3-sonnet:
+    claude-4-sonnet:
       type: "claude"
       api_key: "${ANTHROPIC_API_KEY}"
       timeout: 30
     
-    claude-3-haiku:
-      type: "claude"
-      api_key: "${ANTHROPIC_API_KEY}"
-      timeout: 20
-    
-    gpt-4-turbo:
+    gpt-4o:
       type: "openai"
       api_key: "${OPENAI_API_KEY}"
       base_url: "https://api.openai.com/v1"  # Optional custom endpoint
       timeout: 45
     
-    gpt-3.5-turbo:
+    gpt-4.1:
       type: "openai"
       api_key: "${OPENAI_API_KEY}"
-      timeout: 20
+      timeout: 30
 ```
 
 ### Model Configuration Options
@@ -462,7 +457,6 @@ models:
 - **default**: The model to use when not specified in eval suite or CLI
 - **models**: Dictionary of model configurations
   - **type**: Either "claude" or "openai"
-  - ****: Environment variable containing the API key (recommended)
   - **api_key**: API key (you can use environment variables references)
   - **base_url**: Custom API endpoint (optional, for OpenAI-compatible services)
   - **timeout**: Request timeout in seconds
