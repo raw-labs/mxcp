@@ -154,14 +154,14 @@ async def run_tests_with_session(endpoint_type: str, name: str, user_config: Use
         logger.info(f"Found {len(tests)} tests")
         
         if not tests:
-            logger.warning("No tests defined")
             return {
                 "status": "ok",
                 "tests_run": 0,
-                "message": "No tests defined"
+                "no_tests": True,
+                "tests": []
             }
             
-        # Extract column names from return schema 
+        # Extract column names from return schema
         column_names = extract_column_names(endpoint_def, endpoint_type)
         logger.info(f"Column names for results: {column_names}")
         

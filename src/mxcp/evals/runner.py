@@ -2,13 +2,14 @@ from typing import Dict, Any, Optional, List
 from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
 from mxcp.auth.providers import UserContext
-from mxcp.evals.loader import discover_eval_files, load_eval_suite
+from mxcp.evals.loader import discover_eval_files, load_eval_suite, find_repo_root
 from mxcp.evals.types import EvalSuite, EvalTest
 from mxcp.evals.executor import LLMExecutor
 from mxcp.engine.duckdb_session import DuckDBSession
 import logging
 import time
 import asyncio
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +193,7 @@ async def run_all_evals(user_config: UserConfig, site_config: SiteConfig,
         if error:
             suites.append({
                 "suite": str(file_path),
+                "path": str(file_path.relative_to(find_repo_root()) if file_path else "unknown"),
                 "status": "error",
                 "error": error
             })
@@ -203,8 +205,15 @@ async def run_all_evals(user_config: UserConfig, site_config: SiteConfig,
                 cli_user_context, override_model
             )
             
+            # Get relative path
+            try:
+                relative_path = str(file_path.relative_to(find_repo_root()))
+            except:
+                relative_path = str(file_path)
+            
             suites.append({
                 "suite": suite_name,
+                "path": relative_path,
                 "status": "passed" if result.get("all_passed", False) else "failed",
                 "tests": result.get("tests", []),
                 "error": result.get("error")

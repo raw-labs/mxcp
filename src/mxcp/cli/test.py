@@ -71,57 +71,62 @@ def format_test_results(results, debug: bool = False):
     if failed_count > 0:
         output.append(f"   • {click.style(f'{failed_count} failed', fg='red')}")
     
-    # Group by status
-    passed_endpoints = []
-    failed_endpoints = []
-    
-    for endpoint_result in endpoints:
-        endpoint = endpoint_result.get("endpoint", "unknown")
-        test_results = endpoint_result.get("test_results", {})
-        endpoint_status = test_results.get("status", "unknown")
-        message = test_results.get("message")
-        tests = test_results.get("tests", [])
-        
-        if endpoint_status == "ok":
-            passed_endpoints.append((endpoint, tests))
-        else:
-            failed_endpoints.append((endpoint, message, tests))
-    
     # Show failed endpoints first
-    if failed_endpoints:
+    if failed_count > 0:
         output.append(f"\n{click.style('❌ Failed tests:', fg='red', bold=True)}")
-        for endpoint, message, tests in sorted(failed_endpoints, key=lambda x: x[0]):
-            output.append(f"\n  {click.style('✗', fg='red')} {click.style(endpoint, fg='yellow')}")
-            if message:
-                output.append(f"    {click.style('Error:', fg='red')} {message}")
-            for test in tests:
-                test_name = test.get("name", "Unnamed test")
-                test_status = test.get("status", "unknown")
-                test_time = test.get("time", 0)
-                if test_status != "passed":
-                    output.append(f"    {click.style('✗', fg='red')} {test_name} {click.style(f'({test_time:.2f}s)', fg='bright_black')}")
-                    if test.get("error"):
-                        output.append(f"      {click.style('Error:', fg='red')} {test['error']}")
-                    if debug and hasattr(test["error"], "__cause__") and test["error"].__cause__:
-                        output.append(f"      {click.style('Cause:', fg='yellow')} {str(test['error'].__cause__)}")
+        for endpoint_data in sorted(endpoints, key=lambda x: x["endpoint"]):
+            endpoint = endpoint_data.get("endpoint", "unknown")
+            path = endpoint_data.get("path", "")
+            test_results = endpoint_data.get("test_results", {})
+            
+            if test_results.get("status") != "ok":
+                output.append(f"\n  {click.style('✗', fg='red')} {click.style(endpoint, fg='yellow')} ({path})")
+                
+                if test_results.get("message"):
+                    output.append(f"    {click.style('Error:', fg='red')} {test_results['message']}")
+                
+                tests = test_results.get("tests", [])
+                if test_results.get("no_tests"):
+                    output.append(f"    {click.style('(No tests)', fg='bright_black')}")
                 else:
-                    output.append(f"    {click.style('✓', fg='green')} {test_name} {click.style(f'({test_time:.2f}s)', fg='bright_black')}")
+                    for test in tests:
+                        test_name = test.get("name", "Unnamed test")
+                        test_status = test.get("status", "unknown")
+                        test_time = test.get("time", 0)
+                        if test_status != "passed":
+                            output.append(f"    {click.style('✗', fg='red')} {test_name} {click.style(f'({test_time:.2f}s)', fg='bright_black')}")
+                            if test.get("error"):
+                                output.append(f"      {click.style('Error:', fg='red')} {test['error']}")
+                            if debug and hasattr(test.get("error"), "__cause__") and test["error"].__cause__:
+                                output.append(f"      {click.style('Cause:', fg='yellow')} {str(test['error'].__cause__)}")
+                        else:
+                            output.append(f"    {click.style('✓', fg='green')} {test_name} {click.style(f'({test_time:.2f}s)', fg='bright_black')}")
     
     # Then show passed endpoints
-    if passed_endpoints:
+    if passed_count > 0:
         output.append(f"\n{click.style('✅ Passed tests:', fg='green', bold=True)}")
-        for endpoint, tests in sorted(passed_endpoints, key=lambda x: x[0]):
-            output.append(f"\n  {click.style('✓', fg='green')} {click.style(endpoint, fg='yellow')}")
-            for test in tests:
-                test_name = test.get("name", "Unnamed test")
-                test_status = test.get("status", "unknown")
-                test_time = test.get("time", 0)
-                if test_status == "passed":
-                    output.append(f"    {click.style('✓', fg='green')} {test_name} {click.style(f'({test_time:.2f}s)', fg='bright_black')}")
+        for endpoint_data in sorted(endpoints, key=lambda x: x["endpoint"]):
+            endpoint = endpoint_data.get("endpoint", "unknown")
+            path = endpoint_data.get("path", "")
+            test_results = endpoint_data.get("test_results", {})
+            
+            if test_results.get("status") == "ok":
+                output.append(f"\n  {click.style('✓', fg='green')} {click.style(endpoint, fg='yellow')} ({path})")
+                
+                tests = test_results.get("tests", [])
+                if test_results.get("no_tests"):
+                    output.append(f"    {click.style('(No tests)', fg='bright_black')}")
                 else:
-                    output.append(f"    {click.style('✗', fg='red')} {test_name} {click.style(f'({test_time:.2f}s)', fg='bright_black')}")
-                    if test.get("error"):
-                        output.append(f"      {click.style('Error:', fg='red')} {test['error']}")
+                    for test in tests:
+                        test_name = test.get("name", "Unnamed test")
+                        test_status = test.get("status", "unknown")
+                        test_time = test.get("time", 0)
+                        if test_status == "passed":
+                            output.append(f"    {click.style('✓', fg='green')} {test_name} {click.style(f'({test_time:.2f}s)', fg='bright_black')}")
+                        else:
+                            output.append(f"    {click.style('✗', fg='red')} {test_name} {click.style(f'({test_time:.2f}s)', fg='bright_black')}")
+                            if test.get("error"):
+                                output.append(f"      {click.style('Error:', fg='red')} {test['error']}")
     
     # Summary message
     if failed_count == 0:

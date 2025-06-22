@@ -130,7 +130,8 @@ def format_eval_results(results: Dict[str, Any], debug: bool = False) -> str:
             for suite in failed:
                 tests = suite.get("tests", [])
                 suite_name = suite['suite']
-                output.append(f"\n  {click.style('✗', fg='red')} {click.style(suite_name, fg='yellow')}")
+                path = suite.get('path', '')
+                output.append(f"\n  {click.style('✗', fg='red')} {click.style(suite_name, fg='yellow')} ({path})")
                 
                 # Show individual tests
                 for test in tests:
@@ -151,7 +152,8 @@ def format_eval_results(results: Dict[str, Any], debug: bool = False) -> str:
             for suite in passed:
                 tests = suite.get("tests", [])
                 suite_name = suite['suite']
-                output.append(f"\n  {click.style('✓', fg='green')} {click.style(suite_name, fg='yellow')}")
+                path = suite.get('path', '')
+                output.append(f"\n  {click.style('✓', fg='green')} {click.style(suite_name, fg='yellow')} ({path})")
                 
                 # Show individual tests
                 for test in tests:
