@@ -100,7 +100,7 @@ MXCP provides comprehensive enterprise capabilities across security, quality, an
 ### Operations & Monitoring
 - **[Drift Detection](https://github.com/raw-labs/mxcp/blob/main/docs/features/drift-detection.md)** - Schema change monitoring
 - **[dbt Integration](https://github.com/raw-labs/mxcp/blob/main/docs/guides/integrations.md#dbt-integration)** - Native data transformation
-- **Command-Line Operations** - Direct endpoint execution and monitoring
+- **[Command-Line Operations](https://github.com/raw-labs/mxcp/blob/main/docs/reference/cli.md)** - Direct endpoint execution and monitoring
 
 👉 **[See all features](https://github.com/raw-labs/mxcp/blob/main/docs/features/overview.md)** for a complete overview of MXCP's capabilities.
 
