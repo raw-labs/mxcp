@@ -1043,4 +1043,16 @@ The authentication system is designed to be extensible. Future OAuth providers c
 1. Implementing the `ExternalOAuthHandler` interface in a new provider file
 2. Adding provider-specific configuration to the schema
 3. Updating the `create_oauth_handler` factory function
-4. Adding documentation following the same structure as existing providers 
+4. Adding documentation following the same structure as existing providers
+
+## See Also
+
+- **[Policy Enforcement](../features/policies.md)** - Control access to endpoints based on user context
+- **[Audit Logging](../features/auditing.md)** - Track authentication events and access attempts
+- **[Testing with User Context](quality.md#testing-policy-protected-endpoints)** - Test authenticated endpoints
+- **[Configuration Guide](configuration.md)** - Complete configuration reference
+- **[Features Overview](../features/overview.md)** - Explore all MXCP capabilities
+
+---
+
+*Ready to secure your MXCP server? Start with the [Quickstart Guide](../getting-started/quickstart.md) and add authentication as needed.*

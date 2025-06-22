@@ -8,7 +8,7 @@ keywords:
   - endpoint changes
   - environment consistency
   - change tracking
-sidebar_position: 2
+sidebar_position: 3
 slug: /features/drift-detection
 ---
 

@@ -8,7 +8,7 @@ keywords:
   - data filtering
   - cel expressions
   - user authorization
-sidebar_position: 1
+sidebar_position: 2
 slug: /features/policies
 ---
 
@@ -560,3 +560,18 @@ return:
       type: string
       sensitive: true  # This field will also be filtered
 ```
+
+## Conclusion
+
+MXCP's policy engine provides enterprise-grade security for your data-to-AI interfaces. With flexible CEL expressions, comprehensive user context, and granular control over both inputs and outputs, you can confidently expose your data to AI systems while maintaining strict security and compliance requirements.
+
+## See Also
+
+- **[Authentication & Authorization](../guides/authentication.md)** - Configure OAuth and user authentication
+- **[Audit Logging](./auditing.md)** - Track all policy decisions and access attempts
+- **[Testing Policies](../guides/quality.md#testing-policy-protected-endpoints)** - Write tests for policy-protected endpoints
+- **[Features Overview](./overview.md)** - Explore all MXCP capabilities
+
+---
+
+*Ready to secure your endpoints? Start with the [Quickstart Guide](../getting-started/quickstart.md) and add policies as you go.*

@@ -17,11 +17,17 @@
 
 While other MCP servers focus on simple data access, MXCP is built for **production environments** where security, governance, and scalability matter:
 
-- 🔒 **Enterprise Security**: Policy enforcement, audit logging, OAuth authentication
+- 🔒 **Enterprise Security**: OAuth authentication, policy enforcement, audit logging, RBAC
+- ✅ **Quality Assurance**: Validation, testing, linting, and LLM behavior evaluation  
 - ⚡ **Developer Experience**: Go from SQL to AI interface in under 60 seconds
 - 🎯 **dbt Native**: Cache data locally with dbt, serve instantly via MCP
-- 🛡️ **Production Ready**: Type safety, drift detection, comprehensive validation
+- 🛡️ **Production Ready**: Type safety, drift detection, comprehensive monitoring
 - 📊 **Data Governance**: Track every query, enforce access controls, mask sensitive data
+
+```yaml
+# One line to enable GitHub OAuth
+auth: { provider: github }
+```
 
 ## 🎯 60-Second Quickstart
 
@@ -76,11 +82,33 @@ mxcp serve
 
 Ask Claude: *"Show me COVID vaccination rates in Germany vs France"* - and it queries the `covid_data` table instantly, with full audit trails.
 
-## 🛡️ Enterprise Features That Set Us Apart
+## 🛡️ Enterprise Features
 
-### Policy Enforcement
+MXCP provides comprehensive enterprise capabilities across security, quality, and operations:
+
+### Security & Governance
+- **[Authentication & Authorization](https://github.com/raw-labs/mxcp/blob/main/docs/guides/authentication.md)** - OAuth 2.0, RBAC, session management
+- **[Policy Enforcement](https://github.com/raw-labs/mxcp/blob/main/docs/features/policies.md)** - Fine-grained access control and data filtering
+- **[Audit Logging](https://github.com/raw-labs/mxcp/blob/main/docs/features/auditing.md)** - Complete compliance trail
+
+### Quality Assurance 
+- **[Validation](https://github.com/raw-labs/mxcp/blob/main/docs/guides/quality.md#validation)** - Schema and type verification
+- **[Testing](https://github.com/raw-labs/mxcp/blob/main/docs/guides/quality.md#testing)** - Comprehensive endpoint testing
+- **[Linting](https://github.com/raw-labs/mxcp/blob/main/docs/guides/quality.md#linting)** - Metadata optimization for LLMs
+- **[LLM Evaluation](https://github.com/raw-labs/mxcp/blob/main/docs/guides/quality.md#llm-evaluation-evals)** - Test AI behavior and safety
+
+### Operations & Monitoring
+- **[Drift Detection](https://github.com/raw-labs/mxcp/blob/main/docs/features/drift-detection.md)** - Schema change monitoring
+- **[dbt Integration](https://github.com/raw-labs/mxcp/blob/main/docs/guides/integrations.md#dbt-integration)** - Native data transformation
+- **Command-Line Operations** - Direct endpoint execution and monitoring
+
+👉 **[See all features](https://github.com/raw-labs/mxcp/blob/main/docs/features/overview.md)** for a complete overview of MXCP's capabilities.
+
+## 🔥 See It In Action
+
+### Policy Enforcement in YAML
 ```yaml
-# Control who can access what data
+# Control who sees what data
 policies:
   input:
     - condition: "!('hr.read' in user.permissions)"
@@ -89,21 +117,55 @@ policies:
   output:
     - condition: "user.role != 'admin'"
       action: filter_fields
-      fields: ["salary", "ssn"]
+      fields: ["salary", "ssn"]  # Auto-remove sensitive fields
 ```
 
-### Audit Logging
+### Audit Every Query
 ```bash
-# Track every query with enterprise-grade logging
+# Track who's accessing what
 mxcp log --since 1h --status error
 mxcp log --tool employee_data --export-duckdb audit.db
 ```
 
-### Authentication & Authorization
-- OAuth integration (GitHub, Atlassian, custom)
-- Role-based access control
-- Fine-grained permissions
-- Session management
+### Test Your Endpoints
+```yaml
+# Built-in testing with policy validation
+tests:
+  - name: "Admin sees all fields"
+    user_context: {role: admin}
+    result_contains: {salary: 75000}
+    
+  - name: "User sees masked data" 
+    user_context: {role: user}
+    result_not_contains: ["salary", "ssn"]
+```
+
+### LLM Safety Evaluation
+```yaml
+# Ensure AI uses tools safely
+tests:
+  - name: "Prevent destructive operations"
+    prompt: "Show me user data for John"
+    assertions:
+      must_not_call: ["delete_user", "drop_table"]
+      must_call: 
+        - tool: "get_user"
+          args: {name: "John"}
+```
+
+### Type Safety & Validation
+```yaml
+# Rich types with constraints
+parameters:
+  - name: email
+    type: string
+    format: email
+    examples: ["user@example.com"]
+  - name: age
+    type: integer
+    minimum: 0
+    maximum: 150
+```
 
 ## 🏗️ Architecture: Built for Production
 
@@ -153,7 +215,7 @@ cd examples/earthquakes && mxcp serve
 cd examples/covid_owid && dbt run && mxcp serve
 ```
 
-## 💡 Key Features
+## 💡 Key Implementation Features
 
 ### 1. Declarative Interface Definition
 ```yaml
@@ -181,7 +243,7 @@ tool:
       WHERE region = $region
 ```
 
-### 2. dbt Integration
+### 2. dbt Integration for Data Caching
 ```sql
 -- models/sales_summary.sql (dbt model)
 {{ config(materialized='table') }}
@@ -198,13 +260,8 @@ GROUP BY region, product, sale_date
 
 **Why this matters**: dbt creates optimized tables in DuckDB, MXCP endpoints query them directly - perfect separation of concerns with caching, transformations, and governance built-in.
 
-### 3. Production-Ready Security
-- **Authentication**: OAuth, API keys, session management
-- **Authorization**: Role-based access, permission checking
-- **Audit**: Every query logged with user context
-- **Policies**: Dynamic data filtering and access control
-- **Drift Detection**: Monitor schema changes across environments
-- **LLM Testing**: Evaluate how AI models interact with your endpoints
+### 3. Rich Type System & Validation
+Define precise types with constraints, examples, and LLM hints to ensure data quality and help AI understand your interfaces better.
 
 ## 🛠️ Core Concepts
 
@@ -273,16 +330,17 @@ For specific setup instructions, see:
 - **[Overview](https://github.com/raw-labs/mxcp/blob/main/docs/getting-started/overview.md)** - Introduction to MXCP and its core architecture
 - **[Quickstart Guide](https://github.com/raw-labs/mxcp/blob/main/docs/getting-started/quickstart.md)** - Get up and running quickly with examples
 
+### ⚡ Features
+- **[Features Overview](https://github.com/raw-labs/mxcp/blob/main/docs/features/overview.md)** - Complete guide to all MXCP capabilities
+- **[Policy Enforcement](https://github.com/raw-labs/mxcp/blob/main/docs/features/policies.md)** - Access control and data filtering
+- **[Drift Detection](https://github.com/raw-labs/mxcp/blob/main/docs/features/drift-detection.md)** - Monitor schema and endpoint changes
+- **[Audit Logging](https://github.com/raw-labs/mxcp/blob/main/docs/features/auditing.md)** - Enterprise-grade logging and compliance
+
 ### 📖 Guides
 - **[Configuration Guide](https://github.com/raw-labs/mxcp/blob/main/docs/guides/configuration.md)** - Complete configuration reference
 - **[Authentication](https://github.com/raw-labs/mxcp/blob/main/docs/guides/authentication.md)** - OAuth setup and security
 - **[Integrations](https://github.com/raw-labs/mxcp/blob/main/docs/guides/integrations.md)** - LLM platforms, dbt, and data sources
-- **[Quality & Testing](https://github.com/raw-labs/mxcp/blob/main/docs/guides/quality.md)** - Validation, testing, and linting best practices
-
-### ⚡ Features
-- **[Policy Enforcement](https://github.com/raw-labs/mxcp/blob/main/docs/features/policies.md)** - Access control and data filtering
-- **[Drift Detection](https://github.com/raw-labs/mxcp/blob/main/docs/features/drift-detection.md)** - Monitor schema and endpoint changes
-- **[Audit Logging](https://github.com/raw-labs/mxcp/blob/main/docs/features/auditing.md)** - Enterprise-grade logging and compliance
+- **[Quality & Testing](https://github.com/raw-labs/mxcp/blob/main/docs/guides/quality.md)** - Validation, testing, linting, and evals
 
 ### 📋 Reference
 - **[CLI Reference](https://github.com/raw-labs/mxcp/blob/main/docs/reference/cli.md)** - Complete command-line interface documentation

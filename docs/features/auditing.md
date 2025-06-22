@@ -8,7 +8,7 @@ keywords:
   - usage tracking
   - jsonl logs
   - enterprise security
-sidebar_position: 3
+sidebar_position: 4
 slug: /features/auditing
 ---
 
