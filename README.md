@@ -225,16 +225,34 @@ your-project/
 ```
 
 ### CLI Commands
+
+#### 🚀 Core Commands
 ```bash
-mxcp serve           # Start production MCP server
 mxcp init            # Initialize new project
+mxcp serve           # Start production MCP server
 mxcp list            # List all endpoints
+```
+
+#### ✅ Quality Assurance
+```bash
 mxcp validate        # Check types, SQL, and references
-mxcp test            # Run endpoint tests
-mxcp evals           # Run LLM evaluation tests
+mxcp test            # Run endpoint tests  
+mxcp lint            # Improve metadata for LLM usage
+mxcp evals           # Test how AI models use your endpoints
+```
+
+#### 🔄 Data Management
+```bash
 mxcp dbt run         # Run dbt transformations
-mxcp log             # Query audit logs
 mxcp drift-check     # Check for schema changes
+mxcp drift-snapshot  # Create drift detection baseline
+```
+
+#### 🔍 Operations & Monitoring
+```bash
+mxcp log             # Query audit logs
+mxcp query           # Execute endpoints directly
+mxcp run             # Run a specific endpoint
 ```
 
 ## 🔌 LLM Integration

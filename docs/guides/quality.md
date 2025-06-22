@@ -14,15 +14,18 @@ slug: /guides/quality
 
 # Quality & Testing Guide
 
-This guide covers best practices for ensuring high-quality endpoints in MXCP through validation, testing, and linting. Well-tested endpoints with comprehensive metadata provide better experiences for both developers and LLMs.
+This guide covers best practices for ensuring high-quality endpoints in MXCP through validation, testing, linting, and LLM evaluation. Well-tested endpoints with comprehensive metadata provide better experiences for both developers and LLMs.
 
 ## Overview
 
-MXCP provides three complementary tools for endpoint quality:
+MXCP provides a comprehensive quality assurance toolkit with four complementary tools:
 
 1. **Validation** (`mxcp validate`) - Ensures endpoints are structurally correct
-2. **Testing** (`mxcp test`) - Verifies endpoints work as expected
+2. **Testing** (`mxcp test`) - Verifies endpoints work as expected with direct execution
 3. **Linting** (`mxcp lint`) - Suggests metadata improvements for better LLM performance
+4. **Evals** (`mxcp evals`) - Tests how AI models interact with your endpoints
+
+Together, these tools help you build reliable, well-documented endpoints that both humans and AI can use effectively. While validation, testing, and linting focus on the endpoints themselves, evals ensure that LLMs use your tools safely and correctly.
 
 ## Validation
 
