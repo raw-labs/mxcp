@@ -12,6 +12,7 @@ from mxcp.cli.drift_snapshot import drift_snapshot
 from mxcp.cli.drift_check import drift_check
 from mxcp.cli.log import log
 from mxcp.cli.lint import lint
+from mxcp.cli.evals import evals
 
 @click.group()
 def cli():
@@ -25,6 +26,7 @@ cli.add_command(run_endpoint)
 cli.add_command(validate)
 cli.add_command(test)
 cli.add_command(lint)
+cli.add_command(evals)
 cli.add_command(serve)
 cli.add_command(init)
 cli.add_command(query)

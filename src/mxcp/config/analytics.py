@@ -67,7 +67,7 @@ def track_event(event_name: str, properties: Optional[dict] = None) -> None:
             try:
                 # Add default properties
                 event_properties = {
-                    "app": "mxcp-mcp",
+                    "app": "mxcp",
                     "version": PACKAGE_VERSION,  # Dynamic version from pyproject.toml
                     **(properties or {})
                 }

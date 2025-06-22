@@ -92,6 +92,9 @@ class EndpointLoader:
             # Skip mxcp-site.yml only if it's at the root
             if f.name == "mxcp-site.yml" and f.parent == base_path:
                 continue
+            # Skip eval files (ending with -evals.yml or .evals.yml)
+            if f.name.endswith("-evals.yml") or f.name.endswith(".evals.yml"):
+                continue
             # Skip the file specified in MXCP_CONFIG if it exists
             if mxcp_config.exists() and f.samefile(mxcp_config):
                 continue
@@ -148,6 +151,9 @@ class EndpointLoader:
             for f in all_yaml_files:
                 # Skip mxcp-site.yml only if it's at the root
                 if f.name == "mxcp-site.yml" and f.parent == repo_root:
+                    continue
+                # Skip eval files (ending with -evals.yml or .evals.yml)
+                if f.name.endswith("-evals.yml") or f.name.endswith(".evals.yml"):
                     continue
                 # Skip the file specified in MXCP_CONFIG if it exists
                 if mxcp_config.exists() and f.samefile(mxcp_config):

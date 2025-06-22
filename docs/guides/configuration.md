@@ -417,6 +417,53 @@ MXCP can be configured using environment variables:
 - `MXCP_PROFILE`: Set default profile
 - `MXCP_READONLY`: Enable read-only mode
 
+## Model Configuration (for Evals)
+
+MXCP supports configuring LLM models for evaluation tests. This configuration is used by the `mxcp evals` command to test how AI models interact with your endpoints.
+
+### User Config Model Settings
+
+Add model configuration to your user config file (`~/.mxcp/config.yml`):
+
+```yaml
+models:
+  default: "claude-4-sonnet"  # Default model to use for evals
+  models:
+    claude-4-opus:
+      type: "claude"
+      api_key: "${ANTHROPIC_API_KEY}"  # Environment variable containing API key
+      timeout: 60  # Request timeout in seconds
+      max_retries: 3  # Number of retries on failure
+    
+    claude-4-sonnet:
+      type: "claude"
+      api_key: "${ANTHROPIC_API_KEY}"
+      timeout: 30
+    
+    gpt-4o:
+      type: "openai"
+      api_key: "${OPENAI_API_KEY}"
+      base_url: "https://api.openai.com/v1"  # Optional custom endpoint
+      timeout: 45
+    
+    gpt-4.1:
+      type: "openai"
+      api_key: "${OPENAI_API_KEY}"
+      timeout: 30
+```
+
+### Model Configuration Options
+
+- **default**: The model to use when not specified in eval suite or CLI
+- **models**: Dictionary of model configurations
+  - **type**: Either "claude" or "openai"
+  - **api_key**: API key (you can use environment variables references)
+  - **base_url**: Custom API endpoint (optional, for OpenAI-compatible services)
+  - **timeout**: Request timeout in seconds
+  - **max_retries**: Number of retries on failure
+
+For more information on using evals, see the [LLM Evaluation section](quality.md#llm-evaluation-evals) in the Quality & Testing Guide.
+
 ## Best Practices
 
 1. **Secrets Management**
@@ -434,12 +481,38 @@ MXCP can be configured using environment variables:
    - Use format annotations for strings
    - Provide examples for better documentation
 
-4. **Testing**
-   - Write tests for all endpoints
+4. **Quality Assurance**
+   - **Validate**: Run `mxcp validate` to ensure all endpoints are structurally correct
+   - **Test**: Write comprehensive tests for all endpoints and run `mxcp test` regularly
+   - **Lint**: Use `mxcp lint` to improve metadata for better LLM understanding
+   - **Evals**: Create eval suites to test LLM interactions with `mxcp evals`
+   - Include these checks in your CI/CD pipeline
+
+5. **Testing Best Practices**
+   - Write tests for all endpoints in the YAML definition
    - Test edge cases and error conditions
    - Use realistic test data
+   - Test with different user contexts for policy-protected endpoints
+   - Write eval tests to ensure LLMs use your tools safely
 
-5. **Documentation**
-   - Add descriptions to all parameters
+6. **Documentation**
+   - Add clear descriptions to all endpoints, parameters, and return types
    - Use tags for categorization
-   - Include examples in parameter definitions 
+   - Include meaningful examples in parameter definitions
+   - Document behavioral hints (readOnlyHint, destructiveHint, etc.)
+   - Run `mxcp lint` to identify missing documentation
+
+7. **Development Workflow**
+   ```bash
+   # During development
+   mxcp validate              # Check structure
+   mxcp test                  # Run tests
+   mxcp lint                  # Improve metadata
+   
+   # Before deployment
+   mxcp drift-snapshot        # Create baseline
+   mxcp evals                 # Test LLM behavior
+   
+   # In production
+   mxcp drift-check          # Monitor changes
+   ``` 

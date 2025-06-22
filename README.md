@@ -204,6 +204,7 @@ GROUP BY region, product, sale_date
 - **Audit**: Every query logged with user context
 - **Policies**: Dynamic data filtering and access control
 - **Drift Detection**: Monitor schema changes across environments
+- **LLM Testing**: Evaluate how AI models interact with your endpoints
 
 ## 🛠️ Core Concepts
 
@@ -230,6 +231,7 @@ mxcp init            # Initialize new project
 mxcp list            # List all endpoints
 mxcp validate        # Check types, SQL, and references
 mxcp test            # Run endpoint tests
+mxcp evals           # Run LLM evaluation tests
 mxcp dbt run         # Run dbt transformations
 mxcp log             # Query audit logs
 mxcp drift-check     # Check for schema changes
