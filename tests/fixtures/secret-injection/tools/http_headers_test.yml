@@ -8,4 +8,4 @@ tool:
       secret_value:
         type: string
   source:
-    file: "http_headers_test.sql"
+    file: "../sql/http_headers_test.sql"

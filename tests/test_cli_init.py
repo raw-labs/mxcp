@@ -45,16 +45,16 @@ def test_init_bootstrap(tmp_path):
     assert result.returncode == 0
     assert (tmp_path / "mxcp-site.yml").exists()
     assert (tmp_path / "server_config.json").exists()  # Should exist if we said yes
-    assert (tmp_path / "endpoints" / "hello-world.yml").exists()
-    assert (tmp_path / "endpoints" / "hello-world.sql").exists()
+    assert (tmp_path / "tools" / "hello-world.yml").exists()
+    assert (tmp_path / "sql" / "hello-world.sql").exists()
     
     # Check SQL file formatting
-    with open(tmp_path / "endpoints" / "hello-world.sql") as f:
+    with open(tmp_path / "sql" / "hello-world.sql") as f:
         sql_content = f.read()
     assert sql_content == "SELECT 'Hello, ' || $name || '!' as greeting\n"
     
     # Check YML file content
-    with open(tmp_path / "endpoints" / "hello-world.yml") as f:
+    with open(tmp_path / "tools" / "hello-world.yml") as f:
         yml_content = yaml.safe_load(f)
     
     assert yml_content["tool"]["name"] == "hello_world"

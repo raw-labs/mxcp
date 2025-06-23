@@ -16,4 +16,4 @@ tool:
         type: integer
     additionalProperties: false
   source: 
-    file: error_endpoint.sql 
+    file: ../sql/error_endpoint.sql 

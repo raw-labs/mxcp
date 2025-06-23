@@ -13,8 +13,12 @@ def test_discover_eval_files(tmp_path):
     site_config = tmp_path / "mxcp-site.yml"
     site_config.write_text("mxcp: '1.0.0'\nname: test")
     
-    # Create test eval files
-    eval_file1 = tmp_path / "test-evals.yml"
+    # Create evals directory following new organized structure
+    evals_dir = tmp_path / "evals"
+    evals_dir.mkdir()
+    
+    # Create test eval files in evals directory
+    eval_file1 = evals_dir / "test-evals.yml"
     eval_file1.write_text("""
 mxcp: "1.0.0"
 suite: test_suite
@@ -24,7 +28,7 @@ tests:
     prompt: "Test prompt"
 """)
     
-    eval_file2 = tmp_path / "another.evals.yml"
+    eval_file2 = evals_dir / "another.evals.yml"
     eval_file2.write_text("""
 mxcp: "1.0.0"
 suite: another_suite
@@ -145,8 +149,12 @@ def test_eval_file_validation(tmp_path):
     site_config = tmp_path / "mxcp-site.yml"
     site_config.write_text("mxcp: '1.0.0'\nname: test")
     
-    # Valid eval file
-    valid_file = tmp_path / "valid-evals.yml"
+    # Create evals directory following new organized structure
+    evals_dir = tmp_path / "evals"
+    evals_dir.mkdir()
+    
+    # Valid eval file in evals directory
+    valid_file = evals_dir / "valid-evals.yml"
     valid_file.write_text("""
 mxcp: "1.0.0"
 suite: valid_suite
@@ -158,8 +166,8 @@ tests:
         - "test"
 """)
     
-    # Invalid eval file (missing required fields)
-    invalid_file = tmp_path / "invalid-evals.yml"
+    # Invalid eval file (missing required fields) in evals directory
+    invalid_file = evals_dir / "invalid-evals.yml"
     invalid_file.write_text("""
 mxcp: "1.0.0"
 # Missing suite name

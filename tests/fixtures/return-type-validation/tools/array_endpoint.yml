@@ -20,4 +20,4 @@ tool:
         age:
           type: integer
   source: 
-    file: array_endpoint.sql 
+    file: ../sql/array_endpoint.sql 

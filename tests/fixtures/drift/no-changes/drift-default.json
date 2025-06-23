@@ -6,7 +6,7 @@
     {
       "validation_results": {
         "status": "ok",
-        "path": "endpoints/hello-world.yml"
+        "path": "tools/hello-world.yml"
       },
       "test_results": {
         "status": "ok",
@@ -34,7 +34,7 @@
             "type": "string"
           },
           "source": {
-            "file": "hello-world.sql"
+            "file": "../sql/hello-world.sql"
           }
         }
       }

@@ -11,4 +11,4 @@ tool:
         type: integer
     additionalProperties: true
   source:
-    file: extra_column.sql 
+    file: ../sql/extra_column.sql 

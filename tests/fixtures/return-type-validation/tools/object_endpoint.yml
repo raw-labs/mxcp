@@ -18,4 +18,4 @@ tool:
       age:
         type: integer
   source: 
-    file: object_endpoint.sql 
+    file: ../sql/object_endpoint.sql 

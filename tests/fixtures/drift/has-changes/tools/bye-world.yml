@@ -13,4 +13,4 @@ tool:
     description: Greeting message
     type: string
   source:
-    file: bye-world.sql
+    file: ../sql/bye-world.sql

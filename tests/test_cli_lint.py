@@ -26,12 +26,12 @@ project: test-lint
 profile: default
 """)
     
-    # Create endpoints directory
-    endpoints_dir = tmp_path / "endpoints"
-    endpoints_dir.mkdir()
+    # Create tools directory following new organized structure
+    tools_dir = tmp_path / "tools"
+    tools_dir.mkdir()
     
     # Create a minimal endpoint without tests or examples (should trigger lint warnings)
-    endpoint_file = endpoints_dir / "test.yml"
+    endpoint_file = tools_dir / "test.yml"
     endpoint_file.write_text("""
 mxcp: "1.0.0"
 tool:

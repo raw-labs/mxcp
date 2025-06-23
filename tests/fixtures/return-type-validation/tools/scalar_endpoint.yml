@@ -10,4 +10,4 @@ tool:
   return:
     type: number
   source: 
-    file: scalar_endpoint.sql 
+    file: ../sql/scalar_endpoint.sql 

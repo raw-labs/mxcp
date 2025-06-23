@@ -94,7 +94,7 @@ def test_load_and_validate_snapshot_valid(no_changes_repo_path):
     assert "tables" in snapshot
     assert "resources" in snapshot
     assert len(snapshot["resources"]) == 1
-    assert snapshot["resources"][0]["validation_results"]["path"] == "endpoints/hello-world.yml"
+    assert snapshot["resources"][0]["validation_results"]["path"] == "tools/hello-world.yml"
 
 def test_load_and_validate_snapshot_missing_file():
     """Test loading a non-existent snapshot file."""
@@ -229,15 +229,17 @@ async def test_drift_check_has_changes(has_changes_repo_path, has_changes_site_c
         assert len(added_resources) == 1
         assert len(modified_resources) == 1
         
-        # Check added resource
-        added_resource = added_resources[0]
-        assert added_resource["path"] == "endpoints/bye-world.yml"
+        # Check added resource (there should be one with bye-world)
+        bye_world_resources = [r for r in added_resources if "bye-world" in r["path"]]
+        assert len(bye_world_resources) == 1
+        added_resource = bye_world_resources[0]
+        assert added_resource["path"] == "tools/bye-world.yml"
         assert added_resource["endpoint"] == "tool/bye_world"
         assert added_resource["change_type"] == "added"
         
-        # Check modified resource
+        # Check modified resource  
         modified_resource = modified_resources[0]
-        assert modified_resource["path"] == "endpoints/hello-world.yml"
+        assert modified_resource["path"] == "tools/hello-world.yml"
         assert modified_resource["endpoint"] == "tool/hello_world_changed"
         assert modified_resource["change_type"] == "modified"
         

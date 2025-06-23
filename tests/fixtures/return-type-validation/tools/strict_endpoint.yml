@@ -11,4 +11,4 @@ tool:
         type: integer
     additionalProperties: false
   source:
-    file: allowed_columns.sql 
+    file: ../sql/allowed_columns.sql 

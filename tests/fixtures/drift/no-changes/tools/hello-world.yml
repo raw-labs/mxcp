@@ -13,4 +13,4 @@ tool:
     description: Greeting message
     type: string
   source:
-    file: hello-world.sql
+    file: ../sql/hello-world.sql
