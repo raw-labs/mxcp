@@ -66,7 +66,8 @@ def create_hello_world_files(target_dir: Path):
         "python",
         "sql",
         "drift",
-        "audit"
+        "audit",
+        "data"
     ]
     
     for directory in directories:
@@ -74,7 +75,7 @@ def create_hello_world_files(target_dir: Path):
         dir_path.mkdir(exist_ok=True)
         
         # Create .gitkeep files for empty directories
-        if directory in ["resources", "prompts", "evals", "python", "drift", "audit"]:
+        if directory in ["resources", "prompts", "evals", "python", "drift", "audit", "data"]:
             gitkeep_file = dir_path / ".gitkeep"
             gitkeep_file.touch()
 
@@ -202,7 +203,8 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
         click.echo(f"   ├── evals/              # Evaluation definitions")
         click.echo(f"   ├── python/             # Python extensions")
         click.echo(f"   ├── drift/              # Drift snapshots")
-        click.echo(f"   └── audit/              # Audit logs")
+        click.echo(f"   ├── audit/              # Audit logs")
+        click.echo(f"   └── data/               # Database files")
     else:
         click.echo(f"   ├── tools/              # Create your tool definitions here")
         click.echo(f"   ├── resources/          # Create your resource definitions here")
@@ -211,7 +213,8 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
         click.echo(f"   ├── python/             # Create your Python extensions here")
         click.echo(f"   ├── sql/                # Create your SQL implementations here")
         click.echo(f"   ├── drift/              # Drift snapshots will be stored here")
-        click.echo(f"   └── audit/              # Audit logs will be stored here")
+        click.echo(f"   ├── audit/              # Audit logs will be stored here")
+        click.echo(f"   └── data/               # Database files will be stored here")
     
     click.echo(f"\n{click.style('🚀 Next Steps:', fg='cyan', bold=True)}\n")
     

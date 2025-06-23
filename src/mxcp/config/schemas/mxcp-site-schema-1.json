@@ -251,6 +251,11 @@
           "type": "string",
           "description": "Directory path for audit logs (defaults to 'audit').",
           "default": "audit"
+        },
+        "data": {
+          "type": "string",
+          "description": "Directory path for data files including DuckDB databases (defaults to 'data').",
+          "default": "data"
         }
       },
       "additionalProperties": false

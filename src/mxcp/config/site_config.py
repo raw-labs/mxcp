@@ -57,51 +57,12 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
     
     if "clean_targets" not in dbt_config:
         dbt_config["clean_targets"] = ["target", "dbt_packages"]
-        
-    # Initialize profiles section if not present
-    if "profiles" not in config:
-        config["profiles"] = {}
-        
-    # Get the current profile
-    profile = config.get("profile", "default")
-    
-    # Initialize profile config if not present
-    if profile not in config["profiles"]:
-        config["profiles"][profile] = {}
-        
-    # Initialize duckdb config for the profile if not present
-    if "duckdb" not in config["profiles"][profile]:
-        config["profiles"][profile]["duckdb"] = {}
-        
-    # Set default DuckDB path for the profile if not specified
-    if "path" not in config["profiles"][profile]["duckdb"]:
-        config["profiles"][profile]["duckdb"]["path"] = str(repo_root / f"db-{profile}.duckdb")
-        
-    # Initialize drift config for the profile if not present
-    if "drift" not in config["profiles"][profile]:
-        config["profiles"][profile]["drift"] = {}
-        
-    # Set default drift manifest path for the profile if not specified
-    if "path" not in config["profiles"][profile]["drift"]:
-        config["profiles"][profile]["drift"]["path"] = str(repo_root / f"drift-{profile}.json")
-
-    # Initialize audit config for the profile if not present
-    if "audit" not in config["profiles"][profile]:
-        config["profiles"][profile]["audit"] = {}
-        
-    # Set default audit enabled state for the profile if not specified
-    if "enabled" not in config["profiles"][profile]["audit"]:
-        config["profiles"][profile]["audit"]["enabled"] = False
-        
-    # Set default audit log path for the profile if not specified
-    if "path" not in config["profiles"][profile]["audit"]:
-        config["profiles"][profile]["audit"]["path"] = str(repo_root / f"logs-{profile}.jsonl")
 
     # Initialize extensions section if not present
     if "extensions" not in config:
         config["extensions"] = []
 
-    # Initialize paths section if not present
+    # Initialize paths section if not present (do this early so we can use paths in profile defaults)
     if "paths" not in config:
         config["paths"] = {}
 
@@ -130,6 +91,48 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
     
     if "audit" not in paths_config:
         paths_config["audit"] = "audit"
+    
+    if "data" not in paths_config:
+        paths_config["data"] = "data"
+        
+    # Initialize profiles section if not present
+    if "profiles" not in config:
+        config["profiles"] = {}
+        
+    # Get the current profile
+    profile = config.get("profile", "default")
+    
+    # Initialize profile config if not present
+    if profile not in config["profiles"]:
+        config["profiles"][profile] = {}
+        
+    # Initialize duckdb config for the profile if not present
+    if "duckdb" not in config["profiles"][profile]:
+        config["profiles"][profile]["duckdb"] = {}
+        
+    # Set default DuckDB path for the profile if not specified (now uses data directory)
+    if "path" not in config["profiles"][profile]["duckdb"]:
+        config["profiles"][profile]["duckdb"]["path"] = str(repo_root / paths_config["data"] / f"db-{profile}.duckdb")
+        
+    # Initialize drift config for the profile if not present
+    if "drift" not in config["profiles"][profile]:
+        config["profiles"][profile]["drift"] = {}
+        
+    # Set default drift manifest path for the profile if not specified (now uses drift directory)
+    if "path" not in config["profiles"][profile]["drift"]:
+        config["profiles"][profile]["drift"]["path"] = str(repo_root / paths_config["drift"] / f"drift-{profile}.json")
+
+    # Initialize audit config for the profile if not present
+    if "audit" not in config["profiles"][profile]:
+        config["profiles"][profile]["audit"] = {}
+        
+    # Set default audit enabled state for the profile if not specified
+    if "enabled" not in config["profiles"][profile]["audit"]:
+        config["profiles"][profile]["audit"]["enabled"] = False
+        
+    # Set default audit log path for the profile if not specified (now uses audit directory)
+    if "path" not in config["profiles"][profile]["audit"]:
+        config["profiles"][profile]["audit"]["path"] = str(repo_root / paths_config["audit"] / f"logs-{profile}.jsonl")
         
     return config
 

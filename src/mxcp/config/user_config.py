@@ -196,7 +196,7 @@ def _generate_default_config(site_config: SiteConfig) -> dict:
     logger.debug(f"Site config: {site_config}")
     
     config = {
-        "mxcp": "1",
+        "mxcp": 1,
         "projects": {
             project_name: {
                 "profiles": {

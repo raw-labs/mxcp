@@ -109,7 +109,7 @@ tests:
 def test_get_model_config():
     """Test getting model configuration"""
     user_config: UserConfig = {
-        "mxcp": "1",
+        "mxcp": 1,
         "models": {
             "default": "claude-3-haiku",
             "models": {

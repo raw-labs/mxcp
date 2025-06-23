@@ -8,6 +8,18 @@ import os
 from pathlib import Path
 import shutil
 
+@pytest.fixture(scope="session", autouse=True)
+def set_mxcp_config_env():
+    """Set MXCP_CONFIG to use test fixture user config."""
+    original_config = os.environ.get("MXCP_CONFIG")
+    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "cli-init" / "mxcp-config.yml")
+    yield
+    # Restore original config after tests
+    if original_config is not None:
+        os.environ["MXCP_CONFIG"] = original_config
+    elif "MXCP_CONFIG" in os.environ:
+        del os.environ["MXCP_CONFIG"]
+
 
 def test_init_basic(tmp_path):
     """Test basic init without bootstrap."""
@@ -65,6 +77,215 @@ def test_init_bootstrap(tmp_path):
     assert "📁 Project Structure:" in result.stdout
     assert "🚀 Next Steps:" in result.stdout
     assert "mxcp run tool hello_world --param name=World" in result.stdout
+
+
+def test_init_bootstrap_complete_directory_structure(tmp_path):
+    """Test that init --bootstrap creates the complete organized directory structure."""
+    project_name = "test-organized-project"
+    project_dir = tmp_path / project_name
+    
+    # Run mxcp init --bootstrap
+    result = subprocess.run(
+        ["mxcp", "init", str(project_dir), "--bootstrap", "--project", project_name],
+        capture_output=True,
+        text=True,
+        input="n\n"  # Say no to config generation to focus on directory structure
+    )
+    
+    assert result.returncode == 0
+    
+    # Verify all expected directories exist
+    expected_directories = [
+        "tools",
+        "resources", 
+        "prompts",
+        "evals",
+        "python",
+        "sql",
+        "drift",
+        "audit",
+        "data"
+    ]
+    
+    for directory in expected_directories:
+        dir_path = project_dir / directory
+        assert dir_path.exists(), f"Directory {directory} should exist"
+        assert dir_path.is_dir(), f"{directory} should be a directory"
+    
+    # Verify .gitkeep files exist in empty directories
+    empty_directories_with_gitkeep = [
+        "resources", 
+        "prompts",
+        "evals",
+        "python",
+        "drift",
+        "audit",
+        "data"
+    ]
+    
+    for directory in empty_directories_with_gitkeep:
+        gitkeep_path = project_dir / directory / ".gitkeep"
+        assert gitkeep_path.exists(), f".gitkeep should exist in {directory}"
+        assert gitkeep_path.is_file(), f".gitkeep in {directory} should be a file"
+    
+    # Verify bootstrap files are in correct locations
+    assert (project_dir / "tools" / "hello-world.yml").exists()
+    assert (project_dir / "sql" / "hello-world.sql").exists()
+    
+    # Verify hello-world.yml references SQL file correctly
+    with open(project_dir / "tools" / "hello-world.yml") as f:
+        yml_content = yaml.safe_load(f)
+    
+    assert yml_content["tool"]["source"]["file"] == "../sql/hello-world.sql"
+    
+    # Verify mxcp-site.yml has correct project name
+    with open(project_dir / "mxcp-site.yml") as f:
+        site_config = yaml.safe_load(f)
+    
+    assert site_config["mxcp"] == 1  # Integer version, not string
+    assert site_config["project"] == project_name
+    assert site_config["profile"] == "default"
+    
+    # Test that we can load site config and verify organized paths
+    # This requires importing MXCP modules, so we need to add the src path
+    import sys
+    mxcp_src_path = Path(__file__).parent.parent / "src"
+    if str(mxcp_src_path) not in sys.path:
+        sys.path.insert(0, str(mxcp_src_path))
+    
+    # Change to project directory for config loading
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(project_dir)
+        
+        from mxcp.config.site_config import load_site_config
+        loaded_config = load_site_config()
+        
+        # Verify organized paths are configured correctly
+        paths = loaded_config["paths"]
+        expected_paths = {
+            "tools": "tools",
+            "resources": "resources",
+            "prompts": "prompts", 
+            "evals": "evals",
+            "python": "python",
+            "sql": "sql",
+            "drift": "drift",
+            "audit": "audit",
+            "data": "data"
+        }
+        
+        for path_key, expected_value in expected_paths.items():
+            assert paths[path_key] == expected_value, f"Path {path_key} should be {expected_value}"
+        
+        # Verify profile paths point to organized directories
+        profile_config = loaded_config["profiles"]["default"]
+        
+        # DuckDB should be in data directory
+        expected_duckdb_path = str(project_dir / "data" / "db-default.duckdb")
+        assert profile_config["duckdb"]["path"] == expected_duckdb_path
+        
+        # Drift should be in drift directory  
+        expected_drift_path = str(project_dir / "drift" / "drift-default.json")
+        assert profile_config["drift"]["path"] == expected_drift_path
+        
+        # Audit should be in audit directory
+        expected_audit_path = str(project_dir / "audit" / "logs-default.jsonl")
+        assert profile_config["audit"]["path"] == expected_audit_path
+        
+    finally:
+        os.chdir(original_cwd)
+    
+    # Verify output mentions all directories in help text
+    assert "tools/" in result.stdout
+    assert "resources/" in result.stdout
+    assert "prompts/" in result.stdout
+    assert "evals/" in result.stdout
+    assert "python/" in result.stdout
+    assert "sql/" in result.stdout
+    assert "drift/" in result.stdout
+    assert "audit/" in result.stdout
+    assert "data/" in result.stdout
+
+
+def test_init_bootstrap_with_duckdb_initialization(tmp_path):
+    """Test that init --bootstrap with DuckDB initialization works (catches versioning issues)."""
+    project_name = "test-db-init-project"
+    project_dir = tmp_path / project_name
+    
+    # Set required environment variables to avoid auth errors
+    env = os.environ.copy()
+    env["GITHUB_CLIENT_ID"] = "dummy"
+    env["GITHUB_CLIENT_SECRET"] = "dummy"
+    
+    # Run mxcp init --bootstrap with config generation (triggers DuckDB init)
+    result = subprocess.run(
+        ["mxcp", "init", str(project_dir), "--bootstrap", "--project", project_name],
+        capture_output=True,
+        text=True,
+        input="y\n",  # Say yes to config generation to trigger DuckDB initialization
+        env=env
+    )
+    
+    # Should succeed - if there's a versioning issue, this will fail
+    assert result.returncode == 0, f"Init failed with output: {result.stdout}\nStderr: {result.stderr}"
+    
+    # Verify no version validation errors in output (but allow other warnings)
+    assert "Invalid user config" not in result.stdout
+    assert "not of type 'integer'" not in result.stdout
+    assert "'1.0.0' is not of type 'integer'" not in result.stdout
+    
+    # Verify directories were created correctly
+    assert (project_dir / "data").exists()
+    assert (project_dir / "tools").exists()
+    assert (project_dir / "sql").exists()
+    
+    # Verify files exist in correct locations
+    assert (project_dir / "mxcp-site.yml").exists()
+    assert (project_dir / "server_config.json").exists()
+    assert (project_dir / "tools" / "hello-world.yml").exists()
+    assert (project_dir / "sql" / "hello-world.sql").exists()
+    
+    # Verify the mxcp-site.yml has correct integer version
+    with open(project_dir / "mxcp-site.yml") as f:
+        site_config = yaml.safe_load(f)
+    
+    assert site_config["mxcp"] == 1  # Should be integer, not string
+    assert site_config["project"] == project_name
+    
+    # Success message should be present
+    assert "✨ MXCP project initialized successfully!" in result.stdout
+
+
+def test_user_config_generation_uses_integer_version():
+    """Test that user config generation uses integer version (catches versioning bugs)."""
+    # Test user config generation directly using the test fixture
+    import sys
+    mxcp_src_path = Path(__file__).parent.parent / "src"
+    if str(mxcp_src_path) not in sys.path:
+        sys.path.insert(0, str(mxcp_src_path))
+    
+    from mxcp.config.user_config import _generate_default_config
+    
+    # Create a mock site config (as would be created by mxcp init)
+    site_config = {
+        "mxcp": 1,
+        "project": "test-new-project",
+        "profile": "default"
+    }
+    
+    # Generate default user config (this is what happens when user config doesn't exist)
+    user_config = _generate_default_config(site_config)
+    
+    # Verify the generated user config has integer version
+    assert user_config["mxcp"] == 1, f"User config should have integer version 1, got {user_config['mxcp']} ({type(user_config['mxcp'])})"
+    assert isinstance(user_config["mxcp"], int), f"User config version should be int, got {type(user_config['mxcp'])}"
+    
+    # Verify structure is correct
+    assert "projects" in user_config
+    assert "test-new-project" in user_config["projects"]
+    assert "profiles" in user_config["projects"]["test-new-project"]
+    assert "default" in user_config["projects"]["test-new-project"]["profiles"]
 
 
 def test_init_custom_project_name(tmp_path):
