@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 from jsonschema import validate, ValidationError
 from mxcp.config.types import UserConfig, SiteConfig
+from mxcp.config.migration import check_and_migrate_legacy_version
 import logging
 from typing import Dict, Any, Optional
 import re
@@ -249,6 +250,9 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
         with open(path) as f:
             config = yaml.safe_load(f)
             logger.debug(f"Loaded user config from file: {config}")
+        
+        # Check for legacy version format and provide migration guidance (stops execution)
+        check_and_migrate_legacy_version(config, "user", str(path))
             
         # Interpolate environment variables and vault URLs in the config
         vault_config = config.get('vault')

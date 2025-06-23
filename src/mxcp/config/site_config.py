@@ -4,6 +4,7 @@ import json
 from jsonschema import validate, ValidationError
 from pathlib import Path
 from mxcp.config.types import SiteConfig, UserConfig
+from mxcp.config.migration import check_and_migrate_legacy_version
 from typing import Optional, Dict, Any
 
 def find_repo_root() -> Path:
@@ -154,6 +155,9 @@ def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
     
     with open(config_path) as f:
         config = yaml.safe_load(f)
+    
+    # Check for legacy version format and provide migration guidance (stops execution)
+    check_and_migrate_legacy_version(config, "site", str(config_path))
     
     # Load and apply JSON Schema validation
     schema_path = Path(__file__).parent / "schemas" / "mxcp-site-schema-1.json"

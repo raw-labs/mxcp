@@ -330,13 +330,15 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
             create_hello_world_files(target_dir)
             click.echo("✓ Created example hello world endpoint")
             
+        # Load configs (this will handle migration checks)
+        from mxcp.config.site_config import load_site_config
+        from mxcp.engine.duckdb_session import DuckDBSession
+        
+        site_config = load_site_config(target_dir)
+        new_user_config = load_user_config(site_config)
+        
         # Initialize DuckDB session to create .duckdb file
         try:
-            from mxcp.config.site_config import load_site_config
-            from mxcp.engine.duckdb_session import DuckDBSession
-            
-            site_config = load_site_config(target_dir)
-            new_user_config = load_user_config(site_config)
             session = DuckDBSession(new_user_config, site_config)
             session.close()  # Database file is created when session connects in constructor
             click.echo("✓ Initialized DuckDB database")

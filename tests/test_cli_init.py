@@ -7,6 +7,11 @@ import sys
 import os
 from pathlib import Path
 import shutil
+from unittest.mock import patch, Mock
+from click.testing import CliRunner
+
+from mxcp.cli.init import init
+from mxcp.config.site_config import load_site_config
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
@@ -413,3 +418,133 @@ def test_init_server_config_content(tmp_path):
         # System-wide installation should use direct mxcp command
         assert server_config["command"] == "mxcp"
         assert "cwd" in server_config 
+
+
+def test_init_bootstrap_complete_directory_structure():
+    """Test that init --bootstrap creates the complete directory structure and files."""
+    runner = CliRunner()
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        project_dir = tmpdir_path / "test-project"
+        
+        # Run init with bootstrap
+        result = runner.invoke(init, [str(project_dir), "--bootstrap", "--project", "test-project"], input="n\n")
+        
+        # Should succeed
+        assert result.exit_code == 0, f"Init failed with output: {result.output}"
+        
+        # Check that all directories were created
+        expected_dirs = ["tools", "resources", "prompts", "evals", "python", "sql", "drift", "audit", "data"]
+        for dirname in expected_dirs:
+            dir_path = project_dir / dirname
+            assert dir_path.exists(), f"Directory {dirname} was not created"
+            assert dir_path.is_dir(), f"{dirname} is not a directory"
+        
+        # Check .gitkeep files in empty directories
+        empty_dirs = ["resources", "prompts", "evals", "python", "drift", "audit", "data"]
+        for dirname in empty_dirs:
+            gitkeep = project_dir / dirname / ".gitkeep"
+            assert gitkeep.exists(), f".gitkeep not found in {dirname}"
+        
+        # Check bootstrap files were created correctly
+        tool_file = project_dir / "tools" / "hello-world.yml"
+        sql_file = project_dir / "sql" / "hello-world.sql"
+        assert tool_file.exists(), "hello-world.yml not created in tools/"
+        assert sql_file.exists(), "hello-world.sql not created in sql/"
+        
+        # Check tool file references SQL correctly
+        with open(tool_file) as f:
+            tool_config = yaml.safe_load(f)
+        assert tool_config["tool"]["source"]["file"] == "../sql/hello-world.sql"
+        
+        # Check site config can be loaded (validates schema)
+        site_config = load_site_config(project_dir)
+        assert site_config["project"] == "test-project"
+        assert site_config["profile"] == "default"
+        
+        # Check database file was created in correct location
+        db_file = project_dir / "data" / "db-default.duckdb"
+        assert db_file.exists(), "Database file not created in data/ directory"
+
+
+def test_init_bootstrap_with_duckdb_initialization():
+    """Test that init --bootstrap works with DuckDB initialization."""
+    runner = CliRunner()
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        project_dir = tmpdir_path / "test-db-init"
+        
+        # Run init with bootstrap
+        result = runner.invoke(init, [str(project_dir), "--bootstrap", "--project", "test-db-init"], input="n\n")
+        
+        # Should succeed without version validation errors
+        assert result.exit_code == 0, f"Init failed with output: {result.output}"
+        assert "✓ Initialized DuckDB database" in result.output
+        
+        # Check that database file exists
+        db_file = project_dir / "data" / "db-default.duckdb"
+        assert db_file.exists(), "Database file was not created"
+
+
+def test_user_config_generation_uses_integer_version():
+    """Test that _generate_default_config uses integer version format, not string."""
+    from mxcp.config.user_config import _generate_default_config
+    
+    # Create a mock site config
+    site_config = {
+        "mxcp": 1,
+        "project": "test-project", 
+        "profile": "default"
+    }
+    
+    config = _generate_default_config(site_config)
+    
+    # Version should be integer 1, not string "1.0.0"
+    assert config["mxcp"] == 1, f"Expected integer 1, got {repr(config['mxcp'])}"
+    assert isinstance(config["mxcp"], int), f"Expected int type, got {type(config['mxcp'])}"
+
+
+def test_migration_exception_handling():
+    """Test that migration exceptions are properly caught and displayed by other commands.""" 
+    from mxcp.cli.list import list_endpoints
+    runner = CliRunner()
+    
+    # Use /tmp directly to avoid any parent directory detection issues
+    with tempfile.TemporaryDirectory(dir="/tmp") as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        project_dir = tmpdir_path / "test-migration"
+        project_dir.mkdir()
+        
+        # Create a site config with old string-based versioning
+        old_site_config = {
+            "mxcp": "1.0.0",  # This should trigger migration
+            "project": "test-migration", 
+            "profile": "default"
+        }
+        
+        with open(project_dir / "mxcp-site.yml", "w") as f:
+            yaml.dump(old_site_config, f)
+        
+        # Change working directory to the project directory
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(project_dir)
+            
+            # Run mxcp list - should fail with migration message
+            result = runner.invoke(list_endpoints, [])
+            
+            # Should exit with error
+            assert result.exit_code != 0, "List should have failed due to migration requirement"
+            
+            # Should show migration message
+            assert "🚨 MIGRATION REQUIRED" in result.output, f"Migration message not shown. Output: {result.output}"
+            
+            # Should mention the new directory structure
+            assert "NEW structure:" in result.output
+            assert "tools/" in result.output
+            assert "resources/" in result.output
+            
+        finally:
+            os.chdir(original_cwd) 
