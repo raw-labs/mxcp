@@ -16,11 +16,11 @@ class EndpointRequest(BaseModel):
 @click.option("--transport", type=click.Choice(["streamable-http", "sse", "stdio"]), help="Transport protocol to use (defaults to user config setting)")
 @click.option("--port", type=int, help="Port number to use for HTTP transport (defaults to user config setting)")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-@click.option("--no-sql-tools", is_flag=True, help="Disable built-in SQL querying and schema exploration tools (enabled by default in site config)")
+@click.option("--sql-tools", type=click.Choice(['true', 'false']), help="Enable or disable built-in SQL querying and schema exploration tools")
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @click.option("--stateless", is_flag=True, help="Enable stateless HTTP mode (for serverless deployments)")
 @track_command_with_timing("serve")
-def serve(profile: Optional[str], transport: Optional[str], port: Optional[int], debug: bool, no_sql_tools: bool, readonly: bool, stateless: bool):
+def serve(profile: Optional[str], transport: Optional[str], port: Optional[int], debug: bool, sql_tools: Optional[str], readonly: bool, stateless: bool):
     """Start the MXCP MCP server to expose endpoints via HTTP or stdio.
     
     This command starts a server that exposes your MXCP endpoints as an MCP-compatible
@@ -33,7 +33,8 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
         mxcp serve --port 9000       # Override port from user config
         mxcp serve --transport stdio # Override transport from user config
         mxcp serve --profile dev     # Use the 'dev' profile configuration
-        mxcp serve --no-sql-tools    # Disable built-in SQL querying and schema exploration tools
+        mxcp serve --sql-tools true  # Enable built-in SQL querying and schema exploration tools
+        mxcp serve --sql-tools false # Disable built-in SQL querying and schema exploration tools
         mxcp serve --readonly        # Open database connection in read-only mode
         mxcp serve --stateless       # Enable stateless HTTP mode
     """
@@ -69,6 +70,21 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
         config_stateless = http_config.get("stateless", False)
         final_stateless = stateless if stateless else config_stateless
 
+        # Determine SQL tools setting for server
+        if sql_tools == 'true':
+            enable_sql_tools_param = True
+        elif sql_tools == 'false':
+            enable_sql_tools_param = False
+        else:
+            enable_sql_tools_param = None  # Use site config default
+
+        # For display purposes, calculate what will actually be used
+        site_sql_tools_enabled = site_config.get("sql_tools", {}).get("enabled", False)
+        final_sql_tools_enabled = (
+            enable_sql_tools_param if enable_sql_tools_param is not None 
+            else site_sql_tools_enabled
+        )
+
         # Show startup banner (except for stdio mode which needs clean output)
         if final_transport != "stdio":
             click.echo("\n" + "="*60)
@@ -93,8 +109,7 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
             if final_stateless:
                 click.echo(f"   • HTTP Mode: {click.style('Stateless', fg='magenta')}")
                 
-            sql_tools_enabled = site_config.get("sql_tools", {}).get("enabled", True)
-            if not no_sql_tools and sql_tools_enabled:
+            if final_sql_tools_enabled:
                 click.echo(f"   • SQL Tools: {click.style('Enabled', fg='green')}")
             else:
                 click.echo(f"   • SQL Tools: {click.style('Disabled', fg='red')}")
@@ -139,14 +154,14 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
-        # Pass None for enable_sql_tools when --no-sql-tools is not specified
+        # Pass the determined sql_tools value to the server
         server = RAWMCP(
             user_config, 
             site_config, 
             profile=profile, 
             host=final_host,
             port=final_port, 
-            enable_sql_tools=None if not no_sql_tools else False,
+            enable_sql_tools=enable_sql_tools_param,
             readonly=readonly,
             stateless_http=final_stateless
         )

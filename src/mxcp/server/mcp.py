@@ -45,7 +45,7 @@ class RAWMCP:
             host: The host to bind to
             port: The port to bind to
             enable_sql_tools: Whether to enable built-in SQL querying and schema exploration tools.
-                            If None, uses the value from site_config.sql_tools.enabled (defaults to True)
+                            If None, uses the value from site_config.sql_tools.enabled (defaults to False)
             readonly: Whether to open DuckDB connection in read-only mode
         """
         # Initialize basic configuration first
@@ -166,8 +166,8 @@ class RAWMCP:
         
         # Determine SQL tools enabled state
         if enable_sql_tools is None:
-            # Use site config value, defaulting to True if not specified
-            self.enable_sql_tools = site_config.get("sql_tools", {}).get("enabled", True)
+            # Use site config value, defaulting to False if not specified
+            self.enable_sql_tools = site_config.get("sql_tools", {}).get("enabled", False)
         else:
             # Use explicitly provided value
             self.enable_sql_tools = enable_sql_tools

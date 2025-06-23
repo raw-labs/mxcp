@@ -174,9 +174,9 @@ profiles:
     drift:
       path: "drift-prod.json"
 
-# Built-in SQL tools
+# Built-in SQL tools (disabled by default)
 sql_tools:
-  enabled: true
+  enabled: false
 ```
 
 ## Endpoint Definitions

@@ -191,7 +191,7 @@ Ask Claude:
 
 The responses are instant because the data is cached locally!
 
-**Built-in SQL Tools**: MXCP automatically provides SQL query tools (`execute_sql_query`, `list_tables`, `get_table_schema`) that let Claude explore and query your data directly - no custom endpoints needed for basic data exploration!
+**Built-in SQL Tools**: MXCP provides optional SQL query tools (`execute_sql_query`, `list_tables`, `get_table_schema`) that let Claude explore and query your data directly. These tools are disabled by default but can be enabled in your configuration.
 
 ## Path 3: Enterprise Features (15 minutes)
 
@@ -456,9 +456,9 @@ curl -X POST http://localhost:8080/tools/employee_data \
   -d '{"employee_id": "123"}'
 ```
 
-### Option C: Built-in SQL Tools (Auto-enabled)
+### Option C: Built-in SQL Tools (Optional)
 
-MXCP automatically provides SQL exploration tools that work with any MCP client:
+MXCP provides optional SQL exploration tools that work with any MCP client:
 
 **Available Tools:**
 - `execute_sql_query` - Run custom SQL queries
@@ -476,11 +476,11 @@ mcp-cli tools call execute_sql_query --sql "SELECT COUNT(*) FROM users"
 "Show me what tables are available, then count the users created this month"
 ```
 
-**Configure SQL Tools** (optional):
+**Configure SQL Tools** (required to enable):
 ```yaml
 # mxcp-site.yml
 sql_tools:
-  enabled: true  # Default: true
+  enabled: true  # Default: false - must be explicitly enabled
 ```
 
 ## Production Deployment

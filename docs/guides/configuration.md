@@ -239,7 +239,7 @@ For more details on drift detection, see the [Drift Detection Guide](../features
 ### SQL Tools
 ```yaml
 sql_tools:
-  enabled: true  # Enable built-in SQL querying tools
+  enabled: false  # Enable built-in SQL querying tools (disabled by default)
 ```
 
 ## Endpoint Definitions

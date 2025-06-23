@@ -93,7 +93,7 @@ mxcp serve [OPTIONS]
 - `--transport`: Transport protocol to use (streamable-http, sse, or stdio) - defaults to user config setting
 - `--port`: Port number for HTTP transport - defaults to user config setting
 - `--debug`: Show detailed debug information
-- `--no-sql-tools`: Disable built-in SQL querying and schema exploration tools
+- `--sql-tools`: Enable or disable built-in SQL querying and schema exploration tools (true/false)
 - `--readonly`: Open database connection in read-only mode
 - `--stateless`: Enable stateless HTTP mode for Claude.ai and serverless deployments
 
@@ -103,7 +103,8 @@ mxcp serve                   # Use transport settings from user config
 mxcp serve --port 9000       # Override port from user config
 mxcp serve --transport stdio # Override transport from user config
 mxcp serve --profile dev     # Use the 'dev' profile configuration
-mxcp serve --no-sql-tools    # Disable built-in SQL querying tools
+mxcp serve --sql-tools true  # Enable built-in SQL querying tools
+mxcp serve --sql-tools false # Disable built-in SQL querying tools
 mxcp serve --readonly        # Open database connection in read-only mode
 mxcp serve --stateless       # Enable stateless HTTP mode
 ```
