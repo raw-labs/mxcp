@@ -272,13 +272,21 @@ Define your AI interface using MCP (Model Context Protocol) specs:
 - **Prompts** — Templates for LLM interactions
 
 ### Project Structure
+MXCP enforces an organized directory structure for better project management:
+
 ```
 your-project/
 ├── mxcp-site.yml    # Project configuration
-├── tools/           # Tool definitions
-├── resources/       # Data sources
-├── prompts/         # LLM templates
-└── models/          # dbt transformations & caches
+├── tools/           # MCP tool definitions (.yml files)
+├── resources/       # MCP resource definitions (.yml files)
+├── prompts/         # MCP prompt definitions (.yml files)
+├── evals/           # Evaluation definitions (.yml files)
+├── python/          # Python extensions & shared code
+├── sql/             # SQL implementation files
+├── drift/           # Schema drift detection snapshots
+├── audit/           # Audit logs (when enabled)
+├── models/          # dbt models (if using dbt)
+└── target/          # dbt target directory (if using dbt)
 ```
 
 ### CLI Commands

@@ -16,6 +16,34 @@ slug: /reference/cli
 
 This document provides a comprehensive reference for all MXCP command-line interface (CLI) commands and their options.
 
+## Directory Structure Requirements
+
+MXCP enforces an organized directory structure to improve project maintainability and developer experience. All commands expect your project to follow this structure:
+
+```
+mxcp-project/
+├── mxcp-site.yml       # Project configuration (required)
+├── tools/              # MCP tool definitions (.yml files)
+├── resources/          # MCP resource definitions (.yml files)  
+├── prompts/            # MCP prompt definitions (.yml files)
+├── evals/              # Evaluation definitions (.yml files)
+├── python/             # Python extensions and shared code
+├── sql/                # SQL implementation files
+├── drift/              # Schema drift detection snapshots
+├── audit/              # Audit logs (when enabled)
+├── models/             # dbt models (if using dbt)
+└── target/             # dbt target directory (if using dbt)
+```
+
+**Key Rules:**
+- **Tools** must be defined in `tools/*.yml` files
+- **Resources** must be defined in `resources/*.yml` files
+- **Prompts** must be defined in `prompts/*.yml` files
+- **SQL implementations** should be in `sql/*.sql` files and referenced via relative paths
+- Files in wrong directories are ignored by discovery commands
+
+Use `mxcp init --bootstrap` to create a properly structured project.
+
 ## Common Options
 
 Most commands support these common options:

@@ -242,8 +242,14 @@ tests/
 │   ├── test_name_1/          # Fixture for test_name_1
 │   │   ├── mxcp-site.yml     # Test site configuration
 │   │   ├── mxcp-config.yml   # Test user configuration  
-│   │   ├── endpoints/        # Test endpoints
-│   │   └── queries/          # Test SQL files
+│   │   ├── tools/            # Test tool definitions
+│   │   ├── resources/        # Test resource definitions
+│   │   ├── prompts/          # Test prompt definitions
+│   │   ├── evals/            # Test evaluation definitions
+│   │   ├── python/           # Test Python code
+│   │   ├── sql/              # Test SQL files
+│   │   ├── drift/            # Test drift snapshots
+│   │   └── audit/            # Test audit logs
 │   ├── test_name_2/          # Fixture for test_name_2
 │   │   └── ...
 │   └── ...

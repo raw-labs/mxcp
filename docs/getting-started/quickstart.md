@@ -42,14 +42,38 @@ cd my-mxcp-project
 mxcp init --bootstrap
 ```
 
-This creates:
-- `mxcp-site.yml` - Project configuration
-- `endpoints/hello-world.yml` - A simple hello world tool
-- `endpoints/hello-world.sql` - The SQL implementation
-- `server_config.json` - Claude Desktop configuration (automatically generated!)
+This creates an organized project structure:
+
+```
+my-mxcp-project/
+├── mxcp-site.yml       # Project configuration
+├── tools/              # Tool definitions (MCP tools)
+│   └── hello-world.yml # Example tool definition
+├── resources/          # Resource definitions (MCP resources)
+├── prompts/            # Prompt definitions (MCP prompts)
+├── evals/              # Evaluation definitions
+├── python/             # Python extensions & shared code
+├── sql/                # SQL implementation files
+│   └── hello-world.sql # SQL implementation for tools
+├── drift/              # Drift detection snapshots
+├── audit/              # Audit logs
+└── server_config.json  # Claude Desktop config (auto-generated)
+```
+
+**🏗️ Organized by Design**: MXCP enforces a structured approach where each endpoint type has its own directory:
+
+- **`tools/`** - MCP tool definitions (`.yml` files that define callable functions)
+- **`resources/`** - MCP resource definitions (`.yml` files that define data resources)  
+- **`prompts/`** - MCP prompt definitions (`.yml` files that define reusable prompts)
+- **`evals/`** - Evaluation definitions for testing your endpoints
+- **`python/`** - Python extensions and shared code modules
+- **`sql/`** - SQL implementation files (referenced by YAML definitions)
+- **`drift/`** - Schema drift detection snapshots (auto-generated)
+- **`audit/`** - Audit logs (auto-generated when enabled)
 
 The `--bootstrap` flag provides:
-- ✅ Properly formatted SQL files
+- ✅ Complete organized directory structure
+- ✅ Properly formatted SQL files in dedicated `sql/` directory
 - ✅ Automatic `server_config.json` generation that handles virtualenvs
 - ✅ Clear, actionable next steps
 - ✅ Platform-specific Claude Desktop config paths
@@ -59,7 +83,7 @@ The `--bootstrap` flag provides:
 The bootstrap creates a simple hello world tool:
 
 ```yaml
-# endpoints/hello-world.yml
+# tools/hello-world.yml
 mxcp: "1.0.0"
 tool:
   name: "hello_world"
@@ -74,11 +98,11 @@ tool:
     type: "string"
     description: "Greeting message"
   source:
-    file: "hello-world.sql"
+    file: "../sql/hello-world.sql"  # References SQL file in sql/ directory
 ```
 
 ```sql
--- endpoints/hello-world.sql
+-- sql/hello-world.sql
 SELECT 'Hello, ' || $name || '!' as greeting
 ```
 
@@ -178,7 +202,7 @@ Experience MXCP's production-grade security and governance:
 Create a new endpoint with access control:
 
 ```yaml
-# endpoints/employee-data.yml
+# tools/employee-data.yml
 mxcp: "1.0.0"
 tool:
   name: employee_data
@@ -288,7 +312,7 @@ JOIN external_data e ON s.date = e.date
 
 **Step 2: MXCP endpoint queries the table**
 ```yaml
-# endpoints/sales-analysis.yml
+# tools/sales-analysis.yml
 tool:
   name: get_sales_analysis
   source:
@@ -319,7 +343,7 @@ WHERE timestamp < current_timestamp - interval '24 hours'
 
 **Step 2: MXCP endpoint queries the combined table**
 ```yaml
-# endpoints/dashboard.yml
+# tools/dashboard.yml
 tool:
   name: get_dashboard_metrics
   source:
@@ -593,8 +617,9 @@ After completing this quickstart, you should understand MXCP's unique value:
 
 **The MXCP + dbt Workflow:**
 1. **dbt models** (`models/*.sql`) → Create tables/views in DuckDB using dbt syntax
-2. **MXCP endpoints** (`endpoints/*.yml`) → Query the tables directly using standard SQL
-3. **Perfect separation**: dbt handles data transformation, MXCP handles AI interface
+2. **MXCP tools** (`tools/*.yml`) → Query the dbt tables directly using standard SQL
+3. **SQL files** (`sql/*.sql`) → Contain the actual SQL logic referenced by tools
+4. **Perfect separation**: dbt handles data transformation, MXCP handles AI interface, organized directories keep everything clean
 
 ### Learn More
 - **[Type System](../reference/type-system.md)** - Master MXCP's type validation system
