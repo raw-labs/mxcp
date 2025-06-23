@@ -1,0 +1,28 @@
+mxcp: 1
+tool:
+  name: aggregate_by_category
+  description: Aggregate data by category with statistics
+  language: python
+  source:
+    file: ../python/data_analysis.py
+  parameters:
+    - name: table_name
+      type: string
+      description: Name of the table to aggregate
+  return:
+    type: array
+    items:
+      type: object
+      properties:
+        category:
+          type: string
+        count:
+          type: integer
+        avg_value:
+          type: number
+        total_value:
+          type: number
+        min_value:
+          type: number
+        max_value:
+          type: number 

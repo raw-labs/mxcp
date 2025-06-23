@@ -195,11 +195,39 @@ class RAWMCP:
         self.db_lock = threading.Lock()
         logger.info("Shared DuckDB session created successfully")
         
+        # Initialize Python runtime for endpoints
+        self._init_python_runtime()
+        
         # Register cleanup handler for atexit as a safety net
         atexit.register(self.shutdown)
         
         # Track if we've already shut down to avoid double cleanup
         self._shutdown_called = False
+
+    def _init_python_runtime(self):
+        """Initialize Python runtime and load all Python modules"""
+        from mxcp.engine.python_loader import PythonEndpointLoader
+        from mxcp.runtime import _run_init_hooks
+        from mxcp.config.site_config import find_repo_root
+        
+        logger.info("Initializing Python runtime for endpoints...")
+        
+        # Create loader and pre-load all Python files
+        try:
+            repo_root = find_repo_root()
+            self.python_loader = PythonEndpointLoader(repo_root)
+            
+            # Preload all modules in python/ directory
+            self.python_loader.preload_all_modules()
+            
+            # Run init hooks
+            _run_init_hooks()
+            
+            logger.info("Python runtime initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Python runtime: {e}")
+            # Don't fail server startup if Python runtime fails
+            # SQL endpoints will still work
 
     def _ensure_async_completes(self, coro, timeout: float = 10.0, operation_name: str = "operation"):
         """Ensure an async operation completes, even when called from sync context with active event loop.
@@ -286,6 +314,18 @@ class RAWMCP:
                 except Exception as e:
                     logger.error(f"Error closing OAuth server: {e}")
                     # Continue with shutdown even if OAuth server close fails
+            
+            # Run Python shutdown hooks and cleanup
+            try:
+                from mxcp.runtime import _run_shutdown_hooks
+                _run_shutdown_hooks()
+                
+                # Clean up Python loader
+                if hasattr(self, 'python_loader') and self.python_loader:
+                    self.python_loader.cleanup()
+                    logger.info("Cleaned up Python runtime")
+            except Exception as e:
+                logger.error(f"Error cleaning up Python runtime: {e}")
             
             # Close DuckDB session
             if self.db_session:

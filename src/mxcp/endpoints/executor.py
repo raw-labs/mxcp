@@ -18,6 +18,7 @@ import asyncio
 import logging
 import pandas as pd
 import threading
+import functools
 
 if TYPE_CHECKING:
     from mxcp.auth.providers import UserContext
@@ -419,48 +420,16 @@ class EndpointExecutor:
                 raise ValueError(f"Policy enforcement failed: {e.reason}")
         
         if self.endpoint_type in (EndpointType.TOOL, EndpointType.RESOURCE):
-            # For tools and resources, we execute SQL and return results as list of dicts
-            source = self._get_source_code()
-            
-            # Check for missing parameters in SQL
-            required_params = duckdb.extract_statements(source)[0].named_parameters
-            missing_params = set(required_params) - set(params.keys())
-            if missing_params:
-                raise ValueError(f"Required parameter missing: {', '.join(missing_params)}")
-            
-            # Execute query with thread-safety if lock is provided
-            if self.db_lock:
-                with self.db_lock:
-                    result = self.session.execute_query_to_dict(source, params)
-            else:
-                result = self.session.execute_query_to_dict(source, params)
-                
-            logger.debug(f"SQL query returned {len(result)} rows")
-            logger.debug(f"First row (if any): {result[0] if result else 'No rows'}")
-            
-            # Transform result based on return type if specified
+            # Check the language of the endpoint
             endpoint_def = self.endpoint[self.endpoint_type.value]
-            if "return" in endpoint_def:
-                return_type = endpoint_def["return"].get("type")
-                logger.debug(f"Expected return type: {return_type}")
-                
-                if return_type != "array":
-                    if len(result) == 0:
-                        raise ValueError("SQL query returned no rows")
-                    if len(result) > 1:
-                        raise ValueError(f"SQL query returned multiple rows ({len(result)}), but return type is '{return_type}'")
-                    
-                    # We have exactly one row
-                    row = result[0]
-                    
-                    if return_type == "object":
-                        result = row
-                        logger.debug(f"Transformed to object: {result}")
-                    else:  # scalar type
-                        if len(row) != 1:
-                            raise ValueError(f"SQL query returned multiple columns ({len(row)}), but return type is '{return_type}'")
-                        result = next(iter(row.values()))
-                        logger.debug(f"Transformed to scalar: {result}")
+            language = endpoint_def.get("language", "sql")
+            
+            if language == "python":
+                # Execute Python code
+                result = await self._execute_python(params, endpoint_def)
+            else:
+                # Execute SQL (existing code)
+                result = await self._execute_sql(params, endpoint_def)
             
             # Validate the output against the return type definition if enabled
             if validate_output:
@@ -515,6 +484,130 @@ class EndpointExecutor:
                     raise ValueError(f"Output policy enforcement failed: {e.reason}")
             
             return processed_messages
+            
+    async def _execute_sql(self, params: Dict[str, Any], endpoint_def: Dict[str, Any]) -> EndpointResult:
+        """Execute SQL endpoint (existing logic extracted from execute method)"""
+        source = self._get_source_code()
+        
+        # Check for missing parameters in SQL
+        required_params = duckdb.extract_statements(source)[0].named_parameters
+        missing_params = set(required_params) - set(params.keys())
+        if missing_params:
+            raise ValueError(f"Required parameter missing: {', '.join(missing_params)}")
+        
+        # Execute query with thread-safety if lock is provided
+        if self.db_lock:
+            with self.db_lock:
+                result = self.session.execute_query_to_dict(source, params)
+        else:
+            result = self.session.execute_query_to_dict(source, params)
+            
+        logger.debug(f"SQL query returned {len(result)} rows")
+        logger.debug(f"First row (if any): {result[0] if result else 'No rows'}")
+        
+        # Transform result based on return type if specified
+        if "return" in endpoint_def:
+            return_type = endpoint_def["return"].get("type")
+            logger.debug(f"Expected return type: {return_type}")
+            
+            if return_type != "array":
+                if len(result) == 0:
+                    raise ValueError("SQL query returned no rows")
+                if len(result) > 1:
+                    raise ValueError(f"SQL query returned multiple rows ({len(result)}), but return type is '{return_type}'")
+                
+                # We have exactly one row
+                row = result[0]
+                
+                if return_type == "object":
+                    result = row
+                    logger.debug(f"Transformed to object: {result}")
+                else:  # scalar type
+                    if len(row) != 1:
+                        raise ValueError(f"SQL query returned multiple columns ({len(row)}), but return type is '{return_type}'")
+                    result = next(iter(row.values()))
+                    logger.debug(f"Transformed to scalar: {result}")
+        
+        return result
+        
+    async def _execute_python(self, params: Dict[str, Any], endpoint_def: Dict[str, Any]) -> EndpointResult:
+        """Execute Python endpoint"""
+        from mxcp.engine.python_loader import PythonEndpointLoader
+        from mxcp.runtime import _set_runtime_context, _clear_runtime_context
+        import asyncio
+        from contextvars import copy_context
+        
+        # Get source file path
+        source = endpoint_def.get("source", {})
+        if "file" not in source:
+            raise ValueError("Python endpoints must specify source.file")
+        
+        file_path = Path(source["file"])
+        if not file_path.is_absolute():
+            file_path = self.endpoint_file_path.parent / file_path
+        
+        # Load Python module
+        repo_root = find_repo_root()
+        loader = PythonEndpointLoader(repo_root)
+        module = loader.load_python_module(file_path)
+        
+        # Get function with same name as endpoint
+        func = loader.get_function(module, self.name)
+        
+        # Set runtime context for this execution
+        _set_runtime_context(
+            self.session,
+            self.user_config,
+            self.site_config,
+            self.session.plugins,
+            self.db_lock
+        )
+        
+        try:
+            # Execute function
+            if asyncio.iscoroutinefunction(func):
+                # Async function - run in context
+                ctx = copy_context()
+                result = await ctx.run(func, **params)
+            else:
+                # Sync function - run in thread pool to avoid blocking
+                loop = asyncio.get_event_loop()
+                # Use copy_context to preserve context vars in thread
+                ctx = copy_context()
+                # Use functools.partial to bind the arguments
+                bound_func = functools.partial(func, **params)
+                result = await loop.run_in_executor(None, ctx.run, bound_func)
+            
+            # Normalize result to match expected format
+            return self._normalize_python_result(result, endpoint_def)
+            
+        finally:
+            # Clear runtime context after execution
+            _clear_runtime_context()
+    
+    def _normalize_python_result(self, result: Any, endpoint_def: Dict[str, Any]) -> EndpointResult:
+        """Normalize Python function result to match SQL result format"""
+        return_def = endpoint_def.get("return", {})
+        return_type = return_def.get("type", "array")
+        
+        if return_type == "array":
+            # Expecting list of dicts
+            if not isinstance(result, list):
+                raise ValueError(f"Python function must return list for array return type, got {type(result).__name__}")
+            # Validate each item is a dict
+            for i, item in enumerate(result):
+                if not isinstance(item, dict):
+                    raise ValueError(f"Array item {i} must be a dict, got {type(item).__name__}")
+            return result
+        elif return_type == "object":
+            # Single dict
+            if not isinstance(result, dict):
+                raise ValueError(f"Python function must return dict for object return type, got {type(result).__name__}")
+            return result
+        else:
+            # Scalar - return as-is
+            # The validation will handle type checking
+            return result
             
     def _validate_return(self, output: EndpointResult) -> None:
         """Validate the output against the return type definition if present."""
