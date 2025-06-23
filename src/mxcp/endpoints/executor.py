@@ -587,6 +587,26 @@ class EndpointExecutor:
     
     def _normalize_python_result(self, result: Any, endpoint_def: Dict[str, Any]) -> EndpointResult:
         """Normalize Python function result to match SQL result format"""
+        from datetime import date, time
+        
+        def serialize_value(obj):
+            """Recursively serialize values to be JSON-compatible"""
+            if isinstance(obj, dict):
+                return {k: serialize_value(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [serialize_value(item) for item in obj]
+            elif isinstance(obj, pd.Timestamp):
+                return obj.isoformat()
+            elif isinstance(obj, (datetime, date, time)):
+                return obj.isoformat()
+            elif isinstance(obj, pd.NaT.__class__):
+                return None
+            elif hasattr(obj, 'isoformat'):
+                # Handle any other datetime-like objects
+                return obj.isoformat()
+            else:
+                return obj
+        
         return_def = endpoint_def.get("return", {})
         return_type = return_def.get("type", "array")
         
@@ -594,20 +614,21 @@ class EndpointExecutor:
             # Expecting list of dicts
             if not isinstance(result, list):
                 raise ValueError(f"Python function must return list for array return type, got {type(result).__name__}")
-            # Validate each item is a dict
+            # Validate each item is a dict and serialize timestamps
+            serialized_result = []
             for i, item in enumerate(result):
                 if not isinstance(item, dict):
                     raise ValueError(f"Array item {i} must be a dict, got {type(item).__name__}")
-            return result
+                serialized_result.append(serialize_value(item))
+            return serialized_result
         elif return_type == "object":
             # Single dict
             if not isinstance(result, dict):
                 raise ValueError(f"Python function must return dict for object return type, got {type(result).__name__}")
-            return result
+            return serialize_value(result)
         else:
-            # Scalar - return as-is
-            # The validation will handle type checking
-            return result
+            # Scalar - serialize if needed
+            return serialize_value(result)
             
     def _validate_return(self, output: EndpointResult) -> None:
         """Validate the output against the return type definition if present."""
