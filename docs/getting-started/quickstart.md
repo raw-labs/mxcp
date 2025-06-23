@@ -84,7 +84,7 @@ The bootstrap creates a simple hello world tool:
 
 ```yaml
 # tools/hello-world.yml
-mxcp: "1.0.0"
+mxcp: 1
 tool:
   name: "hello_world"
   description: "A simple hello world tool"
@@ -132,7 +132,7 @@ This example showcases MXCP's killer feature: **dbt-native data caching**
 ```yaml
 # dbt_project.yml - Standard dbt project
 name: 'covid_owid'
-version: '1.0.0'
+version: '1'
 profile: 'covid_owid'
 model-paths: ["models"]
 target-path: "target"
@@ -203,7 +203,7 @@ Create a new endpoint with access control:
 
 ```yaml
 # tools/employee-data.yml
-mxcp: "1.0.0"
+mxcp: 1
 tool:
   name: employee_data
   description: "Query employee information"

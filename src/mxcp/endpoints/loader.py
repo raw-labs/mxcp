@@ -138,17 +138,17 @@ class EndpointLoader:
     def discover_tools(self) -> List[Tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
         """Discover all tool definition files"""
         tools_dir = self._repo_root / self._site_config["paths"]["tools"]
-        return self._discover_in_directory(tools_dir, "tool-schema-1.0.0.json", "tool")
+        return self._discover_in_directory(tools_dir, "tool-schema-1.json", "tool")
 
     def discover_resources(self) -> List[Tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
         """Discover all resource definition files"""
         resources_dir = self._repo_root / self._site_config["paths"]["resources"]
-        return self._discover_in_directory(resources_dir, "resource-schema-1.0.0.json", "resource")
+        return self._discover_in_directory(resources_dir, "resource-schema-1.json", "resource")
 
     def discover_prompts(self) -> List[Tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
         """Discover all prompt definition files"""
         prompts_dir = self._repo_root / self._site_config["paths"]["prompts"]
-        return self._discover_in_directory(prompts_dir, "prompt-schema-1.0.0.json", "prompt")
+        return self._discover_in_directory(prompts_dir, "prompt-schema-1.json", "prompt")
 
     def discover_endpoints(self) -> List[Tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
         """Discover all endpoint files from their respective directories.
@@ -188,13 +188,13 @@ class EndpointLoader:
             # Determine which directory to search based on endpoint type
             if endpoint_type == "tool":
                 search_dir = self._repo_root / self._site_config["paths"]["tools"]
-                schema_name = "tool-schema-1.0.0.json"
+                schema_name = "tool-schema-1.json"
             elif endpoint_type == "resource":
                 search_dir = self._repo_root / self._site_config["paths"]["resources"]
-                schema_name = "resource-schema-1.0.0.json"
+                schema_name = "resource-schema-1.json"
             elif endpoint_type == "prompt":
                 search_dir = self._repo_root / self._site_config["paths"]["prompts"]
-                schema_name = "prompt-schema-1.0.0.json"
+                schema_name = "prompt-schema-1.json"
             else:
                 logger.error(f"Unknown endpoint type: {endpoint_type}")
                 return None

@@ -196,7 +196,7 @@ def _generate_default_config(site_config: SiteConfig) -> dict:
     logger.debug(f"Site config: {site_config}")
     
     config = {
-        "mxcp": "1.0.0",
+        "mxcp": "1",
         "projects": {
             project_name: {
                 "profiles": {
@@ -281,7 +281,7 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
     logger.debug(f"Config after applying defaults: {config}")
     
     # Load and apply JSON Schema validation
-    schema_path = Path(__file__).parent / "schemas" / "mxcp-config-schema-1.0.0.json"
+    schema_path = Path(__file__).parent / "schemas" / "mxcp-config-schema-1.json"
     with open(schema_path) as schema_file:
         schema = json.load(schema_file)
     

@@ -5,9 +5,10 @@
   "required": ["mxcp", "resource"],
   "properties": {
     "mxcp": {
-      "type": "string",
-      "description": "Schema version. Always use '1.0.0'.",
-      "default": "1.0.0"
+      "type": "integer",
+      "description": "Schema version. Must be 1.",
+      "enum": [1],
+      "default": 1
     },
 
     "resource": {

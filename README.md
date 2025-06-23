@@ -220,7 +220,7 @@ cd examples/covid_owid && dbt run && mxcp serve
 ### 1. Declarative Interface Definition
 ```yaml
 # tools/analyze_sales.yml
-mxcp: "1.0.0"
+mxcp: 1
 tool:
   name: analyze_sales
   description: "Analyze sales data with automatic caching"

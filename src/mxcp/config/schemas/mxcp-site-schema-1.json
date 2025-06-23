@@ -5,8 +5,10 @@
   "required": ["mxcp", "project", "profile"],
   "properties": {
     "mxcp": {
-      "type": "string",
-      "description": "Version of the mxcp-site.yml format. Must be '1.0.0'."
+      "type": "number",
+      "description": "Version of the mxcp-site.yml format. Must be 1.",
+      "enum": [1],
+      "default": 1
     },
     "project": {
       "type": "string",

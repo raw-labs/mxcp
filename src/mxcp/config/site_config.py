@@ -153,7 +153,7 @@ def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
         config = yaml.safe_load(f)
     
     # Load and apply JSON Schema validation
-    schema_path = Path(__file__).parent / "schemas" / "mxcp-site-schema-1.0.0.json"
+    schema_path = Path(__file__).parent / "schemas" / "mxcp-site-schema-1.json"
     with open(schema_path) as schema_file:
         schema = json.load(schema_file)
     

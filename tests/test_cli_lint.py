@@ -21,7 +21,7 @@ def test_lint_with_json_output(tmp_path):
     # Create a minimal mxcp-site.yml
     site_config = tmp_path / "mxcp-site.yml"
     site_config.write_text("""
-mxcp: "1.0.0"
+mxcp: 1
 project: test-lint
 profile: default
 """)
@@ -33,7 +33,7 @@ profile: default
     # Create a minimal endpoint without tests or examples (should trigger lint warnings)
     endpoint_file = tools_dir / "test.yml"
     endpoint_file.write_text("""
-mxcp: "1.0.0"
+mxcp: 1
 tool:
   name: test_tool
   description: "A test tool"

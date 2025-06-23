@@ -30,7 +30,7 @@ The example includes two plugin configurations in `config.yml`:
 To use the plugin, register these configurations in your MXCP user config (`~/.mxcp/config.yml`):
 
 ```yaml
-mxcp: 1.0.0
+mxcp: 1
 
 projects:
   demo-plugin:
@@ -47,7 +47,7 @@ projects:
 Then in your `mxcp-site.yml`, you can reference one of these configurations:
 
 ```yaml
-mxcp: 1.0.0
+mxcp: 1
 project: demo-plugin
 profile: dev
 plugin:

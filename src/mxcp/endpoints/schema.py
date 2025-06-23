@@ -166,7 +166,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
             return {"status": "error", "path": relative_path, "message": "No valid endpoint type (tool/resource/prompt) found"}
 
         # Use the appropriate schema based on endpoint type
-        schema_filename = f"{endpoint_type}-schema-1.0.0.json"
+        schema_filename = f"{endpoint_type}-schema-1.json"
         schema_path = Path(__file__).parent / "schemas" / schema_filename
         with open(schema_path) as schema_file:
             schema = json.load(schema_file)

@@ -27,7 +27,7 @@ def test_init_basic(tmp_path):
     with open(tmp_path / "mxcp-site.yml") as f:
         site_config = yaml.safe_load(f)
     
-    assert site_config["mxcp"] == "1.0.0"
+    assert site_config["mxcp"] == 1
     assert site_config["project"] == tmp_path.name
     assert site_config["profile"] == "default"
 

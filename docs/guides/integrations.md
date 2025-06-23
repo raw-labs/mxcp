@@ -332,7 +332,7 @@ DuckDB extensions enable access to various data sources. Note that you need to e
 To use secure connections, configure secrets in `~/.mxcp/config.yml`. Here's an example for the `httpfs` extension:
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 projects:
   my_project:
     profiles:
@@ -353,7 +353,7 @@ projects:
 Then reference these secrets in `mxcp-site.yml`:
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 project: my_project
 profile: dev
 secrets:

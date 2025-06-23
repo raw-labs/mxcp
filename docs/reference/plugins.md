@@ -35,7 +35,7 @@ MXCP plugins are Python modules that inherit from `MXCPBasePlugin` and use the `
 In your `mxcp-site.yml`, define the plugins you want to use:
 
 ```yaml
-mxcp: 1.0.0
+mxcp: 1
 project: my-project
 profile: dev
 
@@ -50,7 +50,7 @@ plugin:
 In your user configuration (`~/.mxcp/config.yml`), provide plugin-specific settings:
 
 ```yaml
-mxcp: 1.0.0
+mxcp: 1
 
 projects:
   my-project:

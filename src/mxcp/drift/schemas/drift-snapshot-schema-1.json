@@ -5,9 +5,10 @@
   "required": ["version", "generated_at", "tables", "resources"],
   "properties": {
     "version": {
-      "type": "string",
-      "description": "Version of the drift snapshot format",
-      "pattern": "^1\\.0\\.0$"
+      "type": "integer",
+      "description": "Version of the drift snapshot format. Must be 1.",
+      "enum": [1],
+      "default": 1
     },
     "generated_at": {
       "type": "string",
@@ -123,9 +124,9 @@
           },
           "definition": {
             "oneOf": [
-              { "$ref": "../../endpoints/schemas/tool-schema-1.0.0.json#/definitions/toolDefinition" },
-              { "$ref": "../../endpoints/schemas/resource-schema-1.0.0.json#/definitions/resourceDefinition" },
-              { "$ref": "../../endpoints/schemas/prompt-schema-1.0.0.json#/definitions/promptDefinition" }
+              { "$ref": "../../endpoints/schemas/tool-schema-1.json#/definitions/toolDefinition" },
+              { "$ref": "../../endpoints/schemas/resource-schema-1.json#/definitions/resourceDefinition" },
+              { "$ref": "../../endpoints/schemas/prompt-schema-1.json#/definitions/promptDefinition" }
             ],
             "description": "Endpoint definition"
           },

@@ -47,7 +47,7 @@ def check_project_exists_in_user_config(project_name: str) -> bool:
 def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str):
     """Create the mxcp-site.yml file with the given project and profile names."""
     config = {
-        "mxcp": "1.0.0",
+        "mxcp": 1,
         "project": project_name,
         "profile": profile_name
     }
@@ -87,7 +87,7 @@ def create_hello_world_files(target_dir: Path):
     
     # Create hello-world.yml in the tools directory
     hello_world_yml = {
-        "mxcp": "1.0.0",
+        "mxcp": 1,
         "tool": {
             "name": "hello_world",
             "description": "A simple hello world tool",

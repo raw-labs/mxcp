@@ -5,9 +5,10 @@
   "required": ["version", "generated_at", "baseline_snapshot_path", "current_snapshot_generated_at", "baseline_snapshot_generated_at", "has_drift", "summary", "table_changes", "resource_changes"],
   "properties": {
     "version": {
-      "type": "string",
-      "description": "Version of the drift report format",
-      "pattern": "^1\\.0\\.0$"
+      "type": "integer",
+      "description": "Version of the drift report format. Must be 1.",
+      "enum": [1],
+      "default": 1
     },
     "generated_at": {
       "type": "string",

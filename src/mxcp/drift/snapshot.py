@@ -110,7 +110,7 @@ async def generate_snapshot(
                 resources.append(resource_data)
         tables = get_duckdb_tables(conn)
         snapshot = DriftSnapshot(
-            version="1.0.0",
+            version=1,
             generated_at=datetime.utcnow().isoformat() + "Z",
             tables=tables,
             resources=resources

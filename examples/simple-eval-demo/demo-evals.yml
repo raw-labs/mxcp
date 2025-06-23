@@ -1,4 +1,4 @@
-mxcp: "1.0.0"
+mxcp: 1
 suite: basic_functionality
 description: "Test basic LLM functionality with simple tools"
 model: claude-4-sonnet

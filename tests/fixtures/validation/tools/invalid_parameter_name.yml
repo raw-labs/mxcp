@@ -1,4 +1,4 @@
-mxcp: "1.0.0"
+mxcp: 1
 tool:
   name: "invalid_param_name_test"
   description: "Test tool with invalid parameter name"

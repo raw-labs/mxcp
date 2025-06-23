@@ -30,7 +30,7 @@ Policy enforcement allows you to:
 Policies are defined in the endpoint YAML files using the `policies` section:
 
 ```yaml
-mxcp: '1.0.0'
+mxcp: '1'
 
 tool:
   name: employee_profile

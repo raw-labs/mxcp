@@ -26,7 +26,7 @@ The user configuration file supports environment variable interpolation using `$
 
 Example:
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 projects:
   my_project:
     profiles:
@@ -46,7 +46,7 @@ If any referenced environment variable is not set, MXCP will raise an error when
 
 ### Schema Version
 ```yaml
-mxcp: "1.0.0"  # Always use this version
+mxcp: 1  # Always use this version
 ```
 
 ### Transport Configuration
@@ -126,7 +126,7 @@ vault:
 Once Vault is configured, you can use `vault://` URLs anywhere in your configuration where you would normally put sensitive values:
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 vault:
   enabled: true
   address: "https://vault.example.com"
@@ -166,7 +166,7 @@ The repository configuration file (`mxcp-site.yml`) defines project-specific set
 
 ### Basic Configuration
 ```yaml
-mxcp: "1.0.0"  # Schema version
+mxcp: 1  # Schema version
 project: "my_project"  # Must match a project in ~/.mxcp/config.yml
 profile: "dev"  # Profile to use
 ```
@@ -248,7 +248,7 @@ Endpoints are defined in YAML files and can be of three types: tools, resources,
 
 ### Tool Definition
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 tool:
   name: "my_tool"
   description: "A tool that does something"
@@ -301,7 +301,7 @@ tool:
 
 ### Resource Definition
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 resource:
   uri: "my://resource/{id}"
   description: "A resource that provides data"
@@ -331,7 +331,7 @@ resource:
 
 ### Prompt Definition
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 prompt:
   name: "my_prompt"
   description: "A prompt template"

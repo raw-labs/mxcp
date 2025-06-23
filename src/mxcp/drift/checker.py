@@ -23,7 +23,7 @@ def load_and_validate_snapshot(snapshot_path: Path) -> DriftSnapshot:
         snapshot_data = json.load(f)
     
     # Validate version
-    if snapshot_data["version"] != "1.0.0":
+    if snapshot_data["version"] != 1:
         raise ValueError(f"Unsupported snapshot version: {snapshot_data['version']}")
     
     # Note: We skip detailed schema validation for now to avoid complex reference resolution
@@ -314,7 +314,7 @@ async def check_drift(
     
     # Create drift report
     report = DriftReport(
-        version="1.0.0",
+        version=1,
         generated_at=datetime.utcnow().isoformat() + "Z",
         baseline_snapshot_path=str(baseline_snapshot_path),
         current_snapshot_generated_at=current_snapshot["generated_at"],

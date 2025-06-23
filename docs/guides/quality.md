@@ -762,7 +762,7 @@ Create eval files with the suffix `-evals.yml` or `.evals.yml`:
 
 ```yaml
 # customer-evals.yml
-mxcp: "1.0.0"
+mxcp: 1
 suite: customer_analysis
 description: "Test LLM's ability to analyze customer data"
 model: claude-3-opus  # Optional: specify model for this suite
@@ -864,7 +864,7 @@ mxcp evals --json-output
 Add model configuration to your user config file (`~/.mxcp/config.yml`):
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 
 models:
   default: claude-3-opus
@@ -895,7 +895,7 @@ projects:
 ### Example: Comprehensive Eval Suite
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 suite: data_governance
 description: "Ensure LLM respects data access policies"
 

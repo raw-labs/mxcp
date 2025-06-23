@@ -36,7 +36,7 @@ def discover_eval_files(site_config: Optional[SiteConfig] = None) -> List[Tuple[
         logger.info(f"Evals directory {evals_dir} does not exist, skipping eval discovery")
         return results
     
-    schema_path = Path(__file__).parent / "schemas" / "eval-schema-1.0.0.json"
+    schema_path = Path(__file__).parent / "schemas" / "eval-schema-1.json"
     with open(schema_path) as f:
         schema = json.load(f)
     
