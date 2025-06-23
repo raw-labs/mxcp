@@ -1,6 +1,6 @@
 from pathlib import Path
 import yaml
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union, Tuple
 from dataclasses import dataclass
 from mxcp.endpoints.types import EndpointDefinition
 from mxcp.config.site_config import SiteConfig
@@ -48,10 +48,12 @@ def extract_validation_error(error_msg: str) -> str:
 class EndpointLoader:
     _endpoints: Dict[str, EndpointDefinition]
     _site_config: SiteConfig
+    _repo_root: Path
 
     def __init__(self, site_config: SiteConfig):
         self._site_config = site_config
         self._endpoints = {}
+        self._repo_root = find_repo_root()
     
     def _is_endpoint_enabled(self, endpoint_data: Dict[str, any]) -> bool:
         """Check if an endpoint is enabled.
@@ -67,37 +69,42 @@ class EndpointLoader:
             if endpoint_type in endpoint_data:
                 return endpoint_data[endpoint_type].get("enabled", True)
         return True
-    
-    def discover_endpoints(self) -> List[tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
-        """Discover all endpoint files and load their metadata, returning (file_path, endpoint_dict, error_message) tuples.
+
+    def _load_schema(self, schema_name: str) -> dict:
+        """Load a schema file by name"""
+        schema_path = Path(__file__).parent / "schemas" / schema_name
+        with open(schema_path) as f:
+            return json.load(f)
+
+    def _discover_in_directory(
+        self, 
+        directory: Path, 
+        schema_name: str, 
+        endpoint_type: str
+    ) -> List[Tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
+        """Discover endpoint files in a specific directory.
         
+        Args:
+            directory: Directory to search in
+            schema_name: Name of the schema file to validate against
+            endpoint_type: Type of endpoint (tool, resource, prompt)
+            
         Returns:
             List of tuples where each tuple contains:
             - file_path: Path to the endpoint file
             - endpoint_dict: The loaded endpoint dictionary if successful, None if failed
             - error_message: Error message if loading failed, None if successful
         """
-        # Always use repository root for finding endpoints
-        base_path = find_repo_root()
-            
         endpoints = []
-        schema_path = Path(__file__).parent / "schemas" / "endpoint-schema-1.0.0.json"
-        with open(schema_path) as f:
-            schema = json.load(f)
-            
-        # Get the MXCP_CONFIG environment variable if set
-        mxcp_config = Path(os.environ.get("MXCP_CONFIG", ""))
         
-        for f in base_path.rglob("*.yml"):
-            # Skip mxcp-site.yml only if it's at the root
-            if f.name == "mxcp-site.yml" and f.parent == base_path:
-                continue
-            # Skip eval files (ending with -evals.yml or .evals.yml)
-            if f.name.endswith("-evals.yml") or f.name.endswith(".evals.yml"):
-                continue
-            # Skip the file specified in MXCP_CONFIG if it exists
-            if mxcp_config.exists() and f.samefile(mxcp_config):
-                continue
+        # Skip if directory doesn't exist
+        if not directory.exists():
+            logger.info(f"Directory {directory} does not exist, skipping {endpoint_type} discovery")
+            return endpoints
+            
+        schema = self._load_schema(schema_name)
+        
+        for f in directory.rglob("*.yml"):
             try:
                 with open(f) as file:
                     data = yaml.safe_load(file)
@@ -106,8 +113,13 @@ class EndpointLoader:
                     if "mxcp" not in data:
                         logger.warning(f"Skipping {f}: Not a mxcp endpoint file (missing 'mxcp' field)")
                         continue
+                    
+                    # Check if it has the expected endpoint type
+                    if endpoint_type not in data:
+                        logger.warning(f"Skipping {f}: Expected {endpoint_type} definition but not found")
+                        continue
                         
-                    # Validate against schema only if it's a mxcp endpoint file
+                    # Validate against schema
                     validate(instance=data, schema=schema)
                     
                     # Check if endpoint is enabled
@@ -122,43 +134,79 @@ class EndpointLoader:
                 endpoints.append((f, None, error_msg))
                 
         return endpoints
+
+    def discover_tools(self) -> List[Tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
+        """Discover all tool definition files"""
+        tools_dir = self._repo_root / self._site_config["paths"]["tools"]
+        return self._discover_in_directory(tools_dir, "tool-schema-1.0.0.json", "tool")
+
+    def discover_resources(self) -> List[Tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
+        """Discover all resource definition files"""
+        resources_dir = self._repo_root / self._site_config["paths"]["resources"]
+        return self._discover_in_directory(resources_dir, "resource-schema-1.0.0.json", "resource")
+
+    def discover_prompts(self) -> List[Tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
+        """Discover all prompt definition files"""
+        prompts_dir = self._repo_root / self._site_config["paths"]["prompts"]
+        return self._discover_in_directory(prompts_dir, "prompt-schema-1.0.0.json", "prompt")
+
+    def discover_endpoints(self) -> List[Tuple[Path, Optional[Dict[str, any]], Optional[str]]]:
+        """Discover all endpoint files from their respective directories.
+        
+        Returns:
+            List of tuples where each tuple contains:
+            - file_path: Path to the endpoint file
+            - endpoint_dict: The loaded endpoint dictionary if successful, None if failed
+            - error_message: Error message if loading failed, None if successful
+        """
+        all_endpoints = []
+        
+        # Discover from each directory type
+        all_endpoints.extend(self.discover_tools())
+        all_endpoints.extend(self.discover_resources())
+        all_endpoints.extend(self.discover_prompts())
+        
+        return all_endpoints
     
     def get_endpoint(self, path: str) -> Optional[EndpointDefinition]:
         """Get a specific endpoint by its path"""
         return self._endpoints.get(path)
     
-    def load_endpoint(self, endpoint_type: str, name: str) -> Optional[tuple[Path, EndpointDefinition]]:
+    def load_endpoint(self, endpoint_type: str, name: str) -> Optional[Tuple[Path, EndpointDefinition]]:
         """Load a specific endpoint by type and name
+        
+        Args:
+            endpoint_type: Type of endpoint (tool, resource, prompt)
+            name: Name or identifier of the endpoint
         
         Returns:
             Optional[tuple[Path, EndpointDefinition]]: A tuple of (file_path, endpoint_data) if found, None otherwise
         """
         try:
-            # Find repository root
-            repo_root = find_repo_root()
-            logger.debug(f"Repository root: {repo_root}")
-            
-            # Get the MXCP_CONFIG environment variable if set
-            mxcp_config = Path(os.environ.get("MXCP_CONFIG", ""))
-            logger.debug(f"MXCP_CONFIG: {mxcp_config}")
             logger.debug(f"Looking for endpoint type: {endpoint_type}, name: {name}")
             
-            # List all YAML files in the repository
-            all_yaml_files = list(repo_root.rglob("*.yml"))
-            logger.debug(f"Found {len(all_yaml_files)} YAML files: {all_yaml_files}")
+            # Determine which directory to search based on endpoint type
+            if endpoint_type == "tool":
+                search_dir = self._repo_root / self._site_config["paths"]["tools"]
+                schema_name = "tool-schema-1.0.0.json"
+            elif endpoint_type == "resource":
+                search_dir = self._repo_root / self._site_config["paths"]["resources"]
+                schema_name = "resource-schema-1.0.0.json"
+            elif endpoint_type == "prompt":
+                search_dir = self._repo_root / self._site_config["paths"]["prompts"]
+                schema_name = "prompt-schema-1.0.0.json"
+            else:
+                logger.error(f"Unknown endpoint type: {endpoint_type}")
+                return None
             
-            # Find all endpoint files
-            for f in all_yaml_files:
-                # Skip mxcp-site.yml only if it's at the root
-                if f.name == "mxcp-site.yml" and f.parent == repo_root:
-                    continue
-                # Skip eval files (ending with -evals.yml or .evals.yml)
-                if f.name.endswith("-evals.yml") or f.name.endswith(".evals.yml"):
-                    continue
-                # Skip the file specified in MXCP_CONFIG if it exists
-                if mxcp_config.exists() and f.samefile(mxcp_config):
-                    continue
-                
+            if not search_dir.exists():
+                logger.error(f"Directory {search_dir} does not exist")
+                return None
+            
+            schema = self._load_schema(schema_name)
+            
+            # Search in the appropriate directory
+            for f in search_dir.rglob("*.yml"):
                 logger.debug(f"Checking file: {f}")
                 try:
                     with open(f) as file:
@@ -170,26 +218,23 @@ class EndpointLoader:
                             logger.debug(f"Skipping {f}: Not a mxcp endpoint file (missing 'mxcp' field)")
                             continue
                         
-                        # Check if this is the endpoint we're looking for
-                        if endpoint_type in data:
-                            logger.debug(f"Found endpoint type {endpoint_type} in {f}")
-                            logger.debug(f"Endpoint content: {data[endpoint_type]}")
-                            
-                            if endpoint_type == "tool" and "name" in data["tool"]:
-                                logger.debug(f"Tool name: {data['tool']['name']}, looking for: {name}")
-                                
-                            if endpoint_type == "resource" and "uri" in data["resource"]:
-                                logger.debug(f"Resource URI: {data['resource']['uri']}, looking for: {name}")
-                                
-                            if endpoint_type == "prompt" and "name" in data["prompt"]:
-                                logger.debug(f"Prompt name: {data['prompt']['name']}, looking for: {name}")
+                        # Check if it has the expected endpoint type
+                        if endpoint_type not in data:
+                            logger.debug(f"Skipping {f}: Expected {endpoint_type} definition but not found")
+                            continue
                         
                         # Check if this is the endpoint we're looking for
-                        if endpoint_type in data and (
-                            (endpoint_type == "tool" and data["tool"]["name"] == name) or
-                            (endpoint_type == "resource" and data["resource"]["uri"] == name) or
-                            (endpoint_type == "prompt" and data["prompt"]["name"] == name)
-                        ):
+                        endpoint_data = data[endpoint_type]
+                        if endpoint_type == "tool" and endpoint_data.get("name") == name:
+                            found = True
+                        elif endpoint_type == "resource" and endpoint_data.get("uri") == name:
+                            found = True
+                        elif endpoint_type == "prompt" and endpoint_data.get("name") == name:
+                            found = True
+                        else:
+                            found = False
+                        
+                        if found:
                             logger.debug(f"Found matching endpoint in {f}")
                             
                             # Check if endpoint is enabled
@@ -198,18 +243,17 @@ class EndpointLoader:
                                 continue
                             
                             # Validate against schema
-                            schema_path = Path(__file__).parent / "schemas" / "endpoint-schema-1.0.0.json"
-                            with open(schema_path) as schema_file:
-                                schema = json.load(schema_file)
-                                validate(instance=data, schema=schema)
+                            validate(instance=data, schema=schema)
                             self._endpoints[str(f)] = data
                             return (f, data)
+                            
                 except Exception as e:
                     logger.error(f"Warning: Failed to load endpoint {f}: {e}")
                     continue
                 
-            logger.error(f"Endpoint {endpoint_type}/{name} not found in any files")
+            logger.error(f"Endpoint {endpoint_type}/{name} not found in {search_dir}")
             return None
+            
         except Exception as e:
             logger.error(f"Warning: Failed to load endpoint {endpoint_type}/{name}: {e}")
             return None

@@ -41,6 +41,16 @@ class SiteProfileConfig(TypedDict, total=False):
     drift: Optional[SiteDriftConfig]
     audit: Optional[SiteAuditConfig]
 
+class SitePathsConfig(TypedDict, total=False):
+    tools: Optional[str]
+    resources: Optional[str]
+    prompts: Optional[str]
+    evals: Optional[str]
+    python: Optional[str]
+    sql: Optional[str]
+    drift: Optional[str]
+    audit: Optional[str]
+
 class SiteConfig(TypedDict):
     mxcp: str
     project: str
@@ -50,6 +60,7 @@ class SiteConfig(TypedDict):
     extensions: Optional[List[Union[str, SiteExtensionDefinition]]]
     dbt: Optional[SiteDbtConfig]
     sql_tools: Optional[SiteSqlToolsConfig]
+    paths: Optional[SitePathsConfig]
     profiles: Dict[str, SiteProfileConfig]
 
 # User Config Types (~/.mxcp/config.yml)

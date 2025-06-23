@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "MXCP Endpoint Definition Schema",
+  "title": "MXCP Resource Definition Schema",
   "type": "object",
-  "required": ["mxcp"],
+  "required": ["mxcp", "resource"],
   "properties": {
     "mxcp": {
       "type": "string",
@@ -10,17 +10,9 @@
       "default": "1.0.0"
     },
 
-    "tool": {
-      "$ref": "#/definitions/toolDefinition",
-      "description": "Defines an MCP tool endpoint."
-    },
     "resource": {
       "$ref": "#/definitions/resourceDefinition",
       "description": "Defines an MCP resource endpoint."
-    },
-    "prompt": {
-      "$ref": "#/definitions/promptDefinition",
-      "description": "Defines an MCP prompt endpoint."
     },
 
     "metadata": {
@@ -32,151 +24,8 @@
       "description": "Optional metadata for documentation purposes."
     }
   },
-  "oneOf": [
-    { "required": ["tool"] },
-    { "required": ["resource"] },
-    { "required": ["prompt"] }
-  ],
 
   "definitions": {
-    "toolDefinition": {
-      "type": "object",
-      "required": ["name", "source"],
-      "properties": {
-        "name": { 
-          "type": "string", 
-          "description": "Name of this tool.",
-          "minLength": 1
-        },
-        "description": { "type": "string", "description": "Description of this tool." },
-        "tags": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Tags to classify this tool."
-        },
-        "annotations": {
-          "type": "object",
-          "description": "Optional behavioral hints for this tool.",
-          "properties": {
-            "title": {
-              "type": "string",
-              "description": "Human-readable display title for the tool."
-            },
-            "readOnlyHint": {
-              "type": "boolean",
-              "description": "Hint: tool does not modify its environment (side-effect-free)."
-            },
-            "destructiveHint": {
-              "type": "boolean",
-              "description": "Hint: tool may perform destructive updates (e.g. delete, overwrite)."
-            },
-            "idempotentHint": {
-              "type": "boolean",
-              "description": "Hint: repeated calls with same arguments yield the same result."
-            },
-            "openWorldHint": {
-              "type": "boolean",
-              "description": "Hint: tool interacts with external systems or entities (non-closed-world)."
-            }
-          },
-          "additionalProperties": false
-        },
-        "parameters": {
-          "type": "array",
-          "description": "Input parameters for this endpoint.",
-          "items": { "$ref": "#/definitions/paramDefinition" }
-        },
-        "return": {
-          "$ref": "#/definitions/typeDefinition",
-          "description": "Description of the output schema."  
-        },
-        "language": {
-          "type": "string",
-          "default": "sql",
-          "enum": ["sql"],
-          "description": "The language used to define the logic of this endpoint. Only 'sql' is currently supported."
-        },
-        "source": {
-          "type": "object",
-          "description": "Source for the endpoint logic, either inline or a file reference.",
-          "oneOf": [
-            { "required": ["code"], "not": { "required": ["file"] } },
-            { "required": ["file"], "not": { "required": ["code"] } }
-          ],
-          "properties": {
-            "code": {
-              "type": "string",
-              "description": "The inline code snippet to execute."
-            },
-            "file": {
-              "type": "string",
-              "description": "A relative path to a file containing the code."
-            }
-          },
-          "additionalProperties": false
-        },
-        "enabled": { "type": "boolean", "default": true, "description": "Whether this endpoint is active." },
-        "tests": {
-          "type": "array",
-          "description": "Tests to validate this endpoint.",
-          "items": {
-            "type": "object",
-            "required": ["name", "arguments"],
-            "properties": {
-              "name": { "type": "string", "description": "Name of the test." },
-              "description": { "type": "string", "description": "What the test checks."  },
-              "arguments": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "required": ["key", "value"],
-                  "properties": {
-                    "key": { "type": "string", "description": "Input parameter to pass to test." },
-                    "value": { "description": "Value of the input parameter to test." }
-                  },
-                  "additionalProperties": false
-                }
-              },
-              "result": { "description": "Expected result." },
-              "user_context": { 
-                "type": "object",
-                "description": "User context for policy testing. Can include role, permissions, user_id, etc."
-              },
-              "result_contains": { 
-                "description": "Partial match - result must contain these fields/values. For arrays, checks if array contains this item."
-              },
-              "result_not_contains": { 
-                "type": "array",
-                "items": { "type": "string" },
-                "description": "List of field names that should NOT be present in the result."
-              },
-              "result_contains_item": { 
-                "description": "For array results - at least one array item must match this object/value."
-              },
-              "result_contains_all": { 
-                "type": "array",
-                "description": "For array results - all these items must be present (any order)."
-              },
-              "result_length": { 
-                "type": "integer",
-                "minimum": 0,
-                "description": "For array results - array must have exactly this many items."
-              },
-              "result_contains_text": { 
-                "type": "string",
-                "description": "For string results - result must contain this substring."
-              }
-            },
-            "additionalProperties": false
-          }
-        },
-        "policies": {
-          "$ref": "#/definitions/policySet",
-          "description": "Policy definitions for access control and data filtering."
-        }
-      }
-    },
-
     "resourceDefinition": {
       "type": "object",
       "required": ["uri", "source"],
@@ -212,8 +61,8 @@
         "language": {
           "type": "string",
           "default": "sql",
-          "enum": ["sql"],
-          "description": "The language used to define the logic of this endpoint. Only 'sql' is currently supported."
+          "enum": ["sql", "python"],
+          "description": "The language used to define the logic of this endpoint. 'sql' or 'python'."
         },
         "source": {
           "type": "object",
@@ -292,52 +141,6 @@
         "policies": {
           "$ref": "#/definitions/policySet",
           "description": "Policy definitions for access control and data filtering."
-        }
-      }
-    },
-
-    "promptDefinition": {
-      "type": "object",
-      "required": ["name"],
-      "properties": {
-        "name": { 
-          "type": "string", 
-          "description": "Logical name identifying this prompt.",
-          "minLength": 1
-        },
-        "description": { "type": "string", "description": "Description of this prompt." },
-        "tags": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Tags to classify the prompt."
-        },
-        "parameters": {
-          "type": "array",
-          "description": "Input parameters used to populate the prompt.",
-          "items": { "$ref": "#/definitions/paramDefinition" }
-        },
-        "messages": {
-          "type": "array",
-          "description": "List of structured prompt messages forming the full prompt sequence.",
-          "items": {
-            "type": "object",
-            "required": ["prompt"],
-            "properties": {
-              "role": {
-                "type": "string",
-                "description": "The role of the speaker of the message (e.g. 'user', 'assistant', 'system')."
-              },
-              "type": {
-                "type": "string",
-                "description": "The content type of the message (e.g. 'text')."
-              },
-              "prompt": {
-                "type": "string",
-                "description": "The templated prompt text (supports Jinja syntax)."
-              }
-            },
-            "additionalProperties": false
-          }
         }
       }
     },
@@ -506,4 +309,4 @@
       "additionalProperties": false
     }
   }
-}
+} 

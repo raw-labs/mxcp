@@ -100,6 +100,36 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
     # Initialize extensions section if not present
     if "extensions" not in config:
         config["extensions"] = []
+
+    # Initialize paths section if not present
+    if "paths" not in config:
+        config["paths"] = {}
+
+    # Apply defaults for paths configuration
+    paths_config = config["paths"]
+    if "tools" not in paths_config:
+        paths_config["tools"] = "tools"
+    
+    if "resources" not in paths_config:
+        paths_config["resources"] = "resources"
+    
+    if "prompts" not in paths_config:
+        paths_config["prompts"] = "prompts"
+    
+    if "evals" not in paths_config:
+        paths_config["evals"] = "evals"
+    
+    if "python" not in paths_config:
+        paths_config["python"] = "python"
+    
+    if "sql" not in paths_config:
+        paths_config["sql"] = "sql"
+    
+    if "drift" not in paths_config:
+        paths_config["drift"] = "drift"
+    
+    if "audit" not in paths_config:
+        paths_config["audit"] = "audit"
         
     return config
 

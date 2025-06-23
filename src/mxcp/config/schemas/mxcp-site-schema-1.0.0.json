@@ -205,6 +205,53 @@
         }
       },
       "additionalProperties": false
+    },
+    "paths": {
+      "type": "object",
+      "description": "Directory paths for different types of MXCP components.",
+      "properties": {
+        "tools": {
+          "type": "string",
+          "description": "Directory path for tool definitions (defaults to 'tools').",
+          "default": "tools"
+        },
+        "resources": {
+          "type": "string",
+          "description": "Directory path for resource definitions (defaults to 'resources').",
+          "default": "resources"
+        },
+        "prompts": {
+          "type": "string",
+          "description": "Directory path for prompt definitions (defaults to 'prompts').",
+          "default": "prompts"
+        },
+        "evals": {
+          "type": "string",
+          "description": "Directory path for evaluation definitions (defaults to 'evals').",
+          "default": "evals"
+        },
+        "python": {
+          "type": "string",
+          "description": "Directory path for Python extensions and shared code (defaults to 'python').",
+          "default": "python"
+        },
+        "sql": {
+          "type": "string",
+          "description": "Directory path for SQL files (defaults to 'sql').",
+          "default": "sql"
+        },
+        "drift": {
+          "type": "string",
+          "description": "Directory path for drift snapshots (defaults to 'drift').",
+          "default": "drift"
+        },
+        "audit": {
+          "type": "string",
+          "description": "Directory path for audit logs (defaults to 'audit').",
+          "default": "audit"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

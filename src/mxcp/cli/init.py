@@ -56,19 +56,36 @@ def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str)
         yaml.dump(config, f, default_flow_style=False)
 
 def create_hello_world_files(target_dir: Path):
-    """Create example hello world endpoint files."""
-    # Create endpoints directory if it doesn't exist
-    endpoints_dir = target_dir / "endpoints"
-    endpoints_dir.mkdir(exist_ok=True)
+    """Create example hello world endpoint files and directory structure."""
+    # Create all directories for the new structure
+    directories = [
+        "tools",
+        "resources", 
+        "prompts",
+        "evals",
+        "python",
+        "sql",
+        "drift",
+        "audit"
+    ]
+    
+    for directory in directories:
+        dir_path = target_dir / directory
+        dir_path.mkdir(exist_ok=True)
+        
+        # Create .gitkeep files for empty directories
+        if directory in ["resources", "prompts", "evals", "python", "drift", "audit"]:
+            gitkeep_file = dir_path / ".gitkeep"
+            gitkeep_file.touch()
 
-    # Create hello-world.sql - properly formatted
+    # Create hello-world.sql in the sql directory
     hello_world_sql = """SELECT 'Hello, ' || $name || '!' as greeting
 """
     
-    with open(endpoints_dir / "hello-world.sql", "w") as f:
+    with open(target_dir / "sql" / "hello-world.sql", "w") as f:
         f.write(hello_world_sql)
     
-    # Create hello-world.yml
+    # Create hello-world.yml in the tools directory
     hello_world_yml = {
         "mxcp": "1.0.0",
         "tool": {
@@ -88,12 +105,12 @@ def create_hello_world_files(target_dir: Path):
                 "description": "Greeting message"
             },
             "source": {
-                "file": "hello-world.sql"
+                "file": "../sql/hello-world.sql"
             }
         }
     }
     
-    with open(endpoints_dir / "hello-world.yml", "w") as f:
+    with open(target_dir / "tools" / "hello-world.yml", "w") as f:
         yaml.dump(hello_world_yml, f, default_flow_style=False, sort_keys=False)
 
 def detect_python_environment():
@@ -176,11 +193,25 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
     click.echo(f"   {project_dir}/")
     click.echo(f"   ├── mxcp-site.yml       # Project configuration")
     if bootstrap:
-        click.echo(f"   └── endpoints/          # Your MCP endpoints")
-        click.echo(f"       ├── hello-world.yml # Example tool definition")
-        click.echo(f"       └── hello-world.sql # SQL implementation")
+        click.echo(f"   ├── tools/              # Tool definitions")
+        click.echo(f"   │   └── hello-world.yml # Example tool definition")
+        click.echo(f"   ├── sql/                # SQL implementations")
+        click.echo(f"   │   └── hello-world.sql # SQL implementation")
+        click.echo(f"   ├── resources/          # Resource definitions")
+        click.echo(f"   ├── prompts/            # Prompt definitions")
+        click.echo(f"   ├── evals/              # Evaluation definitions")
+        click.echo(f"   ├── python/             # Python extensions")
+        click.echo(f"   ├── drift/              # Drift snapshots")
+        click.echo(f"   └── audit/              # Audit logs")
     else:
-        click.echo(f"   └── endpoints/          # Create your endpoints here")
+        click.echo(f"   ├── tools/              # Create your tool definitions here")
+        click.echo(f"   ├── resources/          # Create your resource definitions here")
+        click.echo(f"   ├── prompts/            # Create your prompt definitions here")
+        click.echo(f"   ├── evals/              # Create your evaluation definitions here")
+        click.echo(f"   ├── python/             # Create your Python extensions here")
+        click.echo(f"   ├── sql/                # Create your SQL implementations here")
+        click.echo(f"   ├── drift/              # Drift snapshots will be stored here")
+        click.echo(f"   └── audit/              # Audit logs will be stored here")
     
     click.echo(f"\n{click.style('🚀 Next Steps:', fg='cyan', bold=True)}\n")
     
@@ -190,7 +221,7 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
     if bootstrap:
         click.echo(f"   mxcp run tool hello_world --param name=World")
     else:
-        click.echo(f"   # Create your first endpoint in endpoints/")
+        click.echo(f"   # Create your first tool in tools/")
         click.echo(f"   # Then run: mxcp run tool <tool_name>")
     
     # Step 2: Start the server

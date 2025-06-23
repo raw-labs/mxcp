@@ -118,7 +118,7 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
             
             if not valid_endpoints:
                 click.echo(f"   {click.style('⚠️  No endpoints found!', fg='yellow')}")
-                click.echo(f"   Create endpoints in the 'endpoints/' directory")
+                click.echo(f"   Create tools in the 'tools/' directory, resources in 'resources/', etc.")
             
             click.echo("\n" + "-"*60)
             
