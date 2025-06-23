@@ -2,18 +2,6 @@
 
 This example demonstrates how to create and use Python-based endpoints in MXCP.
 
-## Setup
-
-1. Initialize your MXCP configuration:
-```bash
-mxcp init
-```
-
-2. Add this project to your configuration:
-```bash
-# The init command will guide you through this
-```
-
 ## Features Demonstrated
 
 ### 1. Basic Python Functions
