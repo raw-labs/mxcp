@@ -38,13 +38,13 @@ mxcp serve
 
 ```bash
 # Create sample data
-mxcp run tool create_sample_data --table_name test_data --row_count 100
+mxcp run tool create_sample_data --param table_name=test_data --param row_count=100
 
 # Analyze numbers
-mxcp run tool analyze_numbers --numbers "[1, 2, 3, 4, 5]" --operation mean
+mxcp run tool analyze_numbers --param numbers="[1, 2, 3, 4, 5]" --param operation=mean
 
 # Process time series (async function)
-mxcp run tool process_time_series --table_name test_data --window_days 7
+mxcp run tool process_time_series --param table_name=test_data --param window_days=7
 ```
 
 ## Project Structure
