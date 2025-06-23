@@ -1,0 +1,4 @@
+mxcp: 1
+# This is the global user config file used by CLI init tests
+# It doesn't define any specific projects since init creates new ones
+projects: {} 
