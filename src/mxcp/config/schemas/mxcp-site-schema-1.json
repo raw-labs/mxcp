@@ -5,7 +5,7 @@
   "required": ["mxcp", "project", "profile"],
   "properties": {
     "mxcp": {
-      "type": "number",
+      "type": "integer",
       "description": "Version of the mxcp-site.yml format. Must be 1.",
       "enum": [1],
       "default": 1
