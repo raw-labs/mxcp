@@ -17,12 +17,7 @@ This example demonstrates how to create and use Python-based endpoints in MXCP.
 
 ## Running the Examples
 
-1. Start the MXCP server:
-```bash
-mxcp serve
-```
-
-2. In another terminal, test the endpoints:
+In a terminal, test the endpoints:
 
 ```bash
 # Create sample data
@@ -33,6 +28,11 @@ mxcp run tool analyze_numbers --param numbers="[1, 2, 3, 4, 5]" --param operatio
 
 # Process time series (async function)
 mxcp run tool process_time_series --param table_name=test_data --param window_days=7
+```
+
+Or, if you prefer, you can also start the MXCP server and use any MCP client to call the tools:
+```bash
+mxcp serve
 ```
 
 ## Project Structure
