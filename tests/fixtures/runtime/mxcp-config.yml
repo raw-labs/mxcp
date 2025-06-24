@@ -1,0 +1,41 @@
+mxcp: 1
+projects:
+  runtime_test:
+    profiles:
+      default:
+        secrets:          
+          # Simple value secret
+          - name: simple_secret
+            type: value
+            parameters:
+              value: "test-secret-value-123"
+          
+          # API key secret (another value type)
+          - name: api_key
+            type: value
+            parameters:
+              value: "sk-test-api-key-xyz"
+          
+          # HTTP secret (now fully supported by get_secret, returns entire parameters dict)
+          - name: http_secret
+            type: http
+            parameters:
+              BEARER_TOKEN: "bearer-token-456"
+              EXTRA_HTTP_HEADERS:
+                X-API-Key: "api-key-789"
+                X-Custom-Header: "custom-value"
+          
+          # S3 secret
+          - name: s3_secret
+            type: s3
+            parameters:
+              ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE"
+              SECRET_ACCESS_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+              REGION: "us-east-1"
+        
+        # Plugin configuration for testing plugins runtime
+        plugin:
+          config:
+            test_plugin:
+              enabled: "true"
+              setting1: "value1" 

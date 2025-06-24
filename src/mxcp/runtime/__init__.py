@@ -52,8 +52,14 @@ class DatabaseProxy:
 class ConfigProxy:
     """Proxy for configuration access"""
     
-    def get_secret(self, key: str) -> Optional[str]:
-        """Get a secret from the user configuration"""
+    def get_secret(self, key: str) -> Optional[Dict[str, Any]]:
+        """Get a secret's parameters from the user configuration.
+        
+        Returns the entire parameters dict which can contain:
+        - Simple string values: {"key": "value"}
+        - Nested maps: {"EXTRA_HTTP_HEADERS": {"Header": "Value"}}
+        - Any combination of the above
+        """
         user_config = _user_config_context.get()
         if not user_config:
             return None
@@ -74,10 +80,8 @@ class ConfigProxy:
             # Secrets is now an array of secret objects
             for secret in secrets:
                 if secret.get("name") == key:
-                    # For value type secrets, return the value directly
-                    if secret.get("type") == "value":
-                        return secret.get("parameters", {}).get("value")
-                    # For other types, would need more complex handling
+                    # Return the entire parameters dict for any secret type
+                    return secret.get("parameters", {})
                     
             return None
         except (KeyError, TypeError):

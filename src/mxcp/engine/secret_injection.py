@@ -50,7 +50,7 @@ def inject_secrets(con, site_config: SiteConfig, user_config: UserConfig, profil
         # Build CREATE TEMPORARY SECRET statement
         params = []
         for key, value in secret["parameters"].items():
-            # Handle special case for HTTP headers
+            # Handle special case for nested dictionaries (e.g., HTTP headers)
             if isinstance(value, dict):
                 # Convert dict to DuckDB MAP syntax
                 map_items = [f"'{k}': '{v}'" for k, v in value.items()]
@@ -64,5 +64,12 @@ def inject_secrets(con, site_config: SiteConfig, user_config: UserConfig, profil
             {', '.join(params)}
         )
         """
-        logger.debug(f"Creating secret with SQL: {create_secret_sql}")
-        con.execute(create_secret_sql)
+        
+        try:
+            logger.debug(f"Creating secret with SQL: {create_secret_sql}")
+            con.execute(create_secret_sql)
+        except Exception as e:
+            # Log the error but continue - this allows MXCP to support any secret type
+            # while DuckDB only creates the ones it understands
+            logger.debug(f"Could not create secret '{secret['name']}' in DuckDB: {e}")
+            logger.debug("This secret will still be accessible via config.get_secret() in Python endpoints")

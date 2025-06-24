@@ -1,0 +1,33 @@
+mxcp: 1
+tool:
+  name: test_db_execute
+  description: Test the db.execute() runtime API
+  language: python
+  return:
+    type: object
+    properties:
+      basic_query_result:
+        type: array
+        description: Result of basic SELECT query
+      param_query_result:
+        type: array
+        description: Result of parameterized query
+      secrets_count:
+        type: integer
+        description: Number of secrets visible in DuckDB
+      secret_names:
+        type: array
+        items:
+          type: string
+        description: Names of secrets in DuckDB
+      connection_available:
+        type: boolean
+        description: Whether raw connection is accessible
+  source:
+    file: ../python/runtime_tests.py
+  tests:
+    - name: verify_db_access
+      arguments: []
+      result_contains:
+        secrets_count: 1
+        connection_available: true 

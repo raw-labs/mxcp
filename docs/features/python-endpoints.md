@@ -103,8 +103,17 @@ conn = db.connection
 ```python
 from mxcp.runtime import config
 
-# Get secrets
-api_key = config.get_secret("external_api_key")
+# Get secrets - returns the entire parameters dict
+secret_params = config.get_secret("external_api_key")
+# For a simple value secret: {"value": "api-key-123"}
+api_key = secret_params["value"] if secret_params else None
+
+# For complex secrets like HTTP with headers:
+http_secret = config.get_secret("api_service")
+# Returns: {"BEARER_TOKEN": "token", "EXTRA_HTTP_HEADERS": {"X-API-Key": "key"}}
+if http_secret:
+    token = http_secret.get("BEARER_TOKEN")
+    headers = http_secret.get("EXTRA_HTTP_HEADERS", {})
 
 # Get settings
 project_name = config.get_setting("project")

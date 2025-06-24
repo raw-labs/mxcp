@@ -243,9 +243,13 @@ def test_python_endpoint_with_secrets(temp_project_dir, test_configs, test_sessi
 from mxcp.runtime import config
 
 def get_secret_info() -> dict:
-    api_key = config.get_secret("api_key")
+    # get_secret now returns the parameters dict
+    api_key_params = config.get_secret("api_key")
     missing = config.get_secret("missing_key")
     setting = config.get_setting("project")
+    
+    # Extract value from value-type secret
+    api_key = api_key_params["value"] if api_key_params else None
     
     return {
         "has_api_key": api_key is not None,

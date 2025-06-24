@@ -235,10 +235,14 @@ def test_context_access() -> dict:
     \"\"\"Test access to runtime context (secrets, config).\"\"\"
     thread_id = threading.current_thread().name
     
-    # Access secrets
-    api_key = config.get_secret("api_key")
-    api_secret = config.get_secret("api_secret")
+    # Access secrets - get_secret now returns the parameters dict
+    api_key_params = config.get_secret("api_key")
+    api_secret_params = config.get_secret("api_secret")
     missing = config.get_secret("missing_key")
+    
+    # Extract values from value-type secrets
+    api_key = api_key_params["value"] if api_key_params else None
+    api_secret = api_secret_params["value"] if api_secret_params else None
     
     # Access config settings
     project = config.get_setting("project")

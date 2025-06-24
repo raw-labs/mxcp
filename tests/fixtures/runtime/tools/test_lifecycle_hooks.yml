@@ -1,0 +1,24 @@
+mxcp: 1
+tool:
+  name: test_lifecycle_hooks
+  description: Test on_init and on_shutdown lifecycle hooks
+  language: python
+  return:
+    type: object
+    properties:
+      init_called:
+        type: boolean
+      init_value:
+        type: string
+      init_file_exists:
+        type: boolean
+      lifecycle_works:
+        type: boolean
+  source:
+    file: ../python/runtime_tests.py
+  tests:
+    - name: verify_lifecycle
+      arguments: []
+      result_contains:
+        init_called: false
+        lifecycle_works: false 

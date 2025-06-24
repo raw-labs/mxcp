@@ -1,0 +1,25 @@
+mxcp: 1
+tool:
+  name: test_error_handling
+  description: Test error handling in runtime APIs
+  language: python
+  return:
+    type: object
+    properties:
+      errors:
+        type: object
+        description: Dictionary of errors encountered
+      db_error_contains_invalid:
+        type: boolean
+        description: Whether DB error mentions invalid SQL
+      none_params_works:
+        type: boolean
+        description: Whether None parameters are handled
+  source:
+    file: ../python/runtime_tests.py
+  tests:
+    - name: verify_error_handling
+      arguments: []
+      result_contains:
+        db_error_contains_invalid: true
+        none_params_works: true 
