@@ -434,6 +434,119 @@ tool:
         _clear_runtime_context()
 
 
+def test_async_context_propagation(temp_project_dir, test_configs, test_session):
+    """Test that context variables propagate correctly in async Python endpoints after fix."""
+    user_config, site_config = test_configs
+    
+    # Create async Python endpoint that uses context variables
+    python_file = temp_project_dir / "python" / "async_context_test.py"
+    python_file.write_text("""
+import asyncio
+from mxcp.runtime import db, config
+
+async def test_context_access() -> dict:
+    \"\"\"Test context variable access in async function.\"\"\"
+    # Try to access database (requires context)
+    try:
+        db_result = db.execute("SELECT COUNT(*) as count FROM test_data")
+        db_access_works = True
+        row_count = db_result[0]["count"]
+    except Exception as e:
+        db_access_works = False
+        row_count = None
+        error = str(e)
+    
+    # Try to access config (requires context)
+    try:
+        project = config.get_setting("project")
+        secret = config.get_secret("api_key")
+        config_access_works = True
+        secret_value = secret["value"] if secret else None
+    except Exception as e:
+        config_access_works = False
+        project = None
+        secret_value = None
+    
+    # Test nested async calls
+    nested_result = await _nested_async()
+    
+    return {
+        "db_access_works": db_access_works,
+        "row_count": row_count,
+        "config_access_works": config_access_works,
+        "project": project,
+        "secret_value": secret_value,
+        "nested_result": nested_result
+    }
+
+async def _nested_async() -> dict:
+    \"\"\"Nested async function to test context propagation.\"\"\"
+    await asyncio.sleep(0.01)  # Simulate async work
+    
+    try:
+        # Context should still be available in nested async calls
+        result = db.execute("SELECT name FROM test_data WHERE id = 1")
+        return {
+            "nested_works": True,
+            "name": result[0]["name"] if result else None
+        }
+    except Exception as e:
+        return {
+            "nested_works": False,
+            "error": str(e)
+        }
+""")
+    
+    # Create tool definition
+    tool_yaml = temp_project_dir / "tools" / "test_context_access.yml"
+    tool_yaml.write_text("""
+mxcp: 1
+tool:
+  name: test_context_access
+  description: Test context access in async endpoint
+  language: python
+  source:
+    file: ../python/async_context_test.py
+  parameters: []
+  return:
+    type: object
+""")
+    
+    # Set runtime context
+    _set_runtime_context(test_session, user_config, site_config, {})
+    
+    try:
+        # Execute endpoint
+        executor = EndpointExecutor(
+            EndpointType.TOOL,
+            "test_context_access",
+            user_config,
+            site_config,
+            test_session
+        )
+        
+        # Run async execution
+        async def run_test():
+            result = await executor.execute({})
+            return result
+        
+        result = asyncio.run(run_test())
+        
+        # Verify context was properly available
+        assert result["db_access_works"] is True, "Database access should work in async function"
+        assert result["row_count"] == 3, "Should be able to query database"
+        assert result["config_access_works"] is True, "Config access should work in async function"
+        assert result["project"] == "test-project", "Should be able to read project name"
+        assert result["secret_value"] == "test-api-key-123", "Should be able to read secret"
+        
+        # Verify nested async also had context
+        assert result["nested_result"]["nested_works"] is True, "Nested async should have context"
+        assert result["nested_result"]["name"] == "Alice", "Nested async should be able to query DB"
+        
+    finally:
+        _clear_runtime_context()
+
+
 def test_python_endpoint_error_handling(temp_project_dir, test_configs, test_session):
     """Test error handling in Python endpoints."""
     user_config, site_config = test_configs

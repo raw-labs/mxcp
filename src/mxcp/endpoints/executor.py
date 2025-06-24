@@ -566,9 +566,8 @@ class EndpointExecutor:
         try:
             # Execute function
             if asyncio.iscoroutinefunction(func):
-                # Async function - run in context
-                ctx = copy_context()
-                result = await ctx.run(func, **params)
+                # Async function - await directly (context propagates automatically)
+                result = await func(**params)
             else:
                 # Sync function - run in thread pool to avoid blocking
                 loop = asyncio.get_event_loop()
