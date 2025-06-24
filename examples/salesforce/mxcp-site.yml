@@ -1,5 +1,5 @@
 mxcp: 1
-project: acorn
+project: salesforce-demo
 profile: dev
 
 extensions:
