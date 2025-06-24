@@ -14,7 +14,7 @@
         "message": "No tests defined"
       },
       "definition": {
-        "mxcp": "1",
+        "mxcp": 1,
         "tool": {
           "description": "A simple hello world tool",
           "enabled": true,
