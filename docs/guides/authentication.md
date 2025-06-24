@@ -1047,6 +1047,7 @@ The authentication system is designed to be extensible. Future OAuth providers c
 
 ## See Also
 
+- **[SQL Reference](../reference/sql.md)** - Quick reference for authentication SQL functions
 - **[Policy Enforcement](../features/policies.md)** - Control access to endpoints based on user context
 - **[Audit Logging](../features/auditing.md)** - Track authentication events and access attempts
 - **[Testing with User Context](quality.md#testing-policy-protected-endpoints)** - Test authenticated endpoints
