@@ -1,0 +1,160 @@
+category: advanced
+description: "Advanced features and optimizations"
+subcategories:
+  - name: secrets
+    description: "Manage secrets and credentials"
+    topics:
+      - name: secret-management
+        description: "Configure and use secrets"
+        content:
+          overview: "Securely manage API keys, passwords, and other sensitive data"
+          security_critical: |
+            🚨 CRITICAL SECURITY WARNING:
+            • NEVER hardcode secrets in YAML files or code
+            • NEVER commit secrets to version control
+            • Always use environment variables or HashiCorp Vault
+            • Rotate secrets regularly
+            • Use least-privilege access principles
+            • Monitor for accidental secret exposure in logs
+          prerequisites:
+            - "MXCP project initialized"
+            - "Environment variables set with actual secret values"
+            - "Understanding of security best practices"
+          steps:
+            - command: "🔒 Set environment variables securely:"
+              description: |
+                # Set environment variables (REQUIRED for security)
+                export MY_API_KEY="your_actual_api_key_here"
+                export DB_PASSWORD="your_actual_password_here"
+                
+                # NEVER do this:
+                # MY_API_KEY="hardcoded_key"  # ❌ SECURITY RISK
+            - command: "Define secrets in ~/.mxcp/config.yml:"
+              description: |
+                projects:
+                  my-project:
+                    profiles:
+                      dev:
+                        secrets:
+                          - name: api_key
+                            type: string
+                            parameters:
+                              value: ${MY_API_KEY}  # Environment variable reference
+                          - name: db_credentials
+                            type: database
+                            parameters:
+                              host: localhost
+                              username: user
+                              password: ${DB_PASSWORD}  # Environment variable reference
+            - command: "Alternative: Use HashiCorp Vault (Enterprise):"
+              description: |
+                # In ~/.mxcp/config.yml
+                vault:
+                  enabled: true
+                  address: "https://vault.company.com"
+                  token_env: "VAULT_TOKEN"
+                
+                # Then use vault:// URLs
+                secrets:
+                  - name: db_credentials
+                    type: database
+                    parameters:
+                      username: "vault://secret/database#username"
+                      password: "vault://secret/database#password"
+            - command: "Reference secrets in mxcp-site.yml:"
+              description: |
+                secrets:
+                  - api_key
+                  - db_credentials
+          verification:
+            - "Run: mxcp validate (should not show secret values)"
+            - "Check logs contain no secret values"
+            - "Verify environment variables are set: echo $MY_API_KEY"
+          security_checklist:
+            - "✅ Secrets use environment variables only"
+            - "✅ No hardcoded passwords in any files"
+            - "✅ .env files added to .gitignore"
+            - "✅ Secret rotation plan in place"
+            - "✅ Log monitoring for secret exposure"
+          common_issues:
+            - issue: "Environment variable not found"
+              solution: "Set the environment variable before starting MXCP"
+              security_note: "This prevents MXCP from starting - good security feature"
+            - issue: "Secret appears in logs"
+              solution: "Check for accidental logging of secret values"
+              security_note: "Immediately rotate compromised secrets"
+            - issue: "Secret not available in endpoint"
+              solution: "Ensure secret name is listed in mxcp-site.yml secrets"
+          next_steps:
+            - "Test secret injection: mxcp query \"SELECT '${secret_name}'\""
+            - "Set up secret rotation: Create automation for regular updates"
+            - "Monitor logs: Implement secret detection in log analysis"
+
+  - name: performance
+    description: "Optimize performance and scalability"
+    topics:
+      - name: query-optimization
+        description: "Optimize SQL queries"
+        content:
+          overview: "Improve query performance in MXCP endpoints"
+          techniques:
+            - "Use appropriate indexes on frequently queried columns"
+            - "Limit result sets with LIMIT clauses"
+            - "Use efficient JOIN strategies"
+            - "Cache frequently accessed data"
+          steps:
+            - command: "Analyze query performance:"
+              description: "EXPLAIN SELECT * FROM my_table WHERE condition"
+            - command: "Add limits to large datasets:"
+              description: "SELECT * FROM large_table LIMIT 1000"
+            - command: "Use efficient filtering:"
+              description: "Filter early in query processing"
+          verification:
+            - "Queries execute quickly"
+            - "Memory usage is reasonable"
+          common_issues:
+            - issue: "Slow queries"
+              solution: "Add appropriate WHERE clauses and LIMIT statements"
+            - issue: "Memory errors"
+              solution: "Process data in smaller chunks"
+          next_steps:
+            - "Monitor performance: Add logging and metrics"
+            - "Scale up: Consider database optimization"
+
+  - name: plugins
+    description: "Extend MXCP with custom plugins"
+    topics:
+      - name: custom-plugins
+        description: "Create custom MXCP plugins"
+        content:
+          overview: "Extend MXCP functionality with custom Python plugins"
+          prerequisites:
+            - "Python programming knowledge"
+            - "Understanding of MXCP architecture"
+          steps:
+            - command: "Create plugin directory:"
+              description: "mkdir my_plugin && cd my_plugin"
+            - command: "Create __init__.py:"
+              description: |
+                from mxcp.plugins.base import MXCPPlugin
+                
+                class MyPlugin(MXCPPlugin):
+                    def initialize(self):
+                        # Plugin initialization logic
+                        pass
+            - command: "Configure in mxcp-site.yml:"
+              description: |
+                plugin:
+                  - name: my_plugin
+                    module: my_plugin
+          verification:
+            - "Plugin loads without errors"
+            - "Plugin functionality works as expected"
+          common_issues:
+            - issue: "Plugin not found"
+              solution: "Check module path and Python path"
+            - issue: "Import errors"
+              solution: "Ensure all dependencies are installed"
+          next_steps:
+            - "Advanced plugins: Add custom endpoints and functionality"
+            - "Share plugins: Package for distribution" 

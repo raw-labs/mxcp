@@ -1,0 +1,167 @@
+category: endpoints
+description: "Create and manage tools, resources, and prompts"
+subcategories:
+  - name: tools
+    description: "Create tool endpoints for actions and queries"
+    topics:
+      - name: basic-tool
+        description: "Create a simple tool endpoint"
+        content:
+          overview: "Create a basic tool that executes SQL and returns results"
+          prerequisites:
+            - "MXCP project initialized"
+            - "Basic understanding of SQL"
+          security_warning: |
+            🚨 SECURITY WARNING: Always use parameterized queries to prevent SQL injection:
+            • Use $parameter_name in SQL (NEVER string concatenation)
+            • Validate all parameter types and constraints
+            • Test with malicious inputs before deployment
+            • Never trust user input without validation
+          steps:
+            - command: "Create endpoints/my-tool.yml:"
+              description: |
+                mxcp: "1.0.0"
+                tool:
+                  name: my_tool
+                  description: "My first tool"
+                  parameters:
+                    - name: param1
+                      type: string
+                      description: "A parameter"
+                      # 🔒 SECURITY: Add constraints to prevent injection
+                      minLength: 1
+                      maxLength: 100
+                      pattern: "^[a-zA-Z0-9\\s]+$"  # Only allow safe characters
+                  return:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                  source:
+                    file: "my-tool.sql"
+                  # 🔒 SECURITY: Always include tests
+                  tests:
+                    - name: "basic_test"
+                      arguments:
+                        - key: param1
+                          value: "World"
+                      result:
+                        message: "Hello, World!"
+            - command: "Create endpoints/my-tool.sql:"
+              description: |
+                -- 🔒 SECURITY: Use parameterized queries ($ prefix)
+                -- This prevents SQL injection attacks
+                SELECT 'Hello, ' || $param1 || '!' as message
+          verification:
+            - "Run: mxcp validate"
+            - "Run: mxcp run tool my_tool --param param1=World"
+          common_issues:
+            - issue: "Tool not found"
+              solution: "Check file names match (my-tool.yml and my-tool.sql)"
+            - issue: "Parameter error"
+              solution: "Ensure parameter names match between YAML and SQL"
+          next_steps:
+            - "Add return type validation: mxcp agent-help endpoints tools return-types"
+            - "Add tests: mxcp agent-help testing"
+      
+      - name: return-types
+        description: "Define return type schemas"
+        content:
+          overview: "Specify what data structure your tool returns"
+          basic_types:
+            - "string - Single text value"
+            - "number - Numeric value"
+            - "boolean - true/false"
+            - "array - List of items"
+            - "object - Structured data"
+          examples:
+            - type: "string"
+              description: "Tool returns a single string"
+              yaml: |
+                return:
+                  type: string
+                  description: "A greeting message"
+            - type: "array"
+              description: "Tool returns a list of objects"
+              yaml: |
+                return:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id: {type: integer}
+                      name: {type: string}
+          validation_tips:
+            - "Match return type to your SQL query results"
+            - "Use object for single row, array for multiple rows"
+            - "Test with: mxcp run tool <name>"
+  
+  - name: resources
+    description: "Create resource endpoints for data access"
+    topics:
+      - name: basic-resource
+        description: "Create a simple resource endpoint"
+        content:
+          overview: "Create a resource that provides data via URI"
+          prerequisites:
+            - "MXCP project initialized"
+            - "Understanding of URI patterns"
+          steps:
+            - command: "Create endpoints/my-resource.yml:"
+              description: |
+                mxcp: "1.0.0"
+                resource:
+                  uri: "data://{id}"
+                  description: "Get data by ID"
+                  mime_type: "application/json"
+                  parameters:
+                    - name: id
+                      type: integer
+                  source:
+                    code: "SELECT * FROM my_table WHERE id = $id"
+          verification:
+            - "Run: mxcp validate"
+            - "Test with MCP client"
+          common_issues:
+            - issue: "Invalid URI format"
+              solution: "Use scheme://path/{param} format"
+            - issue: "Parameter mismatch"
+              solution: "Ensure URI parameters match parameter definitions"
+          next_steps:
+            - "Test with client: mxcp agent-help testing"
+            
+  - name: prompts
+    description: "Create prompt endpoints for AI interactions"
+    topics:
+      - name: basic-prompt
+        description: "Create a simple prompt endpoint"
+        content:
+          overview: "Create a prompt that provides context to AI models"
+          prerequisites:
+            - "MXCP project initialized"
+            - "Understanding of prompt templates"
+          steps:
+            - command: "Create endpoints/my-prompt.yml:"
+              description: |
+                mxcp: "1.0.0"
+                prompt:
+                  name: analyze_data
+                  description: "Analyze data with context"
+                  parameters:
+                    - name: data_type
+                      type: string
+                  messages:
+                    - role: system
+                      prompt: "You are a data analyst"
+                    - role: user
+                      prompt: "Please analyze the {{data_type}} data"
+          verification:
+            - "Run: mxcp validate"
+            - "Test with MCP client"
+          common_issues:
+            - issue: "Template syntax error"
+              solution: "Use {{parameter}} syntax for variables"
+            - issue: "Missing parameters"
+              solution: "Define all parameters used in templates"
+          next_steps:
+            - "Add data context: mxcp agent-help endpoints prompts with-data" 

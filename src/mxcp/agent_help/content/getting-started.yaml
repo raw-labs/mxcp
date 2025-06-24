@@ -1,0 +1,392 @@
+category: getting-started
+description: "Initialize and set up MXCP projects"
+technical_context: |
+  MXCP is a SQL-powered MCP server that uses DuckDB as the underlying database engine:
+  - All SQL queries run through DuckDB (in-memory analytics database)
+  - Parameters are safely injected using $param syntax (DuckDB feature)
+  - Extensions like postgres_scanner, httpfs enable external data access
+  - No separate database installation needed - DuckDB is embedded
+  External search hints: "DuckDB getting started", "DuckDB parameter injection", "MCP protocol basics"
+security_warning: |
+  🚨 SECURITY WARNING: Always follow security best practices when using MXCP:
+  • NEVER commit secrets or credentials to version control
+  • Use environment variables for all sensitive data
+  • Validate all inputs to prevent SQL injection
+  • Test endpoints thoroughly before deployment
+  • Enable authentication in production environments
+subcategories:
+  - name: new-project
+    description: "Create a new MXCP project from scratch"
+    agent_priority: high
+    topics:
+      - name: minimal-setup
+        description: "Bare minimum to get started"
+        content:
+          overview: "Creating a minimal MXCP project with a working endpoint in under 5 minutes."
+          technical_requirements:
+            - "DuckDB engine is embedded - no separate installation needed"
+            - "Parameter injection prevents SQL injection using $param syntax"
+            - "Return types must match actual SQL query results"
+          prerequisites:
+            - "Python 3.8 or higher installed"
+            - "pip package manager available"
+            - "MXCP installed (pip install mxcp)"
+          code_examples:
+            - step: "1. Initialize project"
+              command: "mxcp init my-project"
+              description: "Creates mxcp-site.yml and endpoints/ directory"
+            - step: "2. Navigate to project"
+              command: "cd my-project"
+            - step: "3. Create endpoints/hello.yml"
+              content: |
+                mxcp: "1.0.0"
+                tool:
+                  name: hello
+                  description: "Say hello to someone"
+                  parameters:
+                    - name: name
+                      type: string
+                      description: "Name to greet"
+                      default: "World"
+                  return: 
+                    type: string
+                  source:
+                    code: |
+                      SELECT 'Hello, ' || $name || '!' as result
+              technical_note: "DuckDB concatenation (||) and parameter injection ($name)"
+            - step: "4. Test endpoint"
+              command: "mxcp run tool hello --param name=Alice"
+              expected: "'Hello, Alice!'"
+          verification_commands:
+            - "mxcp validate  # Check YAML syntax and schema"
+            - "mxcp list tools  # Should show 'hello' tool"
+            - "mxcp run tool hello --param name=Alice  # Should return greeting"
+            - "mxcp query \"SELECT 'DuckDB working!' as test\"  # Test DuckDB directly"
+          troubleshooting_commands:
+            - "mxcp validate --debug  # Show detailed validation errors"
+            - "ls -la endpoints/  # Check file exists and permissions"
+            - "cat endpoints/hello.yml  # Verify file content"
+          external_search_hints:
+            - "DuckDB string concatenation"
+            - "DuckDB SELECT statements"
+            - "MXCP project structure"
+          key_insight: "This uses the YAML + inline SQL pattern - perfect for simple tools"
+          common_issues:
+            - issue: "Tool not found"
+              solution: "Check file is saved as endpoints/hello.yml (not .yaml or .txt)"
+              technical_note: "MXCP scans for .yml files in endpoints/ directory"
+            - issue: "Parameter error"
+              solution: "Ensure parameter name matches: $name in SQL, name: in YAML"
+              technical_note: "DuckDB parameter injection requires exact name match"
+            - issue: "mxcp command not found"
+              solution: "Install MXCP with: pip install mxcp"
+          next_steps:
+            - "Try a real example: mxcp agent-help examples basic calculator-tool"
+            - "Add data source: mxcp agent-help examples database postgres-basic"
+            - "Learn file patterns: mxcp agent-help examples patterns file-structures"
+      
+      - name: with-examples
+        description: "Bootstrap with example endpoints"
+        content:
+          overview: "Get started with proven, working examples that you can run immediately."
+          technical_requirements:
+            - "Examples use real DuckDB features like CASE statements"
+            - "read_json_auto() requires DuckDB httpfs extension (auto-loaded)"
+            - "NOW() function provides current timestamp"
+          prerequisites:
+            - "Python 3.8 or higher installed"
+            - "MXCP installed"
+          code_examples:
+            - step: "1. Initialize with simple calculator"
+              instructions: "Copy calculator example from: mxcp agent-help examples basic calculator-tool"
+            - step: "2. Test calculator immediately"
+              command: "mxcp run tool calculate --param expression='2 + 2'"
+              expected: "4"
+              technical_note: "DuckDB CASE statement evaluation"
+            - step: "3. Create time endpoint (endpoints/get_time.yml)"
+              content: |
+                mxcp: "1.0.0"
+                tool:
+                  name: get_current_time
+                  description: "Get the current date and time"
+                  annotations:
+                    readOnlyHint: true
+                    idempotentHint: false
+                  return:
+                    type: object
+                    properties:
+                      current_time: {type: string}
+                      timezone: {type: string}
+                  source:
+                    code: |
+                      SELECT 
+                        NOW()::TEXT as current_time,
+                        'UTC' as timezone
+              technical_note: "DuckDB NOW() function and type casting (::TEXT)"
+            - step: "4. Test time endpoint"
+              command: "mxcp run tool get_current_time"
+              expected: "current_time and timezone fields"
+          verification_commands:
+            - "mxcp run tool calculate --param expression='2 + 2'  # Expected: 4"
+            - "mxcp run tool get_current_time  # Expected: timestamp object"
+            - "mxcp list tools  # Should show both tools"
+          troubleshooting_commands:
+            - "mxcp validate --debug  # Check all endpoints"
+            - "mxcp query \"SELECT NOW()\"  # Test DuckDB time function"
+            - "mxcp query \"SELECT CASE WHEN '1+1' = '1+1' THEN 2 END\"  # Test CASE logic"
+          external_search_hints:
+            - "DuckDB CASE statements"
+            - "DuckDB NOW function"
+            - "DuckDB type casting"
+          what_you_get:
+            - "Working calculator with parameter validation"
+            - "Time endpoint showing current timestamp"  
+            - "Complete project structure you can modify"
+            - "Understanding of DuckDB functions"
+          common_issues:
+            - issue: "Tool not found"
+              solution: "Make sure you're in the project directory with endpoints/ folder"
+              technical_note: "MXCP looks for endpoints/ in current directory"
+            - issue: "SQL syntax error"
+              solution: "Check DuckDB SQL syntax - different from MySQL/PostgreSQL"
+              technical_note: "DuckDB has its own SQL dialect"
+          next_steps:
+            - "Explore the files: endpoints/calculate.yml and endpoints/get_time.yml"
+            - "Modify the calculator to add more operations"
+            - "Try the earthquake API: mxcp agent-help examples basic earthquake-api"
+            - "Connect to real data: mxcp agent-help examples database postgres-basic"
+      
+      - name: project-structure
+        description: "Understanding the file structure"
+        content:
+          overview: "Learn about MXCP project structure and key files."
+          technical_requirements:
+            - "mxcp-site.yml configures DuckDB extensions and project settings"
+            - "endpoints/ directory contains all tool/resource/prompt definitions"
+            - "DuckDB database files (db-*.duckdb) store persistent data"
+            - "dbt integration is optional but powerful for data transformation"
+          key_files:
+            - file: "mxcp-site.yml"
+              description: "Main project configuration file"
+              required: true
+              technical_note: "Configures DuckDB extensions, project metadata"
+            - file: "endpoints/"
+              description: "Directory containing all endpoint definitions"
+              required: true
+              technical_note: "MXCP scans this directory for .yml files"
+            - file: "models/"
+              description: "dbt models for data transformation (optional)"
+              required: false
+              technical_note: "dbt SQL models run before endpoint queries"
+            - file: "dbt_project.yml"
+              description: "dbt configuration (optional)"
+              required: false
+              technical_note: "Enables SQL transformation pipeline"
+            - file: "db-{profile}.duckdb"
+              description: "DuckDB database file (auto-generated)"
+              required: false
+              technical_note: "Persistent DuckDB storage, created automatically"
+          structure_example: |
+            my-project/
+            ├── mxcp-site.yml          # Project configuration + DuckDB extensions
+            ├── endpoints/             # MCP endpoints (tools/resources/prompts)
+            │   ├── my-tool.yml       # Tool endpoint definition
+            │   ├── my-tool.sql       # SQL implementation (optional separate file)
+            │   └── my-resource.yml   # Resource endpoint
+            ├── models/               # dbt models (optional)
+            │   └── my_model.sql      # SQL transformation
+            ├── dbt_project.yml       # dbt config (optional)
+            └── db-default.duckdb     # DuckDB database file (auto-created)
+          configuration_example:
+            - file: "mxcp-site.yml"
+              content: |
+                mxcp: "1.0.0"
+                project: my-project
+                profile: dev
+                extensions:          # DuckDB extensions
+                  - postgres_scanner # PostgreSQL connectivity
+                  - httpfs          # HTTP data access
+                sql_tools:
+                  enabled: true      # Enable built-in SQL query tools
+              technical_note: "Extensions are loaded into DuckDB automatically"
+          verification_commands:
+            - "mxcp validate  # Check project structure"
+            - "mxcp list  # Show all available endpoints"
+            - "mxcp query \"SELECT * FROM duckdb_extensions()\"  # Show loaded extensions"
+          troubleshooting_commands:
+            - "ls -la  # Check file structure"
+            - "cat mxcp-site.yml  # Verify configuration"
+            - "mxcp query \"SELECT version()\"  # Test DuckDB connection"
+          external_search_hints:
+            - "DuckDB extensions"
+            - "dbt project structure"
+            - "YAML configuration files"
+          next_steps:
+            - "Configure your project: mxcp agent-help getting-started configuration"
+            - "Create endpoints: mxcp agent-help endpoints"
+            - "Add data sources: mxcp agent-help data-sources"
+  
+  - name: existing-data
+    description: "Connect MXCP to existing data sources"
+    topics:
+      - name: postgresql
+        description: "Connect to PostgreSQL database"
+        content:
+          overview: "Connect MXCP to existing PostgreSQL database using DuckDB's postgres_scanner."
+          prerequisites:
+            - "MXCP project initialized"
+            - "PostgreSQL connection details (host, port, database, username, password)"
+            - "Network access to PostgreSQL server"
+          steps:
+            - command: "Add to mxcp-site.yml:"
+              description: |
+                extensions:
+                  - postgres_scanner
+                secrets:
+                  - pg_connection
+            - command: "Configure secrets in ~/.mxcp/config.yml:"
+              description: |
+                projects:
+                  my-project:
+                    profiles:
+                      dev:
+                        secrets:
+                          - name: pg_connection
+                            type: database
+                            parameters:
+                              host: localhost
+                              port: 5432
+                              database: mydb
+                              username: user
+                              password: ${PG_PASSWORD}
+            - command: "Create endpoint (endpoints/get-users.yml):"
+              description: |
+                tool:
+                  name: get_users
+                  source:
+                    code: |
+                      SELECT * FROM postgres_scan('host=localhost port=5432 dbname=mydb', 'public', 'users')
+          verification:
+            - "Run: mxcp validate"
+            - "Run: mxcp test"
+          common_issues:
+            - issue: "postgres_scanner not found"
+              solution: "Add 'postgres_scanner' to extensions in mxcp-site.yml"
+            - issue: "Connection refused"
+              solution: "Check PostgreSQL is running and credentials are correct"
+            - issue: "Authentication failed"
+              solution: "Verify username/password and ensure user has access"
+          next_steps:
+            - "Create more endpoints: mxcp agent-help endpoints"
+            - "Test your setup: mxcp agent-help testing"
+      
+      - name: duckdb-local
+        description: "Use local DuckDB files"
+        content:
+          overview: "Connect to existing DuckDB database files."
+          prerequisites:
+            - "MXCP project initialized"
+            - "Existing DuckDB file or data to import"
+          steps:
+            - command: "Copy your DuckDB file to project directory"
+              description: "Or use absolute path in SQL queries"
+            - command: "Create endpoint to query existing data:"
+              description: |
+                tool:
+                  name: query_data
+                  source:
+                    code: |
+                      ATTACH 'path/to/your/database.duckdb' AS external_db;
+                      SELECT * FROM external_db.your_table;
+          verification:
+            - "Run: mxcp run tool query_data"
+          common_issues:
+            - issue: "File not found"
+              solution: "Check the path to your DuckDB file"
+            - issue: "Permission denied"
+              solution: "Ensure MXCP has read access to the file"
+          next_steps:
+            - "Import CSV data: mxcp agent-help getting-started existing-data csv-files"
+            - "Create endpoints: mxcp agent-help endpoints"
+  
+  - name: configuration
+    description: "Understanding MXCP configuration files"
+    topics:
+      - name: mxcp-site
+        description: "Project configuration (mxcp-site.yml)"
+        content:
+          overview: "Configure your MXCP project settings."
+          required_fields:
+            - field: "mxcp"
+              description: "Schema version (always '1.0.0')"
+              example: "mxcp: '1.0.0'"
+            - field: "project"
+              description: "Project name (must match ~/.mxcp/config.yml)"
+              example: "project: 'my-project'"
+            - field: "profile"
+              description: "Profile to use"
+              example: "profile: 'dev'"
+          optional_fields:
+            - field: "secrets"
+              description: "List of secret names to use"
+              example: "secrets: ['db_credentials']"
+            - field: "extensions"
+              description: "DuckDB extensions to load"
+              example: "extensions: ['httpfs', 'postgres_scanner']"
+            - field: "sql_tools"
+              description: "Enable built-in SQL tools"
+              example: "sql_tools: {enabled: true}"
+          example_file: |
+            mxcp: "1.0.0"
+            project: "my-project"
+            profile: "dev"
+            secrets:
+              - "db_credentials"
+            extensions:
+              - "httpfs"
+              - "postgres_scanner"
+            sql_tools:
+              enabled: true
+          validation:
+            - "Run: mxcp validate"
+            - "Check schema: mxcp agent-help schemas configuration mxcp-site"
+          common_issues:
+            - issue: "Invalid project name"
+              solution: "Ensure project exists in ~/.mxcp/config.yml"
+            - issue: "Unknown extension"
+              solution: "Check extension name spelling"
+          next_steps:
+            - "Configure user settings: mxcp agent-help getting-started configuration user-config"
+            - "Add secrets: mxcp agent-help advanced secrets"
+      
+      - name: user-config
+        description: "User configuration (~/.mxcp/config.yml)"
+        content:
+          overview: "Configure user-level settings and secrets."
+          location: "~/.mxcp/config.yml"
+          structure: |
+            mxcp: "1.0.0"
+            projects:
+              my-project:
+                profiles:
+                  dev:
+                    secrets: []
+                    auth:
+                      provider: "none"
+          key_sections:
+            - section: "projects"
+              description: "All your MXCP projects"
+            - section: "profiles"
+              description: "Environment-specific settings (dev, prod, etc.)"
+            - section: "secrets"
+              description: "Encrypted credentials and API keys"
+            - section: "auth"
+              description: "Authentication configuration"
+          common_issues:
+            - issue: "Config file not found"
+              solution: "Run any mxcp command to auto-generate"
+            - issue: "Invalid YAML syntax"
+              solution: "Check indentation and quotes"
+          next_steps:
+            - "Set up authentication: mxcp agent-help integration oauth-setup"
+            - "Add secrets: mxcp agent-help advanced secrets" 

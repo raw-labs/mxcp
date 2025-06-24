@@ -1,0 +1,364 @@
+category: troubleshooting
+description: "Diagnose and fix common issues"
+technical_context: |
+  MXCP troubleshooting often involves DuckDB concepts:
+  - Extension loading: INSTALL and LOAD commands for postgres_scanner, httpfs, etc.
+  - Parameter injection: $param syntax is DuckDB-specific
+  - SQL errors: DuckDB has its own error messages and syntax
+  - Performance: DuckDB optimization and memory management
+  External search hints: "DuckDB error messages", "DuckDB extensions troubleshooting", "DuckDB SQL syntax"
+security_warning: |
+  🚨 SECURITY WARNING: When troubleshooting:
+  • NEVER include actual passwords in error reports or logs
+  • Test with dummy data before using real credentials  
+  • Validate all inputs to prevent SQL injection
+  • Check endpoint permissions before deployment
+subcategories:
+  - name: quick-diagnosis
+    description: "Fast diagnosis for common problems"
+    agent_priority: high
+    topics:
+      - name: decision-tree
+        description: "What's not working? Quick decision tree"
+        content:
+          overview: "Start here to quickly identify and fix your issue."
+          decision_tree:
+            - question: "🔍 What's not working?"
+              options:
+                - issue: "1. Endpoints not found/recognized"
+                  next: "mxcp agent-help troubleshooting validation-errors endpoint-not-found"
+                  technical_hint: "MXCP endpoint discovery issue"
+                - issue: "2. Database/connection errors"
+                  next: "mxcp agent-help troubleshooting connection-issues database-errors"
+                  technical_hint: "DuckDB extension or connection problem"
+                - issue: "3. Server won't start"
+                  next: "mxcp agent-help troubleshooting server-errors"  
+                  technical_hint: "MXCP server configuration issue"
+                - issue: "4. Secret/authentication errors"
+                  next: "mxcp agent-help troubleshooting server-errors auth-config"
+                  technical_hint: "Authentication configuration problem"
+                - issue: "5. SQL errors or unexpected results"
+                  next: "mxcp agent-help troubleshooting connection-issues sql-errors"
+                  technical_hint: "DuckDB SQL syntax or data issue"
+          fast_checks:
+            - check: "✅ Files exist and named correctly?"
+              command: "ls endpoints/"
+              technical_note: "MXCP endpoint discovery"
+            - check: "✅ YAML syntax valid?"
+              command: "mxcp validate --debug"
+              technical_note: "YAML schema validation"
+            - check: "✅ Basic DuckDB connection works?"
+              command: "mxcp query \"SELECT 'hello' as test\""
+              technical_note: "DuckDB engine test"
+          external_search_hints:
+            - "DuckDB error messages"
+            - "MXCP endpoint discovery"
+            - "YAML syntax validation"
+          next_steps:
+            - "Still stuck? Check specific error sections below"
+            - "Need working examples? mxcp agent-help examples"
+
+  - name: server-errors
+    description: "Server startup and runtime errors"
+    agent_priority: medium
+    topics:
+      - name: auth-config
+        description: "Authentication configuration errors"
+        content:
+          overview: "Resolve authentication configuration issues preventing server startup"
+          technical_requirements:
+            - "Authentication is MXCP-level, not DuckDB-level"
+            - "OAuth providers require external credentials"
+            - "Environment variables must be accessible to MXCP process"
+          common_causes:
+            - "Missing OAuth provider configuration"
+            - "Environment variables not set"
+            - "Incomplete auth section in config"
+          diagnostic_steps:
+            - command: "Check ~/.mxcp/config.yml has auth section:"
+              description: |
+                auth:
+                  provider: github  # or none, atlassian, salesforce
+            - command: "For OAuth providers, verify environment variables:"
+              description: "GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET"
+            - command: "Run validation with debug:"
+              description: "mxcp validate --debug"
+          solutions:
+            - solution: "Disable auth"
+              action: "Set provider: none"
+              technical_note: "Bypasses authentication for testing"
+            - solution: "Fix OAuth"
+              action: "See mxcp agent-help integration oauth-setup"
+              technical_note: "External OAuth configuration required"
+            - solution: "Check config"
+              action: "mxcp agent-help getting-started configuration"
+          external_search_hints:
+            - "OAuth 2.0 configuration"
+            - "Environment variables setup"
+          next_steps:
+            - "After fixing, run: mxcp serve"
+            - "For OAuth setup: mxcp agent-help integration oauth-setup"
+      
+      - name: port-binding
+        description: "Port already in use errors"
+        content:
+          overview: "Fix port conflicts when starting the server"
+          technical_requirements:
+            - "MXCP server runs on configurable port (default 8000)"
+            - "Port conflicts prevent server startup"
+          common_error: "Address already in use"
+          diagnostic_steps:
+            - command: "Check what's using the port:"
+              description: "lsof -i :8000  # or netstat -tlnp | grep :8000"
+            - command: "Find MXCP processes:"
+              description: "ps aux | grep mxcp"
+          solutions:
+            - solution: "Kill existing process"
+              action: "kill <process_id>"
+            - solution: "Use different port"
+              action: "mxcp serve --port 8001"
+            - solution: "Change default port"
+              action: "Update ~/.mxcp/config.yml transport.http.port"
+          next_steps:
+            - "Restart server: mxcp serve"
+            - "Check server status: curl http://localhost:8000/health"
+            
+  - name: validation-errors
+    description: "Endpoint validation issues"
+    agent_priority: high
+    topics:
+      - name: endpoint-not-found
+        description: "Tool/endpoint not found errors"
+        content:
+          overview: "Fix 'endpoint not found' and related discovery issues."
+          technical_requirements:
+            - "MXCP scans endpoints/ directory for .yml files"
+            - "Tool names must match between YAML and CLI commands"
+            - "YAML syntax must be valid for discovery"
+          common_errors:
+            - error: "Tool 'my_tool' not found"
+              causes:
+                - "File naming mismatch (my_tool vs my-tool)"
+                - "File in wrong directory (not in endpoints/)"
+                - "YAML syntax errors preventing loading"  
+                - "Missing tool: section in YAML"
+              solutions:
+                - "Check exact filename: endpoints/my_tool.yml or endpoints/my-tool.yml"
+                - "Verify YAML structure: tool: must be at root level"
+                - "Run: mxcp validate --debug to see parsing errors"
+                - "Test with working example: mxcp agent-help examples basic calculator-tool"
+          debugging_steps:
+            - step: "1. List what MXCP can see:"
+              command: "mxcp list tools"
+              technical_note: "Shows successfully discovered endpoints"
+            - step: "2. Check file exists:"  
+              command: "ls -la endpoints/"
+              technical_note: "Verify file presence and permissions"
+            - step: "3. Validate YAML syntax:"
+              command: "mxcp validate --debug"
+              technical_note: "Shows YAML parsing errors"
+            - step: "4. Check tool name in file matches command:"
+              description: "tool.name in YAML must match 'mxcp run tool NAME'"
+              technical_note: "Case-sensitive matching required"
+          working_example:
+            description: "Copy this structure that definitely works:"
+            code: |
+              # endpoints/hello.yml
+              mxcp: "1.0.0"
+              tool:
+                name: hello
+                description: "Say hello"
+                parameters: []
+                return: {type: string}
+                source:
+                  code: "SELECT 'Hello!' as result"
+          verification_commands:
+            - "mxcp list tools (should show your tool)"
+            - "mxcp run tool hello (should work)"
+          troubleshooting_commands:
+            - "mxcp validate --debug"
+            - "cat endpoints/hello.yml | python -c 'import yaml, sys; yaml.safe_load(sys.stdin)'"
+          external_search_hints:
+            - "YAML syntax validation"
+            - "File permissions Unix"
+          next_steps:
+            - "Working? Create more tools: mxcp agent-help endpoints tools"
+            - "Still failing? Check YAML syntax with online validator"
+      - name: schema-errors
+        description: "YAML schema validation errors"
+        content:
+          overview: "Fix common schema validation issues"
+          technical_requirements:
+            - "MXCP uses JSON Schema for YAML validation"
+            - "All endpoints must conform to schema structure"
+          common_errors:
+            - error: "Missing required property 'name'"
+              solution: "Add name field to tool/resource/prompt definition"
+              technical_note: "Schema validation requirement"
+            - error: "Invalid parameter name"
+              solution: "Use only letters, numbers, underscores in parameter names"
+              technical_note: "DuckDB parameter naming restrictions"
+            - error: "Unknown property"
+              solution: "Check spelling and structure against schema"
+              technical_note: "JSON Schema validation error"
+          debugging_steps:
+            - command: "Run validation with debug:"
+              description: "mxcp validate --debug"
+            - command: "Check specific endpoint:"
+              description: "mxcp validate my_endpoint"
+            - command: "Validate YAML syntax:"
+              description: "Use online YAML validator or editor plugin"
+          external_search_hints:
+            - "JSON Schema validation"
+            - "YAML syntax"
+          next_steps:
+            - "Check schema help: mxcp agent-help schemas"
+            - "Test after fixing: mxcp validate"
+            
+  - name: connection-issues
+    description: "Database and API connection problems"
+    agent_priority: high
+    topics:
+      - name: database-errors
+        description: "Database connection and query errors"
+        content:
+          overview: "Fix database connection and query issues with specific solutions."
+          technical_requirements:
+            - "DuckDB extensions must be loaded before use"
+            - "postgres_scan() function requires postgres_scanner extension"
+            - "Connection strings are DuckDB-specific format"
+          enhanced_error_messages:
+            - error: "❌ Secret type 'database' not found"
+              explanation: "This means secrets configuration schema mismatch"
+              solutions:
+                - "💡 Try removing secrets temporarily and use direct connection strings"  
+                - "💡 Check MXCP version compatibility: mxcp --version"
+                - "💡 See working examples: mxcp agent-help examples database postgres-basic"
+                - "💡 Test connection first: Use hardcoded values before adding secrets"
+              technical_note: "MXCP secrets system issue, not DuckDB"
+            - error: "❌ postgres_scanner extension not found"
+              explanation: "Extension not loaded or not available"
+              solutions:
+                - "Add 'postgres_scanner' to extensions in mxcp-site.yml"
+                - "Try manual install: mxcp query \"INSTALL postgres_scanner; LOAD postgres_scanner;\""
+                - "Check DuckDB version supports this extension"
+              technical_note: "DuckDB extension system"
+            - error: "❌ Connection refused"
+              explanation: "Network/firewall issue or PostgreSQL not running"
+              solutions:
+                - "Test basic connectivity: telnet YOUR_HOST 5432"
+                - "Check PostgreSQL is running: sudo systemctl status postgresql"
+                - "Verify firewall allows connection on port 5432"
+                - "Try localhost vs actual hostname"
+              technical_note: "Network connectivity, not MXCP or DuckDB issue"
+          common_errors:
+            - error: "Table not found"
+              solution: "Check table name and schema - try: postgres_scan('...', 'public', 'your_table')"
+              technical_note: "DuckDB postgres_scan() requires explicit schema/table"
+            - error: "Permission denied"  
+              solution: "Check database user has SELECT permissions on target tables"
+              technical_note: "PostgreSQL permissions, not DuckDB issue"
+            - error: "Authentication failed"
+              solution: "Test credentials with: psql -h YOUR_HOST -U YOUR_USER YOUR_DB"
+              technical_note: "PostgreSQL authentication"
+          diagnostic_steps:
+            - command: "Test basic DuckDB works:"
+              description: "mxcp query \"SELECT 'test' as result\""
+              technical_note: "Verifies DuckDB engine is working"
+            - command: "Test extension loading:"
+              description: "mxcp query \"SELECT * FROM duckdb_extensions() WHERE extension_name = 'postgres_scanner'\""
+              technical_note: "Shows DuckDB extension status"
+            - command: "Test PostgreSQL directly:"
+              description: "psql -h YOUR_HOST -p 5432 -U YOUR_USER -d YOUR_DB -c \"SELECT version()\""
+              technical_note: "Bypasses DuckDB to test PostgreSQL directly"
+          step_by_step_debugging:
+            - step: "1. Test MXCP basics work"
+              test: "mxcp query \"SELECT 'hello' as test\""
+              expected: "Returns: test: 'hello'"
+              technical_note: "MXCP and DuckDB working"
+            - step: "2. Test extension available"  
+              test: "mxcp query \"INSTALL postgres_scanner; LOAD postgres_scanner;\""
+              expected: "No errors"
+              technical_note: "DuckDB extension system working"
+            - step: "3. Test PostgreSQL connectivity"
+              test: "telnet YOUR_HOST 5432"
+              expected: "Connection succeeds"
+              technical_note: "Network connectivity to PostgreSQL"
+            - step: "4. Test PostgreSQL auth"
+              test: "psql -h YOUR_HOST -U YOUR_USER YOUR_DB"
+              expected: "PostgreSQL prompt appears"
+              technical_note: "PostgreSQL authentication working"
+            - step: "5. Test postgres_scan function"
+              test: "Use working example from: mxcp agent-help examples database postgres-basic"
+              expected: "Returns PostgreSQL data"
+              technical_note: "DuckDB postgres_scanner integration working"
+          success_indicators:
+            - "✅ You know it works when you see PostgreSQL version() output"
+            - "✅ Connection string format: host=HOST port=5432 dbname=DB user=USER password=PASS"
+            - "✅ postgres_scan function returns actual data from your database"
+          external_search_hints:
+            - "DuckDB postgres_scanner troubleshooting"
+            - "PostgreSQL connection troubleshooting"
+            - "DuckDB extension installation"
+          next_steps:
+            - "Working? Add proper secrets: mxcp agent-help advanced secrets database"
+            - "Still failing? Try MySQL: mxcp agent-help data-sources databases mysql"
+            - "Need working example? mxcp agent-help examples database postgres-basic"
+            
+  - name: sql-errors
+    description: "SQL errors and unexpected results"
+    agent_priority: medium
+    topics:
+      - name: sql-errors
+        description: "SQL errors and unexpected results"
+        content:
+          overview: "Fix SQL errors and unexpected results in DuckDB queries"
+          technical_requirements:
+            - "DuckDB has its own SQL dialect and functions"
+            - "Parameter injection uses $param syntax"
+            - "DuckDB error messages are specific to DuckDB engine"
+          common_errors:
+            - error: "SQL syntax error"
+              solution: "Check SQL syntax and correct any errors"
+              technical_note: "DuckDB SQL dialect differences from PostgreSQL/MySQL"
+            - error: "Table not found"
+              solution: "Check table name and schema"
+              technical_note: "DuckDB requires explicit table references"
+            - error: "Function not found"
+              solution: "Check if DuckDB supports the function or if extension is needed"
+              technical_note: "DuckDB function library differences"
+            - error: "Parameter not found: $param"
+              solution: "Ensure parameter is defined in YAML parameters section"
+              technical_note: "MXCP parameter injection system"
+          diagnostic_steps:
+            - command: "Test SQL query directly:"
+              description: "mxcp query \"SELECT * FROM my_table LIMIT 5\""
+              technical_note: "Tests DuckDB query execution"
+            - command: "Check DuckDB function availability:"
+              description: "mxcp query \"SELECT * FROM duckdb_functions() WHERE function_name LIKE '%function%'\""
+              technical_note: "Shows available DuckDB functions"
+            - command: "Test parameter injection:"
+              description: "Create minimal endpoint to test parameter handling"
+              technical_note: "Isolates MXCP parameter system"
+          troubleshooting_commands:
+            - "mxcp query \"SELECT version()\"  # Check DuckDB version"
+            - "mxcp query \"DESCRIBE my_table\"  # Check table structure"
+            - "mxcp validate --debug  # Check endpoint configuration"
+          external_search_hints:
+            - "DuckDB SQL syntax"
+            - "DuckDB functions reference"
+            - "DuckDB error messages"
+            - "SQL parameter injection"
+          solutions:
+            - solution: "Fix SQL query"
+              action: "Check SQL syntax and correct any errors"
+              technical_note: "Use DuckDB-compatible SQL syntax"
+            - solution: "Check table name and schema"
+              action: "Check table name and schema"
+              technical_note: "DuckDB table naming requirements"
+            - solution: "Fix database credentials and permissions"
+              action: "Check database credentials and permissions"
+              technical_note: "External database access through DuckDB extensions"
+          next_steps:
+            - "Test queries: mxcp query \"SELECT * FROM my_table LIMIT 5\""
+            - "Validate endpoints: mxcp validate" 

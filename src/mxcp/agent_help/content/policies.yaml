@@ -1,0 +1,185 @@
+category: policies
+description: "Access control and data protection policies"
+security_warning: |
+  🚨 POLICY SECURITY WARNING:
+  • Policies are your last line of defense against data breaches
+  • Always implement least-privilege access controls
+  • Test policy enforcement thoroughly before deployment
+  • Monitor policy violations for security incidents
+  • Never bypass policies in production environments
+subcategories:
+  - name: access-control
+    description: "Implement user access controls"
+    topics:
+      - name: basic-policies
+        description: "Create basic access control policies"
+        content:
+          overview: "Implement policies to control who can access your endpoints and what data they can see"
+          security_critical: |
+            🚨 CRITICAL: Proper access control prevents data breaches
+            • Default to DENY access - only grant specific permissions
+            • Test policies with different user contexts
+            • Never trust client-provided user information
+            • Log all policy decisions for audit trails
+            • Implement defense in depth with multiple policy layers
+          prerequisites:
+            - "Endpoints with sensitive data"
+            - "Understanding of your access control requirements"
+            - "User authentication system in place"
+          steps:
+            - command: "Add input policies to restrict access:"
+              description: |
+                # In your endpoint YAML file
+                tool:
+                  name: get_employee_data
+                  policies:
+                    input:
+                      # Deny access for guests
+                      - condition: "user.role == 'guest'"
+                        action: deny
+                        reason: "Guests cannot access employee data"
+                      
+                      # Only allow HR and managers to access all employee data
+                      - condition: "user.role not in ['hr', 'manager'] && employee_id != user.employee_id"
+                        action: deny
+                        reason: "Can only access your own employee data"
+            - command: "Add output policies to filter sensitive data:"
+              description: |
+                policies:
+                  output:
+                    # Filter salary information for non-managers
+                    - condition: "user.role not in ['hr', 'manager', 'finance']"
+                      action: filter_fields
+                      fields: ["salary", "bonus", "stock_options"]
+                      reason: "Salary information restricted to authorized roles"
+                    
+                    # Mask SSN for everyone except HR
+                    - condition: "user.role != 'hr'"
+                      action: mask_fields
+                      fields: ["ssn", "tax_id"]
+                      reason: "Personal identification numbers restricted to HR"
+            - command: "Test policies with different user contexts:"
+              description: |
+                # Test as HR user
+                mxcp test --user-context '{"role": "hr", "employee_id": "e001"}'
+                
+                # Test as regular employee
+                mxcp test --user-context '{"role": "employee", "employee_id": "e123"}'
+                
+                # Test as guest (should be denied)
+                mxcp test --user-context '{"role": "guest"}'
+          verification:
+            - "HR users can see all employee data including sensitive fields"
+            - "Employees can only see their own data with sensitive fields filtered"
+            - "Guests are completely denied access"
+            - "Policy violations are logged"
+          security_checklist:
+            - "✅ Default deny policy implemented"
+            - "✅ Role-based access controls defined"
+            - "✅ Sensitive data filtering configured"
+            - "✅ Policy tests for all user roles"
+            - "✅ Audit logging enabled for policy decisions"
+          common_vulnerabilities:
+            - vulnerability: "Privilege escalation"
+              test: "Test with elevated roles in user context"
+              prevention: "Validate user roles server-side, never trust client data"
+            - vulnerability: "Data leakage"
+              test: "Verify sensitive fields are filtered for unauthorized users"
+              prevention: "Implement output policies for all sensitive data"
+            - vulnerability: "Policy bypass"
+              test: "Attempt to access endpoints without proper authentication"
+              prevention: "Enforce authentication at the transport layer"
+          next_steps:
+            - "Advanced policies: Implement time-based and context-aware policies"
+            - "Audit monitoring: Set up alerts for policy violations"
+            - "Policy testing: Automate policy enforcement testing in CI/CD"
+      
+      - name: advanced-policies
+        description: "Complex policy scenarios"
+        content:
+          overview: "Implement advanced policy patterns for complex access control scenarios"
+          security_critical: |
+            🚨 ADVANCED SECURITY: Complex policies require careful testing
+            • Test all possible user context combinations
+            • Monitor policy performance impact
+            • Document policy logic for security audits
+            • Implement policy versioning for compliance
+          steps:
+            - command: "Time-based access controls:"
+              description: |
+                policies:
+                  input:
+                    # Only allow access during business hours
+                    - condition: "now().getHours() < 9 || now().getHours() > 17"
+                      action: deny
+                      reason: "Access only allowed during business hours (9 AM - 5 PM)"
+            - command: "Location-based policies:"
+              description: |
+                policies:
+                  input:
+                    # Restrict sensitive operations to office network
+                    - condition: "!user.ip_address.startsWith('10.0.0.')"
+                      action: deny
+                      reason: "Sensitive operations only allowed from office network"
+            - command: "Data classification policies:"
+              description: |
+                policies:
+                  output:
+                    # Filter fields marked as sensitive
+                    - condition: "true"
+                      action: filter_sensitive_fields
+                      reason: "Automatically filter fields marked as sensitive"
+          next_steps:
+            - "Compliance: Implement GDPR/CCPA data protection policies"
+            - "Dynamic policies: Use external policy decision points"
+
+  - name: data-protection
+    description: "Protect sensitive and personal data"
+    topics:
+      - name: data-classification
+        description: "Classify and protect sensitive data"
+        content:
+          overview: "Implement data classification and protection based on sensitivity levels"
+          security_critical: |
+            🚨 DATA PROTECTION CRITICAL:
+            • Classify ALL data by sensitivity level
+            • Implement automatic PII detection and masking
+            • Comply with data protection regulations (GDPR, CCPA)
+            • Regular audits of data access patterns
+          steps:
+            - command: "Mark sensitive fields in return types:"
+              description: |
+                tool:
+                  name: get_customer_profile
+                  return:
+                    type: object
+                    properties:
+                      customer_id:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                        sensitive: true  # Mark as sensitive
+                      phone:
+                        type: string
+                        sensitive: true  # Mark as sensitive
+                      credit_score:
+                        type: integer
+                        sensitive: true  # Mark as sensitive
+            - command: "Implement automatic sensitive data filtering:"
+              description: |
+                policies:
+                  output:
+                    # Automatically filter sensitive fields for non-authorized users
+                    - condition: "user.clearance_level < 3"
+                      action: filter_sensitive_fields
+                      reason: "Insufficient clearance for sensitive data"
+          security_checklist:
+            - "✅ All PII fields marked as sensitive"
+            - "✅ Automatic sensitive data filtering enabled"
+            - "✅ Data access logging for compliance"
+            - "✅ Regular data classification audits"
+          next_steps:
+            - "Compliance reporting: Generate data access reports"
+            - "Data retention: Implement data lifecycle policies" 

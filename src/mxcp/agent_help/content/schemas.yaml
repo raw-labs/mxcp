@@ -1,0 +1,321 @@
+category: schemas
+description: "YAML file schemas and validation"
+security_warning: |
+  🚨 SECURITY WARNING: Proper schema validation prevents:
+  • SQL injection through malformed parameters
+  • Data leaks via misconfigured return types
+  • Unauthorized access through policy bypass
+  • System compromise via invalid configurations
+  Always validate schemas before deployment!
+subcategories:
+  - name: configuration
+    description: "Configuration file schemas"
+    topics:
+      - name: mxcp-site
+        description: "Project configuration schema (mxcp-site.yml)"
+        content:
+          overview: "Schema for mxcp-site.yml project configuration file"
+          schema_location: "src/mxcp/config/schemas/mxcp-site-schema-1.0.0.json"
+          key_sections:
+            - name: "Basic Structure"
+              required_fields:
+                - "mxcp: '1.0.0' # Schema version"
+                - "project: 'project-name' # Must match ~/.mxcp/config.yml"
+                - "profile: 'profile-name' # Profile to use"
+              optional_fields:
+                - "secrets: [] # List of secret names"
+                - "extensions: [] # DuckDB extensions"
+                - "dbt: {} # dbt configuration"
+                - "sql_tools: {} # SQL tools config"
+            - name: "Example"
+              example: |
+                mxcp: "1.0.0"
+                project: "my-project"
+                profile: "dev"
+                secrets:
+                  - "db_credentials"
+                extensions:
+                  - "httpfs"
+                  - name: "postgres_scanner"
+                    repo: "community"
+                sql_tools:
+                  enabled: true
+          validation_command: "mxcp validate"
+          common_errors:
+            - error: "Invalid project name"
+              solution: "Ensure project exists in ~/.mxcp/config.yml"
+            - error: "Unknown extension"
+              solution: "Check extension name and repo"
+            - error: "YAML syntax error"
+              solution: "Check indentation and quotes"
+      
+      - name: user-config
+        description: "User configuration schema (~/.mxcp/config.yml)"
+        content:
+          overview: "Schema for user configuration file"
+          schema_location: "src/mxcp/config/schemas/mxcp-config-schema-1.0.0.json"
+          key_sections:
+            - name: "Basic Structure"
+              example: |
+                mxcp: "1.0.0"
+                projects:
+                  my-project:
+                    profiles:
+                      dev:
+                        secrets: []
+                        auth:
+                          provider: "none"
+            - name: "Secrets Configuration"
+              example: |
+                secrets:
+                  - name: db_credentials
+                    type: database
+                    parameters:
+                      host: localhost
+                      port: 5432
+                      database: mydb
+                      username: user
+                      password: ${DB_PASSWORD}
+          validation_tips:
+            - "Project names must match between files"
+            - "Use environment variables for sensitive data"
+            - "Validate with: mxcp validate"
+          
+  - name: endpoints
+    description: "Endpoint definition schemas"
+    topics:
+      - name: tool-schema
+        description: "Tool endpoint schema"
+        content:
+          overview: "Schema for tool endpoint definitions"
+          schema_location: "src/mxcp/endpoints/schemas/endpoint-schema-1.0.0.json"
+          required_fields:
+            - "name: string # Tool name"
+            - "source: object # SQL source"
+          optional_fields:
+            - "description: string"
+            - "parameters: array"
+            - "return: object # Return type"
+            - "tests: array"
+            - "policies: object"
+          example: |
+            mxcp: "1.0.0"
+            tool:
+              name: get_users
+              description: "Retrieve user list"
+              parameters:
+                - name: status
+                  type: string
+                  enum: ["active", "inactive"]
+              return:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: {type: integer}
+                    name: {type: string}
+              source:
+                code: |
+                  SELECT id, name FROM users
+                  WHERE status = $status
+          validation_tips:
+            - "Parameter names must match ^[a-zA-Z_][a-zA-Z0-9_]*$"
+            - "Use $ prefix for parameters in SQL"
+            - "Test with: mxcp validate"
+      
+      - name: resource-schema
+        description: "Resource endpoint schema"
+        content:
+          overview: "Schema for resource endpoint definitions"
+          uri_pattern: "scheme://host/path/{param}"
+          required_fields:
+            - "uri: string # Resource URI"
+            - "source: object # SQL source"
+          optional_fields:
+            - "mime_type: string # Content type"
+            - "description: string"
+            - "parameters: array"
+          example: |
+            mxcp: "1.0.0"
+            resource:
+              uri: "users://{user_id}"
+              description: "Get user by ID"
+              mime_type: "application/json"
+              parameters:
+                - name: user_id
+                  type: integer
+              source:
+                code: SELECT * FROM users WHERE id = $user_id
+          validation_tips:
+            - "URI must include scheme"
+            - "Parameters in URI must be defined"
+            - "Use consistent parameter naming"
+      
+      - name: prompt-schema
+        description: "Prompt endpoint schema"
+        content:
+          overview: "Schema for prompt definitions"
+          required_fields:
+            - "name: string"
+            - "messages: array"
+          optional_fields:
+            - "description: string"
+            - "parameters: array"
+          example: |
+            mxcp: "1.0.0"
+            prompt:
+              name: analyze_data
+              description: "Analyze data with context"
+              parameters:
+                - name: data_type
+                  type: string
+                  description: "Type of data to analyze"
+              messages:
+                - role: system
+                  prompt: "You are a data analyst"
+                - role: user
+                  prompt: "Analyze the {{data_type}} data"
+          validation_tips:
+            - "Use {{parameter}} syntax in prompts"
+            - "Include system and user messages"
+            - "Parameters must be defined if used"
+                  
+  - name: type-system
+    description: "Type definitions and validation"
+    topics:
+      - name: basic-types
+        description: "Basic type definitions"
+        content:
+          overview: "MXCP type system for parameters and returns"
+          basic_types:
+            - "string - Text values"
+            - "number - Floating-point numbers"
+            - "integer - Whole numbers"
+            - "boolean - true/false values"
+            - "array - Lists of items"
+            - "object - Structured data"
+          string_formats:
+            - "email - RFC 5322 email format"
+            - "uri - URI/URL format"
+            - "date - ISO 8601 date (YYYY-MM-DD)"
+            - "date-time - ISO 8601 timestamp"
+            - "duration - ISO 8601 duration"
+          example: |
+            parameters:
+              - name: email
+                type: string
+                format: email
+                description: "User email address"
+              - name: age
+                type: integer
+                minimum: 0
+                maximum: 150
+                description: "User age in years"
+              - name: tags
+                type: array
+                items:
+                  type: string
+                description: "List of tags"
+              - name: metadata
+                type: object
+                properties:
+                  created: {type: string, format: date-time}
+                  active: {type: boolean}
+          validation_tips:
+            - "Use specific types for better validation"
+            - "Add constraints (min, max, enum) when appropriate"
+            - "Include descriptions for clarity"
+            
+      - name: parameter-naming
+        description: "Parameter naming conventions"
+        content:
+          overview: "Rules and best practices for naming parameters"
+          naming_rules:
+            - "Must start with letter or underscore"
+            - "Can contain letters, numbers, underscores"
+            - "Cannot start with number"
+            - "Case sensitive"
+            - "No spaces or special characters"
+          regex_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$"
+          good_examples:
+            - "user_id"
+            - "email_address"
+            - "start_date"
+            - "max_results"
+            - "_internal_param"
+          bad_examples:
+            - "user-id # Hyphens not allowed"
+            - "2nd_param # Cannot start with number"
+            - "user id # Spaces not allowed"
+            - "email@domain # Special chars not allowed"
+          sql_usage:
+            - "Use $parameter_name in SQL"
+            - "Parameters are automatically escaped"
+            - "Case must match exactly"
+          common_errors:
+            - error: "Invalid parameter name"
+              solution: "Check naming rules and regex pattern"
+              help_command: "mxcp agent-help schemas type-system parameter-naming"
+              
+  - name: validation-examples
+    description: "Common validation errors and solutions"
+    topics:
+      - name: yaml-syntax-errors
+        description: "Common YAML syntax issues"
+        content:
+          overview: "Fix common YAML syntax problems"
+          examples:
+            - error: "found character '\\t' that cannot start any token"
+              cause: "Tab characters in YAML"
+              solution: "Replace tabs with spaces (use 2 or 4 spaces consistently)"
+              
+            - error: "mapping values are not allowed here"
+              cause: "Incorrect indentation or missing colon"
+              solution: "Check indentation is consistent and all keys have colons"
+              
+            - error: "found undefined alias"
+              cause: "YAML anchor/alias usage"
+              solution: "MXCP doesn't support YAML anchors - use full definitions"
+              
+            - error: "could not find expected ':'"
+              cause: "Missing colon after key"
+              solution: "Add colon after key names"
+              
+            - error: "found unexpected end of stream"
+              cause: "Incomplete YAML structure"
+              solution: "Check all opened lists/objects are properly closed"
+          prevention_tips:
+            - "Use consistent indentation (2 or 4 spaces)"
+            - "Never use tabs"
+            - "Quote strings with special characters"
+            - "Use YAML linter in your editor"
+            
+      - name: schema-validation-errors
+        description: "Schema compliance issues"
+        content:
+          overview: "Fix schema validation problems"
+          examples:
+            - error: "'mxcp' is a required property"
+              cause: "Missing schema version"
+              solution: "Add: mxcp: '1.0.0'"
+              
+            - error: "Invalid enum value for provider"
+              cause: "Unknown auth provider"
+              solution: "Use: none, github, atlassian, or salesforce"
+              
+            - error: "Additional properties are not allowed"
+              cause: "Unknown field in configuration"
+              solution: "Check field name spelling and placement"
+              
+            - error: "String does not match pattern"
+              cause: "Invalid parameter name format"
+              solution: "Use valid parameter names (letters, numbers, underscores)"
+              
+            - error: "Missing required property"
+              cause: "Required field not provided"
+              solution: "Add all required fields for the endpoint type"
+          debugging_tips:
+            - "Run: mxcp validate --debug"
+            - "Check the specific error message"
+            - "Verify against schema documentation"
+            - "Use JSON schema validation tools" 

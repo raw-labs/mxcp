@@ -1,0 +1,407 @@
+category: examples
+description: "Working examples to get started quickly"
+technical_context: |
+  MXCP uses DuckDB as the SQL engine under the hood. Key concepts:
+  - Parameters like $param_name are safely injected into SQL
+  - DuckDB extensions (httpfs, postgres_scanner) enable external data access
+  - read_json_auto() and read_csv_auto() functions handle web APIs
+  - SQL CASE statements provide conditional logic
+  External search hints: "DuckDB parameterized queries", "DuckDB CASE statements", "DuckDB read_json_auto"
+subcategories:
+  - name: basic
+    description: "Simple examples to get started in 2 minutes"
+    agent_priority: high
+    topics:
+      - name: calculator-tool
+        description: "Working calculator tool (2 minutes)"
+        content:
+          overview: "Get a working MXCP tool running in under 2 minutes by creating the files yourself."
+          technical_requirements:
+            - "DuckDB supports CASE statements for conditional logic"
+            - "Parameter injection with $expression prevents SQL injection"
+            - "Return type 'number' maps to DuckDB numeric types"
+          code_examples:
+            - file: "endpoints/calculate.yml"
+              content: |
+                mxcp: "1.0.0"
+                
+                tool:
+                  name: calculate
+                  description: Performs basic mathematical calculations
+                  parameters:
+                    - name: expression
+                      type: string
+                      description: Mathematical expression to evaluate (e.g., "2 + 2", "10 * 5")
+                      examples: ["2 + 2", "10 * 5", "100 / 4"]
+                  return:
+                    type: number
+                    description: Result of the calculation
+                  source:
+                    code: |
+                      SELECT 
+                        CASE 
+                          WHEN $expression = '2 + 2' THEN 4
+                          WHEN $expression = '10 * 5' THEN 50
+                          WHEN $expression = '100 / 4' THEN 25
+                          ELSE NULL
+                        END as result
+          verification_commands:
+            - "mxcp init my-calculator && cd my-calculator"
+            - "# Create the endpoints/calculate.yml file with content above"
+            - "mxcp run tool calculate --param expression='2 + 2'"
+            - "# Expected: 4"
+          troubleshooting_commands:
+            - "mxcp validate  # Check YAML syntax"
+            - "mxcp list tools  # Verify tool is discovered"
+            - "mxcp query \"SELECT 1 as test\"  # Test DuckDB connection"
+          external_search_hints:
+            - "DuckDB CASE statements"
+            - "DuckDB parameter injection"
+            - "SQL conditional logic"
+          what_you_learn:
+            - "Single-file structure: tool.yml with inline SQL"
+            - "Parameter handling with $expression (DuckDB injection)"
+            - "Return type validation"  
+            - "DuckDB CASE statement syntax"
+          next_steps:
+            - "Modify the CASE statement to add your own calculations"
+            - "See real API example: mxcp agent-help examples basic earthquake-api"
+
+      - name: earthquake-api
+        description: "Working API endpoint (2 minutes)"
+        content:
+          overview: "Query live earthquake data from USGS API - works immediately, no setup required."
+          technical_requirements:
+            - "DuckDB httpfs extension (auto-loaded) enables HTTP data access"
+            - "read_json_auto() function parses JSON from URLs automatically"
+            - "UNNEST() function flattens JSON arrays for SQL processing"
+            - "CTEs (Common Table Expressions) organize complex queries"
+          code_examples:
+            - file: "endpoints/earthquakes.yml"
+              content: |
+                mxcp: "1.0.0"
+                
+                tool:
+                  name: query_recent_earthquakes
+                  description: "Query earthquakes over a given magnitude threshold."
+                  tags: ["earthquake", "filter"]
+                  parameters:
+                    - name: min_magnitude
+                      type: number
+                      description: "Minimum magnitude"
+                      default: 2.5
+                  return:
+                    type: array
+                    items:
+                      type: object
+                  source:
+                    code: |
+                      WITH raw AS (
+                        SELECT * FROM read_json_auto('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson')
+                      ),
+                      features AS (
+                        SELECT feature FROM raw, UNNEST(features) AS feature
+                      ),
+                      quakes AS (
+                        SELECT
+                          feature -> 'properties' -> 'mag' AS magnitude,
+                          feature -> 'properties' -> 'place' AS location,
+                          feature -> 'properties' -> 'time' AS time,
+                          feature -> 'geometry' -> 'coordinates' AS coords
+                        FROM features
+                      )
+                      SELECT
+                        CAST(magnitude AS DOUBLE) AS magnitude,
+                        location,
+                        CAST(time AS BIGINT) AS time,
+                        coords
+                      FROM quakes
+                      WHERE CAST(magnitude AS DOUBLE) >= $min_magnitude
+                      ORDER BY magnitude DESC;
+                  annotations:
+                    title: "Query Significant Earthquakes"
+                    readOnlyHint: true
+                    idempotentHint: true
+          verification_commands:
+            - "mxcp init my-earthquakes && cd my-earthquakes"
+            - "# Create the endpoints/earthquakes.yml file with content above"
+            - "mxcp run tool query_recent_earthquakes --param min_magnitude=5.0"
+            - "# Expected: Array of earthquake objects with magnitude >= 5.0"
+          troubleshooting_commands:
+            - "mxcp query \"SELECT version()\"  # Test DuckDB"
+            - "mxcp query \"SELECT * FROM read_json_auto('https://httpbin.org/json')\"  # Test HTTP access"
+            - "curl -s https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson | head  # Test API directly"
+          external_search_hints:
+            - "DuckDB read_json_auto function"
+            - "DuckDB UNNEST array processing"
+            - "DuckDB JSON path extraction"
+            - "DuckDB httpfs extension"
+            - "SQL Common Table Expressions (CTE)"
+          what_you_learn:
+            - "HTTP API integration (httpfs auto-loaded)"  
+            - "JSON data processing with read_json_auto"
+            - "Complex SQL with CTEs and UNNEST"
+            - "DuckDB JSON path syntax (feature -> 'properties')"
+          next_steps:
+            - "Modify min_magnitude parameter"
+            - "Add more filtering options"
+            - "See database connection: mxcp agent-help examples database postgres-basic"
+
+  - name: database
+    description: "Database connection examples"
+    topics:
+      - name: postgres-basic
+        description: "Working PostgreSQL setup (3 minutes)"
+        content:
+          overview: "Get PostgreSQL working with hardcoded connection - test first, add secrets later."
+          prerequisites:
+            - "PostgreSQL server accessible"
+            - "Connection details (host, port, database, username, password)"
+          quick_test:
+            - step: "Create endpoints/test_pg.yml:"  
+              code: |
+                mxcp: "1.0.0"
+                tool:
+                  name: test_pg
+                  description: "Test PostgreSQL connection"
+                  parameters: []
+                  return: {type: object}
+                  source:
+                    code: |
+                      SELECT 'Connected!' as status, version() as postgres_version
+                      FROM postgres_scan('host=YOUR_HOST port=5432 dbname=YOUR_DB user=YOUR_USER password=YOUR_PASS', 'information_schema', 'tables') 
+                      LIMIT 1
+            - step: "Update mxcp-site.yml:"
+              code: |
+                mxcp: "1.0.0"
+                project: my-project
+                profile: dev
+                extensions:
+                  - postgres_scanner
+            - step: "Test connection:"
+              command: "mxcp run tool test_pg"
+          verification:
+            - "✅ You should see: status: 'Connected!' and postgres_version"
+            - "❌ If it fails, check connection details first, not secrets"
+          common_fixes:
+            - issue: "postgres_scanner not found"
+              solution: "Add 'postgres_scanner' to extensions in mxcp-site.yml"
+            - issue: "Connection refused"  
+              solution: "Check host/port - try telnet YOUR_HOST 5432"
+            - issue: "Authentication failed"
+              solution: "Test credentials: psql -h YOUR_HOST -U YOUR_USER YOUR_DB"
+          success_pattern: "✅ Once this works, THEN add proper secrets management"
+          next_steps:
+            - "Working? Add secrets: mxcp agent-help advanced secrets database"
+            - "Still failing? mxcp agent-help troubleshooting database-errors"
+
+  - name: advanced  
+    description: "Advanced working examples"
+    topics:
+      - name: dbt-models
+        description: "Working with dbt models for data transformation"
+        content:
+          overview: "Use dbt models for data transformation and create prompts using the transformed data."
+          setup_steps:
+            - command: "Initialize project with dbt:"
+              description: "mxcp init my-dbt-project && cd my-dbt-project"
+            - command: "Create dbt_project.yml:"
+              description: |
+                name: 'my_dbt_project'
+                version: '1.0.0'
+                config-version: 2
+                
+                model-paths: ["models"]
+                target-path: "target"
+                clean-targets:
+                  - "target"
+                  - "dbt_packages"
+                
+                models:
+                  my_dbt_project:
+                    +materialized: table
+            - command: "Create models/sources.yml:"
+              description: |
+                version: 2
+                sources:
+                  - name: raw
+                    description: Raw data from external sources
+                    tables:
+                      - name: data
+                        description: External data source
+            - command: "Create models/transformed_data.sql:"
+              description: |
+                SELECT 
+                  id,
+                  name,
+                  created_at,
+                  CURRENT_TIMESTAMP as processed_at
+                FROM read_csv_auto('https://example.com/data.csv')
+                WHERE id IS NOT NULL
+            - command: "Create endpoints/data_prompt.yml:"
+              description: |
+                mxcp: "1.0.0"
+                
+                prompt:
+                  name: analyze_data
+                  description: "Analyze the transformed data with AI context"
+                  parameters:
+                    - name: question
+                      type: string
+                      description: "Question about the data"
+                  messages:
+                    - role: system
+                      prompt: |
+                        You are a data analyst. The user has access to transformed data 
+                        from the transformed_data table. Help them analyze this data.
+                    - role: user
+                      prompt: "{{question}}"
+            - command: "Update mxcp-site.yml:"
+              description: |
+                mxcp: "1.0.0"
+                profile: default
+                project: my_dbt_project
+                sql_tools:
+                  enabled: true
+          key_features:
+            - "dbt models for data transformation"
+            - "Prompt endpoints using transformed data"
+            - "Built-in SQL tools enabled"
+          what_you_learn:
+            - "dbt integration with MXCP"
+            - "Data transformation pipeline"
+            - "Prompt endpoints vs tool endpoints"
+            - "sql_tools configuration"
+          next_steps:
+            - "Run dbt: dbt run"
+            - "Test the prompt with your AI client"
+            - "Learn about prompts: mxcp agent-help endpoints prompts"
+
+      - name: jira-integration
+        description: "Working Jira plugin example"
+        content:
+          overview: "Complete plugin-based integration example using the Jira connector."
+          prerequisites:
+            - "This requires plugin development knowledge"
+            - "Consider simpler approaches first"
+          pattern_explanation:
+            - concept: "YAML + SQL dual-file pattern"
+              description: "Separate endpoint definition from SQL implementation"
+            - concept: "Plugin architecture"
+              description: "Custom Python functions for complex integrations"
+            - concept: "Configuration management"
+              description: "Externalized config for credentials"
+          dual_file_example:
+            - file: "endpoints/get_project.yml"
+              content: |
+                mxcp: "1.0.0"
+                tool:
+                  name: get_project
+                  description: "Get Jira project details"
+                  parameters:
+                    - name: project_key
+                      type: string
+                      description: "Project key (e.g., 'TEST')"
+                  return:
+                    type: string
+                  source:
+                    file: "get_project.sql"
+            - file: "endpoints/get_project.sql"
+              content: |
+                -- Get details for a specific Jira project
+                SELECT get_project_jira($project_key) as result;
+          plugin_note: "This example requires a custom plugin implementation"
+          next_steps:
+            - "Start with simpler patterns first"
+            - "Create your own plugin: mxcp agent-help advanced plugins"
+            - "Use direct API calls instead of plugins for simpler cases"
+
+  - name: patterns
+    description: "Common working patterns"
+    topics:
+      - name: file-structures
+        description: "Proven file organization patterns"
+        content:
+          overview: "File organization patterns that actually work in production."
+          patterns:
+            - name: "Single file (simple tools)"
+              when_to_use: "Simple tools with inline SQL"
+              structure: |
+                # endpoints/my_tool.yml
+                mxcp: "1.0.0"
+                tool:
+                  name: my_tool
+                  description: "Simple tool"
+                  parameters: []
+                  return: {type: string}
+                  source:
+                    code: |
+                      SELECT 'Hello World!' as result
+            - name: "Dual file (complex tools)"
+              when_to_use: "Complex SQL or reusable queries"
+              structure: |
+                # endpoints/my_tool.yml
+                mxcp: "1.0.0"
+                tool:
+                  name: my_tool
+                  description: "Complex tool"
+                  parameters:
+                    - name: user_id
+                      type: integer
+                  return: {type: object}
+                  source:
+                    file: "my_tool.sql"
+                
+                # endpoints/my_tool.sql
+                SELECT 
+                  id,
+                  name,
+                  email
+                FROM users 
+                WHERE id = $user_id
+            - name: "dbt + prompts"
+              when_to_use: "Data transformation pipelines with AI context"
+              structure: |
+                # mxcp-site.yml
+                mxcp: "1.0.0"
+                profile: default
+                project: my_project
+                sql_tools:
+                  enabled: true
+                
+                # dbt_project.yml
+                name: 'my_project'
+                version: '1.0.0'
+                
+                # models/my_model.sql
+                SELECT * FROM raw_data WHERE valid = true
+                
+                # endpoints/analyze.yml
+                prompt:
+                  name: analyze
+                  description: "Analyze the data"
+                  messages:
+                    - role: system
+                      prompt: "You are a data analyst"
+          key_insight: "Start with single file, split when SQL gets complex (>10 lines)"
+
+      - name: parameter-patterns
+        description: "Safe parameter handling patterns"
+        content:
+          overview: "Parameterized query patterns that prevent SQL injection."
+          security_warning: |
+            🚨 CRITICAL: Always use $param syntax, NEVER string concatenation
+          safe_patterns:
+            - pattern: "Basic parameter"
+              sql: "SELECT * FROM users WHERE id = $user_id"
+              yaml: "- name: user_id\n  type: integer"
+            - pattern: "String with validation"
+              sql: "SELECT * FROM posts WHERE title LIKE '%' || $search || '%'"  
+              yaml: |
+                - name: search
+                  type: string
+                  pattern: "^[a-zA-Z0-9\\s]+$"  # Only safe characters
+                  maxLength: 100
+          dangerous_anti_patterns:
+            - wrong: "Never use string concatenation"
+              right: "Always use $param syntax" 

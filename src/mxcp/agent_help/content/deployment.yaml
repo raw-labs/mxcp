@@ -1,0 +1,68 @@
+category: deployment
+description: "Deploy and serve your MXCP project"
+security_warning: |
+  🚨 PRODUCTION SECURITY WARNING:
+  • NEVER deploy without authentication enabled
+  • Use HTTPS in production environments
+  • Enable audit logging for compliance
+  • Monitor for suspicious activities
+  • Regular security updates and patches
+  • Implement rate limiting and DDoS protection
+subcategories:
+  - name: local-deployment
+    description: "Run MXCP server locally"
+    topics:
+      - name: basic-server
+        description: "Start basic MXCP server"
+        content:
+          overview: "Start MXCP server for local development and testing"
+          prerequisites:
+            - "MXCP project initialized and validated"
+            - "Endpoints created and tested"
+          steps:
+            - command: "Start server with default settings:"
+              description: "mxcp serve"
+            - command: "Start on custom port:"
+              description: "mxcp serve --port 8080"
+            - command: "Start with specific transport:"
+              description: "mxcp serve --transport stdio"
+          verification:
+            - "Server starts without errors"
+            - "Health check responds: curl http://localhost:8000/health"
+          common_issues:
+            - issue: "Port already in use"
+              solution: "Use different port with --port option"
+            - issue: "Authentication errors"
+              solution: "Check auth configuration in ~/.mxcp/config.yml"
+          next_steps:
+            - "Configure authentication: mxcp agent-help integration oauth-setup"
+            - "Connect to client: mxcp agent-help integration mcp-clients"
+
+  - name: client-integration
+    description: "Connect MCP clients to your server"
+    topics:
+      - name: claude-desktop
+        description: "Connect to Claude Desktop"
+        content:
+          overview: "Configure Claude Desktop to use your MXCP server"
+          prerequisites:
+            - "MXCP server running"
+            - "Claude Desktop installed"
+          steps:
+            - command: "Generate server config:"
+              description: "mxcp init . (select yes for Claude config)"
+            - command: "Add to Claude Desktop config:"
+              description: "Copy server_config.json to Claude Desktop settings"
+            - command: "Restart Claude Desktop"
+              description: "Close and reopen Claude Desktop"
+          verification:
+            - "Claude Desktop recognizes the server"
+            - "Tools and resources are available in Claude"
+          common_issues:
+            - issue: "Server not recognized"
+              solution: "Check server_config.json path and Claude Desktop config location"
+            - issue: "Connection refused"
+              solution: "Ensure MXCP server is running and accessible"
+          next_steps:
+            - "Test tools: Ask Claude to use your tools"
+            - "Debug issues: mxcp agent-help troubleshooting" 

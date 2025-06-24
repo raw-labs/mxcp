@@ -1,0 +1,114 @@
+category: integration
+description: "Integrate with MCP clients and AI platforms"
+subcategories:
+  - name: mcp-clients
+    description: "Connect to various MCP clients"
+    topics:
+      - name: claude-desktop
+        description: "Integrate with Claude Desktop"
+        content:
+          overview: "Set up MXCP to work with Claude Desktop application"
+          prerequisites:
+            - "MXCP server running"
+            - "Claude Desktop installed"
+          steps:
+            - command: "Find Claude Desktop config location:"
+              description: |
+                macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
+                Windows: %APPDATA%\\Claude\\claude_desktop_config.json
+                Linux: ~/.config/Claude/claude_desktop_config.json
+            - command: "Add server configuration:"
+              description: |
+                {
+                  "mcpServers": {
+                    "my-project": {
+                      "command": "mxcp",
+                      "args": ["serve", "--transport", "stdio"],
+                      "cwd": "/path/to/your/project"
+                    }
+                  }
+                }
+            - command: "Restart Claude Desktop"
+              description: "Close and reopen Claude Desktop application"
+          verification:
+            - "Server appears in Claude Desktop MCP section"
+            - "Tools and resources are available"
+          common_issues:
+            - issue: "Config file not found"
+              solution: "Create the file and directory if they don't exist"
+            - issue: "Server not starting"
+              solution: "Check command path and working directory"
+          next_steps:
+            - "Test integration: Ask Claude to use your tools"
+            - "Debug issues: Check server logs"
+
+  - name: oauth-setup
+    description: "Set up OAuth authentication"
+    topics:
+      - name: github-oauth
+        description: "Configure GitHub OAuth"
+        content:
+          overview: "Set up GitHub OAuth for MXCP authentication"
+          security_critical: |
+            🚨 OAUTH SECURITY REQUIREMENTS:
+            • NEVER hardcode OAuth credentials in config files
+            • Use HTTPS for all callback URLs in production
+            • Validate redirect URIs to prevent attacks
+            • Store client secrets as environment variables only
+            • Regularly rotate OAuth credentials
+            • Monitor for unauthorized access attempts
+          prerequisites:
+            - "GitHub account"
+            - "OAuth app created on GitHub"
+            - "HTTPS domain for production (required for OAuth security)"
+          steps:
+            - command: "Create GitHub OAuth app:"
+              description: |
+                1. Go to GitHub Settings > Developer settings > OAuth Apps
+                2. Click "New OAuth App"
+                3. Set Authorization callback URL:
+                   - Development: http://localhost:8000/github/callback
+                   - Production: https://your-domain.com/github/callback
+                4. 🔒 SECURITY: Use HTTPS for production callbacks
+            - command: "🔒 Set environment variables securely:"
+              description: |
+                # REQUIRED: Set these environment variables
+                export GITHUB_CLIENT_ID="your_actual_client_id"
+                export GITHUB_CLIENT_SECRET="your_actual_client_secret"
+                
+                # 🔒 SECURITY: Never hardcode these values
+                # Add to .gitignore: .env*
+            - command: "Configure in ~/.mxcp/config.yml:"
+              description: |
+                projects:
+                  my-project:
+                    profiles:
+                      production:  # Use specific profile for production
+                        auth:
+                          provider: github
+                          clients:
+                            - client_id: "${GITHUB_CLIENT_ID}"
+                              client_secret: "${GITHUB_CLIENT_SECRET}"
+                              name: "MXCP Production"
+                              redirect_uris:
+                                - "https://your-domain.com/github/callback"  # HTTPS required
+                              scopes:
+                                - "mxcp:access"
+                          github:
+                            client_id: "${GITHUB_CLIENT_ID}"
+                            client_secret: "${GITHUB_CLIENT_SECRET}"
+                            scope: "user:email"
+                            callback_path: "/github/callback"
+                            auth_url: "https://github.com/login/oauth/authorize"
+                            token_url: "https://github.com/login/oauth/access_token"
+          verification:
+            - "Server starts with authentication enabled"
+            - "OAuth flow works correctly"
+          common_issues:
+            - issue: "OAuth callback errors"
+              solution: "Check callback URL in GitHub app settings"
+            - issue: "Environment variables not set"
+              solution: "Ensure variables are exported in shell"
+          next_steps:
+            - "Test authentication: Access protected endpoints"
+            - "Configure other providers: Atlassian, Salesforce" 

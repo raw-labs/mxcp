@@ -1,0 +1,263 @@
+category: testing
+description: "Validate, test, and debug your project"
+security_warning: |
+  🚨 SECURITY WARNING: Comprehensive testing prevents security vulnerabilities:
+  • Test for SQL injection with malicious inputs
+  • Verify policy enforcement with different user contexts
+  • Test parameter validation with edge cases
+  • Ensure sensitive data is properly filtered
+  • Test authentication and authorization flows
+  Never deploy untested endpoints to production!
+subcategories:
+  - name: validation
+    description: "Validate endpoints and configuration"
+    topics:
+      - name: basic-validation
+        description: "Basic endpoint validation"
+        content:
+          overview: "Validate your MXCP project configuration and endpoints"
+          prerequisites:
+            - "MXCP project initialized"
+            - "Endpoints created"
+          steps:
+            - command: "Validate all endpoints:"
+              description: "mxcp validate"
+            - command: "Validate specific endpoint:"
+              description: "mxcp validate my_endpoint"
+            - command: "Validate with debug output:"
+              description: "mxcp validate --debug"
+          verification:
+            - "Should see: '✅ All endpoints are valid!'"
+            - "No error messages displayed"
+          common_issues:
+            - issue: "Schema validation errors"
+              solution: "Check YAML syntax and required fields"
+            - issue: "Parameter name errors"
+              solution: "Use only letters, numbers, underscores in parameter names"
+            - issue: "SQL syntax errors"
+              solution: "Test SQL queries independently"
+          next_steps:
+            - "Fix errors: mxcp agent-help troubleshooting validation-errors"
+            - "Run tests: mxcp agent-help testing endpoint-testing"
+      
+      - name: schema-validation
+        description: "Validate against JSON schemas"
+        content:
+          overview: "Understand and fix schema validation errors"
+          common_errors:
+            - error: "Missing required property"
+              solution: "Add all required fields (mxcp, name, source, etc.)"
+              example: "Add: mxcp: '1.0.0'"
+            - error: "Additional properties not allowed"
+              solution: "Remove unknown fields or check spelling"
+            - error: "Invalid parameter name"
+              solution: "Use valid parameter names (letters, numbers, underscores)"
+          debugging_steps:
+            - command: "Run validation with debug:"
+              description: "mxcp validate --debug"
+            - command: "Check specific endpoint:"
+              description: "mxcp validate endpoint_name"
+            - command: "Validate JSON syntax:"
+              description: "Use online YAML validator"
+          next_steps:
+            - "Schema reference: mxcp agent-help schemas"
+            - "Fix specific errors: mxcp agent-help troubleshooting"
+
+  - name: endpoint-testing
+    description: "Test endpoint functionality"
+    topics:
+      - name: tool-testing
+        description: "Test tool endpoints"
+        content:
+          overview: "Test tool endpoints with various parameters"
+          prerequisites:
+            - "Valid tool endpoints created"
+            - "Endpoints pass validation"
+          steps:
+            - command: "Run tool without parameters:"
+              description: "mxcp run tool my_tool"
+            - command: "Run tool with parameters:"
+              description: "mxcp run tool my_tool --param name=value"
+            - command: "Run tool with JSON output:"
+              description: "mxcp run tool my_tool --json-output"
+          verification:
+            - "Tool executes without errors"
+            - "Returns expected data structure"
+            - "Parameters work correctly"
+          common_issues:
+            - issue: "Tool not found"
+              solution: "Check tool name and ensure it's in endpoints/"
+            - issue: "Parameter errors"
+              solution: "Verify parameter names match between YAML and SQL"
+            - issue: "SQL execution errors"
+              solution: "Test SQL query directly with mxcp query"
+          next_steps:
+            - "Add automated tests: mxcp agent-help testing automated-tests"
+            - "Debug issues: mxcp agent-help troubleshooting"
+      
+      - name: automated-tests
+        description: "Create automated tests for endpoints"
+        content:
+          overview: "Add test cases to endpoint definitions for automated testing"
+          prerequisites:
+            - "Working endpoints"
+            - "Understanding of expected outputs"
+          steps:
+            - command: "Add tests to endpoint YAML:"
+              description: |
+                tests:
+                  - name: "test basic functionality"
+                    params:
+                      name: "test"
+                    expect:
+                      - greeting: "Hello, test!"
+            - command: "Run all tests:"
+              description: "mxcp test"
+            - command: "Run tests for specific endpoint:"
+              description: "mxcp test my_endpoint"
+          verification:
+            - "All tests pass"
+            - "Test results are as expected"
+          common_issues:
+            - issue: "Test failures"
+              solution: "Check expected values match actual output"
+            - issue: "Parameter mismatches"
+              solution: "Ensure test parameters are valid"
+          next_steps:
+            - "Advanced testing: Add more test cases"
+            - "Continuous testing: Run tests before deployment"
+      
+      - name: security-testing
+        description: "Test for security vulnerabilities"
+        content:
+          overview: "Test endpoints for common security vulnerabilities and attack vectors"
+          security_critical: |
+            🚨 CRITICAL: Security testing is mandatory before production deployment
+            • Test ALL endpoints for SQL injection vulnerabilities
+            • Verify policy enforcement prevents unauthorized access
+            • Test parameter validation rejects malicious inputs
+            • Ensure sensitive data filtering works correctly
+          prerequisites:
+            - "Working endpoints with comprehensive test coverage"
+            - "Understanding of common attack vectors"
+          steps:
+            - command: "Test SQL injection prevention:"
+              description: |
+                # Add security tests to endpoint YAML
+                tests:
+                  - name: "sql_injection_test"
+                    description: "Test SQL injection prevention"
+                    arguments:
+                      - key: search_term
+                        value: "'; DROP TABLE users; --"
+                    # Should return safe results or error, never execute injection
+                    result_contains_text: "Invalid input"
+            - command: "Test parameter validation:"
+              description: |
+                tests:
+                  - name: "parameter_validation"
+                    description: "Test parameter constraints"
+                    arguments:
+                      - key: user_id
+                        value: "../../etc/passwd"  # Path traversal attempt
+                    # Should reject invalid input
+                    result_contains_text: "Invalid parameter"
+            - command: "Test policy enforcement:"
+              description: |
+                tests:
+                  - name: "unauthorized_access_test"
+                    description: "Test access control policies"
+                    user_context:
+                      role: "guest"
+                      permissions: []
+                    arguments:
+                      - key: sensitive_data_id
+                        value: "secret123"
+                    # Should deny access or filter sensitive fields
+                    result_not_contains: ["sensitive_field", "secret_data"]
+            - command: "Run comprehensive security tests:"
+              description: |
+                # Test all endpoints with malicious inputs
+                mxcp test --debug
+                
+                # Test with different user contexts
+                mxcp test --user-context '{"role": "attacker"}'
+          verification:
+            - "All injection attempts are safely handled"
+            - "Parameter validation rejects malicious inputs"
+            - "Policies prevent unauthorized data access"
+            - "No sensitive data leaks in error messages"
+          security_checklist:
+            - "✅ SQL injection tests for all string parameters"
+            - "✅ Parameter validation for all input types"
+            - "✅ Policy enforcement tests for all user roles"
+            - "✅ Sensitive data filtering verification"
+            - "✅ Error message security (no data leaks)"
+          common_vulnerabilities:
+            - vulnerability: "SQL injection"
+              test: "Use malicious SQL in string parameters"
+              prevention: "Always use parameterized queries ($param)"
+            - vulnerability: "Path traversal"
+              test: "Use '../' sequences in file paths"
+              prevention: "Validate and sanitize all path parameters"
+            - vulnerability: "Data exposure"
+              test: "Access data without proper authorization"
+              prevention: "Implement and test access control policies"
+          next_steps:
+            - "Automated security testing: Integrate into CI/CD pipeline"
+            - "Penetration testing: Hire security experts for comprehensive testing"
+            - "Security monitoring: Implement runtime security monitoring"
+
+  - name: debugging
+    description: "Debug and troubleshoot issues"
+    topics:
+      - name: sql-debugging
+        description: "Debug SQL queries"
+        content:
+          overview: "Debug SQL queries used in endpoints"
+          prerequisites:
+            - "SQL query not working as expected"
+          steps:
+            - command: "Test SQL directly:"
+              description: "mxcp query \"SELECT * FROM my_table\""
+            - command: "Test with parameters:"
+              description: "mxcp query \"SELECT * FROM my_table WHERE id = 1\""
+            - command: "Check available tables:"
+              description: "mxcp query \"SHOW TABLES\""
+            - command: "Describe table structure:"
+              description: "mxcp query \"DESCRIBE my_table\""
+          verification:
+            - "SQL executes without errors"
+            - "Returns expected data"
+          common_issues:
+            - issue: "Table not found"
+              solution: "Check table name and ensure data is loaded"
+            - issue: "Column not found"
+              solution: "Verify column names and spelling"
+            - issue: "Type errors"
+              solution: "Check data types and conversions"
+          next_steps:
+            - "Fix endpoint: Update SQL in endpoint file"
+            - "Database issues: mxcp agent-help troubleshooting connection-issues"
+      
+      - name: connection-debugging
+        description: "Debug database connections"
+        content:
+          overview: "Troubleshoot database connection issues"
+          diagnostic_steps:
+            - command: "Test basic connection:"
+              description: "mxcp query \"SELECT 1\""
+            - command: "Check loaded extensions:"
+              description: "mxcp query \"SELECT * FROM duckdb_extensions()\""
+            - command: "List available schemas:"
+              description: "mxcp query \"SELECT * FROM information_schema.schemata\""
+          common_issues:
+            - issue: "Extension not loaded"
+              solution: "Add extension to mxcp-site.yml extensions list"
+            - issue: "Permission denied"
+              solution: "Check file permissions or database credentials"
+            - issue: "File not found"
+              solution: "Verify file paths are correct"
+          next_steps:
+            - "Fix configuration: mxcp agent-help getting-started configuration"
+            - "Check secrets: mxcp agent-help advanced secrets" 

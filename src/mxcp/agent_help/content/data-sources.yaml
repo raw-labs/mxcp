@@ -1,0 +1,269 @@
+category: data-sources
+description: "Connect to databases and data sources"
+technical_context: |
+  MXCP uses DuckDB as the underlying SQL engine. Data source connections work through DuckDB extensions:
+  - postgres_scanner: Connect to PostgreSQL via postgres_scan() function
+  - mysql_scanner: Connect to MySQL via mysql_scan() function  
+  - httpfs: HTTP data access via read_csv_auto(), read_json_auto()
+  - No drivers needed - DuckDB handles connections internally
+  External search hints: "DuckDB postgres_scanner", "DuckDB extensions", "DuckDB mysql_scanner", "DuckDB httpfs"
+subcategories:
+  - name: databases
+    description: "Connect to various database systems"
+    agent_priority: high
+    topics:
+      - name: postgresql
+        description: "Connect to PostgreSQL database"
+        content:
+          overview: "Connect MXCP to PostgreSQL using DuckDB's postgres_scanner extension"
+          key_principle: "🎯 Test connection first with hardcoded values, THEN add secrets management"
+          technical_requirements:
+            - "DuckDB postgres_scanner extension must be available"
+            - "postgres_scan() function syntax: postgres_scan('connection_string', 'schema', 'table')"
+            - "Connection string format: 'host=HOST port=PORT dbname=DB user=USER password=PASS'"
+            - "Extension auto-installs on first use in most DuckDB installations"
+          quick_test:
+            - step: "1. Add extension to mxcp-site.yml:"
+              code: |
+                mxcp: "1.0.0"
+                project: my-project
+                profile: dev
+                extensions:
+                  - postgres_scanner
+            - step: "2. Create test endpoint (endpoints/test_pg.yml):"
+              code: |
+                mxcp: "1.0.0"
+                tool:
+                  name: test_pg
+                  description: "Test PostgreSQL connection"
+                  parameters: []
+                  return: {type: object}
+                  source:
+                    code: |
+                      SELECT 'Connected!' as status, version() as postgres_version
+                      FROM postgres_scan('host=YOUR_HOST port=5432 dbname=YOUR_DB user=YOUR_USER password=YOUR_PASS', 'information_schema', 'tables') 
+                      LIMIT 1
+            - step: "3. Replace YOUR_* with actual values and test:"
+              command: "mxcp run tool test_pg"
+          verification_commands:
+            - "mxcp query \"INSTALL postgres_scanner; LOAD postgres_scanner;\""
+            - "mxcp query \"SELECT * FROM duckdb_extensions() WHERE extension_name = 'postgres_scanner'\""
+            - "mxcp run tool test_pg"
+            - "# Expected: status: 'Connected!' and postgres_version string"
+          troubleshooting_commands:
+            - "mxcp query \"SELECT version()\"  # Test DuckDB works"
+            - "telnet YOUR_HOST 5432  # Test network connectivity"
+            - "psql -h YOUR_HOST -U YOUR_USER YOUR_DB  # Test PostgreSQL auth"
+            - "mxcp query \"INSTALL postgres_scanner; LOAD postgres_scanner;\"  # Manual extension install"
+          external_search_hints:
+            - "DuckDB postgres_scanner extension"
+            - "DuckDB postgres_scan function"
+            - "PostgreSQL connection strings"
+            - "DuckDB extension installation"
+          common_fixes:
+            - issue: "postgres_scanner not found"
+              solution: "Add 'postgres_scanner' to extensions in mxcp-site.yml"
+              technical_note: "DuckDB extensions must be declared before use"
+            - issue: "Connection refused"  
+              solution: "Check host/port - try: telnet YOUR_HOST 5432"
+              technical_note: "Network connectivity issue, not DuckDB related"
+            - issue: "Authentication failed"
+              solution: "Test credentials with: psql -h YOUR_HOST -U YOUR_USER YOUR_DB"
+              technical_note: "PostgreSQL authentication, not DuckDB issue"
+            - issue: "Extension loading failed"
+              solution: "Try: mxcp query \"INSTALL postgres_scanner; LOAD postgres_scanner;\""
+              technical_note: "Manual DuckDB extension installation"
+          real_query_example:
+            - step: "Once connected, create real queries:"
+              code: |
+                # endpoints/get_users.yml
+                tool:
+                  name: get_users
+                  parameters:
+                    - name: limit
+                      type: integer
+                      default: 10
+                  source:
+                    code: |
+                      SELECT * FROM postgres_scan('host=YOUR_HOST port=5432 dbname=YOUR_DB user=YOUR_USER password=YOUR_PASS', 'public', 'users')
+                      LIMIT $limit
+              technical_note: "postgres_scan() function queries specific PostgreSQL table through DuckDB"
+          production_ready:
+            warning: "🚨 NEVER commit passwords to version control!"
+            next_step: "Working? Now add secrets: mxcp agent-help advanced secrets database"
+          next_steps:
+            - "Add proper secrets: mxcp agent-help advanced secrets database"
+            - "Create more endpoints: mxcp agent-help endpoints tools"
+            - "Still having issues? mxcp agent-help troubleshooting database-errors"
+      
+      - name: mysql
+        description: "Connect to MySQL database"
+        content:
+          overview: "Connect MXCP to MySQL using DuckDB's mysql_scanner extension"
+          technical_requirements:
+            - "DuckDB mysql_scanner extension (availability varies by DuckDB build)"
+            - "mysql_scan() function syntax similar to postgres_scan()"
+          prerequisites:
+            - "MXCP project initialized"
+            - "MySQL server accessible"
+          steps:
+            - command: "Add extension to mxcp-site.yml:"
+              description: |
+                extensions:
+                  - mysql_scanner
+            - command: "Use mysql_scan function:"
+              description: |
+                SELECT * FROM mysql_scan('host=localhost port=3306 database=mydb username=user password=pass', 'table')
+          verification_commands:
+            - "mxcp query \"SELECT * FROM duckdb_extensions() WHERE extension_name = 'mysql_scanner'\""
+            - "Test connection with simple query"
+          troubleshooting_commands:
+            - "mxcp query \"INSTALL mysql_scanner; LOAD mysql_scanner;\""
+            - "Check DuckDB build supports MySQL scanner"
+          external_search_hints:
+            - "DuckDB mysql_scanner extension"
+            - "DuckDB MySQL support"
+          common_issues:
+            - issue: "Extension not available"
+              solution: "Check if mysql_scanner is supported in your DuckDB version"
+              technical_note: "mysql_scanner availability depends on DuckDB build configuration"
+            - issue: "Connection timeout"
+              solution: "Verify network connectivity and firewall settings"
+  
+  - name: files
+    description: "Work with file-based data sources"
+    agent_priority: medium
+    topics:
+      - name: csv-files
+        description: "Import and query CSV files"
+        content:
+          overview: "Work with CSV files directly in MXCP using DuckDB's built-in CSV support"
+          technical_requirements:
+            - "DuckDB read_csv_auto() function auto-detects CSV structure"
+            - "Direct file path or HTTP URL support"
+            - "Automatic type inference and header detection"
+          prerequisites:
+            - "MXCP project initialized"
+            - "CSV files accessible (local or HTTP)"
+          code_examples:
+            - pattern: "Direct CSV query"
+              code: "SELECT * FROM 'path/to/file.csv'"
+              technical_note: "DuckDB auto-detects CSV format"
+            - pattern: "CSV with options"
+              code: "SELECT * FROM read_csv('file.csv', header=true, delimiter=',')"
+              technical_note: "Explicit CSV parsing options"
+            - pattern: "HTTP CSV access"
+              code: "SELECT * FROM 'https://example.com/data.csv'"
+              technical_note: "DuckDB httpfs extension handles HTTP automatically"
+          verification_commands:
+            - "mxcp query \"SELECT * FROM 'your_file.csv' LIMIT 5\""
+            - "mxcp query \"DESCRIBE SELECT * FROM 'your_file.csv'\""
+          troubleshooting_commands:
+            - "mxcp query \"SELECT version()\"  # Test DuckDB"
+            - "head -5 your_file.csv  # Check file format manually"
+          external_search_hints:
+            - "DuckDB read_csv_auto function"
+            - "DuckDB CSV import options"
+            - "DuckDB file format support"
+          common_issues:
+            - issue: "File not found"
+              solution: "Check file path is correct and accessible"
+              technical_note: "DuckDB requires valid file path or URL"
+            - issue: "Encoding issues"
+              solution: "Specify encoding in read_csv function"
+              technical_note: "DuckDB supports various encodings"
+            - issue: "Header problems"
+              solution: "Set header=true/false in read_csv options"
+              technical_note: "DuckDB auto-detection can be overridden"
+          next_steps:
+            - "Create endpoints: mxcp agent-help endpoints tools"
+            - "Data transformation: Use dbt models"
+      
+      - name: json-files
+        description: "Work with JSON data files"
+        content:
+          overview: "Query JSON files using DuckDB's JSON functions"
+          technical_requirements:
+            - "DuckDB read_json_auto() function parses JSON automatically"
+            - "json_extract() function for nested data access"
+            - "Support for JSON Lines (NDJSON) format"
+          prerequisites:
+            - "MXCP project initialized"
+            - "JSON files available (local or HTTP)"
+          code_examples:
+            - pattern: "Read JSON file"
+              code: "SELECT * FROM read_json('data.json')"
+              technical_note: "Basic JSON file reading"
+            - pattern: "Auto-detection"
+              code: "SELECT * FROM read_json_auto('data.json')"
+              technical_note: "Automatic JSON structure detection"
+            - pattern: "Extract nested data"
+              code: "SELECT json_extract(data, '$.field') FROM read_json('file.json')"
+              technical_note: "JSON path extraction using JSONPath syntax"
+          verification_commands:
+            - "mxcp query \"SELECT * FROM read_json_auto('your_file.json') LIMIT 5\""
+            - "mxcp query \"DESCRIBE SELECT * FROM read_json_auto('your_file.json')\""
+          troubleshooting_commands:
+            - "cat your_file.json | jq .  # Validate JSON syntax"
+            - "mxcp query \"SELECT json_valid('your_json_string')\"  # Test JSON validity"
+          external_search_hints:
+            - "DuckDB read_json_auto function"
+            - "DuckDB JSON path extraction"
+            - "JSONPath syntax"
+          common_issues:
+            - issue: "JSON parsing error"
+              solution: "Check JSON file is valid and well-formed"
+              technical_note: "DuckDB requires valid JSON syntax"
+            - issue: "Nested structure issues"
+              solution: "Use json_extract or unnest functions"
+              technical_note: "DuckDB provides functions for complex JSON structures"
+  
+  - name: apis
+    description: "Connect to web APIs and services"
+    agent_priority: medium
+    topics:
+      - name: http-requests
+        description: "Make HTTP requests to APIs"
+        content:
+          overview: "Use DuckDB's httpfs extension to query web APIs"
+          technical_requirements:
+            - "DuckDB httpfs extension (auto-loaded in most cases)"
+            - "HTTP/HTTPS support for direct URL querying"
+            - "JSON and CSV API response support"
+          prerequisites:
+            - "MXCP project initialized"
+            - "API endpoint accessible"
+          code_examples:
+            - pattern: "Query JSON API"
+              code: "SELECT * FROM read_json_auto('https://api.example.com/data')"
+              technical_note: "DuckDB httpfs handles HTTP requests automatically"
+            - pattern: "CSV from URL"
+              code: "SELECT * FROM 'https://example.com/data.csv'"
+              technical_note: "Direct CSV URL access"
+            - pattern: "API with headers"
+              code: "SELECT * FROM read_json_auto('https://api.example.com/data', headers={Authorization: 'Bearer token'})"
+              technical_note: "HTTP headers for authenticated APIs"
+          verification_commands:
+            - "mxcp query \"SELECT * FROM read_json_auto('https://httpbin.org/json') LIMIT 5\""
+            - "curl -s https://api.example.com/data | head  # Test API directly"
+          troubleshooting_commands:
+            - "mxcp query \"SELECT version()\"  # Test DuckDB"
+            - "mxcp query \"SELECT * FROM duckdb_extensions() WHERE extension_name = 'httpfs'\""
+            - "curl -v https://api.example.com/data  # Debug HTTP issues"
+          external_search_hints:
+            - "DuckDB httpfs extension"
+            - "DuckDB HTTP authentication"
+            - "REST API best practices"
+          common_issues:
+            - issue: "HTTP error"
+              solution: "Check API endpoint URL and authentication"
+              technical_note: "HTTP status codes are handled by DuckDB httpfs"
+            - issue: "Rate limiting"
+              solution: "Implement request throttling or caching"
+              technical_note: "API rate limits are external to DuckDB"
+            - issue: "SSL certificate issues"
+              solution: "Check certificate validity or use HTTP for testing"
+              technical_note: "DuckDB httpfs validates SSL certificates"
+          next_steps:
+            - "Add authentication: Configure API keys in secrets"
+            - "Create endpoints: mxcp agent-help endpoints tools" 
