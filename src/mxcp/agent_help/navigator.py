@@ -5,7 +5,7 @@ Help navigation logic for the MXCP agent help system.
 import yaml
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
-from .categories import get_categories, is_valid_category
+from .categories import CATEGORIES, CATEGORY_DESCRIPTIONS, is_valid_category
 
 class HelpNavigator:
     """Navigate through the hierarchical help structure."""
@@ -24,7 +24,7 @@ class HelpNavigator:
             # Return empty structure for missing content files
             return {
                 "category": category,
-                "description": get_categories().get(category, "No description available"),
+                "description": CATEGORY_DESCRIPTIONS.get(category, "No description available"),
                 "subcategories": []
             }
         
@@ -66,8 +66,6 @@ class HelpNavigator:
     
     def _get_root_help(self) -> Tuple[str, Dict[str, Any]]:
         """Get root level help showing all categories."""
-        categories = get_categories()
-        
         return "root", {
             "level": "root",
             "title": "MXCP Agent Help",
@@ -86,12 +84,12 @@ Always follow security best practices and test thoroughly before production depl
 """,
             "categories": [
                 {
-                    "name": name,
-                    "description": desc,
-                    "command": f"mxcp agent-help {name}",
-                    "security_priority": "🔒 HIGH" if name in ["policies", "advanced", "integration"] else "🔒 MEDIUM" if name in ["testing", "deployment"] else "🔒 BASIC"
+                    "name": category,
+                    "description": CATEGORY_DESCRIPTIONS.get(category, "No description available"),
+                    "command": f"mxcp agent-help {category}",
+                    "security_priority": "🔒 HIGH" if category in ["policies", "advanced", "integration"] else "🔒 MEDIUM" if category in ["testing", "deployment"] else "🔒 BASIC"
                 }
-                for name, desc in categories.items()
+                for category in CATEGORIES
             ],
             "usage": [
                 "mxcp agent-help <category>",
@@ -99,17 +97,19 @@ Always follow security best practices and test thoroughly before production depl
                 "mxcp agent-help <category> <subcategory> <topic>"
             ],
             "examples": [
+                "mxcp agent-help examples",
                 "mxcp agent-help getting-started",
                 "mxcp agent-help policies access-control",
                 "mxcp agent-help testing security-testing",
-                "mxcp agent-help advanced secrets"
+                "mxcp agent-help advanced dbt-integration"
             ],
-            "security_quick_start": [
-                "1. Start with: mxcp agent-help getting-started",
-                "2. Secure secrets: mxcp agent-help advanced secrets",
-                "3. Set up policies: mxcp agent-help policies",
-                "4. Security testing: mxcp agent-help testing security-testing",
-                "5. Deploy securely: mxcp agent-help deployment"
+            "quick_start": [
+                "1. START: mxcp agent-help examples (working code patterns)",
+                "2. SETUP: mxcp agent-help getting-started",  
+                "3. BUILD: mxcp agent-help endpoints",
+                "4. SECURE: mxcp agent-help policies",
+                "5. TEST: mxcp agent-help testing",
+                "6. DEPLOY: mxcp agent-help deployment"
             ]
         }
     
@@ -148,7 +148,7 @@ Always follow security best practices and test thoroughly before production depl
         # Find the subcategory
         subcat_content = None
         for subcat in content.get("subcategories", []):
-            if subcat["name"] == subcategory:
+            if subcat and isinstance(subcat, dict) and subcat.get("name") == subcategory:
                 subcat_content = subcat
                 break
         
@@ -189,16 +189,19 @@ Always follow security best practices and test thoroughly before production depl
         subcat_content = None
         
         for subcat in content.get("subcategories", []):
-            if subcat["name"] == subcategory:
+            if subcat and isinstance(subcat, dict) and subcat.get("name") == subcategory:
                 subcat_content = subcat
                 for topic_item in subcat.get("topics", []):
-                    if topic_item["name"] == topic:
+                    if topic_item and isinstance(topic_item, dict) and topic_item.get("name") == topic:
                         topic_content = topic_item
                         break
                 break
         
         if not topic_content:
             return "error", {"error": f"Topic '{topic}' not found in '{category}/{subcategory}'"}
+        
+        if not subcat_content:
+            return "error", {"error": f"Subcategory '{subcategory}' not found in '{category}'"}
         
         result = {
             "level": "topic",
@@ -225,17 +228,19 @@ Always follow security best practices and test thoroughly before production depl
     
     def _get_related_categories(self, category: str) -> List[str]:
         """Get related categories for cross-references."""
-        # Simple heuristic for related categories
+        # Updated relations based on new category structure
         relations = {
-            "getting-started": ["data-sources", "endpoints", "testing"],
-            "data-sources": ["getting-started", "endpoints", "schemas"],
-            "endpoints": ["getting-started", "testing", "schemas"],
-            "testing": ["endpoints", "troubleshooting"],
-            "troubleshooting": ["testing", "schemas"],
-            "schemas": ["endpoints", "troubleshooting"],
-            "integration": ["deployment", "troubleshooting"],
-            "deployment": ["integration", "advanced"],
-            "advanced": ["deployment", "schemas"]
+            "examples": ["getting-started", "endpoints", "testing"],
+            "getting-started": ["examples", "data-sources", "endpoints"],
+            "endpoints": ["examples", "getting-started", "testing", "schemas"],
+            "data-sources": ["getting-started", "endpoints", "advanced"],
+            "testing": ["examples", "endpoints", "troubleshooting"],
+            "troubleshooting": ["testing", "schemas", "advanced"],
+            "advanced": ["data-sources", "policies", "deployment"],
+            "policies": ["advanced", "testing", "integration"],
+            "integration": ["policies", "deployment", "troubleshooting"],
+            "deployment": ["integration", "advanced", "policies"],
+            "schemas": ["endpoints", "troubleshooting", "testing"]
         }
         return relations.get(category, [])
     

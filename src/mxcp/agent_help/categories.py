@@ -2,19 +2,49 @@
 Category definitions for the MXCP agent help system.
 """
 
-# Top-level categories as defined in the implementation guide
-CATEGORIES = {
+# Available categories in priority order
+CATEGORIES = [
+    "examples",       # START HERE - working code patterns
+    "getting-started", # Basic setup and initialization
+    "endpoints",      # Tools, resources, prompts
+    "data-sources",   # Database connections and data access
+    "testing",        # Validation, testing, debugging
+    "troubleshooting", # Common issues and solutions
+    "advanced",       # dbt, plugins, performance, security
+    "policies",       # Security and access control
+    "integration",    # OAuth, MCP clients, external systems
+    "deployment",     # Production deployment strategies
+    "schemas",        # Type system and validation schemas
+]
+
+# Category display names
+CATEGORY_NAMES = {
+    "examples": "Examples",
+    "getting-started": "Getting Started", 
+    "endpoints": "Endpoints",
+    "data-sources": "Data Sources",
+    "testing": "Testing", 
+    "troubleshooting": "Troubleshooting",
+    "advanced": "Advanced",
+    "policies": "Policies",
+    "integration": "Integration",
+    "deployment": "Deployment", 
+    "schemas": "Schemas",
+}
+
+# Category descriptions
+CATEGORY_DESCRIPTIONS = {
     "examples": "Working examples to get started quickly",
     "getting-started": "Initialize and set up MXCP projects",
-    "data-sources": "Connect to databases and data sources", 
-    "endpoints": "Create and manage tools, resources, and prompts",
+    "endpoints": "Create and manage tools, resources, and prompts", 
+    "data-sources": "Connect to databases and external data",
     "testing": "Validate, test, and debug your project",
-    "policies": "Access control and data protection policies",
+    "troubleshooting": "Common issues and solutions",
+    "advanced": "Advanced features and patterns for production deployments",
+    "policies": "Security and access control",
+    "integration": "OAuth, MCP clients, and external integrations",
     "deployment": "Deploy and serve your MXCP project",
-    "troubleshooting": "Diagnose and fix common issues",
-    "integration": "Integrate with MCP clients and AI platforms",
-    "advanced": "Advanced features and optimizations",
-    "schemas": "YAML file schemas and validation"
+    "schemas": "Type system and validation schemas",
 }
 
 def get_categories():
@@ -23,7 +53,7 @@ def get_categories():
 
 def get_category_description(category):
     """Get description for a specific category."""
-    return CATEGORIES.get(category)
+    return CATEGORY_DESCRIPTIONS.get(category)
 
 def is_valid_category(category):
     """Check if a category is valid."""

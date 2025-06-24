@@ -1,13 +1,21 @@
 category: endpoints
 description: "Create and manage tools, resources, and prompts"
+technical_context: |
+  MXCP endpoints are defined in YAML files and can use either SQL or Python implementations:
+  - Tools: Interactive functions that process data and return results
+  - Resources: Data sources accessible via URI patterns
+  - Prompts: Templates for AI model interactions
+  - Both SQL and Python endpoints get security, validation, and audit trails automatically
+  External search hints: "MXCP endpoint types", "YAML endpoint definitions", "MCP protocol specification"
 subcategories:
   - name: tools
     description: "Create tool endpoints for actions and queries"
+    agent_priority: high
     topics:
-      - name: basic-tool
-        description: "Create a simple tool endpoint"
+      - name: basic-tool-sql
+        description: "Create a simple SQL tool endpoint"
         content:
-          overview: "Create a basic tool that executes SQL and returns results"
+          overview: "Create a basic SQL tool that executes queries and returns results"
           prerequisites:
             - "MXCP project initialized"
             - "Basic understanding of SQL"
@@ -18,12 +26,12 @@ subcategories:
             • Test with malicious inputs before deployment
             • Never trust user input without validation
           steps:
-            - command: "Create endpoints/my-tool.yml:"
+            - command: "Create tools/my-tool.yml:"
               description: |
                 mxcp: "1.0.0"
                 tool:
                   name: my_tool
-                  description: "My first tool"
+                  description: "My first SQL tool"
                   parameters:
                     - name: param1
                       type: string
@@ -38,7 +46,10 @@ subcategories:
                       message:
                         type: string
                   source:
-                    file: "my-tool.sql"
+                    code: |
+                      -- 🔒 SECURITY: Use parameterized queries ($ prefix)
+                      -- This prevents SQL injection attacks
+                      SELECT 'Hello, ' || $param1 || '!' as message
                   # 🔒 SECURITY: Always include tests
                   tests:
                     - name: "basic_test"
@@ -47,33 +58,113 @@ subcategories:
                           value: "World"
                       result:
                         message: "Hello, World!"
-            - command: "Create endpoints/my-tool.sql:"
-              description: |
-                -- 🔒 SECURITY: Use parameterized queries ($ prefix)
-                -- This prevents SQL injection attacks
-                SELECT 'Hello, ' || $param1 || '!' as message
           verification:
             - "Run: mxcp validate"
             - "Run: mxcp run tool my_tool --param param1=World"
           common_issues:
             - issue: "Tool not found"
-              solution: "Check file names match (my-tool.yml and my-tool.sql)"
+              solution: "Check file names and ensure it's in tools/ directory"
             - issue: "Parameter error"
-              solution: "Ensure parameter names match between YAML and SQL"
+              solution: "Ensure parameter names match between YAML and SQL ($param1)"
           next_steps:
             - "Add return type validation: mxcp agent-help endpoints tools return-types"
-            - "Add tests: mxcp agent-help testing"
+            - "Try Python version: mxcp agent-help endpoints tools basic-tool-python"
+            - "Add tests: mxcp agent-help testing endpoint-testing"
+
+      - name: basic-tool-python
+        description: "Create a simple Python tool endpoint"
+        content:
+          overview: "Create a Python tool for complex logic and external integrations"
+          prerequisites:
+            - "MXCP project initialized"
+            - "Basic understanding of Python"
+          technical_requirements:
+            - "Function name must match tool name exactly"
+            - "mxcp.runtime module provides database and configuration access"
+            - "Return type must match YAML specification"
+          steps:
+            - command: "Create tools/my-python-tool.yml:"
+              description: |
+                mxcp: "1.0.0"
+                tool:
+                  name: my_python_tool
+                  description: "My first Python tool"
+                  language: python
+                  parameters:
+                    - name: name
+                      type: string
+                      description: "Name to greet"
+                      maxLength: 50
+                  return:
+                    type: object
+                    properties:
+                      greeting: {type: string}
+                      timestamp: {type: string}
+                  source:
+                    file: ../python/my_tools.py
+            - command: "Create python/my_tools.py:"
+              description: |
+                from datetime import datetime
+                from mxcp.runtime import db
+                
+                def my_python_tool(name: str) -> dict:
+                    """Generate a personalized greeting with timestamp."""
+                    
+                    # Validate input
+                    if not name or len(name.strip()) == 0:
+                        return {
+                            "greeting": "Hello, anonymous!",
+                            "timestamp": datetime.now().isoformat()
+                        }
+                    
+                    # Optional: Store greeting history in database
+                    db.execute("""
+                        CREATE TABLE IF NOT EXISTS greeting_history (
+                            name TEXT,
+                            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
+                    
+                    db.execute("""
+                        INSERT INTO greeting_history (name) VALUES ($name)
+                    """, {"name": name})
+                    
+                    return {
+                        "greeting": f"Hello, {name}! Welcome to MXCP!",
+                        "timestamp": datetime.now().isoformat()
+                    }
+          verification:
+            - "Run: mxcp validate"
+            - "Run: mxcp run tool my_python_tool --param name=Alice"
+            - "Check history: mxcp query \"SELECT * FROM greeting_history\""
+          python_advantages:
+            - "Complex business logic and calculations"
+            - "External API calls and integrations"
+            - "Machine learning and data science libraries"
+            - "Async operations for performance"
+            - "Custom error handling and validation"
+          common_issues:
+            - issue: "Function not found"
+              solution: "Ensure function name matches tool name exactly"
+            - issue: "Import errors"
+              solution: "Check Python file path and syntax"
+            - issue: "Runtime errors"
+              solution: "Test Python function independently: python -c \"import python.my_tools\""
+          next_steps:
+            - "Learn async patterns: mxcp agent-help examples python api-client"
+            - "Database integration: mxcp agent-help examples python database-integration"
+            - "Advanced features: mxcp agent-help advanced plugins"
       
       - name: return-types
         description: "Define return type schemas"
         content:
-          overview: "Specify what data structure your tool returns"
+          overview: "Specify what data structure your tool returns for validation and documentation"
           basic_types:
             - "string - Single text value"
-            - "number - Numeric value"
+            - "number - Numeric value (integer or float)"
             - "boolean - true/false"
             - "array - List of items"
-            - "object - Structured data"
+            - "object - Structured data with properties"
           examples:
             - type: "string"
               description: "Tool returns a single string"
@@ -81,6 +172,18 @@ subcategories:
                 return:
                   type: string
                   description: "A greeting message"
+                  examples: ["Hello, World!", "Welcome to MXCP!"]
+            - type: "object"
+              description: "Tool returns structured data"
+              yaml: |
+                return:
+                  type: object
+                  properties:
+                    id: {type: integer, description: "Unique identifier"}
+                    name: {type: string, description: "Display name"}
+                    email: {type: string, format: email}
+                    created_at: {type: string, format: date-time}
+                  required: [id, name]
             - type: "array"
               description: "Tool returns a list of objects"
               yaml: |
@@ -91,10 +194,20 @@ subcategories:
                     properties:
                       id: {type: integer}
                       name: {type: string}
+                  description: "List of users"
+                  maxItems: 1000  # Performance limit
           validation_tips:
-            - "Match return type to your SQL query results"
-            - "Use object for single row, array for multiple rows"
+            - "Match return type to your SQL query results or Python return value"
+            - "Use object for single row/record, array for multiple rows"
+            - "Add constraints like minItems, maxItems for arrays"
+            - "Include examples for better AI understanding"
+          testing_return_types:
             - "Test with: mxcp run tool <name>"
+            - "Validation errors show type mismatches"
+            - "Use mxcp validate to check schema correctness"
+          next_steps:
+            - "Complex schemas: mxcp agent-help schemas type-system"
+            - "Add comprehensive tests: mxcp agent-help testing endpoint-testing"
   
   - name: resources
     description: "Create resource endpoints for data access"
@@ -102,33 +215,51 @@ subcategories:
       - name: basic-resource
         description: "Create a simple resource endpoint"
         content:
-          overview: "Create a resource that provides data via URI"
+          overview: "Create a resource that provides data via URI patterns"
           prerequisites:
             - "MXCP project initialized"
             - "Understanding of URI patterns"
+          uri_pattern_explanation:
+            - "URI scheme defines the resource type (data://, file://, http://)"
+            - "Path parameters use {param_name} syntax"
+            - "Query parameters are handled separately"
           steps:
-            - command: "Create endpoints/my-resource.yml:"
+            - command: "Create resources/my-resource.yml:"
               description: |
                 mxcp: "1.0.0"
                 resource:
-                  uri: "data://{id}"
-                  description: "Get data by ID"
+                  uri: "data://users/{user_id}"
+                  description: "Get user data by ID"
                   mime_type: "application/json"
                   parameters:
-                    - name: id
+                    - name: user_id
                       type: integer
+                      description: "User ID to retrieve"
+                      minimum: 1
                   source:
-                    code: "SELECT * FROM my_table WHERE id = $id"
+                    code: |
+                      SELECT 
+                        id,
+                        name,
+                        email,
+                        created_at
+                      FROM users 
+                      WHERE id = $user_id
           verification:
             - "Run: mxcp validate"
-            - "Test with MCP client"
+            - "Test with MCP client (Claude Desktop, etc.)"
           common_issues:
             - issue: "Invalid URI format"
-              solution: "Use scheme://path/{param} format"
+              solution: "Use scheme://path/{param} format (data://, file://, etc.)"
             - issue: "Parameter mismatch"
-              solution: "Ensure URI parameters match parameter definitions"
+              solution: "Ensure URI parameters match parameter definitions exactly"
+          when_to_use_resources:
+            - "Data that can be addressed by URI"
+            - "File-like access patterns"
+            - "Caching and content-addressable data"
           next_steps:
-            - "Test with client: mxcp agent-help testing"
+            - "Advanced resources: File handling, caching patterns"
+            - "Test with client: mxcp agent-help testing resource-testing"
             
   - name: prompts
     description: "Create prompt endpoints for AI interactions"
@@ -136,32 +267,159 @@ subcategories:
       - name: basic-prompt
         description: "Create a simple prompt endpoint"
         content:
-          overview: "Create a prompt that provides context to AI models"
+          overview: "Create a prompt that provides structured context to AI models"
           prerequisites:
             - "MXCP project initialized"
             - "Understanding of prompt templates"
+          template_syntax:
+            - "Use {{parameter}} for variable substitution"
+            - "Support for Jinja2-style expressions"
+            - "Multiple message roles: system, user, assistant"
           steps:
-            - command: "Create endpoints/my-prompt.yml:"
+            - command: "Create prompts/my-prompt.yml:"
               description: |
                 mxcp: "1.0.0"
                 prompt:
                   name: analyze_data
-                  description: "Analyze data with context"
+                  description: "Analyze data with domain expertise"
                   parameters:
                     - name: data_type
                       type: string
+                      description: "Type of data to analyze"
+                      examples: ["sales", "financial", "user_behavior"]
+                    - name: question
+                      type: string
+                      description: "Specific question about the data"
                   messages:
                     - role: system
-                      prompt: "You are a data analyst"
+                      prompt: |
+                        You are a {{data_type}} data analyst with expertise in statistical analysis.
+                        You have access to comprehensive {{data_type}} data through available tools.
+                        
+                        Always:
+                        - Use specific metrics and numbers in your analysis
+                        - Explain your methodology
+                        - Suggest actionable insights
+                        - Use available SQL query tools to get current data
                     - role: user
-                      prompt: "Please analyze the {{data_type}} data"
+                      prompt: "{{question}}"
           verification:
             - "Run: mxcp validate"
             - "Test with MCP client"
+          template_best_practices:
+            - "Provide clear context about available data"
+            - "Explain what tools are available"
+            - "Set expectations for response format"
+            - "Include examples when helpful"
           common_issues:
             - issue: "Template syntax error"
-              solution: "Use {{parameter}} syntax for variables"
+              solution: "Use {{parameter}} syntax, check Jinja2 documentation"
             - issue: "Missing parameters"
               solution: "Define all parameters used in templates"
+          when_to_use_prompts:
+            - "Provide domain-specific context to AI"
+            - "Structure AI interactions with your data"
+            - "Create specialized AI assistants"
           next_steps:
-            - "Add data context: mxcp agent-help endpoints prompts with-data" 
+            - "Advanced prompts: Data context, tool integration"
+            - "See dbt integration: mxcp agent-help advanced dbt-integration"
+
+      - name: data-context-prompts
+        description: "Create prompts with data context"
+        content:
+          overview: "Build prompts that help AI models understand your data schema and available operations."
+          data_context_patterns:
+            - pattern: "Schema documentation"
+              description: "Provide table and column descriptions"
+              example: |
+                messages:
+                  - role: system
+                    prompt: |
+                      You are a sales data analyst. You have access to these tables:
+                      
+                      **sales**: Transaction records
+                      - id (integer): Unique transaction ID
+                      - customer_id (integer): Customer identifier
+                      - product_id (integer): Product identifier
+                      - amount (decimal): Sale amount in USD
+                      - date (date): Transaction date
+                      
+                      **customers**: Customer information
+                      - id (integer): Unique customer ID
+                      - name (string): Customer name
+                      - email (string): Customer email
+                      - region (string): Geographic region
+                      
+                      Use the available SQL query tools to analyze this data.
+            - pattern: "Available operations"
+              description: "List what the AI can do with your data"
+              example: |
+                messages:
+                  - role: system
+                    prompt: |
+                      Available operations:
+                      - execute_sql_query: Run SQL queries on the sales database
+                      - get_table_schema: Inspect table structure
+                      - list_tables: See all available tables
+                      
+                      For analysis, start by exploring the data structure, then run specific queries.
+          integration_with_dbt:
+            - "Reference dbt model documentation"
+            - "Explain transformed data lineage"
+            - "Provide business context for data models"
+          what_you_learn:
+            - "Effective AI context design"
+            - "Data documentation patterns"
+            - "Tool integration strategies"
+          next_steps:
+            - "Full dbt integration: mxcp agent-help advanced dbt-integration"
+            - "Enterprise patterns: mxcp agent-help examples enterprise"
+
+  - name: organization
+    description: "Organize and structure endpoints effectively"
+    topics:
+      - name: file-structure
+        description: "Organize endpoint files effectively"
+        content:
+          overview: "Best practices for organizing endpoints in larger projects"
+          recommended_structure:
+            - "Group related endpoints in subdirectories"
+            - "Use descriptive file names"
+            - "Separate SQL and Python implementations clearly"
+          structure_examples:
+            - pattern: "Feature-based organization"
+              example: |
+                tools/
+                ├── users/
+                │   ├── create_user.yml
+                │   ├── get_user.yml
+                │   └── update_user.yml
+                ├── sales/
+                │   ├── daily_report.yml
+                │   ├── sales_analysis.yml
+                │   └── forecast.yml
+                └── admin/
+                    ├── system_health.yml
+                    └── user_audit.yml
+            - pattern: "Implementation-based organization"
+              example: |
+                tools/
+                ├── sql/
+                │   ├── user_queries.yml
+                │   └── sales_reports.yml
+                ├── python/
+                │   ├── ml_analysis.yml
+                │   └── api_integrations.yml
+                └── hybrid/
+                    └── complex_workflow.yml
+          naming_conventions:
+            - "Use descriptive names: get_user_profile.yml, not user.yml"
+            - "Include action: create_, get_, update_, analyze_, etc."
+            - "Avoid spaces: use underscores or hyphens"
+          what_you_learn:
+            - "Project organization strategies"
+            - "Scalable endpoint management"
+            - "Team collaboration patterns"
+          next_steps:
+            - "Advanced patterns: mxcp agent-help examples patterns file-structures"
+            - "Testing organization: mxcp agent-help testing" 

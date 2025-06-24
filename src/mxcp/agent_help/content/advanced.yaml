@@ -1,160 +1,989 @@
 category: advanced
-description: "Advanced features and optimizations"
+description: "Advanced features and patterns for production deployments"
+technical_context: |
+  Advanced MXCP features for production-ready applications:
+  - dbt integration for data transformation pipelines
+  - Plugin architecture for custom UDFs and complex integrations
+  - Advanced security with policies and audit trails
+  - Performance optimization with caching and async operations
+  - Multi-environment deployment strategies
+  External search hints: "dbt data modeling", "MXCP plugin development", "OAuth 2.0 flows"
 subcategories:
-  - name: secrets
-    description: "Manage secrets and credentials"
+  - name: dbt-integration
+    description: "Data transformation with dbt models"
+    agent_priority: high
     topics:
-      - name: secret-management
-        description: "Configure and use secrets"
+      - name: dbt-models
+        description: "Working with dbt models for data transformation"
         content:
-          overview: "Securely manage API keys, passwords, and other sensitive data"
-          security_critical: |
-            🚨 CRITICAL SECURITY WARNING:
-            • NEVER hardcode secrets in YAML files or code
-            • NEVER commit secrets to version control
-            • Always use environment variables or HashiCorp Vault
-            • Rotate secrets regularly
-            • Use least-privilege access principles
-            • Monitor for accidental secret exposure in logs
-          prerequisites:
-            - "MXCP project initialized"
-            - "Environment variables set with actual secret values"
-            - "Understanding of security best practices"
-          steps:
-            - command: "🔒 Set environment variables securely:"
-              description: |
-                # Set environment variables (REQUIRED for security)
-                export MY_API_KEY="your_actual_api_key_here"
-                export DB_PASSWORD="your_actual_password_here"
+          overview: "Use dbt models for data transformation and create AI-friendly interfaces to the transformed data."
+          technical_requirements:
+            - "dbt-core and dbt-duckdb packages installed"
+            - "dbt models create materialized tables in DuckDB"
+            - "MXCP sql_tools provide generic query interface"
+            - "Prompts provide AI context for querying transformed data"
+          complete_example:
+            - step: "1. Initialize project with dbt support"
+              command: "mxcp init my-dbt-project && cd my-dbt-project"
+            - step: "2. Install dbt dependencies"
+              command: "pip install dbt-core dbt-duckdb"
+            - step: "3. Create dbt_project.yml"
+              content: |
+                name: 'my_dbt_project'
+                version: '1.0.0'
+                config-version: 2
                 
-                # NEVER do this:
-                # MY_API_KEY="hardcoded_key"  # ❌ SECURITY RISK
-            - command: "Define secrets in ~/.mxcp/config.yml:"
-              description: |
-                projects:
-                  my-project:
-                    profiles:
+                model-paths: ["models"]
+                target-path: "target"
+                clean-targets:
+                  - "target"
+                  - "dbt_packages"
+                
+                models:
+                  my_dbt_project:
+                    +materialized: table
+                    marts:
+                      +materialized: table
+                
+                profiles:
+                  my_dbt_project:
+                    target: dev
+                    outputs:
                       dev:
-                        secrets:
-                          - name: api_key
-                            type: string
-                            parameters:
-                              value: ${MY_API_KEY}  # Environment variable reference
-                          - name: db_credentials
-                            type: database
-                            parameters:
-                              host: localhost
-                              username: user
-                              password: ${DB_PASSWORD}  # Environment variable reference
-            - command: "Alternative: Use HashiCorp Vault (Enterprise):"
-              description: |
-                # In ~/.mxcp/config.yml
-                vault:
+                        type: duckdb
+                        path: '{{ env_var("DBT_DB", "db-default.duckdb") }}'
+            - step: "4. Create models/sources.yml"
+              content: |
+                version: 2
+                sources:
+                  - name: raw
+                    description: Raw data from external sources
+                    tables:
+                      - name: covid_data
+                        description: Raw COVID-19 data from Our World in Data
+                        external:
+                          location: "https://covid.ourworldindata.org/data/owid-covid-data.csv"
+                          options:
+                            format: csv
+                            delimiter: ","
+                            header: true
+            - step: "5. Create models/marts/covid_summary.sql"
+              content: |
+                -- COVID-19 summary by country and date
+                SELECT 
+                  location,
+                  date,
+                  total_cases,
+                  new_cases,
+                  total_deaths,
+                  new_deaths,
+                  people_vaccinated,
+                  people_fully_vaccinated,
+                  population
+                FROM read_csv_auto('https://covid.ourworldindata.org/data/owid-covid-data.csv')
+                WHERE location IS NOT NULL
+                  AND date >= '2020-01-01'
+                  AND location NOT LIKE '%income%'
+                  AND location NOT LIKE 'World'
+            - step: "6. Update mxcp-site.yml"
+              content: |
+                mxcp: "1.0.0"
+                profile: default
+                project: my_dbt_project
+                sql_tools:
                   enabled: true
-                  address: "https://vault.company.com"
-                  token_env: "VAULT_TOKEN"
+                extensions:
+                  - httpfs  # For reading CSV from URL
+            - step: "7. Create prompts/covid_analyst.yml"
+              content: |
+                mxcp: "1.0.0"
                 
-                # Then use vault:// URLs
-                secrets:
-                  - name: db_credentials
-                    type: database
-                    parameters:
-                      username: "vault://secret/database#username"
-                      password: "vault://secret/database#password"
-            - command: "Reference secrets in mxcp-site.yml:"
-              description: |
-                secrets:
-                  - api_key
-                  - db_credentials
-          verification:
-            - "Run: mxcp validate (should not show secret values)"
-            - "Check logs contain no secret values"
-            - "Verify environment variables are set: echo $MY_API_KEY"
-          security_checklist:
-            - "✅ Secrets use environment variables only"
-            - "✅ No hardcoded passwords in any files"
-            - "✅ .env files added to .gitignore"
-            - "✅ Secret rotation plan in place"
-            - "✅ Log monitoring for secret exposure"
-          common_issues:
-            - issue: "Environment variable not found"
-              solution: "Set the environment variable before starting MXCP"
-              security_note: "This prevents MXCP from starting - good security feature"
-            - issue: "Secret appears in logs"
-              solution: "Check for accidental logging of secret values"
-              security_note: "Immediately rotate compromised secrets"
-            - issue: "Secret not available in endpoint"
-              solution: "Ensure secret name is listed in mxcp-site.yml secrets"
+                prompt:
+                  name: covid_data_analyst
+                  description: "COVID-19 data analysis assistant"
+                  parameters:
+                    - name: question
+                      type: string
+                      description: "Question about COVID-19 data"
+                      examples: [
+                        "What were the peak case numbers in the US?",
+                        "Compare vaccination rates between Germany and France",
+                        "Show me hospitalization trends in the UK"
+                      ]
+                  messages:
+                    - role: system
+                      prompt: |
+                        You are a COVID-19 data analyst. You have access to comprehensive COVID-19 data through these tables:
+                        
+                        **covid_summary**: Main COVID-19 metrics by country and date
+                        - location: Country/region name
+                        - date: Date (YYYY-MM-DD format)
+                        - total_cases, new_cases: Case numbers
+                        - total_deaths, new_deaths: Death numbers  
+                        - people_vaccinated, people_fully_vaccinated: Vaccination numbers
+                        - population: Country population
+                        
+                        Use the available SQL query tools to analyze the data and answer questions.
+                        Always provide context and explain your findings.
+                    - role: user
+                      prompt: "{{question}}"
+          verification_commands:
+            - "dbt deps  # Install dbt packages"
+            - "dbt run   # Transform the data"
+            - "mxcp serve  # Start the server"
+            - "# Test with your AI client: 'Show me COVID cases in Germany'"
+          troubleshooting_commands:
+            - "dbt debug  # Check dbt configuration"
+            - "dbt run --debug  # Run with debug output"
+            - "mxcp query \"SHOW TABLES\"  # Check created tables"
+            - "mxcp query \"SELECT COUNT(*) FROM covid_summary\"  # Verify data"
+          external_search_hints:
+            - "dbt data modeling best practices"
+            - "dbt materializations explained"
+            - "DuckDB CSV reading functions"
+          what_you_learn:
+            - "dbt project structure and configuration"
+            - "Data transformation pipeline design"
+            - "AI-friendly data presentation"
+            - "External data source integration"
+            - "Production data workflow patterns"
+          key_benefits:
+            - "Separates data transformation from AI logic"
+            - "Enables complex data processing in SQL"
+            - "Provides clean, documented data models"
+            - "Supports version control for data transformations"
+            - "Enables data quality testing"
           next_steps:
-            - "Test secret injection: mxcp query \"SELECT '${secret_name}'\""
-            - "Set up secret rotation: Create automation for regular updates"
-            - "Monitor logs: Implement secret detection in log analysis"
+            - "Add data quality tests: dbt test"
+            - "Create more complex models with joins"
+            - "Add custom dbt macros"
+            - "See full example: examples/covid_owid"
 
-  - name: performance
-    description: "Optimize performance and scalability"
-    topics:
-      - name: query-optimization
-        description: "Optimize SQL queries"
+      - name: dbt-advanced
+        description: "Advanced dbt patterns with MXCP"
         content:
-          overview: "Improve query performance in MXCP endpoints"
-          techniques:
-            - "Use appropriate indexes on frequently queried columns"
-            - "Limit result sets with LIMIT clauses"
-            - "Use efficient JOIN strategies"
-            - "Cache frequently accessed data"
-          steps:
-            - command: "Analyze query performance:"
-              description: "EXPLAIN SELECT * FROM my_table WHERE condition"
-            - command: "Add limits to large datasets:"
-              description: "SELECT * FROM large_table LIMIT 1000"
-            - command: "Use efficient filtering:"
-              description: "Filter early in query processing"
-          verification:
-            - "Queries execute quickly"
-            - "Memory usage is reasonable"
-          common_issues:
-            - issue: "Slow queries"
-              solution: "Add appropriate WHERE clauses and LIMIT statements"
-            - issue: "Memory errors"
-              solution: "Process data in smaller chunks"
+          overview: "Advanced dbt patterns including incremental models, tests, and documentation."
+          prerequisites:
+            - "Basic dbt knowledge"
+            - "Working dbt + MXCP project"
+          advanced_patterns:
+            - pattern: "Incremental models for large datasets"
+              example: |
+                # models/incremental/daily_metrics.sql
+                {{ config(materialized='incremental') }}
+                
+                SELECT 
+                  date,
+                  country,
+                  SUM(cases) as total_cases,
+                  AVG(cases) as avg_cases,
+                  CURRENT_TIMESTAMP as processed_at
+                FROM {{ ref('covid_summary') }}
+                WHERE 1=1
+                {% if is_incremental() %}
+                  AND date > (SELECT MAX(date) FROM {{ this }})
+                {% endif %}
+                GROUP BY date, country
+            - pattern: "Data quality tests"
+              example: |
+                # models/schema.yml
+                version: 2
+                models:
+                  - name: covid_summary
+                    description: "Clean COVID-19 data"
+                    tests:
+                      - unique:
+                          column_name: "location || '|' || date"
+                      - not_null:
+                          column_name: location
+                      - not_null:
+                          column_name: date
+                    columns:
+                      - name: total_cases
+                        tests:
+                          - not_negative
+                      - name: location
+                        tests:
+                          - accepted_values:
+                              values: ['United States', 'Germany', 'France', 'United Kingdom']
+                              quote: true
+            - pattern: "Custom macros for reusable logic"
+              example: |
+                # macros/calculate_rate.sql
+                {% macro calculate_rate(numerator, denominator) %}
+                  CASE 
+                    WHEN {{ denominator }} = 0 THEN NULL
+                    ELSE ROUND({{ numerator }} * 100.0 / {{ denominator }}, 2)
+                  END
+                {% endmacro %}
+                
+                # Use in model:
+                SELECT 
+                  location,
+                  {{ calculate_rate('people_vaccinated', 'population') }} as vaccination_rate
+                FROM {{ ref('covid_summary') }}
+          what_you_learn:
+            - "Incremental processing for performance"
+            - "Data quality testing strategies"
+            - "Reusable SQL components with macros"
+            - "Advanced dbt configurations"
           next_steps:
-            - "Monitor performance: Add logging and metrics"
-            - "Scale up: Consider database optimization"
+            - "Implement CI/CD for dbt models"
+            - "Add custom tests for business logic"
+            - "Create dbt documentation"
 
   - name: plugins
-    description: "Extend MXCP with custom plugins"
+    description: "Custom plugin development"
     topics:
-      - name: custom-plugins
-        description: "Create custom MXCP plugins"
+      - name: plugin-basics
+        description: "Creating custom plugins"
         content:
-          overview: "Extend MXCP functionality with custom Python plugins"
-          prerequisites:
-            - "Python programming knowledge"
-            - "Understanding of MXCP architecture"
-          steps:
-            - command: "Create plugin directory:"
-              description: "mkdir my_plugin && cd my_plugin"
-            - command: "Create __init__.py:"
-              description: |
-                from mxcp.plugins.base import MXCPPlugin
+          overview: "Develop custom plugins to extend MXCP with specialized functions."
+          when_to_use_plugins:
+            - "Complex authentication flows (OAuth, JWT)"
+            - "Custom data transformations not possible in SQL"
+            - "Reusable functions across multiple tools"
+            - "Performance-critical operations"
+            - "Integration with proprietary systems"
+          basic_plugin_structure:
+            - file: "plugins/my_plugin/__init__.py"
+              content: |
+                from mxcp.plugins import MXCPBasePlugin, udf
+                import requests
+                from typing import Dict, Any
                 
-                class MyPlugin(MXCPPlugin):
-                    def initialize(self):
-                        # Plugin initialization logic
-                        pass
-            - command: "Configure in mxcp-site.yml:"
-              description: |
+                class MXCPPlugin(MXCPBasePlugin):
+                    """Custom plugin for API integrations."""
+                    
+                    def __init__(self, config: Dict[str, Any]):
+                        """Initialize plugin with configuration."""
+                        super().__init__(config)
+                        self.api_key = config.get("api_key")
+                        self.base_url = config.get("base_url", "https://api.example.com")
+                        
+                        # Initialize HTTP session for reuse
+                        self.session = requests.Session()
+                        self.session.headers.update({
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json"
+                        })
+                    
+                    @udf
+                    def fetch_user_data(self, user_id: str) -> str:
+                        """Fetch user data from external API."""
+                        try:
+                            response = self.session.get(f"{self.base_url}/users/{user_id}")
+                            response.raise_for_status()
+                            return response.text
+                        except Exception as e:
+                            return f"Error: {str(e)}"
+                    
+                    @udf
+                    def transform_data(self, data: str) -> str:
+                        """Custom data transformation logic."""
+                        # Complex transformation that's difficult in SQL
+                        import json
+                        try:
+                            parsed = json.loads(data)
+                            # Custom business logic here
+                            transformed = {
+                                "id": parsed.get("id"),
+                                "name": parsed.get("full_name", "Unknown"),
+                                "email": parsed.get("email_address"),
+                                "processed_at": "2024-01-01T00:00:00Z"
+                            }
+                            return json.dumps(transformed)
+                        except Exception as e:
+                            return f"Error: {str(e)}"
+                    
+                    def cleanup(self):
+                        """Clean up resources when plugin is unloaded."""
+                        if hasattr(self, 'session'):
+                            self.session.close()
+            - file: "mxcp-site.yml"
+              content: |
+                mxcp: "1.0.0"
+                project: my-project
+                profile: dev
                 plugin:
-                  - name: my_plugin
+                  - name: my_custom_plugin
                     module: my_plugin
-          verification:
-            - "Plugin loads without errors"
-            - "Plugin functionality works as expected"
-          common_issues:
-            - issue: "Plugin not found"
-              solution: "Check module path and Python path"
-            - issue: "Import errors"
-              solution: "Ensure all dependencies are installed"
+                    config: my_api_config
+            - file: "tools/use_plugin.yml"
+              content: |
+                mxcp: "1.0.0"
+                
+                tool:
+                  name: get_transformed_user
+                  description: "Get and transform user data"
+                  parameters:
+                    - name: user_id
+                      type: string
+                      description: "User ID to fetch"
+                  return:
+                    type: object
+                  source:
+                    code: |
+                      WITH raw_data AS (
+                        SELECT fetch_user_data_my_custom_plugin($user_id) as user_json
+                      )
+                      SELECT 
+                        transform_data_my_custom_plugin(user_json) as transformed_user
+                      FROM raw_data
+          configuration_pattern:
+            - "Plugin configuration in ~/.mxcp/config.yml"
+            - "Secrets management for API keys"
+            - "Environment-specific settings"
+          what_you_learn:
+            - "Plugin architecture patterns"
+            - "UDF (User Defined Function) development"
+            - "Resource management and cleanup"
+            - "Integration with external systems"
           next_steps:
-            - "Advanced plugins: Add custom endpoints and functionality"
-            - "Share plugins: Package for distribution" 
+            - "Study enterprise examples: examples/salesforce, examples/jira"
+            - "Advanced authentication: OAuth 2.0 flows"
+            - "Performance optimization: connection pooling"
+
+      - name: oauth-integration
+        description: "OAuth 2.0 authentication patterns"
+        content:
+          overview: "Implement OAuth 2.0 authentication flows in plugins for enterprise integrations."
+          oauth_flow_example:
+            - step: "1. OAuth configuration"
+              content: |
+                # ~/.mxcp/config.yml
+                projects:
+                  enterprise-app:
+                    profiles:
+                      dev:
+                        plugin:
+                          config:
+                            oauth_service:
+                              client_id: "${OAUTH_CLIENT_ID}"
+                              client_secret: "${OAUTH_CLIENT_SECRET}"
+                              authorization_url: "https://auth.example.com/oauth/authorize"
+                              token_url: "https://auth.example.com/oauth/token"
+                              scope: "read:data write:data"
+                              redirect_uri: "http://localhost:8080/callback"
+            - step: "2. OAuth plugin implementation"
+              content: |
+                # plugins/oauth_plugin/__init__.py
+                from mxcp.plugins import MXCPBasePlugin, udf
+                import requests
+                import urllib.parse
+                import json
+                from datetime import datetime, timedelta
+                
+                class MXCPPlugin(MXCPBasePlugin):
+                    def __init__(self, config):
+                        super().__init__(config)
+                        self.client_id = config["client_id"]
+                        self.client_secret = config["client_secret"]
+                        self.auth_url = config["authorization_url"]
+                        self.token_url = config["token_url"]
+                        self.scope = config["scope"]
+                        self.redirect_uri = config["redirect_uri"]
+                        
+                        # Token storage (in production, use secure storage)
+                        self.access_token = None
+                        self.refresh_token = None
+                        self.token_expires = None
+                    
+                    def get_authorization_url(self) -> str:
+                        """Generate OAuth authorization URL."""
+                        params = {
+                            "client_id": self.client_id,
+                            "response_type": "code",
+                            "scope": self.scope,
+                            "redirect_uri": self.redirect_uri,
+                            "state": "random_state_string"  # In production, use cryptographically secure random
+                        }
+                        return f"{self.auth_url}?{urllib.parse.urlencode(params)}"
+                    
+                    def exchange_code_for_token(self, code: str) -> bool:
+                        """Exchange authorization code for access token."""
+                        data = {
+                            "grant_type": "authorization_code",
+                            "code": code,
+                            "redirect_uri": self.redirect_uri,
+                            "client_id": self.client_id,
+                            "client_secret": self.client_secret
+                        }
+                        
+                        response = requests.post(self.token_url, data=data)
+                        if response.status_code == 200:
+                            token_data = response.json()
+                            self.access_token = token_data["access_token"]
+                            self.refresh_token = token_data.get("refresh_token")
+                            expires_in = token_data.get("expires_in", 3600)
+                            self.token_expires = datetime.now() + timedelta(seconds=expires_in)
+                            return True
+                        return False
+                    
+                    def refresh_access_token(self) -> bool:
+                        """Refresh the access token using refresh token."""
+                        if not self.refresh_token:
+                            return False
+                        
+                        data = {
+                            "grant_type": "refresh_token",
+                            "refresh_token": self.refresh_token,
+                            "client_id": self.client_id,
+                            "client_secret": self.client_secret
+                        }
+                        
+                        response = requests.post(self.token_url, data=data)
+                        if response.status_code == 200:
+                            token_data = response.json()
+                            self.access_token = token_data["access_token"]
+                            expires_in = token_data.get("expires_in", 3600)
+                            self.token_expires = datetime.now() + timedelta(seconds=expires_in)
+                            return True
+                        return False
+                    
+                    def ensure_valid_token(self) -> bool:
+                        """Ensure we have a valid access token."""
+                        if not self.access_token:
+                            return False
+                        
+                        if self.token_expires and datetime.now() >= self.token_expires:
+                            return self.refresh_access_token()
+                        
+                        return True
+                    
+                    @udf
+                    def authenticated_api_call(self, endpoint: str) -> str:
+                        """Make authenticated API call."""
+                        if not self.ensure_valid_token():
+                            return json.dumps({"error": "Authentication required"})
+                        
+                        headers = {
+                            "Authorization": f"Bearer {self.access_token}",
+                            "Accept": "application/json"
+                        }
+                        
+                        try:
+                            response = requests.get(endpoint, headers=headers)
+                            response.raise_for_status()
+                            return response.text
+                        except Exception as e:
+                            return json.dumps({"error": str(e)})
+          security_considerations:
+            - "Store tokens securely (encrypted database, not files)"
+            - "Use PKCE for public clients"
+            - "Implement proper state validation"
+            - "Handle token expiration gracefully"
+            - "Log authentication events for audit"
+          what_you_learn:
+            - "OAuth 2.0 authorization code flow"
+            - "Token management and refresh"
+            - "Secure credential storage"
+            - "Enterprise authentication patterns"
+          next_steps:
+            - "Implement token persistence"
+            - "Add PKCE support for security"
+            - "Study real examples: examples/salesforce"
+
+  - name: performance
+    description: "Performance optimization strategies"
+    topics:
+      - name: caching-strategies
+        description: "Implementing effective caching"
+        content:
+          overview: "Caching strategies to improve performance of expensive operations."
+          caching_levels:
+            - level: "Database-level caching"
+              description: "Cache query results in DuckDB tables"
+              example: |
+                # Cache expensive API results
+                def expensive_api_call(param: str) -> dict:
+                    # Check cache first
+                    cached = db.execute("""
+                        SELECT result FROM api_cache 
+                        WHERE param = $param 
+                        AND timestamp > $cutoff
+                    """, {
+                        "param": param,
+                        "cutoff": datetime.now() - timedelta(hours=1)
+                    })
+                    
+                    if cached:
+                        return json.loads(cached[0]["result"])
+                    
+                    # Fetch from API
+                    result = fetch_from_api(param)
+                    
+                    # Cache the result
+                    db.execute("""
+                        INSERT OR REPLACE INTO api_cache (param, result, timestamp)
+                        VALUES ($param, $result, $timestamp)
+                    """, {
+                        "param": param,
+                        "result": json.dumps(result),
+                        "timestamp": datetime.now()
+                    })
+                    
+                    return result
+            - level: "In-memory caching"
+              description: "Cache frequently accessed data in memory"
+              example: |
+                from functools import lru_cache
+                import time
+                
+                # Simple in-memory cache with TTL
+                cache = {}
+                
+                def cached_computation(key: str, ttl: int = 300) -> dict:
+                    now = time.time()
+                    
+                    if key in cache:
+                        cached_time, cached_data = cache[key]
+                        if now - cached_time < ttl:
+                            return cached_data
+                    
+                    # Perform expensive computation
+                    result = expensive_computation(key)
+                    cache[key] = (now, result)
+                    
+                    return result
+                
+                # Using Python's built-in LRU cache
+                @lru_cache(maxsize=128)
+                def cached_function(param: str) -> str:
+                    return expensive_function(param)
+            - level: "Application-level caching"
+              description: "Cache at the application layer"
+              example: |
+                # Using lifecycle hooks for cache management
+                from mxcp.runtime import on_init, on_shutdown
+                
+                app_cache = {}
+                
+                @on_init
+                def initialize_cache():
+                    """Pre-populate cache with frequently accessed data."""
+                    global app_cache
+                    # Load reference data that changes infrequently
+                    app_cache['countries'] = load_country_data()
+                    app_cache['currencies'] = load_currency_data()
+                
+                @on_shutdown
+                def cleanup_cache():
+                    """Clean up cache resources."""
+                    global app_cache
+                    app_cache.clear()
+                
+                def get_country_info(country_code: str) -> dict:
+                    """Get country info from cache."""
+                    return app_cache.get('countries', {}).get(country_code, {})
+          cache_invalidation_strategies:
+            - "Time-based expiration (TTL)"
+            - "Event-based invalidation"
+            - "Version-based invalidation"
+            - "Manual cache clearing"
+          performance_tips:
+            - "Cache expensive computations, not cheap ones"
+            - "Use appropriate cache sizes to avoid memory issues"
+            - "Monitor cache hit rates"
+            - "Consider cache warming strategies"
+          next_steps:
+            - "Implement cache monitoring"
+            - "Add cache metrics to audit logs"
+            - "Consider distributed caching for scale"
+
+      - name: async-patterns
+        description: "Async programming for I/O-bound operations"
+        content:
+          overview: "Using async/await patterns to improve performance for I/O-bound operations."
+          async_best_practices:
+            - pattern: "Concurrent API calls"
+              example: |
+                import asyncio
+                import aiohttp
+                from typing import List, Dict
+                
+                async def fetch_multiple_apis(endpoints: List[str]) -> List[Dict]:
+                    """Fetch data from multiple APIs concurrently."""
+                    
+                    async def fetch_single(session, url):
+                        try:
+                            async with session.get(url) as response:
+                                return await response.json()
+                        except Exception as e:
+                            return {"error": str(e), "url": url}
+                    
+                    async with aiohttp.ClientSession() as session:
+                        tasks = [fetch_single(session, url) for url in endpoints]
+                        results = await asyncio.gather(*tasks)
+                    
+                    return results
+                
+                # Usage in endpoint
+                async def get_aggregated_data(sources: List[str]) -> dict:
+                    """Get data from multiple sources concurrently."""
+                    results = await fetch_multiple_apis(sources)
+                    
+                    # Process results
+                    aggregated = {
+                        "total_sources": len(sources),
+                        "successful": len([r for r in results if "error" not in r]),
+                        "results": results
+                    }
+                    
+                    # Store in database
+                    db.execute("""
+                        INSERT INTO aggregated_data (timestamp, data)
+                        VALUES ($timestamp, $data)
+                    """, {
+                        "timestamp": datetime.now(),
+                        "data": json.dumps(aggregated)
+                    })
+                    
+                    return aggregated
+            - pattern: "Database connection pooling"
+              example: |
+                import asyncio
+                import asyncpg
+                from mxcp.runtime import on_init, on_shutdown
+                
+                # Global connection pool
+                pg_pool = None
+                
+                @on_init
+                async def init_db_pool():
+                    """Initialize database connection pool."""
+                    global pg_pool
+                    pg_pool = await asyncpg.create_pool(
+                        host="localhost",
+                        port=5432,
+                        database="mydb", 
+                        user="user",
+                        password="password",
+                        min_size=5,
+                        max_size=20
+                    )
+                
+                @on_shutdown
+                async def close_db_pool():
+                    """Close database connection pool."""
+                    global pg_pool
+                    if pg_pool:
+                        await pg_pool.close()
+                
+                async def query_with_pool(query: str, params: dict) -> List[Dict]:
+                    """Execute query using connection pool."""
+                    async with pg_pool.acquire() as conn:
+                        rows = await conn.fetch(query, *params.values())
+                        return [dict(row) for row in rows]
+            - pattern: "Background task processing"
+              example: |
+                import asyncio
+                from typing import Queue
+                
+                # Background task queue
+                task_queue = asyncio.Queue()
+                
+                async def background_processor():
+                    """Process tasks in the background."""
+                    while True:
+                        try:
+                            task = await task_queue.get()
+                            await process_task(task)
+                            task_queue.task_done()
+                        except Exception as e:
+                            print(f"Error processing task: {e}")
+                
+                async def add_background_task(task_data: dict):
+                    """Add task to background queue."""
+                    await task_queue.put(task_data)
+                
+                @on_init
+                async def start_background_processor():
+                    """Start background task processor."""
+                    asyncio.create_task(background_processor())
+          when_to_use_async:
+            - "Multiple external API calls"
+            - "Database operations that can be parallelized"
+            - "File I/O operations"
+            - "Network requests"
+            - "Background task processing"
+          performance_considerations:
+            - "Async has overhead - don't use for CPU-bound tasks"
+            - "Use connection pooling for database operations"
+            - "Implement proper error handling and timeouts"
+            - "Monitor memory usage with large async operations"
+          next_steps:
+            - "Implement comprehensive error handling"
+            - "Add async operation monitoring"
+            - "Consider using asyncio semaphores for rate limiting"
+
+  - name: security
+    description: "Advanced security features"
+    topics:
+      - name: policy-enforcement
+        description: "Implementing fine-grained access control"
+        content:
+          overview: "Use MXCP's policy engine to implement sophisticated access control."
+          policy_examples:
+            - policy_type: "Role-based access control"
+              example: |
+                # tools/sensitive_data.yml
+                mxcp: "1.0.0"
+                
+                tool:
+                  name: get_employee_data
+                  description: "Get employee information"
+                  parameters:
+                    - name: employee_id
+                      type: integer
+                  policies:
+                    input:
+                      - condition: "!('hr.read' in user.permissions)"
+                        action: deny
+                        reason: "Insufficient permissions for HR data"
+                      - condition: "user.role == 'manager' && employee_id not in user.managed_employees"
+                        action: deny
+                        reason: "Can only access data for managed employees"
+                    output:
+                      - condition: "user.role != 'admin'"
+                        action: filter_fields
+                        fields: ["salary", "ssn", "performance_rating"]
+                        reason: "Sensitive fields filtered for non-admin users"
+                  source:
+                    code: |
+                      SELECT 
+                        employee_id,
+                        first_name,
+                        last_name,
+                        department,
+                        salary,
+                        ssn,
+                        performance_rating
+                      FROM employees 
+                      WHERE employee_id = $employee_id
+            - policy_type: "Data filtering based on user context"
+              example: |
+                # tools/sales_data.yml
+                tool:
+                  name: get_sales_data
+                  policies:
+                    input:
+                      - condition: "user.region && region != user.region"
+                        action: modify_params
+                        modifications:
+                          region: "user.region"
+                        reason: "Restricting to user's region"
+                    output:
+                      - condition: "user.access_level < 3"
+                        action: filter_rows
+                        condition: "amount < 10000"
+                        reason: "Large deals filtered for junior users"
+          policy_language:
+            - "Uses CEL (Common Expression Language) for conditions"
+            - "Access to user context: user.role, user.permissions, user.region"
+            - "Access to request parameters: param_name"
+            - "Rich expressions: arithmetic, string operations, array membership"
+          advanced_policy_patterns:
+            - pattern: "Dynamic data masking"
+              description: "Mask sensitive data based on user clearance"
+            - pattern: "Audit trail policies"
+              description: "Log all access to sensitive data"
+            - pattern: "Rate limiting policies"
+              description: "Limit requests per user/endpoint"
+          what_you_learn:
+            - "CEL expression language"
+            - "Policy-based security architecture"
+            - "Dynamic data filtering and masking"
+            - "Access control design patterns"
+          next_steps:
+            - "Implement comprehensive audit logging"
+            - "Add policy testing framework"
+            - "Consider external policy management systems"
+
+  - name: monitoring
+    description: "Production monitoring and observability"
+    topics:
+      - name: audit-logging
+        description: "Comprehensive audit trail implementation"
+        content:
+          overview: "Implement comprehensive audit logging for compliance and security monitoring."
+          audit_configuration:
+            - file: "mxcp-site.yml"
+              content: |
+                mxcp: "1.0.0"
+                project: production-app
+                profile: prod
+                audit:
+                  enabled: true
+                  format: jsonl
+                  include_request_body: true
+                  include_response_body: false  # For security
+                  include_user_context: true
+                  retention_days: 365
+          audit_analysis_patterns:
+            - pattern: "Query audit logs"
+              example: |
+                # Query audit logs for security analysis
+                mxcp log --since "2024-01-01" --tool "sensitive_data" --export-duckdb audit_analysis.db
+                
+                # Then analyze with SQL
+                mxcp query "
+                  SELECT 
+                    user_id,
+                    tool_name,
+                    COUNT(*) as access_count,
+                    MIN(timestamp) as first_access,
+                    MAX(timestamp) as last_access
+                  FROM audit_logs 
+                  WHERE tool_name = 'get_employee_data'
+                  GROUP BY user_id, tool_name
+                  ORDER BY access_count DESC
+                "
+            - pattern: "Detect anomalous access patterns"
+              example: |
+                # Detect unusual access patterns
+                WITH user_baselines AS (
+                  SELECT 
+                    user_id,
+                    AVG(daily_requests) as avg_daily_requests,
+                    STDDEV(daily_requests) as stddev_daily_requests
+                  FROM (
+                    SELECT 
+                      user_id,
+                      DATE(timestamp) as date,
+                      COUNT(*) as daily_requests
+                    FROM audit_logs
+                    WHERE timestamp >= CURRENT_DATE - INTERVAL '30 days'
+                    GROUP BY user_id, DATE(timestamp)
+                  )
+                  GROUP BY user_id
+                ),
+                daily_activity AS (
+                  SELECT 
+                    user_id,
+                    DATE(timestamp) as date,
+                    COUNT(*) as requests_today
+                  FROM audit_logs
+                  WHERE DATE(timestamp) = CURRENT_DATE
+                  GROUP BY user_id, DATE(timestamp)
+                )
+                SELECT 
+                  da.user_id,
+                  da.requests_today,
+                  ub.avg_daily_requests,
+                  CASE 
+                    WHEN da.requests_today > ub.avg_daily_requests + 2 * ub.stddev_daily_requests 
+                    THEN 'ANOMALY'
+                    ELSE 'NORMAL'
+                  END as status
+                FROM daily_activity da
+                JOIN user_baselines ub ON da.user_id = ub.user_id
+                WHERE da.requests_today > ub.avg_daily_requests + 2 * ub.stddev_daily_requests
+          compliance_reporting:
+            - "Generate compliance reports for GDPR, SOX, etc."
+            - "Track data access patterns"
+            - "Monitor policy enforcement effectiveness"
+            - "Detect potential security incidents"
+          what_you_learn:
+            - "Comprehensive audit trail design"
+            - "Security monitoring patterns"
+            - "Compliance reporting strategies"
+            - "Anomaly detection techniques"
+          next_steps:
+            - "Implement real-time alerting"
+            - "Add audit log encryption"
+            - "Integrate with SIEM systems"
+
+      - name: performance-monitoring
+        description: "Monitor and optimize performance"
+        content:
+          overview: "Monitor MXCP performance and identify optimization opportunities."
+          performance_metrics:
+            - metric: "Response time analysis"
+              query: |
+                # Analyze response times by endpoint
+                SELECT 
+                  tool_name,
+                  COUNT(*) as request_count,
+                  AVG(response_time_ms) as avg_response_time,
+                  PERCENTILE_DISC(0.5) WITHIN GROUP (ORDER BY response_time_ms) as median_response_time,
+                  PERCENTILE_DISC(0.95) WITHIN GROUP (ORDER BY response_time_ms) as p95_response_time,
+                  MAX(response_time_ms) as max_response_time
+                FROM audit_logs
+                WHERE timestamp >= CURRENT_DATE - INTERVAL '7 days'
+                GROUP BY tool_name
+                ORDER BY avg_response_time DESC
+            - metric: "Error rate monitoring"
+              query: |
+                # Monitor error rates
+                SELECT 
+                  tool_name,
+                  DATE(timestamp) as date,
+                  COUNT(*) as total_requests,
+                  SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as error_count,
+                  ROUND(100.0 * SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) / COUNT(*), 2) as error_rate_pct
+                FROM audit_logs
+                WHERE timestamp >= CURRENT_DATE - INTERVAL '30 days'
+                GROUP BY tool_name, DATE(timestamp)
+                HAVING error_rate_pct > 5  -- Alert on error rates > 5%
+                ORDER BY date DESC, error_rate_pct DESC
+          automated_monitoring:
+            - pattern: "Performance alerting"
+              example: |
+                # Create monitoring endpoint
+                # tools/performance_monitor.yml
+                tool:
+                  name: performance_health_check
+                  description: "Check system performance health"
+                  language: python
+                  source:
+                    file: ../python/monitoring.py
+                
+                # python/monitoring.py
+                from mxcp.runtime import db
+                from datetime import datetime, timedelta
+                
+                def performance_health_check() -> dict:
+                    """Check system performance and return health status."""
+                    
+                    # Check average response times
+                    perf_data = db.execute("""
+                        SELECT 
+                          AVG(response_time_ms) as avg_response_time,
+                          PERCENTILE_DISC(0.95) WITHIN GROUP (ORDER BY response_time_ms) as p95_response_time
+                        FROM audit_logs
+                        WHERE timestamp >= $cutoff
+                    """, {"cutoff": datetime.now() - timedelta(hours=1)})
+                    
+                    avg_time = perf_data[0]["avg_response_time"] if perf_data else 0
+                    p95_time = perf_data[0]["p95_response_time"] if perf_data else 0
+                    
+                    # Health thresholds
+                    health_status = "healthy"
+                    alerts = []
+                    
+                    if avg_time > 5000:  # 5 seconds
+                        health_status = "degraded"
+                        alerts.append(f"High average response time: {avg_time}ms")
+                    
+                    if p95_time > 10000:  # 10 seconds
+                        health_status = "critical"
+                        alerts.append(f"High P95 response time: {p95_time}ms")
+                    
+                    return {
+                        "status": health_status,
+                        "avg_response_time_ms": avg_time,
+                        "p95_response_time_ms": p95_time,
+                        "alerts": alerts,
+                        "timestamp": datetime.now().isoformat()
+                    }
+          performance_optimization_tips:
+            - "Use database indexes on frequently queried columns"
+            - "Implement caching for expensive operations"
+            - "Use async operations for I/O-bound tasks"
+            - "Monitor and optimize SQL query performance"
+            - "Consider connection pooling for external systems"
+          next_steps:
+            - "Set up automated alerting"
+            - "Implement performance dashboards"
+            - "Add custom performance metrics" 

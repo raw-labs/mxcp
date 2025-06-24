@@ -1,12 +1,13 @@
 category: examples
 description: "Working examples to get started quickly"
 technical_context: |
-  MXCP uses DuckDB as the SQL engine under the hood. Key concepts:
-  - Parameters like $param_name are safely injected into SQL
+  MXCP uses DuckDB as the SQL engine under the hood and supports both SQL and Python endpoints:
+  - SQL: Parameters like $param_name are safely injected into SQL
+  - Python: Full runtime API with db access, async support, lifecycle hooks
   - DuckDB extensions (httpfs, postgres_scanner) enable external data access
-  - read_json_auto() and read_csv_auto() functions handle web APIs
-  - SQL CASE statements provide conditional logic
-  External search hints: "DuckDB parameterized queries", "DuckDB CASE statements", "DuckDB read_json_auto"
+  - SQL: read_json_auto() and read_csv_auto() functions handle web APIs
+  - Python: Complete ecosystem access including ML libraries, APIs, async operations
+  External search hints: "DuckDB parameterized queries", "MXCP Python runtime API", "DuckDB read_json_auto"
 subcategories:
   - name: basic
     description: "Simple examples to get started in 2 minutes"
@@ -21,7 +22,7 @@ subcategories:
             - "Parameter injection with $expression prevents SQL injection"
             - "Return type 'number' maps to DuckDB numeric types"
           code_examples:
-            - file: "endpoints/calculate.yml"
+            - file: "tools/calculate.yml"
               content: |
                 mxcp: "1.0.0"
                 
@@ -47,7 +48,7 @@ subcategories:
                         END as result
           verification_commands:
             - "mxcp init my-calculator && cd my-calculator"
-            - "# Create the endpoints/calculate.yml file with content above"
+            - "# Create the tools/calculate.yml file with content above"
             - "mxcp run tool calculate --param expression='2 + 2'"
             - "# Expected: 4"
           troubleshooting_commands:
@@ -66,6 +67,7 @@ subcategories:
           next_steps:
             - "Modify the CASE statement to add your own calculations"
             - "See real API example: mxcp agent-help examples basic earthquake-api"
+            - "Try Python version: mxcp agent-help examples python python-calculator"
 
       - name: earthquake-api
         description: "Working API endpoint (2 minutes)"
@@ -77,7 +79,7 @@ subcategories:
             - "UNNEST() function flattens JSON arrays for SQL processing"
             - "CTEs (Common Table Expressions) organize complex queries"
           code_examples:
-            - file: "endpoints/earthquakes.yml"
+            - file: "tools/earthquakes.yml"
               content: |
                 mxcp: "1.0.0"
                 
@@ -124,7 +126,7 @@ subcategories:
                     idempotentHint: true
           verification_commands:
             - "mxcp init my-earthquakes && cd my-earthquakes"
-            - "# Create the endpoints/earthquakes.yml file with content above"
+            - "# Create the tools/earthquakes.yml file with content above"
             - "mxcp run tool query_recent_earthquakes --param min_magnitude=5.0"
             - "# Expected: Array of earthquake objects with magnitude >= 5.0"
           troubleshooting_commands:
@@ -146,6 +148,609 @@ subcategories:
             - "Modify min_magnitude parameter"
             - "Add more filtering options"
             - "See database connection: mxcp agent-help examples database postgres-basic"
+            - "Try Python version: mxcp agent-help examples python api-client"
+
+  - name: python
+    description: "Python endpoint examples - complex logic and integrations"
+    agent_priority: high
+    topics:
+      - name: python-calculator
+        description: "Calculator in Python (3 minutes)"
+        content:
+          overview: "Same calculator but in Python - shows the difference between SQL and Python approaches."
+          technical_requirements:
+            - "Python endpoints use language: python in YAML"
+            - "Function name must match tool name exactly"
+            - "mxcp.runtime.db provides database access from Python"
+            - "Return types must match YAML specification"
+          code_examples:
+            - file: "tools/python_calculate.yml"
+              content: |
+                mxcp: "1.0.0"
+                
+                tool:
+                  name: python_calculate
+                  description: "Python-powered mathematical calculator"
+                  language: python
+                  parameters:
+                    - name: expression
+                      type: string
+                      description: "Mathematical expression like '2 + 2' or '10 * 5'"
+                      examples: ["2 + 2", "sqrt(16)", "10 ** 3"]
+                  return:
+                    type: object
+                    properties:
+                      result: {type: number}
+                      expression: {type: string}
+                      valid: {type: boolean}
+                  source:
+                    file: ../python/calculator.py
+            - file: "python/calculator.py"
+              content: |
+                import math
+                import re
+                from mxcp.runtime import db
+                
+                def python_calculate(expression: str) -> dict:
+                    """Calculate mathematical expressions with Python's power."""
+                    
+                    # Validate input - only allow safe mathematical expressions
+                    if not re.match(r'^[0-9+\-*/().sqrt\s]+$', expression):
+                        return {
+                            "result": 0,
+                            "expression": expression,
+                            "valid": False,
+                            "error": "Invalid characters in expression"
+                        }
+                    
+                    try:
+                        # Replace common functions
+                        safe_expr = expression.replace('sqrt', 'math.sqrt')
+                        
+                        # Evaluate safely
+                        result = eval(safe_expr, {"__builtins__": {}, "math": math})
+                        
+                        # Store in database for history
+                        db.execute("""
+                            CREATE TABLE IF NOT EXISTS calculation_history (
+                                expression TEXT,
+                                result DOUBLE,
+                                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                        """)
+                        
+                        db.execute("""
+                            INSERT INTO calculation_history (expression, result)
+                            VALUES ($expression, $result)
+                        """, {"expression": expression, "result": result})
+                        
+                        return {
+                            "result": float(result),
+                            "expression": expression,
+                            "valid": True
+                        }
+                        
+                    except Exception as e:
+                        return {
+                            "result": 0,
+                            "expression": expression,
+                            "valid": False,
+                            "error": str(e)
+                        }
+          verification_commands:
+            - "mxcp init python-calc && cd python-calc"
+            - "mkdir python  # Create python directory"
+            - "# Create both files above"
+            - "mxcp run tool python_calculate --param expression='2 + 2'"
+            - "# Expected: {result: 4, expression: '2 + 2', valid: true}"
+          troubleshooting_commands:
+            - "mxcp validate  # Check YAML syntax"
+            - "python -c \"import python.calculator\"  # Test Python syntax"
+            - "mxcp query \"SELECT * FROM calculation_history\"  # Check stored results"
+          external_search_hints:
+            - "MXCP Python runtime API"
+            - "Python eval function security"
+            - "MXCP database access Python"
+          what_you_learn:
+            - "Python endpoint structure (YAML + .py file)"
+            - "mxcp.runtime.db for database operations"
+            - "Input validation in Python"
+            - "Error handling and return types"
+            - "Python vs SQL trade-offs"
+          comparison_sql_vs_python:
+            - "SQL: Simple expressions, limited logic, fast"
+            - "Python: Complex logic, full libraries, more overhead"
+            - "SQL: Hard to extend, simple to deploy"
+            - "Python: Easy to extend, more complex to test"
+          next_steps:
+            - "Add more mathematical functions"
+            - "See async example: mxcp agent-help examples python api-client"
+            - "Learn database patterns: mxcp agent-help examples python database-integration"
+
+      - name: api-client
+        description: "Async API client (4 minutes)"
+        content:
+          overview: "Build an async Python endpoint that calls external APIs and caches results."
+          technical_requirements:
+            - "async def functions are supported in Python endpoints"
+            - "Use aiohttp or httpx for async HTTP requests"
+            - "mxcp.runtime.db is thread-safe for concurrent access"
+            - "Lifecycle hooks (@on_init, @on_shutdown) manage resources"
+          code_examples:
+            - file: "tools/weather_api.yml"
+              content: |
+                mxcp: "1.0.0"
+                
+                tool:
+                  name: get_weather
+                  description: "Get current weather for a city (with caching)"
+                  language: python
+                  parameters:
+                    - name: city
+                      type: string
+                      description: "City name (e.g., 'London', 'New York')"
+                      examples: ["London", "New York", "Tokyo"]
+                  return:
+                    type: object
+                    properties:
+                      city: {type: string}
+                      temperature: {type: number}
+                      description: {type: string}
+                      cached: {type: boolean}
+                      timestamp: {type: string}
+                  source:
+                    file: ../python/weather_service.py
+            - file: "python/weather_service.py"
+              content: |
+                import asyncio
+                import aiohttp
+                import json
+                from datetime import datetime, timedelta
+                from mxcp.runtime import db, config, on_init, on_shutdown
+                
+                # Global session for connection pooling
+                session = None
+                
+                @on_init
+                def initialize():
+                    """Initialize HTTP session when server starts."""
+                    global session
+                    session = aiohttp.ClientSession(
+                        timeout=aiohttp.ClientTimeout(total=10)
+                    )
+                    print("Weather service initialized")
+                
+                @on_shutdown
+                def cleanup():
+                    """Clean up resources when server stops."""
+                    global session
+                    if session:
+                        asyncio.create_task(session.close())
+                    print("Weather service cleaned up")
+                
+                async def get_weather(city: str) -> dict:
+                    """Get weather data with intelligent caching."""
+                    
+                    # Create cache table if needed
+                    db.execute("""
+                        CREATE TABLE IF NOT EXISTS weather_cache (
+                            city TEXT PRIMARY KEY,
+                            data TEXT,
+                            timestamp TIMESTAMP
+                        )
+                    """)
+                    
+                    # Check cache first (valid for 1 hour)
+                    cache_result = db.execute("""
+                        SELECT data, timestamp FROM weather_cache 
+                        WHERE city = $city 
+                        AND timestamp > $cutoff
+                    """, {
+                        "city": city.lower(),
+                        "cutoff": datetime.now() - timedelta(hours=1)
+                    })
+                    
+                    if cache_result:
+                        cached_data = json.loads(cache_result[0]["data"])
+                        cached_data["cached"] = True
+                        return cached_data
+                    
+                    # Fetch from API (using a free service)
+                    try:
+                        # Using wttr.in free weather API
+                        url = f"https://wttr.in/{city}?format=j1"
+                        
+                        async with session.get(url) as response:
+                            if response.status == 200:
+                                data = await response.json()
+                                
+                                # Extract key information
+                                current = data["current_condition"][0]
+                                weather_data = {
+                                    "city": city,
+                                    "temperature": float(current["temp_C"]),
+                                    "description": current["weatherDesc"][0]["value"],
+                                    "cached": False,
+                                    "timestamp": datetime.now().isoformat()
+                                }
+                                
+                                # Cache the result
+                                db.execute("""
+                                    INSERT OR REPLACE INTO weather_cache (city, data, timestamp)
+                                    VALUES ($city, $data, $timestamp)
+                                """, {
+                                    "city": city.lower(),
+                                    "data": json.dumps(weather_data),
+                                    "timestamp": datetime.now()
+                                })
+                                
+                                return weather_data
+                                
+                            else:
+                                return {
+                                    "city": city,
+                                    "temperature": 0,
+                                    "description": "Weather data unavailable",
+                                    "cached": False,
+                                    "timestamp": datetime.now().isoformat(),
+                                    "error": f"API returned status {response.status}"
+                                }
+                                
+                    except Exception as e:
+                        return {
+                            "city": city,
+                            "temperature": 0,
+                            "description": "Error fetching weather",
+                            "cached": False,
+                            "timestamp": datetime.now().isoformat(),
+                            "error": str(e)
+                        }
+          verification_commands:
+            - "mxcp init weather-app && cd weather-app"
+            - "mkdir python && pip install aiohttp  # Install dependencies"
+            - "# Create both files above"
+            - "mxcp run tool get_weather --param city=London"
+            - "# Expected: Weather object with temperature and description"
+            - "# Run again to test caching"
+            - "mxcp run tool get_weather --param city=London"
+            - "# Expected: Same data but cached=true"
+          troubleshooting_commands:
+            - "pip install aiohttp  # Install async HTTP library"
+            - "mxcp query \"SELECT * FROM weather_cache\"  # Check cache"
+            - "curl 'https://wttr.in/London?format=j1'  # Test API directly"
+          external_search_hints:
+            - "Python aiohttp async HTTP client"
+            - "MXCP Python lifecycle hooks"
+            - "MXCP Python database access"
+            - "Python async await basics"
+          what_you_learn:
+            - "Async Python endpoints with await"
+            - "HTTP client session management"
+            - "Database caching patterns"
+            - "Lifecycle hooks for resource management"
+            - "Error handling in async code"
+          key_patterns:
+            - "Use @on_init/@on_shutdown for resource management"
+            - "Cache expensive API calls in database"
+            - "Always handle HTTP errors gracefully"
+            - "Use connection pooling for performance"
+          next_steps:
+            - "Add more weather endpoints (forecast, alerts)"
+            - "Learn advanced patterns: mxcp agent-help examples python database-integration"
+            - "Enterprise integration: mxcp agent-help examples enterprise salesforce"
+
+      - name: database-integration
+        description: "Complex database operations (5 minutes)"
+        content:
+          overview: "Advanced database patterns: transactions, bulk operations, and data analysis."
+          technical_requirements:
+            - "mxcp.runtime.db supports transactions and bulk operations"
+            - "Python can orchestrate complex multi-step database operations"
+            - "Combine SQL power with Python logic for advanced analytics"
+          code_examples:
+            - file: "tools/user_analytics.yml"
+              content: |
+                mxcp: "1.0.0"
+                
+                tool:
+                  name: analyze_user_activity
+                  description: "Comprehensive user activity analysis with ML insights"
+                  language: python
+                  parameters:
+                    - name: user_id
+                      type: integer
+                      description: "User ID to analyze"
+                    - name: days_back
+                      type: integer
+                      description: "Number of days to analyze"
+                      default: 30
+                  return:
+                    type: object
+                    properties:
+                      user_id: {type: integer}
+                      activity_score: {type: number}
+                      trends: {type: object}
+                      recommendations: {type: array}
+                  source:
+                    file: ../python/analytics.py
+            - file: "python/analytics.py"
+              content: |
+                import pandas as pd
+                import numpy as np
+                from datetime import datetime, timedelta
+                from typing import Dict, List
+                from mxcp.runtime import db
+                
+                def analyze_user_activity(user_id: int, days_back: int = 30) -> Dict:
+                    """Perform comprehensive user activity analysis."""
+                    
+                    cutoff_date = datetime.now() - timedelta(days=days_back)
+                    
+                    # Multi-step analysis using both SQL and Python
+                    
+                    # 1. Get raw activity data (SQL is perfect for this)
+                    activity_data = db.execute("""
+                        SELECT 
+                            DATE(created_at) as activity_date,
+                            activity_type,
+                            COUNT(*) as count,
+                            AVG(duration_minutes) as avg_duration
+                        FROM user_activities 
+                        WHERE user_id = $user_id 
+                        AND created_at >= $cutoff_date
+                        GROUP BY DATE(created_at), activity_type
+                        ORDER BY activity_date DESC
+                    """, {"user_id": user_id, "cutoff_date": cutoff_date})
+                    
+                    if not activity_data:
+                        return {
+                            "user_id": user_id,
+                            "activity_score": 0,
+                            "trends": {},
+                            "recommendations": ["No activity data found"]
+                        }
+                    
+                    # 2. Convert to pandas for complex analysis (Python is better here)
+                    df = pd.DataFrame(activity_data)
+                    
+                    # 3. Calculate activity score using custom logic
+                    activity_weights = {
+                        'login': 1.0,
+                        'page_view': 0.5,
+                        'feature_use': 2.0,
+                        'content_create': 3.0
+                    }
+                    
+                    df['weighted_score'] = df.apply(
+                        lambda row: row['count'] * activity_weights.get(row['activity_type'], 1.0),
+                        axis=1
+                    )
+                    
+                    total_score = df['weighted_score'].sum()
+                    
+                    # 4. Trend analysis
+                    daily_scores = df.groupby('activity_date')['weighted_score'].sum()
+                    
+                    # Calculate trend (linear regression slope)
+                    x = np.arange(len(daily_scores))
+                    if len(x) > 1:
+                        slope = np.polyfit(x, daily_scores.values, 1)[0]
+                        trend_direction = "increasing" if slope > 0 else "decreasing"
+                    else:
+                        slope = 0
+                        trend_direction = "stable"
+                    
+                    # 5. Generate recommendations based on patterns
+                    recommendations = []
+                    
+                    avg_daily_score = total_score / days_back
+                    if avg_daily_score < 5:
+                        recommendations.append("Consider increasing daily engagement")
+                    
+                    content_creation = df[df['activity_type'] == 'content_create']['count'].sum()
+                    if content_creation == 0:
+                        recommendations.append("Try creating some content to boost engagement")
+                    
+                    # 6. Store analysis results for future reference
+                    db.execute("""
+                        CREATE TABLE IF NOT EXISTS user_analysis_cache (
+                            user_id INTEGER,
+                            analysis_date TIMESTAMP,
+                            activity_score DOUBLE,
+                            trend_slope DOUBLE,
+                            recommendations TEXT,
+                            PRIMARY KEY (user_id, analysis_date)
+                        )
+                    """)
+                    
+                    db.execute("""
+                        INSERT OR REPLACE INTO user_analysis_cache 
+                        (user_id, analysis_date, activity_score, trend_slope, recommendations)
+                        VALUES ($user_id, $date, $score, $slope, $recs)
+                    """, {
+                        "user_id": user_id,
+                        "date": datetime.now(),
+                        "score": total_score,
+                        "slope": slope,
+                        "recs": "|".join(recommendations)
+                    })
+                    
+                    return {
+                        "user_id": user_id,
+                        "activity_score": round(total_score, 2),
+                        "trends": {
+                            "direction": trend_direction,
+                            "slope": round(slope, 4),
+                            "avg_daily_score": round(avg_daily_score, 2)
+                        },
+                        "recommendations": recommendations,
+                        "analysis_period_days": days_back,
+                        "total_activities": int(df['count'].sum())
+                    }
+          verification_commands:
+            - "mxcp init analytics-demo && cd analytics-demo"
+            - "mkdir python && pip install pandas numpy  # Install data science libraries"
+            - "# Create sample data first:"
+            - "mxcp query \"CREATE TABLE user_activities (user_id INT, activity_type TEXT, created_at TIMESTAMP, duration_minutes FLOAT)\""
+            - "mxcp query \"INSERT INTO user_activities VALUES (1, 'login', '2024-01-15', 5), (1, 'feature_use', '2024-01-15', 15)\""
+            - "# Create both files above"
+            - "mxcp run tool analyze_user_activity --param user_id=1 --param days_back=30"
+            - "# Expected: Analysis object with activity_score and trends"
+          troubleshooting_commands:
+            - "pip install pandas numpy  # Install required libraries"
+            - "mxcp query \"SELECT COUNT(*) FROM user_activities\"  # Check sample data"
+            - "python -c \"import pandas; print('pandas working')\"  # Test pandas"
+          external_search_hints:
+            - "pandas DataFrame operations"
+            - "numpy linear regression polyfit"
+            - "MXCP Python database transactions"
+            - "Python data analysis patterns"
+          what_you_learn:
+            - "SQL + Python hybrid approach"
+            - "Complex data analysis with pandas/numpy"
+            - "Result caching patterns"
+            - "Multi-step database operations"
+            - "When to use SQL vs Python for different tasks"
+          pattern_explanation:
+            - "Use SQL for: data retrieval, aggregation, filtering"
+            - "Use Python for: complex calculations, ML, business logic"
+            - "Use database for: caching, storing intermediate results"
+            - "Combine all three for: comprehensive analytics"
+          next_steps:
+            - "Add machine learning: scikit-learn integration"
+            - "See enterprise patterns: mxcp agent-help examples enterprise"
+            - "Advanced database: mxcp agent-help examples database advanced-postgres"
+
+  - name: enterprise
+    description: "Enterprise integration examples with real systems"
+    agent_priority: medium
+    topics:
+      - name: salesforce
+        description: "Salesforce CRM integration (from examples/salesforce)"
+        content:
+          overview: "Complete Salesforce integration showing plugin architecture and OAuth patterns."
+          note: "This example demonstrates the plugin architecture - consider simpler API approaches first"
+          prerequisites:
+            - "Salesforce account with API access"
+            - "Connected app configured in Salesforce"
+            - "Understanding of OAuth 2.0 flow"
+          pattern_explanation:
+            - "Plugin architecture for complex integrations"
+            - "Custom UDF functions (User Defined Functions)"
+            - "OAuth credential management"
+            - "Multi-step API authentication"
+          example_tools:
+            - tool: "list_sobjects"
+              description: "List all Salesforce objects"
+              sql: "SELECT list_sobjects_salesforce() as result"
+            - tool: "soql_query"
+              description: "Execute SOQL queries"
+              sql: "SELECT soql_salesforce($query) as result"
+            - tool: "describe_object"
+              description: "Get object field definitions"
+              sql: "SELECT describe_sobject_salesforce($object_name) as result"
+          configuration_example:
+            - file: "mxcp-site.yml"
+              content: |
+                mxcp: "1.0.0"
+                project: salesforce-demo
+                profile: dev
+                plugin:
+                  - name: salesforce
+                    module: mxcp_plugin_salesforce
+                    config: salesforce
+            - file: "~/.mxcp/config.yml"
+              content: |
+                projects:
+                  salesforce-demo:
+                    profiles:
+                      dev:
+                        plugin:
+                          config:
+                            salesforce:
+                              instance_url: "https://your-instance.salesforce.com"
+                              username: "user@company.com"
+                              password: "${SF_PASSWORD}"
+                              security_token: "${SF_TOKEN}"
+                              client_id: "${SF_CLIENT_ID}"
+          what_you_learn:
+            - "Plugin development patterns"
+            - "OAuth 2.0 credential management"
+            - "Custom UDF implementation"
+            - "Enterprise API authentication"
+          when_to_use:
+            - "Complex multi-step authentication flows"
+            - "Custom data transformations needed"
+            - "Reusable functions across multiple tools"
+            - "Performance optimization required"
+          simpler_alternatives:
+            - "Direct HTTP API calls in Python endpoints"
+            - "Simple API key authentication"
+            - "Webhook-based integrations"
+          next_steps:
+            - "Copy full example: cp -r examples/salesforce my-sf-demo"
+            - "Simple API approach: mxcp agent-help examples python api-client"
+            - "OAuth setup: mxcp agent-help integration oauth-setup"
+
+      - name: jira-integration
+        description: "Jira project management integration (from examples/jira)"
+        content:
+          overview: "Jira integration showing enterprise ticketing system patterns."
+          note: "This uses the plugin architecture - consider REST API approach for simpler needs"
+          available_operations:
+            - "Get project information"
+            - "Execute JQL (Jira Query Language) queries"
+            - "Get user details"
+            - "Search issues and tickets"
+          example_usage:
+            - query: "Get project details"
+              sql: "SELECT get_project_jira('MYPROJ') as project_info"
+            - query: "Search issues"
+              sql: "SELECT jql_jira('project = MYPROJ AND status = Open') as issues"
+          pattern_explanation:
+            - "Similar to Salesforce - plugin-based architecture"
+            - "Custom functions for Jira-specific operations"
+            - "JQL query support through SQL interface"
+          configuration_pattern:
+            - "Plugin module: mxcp_plugin_jira"
+            - "OAuth or API token authentication"
+            - "Instance URL configuration"
+          what_you_learn:
+            - "Enterprise ticketing system integration"
+            - "JQL to SQL mapping patterns"
+            - "Project management data analysis"
+          simpler_alternative:
+            - "Use Jira REST API directly in Python endpoints"
+            - "Basic authentication with API tokens"
+            - "HTTP requests with requests library"
+          next_steps:
+            - "Copy example: cp -r examples/jira my-jira-demo"
+            - "REST API approach: mxcp agent-help examples python api-client"
+
+      - name: confluence
+        description: "Confluence documentation integration (from examples/confluence)"
+        content:
+          overview: "Confluence integration for documentation and knowledge base access."
+          available_operations:
+            - "Search pages by content"
+            - "Get page details and content"
+            - "Navigate parent/child page relationships"
+            - "Execute CQL (Confluence Query Language)"
+          example_operations:
+            - "Search pages: search_pages_confluence('project documentation')"
+            - "Get page: get_page_confluence('123456')"
+            - "Get children: get_children_confluence('parent_page_id')"
+          use_cases:
+            - "Documentation search and retrieval"
+            - "Knowledge base integration"
+            - "Content analysis and reporting"
+          pattern_explanation:
+            - "Plugin-based like other enterprise integrations"
+            - "CQL query support"
+            - "Content and metadata access"
+          next_steps:
+            - "Copy example: cp -r examples/confluence my-confluence-demo"
+            - "See plugin development: mxcp agent-help advanced plugins"
 
   - name: database
     description: "Database connection examples"
@@ -158,7 +763,7 @@ subcategories:
             - "PostgreSQL server accessible"
             - "Connection details (host, port, database, username, password)"
           quick_test:
-            - step: "Create endpoints/test_pg.yml:"  
+            - step: "Create tools/test_pg.yml:"  
               code: |
                 mxcp: "1.0.0"
                 tool:
@@ -195,126 +800,76 @@ subcategories:
             - "Working? Add secrets: mxcp agent-help advanced secrets database"
             - "Still failing? mxcp agent-help troubleshooting database-errors"
 
-  - name: advanced  
-    description: "Advanced working examples"
-    topics:
-      - name: dbt-models
-        description: "Working with dbt models for data transformation"
+      - name: advanced-postgres
+        description: "Advanced PostgreSQL patterns with Python"
         content:
-          overview: "Use dbt models for data transformation and create prompts using the transformed data."
-          setup_steps:
-            - command: "Initialize project with dbt:"
-              description: "mxcp init my-dbt-project && cd my-dbt-project"
-            - command: "Create dbt_project.yml:"
-              description: |
-                name: 'my_dbt_project'
-                version: '1.0.0'
-                config-version: 2
-                
-                model-paths: ["models"]
-                target-path: "target"
-                clean-targets:
-                  - "target"
-                  - "dbt_packages"
-                
-                models:
-                  my_dbt_project:
-                    +materialized: table
-            - command: "Create models/sources.yml:"
-              description: |
-                version: 2
-                sources:
-                  - name: raw
-                    description: Raw data from external sources
-                    tables:
-                      - name: data
-                        description: External data source
-            - command: "Create models/transformed_data.sql:"
-              description: |
-                SELECT 
-                  id,
-                  name,
-                  created_at,
-                  CURRENT_TIMESTAMP as processed_at
-                FROM read_csv_auto('https://example.com/data.csv')
-                WHERE id IS NOT NULL
-            - command: "Create endpoints/data_prompt.yml:"
-              description: |
-                mxcp: "1.0.0"
-                
-                prompt:
-                  name: analyze_data
-                  description: "Analyze the transformed data with AI context"
-                  parameters:
-                    - name: question
-                      type: string
-                      description: "Question about the data"
-                  messages:
-                    - role: system
-                      prompt: |
-                        You are a data analyst. The user has access to transformed data 
-                        from the transformed_data table. Help them analyze this data.
-                    - role: user
-                      prompt: "{{question}}"
-            - command: "Update mxcp-site.yml:"
-              description: |
-                mxcp: "1.0.0"
-                profile: default
-                project: my_dbt_project
-                sql_tools:
-                  enabled: true
-          key_features:
-            - "dbt models for data transformation"
-            - "Prompt endpoints using transformed data"
-            - "Built-in SQL tools enabled"
-          what_you_learn:
-            - "dbt integration with MXCP"
-            - "Data transformation pipeline"
-            - "Prompt endpoints vs tool endpoints"
-            - "sql_tools configuration"
-          next_steps:
-            - "Run dbt: dbt run"
-            - "Test the prompt with your AI client"
-            - "Learn about prompts: mxcp agent-help endpoints prompts"
-
-      - name: jira-integration
-        description: "Working Jira plugin example"
-        content:
-          overview: "Complete plugin-based integration example using the Jira connector."
-          prerequisites:
-            - "This requires plugin development knowledge"
-            - "Consider simpler approaches first"
-          pattern_explanation:
-            - concept: "YAML + SQL dual-file pattern"
-              description: "Separate endpoint definition from SQL implementation"
-            - concept: "Plugin architecture"
-              description: "Custom Python functions for complex integrations"
-            - concept: "Configuration management"
-              description: "Externalized config for credentials"
-          dual_file_example:
-            - file: "endpoints/get_project.yml"
-              content: |
-                mxcp: "1.0.0"
+          overview: "Advanced PostgreSQL integration combining SQL and Python approaches."
+          technical_requirements:
+            - "postgres_scanner extension for direct SQL access"
+            - "psycopg2 or asyncpg libraries for Python access"
+            - "Connection pooling for production workloads"
+          dual_approach_example:
+            - approach: "SQL approach (simple queries)"
+              code: |
+                # tools/get_users_sql.yml
                 tool:
-                  name: get_project
-                  description: "Get Jira project details"
-                  parameters:
-                    - name: project_key
-                      type: string
-                      description: "Project key (e.g., 'TEST')"
-                  return:
-                    type: string
+                  name: get_users_sql
                   source:
-                    file: "get_project.sql"
-            - file: "endpoints/get_project.sql"
-              content: |
-                -- Get details for a specific Jira project
-                SELECT get_project_jira($project_key) as result;
-          plugin_note: "This example requires a custom plugin implementation"
+                    code: |
+                      SELECT * FROM postgres_scan(
+                        'host=localhost port=5432 dbname=mydb',
+                        'public',
+                        'users'
+                      ) WHERE active = true
+            - approach: "Python approach (complex operations)"
+              code: |
+                # tools/user_analysis.yml
+                tool:
+                  name: analyze_user_patterns
+                  language: python
+                  source:
+                    file: ../python/user_analytics.py
+                
+                # python/user_analytics.py
+                import asyncio
+                import asyncpg
+                from mxcp.runtime import config, db
+                
+                async def analyze_user_patterns() -> dict:
+                    # Complex analysis that's easier in Python
+                    pg_secret = config.get_secret("postgres_main")
+                    
+                    conn = await asyncpg.connect(
+                        host=pg_secret["host"],
+                        port=pg_secret["port"],
+                        database=pg_secret["database"],
+                        user=pg_secret["username"],
+                        password=pg_secret["password"]
+                    )
+                    
+                    # Complex query with Python processing
+                    users = await conn.fetch("""
+                        SELECT user_id, login_times, activity_scores
+                        FROM user_analytics_view
+                    """)
+                    
+                    # Python analysis
+                    patterns = analyze_login_patterns(users)
+                    
+                    # Store results in DuckDB for caching
+                    db.execute("""
+                        CREATE TABLE IF NOT EXISTS analysis_cache AS
+                        SELECT $patterns as result, CURRENT_TIMESTAMP as cached_at
+                    """, {"patterns": patterns})
+                    
+                    await conn.close()
+                    return patterns
+          when_to_use_which:
+            - "SQL approach: Simple queries, direct data access"
+            - "Python approach: Complex analytics, async operations, connection pooling"
           next_steps:
-            - "Start with simpler patterns first"
-            - "Create your own plugin: mxcp agent-help advanced plugins"
-            - "Use direct API calls instead of plugins for simpler cases"
+            - "See comprehensive example: examples/covid_owid (uses dbt + DuckDB + Python)"
+            - "Enterprise patterns: mxcp agent-help examples enterprise"
 
   - name: patterns
     description: "Common working patterns"
@@ -325,9 +880,9 @@ subcategories:
           overview: "File organization patterns that actually work in production."
           patterns:
             - name: "Single file (simple tools)"
-              when_to_use: "Simple tools with inline SQL"
+              when_to_use: "Simple tools with inline SQL or basic Python"
               structure: |
-                # endpoints/my_tool.yml
+                # tools/my_tool.yml
                 mxcp: "1.0.0"
                 tool:
                   name: my_tool
@@ -338,28 +893,26 @@ subcategories:
                     code: |
                       SELECT 'Hello World!' as result
             - name: "Dual file (complex tools)"
-              when_to_use: "Complex SQL or reusable queries"
+              when_to_use: "Complex SQL or reusable Python functions"
               structure: |
-                # endpoints/my_tool.yml
+                # tools/my_tool.yml
                 mxcp: "1.0.0"
                 tool:
                   name: my_tool
                   description: "Complex tool"
+                  language: python
                   parameters:
                     - name: user_id
                       type: integer
                   return: {type: object}
                   source:
-                    file: "my_tool.sql"
+                    file: ../python/user_tools.py
                 
-                # endpoints/my_tool.sql
-                SELECT 
-                  id,
-                  name,
-                  email
-                FROM users 
-                WHERE id = $user_id
-            - name: "dbt + prompts"
+                # python/user_tools.py
+                def my_tool(user_id: int) -> dict:
+                    # Complex Python logic here
+                    return {"user_id": user_id, "processed": True}
+            - name: "dbt + SQL tools"
               when_to_use: "Data transformation pipelines with AI context"
               structure: |
                 # mxcp-site.yml
@@ -376,14 +929,30 @@ subcategories:
                 # models/my_model.sql
                 SELECT * FROM raw_data WHERE valid = true
                 
-                # endpoints/analyze.yml
+                # prompts/analyze.yml
                 prompt:
                   name: analyze
                   description: "Analyze the data"
                   messages:
                     - role: system
                       prompt: "You are a data analyst"
-          key_insight: "Start with single file, split when SQL gets complex (>10 lines)"
+            - name: "Python + shared modules"
+              when_to_use: "Multiple Python endpoints sharing common code"
+              structure: |
+                python/
+                ├── __init__.py
+                ├── shared/
+                │   ├── __init__.py
+                │   ├── database.py      # Shared DB utilities
+                │   ├── validators.py    # Input validation
+                │   └── utils.py         # Common utilities
+                ├── analytics/
+                │   ├── __init__.py
+                │   └── user_analytics.py
+                └── integrations/
+                    ├── __init__.py
+                    └── api_client.py
+          key_insight: "Start with single file, split when logic gets complex (>20 lines)"
 
       - name: parameter-patterns
         description: "Safe parameter handling patterns"
@@ -402,6 +971,90 @@ subcategories:
                   type: string
                   pattern: "^[a-zA-Z0-9\\s]+$"  # Only safe characters
                   maxLength: 100
+            - pattern: "Python parameter handling"
+              python: |
+                # Automatic parameter injection
+                def search_users(search_term: str, limit: int = 10) -> list:
+                    # Parameters are automatically validated against YAML schema
+                    return db.execute("""
+                        SELECT * FROM users 
+                        WHERE name LIKE '%' || $search_term || '%'
+                        LIMIT $limit
+                    """, {"search_term": search_term, "limit": limit})
           dangerous_anti_patterns:
-            - wrong: "Never use string concatenation"
-              right: "Always use $param syntax" 
+            - wrong: "f\"SELECT * FROM users WHERE name = '{name}'\"  # SQL injection!"
+              right: "\"SELECT * FROM users WHERE name = $name\"  # Safe parameter injection"
+            - wrong: "eval(user_input)  # Code injection!"
+              right: "validate_input(user_input)  # Proper validation"
+          validation_patterns:
+            - "Always define parameter types and constraints in YAML"
+            - "Use regex patterns for string validation"
+            - "Set min/max values for numbers"
+            - "Use enums for limited choice parameters"
+          next_steps:
+            - "Security testing: mxcp agent-help testing security-testing"
+            - "Parameter validation: mxcp agent-help schemas parameters"
+
+      - name: hybrid-sql-python
+        description: "Combining SQL and Python effectively"
+        content:
+          overview: "Patterns for using SQL and Python together in the same project."
+          decision_framework:
+            - "Use SQL for: data retrieval, filtering, aggregation, joins"
+            - "Use Python for: complex logic, API calls, ML, data transformation"
+            - "Use both for: comprehensive analytics, multi-step workflows"
+          pattern_examples:
+            - pattern: "SQL for data, Python for logic"
+              example: |
+                # 1. SQL tool for fast data access
+                # tools/get_sales_data.yml
+                tool:
+                  name: get_sales_data
+                  source:
+                    code: |
+                      SELECT product_id, SUM(amount) as total_sales
+                      FROM sales 
+                      WHERE date >= $start_date
+                      GROUP BY product_id
+                
+                # 2. Python tool for complex analysis
+                # tools/analyze_trends.yml
+                tool:
+                  name: analyze_sales_trends
+                  language: python
+                  source:
+                    file: ../python/analytics.py
+                
+                # python/analytics.py
+                def analyze_sales_trends(start_date: str) -> dict:
+                    # Get data using SQL (fast)
+                    sales_data = db.execute("""
+                        SELECT product_id, SUM(amount) as total_sales
+                        FROM sales WHERE date >= $start_date
+                        GROUP BY product_id
+                    """, {"start_date": start_date})
+                    
+                    # Complex analysis in Python
+                    return perform_trend_analysis(sales_data)
+            - pattern: "dbt + Python combination"
+              example: |
+                # 1. dbt transforms raw data (models/clean_data.sql)
+                SELECT 
+                  cleaned_column,
+                  calculated_metric
+                FROM {{ source('raw', 'messy_data') }}
+                WHERE valid_record = true
+                
+                # 2. Python uses transformed data
+                def advanced_analysis() -> dict:
+                    # Use the dbt-transformed table
+                    clean_data = db.execute("SELECT * FROM clean_data")
+                    return machine_learning_analysis(clean_data)
+          performance_tips:
+            - "Use SQL for initial data filtering (faster)"
+            - "Use Python for complex calculations on smaller datasets"
+            - "Cache expensive Python results in database"
+            - "Consider async Python for I/O-bound operations"
+          next_steps:
+            - "See full example: examples/covid_owid"
+            - "dbt integration: mxcp agent-help examples advanced dbt-models" 
