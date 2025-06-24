@@ -180,7 +180,33 @@ mxcp test
 
 ## dbt Integration
 
-dbt (data build tool) is a powerful SQL-first transformation tool that helps you transform data in your warehouse. MXCP integrates with dbt to help you prepare and optimize your data for LLM consumption.
+dbt (data build tool) is a critical component of MXCP's production methodology. It's not just an optional integration - it's **the foundation** for building reliable MCP servers with high-quality data.
+
+### Why dbt is Essential
+
+In the MXCP methodology, dbt serves as your data quality layer:
+
+1. **Data Modeling**: Transform raw data into well-structured models
+2. **Quality Testing**: Ensure data meets your requirements before it reaches AI
+3. **Performance**: Create materialized views for fast query response
+4. **Documentation**: Generate clear documentation for your data models
+5. **Version Control**: Track all data transformations in Git
+
+### The dbt + MXCP Workflow
+
+```
+Raw Data → dbt Models → DuckDB Tables → MXCP Endpoints → AI Tools
+         ↓
+    Quality Tests
+    Data Contracts
+    Documentation
+```
+
+This approach ensures that:
+- Your AI tools work with clean, validated data
+- Performance is optimized through proper materialization
+- Changes are tracked and tested before deployment
+- Data quality issues are caught early, not in production
 
 ### Configuration
 
