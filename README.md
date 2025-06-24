@@ -1,4 +1,4 @@
-# MXCP: Enterprise-Grade Data-to-AI Infrastructure
+# MXCP: Enterprise-Grade MCP Framework for AI Applications
 
 <div align="center">
   <a href="https://mxcp.dev"><img src="docs/mxcp-logo.png" alt="MXCP Logo" width="350"></a>
@@ -9,24 +9,36 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-BSL-green.svg)](https://github.com/raw-labs/mxcp/blob/main/LICENSE)
 
-**The MCP server built for production: Transform your data into AI-ready interfaces with enterprise security, audit trails, and policy enforcement**
+**The structured methodology for building production-ready MCP servers with enterprise security, data quality, and comprehensive testing**
 
 </div>
 
 ## 🚀 What Makes MXCP Different?
 
-While other MCP servers focus on simple data access, MXCP is built for **production environments** where security, governance, and scalability matter:
+MXCP isn't just another MCP implementation - it's a **complete methodology** for building production AI applications the right way:
 
-- 🔒 **Enterprise Security**: OAuth authentication, policy enforcement, audit logging, RBAC
-- ✅ **Quality Assurance**: Validation, testing, linting, and LLM behavior evaluation  
-- ⚡ **Developer Experience**: Go from SQL to AI interface in under 60 seconds
-- 🎯 **dbt Native**: Cache data locally with dbt, serve instantly via MCP
-- 🛡️ **Production Ready**: Type safety, drift detection, comprehensive monitoring
-- 📊 **Data Governance**: Track every query, enforce access controls, mask sensitive data
+### The Production-Ready Approach
+
+1. **📊 Data Modeling First**: Start with dbt models, data contracts, and quality tests
+2. **📋 Service Design**: Define types, security policies, and API contracts upfront  
+3. **🛠️ Smart Implementation**: Choose SQL for data, Python for logic - or combine both
+4. **✅ Quality Assurance**: Validate, test, lint, and evaluate before deployment
+5. **🚨 Production Operations**: Monitor drift, track audits, ensure performance
+
+### Enterprise Features Built-In
+
+- 🔒 **Security First**: OAuth authentication, RBAC, policy enforcement
+- 📝 **Complete Audit Trail**: Track every operation for compliance
+- 🎯 **Type Safety**: Comprehensive validation across SQL and Python
+- 🧪 **Testing Framework**: Unit tests, integration tests, LLM behavior tests
+- 📈 **Performance**: Optimized queries, caching strategies, async support
+- 🔄 **Drift Detection**: Monitor schema changes across environments
 
 ```yaml
-# One line to enable GitHub OAuth
+# One config enables enterprise features
 auth: { provider: github }
+audit: { enabled: true }
+policies: { strict_mode: true }
 ```
 
 ## 🎯 60-Second Quickstart
@@ -36,51 +48,163 @@ Experience the power of MXCP in under a minute:
 ```bash
 # 1. Install and create project (15 seconds)
 pip install mxcp
-mkdir my-data-api && cd my-data-api
+mkdir my-ai-tools && cd my-ai-tools
 mxcp init --bootstrap
 
-# 2. Start serving your data (5 seconds)
+# 2. Start serving your tools (5 seconds)
 mxcp serve
 
 # 3. Connect to Claude Desktop (40 seconds)
 # Add this to your Claude config:
 {
   "mcpServers": {
-    "my-data": {
+    "my-tools": {
       "command": "mxcp",
       "args": ["serve", "--transport", "stdio"],
-      "cwd": "/path/to/my-data-api"
+      "cwd": "/path/to/my-ai-tools"
     }
   }
 }
 ```
 
-**Result**: You now have a type-safe, validated data API that Claude can use to query your data with full audit trails and policy enforcement.
+**Result**: You now have a production-ready AI tool API with type safety, validation, audit trails, and policy enforcement.
 
-## 💡 Real-World Example: dbt + Data Caching
+## 📚 The MXCP Methodology
 
-See how MXCP transforms data workflows with our COVID-19 example:
+Building production MCP servers requires more than just connecting data to AI. MXCP provides a structured approach:
+
+### 1. Start with Data Quality
+```yaml
+# Use dbt to model and test your data
+models:
+  marts:
+    customer_360:
+      +materialized: table
+      +tests:
+        - unique: customer_id
+        - not_null: [customer_id, email]
+```
+
+### 2. Design Your Service
+```yaml
+# Define clear contracts and security policies
+tool:
+  name: get_customer
+  parameters:
+    - name: customer_id
+      type: string
+      pattern: "^cust_[0-9]+$"
+  policies:
+    input:
+      - condition: "user.role != 'admin' && customer_id != user.customer_id"
+        action: deny
+```
+
+### 3. Implement Smartly
+- **SQL** for data queries against your dbt models
+- **Python** for complex logic, ML models, and integrations
+- **Both** working together for complete solutions
+
+### 4. Test Everything
+```bash
+mxcp validate  # Structure is correct
+mxcp test      # Logic works as expected
+mxcp lint      # Metadata helps LLMs
+mxcp evals     # AI uses tools safely
+```
+
+### 5. Deploy with Confidence
+```bash
+mxcp drift-snapshot        # Baseline your schemas
+mxcp serve --profile prod  # Run with production config
+mxcp log --since 1h        # Monitor operations
+```
+
+👉 **[Read the full Production Methodology Guide](docs/guides/production-methodology.md)** to learn how to build MCP servers the right way.
+
+### Choose Your Implementation Style
+
+<table>
+<tr>
+<td width="50%">
+
+**SQL for Data Queries**
+```yaml
+# tools/sales_report.yml
+tool:
+  name: sales_report
+  description: Get sales by region
+  parameters:
+    - name: region
+      type: string
+  source:
+    code: |
+      SELECT SUM(amount) as total
+      FROM sales 
+      WHERE region = $region
+```
+
+</td>
+<td width="50%">
+
+**Python for Complex Logic**
+```yaml
+# tools/analyze_text.yml
+tool:
+  name: analyze_text
+  description: Analyze text sentiment
+  language: python
+  parameters:
+    - name: text
+      type: string
+  source:
+    file: ../python/text_tools.py
+```
+
+```python
+# python/text_tools.py
+def analyze_text(text: str) -> dict:
+    # Use any Python library
+    sentiment = analyze_sentiment(text)
+    entities = extract_entities(text)
+    return {
+        "sentiment": sentiment,
+        "entities": entities
+    }
+```
+
+</td>
+</tr>
+</table>
+
+## 💡 Real-World Example: Combining SQL & Python
+
+See how MXCP enables sophisticated workflows by combining the strengths of different tools:
 
 ```bash
 # Clone and run the COVID example
 git clone https://github.com/raw-labs/mxcp.git
 cd mxcp/examples/covid_owid
 
-# Cache data locally with dbt (this is the magic!)
+# Cache data locally with dbt (great for data transformation!)
 dbt run  # Transforms and caches OWID data locally
 
-# Serve cached data via MCP
+# Serve via MCP with both SQL and Python endpoints
 mxcp serve
 ```
 
 **What just happened?**
 1. **dbt models** fetch and transform COVID data from Our World in Data into DuckDB tables
 2. **DuckDB** stores the transformed data locally for lightning-fast queries  
-3. **MCP endpoints** query the DuckDB tables directly (no dbt syntax needed)
-4. **Audit logs** track every query for compliance
-5. **Policies** can enforce who sees what data
+3. **SQL endpoints** query the DuckDB tables for simple aggregations
+4. **Python endpoints** can perform complex analysis on the same data
+5. **Audit logs** track every query and function call for compliance
+6. **Policies** enforce who sees what data across both SQL and Python
 
-Ask Claude: *"Show me COVID vaccination rates in Germany vs France"* - and it queries the `covid_data` table instantly, with full audit trails.
+Ask Claude: *"Show me COVID vaccination rates in Germany vs France"* - SQL queries the data instantly  
+Ask Claude: *"Predict the trend for next month"* - Python runs ML models on the same data
+
+This demonstrates MXCP's power: use the right tool for each job while maintaining consistent security and governance.
 
 ## 🛡️ Enterprise Features
 
@@ -118,6 +242,46 @@ policies:
     - condition: "user.role != 'admin'"
       action: filter_fields
       fields: ["salary", "ssn"]  # Auto-remove sensitive fields
+```
+
+### Python for Complex Operations
+```python
+# python/data_analysis.py
+from mxcp.runtime import db, config
+import pandas as pd
+import asyncio
+
+def analyze_performance(department: str, threshold: float) -> dict:
+    """Complex analysis that would be difficult in pure SQL"""
+    # Access database with context
+    employees = db.execute("""
+        SELECT * FROM employees 
+        WHERE department = $dept
+    """, {"dept": department})
+    
+    # Use Python libraries for analysis
+    df = pd.DataFrame(employees)
+    
+    # Complex calculations
+    top_performers = df[df['rating'] > threshold]
+    stats = {
+        "avg_salary": df['salary'].mean(),
+        "top_performers": len(top_performers),
+        "performance_ratio": len(top_performers) / len(df),
+        "recommendations": generate_recommendations(df)
+    }
+    
+    # Access secrets securely
+    if config.get_secret("enable_ml_predictions"):
+        stats["predictions"] = run_ml_model(df)
+    
+    return stats
+
+async def batch_process(items: list) -> dict:
+    """Async Python for concurrent operations"""
+    tasks = [process_item(item) for item in items]
+    results = await asyncio.gather(*tasks)
+    return {"processed": len(results), "results": results}
 ```
 
 ### Audit Every Query
@@ -170,26 +334,34 @@ parameters:
 ## 🏗️ Architecture: Built for Production
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   LLM Client    │    │      MXCP        │    │   Data Sources  │
-│  (Claude, etc)  │◄──►│   (Security      │◄──►│  (DB, APIs,     │
-│                 │    │    Audit         │    │   Files, dbt)   │
-│                 │    │    Policies)     │    │                 │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                       ┌──────────────┐
-                       │ Audit Logs   │
-                       │ (JSONL/DB)   │
-                       └──────────────┘
+┌─────────────────┐      ┌────────────────────────────┐      ┌─────────────────┐
+│   LLM Client    │      │         MXCP Framework     │      │ Implementations │
+│  (Claude, etc)  │◄────►│  ┌─────────────────────┐   │◄────►│                 │
+│                 │ MCP  │  │ Security & Policies │   │      │  SQL Endpoints  │
+│                 │      │  ├─────────────────────┤   │      │  Python Tools   │
+└─────────────────┘      │  │   Type System       │   │      │  Async Handlers │
+                         │  ├─────────────────────┤   │      └─────────────────┘
+                         │  │   Audit Engine      │   │              │
+                         │  ├─────────────────────┤   │              ▼
+                         │  │ Validation & Tests  │   │      ┌─────────────────┐
+                         │  └─────────────────────┘   │      │  Data Sources   │
+                         └────────────────────────────┘      │  ├──────────────┤
+                                      │                      │  │  Databases   │
+                                      ▼                      │  │  APIs        │
+                              ┌──────────────┐               │  │  Files       │
+                              │ Audit Logs   │               │  │  dbt Models  │
+                              │ (JSONL/DB)   │               └─────────────────┘
+                              └──────────────┘
 ```
 
-Unlike simple data connectors, MXCP provides:
-- **Security layer** between LLMs and your data
-- **Audit trail** for every query and result
-- **Policy engine** for fine-grained access control
-- **Type system** for LLM safety and validation
-- **Development workflow** with testing and drift detection
+Unlike simple MCP servers, MXCP provides:
+- **Framework flexibility** - Choose SQL, Python, or both for your implementations
+- **Security layer** between LLMs and your systems
+- **Audit trail** for every operation and result
+- **Policy engine** for fine-grained access control  
+- **Type system** for safety and validation across languages
+- **Development workflow** with testing, linting, and drift detection
+- **Runtime services** for Python endpoints (database access, secrets, lifecycle hooks)
 
 ## 🚀 Quick Start
 
@@ -208,19 +380,52 @@ pip install -e .
 
 Try the included examples:
 ```bash
-# Simple data queries
+# SQL-based data queries
 cd examples/earthquakes && mxcp serve
 
-# Enterprise features (policies, audit, dbt)
+# Python-based analysis tools
+cd examples/python-demo && mxcp serve
+
+# Enterprise features with dbt integration
 cd examples/covid_owid && dbt run && mxcp serve
 ```
 
 ## 💡 Key Implementation Features
 
-### 1. Declarative Interface Definition
+### 1. Choose the Right Tool for the Job
+
+<table>
+<tr>
+<th>Use SQL When:</th>
+<th>Use Python When:</th>
+</tr>
+<tr>
+<td>
+
+- Querying databases
+- Simple aggregations
+- Joining tables
+- Filtering data
+- Basic transformations
+
+</td>
+<td>
+
+- Complex business logic
+- External API calls
+- Machine learning
+- Data science operations
+- File processing
+- Async operations
+
+</td>
+</tr>
+</table>
+
+### 2. SQL Example: Data Queries
 ```yaml
 # tools/analyze_sales.yml
-mxcp: "1.0.0"
+mxcp: 1
 tool:
   name: analyze_sales
   description: "Analyze sales data with automatic caching"
@@ -243,42 +448,116 @@ tool:
       WHERE region = $region
 ```
 
-### 2. dbt Integration for Data Caching
-```sql
--- models/sales_summary.sql (dbt model)
-{{ config(materialized='table') }}
-
-SELECT 
-  region,
-  product,
-  SUM(amount) as amount,
-  created_at::date as sale_date
-FROM {{ source('raw', 'sales_data') }}
-WHERE created_at >= current_date - interval '90 days'
-GROUP BY region, product, sale_date
+### 3. Python Example: Complex Logic
+```yaml
+# tools/risk_assessment.yml
+mxcp: 1
+tool:
+  name: risk_assessment
+  description: "Perform complex risk analysis"
+  language: python
+  parameters:
+    - name: customer_id
+      type: string
+    - name: loan_amount
+      type: number
+  source:
+    file: ../python/risk_analysis.py
 ```
 
-**Why this matters**: dbt creates optimized tables in DuckDB, MXCP endpoints query them directly - perfect separation of concerns with caching, transformations, and governance built-in.
+```python
+# python/risk_analysis.py
+from mxcp.runtime import db, config
+import numpy as np
+from datetime import datetime
 
-### 3. Rich Type System & Validation
-Define precise types with constraints, examples, and LLM hints to ensure data quality and help AI understand your interfaces better.
+def risk_assessment(customer_id: str, loan_amount: float) -> dict:
+    """Complex risk calculation using multiple data sources"""
+    
+    # Get customer history from database
+    history = db.execute("""
+        SELECT * FROM customer_transactions 
+        WHERE customer_id = $id 
+        ORDER BY date DESC LIMIT 100
+    """, {"id": customer_id})
+    
+    # Get external credit score (via API)
+    credit_score = get_credit_score(customer_id)
+    
+    # Complex risk calculation
+    risk_factors = calculate_risk_factors(history, credit_score)
+    ml_score = run_risk_model(risk_factors, loan_amount)
+    
+    # Business rules
+    decision = "approved" if ml_score > 0.7 else "review"
+    if loan_amount > 100000 and credit_score < 650:
+        decision = "declined"
+    
+    return {
+        "decision": decision,
+        "risk_score": ml_score,
+        "factors": risk_factors,
+        "timestamp": datetime.now().isoformat()
+    }
+```
+
+### 4. Lifecycle Management
+Python endpoints support initialization and cleanup hooks:
+
+```python
+# python/ml_service.py
+from mxcp.runtime import on_init, on_shutdown
+
+model = None
+
+@on_init
+def load_model():
+    """Load ML model once at startup"""
+    global model
+    model = load_pretrained_model("risk_v2.pkl")
+
+@on_shutdown  
+def cleanup():
+    """Clean up resources"""
+    if model:
+        model.close()
+
+def predict(data: dict) -> dict:
+    """Use the pre-loaded model"""
+    return {"prediction": model.predict(data)}
+```
 
 ## 🛠️ Core Concepts
 
 ### Tools, Resources, Prompts
 Define your AI interface using MCP (Model Context Protocol) specs:
-- **Tools** — Functions that process data and return results
+- **Tools** — Functions that process data and return results (SQL or Python)
 - **Resources** — Data sources and caches  
 - **Prompts** — Templates for LLM interactions
 
+### Implementation Languages
+MXCP supports two implementation approaches:
+- **SQL** — Best for data queries, aggregations, and transformations. Uses DuckDB's powerful SQL engine.
+- **Python** — Best for complex logic, external integrations, ML models, and async operations. Full access to the Python ecosystem.
+
+Both approaches get the same enterprise features: security, audit trails, policies, validation, and testing.
+
 ### Project Structure
+MXCP enforces an organized directory structure for better project management:
+
 ```
 your-project/
 ├── mxcp-site.yml    # Project configuration
-├── tools/           # Tool definitions
-├── resources/       # Data sources
-├── prompts/         # LLM templates
-└── models/          # dbt transformations & caches
+├── tools/           # MCP tool definitions (.yml files)
+├── resources/       # MCP resource definitions (.yml files)
+├── prompts/         # MCP prompt definitions (.yml files)
+├── evals/           # Evaluation definitions (.yml files)
+├── python/          # Python implementation files for endpoints
+├── sql/             # SQL implementation files (for complex queries)
+├── drift/           # Schema drift detection snapshots
+├── audit/           # Audit logs (when enabled)
+├── models/          # dbt models (if using dbt)
+└── target/          # dbt target directory (if using dbt)
 ```
 
 ### CLI Commands
@@ -332,6 +611,7 @@ For specific setup instructions, see:
 
 ### ⚡ Features
 - **[Features Overview](https://github.com/raw-labs/mxcp/blob/main/docs/features/overview.md)** - Complete guide to all MXCP capabilities
+- **[Python Endpoints](https://github.com/raw-labs/mxcp/blob/main/docs/features/python-endpoints.md)** - Build complex tools with Python
 - **[Policy Enforcement](https://github.com/raw-labs/mxcp/blob/main/docs/features/policies.md)** - Access control and data filtering
 - **[Drift Detection](https://github.com/raw-labs/mxcp/blob/main/docs/features/drift-detection.md)** - Monitor schema and endpoint changes
 - **[Audit Logging](https://github.com/raw-labs/mxcp/blob/main/docs/features/auditing.md)** - Enterprise-grade logging and compliance
@@ -360,4 +640,4 @@ MXCP is developed by RAW Labs for production data-to-AI workflows. For enterpris
 
 ---
 
-**Built for the modern data stack**: Combines dbt's modeling power, DuckDB's performance, and enterprise-grade security into a single AI-ready platform.
+**Built for production AI applications**: Enterprise-grade MCP framework that combines the simplicity of YAML configuration with the power of SQL and Python, wrapped in comprehensive security and governance.

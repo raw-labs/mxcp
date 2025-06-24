@@ -1,0 +1,195 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MXCP Prompt Definition Schema",
+  "type": "object",
+  "required": ["mxcp", "prompt"],
+  "properties": {
+    "mxcp": {
+      "type": "integer",
+      "description": "Schema version. Must be 1.",
+      "enum": [1],
+      "default": 1
+    },
+
+    "prompt": {
+      "$ref": "#/definitions/promptDefinition",
+      "description": "Defines an MCP prompt endpoint."
+    },
+
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Short display title." },
+        "description": { "type": "string", "description": "Longer description." }
+      },
+      "description": "Optional metadata for documentation purposes."
+    }
+  },
+
+  "definitions": {
+    "promptDefinition": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { 
+          "type": "string", 
+          "description": "Logical name identifying this prompt.",
+          "minLength": 1
+        },
+        "description": { "type": "string", "description": "Description of this prompt." },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags to classify the prompt."
+        },
+        "parameters": {
+          "type": "array",
+          "description": "Input parameters used to populate the prompt.",
+          "items": { "$ref": "#/definitions/paramDefinition" }
+        },
+        "messages": {
+          "type": "array",
+          "description": "List of structured prompt messages forming the full prompt sequence.",
+          "items": {
+            "type": "object",
+            "required": ["prompt"],
+            "properties": {
+              "role": {
+                "type": "string",
+                "description": "The role of the speaker of the message (e.g. 'user', 'assistant', 'system')."
+              },
+              "type": {
+                "type": "string",
+                "description": "The content type of the message (e.g. 'text')."
+              },
+              "prompt": {
+                "type": "string",
+                "description": "The templated prompt text (supports Jinja syntax)."
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+
+    "paramDefinition": {
+      "type": "object",
+      "required": ["name", "type", "description"],
+      "properties": {
+        "name": { 
+          "type": "string", 
+          "description": "Parameter name.",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+          "minLength": 1
+        },
+        "description": { 
+          "type": "string", 
+          "description": "What this parameter represents." 
+        },
+        "default": { 
+          "description": "Optional default value if none is provided." 
+        },
+        "examples": {
+          "type": "array",
+          "description": "Example values for this parameter.",
+          "items": {}
+        },
+        "enum": {
+          "type": "array",
+          "description": "List of allowed values.",
+          "items": {}
+        }
+      },
+      "allOf": [
+        { "$ref": "#/definitions/typeDefinition" }
+      ]
+    },
+
+    "typeDefinition": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "integer", "boolean", "array", "object"],
+          "description": "The data type of the value."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["email", "uri", "date", "time", "date-time", "duration", "timestamp"],
+          "description": "Expected format for string values."
+        },
+        "sensitive": {
+          "type": "boolean",
+          "description": "Whether this field contains sensitive data that should be redacted in logs and filtered by policies.",
+          "default": false
+        },
+        "minLength": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Minimum string length." 
+        },
+        "maxLength": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Maximum string length." 
+        },
+        "minimum": {
+          "type": "number",
+          "description": "Minimum value for numbers or integers."
+        },
+        "maximum": {
+          "type": "number",
+          "description": "Maximum value for numbers or integers."
+        },
+        "exclusiveMinimum": {
+          "type": "number",
+          "description": "Exclusive minimum value for numbers or integers."
+        },
+        "exclusiveMaximum": {
+          "type": "number",
+          "description": "Exclusive maximum value for numbers or integers."
+        },
+        "multipleOf": {
+          "type": "number",
+          "description": "Value must be a multiple of this for numbers or integers."
+        },
+        "minItems": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Minimum number of array items." 
+        },
+        "maxItems": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Maximum number of array items." 
+        },
+        "uniqueItems": {
+          "type": "boolean",
+          "description": "Whether array items must be unique."
+        },
+        "items": {
+          "$ref": "#/definitions/typeDefinition",
+          "description": "Schema for items if type is array."
+        },
+        "properties": {
+          "type": "object",
+          "description": "Schema for object properties if type is object.",
+          "additionalProperties": {
+            "$ref": "#/definitions/typeDefinition"
+          }
+        },
+        "required": {
+          "type": "array",
+          "description": "List of required fields if type is object.",
+          "items": { "type": "string" }
+        },
+        "additionalProperties": {
+          "type": "boolean",
+          "description": "Whether to allow additional properties not defined in the schema. Defaults to true if not specified."
+        }
+      }
+    }
+  }
+} 

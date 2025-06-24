@@ -36,7 +36,7 @@ def format_validation_results(results):
     validated = results.get("validated", [])
     if not validated:
         output.append(click.style("ℹ️  No endpoints found to validate", fg='blue'))
-        output.append(f"   Create endpoints in the {click.style('endpoints/', fg='cyan')} directory")
+        output.append(f"   Create tools in the {click.style('tools/', fg='cyan')} directory, resources in {click.style('resources/', fg='cyan')}, etc.")
         return "\n".join(output)
         
     # Count valid and failed endpoints

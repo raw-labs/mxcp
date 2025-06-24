@@ -1,0 +1,21 @@
+mxcp: 1
+tool:
+  name: process_time_series
+  description: Process time series data with rolling window calculations (async)
+  language: python
+  source:
+    file: ../python/data_analysis.py
+  parameters:
+    - name: table_name
+      type: string
+      description: Name of the table containing time series data
+    - name: window_days
+      type: integer
+      default: 7
+      description: Size of the rolling window in days
+      minimum: 1
+      maximum: 365
+  return:
+    type: array
+    items:
+      type: object 

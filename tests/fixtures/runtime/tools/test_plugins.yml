@@ -1,0 +1,27 @@
+mxcp: 1
+tool:
+  name: test_plugins
+  description: Test plugins.get() and plugins.list() runtime APIs
+  language: python
+  return:
+    type: object
+    properties:
+      plugin_list:
+        type: array
+        items:
+          type: string
+      plugin_count:
+        type: integer
+      test_plugin_exists:
+        type: boolean
+      non_existent_is_none:
+        type: boolean
+      plugin_info:
+        type: object
+  source:
+    file: ../python/runtime_tests.py
+  tests:
+    - name: verify_plugins_access
+      arguments: []
+      result_contains:
+        non_existent_is_none: true 

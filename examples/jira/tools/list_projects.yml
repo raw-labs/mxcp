@@ -1,0 +1,21 @@
+mxcp: 1
+
+tool:
+  name: list_projects
+  description: |
+    List all projects in your Jira instance.
+    Returns a JSON string containing an array of projects with their details.
+  type: tool
+  annotations:
+    title: List Projects
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  return:
+    type: string
+    description: |
+      A JSON string containing an array of Jira projects.
+  language: "sql"
+  source:
+    file: "../sql/list_projects.sql" 

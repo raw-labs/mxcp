@@ -1,0 +1,14 @@
+mxcp: 1
+
+resource:
+  name: resource1
+  description: A simple test resource
+  uri: "test://resource1/{id}"
+  parameters:
+    - name: id
+      type: string
+      description: Resource identifier
+      format: uri
+  source:
+    code: |
+      SELECT 1 as value

@@ -53,7 +53,7 @@ def test_validate_valid_endpoint(validation_repo_path, site_config, user_config,
     original_dir = os.getcwd()
     os.chdir(validation_repo_path)
     try:
-        endpoint_path = "endpoints/valid_endpoint.yml"
+        endpoint_path = "tools/valid_endpoint.yml"
         result = validate_endpoint(endpoint_path, user_config, site_config, test_profile, test_session)
         assert result["status"] == "ok"
         assert result["path"] == endpoint_path
@@ -65,7 +65,7 @@ def test_validate_valid_prompt(validation_repo_path, site_config, user_config, t
     original_dir = os.getcwd()
     os.chdir(validation_repo_path)
     try:
-        endpoint_path = "endpoints/valid_prompt.yml"
+        endpoint_path = "prompts/valid_prompt.yml"
         result = validate_endpoint(endpoint_path, user_config, site_config, test_profile, test_session)
         assert result["status"] == "ok"
         assert result["path"] == endpoint_path
@@ -77,7 +77,7 @@ def test_validate_invalid_prompt(validation_repo_path, site_config, user_config,
     original_dir = os.getcwd()
     os.chdir(validation_repo_path)
     try:
-        endpoint_path = "endpoints/invalid_prompt.yml"
+        endpoint_path = "prompts/invalid_prompt.yml"
         result = validate_endpoint(endpoint_path, user_config, site_config, test_profile, test_session)
         assert result["status"] == "error"
         assert "undefined template variables" in result["message"].lower()
@@ -107,7 +107,7 @@ def test_validate_invalid_parameter_name(validation_repo_path, site_config, user
     original_dir = os.getcwd()
     os.chdir(validation_repo_path)
     try:
-        endpoint_path = "endpoints/invalid_parameter_name.yml"
+        endpoint_path = "tools/invalid_parameter_name.yml"
         result = validate_endpoint(endpoint_path, user_config, site_config, test_profile, test_session)
         assert result["status"] == "error"
         assert "schema validation error: 'user/id' does not match" in result["message"].lower()
@@ -119,7 +119,7 @@ def test_validate_missing_param(validation_repo_path, site_config, user_config, 
     original_dir = os.getcwd()
     os.chdir(validation_repo_path)
     try:
-        endpoint_path = "endpoints/missing_param.yml"
+        endpoint_path = "tools/missing_param.yml"
         result = validate_endpoint(endpoint_path, user_config, site_config, test_profile, test_session)
         assert result["status"] == "error"
         assert "parameter mismatch" in result["message"].lower()
@@ -147,7 +147,7 @@ def test_validate_complex_jinja_prompt_valid(validation_repo_path, site_config, 
     original_dir = os.getcwd()
     os.chdir(validation_repo_path)
     try:
-        endpoint_path = "endpoints/complex_jinja_prompt.yml"
+        endpoint_path = "prompts/complex_jinja_prompt.yml"
         result = validate_endpoint(endpoint_path, user_config, site_config, test_profile, test_session)
         assert result["status"] == "ok"
         assert result["path"] == endpoint_path
@@ -159,7 +159,7 @@ def test_validate_complex_jinja_prompt_invalid(validation_repo_path, site_config
     original_dir = os.getcwd()
     os.chdir(validation_repo_path)
     try:
-        endpoint_path = "endpoints/invalid_complex_jinja_prompt.yml"
+        endpoint_path = "prompts/invalid_complex_jinja_prompt.yml"
         result = validate_endpoint(endpoint_path, user_config, site_config, test_profile, test_session)
         assert result["status"] == "error"
         assert "undefined template variables" in result["message"].lower()

@@ -1,0 +1,13 @@
+mxcp: 1
+
+tool:
+  name: scalar_endpoint
+  description: Test endpoint that returns a single scalar value
+  parameters:
+    - name: value
+      type: integer
+      description: Value parameter
+  return:
+    type: number
+  source: 
+    file: ../sql/scalar_endpoint.sql 

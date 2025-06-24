@@ -1,0 +1,38 @@
+mxcp: 1
+
+tool:
+  name: search_pages
+  description: |
+    Search Confluence pages by keyword.
+    Returns a JSON string containing matching pages with their details.
+  type: tool
+  annotations:
+    title: Search Pages
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  parameters:
+    - name: query
+      type: string
+      description: |
+        The search string to find in page content.
+        This will search through page titles and content.
+      examples: [
+        "onboarding guide",
+        "release notes",
+        "API documentation"
+      ]
+    - name: limit
+      type: integer
+      description: |
+        Maximum number of results to return.
+        Defaults to 10 if not specified.
+      examples: [10, 20, 50]
+  return:
+    type: string
+    description: |
+      A JSON string containing an array of matching pages.
+  language: "sql"
+  source:
+    file: "../sql/search_pages.sql" 

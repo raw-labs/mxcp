@@ -1,0 +1,21 @@
+mxcp: 1
+
+tool:
+  name: object_endpoint
+  description: Test endpoint that returns a single object
+  parameters:
+    - name: name
+      type: string
+      description: Name parameter
+    - name: age
+      type: integer
+      description: Age parameter
+  return:
+    type: object
+    properties:
+      name:
+        type: string
+      age:
+        type: integer
+  source: 
+    file: ../sql/object_endpoint.sql 

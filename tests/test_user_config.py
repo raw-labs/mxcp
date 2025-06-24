@@ -9,7 +9,7 @@ def test_env_var_interpolation(tmp_path):
     # Create a test config file
     config_path = tmp_path / "config.yml"
     config_content = """
-    mxcp: "1.0.0"
+    mxcp: 1
     projects:
       test_project:
         profiles:
@@ -55,7 +55,7 @@ def test_missing_env_var(tmp_path):
     # Create a test config file
     config_path = tmp_path / "config.yml"
     config_content = """
-    mxcp: "1.0.0"
+    mxcp: 1
     projects:
       test_project:
         profiles:
@@ -89,7 +89,7 @@ def test_env_var_in_nested_structures(tmp_path):
     # Create a test config file
     config_path = tmp_path / "config.yml"
     config_content = """
-    mxcp: "1.0.0"
+    mxcp: 1
     projects:
       test_project:
         profiles:

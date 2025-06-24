@@ -20,7 +20,7 @@ The plugin provides several UDFs that allow you to:
 Add the following to your MXCP user config (`~/.mxcp/config.yml`). You can use the example `config.yml` in this directory as a template:
 
 ```yaml
-mxcp: 1.0.0
+mxcp: 1
 
 projects:
   confluence-demo:
@@ -39,7 +39,7 @@ projects:
 Create an `mxcp-site.yml` file:
 
 ```yaml
-mxcp: 1.0.0
+mxcp: 1
 project: confluence-demo
 profile: dev
 plugin:

@@ -1,0 +1,25 @@
+mxcp: 1
+
+prompt:
+  name: valid_prompt
+  description: A valid prompt that demonstrates proper message sequence structure
+  parameters:
+    - name: topic
+      type: string
+      description: Topic to discuss
+      minLength: 1
+      maxLength: 100
+    - name: expertise_level
+      type: string
+      description: Level of expertise for the explanation
+      enum: ["beginner", "intermediate", "advanced"]
+      default: "beginner"
+  messages:
+    - role: "system"
+      type: "text"
+      prompt: "You are a knowledgeable teacher who adapts explanations to the audience's expertise level."
+    - role: "user"
+      type: "text"
+      prompt: |
+        Please explain {{topic}} at a {{expertise_level}} level.
+        Focus on the key concepts that would be most relevant for this level of understanding. 

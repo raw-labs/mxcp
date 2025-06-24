@@ -1,95 +1,155 @@
 ---
 title: "Overview"
-description: "Learn about MXCP (Model Execution + Context Protocol), a developer-first toolkit for serving operational data to AI applications through a well-governed, testable interface."
+description: "Learn about MXCP, an enterprise-grade MCP framework for building production AI tools with SQL or Python, featuring security, audit trails, and policy enforcement."
 keywords: 
   - mxcp
   - model context protocol
-  - ai data integration
-  - duckdb
-  - dbt
-  - sql ai tools
-  - llm data access
+  - mcp framework
+  - enterprise mcp
+  - python mcp
+  - sql mcp
+  - ai tools
+  - production ai
+  - llm tools
 sidebar_position: 1
 slug: /
 ---
 
 # MXCP Overview
 
-MXCP (Model Execution + Context Protocol) is a developer-first toolkit that enables you to serve your operational data to AI applications through a well-governed, testable interface. It combines the power of SQL, the flexibility of DuckDB, and the reliability of dbt to create a complete solution for AI data integration.
+MXCP is an enterprise-grade MCP (Model Context Protocol) framework that provides a **complete methodology** for building production-ready AI tools. More than just supporting SQL and Python, MXCP offers a structured approach to creating secure, testable, and governable AI applications.
+
+## Why MXCP?
+
+While other MCP servers focus on quick integrations, MXCP provides the **right way** to build production AI tools:
+
+### The Structured Approach
+
+1. **Data Quality First**: Start with proper data modeling using dbt
+   - Create data models with clear schemas
+   - Implement data quality tests
+   - Build performance-optimized views
+   - Document your data contracts
+
+2. **Service Design**: Plan before you build
+   - Define comprehensive type systems
+   - Design security policies upfront
+   - Create clear API contracts
+   - Structure your endpoints logically
+
+3. **Smart Implementation**: Use the right tool for the job
+   - SQL for data queries and aggregations
+   - Python for complex logic and integrations
+   - Combine both for complete solutions
+
+4. **Quality Assurance**: Test at every level
+   - Validate structure and schemas
+   - Test functionality with real data
+   - Lint for LLM comprehension
+   - Evaluate AI behavior safety
+
+5. **Production Operations**: Deploy with confidence
+   - Monitor schema drift
+   - Track every operation
+   - Analyze performance
+   - Scale securely
+
+### Enterprise Features
+
+- **Security**: OAuth authentication, RBAC, policy enforcement
+- **Audit Trails**: Complete tracking for compliance
+- **Type Safety**: Validation across SQL and Python
+- **Testing**: Comprehensive quality assurance
+- **Monitoring**: Drift detection and performance tracking
 
 ## Core Architecture
 
-MXCP is built around three key components that work together seamlessly:
+MXCP provides a flexible framework that supports multiple implementation approaches:
 
 ```
-┌────────┐      ┌────────┐      ┌────────────┐
-│  dbt   ├─────►│ DuckDB │◄─────┤  MXCP CLI  │
-└────────┘      └────────┘      └────────────┘
-     ▲                                ▲
-     │                                │
-  Git repo                    ~/.mxcp/config.yml
-                              + mxcp-site.yml
+┌─────────────────┐      ┌────────────────────────────┐      ┌─────────────────┐
+│   LLM Client    │      │         MXCP Framework     │      │ Implementations │
+│  (Claude, etc)  │◄────►│  ┌─────────────────────┐   │◄────►│                 │
+│                 │ MCP  │  │ Security & Policies │   │      │  SQL Endpoints  │
+│                 │      │  ├─────────────────────┤   │      │  Python Tools   │
+└─────────────────┘      │  │   Type System       │   │      │  Async Handlers │
+                         │  ├─────────────────────┤   │      └─────────────────┘
+                         │  │   Audit Engine      │   │              │
+                         │  ├─────────────────────┤   │              ▼
+                         │  │ Validation & Tests  │   │      ┌─────────────────┐
+                         │  └─────────────────────┘   │      │  Data Sources   │
+                         └────────────────────────────┘      │  ├──────────────┤
+                                      │                      │  │  Databases   │
+                                      ▼                      │  │  APIs        │
+                              ┌──────────────┐               │  │  Files       │
+                              │ Audit Logs   │               │  │  dbt Models  │
+                              │ (JSONL/DB)   │               └─────────────────┘
+                              └──────────────┘
 ```
 
-### 1. DuckDB: The Execution Engine
+### Framework Components
 
-DuckDB serves as the runtime engine of MXCP, providing:
+#### 1. Implementation Layer
 
-- **Native Analytics Support**: Built-in capabilities for OLAP-style analytics and columnar data formats (Parquet, CSV, JSON)
-- **Python Integration**: Support for Python UDFs via embedded extensions
-- **Local-First Development**: File-based persistence with no server required
-- **Flexible I/O**: Native support for various data sources and formats
-- **Extensible**: Support for core, community, and nightly extensions (e.g., httpfs, parquet, h3)
+Choose the right tool for each endpoint:
 
-DuckDB's architecture makes it ideal for operational workloads, with MXCP automatically injecting necessary extensions, secrets, and Python functions.
+- **SQL Endpoints**: Best for data queries, aggregations, and transformations
+  - Powered by DuckDB's analytical engine
+  - Support for dbt models and transformations
+  - Native handling of various data formats (Parquet, CSV, JSON)
 
-### 2. dbt: The Transformation Layer
+- **Python Tools**: Best for complex logic and integrations
+  - Full Python ecosystem access
+  - Async/await support for concurrent operations  
+  - Runtime services for database access and secrets
+  - Lifecycle hooks for initialization and cleanup
 
-dbt provides the ETL capabilities in MXCP:
+#### 2. Framework Services
 
-- **Declarative Transformations**: Define data models as views or materialized tables
-- **SQL-Based**: Express transformations in standard SQL
-- **Git-Managed**: Version control for all data transformations
-- **DuckDB Integration**: Native support via dbt-duckdb adapter
-- **Caching Strategies**: Use dbt materializations and DuckDB tables for performance optimization
+Every endpoint gets these enterprise features automatically:
 
-### 3. MXCP CLI: The Orchestration Layer
+- **Security & Policies**: OAuth, RBAC, fine-grained access control
+- **Type System**: Comprehensive validation across SQL and Python
+- **Audit Engine**: Track every operation for compliance
+- **Validation & Tests**: Ensure quality before deployment
 
-The MXCP CLI ties everything together:
+#### 3. Runtime Environment
 
-- **Project Management**: Reads project definitions (`mxcp-site.yml`) and configuration
-- **MCP Server**: Serves endpoints as an MCP-compatible HTTP interface
-- **Validation**: Validates endpoint definitions and runs tests
-- **Integration**: Seamless integration with dbt and Python
-- **Flexible Deployment**: Works locally, in CI/CD, or as a managed service
+MXCP provides a consistent runtime for all implementations:
+
+- **Database Access**: `mxcp.runtime.db` for Python endpoints
+- **Configuration**: Access to secrets and settings
+- **Plugin System**: Extend with custom Python functions
+- **Session Management**: Thread-safe execution for concurrent requests
 
 ## Key Features
 
-### 1. Local-First Development
+### 1. Choose Your Implementation
 
-- Clone a repository, run `mxcp serve`, and you're ready to go
-- No external services or coordination layers required
-- Full development environment in a single command
+- **SQL for Data**: Query databases, aggregate data, join tables
+- **Python for Logic**: Call APIs, run ML models, process files
+- **Mix & Match**: Use both in the same project for maximum flexibility
 
-### 2. Declarative Interface Definition
+### 2. Enterprise-Ready
 
-- Define tools, resources, and prompts in YAML
-- Version control all definitions in Git
-- Test and validate changes before deployment
+- **Authentication**: OAuth support for GitHub, Google, Microsoft, and more
+- **Policy Engine**: Fine-grained access control with CEL expressions
+- **Audit Trails**: Track every operation for compliance
+- **Type Safety**: Comprehensive validation across all languages
 
-### 3. Production-Ready Features
+### 3. Developer Experience
 
-- Type safety and schema validation
-- Comprehensive testing framework with LLM evaluation support
-- Integration with existing data pipelines
-- Support for secrets management
+- **Local-First**: Develop and test locally before deployment
+- **Hot Reload**: Changes take effect immediately
+- **Comprehensive Testing**: Unit tests, integration tests, and LLM evaluations
+- **Rich Documentation**: Auto-generated from your YAML definitions
 
-### 4. Flexible Deployment
+### 4. Production Features
 
-- Run locally for development
-- Deploy in CI/CD pipelines
-- Use as a managed service
-- Scale from development to production
+- **Drift Detection**: Monitor schema and API changes
+- **Performance**: Async support, connection pooling, caching
+- **Monitoring**: Built-in metrics and logging
+- **Scalability**: From local development to production deployment
 
 ## Getting Started
 
@@ -103,17 +163,66 @@ The MXCP CLI ties everything together:
    mxcp init
    ```
 
-3. Define your endpoints in YAML:
+3. Define your endpoints using either SQL or Python:
+
+   **SQL Example** (for data queries):
    ```yaml
-   # tools/example.yml
-   name: example_tool
-   type: tool
-   input:
-     date: date
-   output:
-     result: string
-   sql: |
-     SELECT 'Result for ' || :date AS result
+   # tools/sales_report.yml
+   mxcp: 1
+   tool:
+     name: sales_report
+     description: Get sales by region
+     parameters:
+       - name: region
+         type: string
+     return:
+       type: object
+     source:
+       code: |
+         SELECT 
+           SUM(amount) as total,
+           COUNT(*) as transactions
+         FROM sales 
+         WHERE region = $region
+   ```
+
+   **Python Example** (for complex logic):
+   ```yaml
+   # tools/analyze_sentiment.yml
+   mxcp: 1
+   tool:
+     name: analyze_sentiment
+     description: Analyze text sentiment
+     language: python
+     parameters:
+       - name: text
+         type: string
+     return:
+       type: object
+     source:
+       file: ../python/text_analysis.py
+   ```
+
+   ```python
+   # python/text_analysis.py
+   from mxcp.runtime import db, config
+   
+   def analyze_sentiment(text: str) -> dict:
+       # Use any Python library or API
+       sentiment_score = calculate_sentiment(text)
+       
+       # Access database if needed
+       similar_texts = db.execute(
+           "SELECT * FROM texts WHERE sentiment_score BETWEEN $min AND $max",
+           {"min": sentiment_score - 0.1, "max": sentiment_score + 0.1}
+       )
+       
+       return {
+           "text": text,
+           "sentiment_score": sentiment_score,
+           "sentiment_label": get_label(sentiment_score),
+           "similar_count": len(similar_texts)
+       }
    ```
 
 4. Start the server:
@@ -121,9 +230,12 @@ The MXCP CLI ties everything together:
    mxcp serve
    ```
 
+Your AI tools are now available with full security, audit trails, and policy enforcement!
+
 ## Next Steps
 
 - [Quickstart Guide](quickstart.md) - Get up and running with MXCP
+- [Python Endpoints](../features/python-endpoints.md) - Build complex tools with Python
 - [Type System](../reference/type-system.md) - Learn about MXCP's type system
 - [Configuration](../guides/configuration.md) - Configure your MXCP project
 - [Quality & Testing](../guides/quality.md) - Write tests, run LLM evals, and ensure endpoint quality

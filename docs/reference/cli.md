@@ -16,6 +16,35 @@ slug: /reference/cli
 
 This document provides a comprehensive reference for all MXCP command-line interface (CLI) commands and their options.
 
+## Directory Structure Requirements
+
+MXCP enforces an organized directory structure to improve project maintainability and developer experience. All commands expect your project to follow this structure:
+
+```
+mxcp-project/
+├── mxcp-site.yml       # Project configuration (required)
+├── tools/              # MCP tool definitions (.yml files)
+├── resources/          # MCP resource definitions (.yml files)  
+├── prompts/            # MCP prompt definitions (.yml files)
+├── evals/              # Evaluation definitions (.yml files)
+├── python/             # Python endpoints and shared code
+├── plugins/            # MXCP plugins for DuckDB
+├── sql/                # SQL implementation files
+├── drift/              # Schema drift detection snapshots
+├── audit/              # Audit logs (when enabled)
+├── models/             # dbt models (if using dbt)
+└── target/             # dbt target directory (if using dbt)
+```
+
+**Key Rules:**
+- **Tools** must be defined in `tools/*.yml` files
+- **Resources** must be defined in `resources/*.yml` files
+- **Prompts** must be defined in `prompts/*.yml` files
+- **SQL implementations** should be in `sql/*.sql` files and referenced via relative paths
+- Files in wrong directories are ignored by discovery commands
+
+Use `mxcp init --bootstrap` to create a properly structured project.
+
 ## Common Options
 
 Most commands support these common options:
@@ -65,7 +94,7 @@ mxcp serve [OPTIONS]
 - `--transport`: Transport protocol to use (streamable-http, sse, or stdio) - defaults to user config setting
 - `--port`: Port number for HTTP transport - defaults to user config setting
 - `--debug`: Show detailed debug information
-- `--no-sql-tools`: Disable built-in SQL querying and schema exploration tools
+- `--sql-tools`: Enable or disable built-in SQL querying and schema exploration tools (true/false)
 - `--readonly`: Open database connection in read-only mode
 - `--stateless`: Enable stateless HTTP mode for Claude.ai and serverless deployments
 
@@ -75,7 +104,8 @@ mxcp serve                   # Use transport settings from user config
 mxcp serve --port 9000       # Override port from user config
 mxcp serve --transport stdio # Override transport from user config
 mxcp serve --profile dev     # Use the 'dev' profile configuration
-mxcp serve --no-sql-tools    # Disable built-in SQL querying tools
+mxcp serve --sql-tools true  # Enable built-in SQL querying tools
+mxcp serve --sql-tools false # Disable built-in SQL querying tools
 mxcp serve --readonly        # Open database connection in read-only mode
 mxcp serve --stateless       # Enable stateless HTTP mode
 ```

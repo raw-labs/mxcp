@@ -1,0 +1,101 @@
+mxcp: 1
+
+tool:
+  name: test_policy_assertions
+  description: Test endpoint demonstrating assertions with policy-based filtering
+  parameters:
+    - name: user_id
+      type: string
+      description: User ID to fetch
+  return:
+    type: object
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      email:
+        type: string
+      department:
+        type: string
+      salary:
+        type: number
+        sensitive: true
+      ssn:
+        type: string
+        sensitive: true
+      phone:
+        type: string
+        sensitive: true
+  source:
+    code: |
+      SELECT 
+        $user_id as id,
+        'John Doe' as name,
+        'john@example.com' as email,
+        'Engineering' as department,
+        95000 as salary,
+        '123-45-6789' as ssn,
+        '555-0123' as phone
+  
+  policies:
+    output:
+      # Admin can see everything
+      - condition: "user.role != 'admin'"
+        action: filter_fields
+        fields: ["salary"]
+      
+      # Only HR and admin can see SSN
+      - condition: "user.role != 'hr' && user.role != 'admin'"
+        action: mask_fields
+        fields: ["ssn"]
+      
+      # Need special permission to see phone
+      - condition: "!('pii.view' in user.permissions)"
+        action: filter_fields
+        fields: ["phone"]
+  
+  tests:
+    # Test admin sees all fields
+    - name: Admin sees all fields
+      user_context:
+        role: admin
+        permissions: ["pii.view"]
+      arguments:
+        - key: user_id
+          value: "u123"
+      result_contains:
+        id: "u123"
+        salary: 95000
+        ssn: "123-45-6789"
+        phone: "555-0123"
+    
+    # Test regular user doesn't see sensitive fields
+    - name: Regular user has filtered fields
+      user_context:
+        role: user
+        permissions: []
+      arguments:
+        - key: user_id
+          value: "u123"
+      result_contains:
+        id: "u123"
+        name: "John Doe"
+        ssn: "****"  # Masked, not filtered
+      result_not_contains:
+        - salary
+        - phone
+    
+    # Test HR user sees SSN but not necessarily phone
+    - name: HR sees SSN but needs permission for phone
+      user_context:
+        role: hr
+        permissions: []  # No pii.view
+      arguments:
+        - key: user_id
+          value: "u123"
+      result_contains:
+        id: "u123"
+        ssn: "123-45-6789"  # Real SSN
+      result_not_contains:
+        - phone  # No pii.view permission 

@@ -1,0 +1,23 @@
+mxcp: 1
+
+tool:
+  name: array_endpoint
+  description: Test endpoint that returns an array of objects
+  parameters:
+    - name: name
+      type: string
+      description: Name parameter
+    - name: age
+      type: integer
+      description: Age parameter
+  return:
+    type: array
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+        age:
+          type: integer
+  source: 
+    file: ../sql/array_endpoint.sql 

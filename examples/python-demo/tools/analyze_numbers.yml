@@ -1,0 +1,27 @@
+mxcp: 1
+tool:
+  name: analyze_numbers
+  description: Analyze a list of numbers with statistical operations
+  language: python
+  source:
+    file: ../python/data_analysis.py
+  parameters:
+    - name: numbers
+      type: array
+      items:
+        type: number
+      description: List of numbers to analyze
+    - name: operation  
+      type: string
+      enum: ["mean", "median", "mode", "stdev", "sum", "min", "max"]
+      default: "mean"
+      description: Statistical operation to perform
+  return:
+    type: object
+    properties:
+      operation:
+        type: string
+      result:
+        type: number
+      count:
+        type: integer 

@@ -17,4 +17,3 @@ snapshot-paths:
 target-path: target
 test-paths:
 - tests
-version: 1.0.0

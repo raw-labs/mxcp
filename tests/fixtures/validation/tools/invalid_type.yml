@@ -1,0 +1,18 @@
+mxcp: 1
+tool:
+  name: invalid_type
+  description: An endpoint with type mismatch
+  parameters:
+    - name: user_id
+      type: string  # This should be integer based on SQL usage
+      description: User ID to query
+  return:
+    type: object
+    properties:
+      user_name:
+        type: string
+  source:
+    code: |
+      SELECT 'test_user' as user_name
+      FROM (SELECT 1 as user_id) as users
+      WHERE user_id = $user_id

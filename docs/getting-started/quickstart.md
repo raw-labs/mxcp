@@ -1,10 +1,12 @@
 ---
 title: "Quickstart Guide"
-description: "Get started with MXCP quickly - from basic setup to advanced enterprise features. Learn to create projects, integrate with dbt, and deploy production-ready AI data pipelines."
+description: "Get started with MXCP quickly - create AI tools with SQL or Python. Learn to build tools, integrate with dbt, and deploy production-ready AI applications."
 keywords:
   - mxcp quickstart
   - mxcp tutorial
-  - ai data pipeline
+  - python mcp tools
+  - sql mcp endpoints
+  - ai tools framework
   - dbt integration
   - claude desktop setup
   - mcp server
@@ -14,7 +16,22 @@ slug: /quickstart
 
 # MXCP Quickstart Guide
 
-This guide will help you get started with MXCP quickly, from basic setup to advanced enterprise features. We'll cover creating new projects, exploring examples, and leveraging MXCP's unique production capabilities.
+This guide demonstrates MXCP's structured approach to building production-ready MCP servers. You'll learn not just how to create AI tools, but how to build them **the right way** - with proper data modeling, comprehensive testing, and enterprise-grade security.
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Path 1: Hello World (2 minutes)](#path-1-hello-world-2-minutes)
+- [Path 2: Real-World Data Pipeline (10 minutes)](#path-2-real-world-data-pipeline-10-minutes)
+- [Path 3: Python-Powered Tools (5 minutes)](#path-3-python-powered-tools-5-minutes)
+- [Path 4: Enterprise Features (15 minutes)](#path-4-enterprise-features-15-minutes)
+- [Advanced Patterns](#advanced-patterns)
+- [LLM Integration Options](#llm-integration-options)
+- [Production Deployment](#production-deployment)
+- [Next Steps](#next-steps)
+- [Troubleshooting](#troubleshooting)
+- [Why MXCP?](#why-mxcp)
+- [Key Architecture Patterns](#key-architecture-patterns)
 
 ## Installation
 
@@ -29,11 +46,11 @@ pip install "mxcp[vault]"  # HashiCorp Vault integration
 
 ## Path 1: Hello World (2 minutes)
 
-Perfect for understanding the basics:
+Perfect for understanding the basics with both SQL and Python examples:
 
 ### 1. Initialize a Project
 
-Create a new project with a hello world example:
+Create a new project with hello world examples:
 
 ```bash
 # Create a new directory and initialize MXCP
@@ -42,25 +59,52 @@ cd my-mxcp-project
 mxcp init --bootstrap
 ```
 
-This creates:
-- `mxcp-site.yml` - Project configuration
-- `endpoints/hello-world.yml` - A simple hello world tool
-- `endpoints/hello-world.sql` - The SQL implementation
-- `server_config.json` - Claude Desktop configuration (automatically generated!)
+This creates an organized project structure:
+
+```
+my-mxcp-project/
+├── mxcp-site.yml       # Project configuration
+├── tools/              # Tool definitions (MCP tools)
+│   └── hello-world.yml # Example tool definition
+├── resources/          # Resource definitions (MCP resources)
+├── prompts/            # Prompt definitions (MCP prompts)
+├── evals/              # Evaluation definitions
+├── python/             # Python endpoints and shared code
+├── plugins/            # MXCP plugins for DuckDB
+├── sql/                # SQL implementations
+│   └── hello-world.sql # SQL implementation for tools
+├── drift/              # Drift detection snapshots
+├── audit/              # Audit logs
+└── server_config.json  # Claude Desktop config (auto-generated)
+```
+
+**🏗️ Organized by Design**: MXCP enforces a structured approach where each endpoint type has its own directory:
+
+- **`tools/`** - MCP tool definitions (`.yml` files that define callable functions)
+- **`resources/`** - MCP resource definitions (`.yml` files that define data resources)  
+- **`prompts/`** - MCP prompt definitions (`.yml` files that define reusable prompts)
+- **`evals/`** - Evaluation definitions for testing your endpoints
+- **`python/`** - Python endpoints and shared code
+- **`plugins/`** - MXCP plugins for DuckDB (User Defined Functions)
+- **`sql/`** - SQL implementations for data queries
+- **`drift/`** - Schema drift detection snapshots (auto-generated)
+- **`audit/`** - Audit logs (auto-generated when enabled)
 
 The `--bootstrap` flag provides:
-- ✅ Properly formatted SQL files
+- ✅ Complete organized directory structure
+- ✅ Examples in both SQL and Python
 - ✅ Automatic `server_config.json` generation that handles virtualenvs
 - ✅ Clear, actionable next steps
 - ✅ Platform-specific Claude Desktop config paths
 
 ### 2. Explore the Generated Files
 
-The bootstrap creates a simple hello world tool:
+The bootstrap creates examples in both languages:
 
+**SQL Example** (for data queries):
 ```yaml
-# endpoints/hello-world.yml
-mxcp: "1.0.0"
+# tools/hello-world.yml
+mxcp: 1
 tool:
   name: "hello_world"
   description: "A simple hello world tool"
@@ -74,12 +118,66 @@ tool:
     type: "string"
     description: "Greeting message"
   source:
-    file: "hello-world.sql"
+    file: "../sql/hello-world.sql"
 ```
 
 ```sql
--- endpoints/hello-world.sql
+-- sql/hello-world.sql
 SELECT 'Hello, ' || $name || '!' as greeting
+```
+
+**Python Example** (for complex logic):
+```yaml
+# tools/calculate-fibonacci.yml
+mxcp: 1
+tool:
+  name: "calculate_fibonacci"
+  description: "Calculate Fibonacci number"
+  language: python
+  parameters:
+    - name: "n"
+      type: "integer"
+      description: "Position in Fibonacci sequence"
+      minimum: 0
+      maximum: 100
+  return:
+    type: "object"
+    properties:
+      position: { type: "integer" }
+      value: { type: "integer" }
+      calculation_time: { type: "number" }
+  source:
+    file: "../python/math_tools.py"
+```
+
+```python
+# python/math_tools.py
+import time
+from mxcp.runtime import db, config
+
+def calculate_fibonacci(n: int) -> dict:
+    """Calculate the nth Fibonacci number"""
+    start_time = time.time()
+    
+    if n <= 1:
+        value = n
+    else:
+        a, b = 0, 1
+        for _ in range(2, n + 1):
+            a, b = b, a + b
+        value = b
+    
+    # Optional: Store in database for caching
+    db.execute(
+        "INSERT OR REPLACE INTO fibonacci_cache (n, value) VALUES ($n, $value)",
+        {"n": n, "value": value}
+    )
+    
+    return {
+        "position": n,
+        "value": value,
+        "calculation_time": time.time() - start_time
+    }
 ```
 
 ### 3. Start the MCP Server
@@ -108,7 +206,7 @@ This example showcases MXCP's killer feature: **dbt-native data caching**
 ```yaml
 # dbt_project.yml - Standard dbt project
 name: 'covid_owid'
-version: '1.0.0'
+version: '1'
 profile: 'covid_owid'
 model-paths: ["models"]
 target-path: "target"
@@ -167,9 +265,275 @@ Ask Claude:
 
 The responses are instant because the data is cached locally!
 
-**Built-in SQL Tools**: MXCP automatically provides SQL query tools (`execute_sql_query`, `list_tables`, `get_table_schema`) that let Claude explore and query your data directly - no custom endpoints needed for basic data exploration!
+**Built-in SQL Tools**: MXCP provides optional SQL query tools (`execute_sql_query`, `list_tables`, `get_table_schema`) that let Claude explore and query your data directly. These tools are disabled by default but can be enabled in your configuration.
 
-## Path 3: Enterprise Features (15 minutes)
+## Path 3: Python-Powered Tools (5 minutes)
+
+Build complex AI tools using Python's full ecosystem:
+
+### 1. Create a Python Analysis Tool
+
+```yaml
+# tools/sentiment-analyzer.yml
+mxcp: 1
+tool:
+  name: sentiment_analyzer
+  description: "Analyze text sentiment with ML"
+  language: python
+  parameters:
+    - name: texts
+      type: array
+      items:
+        type: string
+      description: "Texts to analyze"
+      maxItems: 100
+  return:
+    type: array
+    items:
+      type: object
+      properties:
+        text: { type: string }
+        sentiment: { type: string, enum: ["positive", "negative", "neutral"] }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+  source:
+    file: "../python/ml_tools.py"
+```
+
+```python
+# python/ml_tools.py
+from mxcp.runtime import db, config, on_init
+import asyncio
+
+# Simulate ML model loading (replace with real model)
+model = None
+
+@on_init
+def load_model():
+    """Load ML model on startup"""
+    global model
+    print("Loading sentiment model...")
+    # model = load_your_model_here()
+    model = {"loaded": True}  # Placeholder
+
+async def sentiment_analyzer(texts: list[str]) -> list[dict]:
+    """Analyze sentiment for multiple texts concurrently"""
+    
+    async def analyze_one(text: str) -> dict:
+        # Simulate async API call or model inference
+        await asyncio.sleep(0.1)
+        
+        # Simple rule-based sentiment (replace with real ML)
+        sentiment = "positive" if "good" in text.lower() else \
+                   "negative" if "bad" in text.lower() else \
+                   "neutral"
+        
+        confidence = 0.95 if sentiment != "neutral" else 0.6
+        
+        # Optional: Store results for analytics
+        db.execute(
+            """
+            INSERT INTO sentiment_history (text, sentiment, confidence, analyzed_at)
+            VALUES ($text, $sentiment, $confidence, CURRENT_TIMESTAMP)
+            """,
+            {"text": text[:200], "sentiment": sentiment, "confidence": confidence}
+        )
+        
+        return {
+            "text": text,
+            "sentiment": sentiment,
+            "confidence": confidence
+        }
+    
+    # Process all texts concurrently
+    results = await asyncio.gather(*[analyze_one(text) for text in texts])
+    return results
+```
+
+### 2. Create an API Integration Tool
+
+```yaml
+# tools/weather-forecast.yml
+mxcp: 1
+tool:
+  name: weather_forecast
+  description: "Get weather forecast for a location"
+  language: python
+  parameters:
+    - name: location
+      type: string
+      description: "City name or coordinates"
+  return:
+    type: object
+    properties:
+      location: { type: string }
+      temperature: { type: number }
+      conditions: { type: string }
+      forecast: 
+        type: array
+        items:
+          type: object
+          properties:
+            day: { type: string }
+            high: { type: number }
+            low: { type: number }
+  source:
+    file: "../python/api_tools.py"
+```
+
+```python
+# python/api_tools.py
+import httpx
+from mxcp.runtime import config, db
+from datetime import datetime
+
+async def weather_forecast(location: str) -> dict:
+    """Fetch weather forecast from external API"""
+    
+    # Get API key from secure config
+    api_key = config.get_secret("weather_api_key")
+    
+    # Check cache first
+    cached = db.execute(
+        """
+        SELECT forecast_data 
+        FROM weather_cache 
+        WHERE location = $location 
+          AND cached_at > datetime('now', '-1 hour')
+        """,
+        {"location": location}
+    ).fetchone()
+    
+    if cached:
+        return cached["forecast_data"]
+    
+    # Fetch from API
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://api.weather.com/forecast",
+            params={"location": location, "key": api_key}
+        )
+        data = response.json()
+    
+    # Transform and cache the result
+    result = {
+        "location": location,
+        "temperature": data["current"]["temp"],
+        "conditions": data["current"]["conditions"],
+        "forecast": [
+            {
+                "day": day["date"],
+                "high": day["high"],
+                "low": day["low"]
+            }
+            for day in data["forecast"][:5]
+        ]
+    }
+    
+    # Cache for future requests
+    db.execute(
+        """
+        INSERT OR REPLACE INTO weather_cache (location, forecast_data, cached_at)
+        VALUES ($location, $data, CURRENT_TIMESTAMP)
+        """,
+        {"location": location, "data": result}
+    )
+    
+    return result
+```
+
+### 3. Combine SQL and Python
+
+Create powerful tools that leverage both SQL for data and Python for logic:
+
+```yaml
+# tools/customer-insights.yml
+mxcp: 1
+tool:
+  name: customer_insights
+  description: "Generate AI insights for customer behavior"
+  language: python
+  parameters:
+    - name: customer_id
+      type: string
+  return:
+    type: object
+  source:
+    file: "../python/insights.py"
+```
+
+```python
+# python/insights.py
+from mxcp.runtime import db
+import statistics
+
+def customer_insights(customer_id: str) -> dict:
+    """Combine SQL data analysis with Python ML insights"""
+    
+    # Use SQL for efficient data aggregation
+    purchase_data = db.execute("""
+        SELECT 
+            COUNT(*) as total_purchases,
+            SUM(amount) as total_spent,
+            AVG(amount) as avg_order_value,
+            MAX(purchase_date) as last_purchase,
+            STRING_AGG(DISTINCT category, ', ') as categories
+        FROM purchases
+        WHERE customer_id = $customer_id
+    """, {"customer_id": customer_id}).fetchone()
+    
+    # Get purchase history for pattern analysis
+    history = db.execute("""
+        SELECT amount, purchase_date, category
+        FROM purchases
+        WHERE customer_id = $customer_id
+        ORDER BY purchase_date DESC
+        LIMIT 50
+    """, {"customer_id": customer_id}).fetchall()
+    
+    # Use Python for complex analysis
+    amounts = [p["amount"] for p in history]
+    
+    insights = {
+        "customer_id": customer_id,
+        **dict(purchase_data),
+        "spending_trend": calculate_trend(amounts),
+        "purchase_frequency": calculate_frequency(history),
+        "predicted_ltv": predict_lifetime_value(purchase_data, history),
+        "recommendations": generate_recommendations(history)
+    }
+    
+    return insights
+
+def calculate_trend(amounts):
+    """Calculate spending trend"""
+    if len(amounts) < 2:
+        return "insufficient_data"
+    
+    recent = statistics.mean(amounts[:10])
+    older = statistics.mean(amounts[10:20]) if len(amounts) >= 20 else amounts[-1]
+    
+    if recent > older * 1.1:
+        return "increasing"
+    elif recent < older * 0.9:
+        return "decreasing"
+    else:
+        return "stable"
+```
+
+### 4. Test Your Python Tools
+
+```bash
+# Run individual tools
+mxcp run tool sentiment_analyzer --param texts='["This is great!", "Bad experience"]'
+
+# Test with mock data
+mxcp test
+
+# View execution logs
+mxcp log --tool sentiment_analyzer
+```
+
+## Path 4: Enterprise Features (15 minutes)
 
 Experience MXCP's production-grade security and governance:
 
@@ -178,8 +542,8 @@ Experience MXCP's production-grade security and governance:
 Create a new endpoint with access control:
 
 ```yaml
-# endpoints/employee-data.yml
-mxcp: "1.0.0"
+# tools/employee-data.yml
+mxcp: 1
 tool:
   name: employee_data
   description: "Query employee information"
@@ -288,7 +652,7 @@ JOIN external_data e ON s.date = e.date
 
 **Step 2: MXCP endpoint queries the table**
 ```yaml
-# endpoints/sales-analysis.yml
+# tools/sales-analysis.yml
 tool:
   name: get_sales_analysis
   source:
@@ -319,7 +683,7 @@ WHERE timestamp < current_timestamp - interval '24 hours'
 
 **Step 2: MXCP endpoint queries the combined table**
 ```yaml
-# endpoints/dashboard.yml
+# tools/dashboard.yml
 tool:
   name: get_dashboard_metrics
   source:
@@ -432,9 +796,9 @@ curl -X POST http://localhost:8080/tools/employee_data \
   -d '{"employee_id": "123"}'
 ```
 
-### Option C: Built-in SQL Tools (Auto-enabled)
+### Option C: Built-in SQL Tools (Optional)
 
-MXCP automatically provides SQL exploration tools that work with any MCP client:
+MXCP provides optional SQL exploration tools that work with any MCP client:
 
 **Available Tools:**
 - `execute_sql_query` - Run custom SQL queries
@@ -452,11 +816,11 @@ mcp-cli tools call execute_sql_query --sql "SELECT COUNT(*) FROM users"
 "Show me what tables are available, then count the users created this month"
 ```
 
-**Configure SQL Tools** (optional):
+**Configure SQL Tools** (required to enable):
 ```yaml
 # mxcp-site.yml
 sql_tools:
-  enabled: true  # Default: true
+  enabled: true  # Default: false - must be explicitly enabled
 ```
 
 ## Production Deployment
@@ -583,20 +947,28 @@ mxcp validate --profile production
 
 After completing this quickstart, you should understand MXCP's unique value:
 
-1. **dbt Integration**: dbt creates optimized tables in DuckDB, MXCP endpoints query them directly
-2. **Enterprise Security**: Policy enforcement, audit trails, authentication
-3. **Production Ready**: Type safety, monitoring, drift detection
-4. **Developer Experience**: Fast iteration, comprehensive validation
+1. **Flexible Implementation**: Choose SQL for data queries, Python for complex logic, or both
+2. **Enterprise Security**: Policy enforcement, audit trails, OAuth authentication
+3. **Production Ready**: Type safety, monitoring, drift detection, comprehensive testing
+4. **Developer Experience**: Fast iteration, hot reload, comprehensive validation
 5. **Scalability**: From prototype to production without re-architecting
 
-## Key Architecture Pattern
+## Key Architecture Patterns
 
-**The MXCP + dbt Workflow:**
+**SQL + dbt Workflow:**
 1. **dbt models** (`models/*.sql`) → Create tables/views in DuckDB using dbt syntax
-2. **MXCP endpoints** (`endpoints/*.yml`) → Query the tables directly using standard SQL
-3. **Perfect separation**: dbt handles data transformation, MXCP handles AI interface
+2. **MXCP tools** (`tools/*.yml`) → Query the dbt tables directly using standard SQL
+3. **SQL files** (`sql/*.sql`) → Contain the actual SQL logic referenced by tools
+
+**Python Workflow:**
+1. **Python modules** (`python/*.py`) → Implement complex logic, API calls, ML models
+2. **MXCP tools** (`tools/*.yml`) → Define interfaces with `language: python`
+3. **Runtime services** → Access database, config, and secrets via `mxcp.runtime`
+
+**Perfect separation**: Choose the right tool for each job, with all endpoints getting enterprise features automatically.
 
 ### Learn More
+- **[Python Endpoints](../features/python-endpoints.md)** - Build complex tools with Python
 - **[Type System](../reference/type-system.md)** - Master MXCP's type validation system
 - **[dbt Integration](../guides/integrations.md#dbt-integration)** - Build robust data transformation pipelines
 - **[Drift Detection](../features/drift-detection.md)** - Monitor changes across environments

@@ -73,7 +73,7 @@ def list_endpoints(profile: str, json_output: bool, debug: bool):
         else:
             if not results:
                 click.echo(click.style("ℹ️  No endpoints found", fg='blue'))
-                click.echo(f"   Create endpoints in the {click.style('endpoints/', fg='cyan')} directory")
+                click.echo(f"   Create tools in the {click.style('tools/', fg='cyan')} directory, resources in {click.style('resources/', fg='cyan')}, etc.")
                 return
                 
             # Count valid and failed endpoints

@@ -1,0 +1,25 @@
+mxcp: 1
+tool:
+  name: create_sample_data
+  description: Create a sample table with test data
+  language: python
+  source:
+    file: ../python/data_analysis.py
+  parameters:
+    - name: table_name
+      type: string
+      description: Name of the table to create
+    - name: row_count
+      type: integer
+      description: Number of rows to generate
+      minimum: 1
+      maximum: 10000
+  return:
+    type: object
+    properties:
+      status:
+        type: string
+      table:
+        type: string
+      rows_created:
+        type: integer 

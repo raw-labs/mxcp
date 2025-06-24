@@ -1,0 +1,313 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MXCP Resource Definition Schema",
+  "type": "object",
+  "required": ["mxcp", "resource"],
+  "properties": {
+    "mxcp": {
+      "type": "integer",
+      "description": "Schema version. Must be 1.",
+      "enum": [1],
+      "default": 1
+    },
+
+    "resource": {
+      "$ref": "#/definitions/resourceDefinition",
+      "description": "Defines an MCP resource endpoint."
+    },
+
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Short display title." },
+        "description": { "type": "string", "description": "Longer description." }
+      },
+      "description": "Optional metadata for documentation purposes."
+    }
+  },
+
+  "definitions": {
+    "resourceDefinition": {
+      "type": "object",
+      "required": ["uri", "source"],
+      "properties": {
+        "uri": { 
+          "type": "string", 
+          "description": "Logical URI identifying this resource.",
+          "pattern": "^[A-Za-z][A-Za-z0-9+.-]*://(?:[A-Za-z0-9._-]+|\\{[A-Za-z_][A-Za-z0-9_]*\\})(?:/(?:[A-Za-z0-9._-]+|\\{[A-Za-z_][A-Za-z0-9_]*\\}))*$",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "name": { 
+          "type": "string", 
+          "description": "Name of this resource.",
+          "minLength": 1
+        },
+        "description": { "type": "string", "description": "Description of this resource." },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags to classify this resource."
+        },
+        "mime_type": { "type": "string", "description": "MIME type of this resource." },
+        "parameters": {
+          "type": "array",
+          "description": "Input parameters for this endpoint.",
+          "items": { "$ref": "#/definitions/paramDefinition" }
+        },
+        "return": {
+          "$ref": "#/definitions/typeDefinition",
+          "description": "Description of the output schema."  
+        },
+        "language": {
+          "type": "string",
+          "default": "sql",
+          "enum": ["sql", "python"],
+          "description": "The language used to define the logic of this endpoint. 'sql' or 'python'."
+        },
+        "source": {
+          "type": "object",
+          "description": "Source for the endpoint logic, either inline or a file reference.",
+          "oneOf": [
+            { "required": ["code"], "not": { "required": ["file"] } },
+            { "required": ["file"], "not": { "required": ["code"] } }
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "The inline code snippet to execute."
+            },
+            "file": {
+              "type": "string",
+              "description": "A relative path to a file containing the code."
+            }
+          },
+          "additionalProperties": false
+        },
+        "enabled": { "type": "boolean", "default": true, "description": "Whether this endpoint is active." },
+        "tests": {
+          "type": "array",
+          "description": "Tests to validate this endpoint.",
+          "items": {
+            "type": "object",
+            "required": ["name", "arguments"],
+            "properties": {
+              "name": { "type": "string", "description": "Name of the test." },
+              "description": { "type": "string", "description": "What the test checks."  },
+              "arguments": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["key", "value"],
+                  "properties": {
+                    "key": { "type": "string", "description": "Input parameter to pass to test." },
+                    "value": { "description": "Value of the input parameter to test." }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "result": { "description": "Expected result." },
+              "user_context": { 
+                "type": "object",
+                "description": "User context for policy testing. Can include role, permissions, user_id, etc."
+              },
+              "result_contains": { 
+                "description": "Partial match - result must contain these fields/values. For arrays, checks if array contains this item."
+              },
+              "result_not_contains": { 
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "List of field names that should NOT be present in the result."
+              },
+              "result_contains_item": { 
+                "description": "For array results - at least one array item must match this object/value."
+              },
+              "result_contains_all": { 
+                "type": "array",
+                "description": "For array results - all these items must be present (any order)."
+              },
+              "result_length": { 
+                "type": "integer",
+                "minimum": 0,
+                "description": "For array results - array must have exactly this many items."
+              },
+              "result_contains_text": { 
+                "type": "string",
+                "description": "For string results - result must contain this substring."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "policies": {
+          "$ref": "#/definitions/policySet",
+          "description": "Policy definitions for access control and data filtering."
+        }
+      }
+    },
+
+    "paramDefinition": {
+      "type": "object",
+      "required": ["name", "type", "description"],
+      "properties": {
+        "name": { 
+          "type": "string", 
+          "description": "Parameter name.",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+          "minLength": 1
+        },
+        "description": { 
+          "type": "string", 
+          "description": "What this parameter represents." 
+        },
+        "default": { 
+          "description": "Optional default value if none is provided." 
+        },
+        "examples": {
+          "type": "array",
+          "description": "Example values for this parameter.",
+          "items": {}
+        },
+        "enum": {
+          "type": "array",
+          "description": "List of allowed values.",
+          "items": {}
+        }
+      },
+      "allOf": [
+        { "$ref": "#/definitions/typeDefinition" }
+      ]
+    },
+
+    "typeDefinition": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "integer", "boolean", "array", "object"],
+          "description": "The data type of the value."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["email", "uri", "date", "time", "date-time", "duration", "timestamp"],
+          "description": "Expected format for string values."
+        },
+        "sensitive": {
+          "type": "boolean",
+          "description": "Whether this field contains sensitive data that should be redacted in logs and filtered by policies.",
+          "default": false
+        },
+        "minLength": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Minimum string length." 
+        },
+        "maxLength": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Maximum string length." 
+        },
+        "minimum": {
+          "type": "number",
+          "description": "Minimum value for numbers or integers."
+        },
+        "maximum": {
+          "type": "number",
+          "description": "Maximum value for numbers or integers."
+        },
+        "exclusiveMinimum": {
+          "type": "number",
+          "description": "Exclusive minimum value for numbers or integers."
+        },
+        "exclusiveMaximum": {
+          "type": "number",
+          "description": "Exclusive maximum value for numbers or integers."
+        },
+        "multipleOf": {
+          "type": "number",
+          "description": "Value must be a multiple of this for numbers or integers."
+        },
+        "minItems": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Minimum number of array items." 
+        },
+        "maxItems": { 
+          "type": "integer", 
+          "minimum": 0, 
+          "description": "Maximum number of array items." 
+        },
+        "uniqueItems": {
+          "type": "boolean",
+          "description": "Whether array items must be unique."
+        },
+        "items": {
+          "$ref": "#/definitions/typeDefinition",
+          "description": "Schema for items if type is array."
+        },
+        "properties": {
+          "type": "object",
+          "description": "Schema for object properties if type is object.",
+          "additionalProperties": {
+            "$ref": "#/definitions/typeDefinition"
+          }
+        },
+        "required": {
+          "type": "array",
+          "description": "List of required fields if type is object.",
+          "items": { "type": "string" }
+        },
+        "additionalProperties": {
+          "type": "boolean",
+          "description": "Whether to allow additional properties not defined in the schema. Defaults to true if not specified."
+        }
+      }
+    },
+
+    "policySet": {
+      "type": "object",
+      "description": "Policy definitions for endpoint access control and data filtering.",
+      "properties": {
+        "input": {
+          "type": "array",
+          "description": "Input policies evaluated before endpoint execution.",
+          "items": { "$ref": "#/definitions/policyDefinition" }
+        },
+        "output": {
+          "type": "array", 
+          "description": "Output policies evaluated after endpoint execution.",
+          "items": { "$ref": "#/definitions/policyDefinition" }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "policyDefinition": {
+      "type": "object",
+      "required": ["condition", "action"],
+      "description": "A single policy rule definition.",
+      "properties": {
+        "condition": {
+          "type": "string",
+          "description": "CEL expression that determines when this policy applies."
+        },
+        "action": {
+          "type": "string",
+          "enum": ["deny", "filter_fields", "mask_fields", "filter_sensitive_fields"],
+          "description": "Action to take when the condition is true."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable explanation for the policy action."
+        },
+        "fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of field names for filter_fields and mask_fields actions."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+} 

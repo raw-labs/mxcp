@@ -148,17 +148,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         relative_path = Path(path).name
     
     try:
-        # First, validate against JSON schema
-        schema_path = Path(__file__).parent / "schemas" / "endpoint-schema-1.0.0.json"
-        with open(schema_path) as schema_file:
-            schema = json.load(schema_file)
-        
-        try:
-            jsonschema_validate(instance=endpoint, schema=schema)
-        except Exception as e:
-            return {"status": "error", "path": relative_path, "message": f"Schema validation error: {str(e)}"}
-        
-        # Determine endpoint type and name
+        # Determine endpoint type first
         endpoint_type = None
         name = None
         for t in ("tool", "resource", "prompt"):
@@ -174,6 +164,17 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
                 
         if not endpoint_type or not name:
             return {"status": "error", "path": relative_path, "message": "No valid endpoint type (tool/resource/prompt) found"}
+
+        # Use the appropriate schema based on endpoint type
+        schema_filename = f"{endpoint_type}-schema-1.json"
+        schema_path = Path(__file__).parent / "schemas" / schema_filename
+        with open(schema_path) as schema_file:
+            schema = json.load(schema_file)
+        
+        try:
+            jsonschema_validate(instance=endpoint, schema=schema)
+        except Exception as e:
+            return {"status": "error", "path": relative_path, "message": f"Schema validation error: {str(e)}"}
 
         # For prompts, validate messages structure and template variables
         if endpoint_type == "prompt":
@@ -215,7 +216,28 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
             if err:
                 return err
 
-        # For tools and resources, validate SQL
+        # Check if this is a Python endpoint - skip SQL validation if so
+        endpoint_def = endpoint.get(endpoint_type, {})
+        language = endpoint_def.get("language", "sql")
+        
+        if language == "python":
+            # For Python endpoints, just validate that the source file exists
+            source = endpoint_def.get("source", {})
+            if "file" not in source:
+                return {"status": "error", "path": relative_path, "message": "Python endpoints must specify source.file"}
+            
+            # Check if the file exists
+            file_path = Path(source["file"])
+            if not file_path.is_absolute():
+                file_path = path_obj.parent / file_path
+            
+            if not file_path.exists():
+                return {"status": "error", "path": relative_path, "message": f"Python source file not found: {file_path}"}
+            
+            # Python endpoints are valid if they have proper structure and file exists
+            return {"status": "ok", "path": relative_path}
+
+        # For SQL tools and resources, validate SQL
         try:
             sql_query = get_endpoint_source_code(endpoint, endpoint_type, path_obj, repo_root)
         except Exception as e:

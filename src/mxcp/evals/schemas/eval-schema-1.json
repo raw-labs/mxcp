@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MXCP Eval Suite",
+  "type": "object",
+  "required": ["mxcp", "suite", "tests"],
+  "properties": {
+    "mxcp": {
+      "type": "integer",
+      "description": "Schema version. Must be 1.",
+      "enum": [1],
+      "default": 1
+    },
+    "suite": {
+      "type": "string",
+      "description": "Name of the eval suite (e.g., 'churn_checks')",
+      "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of what this eval suite tests"
+    },
+    "model": {
+      "type": "string",
+      "description": "Optional model to use for this suite (e.g., 'claude-4-opus')",
+      "enum": [
+        "claude-4-opus",
+        "claude-4-sonnet",
+        "gpt-4o",
+        "gpt-4.1"
+      ]
+    },
+    "tests": {
+      "type": "array",
+      "description": "List of eval tests to run",
+      "items": {
+        "type": "object",
+        "required": ["name", "prompt", "assertions"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the test",
+            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+          },
+          "description": {
+            "type": "string",
+            "description": "What this test is checking"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The prompt to send to the LLM"
+          },
+          "user_context": {
+            "type": "object",
+            "description": "Optional user context for this test (e.g., role, permissions)",
+            "additionalProperties": true
+          },
+          "assertions": {
+            "type": "object",
+            "description": "Assertions to validate the LLM's response",
+            "properties": {
+              "must_call": {
+                "type": "array",
+                "description": "Tools that must be called with specific arguments",
+                "items": {
+                  "type": "object",
+                  "required": ["tool", "args"],
+                  "properties": {
+                    "tool": {
+                      "type": "string",
+                      "description": "Name of the tool that must be called"
+                    },
+                    "args": {
+                      "type": "object",
+                      "description": "Expected arguments for the tool call",
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "must_not_call": {
+                "type": "array",
+                "description": "List of tool names that should NOT be called",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "answer_contains": {
+                "type": "array",
+                "description": "Strings that must appear in the LLM's answer",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "answer_not_contains": {
+                "type": "array",
+                "description": "Strings that must NOT appear in the LLM's answer",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+} 

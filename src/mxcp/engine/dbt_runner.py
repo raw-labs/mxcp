@@ -210,7 +210,6 @@ def _build_dbt_project(
     return {
         "name": sanitized_project,  # Use sanitized project name
         "profile": dbt_profile,  # Use combined profile name
-        "version": "1.0.0",
         "config-version": 2,
         "model-paths": dbt_config.get("model_paths", ["models"]),
         "analysis-paths": dbt_config.get("analysis_paths", ["analyses"]),

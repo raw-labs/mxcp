@@ -1,0 +1,57 @@
+mxcp: 1
+
+tool:
+  name: "test_nonexistent_fields"
+  description: "Test endpoint for verifying non-existent field handling in policies"
+  parameters:
+    - name: user_id
+      type: string
+      description: "User ID to look up"
+      examples: ["user123"]
+  
+  return:
+    type: object
+    properties:
+      id:
+        type: string
+        description: "User ID"
+      name:
+        type: string
+        description: "User name"
+      email:
+        type: string
+        format: email
+        description: "User email"
+  
+  source:
+    code: |
+      -- Simple test data with only basic fields that uses the user_id parameter
+      SELECT $user_id as id, 'Test User' as name, 'test@example.com' as email
+
+  policies:
+    output:
+      # This policy references many fields that don't exist in the response
+      # to test that they are silently ignored
+      - condition: "user.role != 'admin'"
+        action: filter_fields
+        fields: [
+          "salary",           # doesn't exist
+          "ssn",              # doesn't exist  
+          "internal_notes",   # doesn't exist
+          "performance_rating", # doesn't exist
+          "manager_comments", # doesn't exist
+          "secret_data",      # doesn't exist
+          "phone"             # doesn't exist
+        ]
+        reason: "Filter sensitive fields for non-admins"
+      
+      # This policy tries to mask non-existent fields
+      - condition: "user.role != 'superuser'"
+        action: mask_fields
+        fields: [
+          "credit_card",      # doesn't exist
+          "password_hash",    # doesn't exist
+          "api_keys",         # doesn't exist
+          "private_keys"      # doesn't exist
+        ]
+        reason: "Mask security-related fields" 

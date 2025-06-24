@@ -13,12 +13,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-def _load_plugin(module_path: str, config: Dict[str, str], user_context: Optional['UserContext'] = None) -> MXCPBasePlugin:
+def _load_plugin(module_path: str, config: Dict[str, str], site_config: SiteConfig, user_context: Optional['UserContext'] = None) -> MXCPBasePlugin:
     """Load and instantiate a plugin.
     
     Args:
         module_path: The Python module path containing the plugin
         config: The resolved configuration for the plugin
+        site_config: The site configuration containing path settings
         user_context: Optional authenticated user context
         
     Returns:
@@ -29,10 +30,14 @@ def _load_plugin(module_path: str, config: Dict[str, str], user_context: Optiona
         AttributeError: If the module does not contain an MXCPBasePlugin class
     """
     try:
-        # Add current directory to Python path if not already there
+        # Add plugins directory to Python path if not already there
         current_dir = os.getcwd()
-        if current_dir not in sys.path:
-            sys.path.insert(0, current_dir)
+        # Get plugins path from site config (defaults are applied in load_site_config)
+        plugins_path = site_config["paths"]["plugins"]
+        plugins_dir = os.path.join(current_dir, plugins_path)
+        if os.path.exists(plugins_dir) and plugins_dir not in sys.path:
+            sys.path.insert(0, plugins_dir)
+            logger.debug(f"Added {plugins_dir} to Python path for plugins")
             
         module = importlib.import_module(module_path)
         plugin_class = getattr(module, "MXCPPlugin")
@@ -95,7 +100,7 @@ def load_plugins(site_config: SiteConfig, user_config: UserConfig, project: str,
             plugin_config_dict = {}
         
         # Load and instantiate the plugin with user context
-        plugin = _load_plugin(module, plugin_config_dict, user_context)
+        plugin = _load_plugin(module, plugin_config_dict, site_config, user_context)
         plugins[name] = plugin
         
         if user_context:

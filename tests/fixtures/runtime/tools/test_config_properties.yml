@@ -1,0 +1,38 @@
+mxcp: 1
+tool:
+  name: test_config_properties
+  description: Test config.user_config and config.site_config properties
+  language: python
+  return:
+    type: object
+    properties:
+      user_config_exists:
+        type: boolean
+      site_config_exists:
+        type: boolean
+      user_config_type:
+        type: string
+      site_config_type:
+        type: string
+      project_name:
+        type: string
+      secrets_count:
+        type: integer
+      site_project:
+        type: string
+      site_secrets_count:
+        type: integer
+      access_works:
+        type: boolean
+  source:
+    file: ../python/runtime_tests.py
+  tests:
+    - name: verify_config_properties
+      arguments: []
+      result_contains:
+        user_config_exists: true
+        site_config_exists: true
+        project_name: "runtime_test"
+        secrets_count: 4
+        site_secrets_count: 3
+        access_works: true 
