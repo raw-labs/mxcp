@@ -29,4 +29,4 @@ tool:
       A JSON string containing the project's details.
   language: "sql"
   source:
-    file: "get_project.sql" 
+    file: "../sql/get_project.sql" 

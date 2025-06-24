@@ -18,4 +18,4 @@ tool:
       A JSON string containing an array of spaces.
   language: "sql"
   source:
-    file: "list_spaces.sql" 
+    file: "../sql/list_spaces.sql" 

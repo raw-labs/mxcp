@@ -246,7 +246,8 @@ tests/
 │   │   ├── resources/        # Test resource definitions
 │   │   ├── prompts/          # Test prompt definitions
 │   │   ├── evals/            # Test evaluation definitions
-│   │   ├── python/           # Test Python code
+│   │   ├── python/           # Test Python endpoints
+│   │   ├── plugins/          # Test MXCP plugins
 │   │   ├── sql/              # Test SQL files
 │   │   ├── drift/            # Test drift snapshots
 │   │   └── audit/            # Test audit logs

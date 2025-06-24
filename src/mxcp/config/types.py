@@ -47,9 +47,11 @@ class SitePathsConfig(TypedDict, total=False):
     prompts: Optional[str]
     evals: Optional[str]
     python: Optional[str]
+    plugins: Optional[str]
     sql: Optional[str]
     drift: Optional[str]
     audit: Optional[str]
+    data: Optional[str]
 
 class SiteConfig(TypedDict):
     mxcp: str

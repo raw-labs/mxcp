@@ -87,6 +87,9 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
     if "sql" not in paths_config:
         paths_config["sql"] = "sql"
     
+    if "plugins" not in paths_config:
+        paths_config["plugins"] = "plugins"
+    
     if "drift" not in paths_config:
         paths_config["drift"] = "drift"
     

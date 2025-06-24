@@ -27,7 +27,8 @@ mxcp-project/
 ├── resources/          # MCP resource definitions (.yml files)  
 ├── prompts/            # MCP prompt definitions (.yml files)
 ├── evals/              # Evaluation definitions (.yml files)
-├── python/             # Python extensions and shared code
+├── python/             # Python endpoints and shared code
+├── plugins/            # MXCP plugins for DuckDB
 ├── sql/                # SQL implementation files
 ├── drift/              # Schema drift detection snapshots
 ├── audit/              # Audit logs (when enabled)

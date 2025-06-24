@@ -237,6 +237,11 @@
           "description": "Directory path for Python extensions and shared code (defaults to 'python').",
           "default": "python"
         },
+        "plugins": {
+          "type": "string",
+          "description": "Directory path for MXCP plugins (defaults to 'plugins').",
+          "default": "plugins"
+        },
         "sql": {
           "type": "string",
           "description": "Directory path for SQL files (defaults to 'sql').",

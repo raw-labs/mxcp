@@ -10,12 +10,15 @@ This plugin implements the Caesar cipher, a simple encryption technique where ea
 
 ```
 examples/plugin/
-├── my_plugin/
-│   ├── __init__.py
-│   └── plugin.py          # Plugin implementation
+├── plugins/
+│   └── my_plugin/
+│       └── __init__.py    # Plugin implementation
+├── tools/
+│   └── decipher.yml       # Endpoint using the plugin
+├── python/                # Directory for Python endpoints
+├── sql/                   # Directory for SQL implementations
 ├── config.yml             # Example plugin configuration
 ├── mxcp-site.yml          # Project configuration
-├── decipher.yml           # Endpoint using the plugin
 └── README.md
 ```
 

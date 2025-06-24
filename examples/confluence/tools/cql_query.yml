@@ -63,4 +63,4 @@ tool:
             type: string
           description: "Page labels"
   source:
-    file: "cql_query.sql" 
+    file: "../sql/cql_query.sql" 

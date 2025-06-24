@@ -35,4 +35,4 @@ tool:
       A JSON string containing an array of matching pages.
   language: "sql"
   source:
-    file: "search_pages.sql" 
+    file: "../sql/search_pages.sql" 

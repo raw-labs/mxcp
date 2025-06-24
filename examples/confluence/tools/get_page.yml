@@ -1,13 +1,13 @@
 mxcp: 1
 
 tool:
-  name: get_children
+  name: get_page
   description: |
-    List direct children of a Confluence page.
-    Returns a JSON string containing the child pages.
+    Fetch a Confluence page's content.
+    Returns a JSON string containing the page content in both storage format and rendered HTML.
   type: tool
   annotations:
-    title: Get Children
+    title: Get Page
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true
@@ -16,13 +16,13 @@ tool:
     - name: page_id
       type: string
       description: |
-        The ID of the parent page.
+        The ID of the page to fetch.
         This is typically a numeric ID found in the page URL.
       examples: ["123456", "789012"]
   return:
     type: string
     description: |
-      A JSON string containing an array of child pages.
+      A JSON string containing the page content.
   language: "sql"
   source:
-    file: "get_children.sql" 
+    file: "../sql/get_page.sql" 

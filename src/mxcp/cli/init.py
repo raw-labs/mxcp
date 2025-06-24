@@ -64,6 +64,7 @@ def create_hello_world_files(target_dir: Path):
         "prompts",
         "evals",
         "python",
+        "plugins",
         "sql",
         "drift",
         "audit",
@@ -75,7 +76,7 @@ def create_hello_world_files(target_dir: Path):
         dir_path.mkdir(exist_ok=True)
         
         # Create .gitkeep files for empty directories
-        if directory in ["resources", "prompts", "evals", "python", "drift", "audit", "data"]:
+        if directory in ["resources", "prompts", "evals", "python", "plugins", "drift", "audit", "data"]:
             gitkeep_file = dir_path / ".gitkeep"
             gitkeep_file.touch()
 
@@ -202,6 +203,7 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
         click.echo(f"   ├── prompts/            # Prompt definitions")
         click.echo(f"   ├── evals/              # Evaluation definitions")
         click.echo(f"   ├── python/             # Python extensions")
+        click.echo(f"   ├── plugins/            # Plugin definitions")
         click.echo(f"   ├── drift/              # Drift snapshots")
         click.echo(f"   ├── audit/              # Audit logs")
         click.echo(f"   └── data/               # Database files")
@@ -211,6 +213,7 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
         click.echo(f"   ├── prompts/            # Create your prompt definitions here")
         click.echo(f"   ├── evals/              # Create your evaluation definitions here")
         click.echo(f"   ├── python/             # Create your Python extensions here")
+        click.echo(f"   ├── plugins/            # Create your plugin definitions here")
         click.echo(f"   ├── sql/                # Create your SQL implementations here")
         click.echo(f"   ├── drift/              # Drift snapshots will be stored here")
         click.echo(f"   ├── audit/              # Audit logs will be stored here")

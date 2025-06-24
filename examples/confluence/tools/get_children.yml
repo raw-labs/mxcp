@@ -1,13 +1,13 @@
 mxcp: 1
 
 tool:
-  name: describe_page
+  name: get_children
   description: |
-    Show metadata about a Confluence page.
-    Returns a JSON string containing page details like title, author, update date, and labels.
+    List direct children of a Confluence page.
+    Returns a JSON string containing the child pages.
   type: tool
   annotations:
-    title: Describe Page
+    title: Get Children
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true
@@ -16,13 +16,13 @@ tool:
     - name: page_id
       type: string
       description: |
-        The ID of the page to describe.
+        The ID of the parent page.
         This is typically a numeric ID found in the page URL.
       examples: ["123456", "789012"]
   return:
     type: string
     description: |
-      A JSON string containing the page metadata.
+      A JSON string containing an array of child pages.
   language: "sql"
   source:
-    file: "describe_page.sql" 
+    file: "../sql/get_children.sql" 

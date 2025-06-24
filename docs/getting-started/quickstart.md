@@ -69,7 +69,8 @@ my-mxcp-project/
 ├── resources/          # Resource definitions (MCP resources)
 ├── prompts/            # Prompt definitions (MCP prompts)
 ├── evals/              # Evaluation definitions
-├── python/             # Python implementations
+├── python/             # Python endpoints and shared code
+├── plugins/            # MXCP plugins for DuckDB
 ├── sql/                # SQL implementations
 │   └── hello-world.sql # SQL implementation for tools
 ├── drift/              # Drift detection snapshots
@@ -83,7 +84,8 @@ my-mxcp-project/
 - **`resources/`** - MCP resource definitions (`.yml` files that define data resources)  
 - **`prompts/`** - MCP prompt definitions (`.yml` files that define reusable prompts)
 - **`evals/`** - Evaluation definitions for testing your endpoints
-- **`python/`** - Python implementations for complex logic
+- **`python/`** - Python endpoints and shared code
+- **`plugins/`** - MXCP plugins for DuckDB (User Defined Functions)
 - **`sql/`** - SQL implementations for data queries
 - **`drift/`** - Schema drift detection snapshots (auto-generated)
 - **`audit/`** - Audit logs (auto-generated when enabled)
