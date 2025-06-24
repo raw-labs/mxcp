@@ -15,7 +15,30 @@ The plugin provides several UDFs that allow you to:
 
 ## Configuration
 
-### 1. User Configuration
+### 1. Creating an Atlassian API Token
+
+**Important:** This plugin currently only supports API tokens **without scopes**. While Atlassian has introduced scoped API tokens, there are known compatibility issues when using scoped tokens with basic authentication that this plugin relies on.
+
+To create an API token without scopes:
+
+1. **Log in to your Atlassian account** at [https://id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
+
+2. **Verify your identity** (if prompted):
+   - Atlassian may ask you to verify your identity before creating API tokens
+   - Check your email for a one-time passcode and enter it when prompted
+
+3. **Create the API token**:
+   - Click **"Create API token"** (not "Create API token with scopes")
+   - Enter a descriptive name for your token (e.g., "MXCP Confluence Integration")
+   - Select an expiration date (tokens can last from 1 day to 1 year)
+   - Click **"Create"**
+
+4. **Copy and save your token**:
+   - Click **"Copy to clipboard"** to copy the token
+   - **Important:** Save this token securely (like in a password manager) as you won't be able to view it again
+   - This token will be used as your "password" in the configuration below
+
+### 2. User Configuration
 
 Add the following to your MXCP user config (`~/.mxcp/config.yml`). You can use the example `config.yml` in this directory as a template:
 
@@ -31,8 +54,14 @@ projects:
             confluence:
               url: "https://your-domain.atlassian.net/wiki"
               username: "your-email@example.com"
-              password: "your-api-token"
+              password: "your-api-token"  # Use the API token you created above
 ```
+
+**Configuration Notes:**
+- Replace `your-domain` with your actual Atlassian domain
+- Replace `your-email@example.com` with the email address of your Atlassian account
+- Replace `your-api-token` with the API token you created in step 1
+- The `password` field should contain your API token, not your actual Atlassian password
 
 ### 2. Site Configuration
 
