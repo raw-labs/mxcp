@@ -8,7 +8,7 @@ Parameters
 Licensor:             RAW Labs SA
 Licensed Work:        MXCP
                       The Licensed Work is (c) 2025 RAW Labs SA
-Additional Use Grant: You may make use of the Licensed Work, provided that you may not use the Licensed Work for a Database Service.
+Additional Use Grant: You may make use of the Licensed Work, provided that you may not use the Licensed Work for operating MXCP, or any derivative work thereof, as a hosted service or integrated component of a commercial offering that enables third parties to run models, workflows, or database queries — including, but not limited to, model execution platforms, API marketplaces, and Database-as-a-Service (DBaaS) products.
 Change Date:          Four years from the date the Licensed Work is published.
 Change License:       MIT License
 

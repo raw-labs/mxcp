@@ -638,6 +638,19 @@ MXCP is developed by RAW Labs for production data-to-AI workflows. For enterpris
 - 📧 Contact: [mxcp@raw-labs.com](mailto:mxcp@raw-labs.com)
 - 🌐 Website: [mxcp.dev](https://mxcp.dev)
 
+## 📄 License
+
+MXCP is released under the Business Source License 1.1 (BSL). It is free to use for development, testing, and most production scenarios. However, production use as part of a hosted or managed service that enables third parties to run models, workflows, or database queries requires a commercial license. This includes:
+
+- Model execution platforms
+- API marketplaces  
+- Database-as-a-Service (DBaaS) products
+- Any hosted service offering MXCP functionality to third parties
+
+The license automatically converts to the MIT license four years after the release of each version. You can view the source code and contribute to its development.
+
+For commercial licensing inquiries, please contact [mxcp@raw-labs.com](mailto:mxcp@raw-labs.com).
+
 ---
 
 **Built for production AI applications**: Enterprise-grade MCP framework that combines the simplicity of YAML configuration with the power of SQL and Python, wrapped in comprehensive security and governance.
