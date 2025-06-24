@@ -969,4 +969,411 @@ tool:
             assert isinstance(row["updated_at"], str)
         
     finally:
+        _clear_runtime_context()
+
+
+def test_python_parameter_mismatches(temp_project_dir, test_configs, test_session):
+    """Test parameter mismatches between YAML definition and Python function signature."""
+    user_config, site_config = test_configs
+    
+    # Create Python file with various function signatures
+    python_file = temp_project_dir / "python" / "param_mismatch_test.py"
+    python_file.write_text("""
+def missing_args(a: int, b: int) -> dict:
+    \"\"\"Function that expects two arguments\"\"\"
+    return {"result": a + b}
+
+def missing_args_python(a: int, b: int) -> dict:
+    \"\"\"Function that expects two arguments\"\"\"
+    return {"result": a + b}
+
+def extra_args(a: int) -> dict:
+    \"\"\"Function that expects only one argument\"\"\"
+    return {"result": a * 2}
+
+def optional_params(a: int, b: int = 10, c: str = "default") -> dict:
+    \"\"\"Function with optional parameters\"\"\"
+    return {
+        "a": a,
+        "b": b,
+        "c": c,
+        "sum": a + b
+    }
+
+def optional_params_proper(a: int, b: int = 10, c: str = "default") -> dict:
+    \"\"\"Function with optional parameters\"\"\"
+    return {
+        "a": a,
+        "b": b,
+        "c": c,
+        "sum": a + b
+    }
+
+def kwargs_function(a: int, **kwargs) -> dict:
+    \"\"\"Function that accepts **kwargs\"\"\"
+    return {
+        "a": a,
+        "extra_keys": list(kwargs.keys()),
+        "extra_values": kwargs
+    }
+
+def positional_only(a: int, b: int, /) -> dict:
+    \"\"\"Function with positional-only parameters\"\"\"
+    return {"result": a - b}
+""")
+    
+    # Test 1: Missing required arguments
+    # YAML defines no parameters, but function expects 2
+    tool_yaml = temp_project_dir / "tools" / "missing_args.yml"
+    tool_yaml.write_text("""
+mxcp: 1
+tool:
+  name: missing_args
+  description: Test missing arguments
+  language: python
+  source:
+    file: ../python/param_mismatch_test.py
+  parameters: []
+  return:
+    type: object
+""")
+    
+    executor = EndpointExecutor(
+        EndpointType.TOOL,
+        "missing_args",
+        user_config,
+        site_config,
+        test_session
+    )
+    
+    # Set runtime context
+    _set_runtime_context(test_session, user_config, site_config, {})
+    
+    try:
+        # This should raise TypeError because function expects 'a' and 'b'
+        async def test_missing():
+            result = await executor.execute({})
+            return result
+        
+        with pytest.raises(TypeError, match="missing.*required.*argument"):
+            asyncio.run(test_missing())
+    finally:
+        _clear_runtime_context()
+    
+    # Test 2: Too many arguments
+    # YAML defines parameters that function doesn't accept
+    tool_yaml2 = temp_project_dir / "tools" / "extra_args.yml"
+    tool_yaml2.write_text("""
+mxcp: 1
+tool:
+  name: extra_args
+  description: Test extra arguments
+  language: python
+  source:
+    file: ../python/param_mismatch_test.py
+  parameters:
+    - name: a
+      type: integer
+      description: First number
+    - name: b
+      type: integer
+      description: Second number (function doesn't expect this)
+    - name: c
+      type: string
+      description: Extra parameter
+  return:
+    type: object
+""")
+    
+    executor2 = EndpointExecutor(
+        EndpointType.TOOL,
+        "extra_args",
+        user_config,
+        site_config,
+        test_session
+    )
+    
+    # Set runtime context
+    _set_runtime_context(test_session, user_config, site_config, {})
+    
+    try:
+        # This should raise TypeError because function doesn't accept 'b' and 'c'
+        async def test_extra():
+            result = await executor2.execute({"a": 5, "b": 10, "c": "extra"})
+            return result
+        
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            asyncio.run(test_extra())
+    finally:
+        _clear_runtime_context()
+    
+    # Test 3: Optional parameters - not passing them
+    tool_yaml3 = temp_project_dir / "tools" / "optional_params.yml"
+    tool_yaml3.write_text("""
+mxcp: 1
+tool:
+  name: optional_params
+  description: Test optional parameters
+  language: python
+  source:
+    file: ../python/param_mismatch_test.py
+  parameters:
+    - name: a
+      type: integer
+      description: Required parameter
+  return:
+    type: object
+""")
+    
+    executor3 = EndpointExecutor(
+        EndpointType.TOOL,
+        "optional_params",
+        user_config,
+        site_config,
+        test_session
+    )
+    
+    # Set runtime context
+    _set_runtime_context(test_session, user_config, site_config, {})
+    
+    try:
+        # This should work - 'b' and 'c' have defaults
+        async def test_optional_not_passed():
+            result = await executor3.execute({"a": 5})
+            return result
+        
+        result = asyncio.run(test_optional_not_passed())
+        assert result["a"] == 5
+        assert result["b"] == 10  # default value
+        assert result["c"] == "default"  # default value
+        assert result["sum"] == 15
+    finally:
+        _clear_runtime_context()
+    
+    # Test 4: YAML validator prevents unknown parameters
+    # This test shows that unknown parameters are caught at validation time
+    tool_yaml4 = temp_project_dir / "tools" / "validate_params.yml"
+    tool_yaml4.write_text("""
+mxcp: 1
+tool:
+  name: extra_args
+  description: Test YAML validation
+  language: python
+  source:
+    file: ../python/param_mismatch_test.py
+  parameters:
+    - name: a
+      type: integer
+      description: Only parameter defined in YAML
+  return:
+    type: object
+""")
+    
+    executor4 = EndpointExecutor(
+        EndpointType.TOOL,
+        "extra_args",
+        user_config,
+        site_config,
+        test_session
+    )
+    
+    # The executor validates against YAML first, so unknown params are rejected
+    async def test_unknown_params():
+        result = await executor4.execute({"a": 5, "b": 10})
+        return result
+    
+    with pytest.raises(ValueError, match="Unknown parameter: b"):
+        asyncio.run(test_unknown_params())
+    
+    # Test 5: Python function with missing required params (YAML defines param but doesn't pass it)
+    tool_yaml5 = temp_project_dir / "tools" / "missing_args_python.yml"
+    tool_yaml5.write_text("""
+mxcp: 1
+tool:
+  name: missing_args_python
+  description: Test missing function arguments
+  language: python
+  source:
+    file: ../python/param_mismatch_test.py
+  parameters:
+    - name: a
+      type: integer
+      description: Only one param defined, but function needs two
+  return:
+    type: object
+""")
+    
+    executor5 = EndpointExecutor(
+        EndpointType.TOOL,
+        "missing_args_python",
+        user_config,
+        site_config,
+        test_session
+    )
+    
+    # Set runtime context
+    _set_runtime_context(test_session, user_config, site_config, {})
+    
+    try:
+        # This should raise TypeError at function call time
+        async def test_missing_func_param():
+            result = await executor5.execute({"a": 5})
+            return result
+        
+        with pytest.raises(TypeError, match="missing.*required.*argument.*'b'"):
+            asyncio.run(test_missing_func_param())
+    finally:
+        _clear_runtime_context()
+    
+    # Test 5b: Optional parameters properly defined in YAML
+    tool_yaml5b = temp_project_dir / "tools" / "optional_params_proper.yml"
+    tool_yaml5b.write_text("""
+mxcp: 1
+tool:
+  name: optional_params_proper
+  description: Test optional parameters with proper YAML definition
+  language: python
+  source:
+    file: ../python/param_mismatch_test.py
+  parameters:
+    - name: a
+      type: integer
+      description: Required parameter
+    - name: b
+      type: integer
+      description: Optional parameter
+      default: 10
+    - name: c
+      type: string
+      description: Optional string parameter
+      default: "default"
+  return:
+    type: object
+""")
+    
+    executor5b = EndpointExecutor(
+        EndpointType.TOOL,
+        "optional_params_proper",
+        user_config,
+        site_config,
+        test_session
+    )
+    
+    # Set runtime context
+    _set_runtime_context(test_session, user_config, site_config, {})
+    
+    try:
+        # Test with only required param - should use defaults from YAML
+        async def test_yaml_defaults():
+            result = await executor5b.execute({"a": 7})
+            return result
+        
+        result = asyncio.run(test_yaml_defaults())
+        assert result["a"] == 7
+        assert result["b"] == 10  # YAML default
+        assert result["c"] == "default"  # YAML default
+        
+        # Test overriding defaults
+        async def test_override_defaults():
+            result = await executor5b.execute({"a": 3, "b": 15, "c": "override"})
+            return result
+        
+        result = asyncio.run(test_override_defaults())
+        assert result["a"] == 3
+        assert result["b"] == 15
+        assert result["c"] == "override"
+        assert result["sum"] == 18
+    finally:
+        _clear_runtime_context()
+    
+    # Test 6: Function with **kwargs accepts extra arguments
+    tool_yaml6 = temp_project_dir / "tools" / "kwargs_function.yml"
+    tool_yaml6.write_text("""
+mxcp: 1
+tool:
+  name: kwargs_function
+  description: Test function with **kwargs
+  language: python
+  source:
+    file: ../python/param_mismatch_test.py
+  parameters:
+    - name: a
+      type: integer
+      description: Required parameter
+    - name: extra1
+      type: string
+      description: Extra parameter 1
+    - name: extra2
+      type: integer
+      description: Extra parameter 2
+  return:
+    type: object
+""")
+    
+    executor6 = EndpointExecutor(
+        EndpointType.TOOL,
+        "kwargs_function",
+        user_config,
+        site_config,
+        test_session
+    )
+    
+    # Set runtime context
+    _set_runtime_context(test_session, user_config, site_config, {})
+    
+    try:
+        # This should work - function accepts **kwargs
+        async def test_kwargs():
+            result = await executor6.execute({"a": 5, "extra1": "hello", "extra2": 42})
+            return result
+        
+        result = asyncio.run(test_kwargs())
+        assert result["a"] == 5
+        assert set(result["extra_keys"]) == {"extra1", "extra2"}
+        assert result["extra_values"]["extra1"] == "hello"
+        assert result["extra_values"]["extra2"] == 42
+    finally:
+        _clear_runtime_context()
+    
+    # Test 7: Positional-only parameters (Python 3.8+)
+    tool_yaml7 = temp_project_dir / "tools" / "positional_only.yml"
+    tool_yaml7.write_text("""
+mxcp: 1
+tool:
+  name: positional_only
+  description: Test positional-only parameters
+  language: python
+  source:
+    file: ../python/param_mismatch_test.py
+  parameters:
+    - name: a
+      type: integer
+      description: First number
+    - name: b
+      type: integer
+      description: Second number
+  return:
+    type: object
+""")
+    
+    executor7 = EndpointExecutor(
+        EndpointType.TOOL,
+        "positional_only",
+        user_config,
+        site_config,
+        test_session
+    )
+    
+    # Set runtime context
+    _set_runtime_context(test_session, user_config, site_config, {})
+    
+    try:
+        # This should fail because we're passing keyword arguments to positional-only params
+        async def test_positional():
+            result = await executor7.execute({"a": 10, "b": 3})
+            return result
+        
+        with pytest.raises(TypeError, match="positional-only"):
+            asyncio.run(test_positional())
+    finally:
         _clear_runtime_context() 
