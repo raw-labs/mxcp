@@ -1,0 +1,19 @@
+mxcp: 1
+
+tool:
+  name: tool1
+  description: A simple test tool
+  parameters:
+    - name: input
+      type: string
+      description: POstgresql syntax
+      minLength: 1
+      maxLength: 100 
+    - name: input2
+      type: string
+      description: POstgresql syntax
+      minLength: 1
+      maxLength: 100 
+  source:
+    code: |
+      {{input}}

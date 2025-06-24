@@ -103,10 +103,16 @@ class DuckDBSession:
         if readonly is None:
             readonly = self.site_config["profiles"][profile]["duckdb"].get("readonly", False)
             
-        # Handle read-only mode when database file doesn't exist
-        if readonly and db_path != ":memory:":
+        # Ensure parent directory exists for database file (except for :memory: databases)
+        if db_path != ":memory:":
             db_file = Path(db_path)
-            if not db_file.exists():
+            db_dir = db_file.parent
+            if not db_dir.exists():
+                logger.info(f"Creating directory {db_dir} for database file")
+                db_dir.mkdir(parents=True, exist_ok=True)
+                
+            # Handle read-only mode when database file doesn't exist
+            if readonly and not db_file.exists():
                 logger.info(f"Database file {db_path} doesn't exist. Creating it first before opening in read-only mode.")
                 # Create the database file first
                 temp_conn = duckdb.connect(db_path)

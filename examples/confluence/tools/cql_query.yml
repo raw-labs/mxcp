@@ -1,0 +1,66 @@
+mxcp: 1
+tool:
+  name: cql_query
+  description: "Execute a CQL query against Confluence"
+  parameters:
+    - name: cql
+      type: string
+      description: |
+        The CQL query string to execute.
+        Example: 'text ~ "important documentation"'
+      examples: [
+        'text ~ "important documentation"',
+        'type = page AND space = "TEAM"',
+        'label = "documentation"'
+      ]
+    - name: space_key
+      type: string
+      description: |
+        The space key to search in.
+        Example: 'TEAM'
+      examples: ["TEAM", "DOCS", "PROD"]
+    - name: limit
+      type: integer
+      description: |
+        Maximum number of results to return.
+        Defaults to 10 if not specified.
+      examples: [10, 20, 50]
+  return:
+    type: array
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+          description: "Page ID"
+        title:
+          type: string
+          description: "Page title"
+        space_key:
+          type: string
+          description: "Space key"
+        url:
+          type: string
+          description: "Page URL"
+        version:
+          type: object
+          properties:
+            number:
+              type: integer
+              description: "Version number"
+            when:
+              type: string
+              description: "Version timestamp"
+        last_modified:
+          type: string
+          description: "Last modification timestamp"
+        author:
+          type: string
+          description: "Page author"
+        labels:
+          type: array
+          items:
+            type: string
+          description: "Page labels"
+  source:
+    file: "../sql/cql_query.sql" 

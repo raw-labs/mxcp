@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 from jsonschema import validate, ValidationError
 from mxcp.config.types import UserConfig, SiteConfig
+from mxcp.config.migration import check_and_migrate_legacy_version
 import logging
 from typing import Dict, Any, Optional
 import re
@@ -196,7 +197,7 @@ def _generate_default_config(site_config: SiteConfig) -> dict:
     logger.debug(f"Site config: {site_config}")
     
     config = {
-        "mxcp": "1.0.0",
+        "mxcp": 1,
         "projects": {
             project_name: {
                 "profiles": {
@@ -249,6 +250,9 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
         with open(path) as f:
             config = yaml.safe_load(f)
             logger.debug(f"Loaded user config from file: {config}")
+        
+        # Check for legacy version format and provide migration guidance (stops execution)
+        check_and_migrate_legacy_version(config, "user", str(path))
             
         # Interpolate environment variables and vault URLs in the config
         vault_config = config.get('vault')
@@ -281,7 +285,7 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
     logger.debug(f"Config after applying defaults: {config}")
     
     # Load and apply JSON Schema validation
-    schema_path = Path(__file__).parent / "schemas" / "mxcp-config-schema-1.0.0.json"
+    schema_path = Path(__file__).parent / "schemas" / "mxcp-config-schema-1.json"
     with open(schema_path) as schema_file:
         schema = json.load(schema_file)
     

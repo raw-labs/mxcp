@@ -30,7 +30,7 @@ async def run_eval_suite(suite_name: str, user_config: UserConfig, site_config: 
         Dictionary with test results
     """
     # Load the eval suite
-    result = load_eval_suite(suite_name)
+    result = load_eval_suite(suite_name, site_config)
     if not result:
         return {"error": f"Eval suite '{suite_name}' not found"}
     
@@ -182,7 +182,7 @@ async def run_all_evals(user_config: UserConfig, site_config: SiteConfig,
     Returns:
         Dictionary with results from all suites
     """
-    eval_files = discover_eval_files()
+    eval_files = discover_eval_files(site_config)
     
     if not eval_files:
         logger.warning("No eval files found")

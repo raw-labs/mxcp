@@ -1,0 +1,30 @@
+mxcp: 1
+
+prompt:
+  name: invalid_complex_jinja_prompt
+  description: A prompt with complex Jinja2 features and missing parameters
+  parameters:
+    - name: topic
+      type: string
+      description: Topic to discuss
+      minLength: 1
+      maxLength: 100
+  messages:
+    - role: "system"
+      type: "text"
+      prompt: "You are a knowledgeable teacher."
+    - role: "user"
+      type: "text"
+      prompt: |
+        {% if user_type == 'admin' %}
+          Welcome admin {{ username }}! Let's discuss {{ topic }}.
+        {% else %}
+          Welcome {{ username }}! Let's discuss {{ topic }}.
+        {% endif %}
+
+        {% if items %}
+          Here are the items to cover:
+          {% for item in items %}
+            - {{ item.name }}: {{ item.description }}
+          {% endfor %}
+        {% endif %} 

@@ -11,7 +11,7 @@ This example demonstrates how to use MXCP with Salesforce data. It shows how to:
    Add the following to your MXCP user config (`~/.mxcp/config.yml`). You can use the example `config.yml` in this directory as a template:
 
    ```yaml
-   mxcp: 1.0.0
+   mxcp: 1
 
    projects:
      salesforce-demo:
@@ -30,7 +30,7 @@ This example demonstrates how to use MXCP with Salesforce data. It shows how to:
 2. Create an `mxcp-site.yml` file:
 
    ```yaml
-   mxcp: 1.0.0
+   mxcp: 1
    project: salesforce-demo
    profile: dev
    plugin:

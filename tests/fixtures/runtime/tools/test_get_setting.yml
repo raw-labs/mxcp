@@ -1,0 +1,44 @@
+mxcp: 1
+tool:
+  name: test_get_setting
+  description: Test the config.get_setting() runtime API
+  language: python
+  return:
+    type: object
+    properties:
+      project:
+        type: string
+      profile:
+        type: string
+      mxcp_version:
+        type: integer
+      secrets_list:
+        type: array
+        items:
+          type: string
+      extensions:
+        type: array
+        items:
+          type: string
+      missing_setting:
+        type: string
+      dbt_enabled:
+        type: boolean
+      project_correct:
+        type: boolean
+      profile_correct:
+        type: boolean
+      secrets_count:
+        type: integer
+      missing_uses_default:
+        type: boolean
+  source:
+    file: ../python/runtime_tests.py
+  tests:
+    - name: verify_settings_access
+      arguments: []
+      result_contains:
+        project_correct: true
+        profile_correct: true
+        missing_uses_default: true
+        secrets_count: 3 

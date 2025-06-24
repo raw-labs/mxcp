@@ -4,6 +4,7 @@ import json
 from jsonschema import validate, ValidationError
 from pathlib import Path
 from mxcp.config.types import SiteConfig, UserConfig
+from mxcp.config.migration import check_and_migrate_legacy_version
 from typing import Optional, Dict, Any
 
 def find_repo_root() -> Path:
@@ -57,6 +58,46 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
     
     if "clean_targets" not in dbt_config:
         dbt_config["clean_targets"] = ["target", "dbt_packages"]
+
+    # Initialize extensions section if not present
+    if "extensions" not in config:
+        config["extensions"] = []
+
+    # Initialize paths section if not present (do this early so we can use paths in profile defaults)
+    if "paths" not in config:
+        config["paths"] = {}
+
+    # Apply defaults for paths configuration
+    paths_config = config["paths"]
+    if "tools" not in paths_config:
+        paths_config["tools"] = "tools"
+    
+    if "resources" not in paths_config:
+        paths_config["resources"] = "resources"
+    
+    if "prompts" not in paths_config:
+        paths_config["prompts"] = "prompts"
+    
+    if "evals" not in paths_config:
+        paths_config["evals"] = "evals"
+    
+    if "python" not in paths_config:
+        paths_config["python"] = "python"
+    
+    if "sql" not in paths_config:
+        paths_config["sql"] = "sql"
+    
+    if "plugins" not in paths_config:
+        paths_config["plugins"] = "plugins"
+    
+    if "drift" not in paths_config:
+        paths_config["drift"] = "drift"
+    
+    if "audit" not in paths_config:
+        paths_config["audit"] = "audit"
+    
+    if "data" not in paths_config:
+        paths_config["data"] = "data"
         
     # Initialize profiles section if not present
     if "profiles" not in config:
@@ -73,17 +114,17 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
     if "duckdb" not in config["profiles"][profile]:
         config["profiles"][profile]["duckdb"] = {}
         
-    # Set default DuckDB path for the profile if not specified
+    # Set default DuckDB path for the profile if not specified (now uses data directory)
     if "path" not in config["profiles"][profile]["duckdb"]:
-        config["profiles"][profile]["duckdb"]["path"] = str(repo_root / f"db-{profile}.duckdb")
+        config["profiles"][profile]["duckdb"]["path"] = str(repo_root / paths_config["data"] / f"db-{profile}.duckdb")
         
     # Initialize drift config for the profile if not present
     if "drift" not in config["profiles"][profile]:
         config["profiles"][profile]["drift"] = {}
         
-    # Set default drift manifest path for the profile if not specified
+    # Set default drift manifest path for the profile if not specified (now uses drift directory)
     if "path" not in config["profiles"][profile]["drift"]:
-        config["profiles"][profile]["drift"]["path"] = str(repo_root / f"drift-{profile}.json")
+        config["profiles"][profile]["drift"]["path"] = str(repo_root / paths_config["drift"] / f"drift-{profile}.json")
 
     # Initialize audit config for the profile if not present
     if "audit" not in config["profiles"][profile]:
@@ -93,13 +134,9 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
     if "enabled" not in config["profiles"][profile]["audit"]:
         config["profiles"][profile]["audit"]["enabled"] = False
         
-    # Set default audit log path for the profile if not specified
+    # Set default audit log path for the profile if not specified (now uses audit directory)
     if "path" not in config["profiles"][profile]["audit"]:
-        config["profiles"][profile]["audit"]["path"] = str(repo_root / f"logs-{profile}.jsonl")
-
-    # Initialize extensions section if not present
-    if "extensions" not in config:
-        config["extensions"] = []
+        config["profiles"][profile]["audit"]["path"] = str(repo_root / paths_config["audit"] / f"logs-{profile}.jsonl")
         
     return config
 
@@ -122,8 +159,11 @@ def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
     with open(config_path) as f:
         config = yaml.safe_load(f)
     
+    # Check for legacy version format and provide migration guidance (stops execution)
+    check_and_migrate_legacy_version(config, "site", str(config_path))
+    
     # Load and apply JSON Schema validation
-    schema_path = Path(__file__).parent / "schemas" / "mxcp-site-schema-1.0.0.json"
+    schema_path = Path(__file__).parent / "schemas" / "mxcp-site-schema-1.json"
     with open(schema_path) as schema_file:
         schema = json.load(schema_file)
     

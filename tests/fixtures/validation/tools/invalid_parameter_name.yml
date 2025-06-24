@@ -1,0 +1,13 @@
+mxcp: 1
+tool:
+  name: "invalid_param_name_test"
+  description: "Test tool with invalid parameter name"
+  parameters:
+    - name: "user/id"  # Invalid parameter name with slash
+      type: "string"
+      description: "Invalid parameter name"
+  return:
+    type: "string"
+  language: "sql"
+  source:
+    code: "SELECT 'test' as result" 

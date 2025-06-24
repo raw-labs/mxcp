@@ -14,18 +14,58 @@ slug: /guides/quality
 
 # Quality & Testing Guide
 
-This guide covers best practices for ensuring high-quality endpoints in MXCP through validation, testing, linting, and LLM evaluation. Well-tested endpoints with comprehensive metadata provide better experiences for both developers and LLMs.
+Quality assurance is a **critical phase** in MXCP's production methodology. This guide covers the comprehensive testing approach that separates hobby projects from production-ready MCP servers.
 
-## Overview
+## Why Quality Matters
 
-MXCP provides a comprehensive quality assurance toolkit with four complementary tools:
+In production AI systems, quality issues don't just cause errors - they can lead to:
+- **Security breaches** from untested policies
+- **Data leaks** from missing validations  
+- **Poor AI behavior** from unclear metadata
+- **System failures** from untested edge cases
+- **Compliance violations** from missing audit trails
 
-1. **Validation** (`mxcp validate`) - Ensures endpoints are structurally correct
-2. **Testing** (`mxcp test`) - Verifies endpoints work as expected with direct execution
-3. **Linting** (`mxcp lint`) - Suggests metadata improvements for better LLM performance
-4. **Evals** (`mxcp evals`) - Tests how AI models interact with your endpoints
+## The MXCP Quality Framework
 
-Together, these tools help you build reliable, well-documented endpoints that both humans and AI can use effectively. While validation, testing, and linting focus on the endpoints themselves, evals ensure that LLMs use your tools safely and correctly.
+MXCP provides a four-layer quality assurance system, each addressing different aspects of production readiness:
+
+1. **Validation** (`mxcp validate`) - Ensures structural correctness
+   - Catches configuration errors before runtime
+   - Validates types, schemas, and references
+   - Ensures SQL syntax is valid
+
+2. **Testing** (`mxcp test`) - Verifies functional correctness
+   - Tests with real data and edge cases
+   - Validates security policies work as intended
+   - Ensures output matches expectations
+
+3. **Linting** (`mxcp lint`) - Optimizes for AI comprehension
+   - Improves metadata for better LLM understanding
+   - Suggests descriptions, examples, and tags
+   - Helps AI use your tools correctly
+
+4. **Evals** (`mxcp evals`) - Tests AI behavior safety
+   - Ensures LLMs use tools appropriately
+   - Prevents destructive operations
+   - Validates permission-based access
+
+Together, these tools ensure your MCP server is not just functional, but **production-ready**.
+
+## Quality in the Development Lifecycle
+
+```
+Data Modeling → Service Design → Implementation → Quality Assurance → Production
+                                                 ↓
+                                          Validate → Test → Lint → Eval
+                                                 ↓
+                                          Fix Issues & Iterate
+```
+
+Quality assurance should happen:
+- **During development**: Catch issues early with validation
+- **Before commits**: Run tests as part of your workflow
+- **In CI/CD**: Automate all quality checks
+- **In production**: Monitor for drift and performance
 
 ## Validation
 
@@ -762,7 +802,7 @@ Create eval files with the suffix `-evals.yml` or `.evals.yml`:
 
 ```yaml
 # customer-evals.yml
-mxcp: "1.0.0"
+mxcp: 1
 suite: customer_analysis
 description: "Test LLM's ability to analyze customer data"
 model: claude-3-opus  # Optional: specify model for this suite
@@ -864,7 +904,7 @@ mxcp evals --json-output
 Add model configuration to your user config file (`~/.mxcp/config.yml`):
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 
 models:
   default: claude-3-opus
@@ -895,7 +935,7 @@ projects:
 ### Example: Comprehensive Eval Suite
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 suite: data_governance
 description: "Ensure LLM respects data access policies"
 

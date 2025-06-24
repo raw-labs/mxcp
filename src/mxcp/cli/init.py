@@ -47,7 +47,7 @@ def check_project_exists_in_user_config(project_name: str) -> bool:
 def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str):
     """Create the mxcp-site.yml file with the given project and profile names."""
     config = {
-        "mxcp": "1.0.0",
+        "mxcp": 1,
         "project": project_name,
         "profile": profile_name
     }
@@ -56,21 +56,40 @@ def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str)
         yaml.dump(config, f, default_flow_style=False)
 
 def create_hello_world_files(target_dir: Path):
-    """Create example hello world endpoint files."""
-    # Create endpoints directory if it doesn't exist
-    endpoints_dir = target_dir / "endpoints"
-    endpoints_dir.mkdir(exist_ok=True)
+    """Create example hello world endpoint files and directory structure."""
+    # Create all directories for the new structure
+    directories = [
+        "tools",
+        "resources", 
+        "prompts",
+        "evals",
+        "python",
+        "plugins",
+        "sql",
+        "drift",
+        "audit",
+        "data"
+    ]
+    
+    for directory in directories:
+        dir_path = target_dir / directory
+        dir_path.mkdir(exist_ok=True)
+        
+        # Create .gitkeep files for empty directories
+        if directory in ["resources", "prompts", "evals", "python", "plugins", "drift", "audit", "data"]:
+            gitkeep_file = dir_path / ".gitkeep"
+            gitkeep_file.touch()
 
-    # Create hello-world.sql - properly formatted
+    # Create hello-world.sql in the sql directory
     hello_world_sql = """SELECT 'Hello, ' || $name || '!' as greeting
 """
     
-    with open(endpoints_dir / "hello-world.sql", "w") as f:
+    with open(target_dir / "sql" / "hello-world.sql", "w") as f:
         f.write(hello_world_sql)
     
-    # Create hello-world.yml
+    # Create hello-world.yml in the tools directory
     hello_world_yml = {
-        "mxcp": "1.0.0",
+        "mxcp": 1,
         "tool": {
             "name": "hello_world",
             "description": "A simple hello world tool",
@@ -88,12 +107,12 @@ def create_hello_world_files(target_dir: Path):
                 "description": "Greeting message"
             },
             "source": {
-                "file": "hello-world.sql"
+                "file": "../sql/hello-world.sql"
             }
         }
     }
     
-    with open(endpoints_dir / "hello-world.yml", "w") as f:
+    with open(target_dir / "tools" / "hello-world.yml", "w") as f:
         yaml.dump(hello_world_yml, f, default_flow_style=False, sort_keys=False)
 
 def detect_python_environment():
@@ -176,11 +195,29 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
     click.echo(f"   {project_dir}/")
     click.echo(f"   ├── mxcp-site.yml       # Project configuration")
     if bootstrap:
-        click.echo(f"   └── endpoints/          # Your MCP endpoints")
-        click.echo(f"       ├── hello-world.yml # Example tool definition")
-        click.echo(f"       └── hello-world.sql # SQL implementation")
+        click.echo(f"   ├── tools/              # Tool definitions")
+        click.echo(f"   │   └── hello-world.yml # Example tool definition")
+        click.echo(f"   ├── sql/                # SQL implementations")
+        click.echo(f"   │   └── hello-world.sql # SQL implementation")
+        click.echo(f"   ├── resources/          # Resource definitions")
+        click.echo(f"   ├── prompts/            # Prompt definitions")
+        click.echo(f"   ├── evals/              # Evaluation definitions")
+        click.echo(f"   ├── python/             # Python extensions")
+        click.echo(f"   ├── plugins/            # Plugin definitions")
+        click.echo(f"   ├── drift/              # Drift snapshots")
+        click.echo(f"   ├── audit/              # Audit logs")
+        click.echo(f"   └── data/               # Database files")
     else:
-        click.echo(f"   └── endpoints/          # Create your endpoints here")
+        click.echo(f"   ├── tools/              # Create your tool definitions here")
+        click.echo(f"   ├── resources/          # Create your resource definitions here")
+        click.echo(f"   ├── prompts/            # Create your prompt definitions here")
+        click.echo(f"   ├── evals/              # Create your evaluation definitions here")
+        click.echo(f"   ├── python/             # Create your Python extensions here")
+        click.echo(f"   ├── plugins/            # Create your plugin definitions here")
+        click.echo(f"   ├── sql/                # Create your SQL implementations here")
+        click.echo(f"   ├── drift/              # Drift snapshots will be stored here")
+        click.echo(f"   ├── audit/              # Audit logs will be stored here")
+        click.echo(f"   └── data/               # Database files will be stored here")
     
     click.echo(f"\n{click.style('🚀 Next Steps:', fg='cyan', bold=True)}\n")
     
@@ -190,7 +227,7 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
     if bootstrap:
         click.echo(f"   mxcp run tool hello_world --param name=World")
     else:
-        click.echo(f"   # Create your first endpoint in endpoints/")
+        click.echo(f"   # Create your first tool in tools/")
         click.echo(f"   # Then run: mxcp run tool <tool_name>")
     
     # Step 2: Start the server
@@ -296,13 +333,15 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
             create_hello_world_files(target_dir)
             click.echo("✓ Created example hello world endpoint")
             
+        # Load configs (this will handle migration checks)
+        from mxcp.config.site_config import load_site_config
+        from mxcp.engine.duckdb_session import DuckDBSession
+        
+        site_config = load_site_config(target_dir)
+        new_user_config = load_user_config(site_config)
+        
         # Initialize DuckDB session to create .duckdb file
         try:
-            from mxcp.config.site_config import load_site_config
-            from mxcp.engine.duckdb_session import DuckDBSession
-            
-            site_config = load_site_config(target_dir)
-            new_user_config = load_user_config(site_config)
             session = DuckDBSession(new_user_config, site_config)
             session.close()  # Database file is created when session connects in constructor
             click.echo("✓ Initialized DuckDB database")

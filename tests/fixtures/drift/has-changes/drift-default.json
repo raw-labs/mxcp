@@ -1,12 +1,12 @@
 {
-  "version": "1.0.0",
+  "version": 1,
   "generated_at": "2025-05-27T11:04:04.109401Z",
   "tables": [],
   "resources": [
     {
       "validation_results": {
         "status": "ok",
-        "path": "endpoints/hello-world.yml"
+        "path": "tools/hello-world.yml"
       },
       "test_results": {
         "status": "ok",
@@ -14,7 +14,7 @@
         "message": "No tests defined"
       },
       "definition": {
-        "mxcp": "1.0.0",
+        "mxcp": 1,
         "tool": {
           "description": "A simple hello world tool",
           "enabled": true,
@@ -34,7 +34,7 @@
             "type": "string"
           },
           "source": {
-            "file": "hello-world.sql"
+            "file": "../sql/hello-world.sql"
           }
         }
       }

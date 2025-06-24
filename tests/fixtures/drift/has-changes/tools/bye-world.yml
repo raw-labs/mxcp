@@ -1,0 +1,16 @@
+mxcp: 1
+tool:
+  description: A simple bye world tool
+  enabled: true
+  name: bye_world
+  parameters:
+  - description: Name to greet
+    examples:
+    - World
+    name: name
+    type: string
+  return:
+    description: Greeting message
+    type: string
+  source:
+    file: ../sql/bye-world.sql

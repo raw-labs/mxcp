@@ -66,7 +66,7 @@ Track all changes for compliance and debugging:
 Add drift configuration to your `mxcp-site.yml`:
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 project: my_project
 profile: default
 
@@ -129,7 +129,7 @@ A drift snapshot contains comprehensive information about your MXCP repository s
 
 ```json
 {
-  "version": "1.0.0",
+  "version": "1",
   "generated_at": "2025-01-27T10:30:00.000Z",
   "tables": [
     {
@@ -160,7 +160,7 @@ A drift snapshot contains comprehensive information about your MXCP repository s
         "tests": [...]
       },
       "definition": {
-        "mxcp": "1.0.0",
+        "mxcp": "1",
         "tool": {
           "name": "get_user",
           "description": "Get user by ID",
@@ -178,7 +178,7 @@ When drift is detected, you get a detailed report:
 
 ```json
 {
-  "version": "1.0.0",
+  "version": "1",
   "generated_at": "2025-01-27T10:35:00.000Z",
   "baseline_snapshot_path": "drift-default.json",
   "has_drift": true,
@@ -294,10 +294,10 @@ Track how your schema evolves over time:
 ```bash
 # Tag snapshots with versions
 mxcp drift-snapshot --profile production
-cp drift-production.json snapshots/v1.0.0-snapshot.json
+cp drift-production.json snapshots/v1-snapshot.json
 
 # Later, compare against historical snapshots
-mxcp drift-check --baseline snapshots/v1.0.0-snapshot.json
+mxcp drift-check --baseline snapshots/v1-snapshot.json
 ```
 
 ## Advanced Features

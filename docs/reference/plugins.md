@@ -35,7 +35,7 @@ MXCP plugins are Python modules that inherit from `MXCPBasePlugin` and use the `
 In your `mxcp-site.yml`, define the plugins you want to use:
 
 ```yaml
-mxcp: 1.0.0
+mxcp: 1
 project: my-project
 profile: dev
 
@@ -50,7 +50,7 @@ plugin:
 In your user configuration (`~/.mxcp/config.yml`), provide plugin-specific settings:
 
 ```yaml
-mxcp: 1.0.0
+mxcp: 1
 
 projects:
   my-project:
@@ -68,10 +68,10 @@ projects:
 
 ### 3. Create the Plugin Module
 
-Create a Python file/module with your plugin implementation:
+Create a Python file/module with your plugin implementation. All plugin modules must be placed in the `plugins/` directory of your MXCP project:
 
 ```python
-# my_plugin/__init__.py
+# plugins/my_plugin/__init__.py
 from typing import Dict, Any
 from mxcp.plugins import MXCPBasePlugin, udf
 
@@ -129,7 +129,7 @@ plugin:
 **Configuration Fields:**
 
 - `name` (required): Unique identifier for this plugin instance. Used as suffix in SQL function names.
-- `module` (required): Python module path containing the `MXCPPlugin` class.
+- `module` (required): Python module path containing the `MXCPPlugin` class. The module must exist in the `plugins/` directory.
 - `config` (optional): Reference to configuration in user config. If omitted, plugin receives empty config `{}`.
 
 ### User Configuration (`~/.mxcp/config.yml`)
@@ -571,11 +571,28 @@ requests>=2.28.0
 
 ### 2. Plugin Distribution
 
-Plugins can be distributed as:
+Plugins must be placed in the `plugins/` directory of your MXCP project. They can be distributed as:
 
-- **Local modules**: Python files in your project directory
-- **Python packages**: Installable via pip
+- **Local modules**: Python files in your project's `plugins/` directory
+- **Python packages**: Installable via pip into the `plugins/` directory
 - **Git repositories**: Referenced via pip install from git URLs
+
+**Directory Structure Example:**
+```
+my-mxcp-project/
+├── mxcp-site.yml
+├── python/                    # Python endpoints and shared code
+├── plugins/                   # MXCP plugins for DuckDB
+│   ├── my_plugin/
+│   │   └── __init__.py
+│   ├── utils/
+│   │   └── string_plugin.py
+│   └── integrations/
+│       └── github.py
+├── tools/
+├── resources/
+└── sql/
+```
 
 ### 3. Environment Variables
 

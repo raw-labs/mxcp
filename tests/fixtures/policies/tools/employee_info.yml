@@ -1,0 +1,90 @@
+mxcp: 1
+
+tool:
+  name: "employee_info"
+  description: "Get employee information with policy-based access control"
+  parameters:
+    - name: employee_id
+      type: string
+      description: "Employee ID to look up"
+      examples: ["emp123", "emp456"]
+  
+  return:
+    type: object
+    properties:
+      id:
+        type: string
+        description: "Employee ID"
+      name:
+        type: string
+        description: "Employee name"
+      email:
+        type: string
+        format: email
+        description: "Employee email"
+      department:
+        type: string
+        description: "Department name"
+      salary:
+        type: number
+        description: "Annual salary"
+      ssn:
+        type: string
+        description: "Social Security Number"
+      phone:
+        type: string
+        description: "Phone number"
+      hire_date:
+        type: string
+        format: date
+        description: "Date of hire"
+  
+  source:
+    code: |
+      -- Mock employee data for demonstration
+      WITH employees AS (
+        SELECT 'emp123' as id, 'John Doe' as name, 'john.doe@company.com' as email, 
+               'Engineering' as department, 85000 as salary, '123-45-6789' as ssn,
+               '555-1234' as phone, '2020-01-15'::DATE as hire_date
+        UNION ALL
+        SELECT 'emp456' as id, 'Jane Smith' as name, 'jane.smith@company.com' as email,
+               'HR' as department, 95000 as salary, '987-65-4321' as ssn,
+               '555-5678' as phone, '2019-06-01'::DATE as hire_date
+      )
+      SELECT * FROM employees WHERE id = $employee_id
+
+  policies:
+    input:
+      # Deny access to guests
+      - condition: "user.role == 'guest'"
+        action: deny
+        reason: "Guests cannot access employee information"
+      
+      # Require employee.read permission
+      - condition: "!('employee.read' in user.permissions)"
+        action: deny
+        reason: "Missing 'employee.read' permission"
+      
+      # Users can only view their own profile (unless they're admin or HR)
+      - condition: "employee_id != user.user_id && user.role != 'admin' && user.role != 'hr'"
+        action: deny
+        reason: "You can only view your own employee information"
+    
+    output:
+      # Non-admins cannot see salary information
+      - condition: "user.role != 'admin' && user.role != 'hr'"
+        action: filter_fields
+        fields: ["salary"]
+        reason: "Salary information is restricted"
+      
+      # Mask SSN for non-HR users
+      - condition: "user.role != 'hr'"
+        action: mask_fields
+        fields: ["ssn"]
+        reason: "SSN is sensitive information"
+      
+      # Filter phone numbers for users without PII permission
+      - condition: "!('pii.view' in user.permissions)"
+        action: filter_fields
+        fields: ["phone"]
+        reason: "Phone numbers require PII view permission" 

@@ -1,0 +1,18 @@
+mxcp: 1
+
+prompt:
+  name: prompt2
+  description: A nested test prompt
+  parameters:
+    - name: message
+      type: string
+      description: Message to include in prompt
+      minLength: 1
+      maxLength: 200
+  messages:
+    - role: system
+      type: text
+      prompt: You are a helpful assistant in a subfolder.
+    - role: user
+      type: text
+      prompt: "{{message}}" 

@@ -1,0 +1,16 @@
+mxcp: 1
+tool:
+  name: missing_param
+  description: An endpoint with missing parameter
+  parameters:
+    - name: extra_param  # This parameter is not used in SQL
+      type: string
+      description: Extra parameter
+  return:
+    type: object
+    properties:
+      user_name:
+        type: string
+  source:
+    code: |
+      SELECT 'test_user' as user_name 

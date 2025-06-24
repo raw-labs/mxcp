@@ -1,0 +1,20 @@
+mxcp: 1
+
+prompt:
+  name: invalid_prompt
+  description: A prompt with undefined template variables
+  parameters:
+    - name: topic
+      type: string
+      description: Topic to discuss
+      minLength: 1
+      maxLength: 100
+  messages:
+    - role: "system"
+      type: "text"
+      prompt: "You are a knowledgeable teacher."
+    - role: "user"
+      type: "text"
+      prompt: |
+        Please explain {{topic}} at a {{expertise_level}} level.
+        The explanation should be {{complexity}} and include {{extra_info}}. 

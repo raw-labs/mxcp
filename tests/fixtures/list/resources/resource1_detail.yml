@@ -1,0 +1,14 @@
+mxcp: 1
+
+resource:
+  name: resource1_detail
+  description: A detailed view of a resource
+  uri: "test://resource1/{id}/detail"
+  parameters:
+    - name: id
+      type: string
+      description: Resource identifier
+      format: uri
+  source:
+    code: |
+      SELECT 1 as value 

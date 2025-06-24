@@ -91,7 +91,7 @@ MXCP uses a two-tier configuration system for maximum flexibility and security.
 The user configuration file stores personal settings, secrets, and profiles:
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 
 # Default transport settings
 transport:
@@ -138,7 +138,7 @@ projects:
 The repository configuration defines project-specific settings:
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 project: "my_project"
 profile: "dev"
 
@@ -174,9 +174,9 @@ profiles:
     drift:
       path: "drift-prod.json"
 
-# Built-in SQL tools
+# Built-in SQL tools (disabled by default)
 sql_tools:
-  enabled: true
+  enabled: false
 ```
 
 ## Endpoint Definitions
@@ -188,7 +188,7 @@ MXCP supports three types of endpoints, each defined in YAML files:
 Tools are functions that can be called with parameters and return structured data:
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 tool:
   name: "user_lookup"
   description: "Look up user information by email"
@@ -249,7 +249,7 @@ tool:
 Resources provide data that can be accessed via URI patterns:
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 resource:
   uri: "users://profile/{user_id}"
   description: "User profile data"
@@ -277,7 +277,7 @@ resource:
 Prompts are templates for AI interactions with parameter substitution:
 
 ```yaml
-mxcp: "1.0.0"
+mxcp: 1
 prompt:
   name: "user_summary"
   description: "Generate a summary for a user"
@@ -498,7 +498,7 @@ Create YAML files defining tools, resources, or prompts:
 
 ```yaml
 # tools/users.yml
-mxcp: "1.0.0"
+mxcp: 1
 tool:
   name: "list_users"
   description: "List users with filtering"

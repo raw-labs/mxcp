@@ -1,0 +1,13 @@
+mxcp: 1
+project: runtime_test
+profile: default
+
+# Secrets to inject
+secrets:
+  - simple_secret
+  - http_secret
+  - api_key
+    
+# Extensions for testing
+extensions:
+  - httpfs 

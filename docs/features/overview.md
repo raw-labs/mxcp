@@ -86,6 +86,18 @@ MXCP provides a comprehensive set of enterprise features designed for production
 - **Constraints**: Min/max, patterns, enums
 - **LLM Hints**: Help AI understand data types
 
+### [SQL Reference](../reference/sql.md)
+- **DuckDB Syntax**: PostgreSQL-compatible analytical SQL
+- **Built-in Functions**: User authentication functions
+- **Named Parameters**: Safe parameter binding
+- **Extensions**: httpfs, json, parquet, and more
+
+### [Python Reference](../reference/python.md)
+- **Runtime APIs**: Database, config, secrets access
+- **Lifecycle Hooks**: Server initialization/shutdown
+- **Thread Safety**: Concurrent execution support
+- **Type Compatibility**: Seamless SQL/Python integration
+
 ### [Plugin System](../reference/plugins.md)
 - **Python Extensions**: Custom functions and UDFs
 - **Provider Plugins**: OAuth and authentication

@@ -213,7 +213,7 @@ async def test_invalid_endpoint_yaml(test_repo_path, test_user_config, test_site
     try:
         endpoint_type = "tool"
         name = "invalid"
-        invalid_path = Path("endpoints/invalid.yml")
+        invalid_path = Path("tools/invalid.yml")
         with open(invalid_path, "w") as f:
             f.write("invalid: yaml: content: [")
         try:

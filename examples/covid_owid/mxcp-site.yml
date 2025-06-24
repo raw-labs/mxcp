@@ -1,4 +1,4 @@
-mxcp: 1.0.0
+mxcp: 1
 profile: default
 project: covid_owid
 sql_tools:

@@ -10,12 +10,15 @@ This plugin implements the Caesar cipher, a simple encryption technique where ea
 
 ```
 examples/plugin/
-├── my_plugin/
-│   ├── __init__.py
-│   └── plugin.py          # Plugin implementation
+├── plugins/
+│   └── my_plugin/
+│       └── __init__.py    # Plugin implementation
+├── tools/
+│   └── decipher.yml       # Endpoint using the plugin
+├── python/                # Directory for Python endpoints
+├── sql/                   # Directory for SQL implementations
 ├── config.yml             # Example plugin configuration
 ├── mxcp-site.yml          # Project configuration
-├── decipher.yml           # Endpoint using the plugin
 └── README.md
 ```
 
@@ -30,7 +33,7 @@ The example includes two plugin configurations in `config.yml`:
 To use the plugin, register these configurations in your MXCP user config (`~/.mxcp/config.yml`):
 
 ```yaml
-mxcp: 1.0.0
+mxcp: 1
 
 projects:
   demo-plugin:
@@ -47,7 +50,7 @@ projects:
 Then in your `mxcp-site.yml`, you can reference one of these configurations:
 
 ```yaml
-mxcp: 1.0.0
+mxcp: 1
 project: demo-plugin
 profile: dev
 plugin:
