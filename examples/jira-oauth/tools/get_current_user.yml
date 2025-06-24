@@ -1,0 +1,25 @@
+mxcp: 1
+
+tool:
+  name: get_current_user
+  description: |
+    Get the username of the currently authenticated user in MXCP.
+    This tool returns the username of the person who is authenticated via OAuth with Jira.
+    It's useful for understanding whose credentials are being used for Jira API calls,
+    and can help verify that the OAuth authentication flow completed successfully.
+    The username typically corresponds to the Atlassian account email address.
+  type: tool
+  annotations:
+    title: Get Current Authenticated User
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: false
+  return:
+    type: string
+    description: |
+      The username (typically email address) of the currently authenticated user.
+      Returns NULL if no user is authenticated.
+  language: "sql"
+  source:
+    file: "get_current_user.sql" 
