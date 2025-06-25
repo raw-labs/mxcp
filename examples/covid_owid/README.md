@@ -44,7 +44,9 @@ pip install -e .
    mxcp serve
    ```
 
-## 🔌 Claude Desktop Integration
+## 🔌 Integration
+
+### Claude Desktop
 
 To use this example with Claude Desktop:
 
@@ -95,6 +97,57 @@ After saving the configuration, restart Claude Desktop to load the new MCP serve
 ### 4. Test the Integration
 
 In Claude Desktop, try asking:
+- "Show me COVID-19 cases in the United States for 2022"
+- "Compare vaccination rates between France and Germany"
+- "What were the peak hospitalization rates in the UK?"
+
+### Cursor
+
+To use this example with Cursor:
+
+#### Option 1: Automatic Setup (Recommended)
+
+Run `mxcp init .` in the covid_owid directory and follow the prompts to automatically configure Cursor.
+
+#### Option 2: Manual Setup
+
+1. **Locate Cursor's Configuration**:
+   - **Project-specific**: Create `.cursor/mcp.json` in the covid_owid directory
+   - **Global**: `~/.cursor/mcp.json` in your home directory
+
+2. **Add Configuration**:
+
+   For global installations:
+   ```json
+   {
+     "mcpServers": {
+       "covid": {
+         "command": "mxcp",
+         "args": ["serve", "--transport", "stdio"],
+         "cwd": "/absolute/path/to/mxcp/examples/covid_owid"
+       }
+     }
+   }
+   ```
+
+   For virtual environment installations:
+   ```json
+   {
+     "mcpServers": {
+       "covid": {
+         "command": "/bin/bash",
+         "args": [
+           "-c",
+           "cd /absolute/path/to/mxcp/examples/covid_owid && source ../../.venv/bin/activate && mxcp serve --transport stdio"
+         ]
+       }
+     }
+   }
+   ```
+
+3. **Test the Integration**:
+
+In Cursor, try asking:
 - "Show me COVID-19 cases in the United States for 2022"
 - "Compare vaccination rates between France and Germany"
 - "What were the peak hospitalization rates in the UK?"

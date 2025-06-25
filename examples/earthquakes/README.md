@@ -39,7 +39,9 @@ pip install -e .
    mxcp serve
    ```
 
-## 🔌 Claude Desktop Integration
+## 🔌 Integration
+
+### Claude Desktop
 
 To use this example with Claude Desktop:
 
@@ -95,6 +97,57 @@ In Claude Desktop, try asking:
 - "List earthquakes near California"
 
 Claude will automatically use the earthquake data tools to answer your questions.
+
+### Cursor
+
+To use this example with Cursor:
+
+#### Option 1: Automatic Setup (Recommended)
+
+Run `mxcp init .` in the earthquakes directory and follow the prompts to automatically configure Cursor.
+
+#### Option 2: Manual Setup
+
+1. **Locate Cursor's Configuration**:
+   - **Project-specific**: Create `.cursor/mcp.json` in the earthquakes directory
+   - **Global**: `~/.cursor/mcp.json` in your home directory
+
+2. **Add Configuration**:
+
+   For global installations:
+   ```json
+   {
+     "mcpServers": {
+       "earthquakes": {
+         "command": "mxcp",
+         "args": ["serve", "--transport", "stdio"],
+         "cwd": "/absolute/path/to/mxcp/examples/earthquakes"
+       }
+     }
+   }
+   ```
+
+   For virtual environment installations:
+   ```json
+   {
+     "mcpServers": {
+       "earthquakes": {
+         "command": "/bin/bash",
+         "args": [
+           "-c",
+           "cd /absolute/path/to/mxcp/examples/earthquakes && source ../../.venv/bin/activate && mxcp serve --transport stdio"
+         ]
+       }
+     }
+   }
+   ```
+
+3. **Test the Integration**:
+
+In Cursor, try asking:
+- "Show me recent earthquakes above magnitude 5.0"
+- "What was the strongest earthquake in the last 24 hours?"
+- "List earthquakes near California"
 
 ## 🛠️ Other MCP Clients
 

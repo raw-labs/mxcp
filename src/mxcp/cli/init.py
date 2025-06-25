@@ -5,10 +5,12 @@ import os
 import sys
 import json
 import shutil
+import platform
+import base64
 from mxcp.cli.utils import output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.config.user_config import load_user_config
 from mxcp.config.analytics import track_command_with_timing
-from typing import Optional
+from typing import Optional, Dict, List
 
 def check_existing_mxcp_repo(target_dir: Path) -> bool:
     """Check if there's a mxcp-site.yml in the target directory or any parent directory."""
@@ -185,7 +187,122 @@ def generate_claude_config(project_dir: Path, project_name: str):
     
     return config
 
-def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, config_generated: bool = True):
+def detect_cursor_installation() -> Optional[Dict[str, str]]:
+    """Detect Cursor IDE installation and return relevant paths."""
+    system = platform.system().lower()
+    cursor_info = {}
+    
+    # Common Cursor executable names
+    cursor_executables = ["cursor", "cursor.exe"] if system == "windows" else ["cursor"]
+    
+    # Check if Cursor is in PATH
+    cursor_path = None
+    for executable in cursor_executables:
+        cursor_path = shutil.which(executable)
+        if cursor_path:
+            break
+    
+    if cursor_path:
+        cursor_info["executable"] = cursor_path
+    
+    # Determine config directory based on OS
+    home = Path.home()
+    if system == "windows":
+        cursor_config_dir = home / "AppData" / "Roaming" / "Cursor" / "User"
+    elif system == "darwin":  # macOS
+        cursor_config_dir = home / "Library" / "Application Support" / "Cursor" / "User"
+    else:  # Linux and other Unix-like
+        cursor_config_dir = home / ".config" / "Cursor" / "User"
+    
+    if cursor_config_dir.exists():
+        cursor_info["config_dir"] = str(cursor_config_dir)
+        cursor_info["global_mcp_config"] = str(home / ".cursor" / "mcp.json")
+    
+    return cursor_info if cursor_info else None
+
+def generate_cursor_config(project_dir: Path, project_name: str) -> Dict:
+    """Generate Cursor MCP configuration (same format as Claude Desktop)."""
+    return generate_claude_config(project_dir, project_name)
+
+def generate_cursor_deeplink(config: Dict, project_name: str) -> str:
+    """Generate Cursor deeplink for one-click installation."""
+    # Extract just the server config for the deeplink (no mcpServers wrapper)
+    server_config = config["mcpServers"][project_name]
+    
+    # Base64 encode the configuration
+    config_json = json.dumps(server_config)
+    encoded_config = base64.b64encode(config_json.encode()).decode()
+    
+    # Generate the deeplink using the correct cursor:// protocol
+    deeplink = f"cursor://anysphere.cursor-deeplink/mcp/install?name={project_name}&config={encoded_config}"
+    
+    return deeplink
+
+def install_cursor_config(config: Dict, project_name: str, install_type: str = "project", project_dir: Optional[Path] = None) -> bool:
+    """Install Cursor MCP configuration.
+    
+    Args:
+        config: The MCP configuration to install
+        project_name: Name of the project
+        install_type: Either "project" or "global"
+        project_dir: Project directory (required for project install)
+    
+    Returns:
+        True if installation was successful, False otherwise
+    """
+    try:
+        if install_type == "project":
+            if not project_dir:
+                return False
+            cursor_dir = project_dir / ".cursor"
+            cursor_dir.mkdir(exist_ok=True)
+            config_path = cursor_dir / "mcp.json"
+        else:  # global
+            cursor_dir = Path.home() / ".cursor"
+            cursor_dir.mkdir(exist_ok=True)
+            config_path = cursor_dir / "mcp.json"
+        
+        # If config file exists, merge with existing configuration
+        existing_config = {}
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    existing_config = json.load(f)
+            except (json.JSONDecodeError, Exception):
+                # If we can't read existing config, start fresh
+                existing_config = {}
+        
+        # Merge configurations
+        if "mcpServers" not in existing_config:
+            existing_config["mcpServers"] = {}
+        
+        existing_config["mcpServers"][project_name] = config["mcpServers"][project_name]
+        
+        # Write updated configuration
+        with open(config_path, 'w') as f:
+            json.dump(existing_config, f, indent=2)
+        
+        return True
+    except Exception:
+        return False
+
+def show_cursor_next_steps(project_name: str, install_type: str):
+    """Show Cursor-specific next steps."""
+    click.echo(f"\n{click.style('📝 Cursor IDE Manual Setup:', fg='cyan', bold=True)}")
+    
+    click.echo(f"   📋 To install manually:")
+    click.echo(f"   1. Open Cursor IDE")
+    click.echo(f"   2. Go to Settings > Features > Model Context Protocol")
+    click.echo(f"   3. Add the configuration shown above, or")
+    click.echo(f"   4. Use the one-click install link provided above")
+    
+    click.echo(f"\n   🚀 After installation:")
+    click.echo(f"   • Restart Cursor IDE")
+    click.echo(f"   • Open the Agent/Chat")
+    click.echo(f"   • The '{project_name}' MCP server will be automatically available")
+    click.echo(f"   • Try asking: \"List the available tools from {project_name}\"")
+
+def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, config_generated: bool = True, cursor_configured: bool = False, cursor_install_type: str = None):
     """Show helpful next steps after initialization."""
     click.echo("\n" + "="*60)
     click.echo(click.style("✨ MXCP project initialized successfully!", fg='green', bold=True))
@@ -234,20 +351,38 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
     click.echo(f"\n{click.style('2. Start the MCP server:', fg='yellow')}")
     click.echo(f"   mxcp serve")
     
-    # Step 3: Connect to Claude
-    click.echo(f"\n{click.style('3. Connect to Claude Desktop:', fg='yellow')}")
-    if config_generated:
+    # Step 3: Connect to IDE
+    if config_generated and cursor_configured:
+        click.echo(f"\n{click.style('3. Connect to your preferred IDE:', fg='yellow')}")
+        click.echo(f"   🔹 Claude Desktop: Add server_config.json to Claude config")
+        click.echo(f"   🔹 Cursor IDE: Already configured! Open Cursor and start using.")
+    elif config_generated:
+        click.echo(f"\n{click.style('3. Connect to Claude Desktop:', fg='yellow')}")
         click.echo(f"   Add the generated server_config.json to your Claude Desktop config")
+    elif cursor_configured:
+        click.echo(f"\n{click.style('3. Connect to Cursor IDE:', fg='yellow')}")
+        click.echo(f"   Already configured! Open Cursor and start using.")
     else:
-        click.echo(f"   Create a server configuration for Claude Desktop")
-        click.echo(f"   Run 'mxcp init .' again to generate server_config.json")
-    click.echo(f"   Config location:")
-    if sys.platform == "darwin":
-        click.echo(f"   ~/Library/Application Support/Claude/claude_desktop_config.json")
-    elif sys.platform == "win32":
-        click.echo(f"   %APPDATA%\\Claude\\claude_desktop_config.json")
-    else:
-        click.echo(f"   ~/.config/Claude/claude_desktop_config.json")
+        click.echo(f"\n{click.style('3. Connect to your IDE:', fg='yellow')}")
+        click.echo(f"   Create configurations for Claude Desktop or Cursor IDE")
+        click.echo(f"   Run 'mxcp init .' again to generate configurations")
+    
+    if config_generated or cursor_configured:
+        # Show IDE-specific config locations
+        click.echo(f"   Config locations:")
+        if config_generated:
+            if sys.platform == "darwin":
+                click.echo(f"   • Claude Desktop: ~/Library/Application Support/Claude/claude_desktop_config.json")
+            elif sys.platform == "win32":
+                click.echo(f"   • Claude Desktop: %APPDATA%\\Claude\\claude_desktop_config.json")
+            else:
+                click.echo(f"   • Claude Desktop: ~/.config/Claude/claude_desktop_config.json")
+        
+        if cursor_configured:
+            if cursor_install_type == "project":
+                click.echo(f"   • Cursor IDE: {project_dir}/.cursor/mcp.json (project-specific)")
+            else:
+                click.echo(f"   • Cursor IDE: ~/.cursor/mcp.json (global)")
     
     # Step 4: Explore more
     click.echo(f"\n{click.style('4. Learn more:', fg='yellow')}")
@@ -259,7 +394,12 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
     
     if bootstrap:
         click.echo(f"\n{click.style('💡 Try it now:', fg='green')}")
-        click.echo(f"   In Claude Desktop, ask: \"Use the hello_world tool to greet Alice\"")
+        if config_generated and cursor_configured:
+            click.echo(f"   In Claude Desktop or Cursor IDE, ask: \"Use the hello_world tool to greet Alice\"")
+        elif config_generated:
+            click.echo(f"   In Claude Desktop, ask: \"Use the hello_world tool to greet Alice\"")
+        elif cursor_configured:
+            click.echo(f"   In Cursor IDE, ask: \"Use the hello_world tool to greet Alice\"")
     
     click.echo(f"\n{click.style('📚 Resources:', fg='cyan', bold=True)}")
     click.echo(f"   • Documentation: https://mxcp.dev")
@@ -281,7 +421,7 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
     This command creates a new MXCP repository by:
     1. Creating a mxcp-site.yml file with project and profile configuration
     2. Optionally creating example endpoint files
-    3. Generating a server_config.json for Claude Desktop integration
+    3. Generating configurations for Claude Desktop and/or Cursor IDE integration
     
     \b
     Examples:
@@ -347,10 +487,14 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
             click.echo("✓ Initialized DuckDB database")
         except Exception as e:
             click.echo(f"⚠️  Warning: Failed to initialize DuckDB database: {e}")
-            
+        
+        # IDE Configuration Generation
+        config_generated = False
+        cursor_configured = False
+        cursor_install_type = None
+        
         # Generate Claude Desktop config
         try:
-            # Ask if user wants to generate Claude Desktop config
             if click.confirm("\nWould you like to generate a Claude Desktop configuration file?"):
                 claude_config = generate_claude_config(target_dir, project)
                 config_path = target_dir / "server_config.json"
@@ -361,18 +505,76 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
                 click.echo(f"✓ Generated server_config.json for Claude Desktop")
                 
                 # Show the config content
-                click.echo("\nGenerated configuration:")
+                click.echo("\nGenerated Claude Desktop configuration:")
                 click.echo(json.dumps(claude_config, indent=2))
                 config_generated = True
             else:
                 click.echo("ℹ️  Skipped Claude Desktop configuration generation")
-                config_generated = False
         except Exception as e:
             click.echo(f"⚠️  Warning: Failed to generate Claude config: {e}")
-            config_generated = False
+        
+        # Generate Cursor IDE config
+        try:
+            if click.confirm("\nWould you like to set up Cursor IDE integration?"):
+                cursor_config = generate_cursor_config(target_dir, project)
+                
+                # Generate deeplink by default
+                deeplink = generate_cursor_deeplink(cursor_config, project)
+                
+                # Detect Cursor installation
+                cursor_info = detect_cursor_installation()
+                
+                if cursor_info:
+                    click.echo(f"✓ Detected Cursor IDE installation")
+                    
+                    # Offer installation options
+                    click.echo("\nChoose Cursor configuration option:")
+                    click.echo("1. Auto-configure (recommended) - Install directly to your Cursor config")
+                    click.echo("2. Manual setup - Copy configuration manually")
+                    
+                    choice = click.prompt("Enter your choice", type=click.Choice(['1', '2']), default='1')
+                    
+                    if choice == '1':
+                        # Ask for installation scope
+                        scope_choice = click.prompt(
+                            "Installation scope:\n1. Project-specific (only this project)\n2. Global (all Cursor workspaces)\nEnter choice",
+                            type=click.Choice(['1', '2']), default='1'
+                        )
+                        
+                        install_type = "project" if scope_choice == '1' else "global"
+                        
+                        if install_cursor_config(cursor_config, project, install_type, target_dir):
+                            click.echo(f"✓ Configured Cursor MCP server ({'project-specific' if install_type == 'project' else 'globally'})")
+                            cursor_configured = True
+                            cursor_install_type = install_type
+                        else:
+                            click.echo(f"⚠️  Failed to configure Cursor automatically, using manual setup")
+                            cursor_install_type = "manual"
+                    else:
+                        cursor_install_type = "manual"
+                else:
+                    # Cursor not detected, provide manual setup
+                    click.echo("⚠️  Cursor IDE not detected in PATH")
+                    cursor_install_type = "manual"
+                
+                # Show the config content
+                click.echo(f"\n📋 Cursor IDE Configuration:")
+                click.echo(json.dumps(cursor_config, indent=2))
+                
+                # Always show the deeplink
+                click.echo(f"\n🔗 One-Click Install Link:")
+                click.echo(f"   {deeplink}")
+                click.echo(f"\n   💡 Share this link to let others install your MXCP server with one click!")
+                
+                if cursor_install_type == "manual":
+                    show_cursor_next_steps(project, cursor_install_type)
+            else:
+                click.echo("ℹ️  Skipped Cursor IDE configuration generation")
+        except Exception as e:
+            click.echo(f"⚠️  Warning: Failed to generate Cursor config: {e}")
             
         # Show next steps
-        show_next_steps(target_dir, project, bootstrap, config_generated)
+        show_next_steps(target_dir, project, bootstrap, config_generated, cursor_configured, cursor_install_type)
             
     except Exception as e:
         output_error(e, json_output=False, debug=debug) 

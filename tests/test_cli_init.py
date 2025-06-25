@@ -5,6 +5,7 @@ import yaml
 import tempfile
 import sys
 import os
+import base64
 from pathlib import Path
 import shutil
 from unittest.mock import patch, Mock
@@ -28,12 +29,12 @@ def set_mxcp_config_env():
 
 def test_init_basic(tmp_path):
     """Test basic init without bootstrap."""
-    # Simulate 'n' response to the config generation prompt
+    # Simulate 'n' response to both config generation prompts
     result = subprocess.run(
         ["mxcp", "init", str(tmp_path)],
         capture_output=True,
         text=True,
-        input="n\n"  # Say no to config generation
+        input="n\nn\n"  # Say no to both Claude and Cursor config generation
     )
     
     assert result.returncode == 0
@@ -51,12 +52,12 @@ def test_init_basic(tmp_path):
 
 def test_init_bootstrap(tmp_path):
     """Test init with bootstrap flag."""
-    # Simulate 'y' response to the config generation prompt
+    # Simulate 'y' response to Claude config generation, 'n' to Cursor
     result = subprocess.run(
         ["mxcp", "init", str(tmp_path), "--bootstrap"],
         capture_output=True,
         text=True,
-        input="y\n"  # Say yes to config generation
+        input="y\nn\n"  # Say yes to Claude config, no to Cursor
     )
     
     assert result.returncode == 0
@@ -94,7 +95,7 @@ def test_init_bootstrap_complete_directory_structure(tmp_path):
         ["mxcp", "init", str(project_dir), "--bootstrap", "--project", project_name],
         capture_output=True,
         text=True,
-        input="n\n"  # Say no to config generation to focus on directory structure
+        input="n\nn\n"  # Say no to both config generations to focus on directory structure
     )
     
     assert result.returncode == 0
@@ -228,7 +229,7 @@ def test_init_bootstrap_with_duckdb_initialization(tmp_path):
         ["mxcp", "init", str(project_dir), "--bootstrap", "--project", project_name],
         capture_output=True,
         text=True,
-        input="y\n",  # Say yes to config generation to trigger DuckDB initialization
+        input="y\nn\n",  # Say yes to Claude config generation, no to Cursor to trigger DuckDB initialization
         env=env
     )
     
@@ -299,7 +300,7 @@ def test_init_custom_project_name(tmp_path):
         ["mxcp", "init", str(tmp_path), "--project", "my-custom-project"],
         capture_output=True,
         text=True,
-        input="n\n"  # Say no to config generation
+        input="n\nn\n"  # Say no to both config generations
     )
     
     assert result.returncode == 0
@@ -316,7 +317,7 @@ def test_init_with_config_generation(tmp_path):
         ["mxcp", "init", str(tmp_path), "--bootstrap"],
         capture_output=True,
         text=True,
-        input="y\n"  # Say yes to config generation
+        input="y\nn\n"  # Say yes to Claude config, no to Cursor config
     )
     
     assert result.returncode == 0
@@ -334,7 +335,7 @@ def test_init_with_config_generation(tmp_path):
     assert "args" in server_config
     
     # Check output shows the generated config
-    assert "Generated configuration:" in result.stdout
+    assert "Generated Claude Desktop configuration:" in result.stdout
     assert "mcpServers" in result.stdout
 
 
@@ -344,7 +345,7 @@ def test_init_without_config_generation(tmp_path):
         ["mxcp", "init", str(tmp_path), "--bootstrap"],
         capture_output=True,
         text=True,
-        input="n\n"  # Say no to config generation
+        input="n\nn\n"  # Say no to both Claude and Cursor config generation
     )
     
     assert result.returncode == 0
@@ -352,7 +353,8 @@ def test_init_without_config_generation(tmp_path):
     
     # Check output mentions skipping config
     assert "Skipped Claude Desktop configuration generation" in result.stdout
-    assert "Run 'mxcp init .' again to generate server_config.json" in result.stdout
+    assert "Skipped Cursor IDE configuration generation" in result.stdout
+    assert "Run 'mxcp init .' again to generate configurations" in result.stdout
 
 
 def test_init_cannot_create_inside_existing_repo(tmp_path):
@@ -361,7 +363,7 @@ def test_init_cannot_create_inside_existing_repo(tmp_path):
     parent_dir = tmp_path / "parent"
     parent_dir.mkdir()
     
-    subprocess.run(["mxcp", "init", str(parent_dir)], capture_output=True, input="n\n", text=True)
+    subprocess.run(["mxcp", "init", str(parent_dir)], capture_output=True, input="n\nn\n", text=True)
     
     # Try to create child repo
     child_dir = parent_dir / "child"
@@ -371,7 +373,7 @@ def test_init_cannot_create_inside_existing_repo(tmp_path):
         ["mxcp", "init", str(child_dir)],
         capture_output=True,
         text=True,
-        input="n\n"  # Say no to config generation
+        input="n\nn\n"  # Say no to both config generations
     )
     
     assert result.returncode != 0
@@ -388,7 +390,7 @@ def test_init_server_config_content(tmp_path):
         ["mxcp", "init", str(project_dir), "--bootstrap"],
         capture_output=True,
         text=True,
-        input="y\n"  # Say yes to config generation
+        input="y\nn\n"  # Say yes to Claude config generation, no to Cursor
     )
     
     assert result.returncode == 0
@@ -429,7 +431,7 @@ def test_init_bootstrap_complete_directory_structure():
         project_dir = tmpdir_path / "test-project"
         
         # Run init with bootstrap
-        result = runner.invoke(init, [str(project_dir), "--bootstrap", "--project", "test-project"], input="n\n")
+        result = runner.invoke(init, [str(project_dir), "--bootstrap", "--project", "test-project"], input="n\nn\n")
         
         # Should succeed
         assert result.exit_code == 0, f"Init failed with output: {result.output}"
@@ -477,7 +479,7 @@ def test_init_bootstrap_with_duckdb_initialization():
         project_dir = tmpdir_path / "test-db-init"
         
         # Run init with bootstrap
-        result = runner.invoke(init, [str(project_dir), "--bootstrap", "--project", "test-db-init"], input="n\n")
+        result = runner.invoke(init, [str(project_dir), "--bootstrap", "--project", "test-db-init"], input="n\nn\n")
         
         # Should succeed without version validation errors
         assert result.exit_code == 0, f"Init failed with output: {result.output}"
@@ -504,6 +506,236 @@ def test_user_config_generation_uses_integer_version():
     # Version should be integer 1, not string "1.0.0"
     assert config["mxcp"] == 1, f"Expected integer 1, got {repr(config['mxcp'])}"
     assert isinstance(config["mxcp"], int), f"Expected int type, got {type(config['mxcp'])}"
+
+
+def test_init_with_cursor_config_generation(tmp_path):
+    """Test init with Cursor IDE config generation."""
+    with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
+        # Mock Cursor as detected
+        mock_detect.return_value = {
+            "executable": "/usr/bin/cursor",
+            "config_dir": str(Path.home() / ".config" / "Cursor" / "User"),
+            "global_mcp_config": str(Path.home() / ".cursor" / "mcp.json")
+        }
+        
+        result = subprocess.run(
+            ["mxcp", "init", str(tmp_path), "--bootstrap"],
+            capture_output=True,
+            text=True,
+            input="n\ny\n1\n1\n"  # No to Claude, Yes to Cursor, Auto-configure, Project-specific
+        )
+        
+        assert result.returncode == 0
+        assert "✓ Detected Cursor IDE installation" in result.stdout
+        assert "✓ Configured Cursor MCP server (project-specific)" in result.stdout
+        
+        # Should show Cursor configuration
+        assert "📋 Cursor IDE Configuration:" in result.stdout
+        assert "mcpServers" in result.stdout
+        
+        # Should show deeplink
+        assert "🔗 One-Click Install Link:" in result.stdout
+        assert "cursor://anysphere.cursor-deeplink/mcp/install?name=" in result.stdout
+        assert "💡 Share this link to let others install your MXCP server with one click!" in result.stdout
+        
+        # Check project-specific config file was created
+        cursor_config_path = tmp_path / ".cursor" / "mcp.json"
+        assert cursor_config_path.exists()
+        
+        with open(cursor_config_path) as f:
+            config = json.load(f)
+        
+        assert "mcpServers" in config
+        assert tmp_path.name in config["mcpServers"]
+
+
+def test_init_with_cursor_global_config(tmp_path):
+    """Test init with Cursor IDE global config generation."""
+    with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect, \
+         patch('mxcp.cli.init.install_cursor_config') as mock_install:
+        
+        # Mock Cursor as detected
+        mock_detect.return_value = {
+            "executable": "/usr/bin/cursor",
+            "config_dir": str(Path.home() / ".config" / "Cursor" / "User"),
+            "global_mcp_config": str(Path.home() / ".cursor" / "mcp.json")
+        }
+        
+        # Mock successful installation
+        mock_install.return_value = True
+        
+        result = subprocess.run(
+            ["mxcp", "init", str(tmp_path), "--bootstrap"],
+            capture_output=True,
+            text=True,
+            input="n\ny\n1\n2\n"  # No to Claude, Yes to Cursor, Auto-configure, Global
+        )
+        
+        assert result.returncode == 0
+        assert "✓ Configured Cursor MCP server (globally)" in result.stdout
+        
+        # Should call install_cursor_config with global scope
+        mock_install.assert_called_once()
+        args, kwargs = mock_install.call_args
+        assert args[1] == tmp_path.name  # project name
+        assert args[2] == "global"  # install type
+
+
+def test_init_with_cursor_manual_setup(tmp_path):
+    """Test init with Cursor IDE manual setup."""
+    with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
+        # Mock Cursor as detected
+        mock_detect.return_value = {
+            "executable": "/usr/bin/cursor",
+            "config_dir": str(Path.home() / ".config" / "Cursor" / "User"),
+            "global_mcp_config": str(Path.home() / ".cursor" / "mcp.json")
+        }
+        
+        result = subprocess.run(
+            ["mxcp", "init", str(tmp_path), "--bootstrap"],
+            capture_output=True,
+            text=True,
+            input="n\ny\n2\n"  # No to Claude, Yes to Cursor, Manual setup
+        )
+        
+        assert result.returncode == 0
+        assert "📝 Cursor IDE Manual Setup:" in result.stdout
+        assert "📋 To install manually:" in result.stdout
+        assert "1. Open Cursor IDE" in result.stdout
+        assert "2. Go to Settings > Features > Model Context Protocol" in result.stdout
+        assert "4. Use the one-click install link provided above" in result.stdout
+
+
+def test_init_cursor_not_detected(tmp_path):
+    """Test init when Cursor IDE is not detected."""
+    with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
+        # Mock Cursor as not detected
+        mock_detect.return_value = None
+        
+        result = subprocess.run(
+            ["mxcp", "init", str(tmp_path), "--bootstrap"],
+            capture_output=True,
+            text=True,
+            input="n\ny\n"  # No to Claude, Yes to Cursor
+        )
+        
+        assert result.returncode == 0
+        assert "⚠️  Cursor IDE not detected in PATH" in result.stdout
+        assert "📝 Cursor IDE Manual Setup:" in result.stdout
+        
+        # Should still show deeplink and config
+        assert "🔗 One-Click Install Link:" in result.stdout
+        assert "📋 Cursor IDE Configuration:" in result.stdout
+
+
+def test_init_both_claude_and_cursor_config(tmp_path):
+    """Test init with both Claude Desktop and Cursor IDE config generation."""
+    with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
+        # Mock Cursor as detected
+        mock_detect.return_value = {
+            "executable": "/usr/bin/cursor",
+            "config_dir": str(Path.home() / ".config" / "Cursor" / "User"),
+            "global_mcp_config": str(Path.home() / ".cursor" / "mcp.json")
+        }
+        
+        result = subprocess.run(
+            ["mxcp", "init", str(tmp_path), "--bootstrap"],
+            capture_output=True,
+            text=True,
+            input="y\ny\n1\n1\n"  # Yes to Claude, Yes to Cursor, Auto-configure, Project-specific
+        )
+        
+        assert result.returncode == 0
+        
+        # Should generate Claude config
+        assert (tmp_path / "server_config.json").exists()
+        assert "✓ Generated server_config.json for Claude Desktop" in result.stdout
+        
+        # Should generate Cursor config
+        assert "✓ Configured Cursor MCP server (project-specific)" in result.stdout
+        cursor_config_path = tmp_path / ".cursor" / "mcp.json"
+        assert cursor_config_path.exists()
+        
+        # Should show both in next steps
+        assert "🔹 Claude Desktop: Add server_config.json to Claude config" in result.stdout
+        assert "🔹 Cursor IDE: Already configured! Open Cursor and start using." in result.stdout
+
+
+def test_cursor_deeplink_generation():
+    """Test Cursor deeplink generation function."""
+    from mxcp.cli.init import generate_cursor_deeplink
+    import base64
+    
+    # Test config
+    config = {
+        "mcpServers": {
+            "test-project": {
+                "command": "mxcp",
+                "args": ["serve", "--transport", "stdio"],
+                "cwd": "/path/to/project"
+            }
+        }
+    }
+    
+    deeplink = generate_cursor_deeplink(config, "test-project")
+    
+    # Should be a valid Cursor deeplink with correct protocol
+    assert deeplink.startswith("cursor://anysphere.cursor-deeplink/mcp/install?name=test-project&config=")
+    
+    # Extract and decode the config
+    config_param = deeplink.split("&config=")[1]
+    decoded_config = base64.b64decode(config_param).decode()
+    config_data = json.loads(decoded_config)
+    
+    # Should contain just the server config directly (no mcpServers wrapper)
+    assert "command" in config_data
+    assert "args" in config_data
+    assert config_data["command"] == "mxcp"
+    assert config_data["args"] == ["serve", "--transport", "stdio"]
+
+
+def test_cursor_config_merging(tmp_path):
+    """Test that Cursor config merging works with existing configs."""
+    from mxcp.cli.init import install_cursor_config
+    
+    # Create existing config
+    cursor_dir = tmp_path / ".cursor"
+    cursor_dir.mkdir()
+    config_path = cursor_dir / "mcp.json"
+    
+    existing_config = {
+        "mcpServers": {
+            "existing-server": {
+                "command": "existing-command",
+                "args": ["existing-args"]
+            }
+        }
+    }
+    
+    with open(config_path, 'w') as f:
+        json.dump(existing_config, f)
+    
+    # Add new config
+    new_config = {
+        "mcpServers": {
+            "new-server": {
+                "command": "mxcp",
+                "args": ["serve", "--transport", "stdio"]
+            }
+        }
+    }
+    
+    result = install_cursor_config(new_config, "new-server", "project", tmp_path)
+    assert result is True
+    
+    # Check merged config
+    with open(config_path) as f:
+        merged_config = json.load(f)
+    
+    assert "existing-server" in merged_config["mcpServers"]
+    assert "new-server" in merged_config["mcpServers"]
+    assert merged_config["mcpServers"]["existing-server"]["command"] == "existing-command"
+    assert merged_config["mcpServers"]["new-server"]["command"] == "mxcp"
 
 
 def test_migration_exception_handling():

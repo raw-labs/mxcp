@@ -596,12 +596,14 @@ mxcp run             # Run a specific endpoint
 MXCP implements the Model Context Protocol (MCP), making it compatible with:
 
 - **Claude Desktop** — Native MCP support
+- **Cursor IDE** — Native MCP support with one-click installation
 - **OpenAI-compatible tools** — Via MCP adapters  
 - **Custom integrations** — Using the MCP specification
 
 For specific setup instructions, see:
 - [Earthquakes Example](https://github.com/raw-labs/mxcp/blob/main/examples/earthquakes/README.md) — Complete Claude Desktop setup
 - [COVID + dbt Example](https://github.com/raw-labs/mxcp/blob/main/examples/covid_owid/README.md) — Advanced dbt integration
+- [Integrations Guide](https://github.com/raw-labs/mxcp/blob/main/docs/guides/integrations.md) — Claude Desktop and Cursor IDE setup
 
 ## 📚 Documentation
 

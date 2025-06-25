@@ -1,9 +1,10 @@
 ---
 title: "Integrations"
-description: "Integrate MXCP with AI platforms, dbt, and data sources. Connect with Claude Desktop, OpenAI, and other LLM providers. Access diverse data sources through DuckDB."
+description: "Integrate MXCP with AI platforms, dbt, and data sources. Connect with Claude Desktop, Cursor IDE, OpenAI, and other LLM providers. Access diverse data sources through DuckDB."
 keywords:
   - mxcp integrations
   - claude desktop integration
+  - cursor ide integration
   - dbt integration
   - duckdb extensions
   - llm integration
@@ -18,7 +19,7 @@ MXCP provides seamless integration with AI platforms and data tools to create po
 
 ## Table of Contents
 
-- [LLM Integration](#llm-integration) — Connect with Claude Desktop, OpenAI, and other AI platforms
+- [LLM Integration](#llm-integration) — Connect with Claude Desktop, Cursor IDE, OpenAI, and other AI platforms
 - [dbt Integration](#dbt-integration) — Transform and prepare data for AI consumption
 - [DuckDB Integration](#duckdb-integration) — Access diverse data sources with powerful SQL capabilities
 
@@ -73,6 +74,88 @@ Claude Desktop has native MCP support, making it the easiest way to get started 
 - Use descriptive server names that reflect your project's purpose
 - Test your configuration with simple queries first
 - Monitor Claude's developer console for connection issues
+
+### Cursor IDE
+
+Cursor IDE has native MCP support through its Model Context Protocol integration, providing another excellent way to use MXCP with AI-powered development tools.
+
+#### Automatic Configuration
+
+The easiest way to set up Cursor IDE integration is during project initialization:
+
+```bash
+# Initialize MXCP project with IDE configuration
+mxcp init my-project --bootstrap
+
+# Follow the prompts to configure Cursor IDE automatically
+# Choose from:
+# 1. Project-specific (recommended) - Only available in this project
+# 2. Global - Available in all Cursor workspaces
+```
+
+#### Manual Configuration
+
+For manual setup or existing projects:
+
+1. **Generate Cursor configuration**:
+   ```bash
+   # Run init again in existing project to add Cursor config
+   cd my-existing-project
+   mxcp init .
+   ```
+
+2. **Configuration locations**:
+   - **Project-specific**: `.cursor/mcp.json` (created in your project directory)
+   - **Global**: `~/.cursor/mcp.json` (available in all Cursor workspaces)
+
+3. **Manual configuration file**:
+
+   For global installations:
+   ```json
+   {
+     "mcpServers": {
+       "my-project": {
+         "command": "mxcp",
+         "args": ["serve", "--transport", "stdio"],
+         "cwd": "/absolute/path/to/your/mxcp/project"
+       }
+     }
+   }
+   ```
+
+   For virtual environment installations:
+   ```json
+   {
+     "mcpServers": {
+       "my-project": {
+         "command": "bash",
+         "args": [
+           "-c",
+           "cd /absolute/path/to/your/project && source /path/to/.venv/bin/activate && mxcp serve --transport stdio"
+         ]
+       }
+     }
+   }
+   ```
+
+#### One-Click Installation
+
+MXCP generates one-click installation links for easy sharing:
+
+```bash
+# The deeplink is automatically generated during init
+# Example format:
+cursor://anysphere.cursor-deeplink/mcp/install?name=my-project&config=eyJjb21tYW5kIjoi...
+```
+
+Share this link with team members for instant Cursor IDE setup.
+
+#### Best Practices
+
+- **Project-specific configuration** is recommended for team projects
+- **Global configuration** is useful for personal tools used across multiple projects
+- Use the one-click installation links for team onboarding
+- Test your configuration by asking Cursor to list available tools
 
 ### OpenAI and Other Providers
 
