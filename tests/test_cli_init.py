@@ -353,7 +353,7 @@ def test_init_without_config_generation(tmp_path):
     
     # Check output mentions skipping config
     assert "Skipped Claude Desktop configuration generation" in result.stdout
-            assert "Skipped Cursor configuration generation" in result.stdout
+    assert "Skipped Cursor configuration generation" in result.stdout
     assert "Run 'mxcp init .' again to generate configurations" in result.stdout
 
 
@@ -510,6 +510,8 @@ def test_user_config_generation_uses_integer_version():
 
 def test_init_with_cursor_config_generation(tmp_path):
     """Test init with Cursor config generation."""
+    runner = CliRunner()
+    
     with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
         # Mock Cursor as detected
         mock_detect.return_value = {
@@ -518,25 +520,24 @@ def test_init_with_cursor_config_generation(tmp_path):
             "global_mcp_config": str(Path.home() / ".cursor" / "mcp.json")
         }
         
-        result = subprocess.run(
-            ["mxcp", "init", str(tmp_path), "--bootstrap"],
-            capture_output=True,
-            text=True,
+        result = runner.invoke(
+            init, 
+            [str(tmp_path), "--bootstrap"],
             input="n\ny\n1\n1\n"  # No to Claude, Yes to Cursor, Auto-configure, Project-specific
         )
         
-        assert result.returncode == 0
-        assert "✓ Detected Cursor installation" in result.stdout
-        assert "✓ Configured Cursor MCP server (project-specific)" in result.stdout
+        assert result.exit_code == 0
+        assert "✓ Detected Cursor installation" in result.output
+        assert "✓ Configured Cursor MCP server (project-specific)" in result.output
         
         # Should show Cursor configuration
-        assert "📋 Cursor Configuration:" in result.stdout
-        assert "mcpServers" in result.stdout
+        assert "📋 Cursor Configuration:" in result.output
+        assert "mcpServers" in result.output
         
         # Should show deeplink
-        assert "🔗 One-Click Install Link:" in result.stdout
-        assert "cursor://anysphere.cursor-deeplink/mcp/install?name=" in result.stdout
-        assert "💡 Share this link to let others install your MXCP server with one click!" in result.stdout
+        assert "🔗 One-Click Install Link:" in result.output
+        assert "cursor://anysphere.cursor-deeplink/mcp/install?name=" in result.output
+        assert "💡 Share this link to let others install your MXCP server with one click!" in result.output
         
         # Check project-specific config file was created
         cursor_config_path = tmp_path / ".cursor" / "mcp.json"
@@ -551,6 +552,8 @@ def test_init_with_cursor_config_generation(tmp_path):
 
 def test_init_with_cursor_global_config(tmp_path):
     """Test init with Cursor global config generation."""
+    runner = CliRunner()
+    
     with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect, \
          patch('mxcp.cli.init.install_cursor_config') as mock_install:
         
@@ -564,15 +567,14 @@ def test_init_with_cursor_global_config(tmp_path):
         # Mock successful installation
         mock_install.return_value = True
         
-        result = subprocess.run(
-            ["mxcp", "init", str(tmp_path), "--bootstrap"],
-            capture_output=True,
-            text=True,
+        result = runner.invoke(
+            init,
+            [str(tmp_path), "--bootstrap"],
             input="n\ny\n1\n2\n"  # No to Claude, Yes to Cursor, Auto-configure, Global
         )
         
-        assert result.returncode == 0
-        assert "✓ Configured Cursor MCP server (globally)" in result.stdout
+        assert result.exit_code == 0
+        assert "✓ Configured Cursor MCP server (globally)" in result.output
         
         # Should call install_cursor_config with global scope
         mock_install.assert_called_once()
@@ -583,6 +585,8 @@ def test_init_with_cursor_global_config(tmp_path):
 
 def test_init_with_cursor_manual_setup(tmp_path):
     """Test init with Cursor manual setup."""
+    runner = CliRunner()
+    
     with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
         # Mock Cursor as detected
         mock_detect.return_value = {
@@ -591,45 +595,47 @@ def test_init_with_cursor_manual_setup(tmp_path):
             "global_mcp_config": str(Path.home() / ".cursor" / "mcp.json")
         }
         
-        result = subprocess.run(
-            ["mxcp", "init", str(tmp_path), "--bootstrap"],
-            capture_output=True,
-            text=True,
+        result = runner.invoke(
+            init,
+            [str(tmp_path), "--bootstrap"],
             input="n\ny\n2\n"  # No to Claude, Yes to Cursor, Manual setup
         )
         
-        assert result.returncode == 0
-        assert "📝 Cursor Manual Setup:" in result.stdout
-        assert "📋 To install manually:" in result.stdout
-        assert "1. Open Cursor" in result.stdout
-        assert "2. Go to Settings > Features > Model Context Protocol" in result.stdout
-        assert "4. Use the one-click install link provided above" in result.stdout
+        assert result.exit_code == 0
+        assert "📝 Cursor Manual Setup:" in result.output
+        assert "📋 To install manually:" in result.output
+        assert "1. Open Cursor" in result.output
+        assert "2. Go to Settings > Features > Model Context Protocol" in result.output
+        assert "4. Use the one-click install link provided above" in result.output
 
 
 def test_init_cursor_not_detected(tmp_path):
     """Test init when Cursor is not detected."""
+    runner = CliRunner()
+    
     with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
         # Mock Cursor as not detected
         mock_detect.return_value = None
         
-        result = subprocess.run(
-            ["mxcp", "init", str(tmp_path), "--bootstrap"],
-            capture_output=True,
-            text=True,
+        result = runner.invoke(
+            init,
+            [str(tmp_path), "--bootstrap"],
             input="n\ny\n"  # No to Claude, Yes to Cursor
         )
         
-        assert result.returncode == 0
-        assert "⚠️  Cursor not detected in PATH" in result.stdout
-        assert "📝 Cursor Manual Setup:" in result.stdout
+        assert result.exit_code == 0
+        assert "⚠️  Cursor not detected in PATH" in result.output
+        assert "📝 Cursor Manual Setup:" in result.output
         
         # Should still show deeplink and config
-        assert "🔗 One-Click Install Link:" in result.stdout
-        assert "📋 Cursor Configuration:" in result.stdout
+        assert "🔗 One-Click Install Link:" in result.output
+        assert "📋 Cursor Configuration:" in result.output
 
 
 def test_init_both_claude_and_cursor_config(tmp_path):
     """Test init with both Claude Desktop and Cursor config generation."""
+    runner = CliRunner()
+    
     with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
         # Mock Cursor as detected
         mock_detect.return_value = {
@@ -638,27 +644,26 @@ def test_init_both_claude_and_cursor_config(tmp_path):
             "global_mcp_config": str(Path.home() / ".cursor" / "mcp.json")
         }
         
-        result = subprocess.run(
-            ["mxcp", "init", str(tmp_path), "--bootstrap"],
-            capture_output=True,
-            text=True,
+        result = runner.invoke(
+            init,
+            [str(tmp_path), "--bootstrap"],
             input="y\ny\n1\n1\n"  # Yes to Claude, Yes to Cursor, Auto-configure, Project-specific
         )
         
-        assert result.returncode == 0
+        assert result.exit_code == 0
         
         # Should generate Claude config
         assert (tmp_path / "server_config.json").exists()
-        assert "✓ Generated server_config.json for Claude Desktop" in result.stdout
+        assert "✓ Generated server_config.json for Claude Desktop" in result.output
         
         # Should generate Cursor config
-        assert "✓ Configured Cursor MCP server (project-specific)" in result.stdout
+        assert "✓ Configured Cursor MCP server (project-specific)" in result.output
         cursor_config_path = tmp_path / ".cursor" / "mcp.json"
         assert cursor_config_path.exists()
         
         # Should show both in next steps
-        assert "🔹 Claude Desktop: Add server_config.json to Claude config" in result.stdout
-        assert "🔹 Cursor: Already configured! Open Cursor and start using." in result.stdout
+        assert "🔹 Claude Desktop: Add server_config.json to Claude config" in result.output
+        assert "🔹 Cursor: Already configured! Open Cursor and start using." in result.output
 
 
 def test_cursor_deeplink_generation():
