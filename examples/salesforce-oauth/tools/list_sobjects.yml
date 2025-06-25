@@ -1,0 +1,38 @@
+mxcp: 1
+tool:
+  name: list_sobjects
+  description: |
+    List all available Salesforce objects (sObjects) in the organization.
+    Optionally filter the list by providing a filter term for fuzzy matching on object names.
+  tags: ["salesforce", "metadata", "objects"]
+  annotations:
+    title: "List Salesforce Objects"
+    readOnlyHint: true
+    idempotentHint: true
+  parameters:
+    - name: filter
+      type: string
+      description: "Optional filter term to match against object names (case-insensitive fuzzy matching)"
+      default: null
+      examples: ["Account", "Contact", "Custom"]
+  return:
+    type: array
+    description: "List of sObject names"
+    items:
+      type: string
+      description: "Name of a Salesforce object"
+  language: python
+  source:
+    file: ../python/salesforce_client.py
+  tests:
+    - name: "List all objects"
+      description: "Test listing all available Salesforce objects"
+      arguments: []
+      result_contains_item: "Account"
+    
+    - name: "Filter objects"
+      description: "Test filtering objects by name"
+      arguments:
+        - key: filter
+          value: "Account"
+      result_contains_item: "Account" 
