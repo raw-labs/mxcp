@@ -188,7 +188,7 @@ def generate_claude_config(project_dir: Path, project_name: str):
     return config
 
 def detect_cursor_installation() -> Optional[Dict[str, str]]:
-    """Detect Cursor IDE installation and return relevant paths."""
+    """Detect Cursor installation and return relevant paths."""
     system = platform.system().lower()
     cursor_info = {}
     
@@ -288,16 +288,16 @@ def install_cursor_config(config: Dict, project_name: str, install_type: str = "
 
 def show_cursor_next_steps(project_name: str, install_type: str):
     """Show Cursor-specific next steps."""
-    click.echo(f"\n{click.style('📝 Cursor IDE Manual Setup:', fg='cyan', bold=True)}")
+    click.echo(f"\n{click.style('📝 Cursor Manual Setup:', fg='cyan', bold=True)}")
     
     click.echo(f"   📋 To install manually:")
-    click.echo(f"   1. Open Cursor IDE")
+    click.echo(f"   1. Open Cursor")
     click.echo(f"   2. Go to Settings > Features > Model Context Protocol")
     click.echo(f"   3. Add the configuration shown above, or")
     click.echo(f"   4. Use the one-click install link provided above")
     
     click.echo(f"\n   🚀 After installation:")
-    click.echo(f"   • Restart Cursor IDE")
+    click.echo(f"   • Restart Cursor")
     click.echo(f"   • Open the Agent/Chat")
     click.echo(f"   • The '{project_name}' MCP server will be automatically available")
     click.echo(f"   • Try asking: \"List the available tools from {project_name}\"")
@@ -355,16 +355,16 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
     if config_generated and cursor_configured:
         click.echo(f"\n{click.style('3. Connect to your preferred IDE:', fg='yellow')}")
         click.echo(f"   🔹 Claude Desktop: Add server_config.json to Claude config")
-        click.echo(f"   🔹 Cursor IDE: Already configured! Open Cursor and start using.")
+        click.echo(f"   🔹 Cursor: Already configured! Open Cursor and start using.")
     elif config_generated:
         click.echo(f"\n{click.style('3. Connect to Claude Desktop:', fg='yellow')}")
         click.echo(f"   Add the generated server_config.json to your Claude Desktop config")
     elif cursor_configured:
-        click.echo(f"\n{click.style('3. Connect to Cursor IDE:', fg='yellow')}")
+        click.echo(f"\n{click.style('3. Connect to Cursor:', fg='yellow')}")
         click.echo(f"   Already configured! Open Cursor and start using.")
     else:
         click.echo(f"\n{click.style('3. Connect to your IDE:', fg='yellow')}")
-        click.echo(f"   Create configurations for Claude Desktop or Cursor IDE")
+        click.echo(f"   Create configurations for Claude Desktop or Cursor")
         click.echo(f"   Run 'mxcp init .' again to generate configurations")
     
     if config_generated or cursor_configured:
@@ -380,9 +380,9 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
         
         if cursor_configured:
             if cursor_install_type == "project":
-                click.echo(f"   • Cursor IDE: {project_dir}/.cursor/mcp.json (project-specific)")
+                click.echo(f"   • Cursor: {project_dir}/.cursor/mcp.json (project-specific)")
             else:
-                click.echo(f"   • Cursor IDE: ~/.cursor/mcp.json (global)")
+                click.echo(f"   • Cursor: ~/.cursor/mcp.json (global)")
     
     # Step 4: Explore more
     click.echo(f"\n{click.style('4. Learn more:', fg='yellow')}")
@@ -395,11 +395,11 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
     if bootstrap:
         click.echo(f"\n{click.style('💡 Try it now:', fg='green')}")
         if config_generated and cursor_configured:
-            click.echo(f"   In Claude Desktop or Cursor IDE, ask: \"Use the hello_world tool to greet Alice\"")
+            click.echo(f"   In Claude Desktop or Cursor, ask: \"Use the hello_world tool to greet Alice\"")
         elif config_generated:
             click.echo(f"   In Claude Desktop, ask: \"Use the hello_world tool to greet Alice\"")
         elif cursor_configured:
-            click.echo(f"   In Cursor IDE, ask: \"Use the hello_world tool to greet Alice\"")
+            click.echo(f"   In Cursor, ask: \"Use the hello_world tool to greet Alice\"")
     
     click.echo(f"\n{click.style('📚 Resources:', fg='cyan', bold=True)}")
     click.echo(f"   • Documentation: https://mxcp.dev")
@@ -421,7 +421,7 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
     This command creates a new MXCP repository by:
     1. Creating a mxcp-site.yml file with project and profile configuration
     2. Optionally creating example endpoint files
-    3. Generating configurations for Claude Desktop and/or Cursor IDE integration
+    3. Generating configurations for Claude Desktop and/or Cursor integration
     
     \b
     Examples:
@@ -513,9 +513,9 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
         except Exception as e:
             click.echo(f"⚠️  Warning: Failed to generate Claude config: {e}")
         
-        # Generate Cursor IDE config
+        # Generate Cursor config
         try:
-            if click.confirm("\nWould you like to set up Cursor IDE integration?"):
+            if click.confirm("\nWould you like to set up Cursor integration?"):
                 cursor_config = generate_cursor_config(target_dir, project)
                 
                 # Generate deeplink by default
@@ -525,7 +525,7 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
                 cursor_info = detect_cursor_installation()
                 
                 if cursor_info:
-                    click.echo(f"✓ Detected Cursor IDE installation")
+                    click.echo(f"✓ Detected Cursor installation")
                     
                     # Offer installation options
                     click.echo("\nChoose Cursor configuration option:")
@@ -554,11 +554,11 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
                         cursor_install_type = "manual"
                 else:
                     # Cursor not detected, provide manual setup
-                    click.echo("⚠️  Cursor IDE not detected in PATH")
+                    click.echo("⚠️  Cursor not detected in PATH")
                     cursor_install_type = "manual"
                 
                 # Show the config content
-                click.echo(f"\n📋 Cursor IDE Configuration:")
+                click.echo(f"\n📋 Cursor Configuration:")
                 click.echo(json.dumps(cursor_config, indent=2))
                 
                 # Always show the deeplink
@@ -569,7 +569,7 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
                 if cursor_install_type == "manual":
                     show_cursor_next_steps(project, cursor_install_type)
             else:
-                click.echo("ℹ️  Skipped Cursor IDE configuration generation")
+                click.echo("ℹ️  Skipped Cursor configuration generation")
         except Exception as e:
             click.echo(f"⚠️  Warning: Failed to generate Cursor config: {e}")
             

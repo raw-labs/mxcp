@@ -353,7 +353,7 @@ def test_init_without_config_generation(tmp_path):
     
     # Check output mentions skipping config
     assert "Skipped Claude Desktop configuration generation" in result.stdout
-    assert "Skipped Cursor IDE configuration generation" in result.stdout
+            assert "Skipped Cursor configuration generation" in result.stdout
     assert "Run 'mxcp init .' again to generate configurations" in result.stdout
 
 
@@ -509,7 +509,7 @@ def test_user_config_generation_uses_integer_version():
 
 
 def test_init_with_cursor_config_generation(tmp_path):
-    """Test init with Cursor IDE config generation."""
+    """Test init with Cursor config generation."""
     with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
         # Mock Cursor as detected
         mock_detect.return_value = {
@@ -526,11 +526,11 @@ def test_init_with_cursor_config_generation(tmp_path):
         )
         
         assert result.returncode == 0
-        assert "✓ Detected Cursor IDE installation" in result.stdout
+        assert "✓ Detected Cursor installation" in result.stdout
         assert "✓ Configured Cursor MCP server (project-specific)" in result.stdout
         
         # Should show Cursor configuration
-        assert "📋 Cursor IDE Configuration:" in result.stdout
+        assert "📋 Cursor Configuration:" in result.stdout
         assert "mcpServers" in result.stdout
         
         # Should show deeplink
@@ -550,7 +550,7 @@ def test_init_with_cursor_config_generation(tmp_path):
 
 
 def test_init_with_cursor_global_config(tmp_path):
-    """Test init with Cursor IDE global config generation."""
+    """Test init with Cursor global config generation."""
     with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect, \
          patch('mxcp.cli.init.install_cursor_config') as mock_install:
         
@@ -582,7 +582,7 @@ def test_init_with_cursor_global_config(tmp_path):
 
 
 def test_init_with_cursor_manual_setup(tmp_path):
-    """Test init with Cursor IDE manual setup."""
+    """Test init with Cursor manual setup."""
     with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
         # Mock Cursor as detected
         mock_detect.return_value = {
@@ -599,15 +599,15 @@ def test_init_with_cursor_manual_setup(tmp_path):
         )
         
         assert result.returncode == 0
-        assert "📝 Cursor IDE Manual Setup:" in result.stdout
+        assert "📝 Cursor Manual Setup:" in result.stdout
         assert "📋 To install manually:" in result.stdout
-        assert "1. Open Cursor IDE" in result.stdout
+        assert "1. Open Cursor" in result.stdout
         assert "2. Go to Settings > Features > Model Context Protocol" in result.stdout
         assert "4. Use the one-click install link provided above" in result.stdout
 
 
 def test_init_cursor_not_detected(tmp_path):
-    """Test init when Cursor IDE is not detected."""
+    """Test init when Cursor is not detected."""
     with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
         # Mock Cursor as not detected
         mock_detect.return_value = None
@@ -620,16 +620,16 @@ def test_init_cursor_not_detected(tmp_path):
         )
         
         assert result.returncode == 0
-        assert "⚠️  Cursor IDE not detected in PATH" in result.stdout
-        assert "📝 Cursor IDE Manual Setup:" in result.stdout
+        assert "⚠️  Cursor not detected in PATH" in result.stdout
+        assert "📝 Cursor Manual Setup:" in result.stdout
         
         # Should still show deeplink and config
         assert "🔗 One-Click Install Link:" in result.stdout
-        assert "📋 Cursor IDE Configuration:" in result.stdout
+        assert "📋 Cursor Configuration:" in result.stdout
 
 
 def test_init_both_claude_and_cursor_config(tmp_path):
-    """Test init with both Claude Desktop and Cursor IDE config generation."""
+    """Test init with both Claude Desktop and Cursor config generation."""
     with patch('mxcp.cli.init.detect_cursor_installation') as mock_detect:
         # Mock Cursor as detected
         mock_detect.return_value = {
@@ -658,7 +658,7 @@ def test_init_both_claude_and_cursor_config(tmp_path):
         
         # Should show both in next steps
         assert "🔹 Claude Desktop: Add server_config.json to Claude config" in result.stdout
-        assert "🔹 Cursor IDE: Already configured! Open Cursor and start using." in result.stdout
+        assert "🔹 Cursor: Already configured! Open Cursor and start using." in result.stdout
 
 
 def test_cursor_deeplink_generation():
