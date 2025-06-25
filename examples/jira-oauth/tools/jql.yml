@@ -47,4 +47,4 @@ tool:
       A JSON string containing an array of Jira issues.
   language: "sql"
   source:
-    file: "jql.sql" 
+    file: "../sql/jql.sql" 

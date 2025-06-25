@@ -18,4 +18,4 @@ tool:
       A JSON string containing an array of Jira projects.
   language: "sql"
   source:
-    file: "list_projects.sql" 
+    file: "../sql/list_projects.sql" 

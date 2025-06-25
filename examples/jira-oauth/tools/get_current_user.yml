@@ -22,4 +22,4 @@ tool:
       Returns NULL if no user is authenticated.
   language: "sql"
   source:
-    file: "get_current_user.sql" 
+    file: "../sql/get_current_user.sql" 

@@ -27,4 +27,4 @@ tool:
       A JSON string containing the user's details.
   language: "sql"
   source:
-    file: "get_user.sql" 
+    file: "../sql/get_user.sql" 
