@@ -1,0 +1,48 @@
+mxcp: 1
+tool:
+  name: whoami
+  description: Display information about the current authenticated Salesforce user from OAuth context
+  tags:
+    - salesforce
+    - user
+    - auth
+  readOnlyHint: true
+  parameters: []
+  return:
+    type: object
+    description: Current user information from OAuth context
+    properties:
+      user_id:
+        type: string
+        description: Salesforce user ID
+      organization_id:
+        type: string
+        description: Salesforce organization ID
+      username:
+        type: string
+        description: Username
+      display_name:
+        type: string
+        description: Display name
+      email:
+        type: string
+        description: Email address
+      instance_url:
+        type: string
+        description: Salesforce instance URL
+      language:
+        type: string
+        description: User's language preference
+      locale:
+        type: string
+        description: User's locale preference
+      timezone:
+        type: string
+        description: User's timezone
+  language: python
+  source:
+    file: ../python/salesforce_client.py
+  tests:
+    - name: whoami_basic
+      description: Get current user information
+      arguments: []
