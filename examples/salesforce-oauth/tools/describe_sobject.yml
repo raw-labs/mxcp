@@ -1,0 +1,34 @@
+mxcp: 1
+tool:
+  name: describe_sobject
+  description: |
+    Get detailed metadata for a specific Salesforce object, including all field information.
+    Returns field names, types, labels, and relationship details.
+  tags: ["salesforce", "metadata", "schema"]
+  annotations:
+    title: "Describe Salesforce Object"
+    readOnlyHint: true
+    idempotentHint: true
+  parameters:
+    - name: object_name
+      type: string
+      description: "Name of the Salesforce object to describe"
+      examples: ["Account", "Contact", "Opportunity", "Lead", "Case"]
+  return:
+    type: object
+    description: "Object metadata with field information"
+    additionalProperties: true
+  language: python
+  source:
+    file: ../python/salesforce_client.py
+  tests:
+    - name: "Describe Account object"
+      description: "Test describing the standard Account object"
+      arguments:
+        - key: object_name
+          value: "Account"
+      result_contains:
+        Name:
+          type: "string"
+        Id:
+          type: "id" 
