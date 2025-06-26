@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 import logging
-from jsonschema import validate, ValidationError, RefResolver
+from jsonschema import validate, ValidationError
 
 from mxcp.drift.types import (
     DriftSnapshot, DriftReport, TableChange, ResourceChange, 

@@ -34,7 +34,7 @@ class EndpointType(Enum):
     PROMPT = "prompt"
 
 # Type alias for standardized endpoint results
-EndpointResult = List[Dict[str, Any]]
+EndpointResult = Any  # Can be any type: scalar, list, dict, etc.
 
 def get_endpoint_source_code(endpoint_dict: dict, endpoint_type: str, endpoint_file_path: Path, repo_root: Path) -> str:
     """Get the source code for the endpoint, resolving code vs file."""
@@ -391,10 +391,11 @@ class EndpointExecutor:
             user_context: Optional user context for policy enforcement
         
         Returns:
-            For tools and resources: 
-                - If return type is array: List[Dict[str, Any]] where each dict represents a row
-                - If return type is object: Dict[str, Any] representing a single row
-                - If return type is scalar: The scalar value from a single row, single column
+            For tools and resources:
+                - Can return any type based on the return type definition
+                - Arrays can contain any type (primitives, objects, etc.)
+                - Objects return as dicts
+                - Scalars return as their primitive type
             For prompts: List[Dict[str, Any]] where each dict represents a message with role, prompt, and type
         """
         # Load endpoint definition if not already loaded
@@ -610,16 +611,10 @@ class EndpointExecutor:
         return_type = return_def.get("type", "array")
         
         if return_type == "array":
-            # Expecting list of dicts
             if not isinstance(result, list):
                 raise ValueError(f"Python function must return list for array return type, got {type(result).__name__}")
-            # Validate each item is a dict and serialize timestamps
-            serialized_result = []
-            for i, item in enumerate(result):
-                if not isinstance(item, dict):
-                    raise ValueError(f"Array item {i} must be a dict, got {type(item).__name__}")
-                serialized_result.append(serialize_value(item))
-            return serialized_result
+            # Serialize all items (no dict requirement)
+            return serialize_value(result)
         elif return_type == "object":
             # Single dict
             if not isinstance(result, dict):
@@ -672,7 +667,7 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
         user_context: Optional user context for policy enforcement
         
     Returns:
-        For tools and resources: List[Dict[str, Any]] where each dict represents a row with column names as keys
+        For tools and resources: Any type based on the endpoint definition (scalar, list, dict, etc.)
         For prompts: List[Dict[str, Any]] where each dict represents a message with role, prompt, and type
     """
     try:
