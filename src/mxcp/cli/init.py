@@ -563,8 +563,9 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
                 
                 # Always show the deeplink
                 click.echo(f"\n🔗 One-Click Install Link:")
-                click.echo(f"   {deeplink}")
-                click.echo(f"\n   💡 Share this link to let others install your MXCP server with one click!")
+                clickable_link = f"\033]8;;{deeplink}\033\\{deeplink}\033]8;;\033\\"
+                click.echo(clickable_link)
+                click.echo(f"\n💡 Share this link to let others install your MXCP server with one click!")
                 
                 if cursor_install_type == "manual":
                     show_cursor_next_steps(project, cursor_install_type)
