@@ -21,35 +21,79 @@ def render_table(
         click.echo(f"\n{click.style(f'📊 {title} (0 items)', fg='cyan', bold=True)}")
         return
     
-    # Check if it's a list of primitives (not dicts)
-    if data and not isinstance(data[0], dict):
-        # Single column table for primitives
-        click.echo(f"\n{click.style(f'📊 {title} ({len(data)} items):', fg='cyan', bold=True)}\n")
-        
-        # Calculate column width
-        display_data = data[:max_rows]
-        col_width = min(
-            max(len(str(item)) for item in display_data) if display_data else 5,
-            max_col_width
-        )
-        col_width = max(col_width, 5)  # Minimum width for "Value" header
-        
-        # Print header
-        click.echo("Value")
-        click.echo("─" * col_width)
-        
-        # Print values
-        for item in display_data:
-            value_str = str(item)
-            if len(value_str) > max_col_width:
-                value_str = value_str[:max_col_width-3] + "..."
-            click.echo(value_str)
-        
-        if len(data) > max_rows:
-            click.echo(f"\n... and {len(data) - max_rows} more items")
-        return
+    # Analyze data type composition
+    dict_count = 0
+    non_dict_count = 0
+    sample_size = min(len(data), 100)  # Check first 100 items for performance
     
-    # Handle list of dicts (tabular data)
+    for i in range(sample_size):
+        if isinstance(data[i], dict):
+            dict_count += 1
+        else:
+            non_dict_count += 1
+    
+    # Determine rendering strategy based on data composition
+    if dict_count > 0 and non_dict_count == 0:
+        # All sampled items are dicts - render as table
+        # But first verify all dicts have consistent keys
+        try:
+            first_keys = set(data[0].keys())
+            keys_consistent = True
+            
+            for i in range(1, sample_size):
+                if set(data[i].keys()) != first_keys:
+                    keys_consistent = False
+                    break
+            
+            if keys_consistent:
+                _render_dict_table(data, title, max_rows, max_col_width)
+            else:
+                # Inconsistent keys - fall back to primitive rendering
+                click.echo(f"\n{click.style('⚠️  Warning: Inconsistent dict keys found. Displaying as list.', fg='yellow')}")
+                _render_primitive_list(data, title, max_rows, max_col_width)
+        except (AttributeError, TypeError):
+            # Safety fallback if dict operations fail
+            _render_primitive_list(data, title, max_rows, max_col_width)
+    
+    elif dict_count == 0 and non_dict_count > 0:
+        # All sampled items are non-dicts - render as primitive list
+        _render_primitive_list(data, title, max_rows, max_col_width)
+    
+    else:
+        # Mixed types - warn and render as primitives
+        click.echo(f"\n{click.style('⚠️  Warning: Mixed data types found. Displaying all as strings.', fg='yellow')}")
+        _render_primitive_list(data, title, max_rows, max_col_width)
+
+
+def _render_primitive_list(data: List[Any], title: str, max_rows: int, max_col_width: int) -> None:
+    """Render a list of primitive values."""
+    click.echo(f"\n{click.style(f'📊 {title} ({len(data)} items):', fg='cyan', bold=True)}\n")
+    
+    # Calculate column width
+    display_data = data[:max_rows]
+    col_width = min(
+        max(len(str(item)) for item in display_data) if display_data else 5,
+        max_col_width
+    )
+    col_width = max(col_width, 5)  # Minimum width for "Value" header
+    
+    # Print header
+    click.echo("Value")
+    click.echo("─" * col_width)
+    
+    # Print values
+    for item in display_data:
+        value_str = str(item)
+        if len(value_str) > max_col_width:
+            value_str = value_str[:max_col_width-3] + "..."
+        click.echo(value_str)
+    
+    if len(data) > max_rows:
+        click.echo(f"\n... and {len(data) - max_rows} more items")
+
+
+def _render_dict_table(data: List[Dict[str, Any]], title: str, max_rows: int, max_col_width: int) -> None:
+    """Render a list of dictionaries as a table."""
     click.echo(f"\n{click.style(f'📊 {title} ({len(data)} rows):', fg='cyan', bold=True)}\n")
     
     # Get column names from first row
@@ -62,9 +106,11 @@ def render_table(
         col_widths[col] = len(str(col))
         # Check data widths (limit to first max_rows for performance)
         for row in data[:max_rows]:
-            val_len = len(str(row.get(col, '')))
-            if val_len > col_widths[col]:
-                col_widths[col] = val_len
+            # Safely handle non-dict rows that might have slipped through
+            if isinstance(row, dict):
+                val_len = len(str(row.get(col, '')))
+                if val_len > col_widths[col]:
+                    col_widths[col] = val_len
         # Cap column width
         col_widths[col] = min(col_widths[col], max_col_width)
     
@@ -79,6 +125,10 @@ def render_table(
     # Print rows
     display_rows = data[:max_rows]
     for row in display_rows:
+        # Skip non-dict rows as a safety measure
+        if not isinstance(row, dict):
+            continue
+            
         row_parts = []
         for col in columns:
             val = str(row.get(col, ''))
