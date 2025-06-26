@@ -141,7 +141,7 @@ class HelpRenderer:
                 priority_text = ""
                 if subcat.get('agent_priority'):
                     priority_color = 'red' if subcat['agent_priority'] == 'high' else 'yellow' if subcat['agent_priority'] == 'medium' else 'green'
-                    priority_text = f" {click.style(f'[{subcat['agent_priority'].upper()}]', fg=priority_color)}"
+                    priority_text = ' ' + click.style(f'[{subcat["agent_priority"].upper()}]', fg=priority_color)
                 
                 lines.append(f"{click.style(f'{i:2}.', fg='blue')} {click.style(subcat['name'], fg='green', bold=True)}{priority_text}")
                 lines.append(f"    {subcat['description']}")
