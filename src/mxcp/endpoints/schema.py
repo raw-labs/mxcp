@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 import yaml
 import json
-from jsonschema import validate as jsonschema_validate
+from jsonschema import validate as jsonschema_validate, RefResolver
 from mxcp.engine.duckdb_session import DuckDBSession
 import os
 from mxcp.config.site_config import find_repo_root
@@ -171,8 +171,26 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         with open(schema_path) as schema_file:
             schema = json.load(schema_file)
         
+        # Set up resolver for cross-file references
+        schemas_dir = (Path(__file__).parent / "schemas").resolve()
+        base_uri = schemas_dir.as_uri() + "/"
+        
+        # Load common schema for resolver
+        common_schema_path = schemas_dir / "common-types-schema-1.json"
+        with open(common_schema_path) as common_file:
+            common_schema = json.load(common_file)
+        
+        # Create resolver with schema store
+        resolver = RefResolver(
+            base_uri=base_uri,
+            referrer=schema,
+            store={
+                "common-types-schema-1.json": common_schema
+            }
+        )
+        
         try:
-            jsonschema_validate(instance=endpoint, schema=schema)
+            jsonschema_validate(instance=endpoint, schema=schema, resolver=resolver)
         except Exception as e:
             return {"status": "error", "path": relative_path, "message": f"Schema validation error: {str(e)}"}
 
