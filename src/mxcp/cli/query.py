@@ -5,6 +5,7 @@ from pathlib import Path
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
+from mxcp.cli.table_renderer import render_table
 from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.config.analytics import track_command_with_timing
 
@@ -129,46 +130,9 @@ def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profi
                 click.echo(f"\n{click.style('✅ Query executed successfully!', fg='green', bold=True)}")
                 
                 if isinstance(result, list) and len(result) > 0:
-                    # Format as a table
-                    click.echo(f"\n{click.style(f'📊 Results ({len(result)} rows):', fg='cyan', bold=True)}\n")
-                    
-                    # Get column names
-                    columns = list(result[0].keys())
-                    
-                    # Calculate column widths
-                    col_widths = {}
-                    for col in columns:
-                        # Start with column name length
-                        col_widths[col] = len(str(col))
-                        # Check data widths (limit to first 100 rows for performance)
-                        for row in result[:100]:
-                            val_len = len(str(row.get(col, '')))
-                            if val_len > col_widths[col]:
-                                col_widths[col] = val_len
-                        # Cap column width at 50
-                        col_widths[col] = min(col_widths[col], 50)
-                    
-                    # Print header
-                    header_parts = []
-                    for col in columns:
-                        header_parts.append(str(col).ljust(col_widths[col]))
-                    header = ' │ '.join(header_parts)
-                    click.echo(header)
-                    click.echo('─' * len(header))
-                    
-                    # Print rows (limit to 100 for terminal display)
-                    display_rows = result[:100]
-                    for row in display_rows:
-                        row_parts = []
-                        for col in columns:
-                            val = str(row.get(col, ''))
-                            if len(val) > col_widths[col]:
-                                val = val[:col_widths[col]-3] + '...'
-                            row_parts.append(val.ljust(col_widths[col]))
-                        click.echo(' │ '.join(row_parts))
-                    
+                    # Use shared table renderer
+                    render_table(result, title="Query Results")
                     if len(result) > 100:
-                        click.echo(f"\n{click.style(f'... and {len(result) - 100} more rows', fg='yellow')}")
                         click.echo(f"{click.style('💡 Tip:', fg='yellow')} Use {click.style('--json-output', fg='cyan')} to export all results")
                         
                 elif isinstance(result, list) and len(result) == 0:
