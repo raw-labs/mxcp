@@ -8,6 +8,7 @@ from mxcp.endpoints.executor import EndpointType
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config, get_active_profile
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
+from mxcp.cli.table_renderer import format_result_for_display
 from mxcp.config.analytics import track_command_with_timing
 from mxcp.auth.providers import UserContext
 from mxcp.engine.duckdb_session import DuckDBSession
@@ -145,15 +146,10 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
                 output_result(result, json_output, debug)
             else:
                 # Add success indicator
-                click.echo(f"{click.style('✅ Success!', fg='green', bold=True)}\n")
+                click.echo(f"{click.style('✅ Success!', fg='green', bold=True)}")
                 
-                # Format the result nicely
-                if isinstance(result, dict):
-                    click.echo(json.dumps(result, indent=2))
-                elif isinstance(result, list):
-                    click.echo(json.dumps(result, indent=2))
-                else:
-                    click.echo(str(result))
+                # Use the table renderer for nice formatting
+                format_result_for_display(result)
                     
                 # Add execution time if available in debug mode
                 if debug:
