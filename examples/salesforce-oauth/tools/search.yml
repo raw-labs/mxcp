@@ -1,0 +1,38 @@
+mxcp: 1
+tool:
+  name: search
+  description: |
+    Search across all searchable Salesforce objects using the native Salesforce search.
+    This uses the simple SOSL syntax "FIND {search_term}" which automatically searches
+    all searchable objects and fields.
+  language: python
+  source:
+    file: ../python/salesforce_client.py
+  parameters:
+    - name: search_term
+      type: string
+      description: "Term to search for across all searchable objects"
+      examples: ["John", "Acme", "555-1234", "example.com"]
+  return:
+    type: array
+    description: "Search results from all matching objects"
+    items:
+      type: object
+      description: "Search result record"
+      additionalProperties: true
+  tags:
+    - salesforce
+    - search
+    - data
+  annotations:
+    title: "Search Salesforce Records"
+    readOnlyHint: true
+    idempotentHint: true
+  tests:
+    - name: "Basic search"
+      description: "Test searching for a common term"
+      arguments:
+        - key: search_term
+          value: "test"
+      # Note: Using result type array since search results can be empty or contain records
+      result: [] 
