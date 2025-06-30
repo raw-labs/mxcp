@@ -165,6 +165,8 @@ def cleanup():
     print("API client closed")
 ```
 
+**Important:** These hooks are for managing Python resources (HTTP clients, connections to external services, etc.), NOT for database management. The DuckDB connection is managed automatically by MXCP.
+
 ## Async Functions
 
 Python endpoints support both synchronous and asynchronous functions:
@@ -286,6 +288,44 @@ def generate_report() -> list:
 ```
 
 ## Best Practices
+
+### Database Access
+
+**Do:**
+- Always access the database through `db.execute()` for each operation
+- Let MXCP manage the database connection lifecycle
+- Use parameterized queries to prevent SQL injection
+
+**Don't:**
+- Store the database connection (`db.connection`) in global variables
+- Cache database connections in class attributes
+- Assume the connection persists across server reloads
+
+```python
+from mxcp.runtime import db
+
+# ✅ CORRECT - Access DB through runtime proxy
+def get_user_data(user_id: int) -> dict:
+    results = db.execute(
+        "SELECT * FROM users WHERE id = ?",
+        {"user_id": user_id}
+    )
+    return results[0] if results else None
+
+# ❌ INCORRECT - Don't store the connection
+cached_conn = db.connection  # Never do this!
+
+class DataService:
+    def __init__(self):
+        # ❌ INCORRECT - Don't store connections in instances
+        self.conn = db.connection
+    
+    def get_data(self):
+        # This will fail after a database reload
+        return self.conn.execute("SELECT * FROM data")
+```
+
+The `db` proxy ensures your code always uses the current active connection, even after database reloads triggered by signals or configuration changes.
 
 1. **Error Handling**: Always handle potential errors gracefully
    ```python

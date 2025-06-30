@@ -27,6 +27,7 @@ from starlette.responses import JSONResponse
 import re
 from mxcp.policies import PolicyEnforcementError
 import hashlib
+import signal
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +204,11 @@ class RAWMCP:
         
         # Track if we've already shut down to avoid double cleanup
         self._shutdown_called = False
+        
+        # Register SIGUSR1 handler for database reload (Unix-like systems only)
+        if hasattr(signal, 'SIGUSR1'):
+            signal.signal(signal.SIGUSR1, self._handle_reload_signal)
+            logger.info("Registered SIGUSR1 handler for database reload")
 
     def _init_python_runtime(self):
         """Initialize Python runtime and load all Python modules"""
@@ -1172,4 +1178,71 @@ class RAWMCP:
             logger.info("MCP server started successfully.")
         except Exception as e:
             logger.error(f"Error running MCP server: {e}")
-            raise 
+            raise
+
+    def _handle_reload_signal(self, signum, frame):
+        """Handle SIGUSR1 signal to reload the DuckDB session."""
+        logger.info("Received SIGUSR1 signal - reloading DuckDB session...")
+        try:
+            self.reload_db_session()
+            logger.info("DuckDB session reloaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to reload DuckDB session: {e}")
+
+    def reload_db_session(self):
+        """Reload the DuckDB session by closing the current one and creating a new one.
+        
+        This method is thread-safe and can be called while the server is running.
+        It will:
+        1. Acquire the DB lock to prevent concurrent access
+        2. Close the current session
+        3. Reload the site configuration (to pick up any env var changes)
+        4. Create a new session
+        
+        Note: Python endpoints will automatically use the new session through the
+        runtime context system. Init/shutdown hooks are not called as they're meant
+        for managing Python resources, not database connections.
+        """
+        logger.info("Starting DuckDB session reload...")
+        
+        # Acquire the lock to ensure no other threads are using the session
+        with self.db_lock:
+            try:
+                # Close the current session
+                if self.db_session:
+                    logger.info("Closing current DuckDB session...")
+                    self.db_session.close()
+                    self.db_session = None
+                
+                # Reload site configuration to pick up any environment variable changes
+                from mxcp.config.site_config import load_site_config
+                logger.info("Reloading site configuration...")
+                self.site_config = load_site_config()
+                
+                # Create a new session
+                logger.info("Creating new DuckDB session...")
+                self.db_session = DuckDBSession(
+                    self.user_config, 
+                    self.site_config, 
+                    self.profile_name, 
+                    self.readonly
+                )
+                
+                logger.info("DuckDB session reload completed successfully")
+                
+            except Exception as e:
+                logger.error(f"Error during DuckDB session reload: {e}")
+                # Try to restore a working session if possible
+                if not self.db_session:
+                    logger.info("Attempting to create a new session after reload failure...")
+                    try:
+                        self.db_session = DuckDBSession(
+                            self.user_config, 
+                            self.site_config, 
+                            self.profile_name, 
+                            self.readonly
+                        )
+                        logger.info("Recovery session created successfully")
+                    except Exception as recovery_error:
+                        logger.error(f"Failed to create recovery session: {recovery_error}")
+                        raise 

@@ -572,4 +572,7 @@ The following environment variables can be used to configure MXCP:
 
 - `MXCP_DEBUG`: Enable debug logging (equivalent to --debug)
 - `MXCP_PROFILE`: Set default profile (equivalent to --profile)
-- `MXCP_READONLY`: Enable read-only mode (equivalent to --readonly) 
+- `MXCP_READONLY`: Enable read-only mode (equivalent to --readonly)
+- `MXCP_DUCKDB_PATH`: Override the DuckDB file location from configuration
+
+For more details on environment variables and their usage, see the [Configuration Guide](../guides/configuration.md#environment-variables). 

@@ -416,6 +416,84 @@ MXCP can be configured using environment variables:
 - `MXCP_DEBUG`: Enable debug logging
 - `MXCP_PROFILE`: Set default profile
 - `MXCP_READONLY`: Enable read-only mode
+- `MXCP_DUCKDB_PATH`: Override the DuckDB file location (see below)
+
+### DuckDB Path Override
+
+The `MXCP_DUCKDB_PATH` environment variable allows you to override the DuckDB database file location configured in `mxcp-site.yml`. This is useful for:
+
+- Using a centralized database location across different projects
+- Running tests with a temporary database
+- Deploying to environments where the configured path isn't writable
+
+**Example:**
+```bash
+# Override DuckDB location for all commands
+export MXCP_DUCKDB_PATH="/tmp/test.duckdb"
+mxcp run my_tool
+
+# Or set it for a single command
+MXCP_DUCKDB_PATH="/path/to/shared.db" mxcp serve
+```
+
+When `MXCP_DUCKDB_PATH` is set, it overrides the path specified in `profiles.<profile>.duckdb.path` for all profiles.
+
+### Signal-Based Database Reload (Unix/Linux/macOS)
+
+When running `mxcp serve`, you can send a `SIGUSR1` signal to reload the DuckDB connection without restarting the server. This is useful for:
+
+- Picking up changes to the DuckDB file made by external processes
+- Changing the database location via `MXCP_DUCKDB_PATH` without downtime
+- Recovering from temporary database issues
+
+**Example:**
+```bash
+# Start the server
+mxcp serve &
+SERVER_PID=$!
+
+# Later, reload the database connection
+kill -USR1 $SERVER_PID
+
+# Or find the process and send the signal
+pkill -USR1 -f "mxcp serve"
+```
+
+**What happens during reload:**
+1. The server receives the SIGUSR1 signal
+2. Current database connections are safely closed
+3. Site configuration is reloaded (picking up any environment variable changes)
+4. A new database connection is established
+
+**Important for Python endpoints:**
+- Python endpoints automatically use the new database connection through the `mxcp.runtime.db` proxy
+- Do NOT store database connections in global variables or class attributes
+- Always access the database through `db.execute()` for each operation
+- Init/shutdown hooks (`@on_init`, `@on_shutdown`) are NOT called during reload - they're for managing Python resources like HTTP clients, not database connections
+
+**Example of correct Python endpoint:**
+```python
+from mxcp.runtime import db
+
+# ✅ Good - accesses DB through runtime proxy
+def get_data(user_id: int) -> dict:
+    results = db.execute(
+        "SELECT * FROM users WHERE id = ?",
+        {"user_id": user_id}
+    )
+    return results[0] if results else None
+
+# ❌ Bad - don't do this!
+conn = db.connection  # Never store the connection
+def get_data_bad(user_id: int) -> dict:
+    return conn.execute("...")  # This won't work after reload
+```
+
+**Notes:**
+- This feature is only available on Unix-like systems (Linux, macOS)
+- The reload is thread-safe and won't interrupt active requests
+- If the reload fails, the server attempts to restore the previous connection
+- Check server logs for reload status and any errors
 
 ## Model Configuration (for Evals)
 
