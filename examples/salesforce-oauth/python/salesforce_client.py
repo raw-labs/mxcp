@@ -1,9 +1,26 @@
 """
 Salesforce MCP tools using simple_salesforce with MXCP OAuth authentication.
 """
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from mxcp.auth.context import get_user_context
 from simple_salesforce import Salesforce
+
+
+def _escape_sosl_search_term(search_term: str) -> str:
+    """
+    Escape special characters in SOSL search terms to prevent injection attacks.
+    
+    SOSL special characters that need escaping: & | ! { } [ ] ( ) ^ ~ * ? : " ' + -
+    """
+    # Escape backslashes first to avoid double-escaping
+    escaped = search_term.replace('\\', '\\\\')
+    
+    # Escape SOSL special characters
+    special_chars = ['&', '|', '!', '{', '}', '[', ']', '(', ')', '^', '~', '*', '?', ':', '"', "'", '+', '-']
+    for char in special_chars:
+        escaped = escaped.replace(char, f'\\{char}')
+    
+    return escaped
 
 
 def _get_salesforce_client():
@@ -62,7 +79,7 @@ def _get_salesforce_client():
         raise ValueError(f"Failed to authenticate with Salesforce: {str(e)}")
 
 
-def list_sobjects(filter: str | None = None) -> list[str]:
+def list_sobjects(filter: Optional[str] = None) -> List[str]:
     """
     List all available Salesforce objects (sObjects) in the org.
     
@@ -164,7 +181,7 @@ def get_sobject(object_name: str, record_id: str) -> Dict[str, Any]:
     return record
 
 
-def soql(query: str) -> list[Dict[str, Any]]:
+def soql(query: str) -> List[Dict[str, Any]]:
     """
     Execute an arbitrary SOQL (Salesforce Object Query Language) query.
     
@@ -188,7 +205,7 @@ def soql(query: str) -> list[Dict[str, Any]]:
     return records
 
 
-def search(search_term: str) -> list[Dict[str, Any]]:
+def search(search_term: str) -> List[Dict[str, Any]]:
     """
     Search for records across all searchable Salesforce objects using a simple search term.
     Uses Salesforce's native search to automatically find matches across all objects.
@@ -201,8 +218,11 @@ def search(search_term: str) -> list[Dict[str, Any]]:
     """
     sf = _get_salesforce_client()
     
+    # Escape the search term to prevent SOSL injection attacks
+    escaped_search_term = _escape_sosl_search_term(search_term)
+    
     # Use simple SOSL syntax - Salesforce searches all searchable objects automatically
-    sosl_query = f"FIND {{{search_term}}}"
+    sosl_query = f"FIND {{{escaped_search_term}}}"
     
     # Execute the SOSL search
     search_results = sf.search(sosl_query)
@@ -218,7 +238,7 @@ def search(search_term: str) -> list[Dict[str, Any]]:
     return all_records
 
 
-def sosl(query: str) -> list[Dict[str, Any]]:
+def sosl(query: str) -> List[Dict[str, Any]]:
     """
     Execute an arbitrary SOSL (Salesforce Object Search Language) query.
     
