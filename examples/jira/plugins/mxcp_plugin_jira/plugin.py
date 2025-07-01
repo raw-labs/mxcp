@@ -89,6 +89,7 @@ class MXCPPlugin(MXCPBasePlugin):
                     "labels": f.get("labels") or [],
                     "fix_versions": [_name(v) for v in f.get("fixVersions", [])],
                     "parent": _key(f.get("parent")),
+                    "url": f"{self.url}/browse/{issue['key']}",  # web UI URL
                 }
             )
 
@@ -127,7 +128,7 @@ class MXCPPlugin(MXCPBasePlugin):
                     "name": p.get("name"),
                     "type": p.get("projectTypeKey"),  # e.g. software, business
                     "lead": safe_name(p.get("lead")),
-                    "url": p.get("self"),  # REST URL (or None)
+                    "url": f"{self.url}/projects/{p.get('key')}",  # web UI URL
                 }
             )
 
@@ -144,4 +145,10 @@ class MXCPPlugin(MXCPBasePlugin):
             JSON string containing the project details
         """
         logger.info("Getting project details for key: %s", project_key)
-        return json.dumps(self.jira.project(project_key))
+        info = self.jira.project(project_key)
+        # remove the self key if it exists
+        if "self" in info:
+            info.pop("self")
+        # Add web UI URL
+        info["url"] = f"{self.url}/projects/{project_key}"
+        return json.dumps(info)
