@@ -920,7 +920,7 @@ tool:
             with pytest.raises(ValueError) as exc_info:
                 asyncio.run(run_test())
             
-            assert "Python function must return list for array return type, got str" in str(exc_info.value)
+            assert "Expected array, got str" in str(exc_info.value)
             
         finally:
             _clear_runtime_context()
@@ -969,7 +969,7 @@ tool:
             with pytest.raises(ValueError) as exc_info:
                 asyncio.run(run_test())
             
-            assert "Python function must return dict for object return type, got list" in str(exc_info.value)
+            assert "Expected object, got list" in str(exc_info.value)
             
         finally:
             _clear_runtime_context()

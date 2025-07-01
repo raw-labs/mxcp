@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING
 import duckdb
 import yaml
-from datetime import datetime
+from datetime import datetime, date, time
 import json
 from jinja2 import Template
 from mxcp.endpoints.types import EndpointDefinition
@@ -52,11 +52,11 @@ def get_endpoint_source_code(endpoint_dict: dict, endpoint_type: str, endpoint_f
         raise ValueError("No source code found in endpoint definition")
 
 class SchemaError(ValueError):
-    """Raised when a value doesn't match the expected schema."""
+    """Custom exception for schema validation errors"""
     pass
 
 class TypeConverter:
-    """Handles conversion between Python types and DuckDB types"""
+    """Utility class for type conversion and validation"""
     
     @staticmethod
     def python_type_to_schema_type(python_type: str) -> str:
@@ -73,10 +73,10 @@ class TypeConverter:
             "timedelta": "duration"
         }
         return type_map.get(python_type, python_type)
-
+    
     @staticmethod
-    def convert_value(value: Any, param_def: Dict[str, Any]) -> Any:
-        """Convert a value to the appropriate type based on parameter definition"""
+    def convert_parameter(value: Any, param_def: Dict[str, Any]) -> Any:
+        """Convert input parameter values to appropriate types for tool execution"""
         param_type = param_def.get("type")
         param_format = param_def.get("format")
         
@@ -84,32 +84,28 @@ class TypeConverter:
             return None
             
         if param_type == "string":
-            # Handle pandas Timestamp objects that come from DuckDB
-            if hasattr(value, 'strftime'):
-                # It's a datetime-like object (pandas Timestamp, datetime, etc.)
-                if param_format == "date":
-                    return value.strftime("%Y-%m-%d")
-                elif param_format == "date-time":
-                    return value.isoformat()
-                elif param_format == "time":
-                    return value.strftime("%H:%M:%S")
-                else:
-                    # Default to ISO format for datetime objects
-                    return value.isoformat()
-            
-            # Handle string format annotations
+            # Handle string format parsing (input strings → typed objects for processing)
+            # NOTE: In MCP tool calls, ALL date/temporal parameters come as JSON strings since
+            # JSON doesn't support native date objects. Formats like "2024-01-15" or 
+            # "2024-01-15T10:30:00Z" are parsed into Python datetime/date/time objects.
             if param_format == "date-time":
+                if not isinstance(value, str):
+                    raise SchemaError(f"Expected string for date-time format, got {type(value).__name__}")
                 return datetime.fromisoformat(value.replace("Z", "+00:00"))
             elif param_format == "date":
-                if isinstance(value, str):
-                    return datetime.strptime(value, "%Y-%m-%d").date()
-                else:
-                    return value  # Already a date object
+                if not isinstance(value, str):
+                    raise SchemaError(f"Expected string for date format, got {type(value).__name__}")
+                return datetime.strptime(value, "%Y-%m-%d").date()
             elif param_format == "time":
-                if isinstance(value, str):
-                    return datetime.strptime(value, "%H:%M:%S").time()
-                else:
-                    return value  # Already a time object
+                if not isinstance(value, str):
+                    raise SchemaError(f"Expected string for time format, got {type(value).__name__}")
+                return datetime.strptime(value, "%H:%M:%S").time()
+            elif param_format == "timestamp":
+                # Unix timestamp (seconds since epoch)
+                try:
+                    return datetime.fromtimestamp(float(value))
+                except (ValueError, OSError):
+                    raise SchemaError(f"Invalid timestamp: {value}")
             elif param_format == "email":
                 if not re.match(r"[^@]+@[^@]+\.[^@]+", value):
                     raise SchemaError(f"Invalid email format: {value}")
@@ -123,12 +119,6 @@ class TypeConverter:
                 if not re.match(r"^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$", value):
                     raise SchemaError(f"Invalid duration format: {value}")
                 return str(value)
-            elif param_format == "timestamp":
-                # Unix timestamp (seconds since epoch)
-                try:
-                    return datetime.fromtimestamp(float(value))
-                except (ValueError, OSError):
-                    raise SchemaError(f"Invalid timestamp: {value}")
             
             # Validate string length constraints
             if "minLength" in param_def and len(value) < param_def["minLength"]:
@@ -203,7 +193,7 @@ class TypeConverter:
                     raise SchemaError("Array must contain unique items")
             
             items_def = param_def.get("items", {})
-            return [TypeConverter.convert_value(item, items_def) for item in value]
+            return [TypeConverter.convert_parameter(item, items_def) for item in value]
             
         elif param_type == "object":
             if not isinstance(value, dict):
@@ -228,21 +218,151 @@ class TypeConverter:
             result = {}
             for k, v in value.items():
                 if k in properties:
-                    result[k] = TypeConverter.convert_value(v, properties[k])
+                    result[k] = TypeConverter.convert_parameter(v, properties[k])
                 elif not param_def.get("additionalProperties", True):
                     raise SchemaError(f"Unexpected property: {k}")
                 else:
-                    # For additional properties, handle special types like pandas Timestamp
-                    if isinstance(v, pd.Timestamp):
-                        result[k] = v.strftime("%Y-%m-%d")
-                    elif hasattr(v, 'isoformat'):
-                        result[k] = v.isoformat()
-                    else:
-                        result[k] = v
+                    result[k] = v
             
             return result
             
         return value
+    
+    @staticmethod
+    def validate_output(value: Any, return_def: Dict[str, Any]) -> None:
+        """Validate output values match the expected return type schema"""
+        return_type = return_def.get("type")
+        return_format = return_def.get("format")
+        
+        if value is None:
+            return
+            
+        if return_type == "string":
+            if not isinstance(value, str):
+                # Allow datetime-like objects that will be serialized to strings
+                if not hasattr(value, 'strftime') and not hasattr(value, 'isoformat'):
+                    raise SchemaError(f"Expected string, got {type(value).__name__}")
+            
+            # Validate format constraints for actual strings
+            if isinstance(value, str):
+                if return_format == "email":
+                    if not re.match(r"[^@]+@[^@]+\.[^@]+", value):
+                        raise SchemaError(f"Invalid email format: {value}")
+                elif return_format == "uri":
+                    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:.*$", value):
+                        raise SchemaError(f"Invalid URI format: {value}")
+                elif return_format == "duration":
+                    if not re.match(r"^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$", value):
+                        raise SchemaError(f"Invalid duration format: {value}")
+                
+                # Validate string length constraints
+                if "minLength" in return_def and len(value) < return_def["minLength"]:
+                    raise SchemaError(f"String must be at least {return_def['minLength']} characters long")
+                if "maxLength" in return_def and len(value) > return_def["maxLength"]:
+                    raise SchemaError(f"String must be at most {return_def['maxLength']} characters long")
+            
+        elif return_type == "number":
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise SchemaError(f"Expected number, got {type(value).__name__}")
+            # Validate numeric constraints
+            if "minimum" in return_def and value < return_def["minimum"]:
+                raise SchemaError(f"Value must be >= {return_def['minimum']}")
+            if "maximum" in return_def and value > return_def["maximum"]:
+                raise SchemaError(f"Value must be <= {return_def['maximum']}")
+            
+        elif return_type == "integer":
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise SchemaError(f"Expected integer, got {type(value).__name__}")
+            # Validate integer constraints  
+            if "minimum" in return_def and value < return_def["minimum"]:
+                raise SchemaError(f"Value must be >= {return_def['minimum']}")
+            if "maximum" in return_def and value > return_def["maximum"]:
+                raise SchemaError(f"Value must be <= {return_def['maximum']}")
+            
+        elif return_type == "boolean":
+            if not isinstance(value, bool):
+                raise SchemaError(f"Expected boolean, got {type(value).__name__}")
+            
+        elif return_type == "array":
+            if not isinstance(value, (list, np.ndarray)):
+                raise SchemaError(f"Expected array, got {type(value).__name__}")
+            
+            # Convert numpy arrays to lists for consistent validation
+            if isinstance(value, np.ndarray):
+                value = value.tolist()
+            
+            # Validate array constraints
+            if "minItems" in return_def and len(value) < return_def["minItems"]:
+                raise SchemaError(f"Array must have at least {return_def['minItems']} items")
+            if "maxItems" in return_def and len(value) > return_def["maxItems"]:
+                raise SchemaError(f"Array must have at most {return_def['maxItems']} items")
+            
+            # Validate array items
+            items_def = return_def.get("items", {})
+            if items_def:
+                for i, item in enumerate(value):
+                    try:
+                        TypeConverter.validate_output(item, items_def)
+                    except SchemaError as e:
+                        raise SchemaError(f"Array item {i}: {str(e)}")
+            
+        elif return_type == "object":
+            if not isinstance(value, dict):
+                raise SchemaError(f"Expected object, got {type(value).__name__}")
+            
+            properties = return_def.get("properties", {})
+            required = return_def.get("required", [])
+            
+            # Check required properties
+            missing = [prop for prop in required if prop not in value]
+            if missing:
+                raise SchemaError(f"Missing required properties: {', '.join(missing)}")
+            
+            # Validate each property
+            for k, v in value.items():
+                if k in properties:
+                    try:
+                        TypeConverter.validate_output(v, properties[k])
+                    except SchemaError as e:
+                        raise SchemaError(f"Property '{k}': {str(e)}")
+                elif not return_def.get("additionalProperties", True):
+                    raise SchemaError(f"Unexpected property: {k}")
+    
+    @staticmethod
+    def serialize_for_output(obj: Any) -> Any:
+        """Serialize output objects for JSON compatibility, handling dates/times consistently"""
+        if isinstance(obj, dict):
+            return {k: TypeConverter.serialize_for_output(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, np.ndarray)):
+            # Convert numpy arrays to lists and serialize recursively
+            items = obj.tolist() if isinstance(obj, np.ndarray) else obj
+            return [TypeConverter.serialize_for_output(item) for item in items]
+        elif isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        elif isinstance(obj, (datetime, date, time)):
+            return obj.isoformat()
+        elif isinstance(obj, pd.NaT.__class__):
+            return None
+        elif hasattr(obj, 'isoformat'):
+            # Handle any other datetime-like objects
+            return obj.isoformat()
+        else:
+            return obj
+
+    # Legacy method - kept for backward compatibility, but deprecated
+    @staticmethod
+    def convert_value(value: Any, param_def: Dict[str, Any]) -> Any:
+        """
+        DEPRECATED: Use convert_parameter() for input processing or validate_output() for output validation.
+        This method is kept for backward compatibility but has inconsistent behavior.
+        """
+        import warnings
+        warnings.warn(
+            "convert_value() is deprecated. Use convert_parameter() for input processing or validate_output() for output validation.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return TypeConverter.convert_parameter(value, param_def)
 
 class EndpointExecutor:
     def __init__(self, endpoint_type: EndpointType, name: str, user_config: UserConfig, site_config: SiteConfig, 
@@ -324,7 +444,7 @@ class EndpointExecutor:
             
             # Convert value to appropriate type
             try:
-                params[name] = TypeConverter.convert_value(value, param_def)
+                params[name] = TypeConverter.convert_parameter(value, param_def)
             except Exception as e:
                 raise ValueError(f"Error converting parameter {name}: {str(e)}")
                 
@@ -433,9 +553,12 @@ class EndpointExecutor:
                 result = await self._execute_sql(params, endpoint_def)
             
             # Validate the output against the return type definition if enabled
-            if validate_output:
+            if validate_output and "return" in endpoint_def:
                 logger.debug(f"Validating output of type {type(result).__name__}")
-                self._validate_return(result)
+                TypeConverter.validate_output(result, endpoint_def["return"])
+            
+            # Serialize output for consistency across SQL and Python execution paths
+            result = TypeConverter.serialize_for_output(result)
             
             # Enforce output policies
             if self.policy_enforcer:
@@ -578,80 +701,16 @@ class EndpointExecutor:
                 bound_func = functools.partial(func, **params)
                 result = await loop.run_in_executor(None, ctx.run, bound_func)
             
-            # Normalize result to match expected format
-            return self._normalize_python_result(result, endpoint_def)
+            # Return raw Python objects (consistent with SQL execution)
+            return result
             
         finally:
             # Clear runtime context after execution
             _clear_runtime_context()
     
-    def _normalize_python_result(self, result: Any, endpoint_def: Dict[str, Any]) -> EndpointResult:
-        """Normalize Python function result to match SQL result format"""
-        from datetime import date, time
-        
-        def serialize_value(obj):
-            """Recursively serialize values to be JSON-compatible"""
-            if isinstance(obj, dict):
-                return {k: serialize_value(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [serialize_value(item) for item in obj]
-            elif isinstance(obj, pd.Timestamp):
-                return obj.isoformat()
-            elif isinstance(obj, (datetime, date, time)):
-                return obj.isoformat()
-            elif isinstance(obj, pd.NaT.__class__):
-                return None
-            elif hasattr(obj, 'isoformat'):
-                # Handle any other datetime-like objects
-                return obj.isoformat()
-            else:
-                return obj
-        
-        return_def = endpoint_def.get("return", {})
-        return_type = return_def.get("type", "array")
-        
-        if return_type == "array":
-            if not isinstance(result, list):
-                raise ValueError(f"Python function must return list for array return type, got {type(result).__name__}")
-            # Serialize all items (no dict requirement)
-            return serialize_value(result)
-        elif return_type == "object":
-            # Single dict
-            if not isinstance(result, dict):
-                raise ValueError(f"Python function must return dict for object return type, got {type(result).__name__}")
-            return serialize_value(result)
-        else:
-            # Scalar - serialize if needed
-            return serialize_value(result)
+
             
-    def _validate_return(self, output: EndpointResult) -> None:
-        """Validate the output against the return type definition if present."""
-        if not self.endpoint:
-            raise RuntimeError("Endpoint not loaded")
-        
-        endpoint_def = self.endpoint[self.endpoint_type.value]
-        if "return" not in endpoint_def:
-            return
-        
-        return_def = endpoint_def["return"]
-        return_type = return_def.get("type")
-        
-        logger.debug(f"_validate_return: output={output}, type={type(output).__name__}")
-        logger.debug(f"_validate_return: return_def={return_def}")
-        
-        try:
-            TypeConverter.convert_value(output, return_def)
-        except SchemaError as e:
-            # Schema errors are already user-friendly
-            logger.error(f"_validate_return: SchemaError: {e}")
-            raise e
-        except Exception as e:
-            # For any other errors, provide a generic type mismatch message
-            expected_type = return_def.get("type", "unknown")
-            actual_type = TypeConverter.python_type_to_schema_type(type(output).__name__)
-            error_msg = f"Output validation failed: Expected return type '{expected_type}', but received '{actual_type}'"
-            logger.error(f"_validate_return: Generic error: {e}, error_msg={error_msg}")
-            raise SchemaError(error_msg) from e
+
 
 async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, session: DuckDBSession, profile: Optional[str] = None, user_context: Optional['UserContext'] = None) -> EndpointResult:
     """Execute an endpoint by type and name.
