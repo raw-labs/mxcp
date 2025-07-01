@@ -38,7 +38,9 @@ This example demonstrates how to create MCP tools that interact with Salesforce 
    - **Contact Email**: Your email
 4. Enable OAuth Settings:
    - **Enable OAuth Settings**: Check this box
-   - **Callback URL**: `http://localhost:8080/salesforce/callback`
+   - **Callback URL**: This depends on your deployment:
+     - **Local Development**: `http://localhost:8000/salesforce/callback`
+     - **Remote/Production**: `https://your-domain.com/salesforce/callback` (replace with your actual server URL)
    - **Selected OAuth Scopes**: Add these scopes:
      - Access and manage your data (api)
      - Perform requests on your behalf at any time (refresh_token, offline_access)
@@ -53,6 +55,39 @@ Set your Salesforce OAuth credentials:
 export SALESFORCE_CLIENT_ID="your-consumer-key-from-connected-app"
 export SALESFORCE_CLIENT_SECRET="your-consumer-secret-from-connected-app"
 ```
+
+### 3. Configure Callback URL for Your Deployment
+
+The callback URL configuration depends on where your MXCP server will run:
+
+#### Local Development
+For local development, the default configuration in `config.yml` uses `http://localhost:8000/salesforce/callback`. This works when:
+- You're running MXCP locally on your development machine
+- Users authenticate from the same machine where MXCP is running
+
+#### Remote/Production Deployment
+For remote servers or production deployments, you need to:
+
+1. **Update config.yml**: Uncomment and modify the production callback URL:
+   ```yaml
+   redirect_uris:
+     - "http://localhost:8000/salesforce/callback"  # Keep for local dev
+     - "https://your-domain.com/salesforce/callback"  # Add your actual URL
+   ```
+
+2. **Update base_url**: Set the correct base URL in your config:
+   ```yaml
+   transport:
+     http:
+       base_url: https://your-domain.com  # Your actual server URL
+   ```
+
+3. **Configure Connected App**: Add the production callback URL to your Salesforce Connected App's callback URLs
+
+**Important**: 
+- The callback URL must be accessible from the user's browser, not just from your server
+- For production deployments, Salesforce requires HTTPS for callback URLs
+- You can configure multiple callback URLs in your Connected App to support both local development and production
 
 ## Running the Examples
 
@@ -141,7 +176,9 @@ When you run `list_sobjects`, you'll get a response like:
 - **"No user context available"**: User needs to authenticate first by running `mxcp serve` and completing OAuth flow
 - **"No Salesforce access token found"**: Authentication was incomplete or token expired - re-authenticate
 - **Connected App Issues**: Verify your `SALESFORCE_CLIENT_ID` and `SALESFORCE_CLIENT_SECRET` are correct
-- **Callback URL Mismatch**: Ensure the callback URL in your Connected App matches `http://localhost:8080/salesforce/callback`
+- **Callback URL Mismatch**: Ensure the callback URL in your Connected App matches where your MXCP server is accessible:
+  - Local development: `http://localhost:8000/salesforce/callback`
+  - Remote/production: `https://your-domain.com/salesforce/callback`
 - **OAuth Scopes**: Verify your Connected App has the required OAuth scopes (api, refresh_token, id, profile, email)
 
 ### API Errors
@@ -151,7 +188,9 @@ When you run `list_sobjects`, you'll get a response like:
 
 ### Connected App Setup Issues
 - **App Not Found**: Make sure your Connected App is saved and the Consumer Key/Secret are copied correctly
-- **Callback URL**: The callback URL must exactly match `http://localhost:8080/salesforce/callback`
+- **Callback URL**: The callback URL must exactly match your MXCP server's accessible address:
+  - For local development: `http://localhost:8000/salesforce/callback`
+  - For remote deployment: `https://your-domain.com/salesforce/callback`
 - **OAuth Scopes**: Missing scopes will cause authentication to fail - ensure all required scopes are selected
 
 ## Next Steps
