@@ -3,6 +3,9 @@ mxcp: 1
 tool:
   name: "get_sobject"
   description: "Use this tool when you have a specific Salesforce record ID and need to retrieve all fields for that record. This is ideal for getting complete details about a known record, like when you have an Account ID from a previous query and need all its information. The tool requires both the object type (e.g., 'Account', 'Contact') and the record's unique ID. This is different from search or SOQL queries which find records based on field values - this tool is for direct record lookup by ID."
+  language: python
+  source:
+    file: ../python/salesforce_endpoints.py
   parameters:
     - name: sobject_name
       type: string
@@ -17,7 +20,15 @@ tool:
       examples:
         - "001xx000003DIloAAG"
         - "003xx000004TmiAAE"
-  source:
-    code: SELECT get_sobject_salesforce($sobject_name, $record_id);
+  return:
+    type: object
   annotations:
-    readOnlyHint: true 
+    readOnlyHint: true
+  tests:
+    - name: "Get Account record structure"
+      description: "Verify Account record has expected fields like Id, Name"
+      arguments:
+        - key: sobject_name
+          value: "Account"
+        - key: record_id
+          value: "001Qy00000pxRDKIA2"
