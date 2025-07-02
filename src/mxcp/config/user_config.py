@@ -273,7 +273,7 @@ def _generate_default_config(site_config: SiteConfig) -> dict:
     logger.debug(f"Generated default config: {config}")
     return config
 
-def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> UserConfig:
+def load_user_config(site_config: SiteConfig, generate_default: bool = True, resolve_refs: bool = True) -> UserConfig:
     """Load the user configuration from ~/.mxcp/config.yml or MXCP_CONFIG env var.
     
     If the config file doesn't exist and MXCP_CONFIG is not set, generates a default config
@@ -295,9 +295,11 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
     Args:
         site_config: The site configuration loaded from mxcp-site.yml
         generate_default: Whether to generate a default config if the file doesn't exist
+        resolve_refs: Whether to resolve external references (vault://, file://, ${ENV_VAR}).
+                     Set to False to get the raw template configuration.
         
     Returns:
-        The validated user configuration
+        The validated user configuration (with resolved values if resolve_refs=True)
         
     Raises:
         FileNotFoundError: If the config file doesn't exist and generate_default is False
@@ -321,9 +323,10 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
         # Check for legacy version format and provide migration guidance (stops execution)
         check_and_migrate_legacy_version(config, "user", str(path))
             
-        # Interpolate environment variables and vault URLs in the config
-        vault_config = config.get('vault')
-        config = _interpolate_values(config, vault_config)
+        # Interpolate environment variables and vault URLs in the config if requested
+        if resolve_refs:
+            vault_config = config.get('vault')
+            config = _interpolate_values(config, vault_config)
             
         # Ensure project and profile exist in config
         project_name = site_config["project"]

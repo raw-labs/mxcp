@@ -3,6 +3,7 @@ import pytest
 from pathlib import Path
 from mxcp.config.user_config import load_user_config
 from mxcp.config.types import SiteConfig
+import yaml
 
 def test_env_var_interpolation(tmp_path):
     """Test environment variable interpolation in user config."""
@@ -283,46 +284,114 @@ def test_file_url_errors(tmp_path):
     del os.environ["MXCP_CONFIG"]
 
 def test_mixed_interpolation_with_files(tmp_path):
-    """Test mixing env vars, vault URLs, and file URLs."""
-    # Create a secret file
-    secret_file = tmp_path / "jwt_secret.txt"
-    secret_file.write_text("jwt-secret-key-789")
+    """Test mixed interpolation with environment variables and file URLs."""
+    # Create test files
+    secret_file = tmp_path / "secret.txt"
+    secret_file.write_text("file_secret_value")
     
-    # Create config with mixed interpolation
-    config_path = tmp_path / "config.yml"
-    config_content = f"""
-    mxcp: 1
-    projects:
-      test_project:
-        profiles:
-          dev:
-            secrets:
-              - name: "api_config"
-                type: "test"
-                parameters:
-                  api_url: "${{API_BASE_URL}}"
-                  api_key: "file://{secret_file}"
-                  api_timeout: "30"
-    """
-    config_path.write_text(config_content)
+    config_file = tmp_path / "config.json"
+    config_file.write_text('{"api_endpoint": "https://api.example.com"}')
     
-    # Set up environment
-    os.environ["MXCP_CONFIG"] = str(config_path)
-    os.environ["API_BASE_URL"] = "https://api.production.com"
+    # Set environment variables
+    os.environ['MXCP_CONFIG'] = str(tmp_path / 'config.yml')
+    os.environ['ENV_VALUE'] = 'from_env'
     
-    site_config = {
-        "project": "test_project",
-        "profile": "dev"
+    # Create a user config with mixed references
+    user_config_data = {
+        "mxcp": 1,
+        "projects": {
+            "test": {
+                "profiles": {
+                    "default": {
+                        "secrets": [{
+                            "name": "mixed_secret",
+                            "type": "generic",
+                            "parameters": {
+                                "env_var": "${ENV_VALUE}",
+                                "file_secret": f"file://{secret_file}",
+                                "mixed": "prefix_${ENV_VALUE}_suffix",
+                                "config_file": f"file://{config_file}"
+                            }
+                        }]
+                    }
+                }
+            }
+        }
     }
+    
+    with open(tmp_path / 'config.yml', 'w') as f:
+        yaml.dump(user_config_data, f)
+    
+    site_config = {"project": "test", "profile": "default"}
     
     # Load and verify
     config = load_user_config(site_config)
-    params = config["projects"]["test_project"]["profiles"]["dev"]["secrets"][0]["parameters"]
+    params = config['projects']['test']['profiles']['default']['secrets'][0]['parameters']
     
-    assert params["api_url"] == "https://api.production.com"
-    assert params["api_key"] == "jwt-secret-key-789"
-    assert params["api_timeout"] == "30"
+    assert params['env_var'] == 'from_env'
+    assert params['file_secret'] == 'file_secret_value'
+    assert params['mixed'] == 'prefix_from_env_suffix'
+    assert params['config_file'] == '{"api_endpoint": "https://api.example.com"}'
+
+def test_load_without_resolving_refs(tmp_path):
+    """Test that load_user_config with resolve_refs=False returns unresolved references."""
+    # Set environment variables
+    os.environ['MXCP_CONFIG'] = str(tmp_path / 'config.yml')
+    os.environ['TEST_VALUE'] = 'resolved_value'
     
-    # Clean up
-    del os.environ["MXCP_CONFIG"]
-    del os.environ["API_BASE_URL"] 
+    # Create a user config with external references
+    user_config_data = {
+        "mxcp": 1,
+        "projects": {
+            "test": {
+                "profiles": {
+                    "default": {
+                        "secrets": [{
+                            "name": "test_secret",
+                            "type": "generic",
+                            "parameters": {
+                                "value": "${TEST_VALUE}",
+                                "file_ref": "file://secret.txt"
+                            }
+                        }],
+                        "plugin": {
+                            "config": {
+                                "test_plugin": {
+                                    "vault_ref": "vault://secret/path#key"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    with open(tmp_path / 'config.yml', 'w') as f:
+        yaml.dump(user_config_data, f)
+    
+    site_config = {"project": "test", "profile": "default"}
+    
+    # Load without resolving references
+    config = load_user_config(site_config, resolve_refs=False)
+    secret_params = config['projects']['test']['profiles']['default']['secrets'][0]['parameters']
+    plugin_config = config['projects']['test']['profiles']['default']['plugin']['config']['test_plugin']
+    
+    # Should contain unresolved references
+    assert secret_params['value'] == '${TEST_VALUE}'
+    assert secret_params['file_ref'] == 'file://secret.txt'
+    assert plugin_config['vault_ref'] == 'vault://secret/path#key'
+    
+    # Create a secret file so file resolution works
+    secret_file = Path.cwd() / "secret.txt"
+    secret_file.write_text("file_content")
+    
+    try:
+        # Now load with resolving references (default behavior)
+        # This will fail on vault resolution, but that's expected
+        with pytest.raises(ValueError, match="Vault URL .* found but Vault is not enabled"):
+            config_resolved = load_user_config(site_config, resolve_refs=True)
+    finally:
+        # Clean up the secret file
+        if secret_file.exists():
+            secret_file.unlink() 

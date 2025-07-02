@@ -28,6 +28,7 @@ import re
 from mxcp.policies import PolicyEnforcementError
 import hashlib
 import signal
+from mxcp.config.external_refs import ExternalRefTracker
 
 logger = logging.getLogger(__name__)
 
@@ -49,23 +50,30 @@ class RAWMCP:
                             If None, uses the value from site_config.sql_tools.enabled (defaults to False)
             readonly: Whether to open DuckDB connection in read-only mode
         """
-        # Initialize basic configuration first
-        self.user_config = user_config
-        self.site_config = site_config
+        # Store the provided configs (these may or may not be resolved)
+        # We'll properly initialize them in _initialize_runtime_components
+        self._initial_user_config = user_config
+        self._initial_site_config = site_config
         self.profile_name = profile or site_config["profile"]
-        self.active_profile = get_active_profile(self.user_config, self.site_config, profile)
+        self.readonly = readonly
+        
+        # Initialize external reference tracker
+        self.ref_tracker = ExternalRefTracker()
+        
+        # Initialize the runtime components (this will set self.user_config, self.site_config, etc.)
+        self._initialize_runtime_components()
         
         # Initialize OAuth authentication using profile-specific auth config
         auth_config = self.active_profile.get("auth", {})
-        self.oauth_handler = create_oauth_handler(auth_config, host=host, port=port, user_config=user_config)
+        self.oauth_handler = create_oauth_handler(auth_config, host=host, port=port, user_config=self.user_config)
         self.oauth_server = None
         auth_settings = None
         
         if self.oauth_handler:
-            self.oauth_server = GeneralOAuthAuthorizationServer(self.oauth_handler, auth_config, user_config)
+            self.oauth_server = GeneralOAuthAuthorizationServer(self.oauth_handler, auth_config, self.user_config)
             
             # Use URL builder for OAuth endpoints
-            url_builder = create_url_builder(user_config)
+            url_builder = create_url_builder(self.user_config)
             base_url = url_builder.get_base_url(host=host, port=port)
             
             # Get authorization configuration
@@ -131,7 +139,7 @@ class RAWMCP:
                 from starlette.responses import JSONResponse
                 
                 # Use URL builder with request context for proper scheme detection
-                url_builder = create_url_builder(user_config)
+                url_builder = create_url_builder(self.user_config)
                 base_url = url_builder.get_base_url(request)
                 
                 # Get supported scopes from configuration
@@ -152,7 +160,6 @@ class RAWMCP:
                 )
         
         self.loader = EndpointLoader(self.site_config)
-        self.readonly = readonly
         
         # Split endpoints into valid and failed
         discovered = self.loader.discover_endpoints()
@@ -187,20 +194,13 @@ class RAWMCP:
         else:
             self.audit_logger = None
         
-        # Store transport mode (will be set during run())
         self.transport_mode = None
         
-        # Create shared DuckDB session and lock for thread-safety
-        logger.info("Creating shared DuckDB session for server...")
-        self.db_session = DuckDBSession(user_config, site_config, profile, readonly)
+        # Create shared lock for thread-safety
         self.db_lock = threading.Lock()
-        logger.info("Shared DuckDB session created successfully")
         
         # Track if we've already shut down to avoid double cleanup
         self._shutdown_called = False
-        
-        # Initialize the runtime components (configs, db, python runtimes)
-        self._initialize_runtime_components()
         
         # Register signal handlers for graceful shutdown and configuration reload
         self._register_signal_handlers()
@@ -271,21 +271,26 @@ class RAWMCP:
         """
         logger.info("Initializing runtime components...")
         
-        # 1. Load configurations from source
-        logger.info("Loading site and user configurations...")
-        from mxcp.config.site_config import load_site_config
-        from mxcp.config.user_config import load_user_config
+        # 1. Load raw configurations (templates with unresolved references)
+        if not hasattr(self, '_config_templates_loaded'):
+            logger.info("Loading configuration templates...")
+            
+            # Use the initial configs passed to __init__ as templates
+            # They might already be resolved (from CLI) or might be raw
+            # The ref tracker will handle both cases
+            self.ref_tracker.set_template(self._initial_site_config, self._initial_user_config)
+            self._config_templates_loaded = True
+            logger.info("Configuration templates loaded and external references tracked.")
         
-        # Reload site config first
-        self.site_config = load_site_config()
-        # Reload user config, which depends on site config
-        self.user_config = load_user_config(self.site_config)
+        # 2. Resolve all external references
+        logger.info("Resolving external configuration references...")
+        self.site_config, self.user_config = self.ref_tracker.resolve_all()
         
-        # Update active profile based on new configs
+        # Update active profile based on resolved configs
         self.active_profile = get_active_profile(self.user_config, self.site_config, self.profile_name)
-        logger.info("Configurations loaded successfully.")
+        logger.info("External references resolved successfully.")
 
-        # 2. Create a new DuckDB session with the new config
+        # 3. Create a new DuckDB session with the new config
         logger.info("Creating new DuckDB session...")
         self.db_session = DuckDBSession(
             self.user_config,
@@ -295,7 +300,7 @@ class RAWMCP:
         )
         logger.info("New DuckDB session created.")
 
-        # 3. Initialize Python runtime and plugins
+        # 4. Initialize Python runtime and plugins
         # This will import modules and run @on_init hooks, picking up the new config
         logger.info("Initializing Python runtimes...")
         self._init_python_runtime()
@@ -304,26 +309,65 @@ class RAWMCP:
 
     def reload_configuration(self):
         """
-        Reloads the entire server configuration, including user/site configs,
-        the DuckDB session, and all Python runtimes (endpoints and plugins).
+        Reloads external configuration values (vault://, file://, env vars) only.
         
-        This method is thread-safe. It acquires a lock to wait for any
-        in-progress database queries to complete before gracefully restarting
-        all configuration-dependent components.
+        This method refreshes all external references without re-reading the
+        configuration files themselves, making it safer for long-running services.
+        
+        The reload process:
+        1. Acquires lock to wait for in-progress queries
+        2. Resolves all external references again
+        3. If values changed, recreates runtime components with new values
         """
         logger.info("Acquiring lock for configuration reload...")
         with self.db_lock:
-            logger.info("Lock acquired. Proceeding with configuration reload.")
+            logger.info("Lock acquired. Checking for external value changes...")
             try:
+                # Save current configs for comparison
+                old_site_config = self.site_config
+                old_user_config = self.user_config
+                
+                # Resolve all external references again
+                new_site_config, new_user_config = self.ref_tracker.resolve_all()
+                
+                # Check if anything actually changed
+                if (old_site_config == new_site_config and 
+                    old_user_config == new_user_config):
+                    logger.info("No changes detected in external configuration values.")
+                    return
+                
+                logger.info("External configuration values have changed. Reloading runtime components...")
+                
+                # Shutdown runtime components
                 self._shutdown_runtime_components()
-                self._initialize_runtime_components()
+                
+                # Apply the new configurations
+                self.site_config = new_site_config
+                self.user_config = new_user_config
+                self.active_profile = get_active_profile(self.user_config, self.site_config, self.profile_name)
+                
+                # Recreate runtime components with new values
+                logger.info("Creating new DuckDB session...")
+                self.db_session = DuckDBSession(
+                    self.user_config,
+                    self.site_config,
+                    self.profile_name,
+                    self.readonly
+                )
+                logger.info("New DuckDB session created.")
+                
+                # Re-initialize Python runtime
+                logger.info("Initializing Python runtimes...")
+                self._init_python_runtime()
+                
                 logger.info("Configuration reload completed successfully.")
+                
             except Exception as e:
                 logger.error(f"Failed to reload configuration: {e}", exc_info=True)
                 # In case of failure, it's safer to shut down as the server state is unknown
-                logger.error("Server state is inconsistent due to reload failure. Initiating shutdown.")
-                self.shutdown()
-        
+                logger.error("Server state may be inconsistent due to reload failure. Consider restarting.")
+                # Don't auto-shutdown here, let the operator decide
+
     def _init_python_runtime(self):
         """Initialize Python runtime and load all Python modules"""
         from mxcp.engine.python_loader import PythonEndpointLoader
@@ -1276,56 +1320,4 @@ class RAWMCP:
             logger.info("MCP server started successfully.")
         except Exception as e:
             logger.error(f"Error running MCP server: {e}")
-            raise
-
-    def _handle_reload_signal(self, signum, frame):
-        """Handle SIGHUP signal to reload the configuration."""
-        logger.info("Received SIGHUP signal, initiating configuration reload...")
-        
-        # Run the reload in a new thread to avoid blocking the signal handler
-        reload_thread = threading.Thread(target=self.reload_configuration)
-        reload_thread.start()
-
-    def register_endpoints(self):
-        """Register all discovered endpoints with MCP."""
-        for path, endpoint_def in self.endpoints:
-            try:
-                # Validate endpoint before registration using shared session
-                validation_result = validate_endpoint(str(path), self.user_config, self.site_config, self.active_profile, self.db_session)
-                
-                if validation_result["status"] != "ok":
-                    logger.warning(f"Skipping invalid endpoint {path}: {validation_result.get('message', 'Unknown error')}")
-                    self.skipped_endpoints.append({
-                        "path": str(path),
-                        "error": validation_result.get("message", "Unknown error")
-                    })
-                    continue
-
-                if "tool" in endpoint_def:
-                    self._register_tool(endpoint_def["tool"])
-                    logger.info(f"Registered tool endpoint from {path}: {endpoint_def['tool']['name']}")
-                elif "resource" in endpoint_def:
-                    self._register_resource(endpoint_def["resource"])
-                    logger.info(f"Registered resource endpoint from {path}: {endpoint_def['resource']['uri']}")
-                elif "prompt" in endpoint_def:
-                    self._register_prompt(endpoint_def["prompt"])
-                    logger.info(f"Registered prompt endpoint from {path}: {endpoint_def['prompt']['name']}")
-                else:
-                    logger.warning(f"Unknown endpoint type in {path}: {endpoint_def}")
-            except Exception as e:
-                logger.error(f"Error registering endpoint {path}: {e}")
-                self.skipped_endpoints.append({
-                    "path": str(path),
-                    "error": str(e)
-                })
-                continue
-
-        # Register DuckDB features if enabled
-        if self.enable_sql_tools:
-            self._register_duckdb_features()
-
-        # Report skipped endpoints
-        if self.skipped_endpoints:
-            logger.warning(f"Skipped {len(self.skipped_endpoints)} invalid endpoints:")
-            for skipped in self.skipped_endpoints:
-                logger.warning(f"  - {skipped['path']}: {skipped['error']}") 
+            raise 

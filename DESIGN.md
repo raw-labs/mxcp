@@ -141,6 +141,50 @@ projects:
 - **Profile-Based**: Multiple environments per project
 - **Transport Configuration**: Default settings for server protocols
 
+### Configuration Interpolation
+
+Both user and site configurations support several forms of value interpolation:
+
+1. **Environment Variables**: Use `${ENV_VAR}` syntax to reference environment variables
+2. **Vault Integration**: Use `vault://path/to/secret#field` URLs to fetch secrets from HashiCorp Vault
+3. **File References**: Use `file:///path/to/file` or `file://relative/path` URLs to read values from files
+
+Example:
+```yaml
+projects:
+  my_project:
+    profiles:
+      production:
+        secrets:
+          - name: database
+            parameters:
+              password: ${DB_PASSWORD}              # From environment
+              api_key: vault://secret/api#key      # From Vault
+              ssl_cert: file:///etc/ssl/cert.pem   # From file
+```
+
+### Hot Reload Architecture
+
+The MCP server supports hot reloading of external configuration values via SIGHUP signal. This is designed for safe updates in production environments:
+
+**Design Principles:**
+1. **Configuration templates are immutable** - Files are read once at startup
+2. **Only external values are refreshed** - vault://, file://, ${ENV_VAR}
+3. **No structural changes** - Service topology remains stable
+4. **Graceful handling** - Active requests complete before reload
+
+**Implementation:**
+- `ExternalRefTracker` scans configs at startup, building a registry of all external references
+- On SIGHUP, only these tracked references are re-resolved
+- If values change, runtime components (DB, Python) are recreated with new values
+- If resolution fails, the server continues with existing values
+
+**Benefits:**
+- Safe for production - no risk from accidental config file changes
+- Fast - only resolves what's needed
+- Predictable - operators know exactly what will change
+- Reliable - failures don't crash the service
+
 ### Repository Configuration (`mxcp-site.yml`)
 
 The repository configuration defines project-specific settings:

@@ -505,69 +505,34 @@ MXCP_DUCKDB_PATH="/path/to/shared.db" mxcp serve
 
 When `MXCP_DUCKDB_PATH` is set, it overrides the path specified in `profiles.<profile>.duckdb.path` for all profiles.
 
-### Signal-Based Configuration Reload (Unix/Linux/macOS)
+### Configuration Reload
 
-When running `mxcp serve`, you can send a `SIGHUP` signal to reload the server's configuration without restarting. This performs a hot reload of:
+For long-running MCP servers, you can reload external configuration values (secrets from vault://, file://, and environment variables) without restarting the service:
 
-- User and site configurations (re-reading from disk)
-- All secrets from environment variables, Vault, and file:// URLs
-- DuckDB connection with new credentials
-- Python runtime (endpoints and plugins) with new configuration
-
-**What is NOT reloaded:**
-- OAuth/authentication settings
-- Endpoint registrations (tools, resources, prompts)
-- Server settings (host, port, transport)
-
-**Example:**
 ```bash
-# Start the server
-mxcp serve &
-SERVER_PID=$!
-
-# Later, reload the configuration
-kill -HUP $SERVER_PID
-
-# Or find the process and send the signal
-pkill -HUP -f "mxcp serve"
+# Send SIGHUP signal to reload external values
+kill -HUP <pid>
 ```
 
-**What happens during reload:**
-1. The server receives the SIGHUP signal
-2. Waits for any active requests to complete
-3. Runs shutdown hooks for Python endpoints and plugins
-4. Closes the current DuckDB connection
-5. Re-reads user and site configurations
-6. Re-evaluates all secrets (env vars, vault://, file://)
-7. Creates a new DuckDB connection with updated config
-8. Re-initializes Python runtimes with new configuration
+The reload process:
+1. **Only external references are refreshed** - the configuration file structure is NOT re-read
+2. **Service remains available** - queries wait for the reload to complete
+3. **Automatic rollback on failure** - if new values cause errors, the server continues with old values
 
-**Important for Python endpoints and plugins:**
-- Implement proper cleanup using `@on_shutdown` or override `shutdown()` method
-- The runtime will be completely re-initialized, running `@on_init` hooks again
-- Don't store configuration values in global variables - access them through the runtime
+What gets refreshed:
+- ✅ Vault secrets (vault://)
+- ✅ File contents (file://)
+- ✅ Environment variables (${VAR})
+- ✅ DuckDB connection with new credentials
+- ✅ Python runtimes with updated configs
 
-**Example of configuration that benefits from hot reload:**
-```yaml
-# User config with secrets that might change
-projects:
-  my_project:
-    profiles:
-      production:
-        secrets:
-          - name: "database"
-            type: "postgresql"
-            parameters:
-              host: "${DB_HOST}"
-              password: "vault://secret/db#password"  # Can rotate in Vault
-              ssl_cert: "file:///etc/ssl/db.crt"     # Can update cert file
-```
+What does NOT change:
+- ❌ Configuration file structure
+- ❌ OAuth provider settings
+- ❌ Server host/port settings
+- ❌ Registered endpoints
 
-**Notes:**
-- This feature is only available on Unix-like systems (Linux, macOS)
-- The reload is atomic and thread-safe
-- If reload fails, the server initiates a graceful shutdown to prevent inconsistent state
-- Check server logs for reload status and any errors
+This design ensures that only the values that are meant to be dynamic (secrets, tokens, etc.) are refreshed, while the service structure remains stable. This prevents accidental service disruption from configuration file changes.
 
 ## Model Configuration (for Evals)
 

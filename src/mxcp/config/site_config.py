@@ -156,7 +156,10 @@ def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
         repo_path: Optional path to the repository root. If not provided, uses current directory.
         
     Returns:
-        The validated site configuration
+        The loaded and validated site configuration
+        
+    Raises:
+        FileNotFoundError: If mxcp-site.yml is not found
     """
     if repo_path is None:
         repo_path = Path.cwd()
@@ -170,7 +173,7 @@ def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
     
     # Check for legacy version format and provide migration guidance (stops execution)
     check_and_migrate_legacy_version(config, "site", str(config_path))
-    
+        
     # Load and apply JSON Schema validation
     schema_path = Path(__file__).parent / "schemas" / "mxcp-site-schema-1.json"
     with open(schema_path) as schema_file:
