@@ -29,10 +29,6 @@ def extract_validation_error(error_msg: str) -> str:
     Returns:
         A concise error message
     """
-    # For required field errors
-    if "'required'" in error_msg:
-        field = error_msg.split("'")[1]
-        return f"Missing required field: {field}"
     
     # For type errors
     if "is not of a type" in error_msg:
