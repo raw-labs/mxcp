@@ -3,6 +3,9 @@ mxcp: 1
 tool:
   name: "sosl"
   description: "Use this tool when you need advanced search capabilities across multiple Salesforce objects. It's perfect for complex search scenarios like 'find all records containing this text in any field' or 'search only in name fields across accounts and contacts'. SOSL gives you fine-grained control over which objects to search and which fields to return. For example, use this when you need to find all records mentioning a specific product across accounts, contacts, and opportunities. If you just need a simple search, use the search tool instead. If you need to query specific fields from a single object, use the soql tool instead."
+  language: python
+  source:
+    file: ../python/salesforce_endpoints.py
   parameters:
     - name: query
       type: string
@@ -11,7 +14,30 @@ tool:
         - "FIND {Acme} IN ALL FIELDS RETURNING Account(Name, Phone)"
         - "FIND {John} IN NAME FIELDS RETURNING Contact(FirstName, LastName, Email)"
         - "FIND {New York} IN ALL FIELDS RETURNING Account(Name, BillingCity), Lead(Company, City)"
-  source:
-    code: SELECT sosl_salesforce($query);
+  return:
+    type: array
+    items:
+      type: object
   annotations:
-    readOnlyHint: true 
+    readOnlyHint: true
+  tests:
+    - name: "Basic SOSL search"
+      description: "Verify SOSL search returns array of search results"
+      arguments:
+        - key: query
+          value: "FIND {Test} IN ALL FIELDS RETURNING Account(Name)"
+    - name: "Multi-object search"
+      description: "Verify SOSL can search across multiple objects"
+      arguments:
+        - key: query
+          value: "FIND {Test} IN ALL FIELDS RETURNING Account(Name), Contact(FirstName, LastName)"
+    - name: "Name field search"
+      description: "Verify SOSL can search in specific fields"
+      arguments:
+        - key: query
+          value: "FIND {Test} IN NAME FIELDS RETURNING Account(Name)"
+    - name: "Search with specific fields"
+      description: "Verify SOSL returns specified fields"
+      arguments:
+        - key: query
+          value: "FIND {Test} IN ALL FIELDS RETURNING Account(Name, Phone)"

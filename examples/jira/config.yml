@@ -1,12 +1,17 @@
 mxcp: 1
 
+# Sample configuration file for JIRA Python endpoints example
+# Copy this to ~/.mxcp/config.yml and update with your JIRA details
+
 projects:
-  jira-demo:
+  jira-python-demo:
     profiles:
-      dev:
-        plugin:
-          config:
-            jira:
+      default:
+        secrets:
+          - name: "jira"
+            type: "python"
+            parameters:
               url: "https://your-domain.atlassian.net"
               username: "your-email@example.com"
-              password: "your-api-token" 
+              password: "your-api-token"
+
