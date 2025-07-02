@@ -5,8 +5,6 @@ This module provides functionality to track and refresh external configuration
 values (vault://, file://, environment variables) without reloading the entire
 configuration structure.
 """
-import os
-import re
 import time
 import copy
 import logging
@@ -14,12 +12,13 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from mxcp.config.references import (
+    find_references,
+    resolve_value,
+    FILE_URL_PATTERN,
+)
 
-# Regular expressions for external references
-ENV_VAR_PATTERN = re.compile(r'\${([A-Za-z0-9_]+)}')
-VAULT_URL_PATTERN = re.compile(r'vault://([^#]+)(?:#(.+))?')
-FILE_URL_PATTERN = re.compile(r'file://(.+)')
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -35,32 +34,9 @@ class ExternalRef:
     def resolve(self, vault_config: Optional[Dict[str, Any]] = None) -> Any:
         """Resolve this reference to its current value."""
         try:
-            if self.ref_type == "vault":
-                from mxcp.config.user_config import _resolve_vault_url
-                value = _resolve_vault_url(self.source, vault_config)
-            elif self.ref_type == "file":
-                from mxcp.config.user_config import _resolve_file_url
-                value = _resolve_file_url(self.source)
-            elif self.ref_type == "env":
-                # Extract env var name
-                match = ENV_VAR_PATTERN.search(self.source)
-                if not match:
-                    raise ValueError(f"Invalid env var pattern: {self.source}")
-                env_var = match.group(1)
-                if env_var not in os.environ:
-                    raise ValueError(f"Environment variable {env_var} is not set")
-                # Handle full string interpolation
-                value = self.source
-                for env_match in ENV_VAR_PATTERN.findall(self.source):
-                    if env_match not in os.environ:
-                        raise ValueError(f"Environment variable {env_match} is not set")
-                    value = value.replace(f"${{{env_match}}}", os.environ[env_match])
-            else:
-                raise ValueError(f"Unknown reference type: {self.ref_type}")
-            
+            value = resolve_value(self.source, vault_config)
             self.last_error = None
             return value
-            
         except Exception as e:
             self.last_error = str(e)
             logger.error(f"Failed to resolve {self.ref_type} reference '{self.source}': {e}")
@@ -75,42 +51,6 @@ class ExternalRefTracker:
         self._template_config: Optional[Dict[str, Any]] = None
         self._resolved_config: Optional[Dict[str, Any]] = None
     
-    def scan_config(self, config: Dict[str, Any], path: Optional[List[Union[str, int]]] = None) -> List[ExternalRef]:
-        """Recursively scan configuration for external references."""
-        refs = []
-        path = path or []
-        
-        if isinstance(config, dict):
-            for key, value in config.items():
-                current_path = path + [key]
-                refs.extend(self._scan_value(value, current_path))
-        elif isinstance(config, list):
-            for i, item in enumerate(config):
-                current_path = path + [i]
-                refs.extend(self._scan_value(item, current_path))
-        
-        return refs
-    
-    def _scan_value(self, value: Any, path: List[Union[str, int]]) -> List[ExternalRef]:
-        """Scan a single value for external references."""
-        refs = []
-        
-        if isinstance(value, str):
-            # Check for external references
-            if value.startswith("vault://"):
-                refs.append(ExternalRef(path, value, "vault"))
-            elif value.startswith("file://"):
-                refs.append(ExternalRef(path, value, "file"))
-            elif ENV_VAR_PATTERN.search(value):
-                refs.append(ExternalRef(path, value, "env"))
-        elif isinstance(value, dict):
-            refs.extend(self.scan_config(value, path))
-        elif isinstance(value, list):
-            for i, item in enumerate(value):
-                refs.extend(self._scan_value(item, path + [i]))
-        
-        return refs
-    
     def set_template(self, site_config: Dict[str, Any], user_config: Dict[str, Any]):
         """Set the template configuration and scan for references."""
         self._template_config = {
@@ -118,9 +58,14 @@ class ExternalRefTracker:
             "user": copy.deepcopy(user_config)
         }
         
-        # Scan both configs for external references
+        # Scan both configs for external references using the unified function
         self.refs = []
-        self.refs.extend(self.scan_config(user_config, ["user"]))
+        
+        # Convert find_references results to ExternalRef objects
+        user_refs = find_references(user_config, ["user"])
+        for path, source, ref_type in user_refs:
+            self.refs.append(ExternalRef(path, source, ref_type))
+        
         # Note: We could also scan site_config if it supports external refs in the future
         
         logger.info(f"Found {len(self.refs)} external references in configuration")

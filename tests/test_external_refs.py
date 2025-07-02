@@ -61,7 +61,7 @@ class TestExternalRefTracker:
     """Test the ExternalRefTracker class."""
     
     def test_scan_config(self):
-        """Test scanning configuration for external references."""
+        """Test scanning configuration for external references via set_template."""
         tracker = ExternalRefTracker()
         
         config = {
@@ -83,26 +83,27 @@ class TestExternalRefTracker:
             }
         }
         
-        refs = tracker.scan_config(config)
+        # Use set_template to scan the config
+        tracker.set_template({}, config)  # Empty site config, test user config
         
         # Should find 5 external references
-        assert len(refs) == 5
+        assert len(tracker.refs) == 5
         
         # Check vault reference
-        vault_refs = [r for r in refs if r.ref_type == 'vault']
+        vault_refs = [r for r in tracker.refs if r.ref_type == 'vault']
         assert len(vault_refs) == 1
         assert vault_refs[0].source == 'vault://secret/db#password'
-        assert vault_refs[0].path == ['database', 'password']
+        assert vault_refs[0].path == ['user', 'database', 'password']  # Note: prepended with 'user'
         
         # Check file references
-        file_refs = [r for r in refs if r.ref_type == 'file']
+        file_refs = [r for r in tracker.refs if r.ref_type == 'file']
         assert len(file_refs) == 2
         file_paths = {r.source for r in file_refs}
         assert 'file:///etc/ssl/cert.pem' in file_paths
         assert 'file://config.json' in file_paths
         
         # Check env references
-        env_refs = [r for r in refs if r.ref_type == 'env']
+        env_refs = [r for r in tracker.refs if r.ref_type == 'env']
         assert len(env_refs) == 2
         env_sources = {r.source for r in env_refs}
         assert '${API_KEY}' in env_sources

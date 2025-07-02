@@ -1,7 +1,7 @@
 import pytest
 import os
 from unittest.mock import patch, MagicMock
-from mxcp.config.user_config import _resolve_vault_url, _interpolate_values
+from mxcp.config.references import resolve_vault_url, interpolate_all
 
 
 class TestVaultIntegration:
@@ -32,7 +32,7 @@ class TestVaultIntegration:
                 mock_hvac_client.return_value = mock_client
                 
                 # Test successful resolution
-                result = _resolve_vault_url('vault://secret/database#username', vault_config)
+                result = resolve_vault_url('vault://secret/database#username', vault_config)
                 assert result == 'test_user'
                 
                 # Verify client was configured correctly
@@ -47,23 +47,23 @@ class TestVaultIntegration:
         
         # Test missing key
         with pytest.raises(ValueError, match="must specify a key after '#'"):
-            _resolve_vault_url('vault://secret/database', vault_config)
+            resolve_vault_url('vault://secret/database', vault_config)
         
         # Test invalid format
         with pytest.raises(ValueError, match="Invalid vault URL format"):
-            _resolve_vault_url('invalid://url', vault_config)
+            resolve_vault_url('invalid://url', vault_config)
 
     def test_vault_disabled(self):
         """Test that vault URLs fail when vault is disabled."""
         vault_config = {'enabled': False}
         
         with pytest.raises(ValueError, match="Vault is not enabled"):
-            _resolve_vault_url('vault://secret/test#key', vault_config)
+            resolve_vault_url('vault://secret/test#key', vault_config)
 
     def test_vault_missing_config(self):
         """Test that vault URLs fail when vault config is missing."""
         with pytest.raises(ValueError, match="Vault is not enabled"):
-            _resolve_vault_url('vault://secret/test#key', None)
+            resolve_vault_url('vault://secret/test#key', None)
 
     def test_vault_missing_token(self):
         """Test that vault URLs fail when token is missing."""
@@ -75,7 +75,7 @@ class TestVaultIntegration:
         
         with patch.dict(os.environ, {}, clear=True):
             with pytest.raises(ValueError, match="Vault token not found"):
-                _resolve_vault_url('vault://secret/test#key', vault_config)
+                resolve_vault_url('vault://secret/test#key', vault_config)
 
     def test_vault_hvac_not_installed(self):
         """Test that appropriate error is raised when hvac is not installed."""
@@ -94,7 +94,7 @@ class TestVaultIntegration:
             
             with patch('builtins.__import__', side_effect=mock_import):
                 with pytest.raises(ImportError, match="hvac library is required"):
-                    _resolve_vault_url('vault://secret/test#key', vault_config)
+                    resolve_vault_url('vault://secret/test#key', vault_config)
 
     def test_vault_kv_v1_fallback(self):
         """Test that KV v1 is used as fallback when v2 fails."""
@@ -119,7 +119,7 @@ class TestVaultIntegration:
                 }
                 mock_hvac_client.return_value = mock_client
                 
-                result = _resolve_vault_url('vault://secret/database#username', vault_config)
+                result = resolve_vault_url('vault://secret/database#username', vault_config)
                 assert result == 'test_user_v1'
 
     def test_interpolate_values_with_vault(self):
@@ -153,7 +153,7 @@ class TestVaultIntegration:
                 }
                 mock_hvac_client.return_value = mock_client
                 
-                result = _interpolate_values(config, vault_config)
+                result = interpolate_all(config, vault_config)
                 
                 assert result['database']['username'] == 'db_user'
                 assert result['database']['password'] == 'db_pass'
@@ -189,7 +189,7 @@ class TestVaultIntegration:
                 }
                 mock_hvac_client.return_value = mock_client
                 
-                result = _interpolate_values(config, vault_config)
+                result = interpolate_all(config, vault_config)
                 
                 assert result['database']['username'] == 'db_user'
                 assert result['database']['host'] == 'db.example.com'
@@ -211,7 +211,7 @@ class TestVaultIntegration:
                 mock_hvac_client.return_value = mock_client
                 
                 with pytest.raises(ValueError, match="Failed to authenticate with Vault"):
-                    _resolve_vault_url('vault://secret/test#key', vault_config)
+                    resolve_vault_url('vault://secret/test#key', vault_config)
 
     def test_vault_secret_not_found(self):
         """Test that missing secrets are handled properly."""
@@ -236,4 +236,4 @@ class TestVaultIntegration:
                 mock_hvac_client.return_value = mock_client
                 
                 with pytest.raises(ValueError, match="Key 'missing_key' not found in Vault secret"):
-                    _resolve_vault_url('vault://secret/test#missing_key', vault_config) 
+                    resolve_vault_url('vault://secret/test#missing_key', vault_config) 
