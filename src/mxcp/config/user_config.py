@@ -17,6 +17,9 @@ ENV_VAR_PATTERN = re.compile(r'\${([A-Za-z0-9_]+)}')
 # Regular expression to match vault://path/to/secret#key patterns
 VAULT_URL_PATTERN = re.compile(r'vault://([^#]+)(?:#(.+))?')
 
+# Regular expression to match file:///path/to/file or file://relative/path patterns
+FILE_URL_PATTERN = re.compile(r'file://(.+)')
+
 def _resolve_vault_url(vault_url: str, vault_config: Optional[Dict[str, Any]]) -> str:
     """Resolve a vault:// URL to retrieve the secret value.
     
@@ -92,23 +95,79 @@ def _resolve_vault_url(vault_url: str, vault_config: Optional[Dict[str, Any]]) -
             raise
         raise ValueError(f"Error connecting to Vault: {e}")
 
+def _resolve_file_url(file_url: str) -> str:
+    """Resolve a file:// URL to read the content from a local file.
+    
+    Args:
+        file_url: The file:// URL to resolve (e.g., file:///path/to/secret.txt or file://relative/path.txt)
+        
+    Returns:
+        The content of the file with whitespace stripped
+        
+    Raises:
+        ValueError: If file path is invalid or file cannot be read
+        FileNotFoundError: If the file does not exist
+    """
+    # Parse the file URL
+    match = FILE_URL_PATTERN.match(file_url)
+    if not match:
+        raise ValueError(f"Invalid file URL format: '{file_url}'. Expected format: file://path/to/file")
+    
+    file_path_str = match.group(1)
+    
+    # Handle absolute paths (file:///path) vs relative paths (file://path)
+    if file_path_str.startswith('/'):
+        # Absolute path
+        file_path = Path(file_path_str)
+    else:
+        # Relative path - relative to current working directory
+        file_path = Path.cwd() / file_path_str
+    
+    try:
+        # Check if file exists
+        if not file_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        
+        # Check if it's a file (not a directory)
+        if not file_path.is_file():
+            raise ValueError(f"Path is not a file: {file_path}")
+        
+        # Read the file content
+        content = file_path.read_text(encoding='utf-8').strip()
+        
+        if not content:
+            logger.warning(f"File '{file_path}' is empty")
+        
+        return content
+        
+    except FileNotFoundError:
+        raise
+    except PermissionError as e:
+        raise ValueError(f"Permission denied reading file '{file_path}': {e}")
+    except Exception as e:
+        raise ValueError(f"Error reading file '{file_path}': {e}")
+
 def _interpolate_values(value: Any, vault_config: Optional[Dict[str, Any]] = None) -> Any:
-    """Interpolate environment variables and vault URLs in string values.
+    """Interpolate environment variables, vault URLs, and file URLs in string values.
     
     Args:
         value: The value to process. Can be a string, dict, list, or other type.
         vault_config: Optional vault configuration for resolving vault:// URLs
         
     Returns:
-        The processed value with environment variables and vault URLs interpolated.
+        The processed value with environment variables, vault URLs, and file URLs interpolated.
         
     Raises:
-        ValueError: If an environment variable is referenced but not set, or vault resolution fails.
+        ValueError: If an environment variable is referenced but not set, or URL resolution fails.
     """
     if isinstance(value, str):
         # Check for vault:// URLs first
         if value.startswith('vault://'):
             return _resolve_vault_url(value, vault_config)
+        
+        # Check for file:// URLs
+        if value.startswith('file://'):
+            return _resolve_file_url(value)
         
         # Find all environment variable references
         matches = ENV_VAR_PATTERN.findall(value)
@@ -220,10 +279,18 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
     If the config file doesn't exist and MXCP_CONFIG is not set, generates a default config
     based on the site config if generate_default is True.
     
-    The configuration supports environment variable interpolation using ${ENV_VAR} syntax.
-    For example:
+    The configuration supports multiple ways to inject values:
+    
+    1. Environment variable interpolation using ${ENV_VAR} syntax:
         database: ${DB_NAME}
         password: ${DB_PASSWORD}
+    
+    2. Vault integration using vault:// URLs:
+        password: vault://secret/db#password
+    
+    3. File path references using file:// URLs:
+        api_key: file:///path/to/api_key.txt
+        ssl_cert: file://certs/server.crt
     
     Args:
         site_config: The site configuration loaded from mxcp-site.yml
@@ -234,7 +301,7 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True) -> 
         
     Raises:
         FileNotFoundError: If the config file doesn't exist and generate_default is False
-        ValueError: If an environment variable is referenced but not set
+        ValueError: If an environment variable is referenced but not set, or URL resolution fails
     """
     path = Path(os.environ.get("MXCP_CONFIG", Path.home() / ".mxcp" / "config.yml"))
     logger.debug(f"Looking for user config at: {path}")

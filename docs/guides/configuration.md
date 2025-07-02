@@ -20,9 +20,13 @@ This guide covers all aspects of MXCP configuration, from user settings to endpo
 
 The user configuration file (`~/.mxcp/config.yml`) stores user-specific settings and secrets.
 
-### Environment Variable Interpolation
+### Dynamic Value Interpolation
 
-The user configuration file supports environment variable interpolation using `${ENV_VAR}` syntax. This allows you to reference environment variables in your configuration, which is particularly useful for sensitive values like passwords and API keys.
+The user configuration file supports several methods for injecting values dynamically:
+
+1. **Environment Variables** - Use `${ENV_VAR}` syntax
+2. **Vault Secrets** - Use `vault://path/to/secret#key` URLs
+3. **File References** - Use `file://path/to/file` URLs
 
 Example:
 ```yaml
@@ -37,12 +41,13 @@ projects:
             parameters:
               host: "localhost"
               port: "5432"
-              database: "${DB_NAME}"
-              username: "${DB_USER}"
-              password: "${DB_PASSWORD}"
+              database: "${DB_NAME}"               # From environment variable
+              username: "${DB_USER}"                # From environment variable
+              password: "vault://secret/db#password" # From Vault
+              ssl_cert: "file:///etc/ssl/db.crt"    # From file
 ```
 
-If any referenced environment variable is not set, MXCP will raise an error when loading the configuration.
+If any referenced value cannot be resolved (missing environment variable, Vault secret, or file), MXCP will raise an error when loading the configuration.
 
 ### Schema Version
 ```yaml
@@ -159,6 +164,68 @@ projects:
 **Supported Secret Engines:**
 - KV Secrets Engine v2 (default)
 - KV Secrets Engine v1 (fallback)
+
+### File References
+
+MXCP supports reading configuration values from local files using `file://` URLs. This is useful for:
+- Loading certificates or keys from files
+- Reading API tokens from secure file locations
+- Separating sensitive data from configuration files
+
+**File URL Format:**
+- Absolute paths: `file:///absolute/path/to/file`
+- Relative paths: `file://relative/path/to/file` (relative to current working directory)
+
+**Example:**
+```yaml
+mxcp: 1
+projects:
+  my_project:
+    profiles:
+      dev:
+        secrets:
+          - name: "ssl_certificates"
+            type: "custom"
+            parameters:
+              cert: "file:///etc/ssl/certs/server.crt"
+              key: "file:///etc/ssl/private/server.key"
+          - name: "api_config"
+            type: "api"
+            parameters:
+              api_key: "file://secrets/api_key.txt"
+              endpoint: "https://api.example.com"
+```
+
+**Important Notes:**
+- The file content is read when the configuration is loaded
+- Whitespace (including newlines) is automatically stripped from the file content
+- The file must exist and be readable when the configuration is loaded
+- Use appropriate file permissions to protect sensitive files
+- Relative paths are resolved from the current working directory, not the config file location
+
+### Combining Interpolation Methods
+
+You can combine environment variables, Vault URLs, and file references in the same configuration:
+
+```yaml
+mxcp: 1
+vault:
+  enabled: true
+  address: "${VAULT_ADDR}"
+  token_env: "VAULT_TOKEN"
+projects:
+  my_project:
+    profiles:
+      dev:
+        secrets:
+          - name: "app_config"
+            type: "custom"
+            parameters:
+              database_host: "${DB_HOST}"                    # Environment variable
+              database_password: "vault://secret/db#password" # Vault secret
+              ssl_cert: "file:///etc/ssl/app.crt"            # File reference
+              api_key: "file://keys/api.key"                 # Relative file path
+```
 
 ## Repository Configuration
 

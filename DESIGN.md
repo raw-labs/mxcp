@@ -120,6 +120,11 @@ projects:
               database: "${DB_NAME}"
               username: "vault://secret/db#username"
               password: "vault://secret/db#password"
+          - name: "api_keys"
+            type: "custom"
+            parameters:
+              public_key: "file:///path/to/public_key.pem"
+              private_key: "file://keys/private_key.pem"
         auth:
           provider: "github"
           github:
@@ -130,6 +135,9 @@ projects:
 **Key Features:**
 - **Environment Variable Interpolation**: Use `${ENV_VAR}` syntax
 - **Vault Integration**: Use `vault://path/to/secret#key` for secure secret retrieval
+- **File References**: Use `file://path/to/file` to read values from local files
+  - Absolute paths: `file:///absolute/path/to/file`
+  - Relative paths: `file://relative/path/to/file` (relative to current working directory)
 - **Profile-Based**: Multiple environments per project
 - **Transport Configuration**: Default settings for server protocols
 
