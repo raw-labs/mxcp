@@ -547,6 +547,142 @@ tool:
         _clear_runtime_context()
 
 
+def test_python_endpoint_with_non_duckdb_secret_type(temp_project_dir):
+    """Test Python endpoint accessing secrets with non-DuckDB types (e.g., 'custom', 'python')."""
+    # Create custom user config with non-DuckDB secret type
+    user_config_data = {
+        "mxcp": 1,
+        "projects": {
+            "test-project": {
+                "profiles": {
+                    "test": {
+                        "secrets": [
+                            {
+                                "name": "custom_api",
+                                "type": "custom",  # Non-DuckDB type
+                                "parameters": {
+                                    "api_key": "custom-api-key-456",
+                                    "endpoint": "https://api.example.com",
+                                    "headers": {
+                                        "X-Custom": "header-value"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "python_only",
+                                "type": "python",  # Hypothetical Python-only type
+                                "parameters": {
+                                    "value": "python-secret-789",
+                                    "config": {
+                                        "nested": "value"
+                                    }
+                                }
+                            }
+                        ],
+                        "plugin": {"config": {}}
+                    }
+                }
+            }
+        }
+    }
+    
+    # Write user config to file
+    config_path = temp_project_dir / "mxcp-config.yml"
+    with open(config_path, "w") as f:
+        yaml.dump(user_config_data, f)
+    
+    # Set environment variable to point to our config
+    os.environ["MXCP_CONFIG"] = str(config_path)
+    
+    try:
+        # Load configs
+        site_config = load_site_config()
+        user_config = load_user_config(site_config)
+        
+        # Update site config to reference our secrets
+        site_config["secrets"] = ["custom_api", "python_only"]
+        
+        # Create Python endpoint file
+        python_file = temp_project_dir / "python" / "custom_secrets.py"
+        python_file.write_text("""
+from mxcp.runtime import config
+
+def test_custom_secrets() -> dict:
+    # Test getting custom type secret
+    custom_params = config.get_secret("custom_api")
+    python_params = config.get_secret("python_only")
+    
+    return {
+        "custom_api_key": custom_params["api_key"] if custom_params else None,
+        "custom_endpoint": custom_params.get("endpoint") if custom_params else None,
+        "custom_headers": custom_params.get("headers") if custom_params else None,
+        "python_value": python_params["value"] if python_params else None,
+        "python_config": python_params.get("config") if python_params else None,
+        "both_secrets_found": custom_params is not None and python_params is not None
+    }
+""")
+        
+        # Create tool definition
+        tool_yaml = temp_project_dir / "tools" / "test_custom_secrets.yml"
+        tool_yaml.write_text("""
+mxcp: 1
+tool:
+  name: test_custom_secrets
+  description: Test non-DuckDB secret types
+  language: python
+  source:
+    file: ../python/custom_secrets.py
+  parameters: []
+  return:
+    type: object
+""")
+        
+        # Create test DuckDB session
+        with DuckDBSession(user_config, site_config) as test_session:
+            # Set runtime context
+            _set_runtime_context(test_session, user_config, site_config, {})
+            
+            try:
+                # Execute endpoint
+                executor = EndpointExecutor(
+                    EndpointType.TOOL,
+                    "test_custom_secrets",
+                    user_config,
+                    site_config,
+                    test_session
+                )
+                
+                # Run async execution
+                async def run_test():
+                    result = await executor.execute({})
+                    return result
+                
+                result = asyncio.run(run_test())
+                
+                # Check results - secrets should be accessible even with non-DuckDB types
+                assert result["custom_api_key"] == "custom-api-key-456"
+                assert result["custom_endpoint"] == "https://api.example.com"
+                assert result["custom_headers"]["X-Custom"] == "header-value"
+                assert result["python_value"] == "python-secret-789"
+                assert result["python_config"]["nested"] == "value"
+                assert result["both_secrets_found"] is True
+                
+                # Verify no DuckDB errors by checking that session is still valid
+                # Non-DuckDB secret types should be silently skipped
+                assert test_session.conn is not None
+                
+            finally:
+                _clear_runtime_context()
+                
+    finally:
+        # Clean up environment variable
+        if "MXCP_CONFIG" in os.environ:
+            del os.environ["MXCP_CONFIG"]
+
+
+
+
+
 def test_python_endpoint_error_handling(temp_project_dir, test_configs, test_session):
     """Test error handling in Python endpoints."""
     user_config, site_config = test_configs

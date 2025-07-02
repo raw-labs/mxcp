@@ -375,10 +375,285 @@ transport:
                         reload_thread.join(timeout=2.0)
                         assert not reload_thread.is_alive()
     
+    @patch('mxcp.config.user_config.load_user_config')
+    @patch('mxcp.server.mcp.DuckDBSession')
+    @patch('mxcp.server.mcp.EndpointLoader')
+    @patch('mxcp.plugins.base.run_plugin_shutdown_hooks')
+    def test_plugin_config_reload(self, mock_plugin_shutdown, mock_loader, mock_db, mock_load_user_config):
+        """Test that plugins are reloaded when their config changes via external references."""
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with temp_working_directory(tmpdir):
+                site_config_path = Path(tmpdir)
+                
+                # Set initial env var for plugin config
+                os.environ['PLUGIN_API_KEY'] = 'initial_key'
+                
+                # Mock user config with plugin config using env reference
+                mock_load_user_config.return_value = get_mock_user_config({
+                    'plugin': {
+                        'config': {
+                            'test_plugin': {
+                                'api_key': '${PLUGIN_API_KEY}',
+                                'endpoint': 'https://api.example.com'
+                            }
+                        }
+                    }
+                })
+                
+                # Create config files
+                (site_config_path / "mxcp-site.yml").write_text("""
+mxcp: 1
+project: test
+profile: default
+profiles:
+  default:
+    duckdb:
+      path: ":memory:"
+plugin:
+  - name: test_plugin
+    module: test_plugin_module
+    config: test_plugin
+""")
+                (site_config_path / "mxcp-config.yml").write_text("""
+transport:
+  provider: streamable-http
+""")
+                
+                # Mock DuckDB session
+                mock_db_instance = MagicMock()
+                mock_db_instance.plugins = {'test_plugin': MagicMock()}
+                mock_db_instance.close = MagicMock()
+                mock_db.return_value = mock_db_instance
+                
+                # Create server
+                server = RAWMCP(site_config_path=site_config_path)
+                
+                # Verify initial plugin config
+                plugin_cfg = server.user_config['projects']['test']['profiles']['default']['plugin']['config']['test_plugin']
+                assert plugin_cfg['api_key'] == 'initial_key'
+                
+                # Change env var
+                os.environ['PLUGIN_API_KEY'] = 'updated_key'
+                
+                # Call reload
+                server.reload_configuration()
+                
+                # Verify plugin shutdown was called
+                mock_plugin_shutdown.assert_called_once()
+                
+                # Verify new plugin config
+                plugin_cfg = server.user_config['projects']['test']['profiles']['default']['plugin']['config']['test_plugin']
+                assert plugin_cfg['api_key'] == 'updated_key'
+                
+                # Verify DB session was recreated (closed and new instance created)
+                assert mock_db_instance.close.called
+                assert mock_db.call_count >= 2  # Initial creation + reload
+    
+    @patch('mxcp.config.user_config.load_user_config')
+    @patch('mxcp.server.mcp.DuckDBSession')
+    @patch('mxcp.server.mcp.EndpointLoader')
+    @patch('mxcp.runtime._run_shutdown_hooks')
+    @patch('mxcp.plugins.base.run_plugin_shutdown_hooks')
+    def test_end_to_end_reload_with_secrets_and_plugins(self, mock_plugin_shutdown, mock_py_shutdown, 
+                                                        mock_loader, mock_db, mock_load_user_config):
+        """Test end-to-end reload with Python endpoints using secrets and plugins using config."""
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with temp_working_directory(tmpdir):
+                site_config_path = Path(tmpdir)
+                
+                # Create files for external references
+                secret_file = Path(tmpdir) / "api_secret.txt"
+                secret_file.write_text("initial_secret_value")
+                
+                # Set env vars
+                os.environ['PLUGIN_TIMEOUT'] = '30'
+                os.environ['ENDPOINT_FEATURE'] = 'feature_v1'
+                
+                # Mock user config with both secrets and plugin config
+                mock_load_user_config.return_value = get_mock_user_config({
+                    'secrets': [
+                        {
+                            'name': 'custom_api',
+                            'type': 'custom',  # Non-DuckDB type
+                            'parameters': {
+                                'api_key': f'file://{secret_file}',
+                                'feature_flag': '${ENDPOINT_FEATURE}'
+                            }
+                        }
+                    ],
+                    'plugin': {
+                        'config': {
+                            'api_plugin': {
+                                'timeout': '${PLUGIN_TIMEOUT}',
+                                'base_url': 'https://api.example.com'
+                            }
+                        }
+                    }
+                })
+                
+                # Create config files
+                (site_config_path / "mxcp-site.yml").write_text("""
+mxcp: 1
+project: test
+profile: default
+profiles:
+  default:
+    duckdb:
+      path: ":memory:"
+secrets:
+  - custom_api
+plugin:
+  - name: api_plugin
+    module: api_plugin_module
+    config: api_plugin
+""")
+                (site_config_path / "mxcp-config.yml").write_text("""
+transport:
+  provider: streamable-http
+""")
+                
+                # Mock DuckDB session
+                mock_db_instance = MagicMock()
+                mock_db.return_value = mock_db_instance
+                
+                # Create server
+                server = RAWMCP(site_config_path=site_config_path)
+                
+                # Verify initial values
+                secrets = server.user_config['projects']['test']['profiles']['default']['secrets']
+                secret_params = next(s['parameters'] for s in secrets if s['name'] == 'custom_api')
+                assert secret_params['api_key'] == 'initial_secret_value'
+                assert secret_params['feature_flag'] == 'feature_v1'
+                
+                plugin_cfg = server.user_config['projects']['test']['profiles']['default']['plugin']['config']['api_plugin']
+                assert plugin_cfg['timeout'] == '30'
+                
+                # Change all external values
+                secret_file.write_text("updated_secret_value")
+                os.environ['PLUGIN_TIMEOUT'] = '60'
+                os.environ['ENDPOINT_FEATURE'] = 'feature_v2'
+                
+                # Call reload
+                server.reload_configuration()
+                
+                # Verify both shutdown hooks were called
+                mock_py_shutdown.assert_called_once()
+                mock_plugin_shutdown.assert_called_once()
+                
+                # Verify all values were updated
+                secrets = server.user_config['projects']['test']['profiles']['default']['secrets']
+                secret_params = next(s['parameters'] for s in secrets if s['name'] == 'custom_api')
+                assert secret_params['api_key'] == 'updated_secret_value'
+                assert secret_params['feature_flag'] == 'feature_v2'
+                
+                plugin_cfg = server.user_config['projects']['test']['profiles']['default']['plugin']['config']['api_plugin']
+                assert plugin_cfg['timeout'] == '60'
+    
+    @patch('mxcp.config.user_config.load_user_config')
+    @patch('mxcp.server.mcp.DuckDBSession')
+    @patch('mxcp.server.mcp.EndpointLoader')
+    @patch('mxcp.runtime._run_shutdown_hooks')
+    def test_python_endpoint_with_non_duckdb_secrets_reload(self, mock_py_shutdown, mock_loader, mock_db, mock_load_user_config):
+        """Test that Python endpoints can access non-DuckDB secret types after reload."""
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with temp_working_directory(tmpdir):
+                site_config_path = Path(tmpdir)
+                
+                # Create files for external references
+                secret_file = Path(tmpdir) / "api_secret.txt"
+                secret_file.write_text("initial_api_key")
+                
+                # Set env var
+                os.environ['CUSTOM_SECRET_TYPE'] = 'python'
+                
+                # Mock user config with non-DuckDB secret types
+                mock_load_user_config.return_value = get_mock_user_config({
+                    'secrets': [
+                        {
+                            'name': 'custom_secret',
+                            'type': 'custom',  # Non-DuckDB type
+                            'parameters': {
+                                'api_key': f'file://{secret_file}',
+                                'endpoint': 'https://api.example.com'
+                            }
+                        },
+                        {
+                            'name': 'python_secret',
+                            'type': '${CUSTOM_SECRET_TYPE}',  # Dynamic non-DuckDB type
+                            'parameters': {
+                                'value': 'python-only-secret',
+                                'config': {
+                                    'nested': 'value'
+                                }
+                            }
+                        }
+                    ]
+                })
+                
+                # Create config files
+                (site_config_path / "mxcp-site.yml").write_text("""
+mxcp: 1
+project: test
+profile: default
+profiles:
+  default:
+    duckdb:
+      path: ":memory:"
+secrets:
+  - custom_secret
+  - python_secret
+""")
+                (site_config_path / "mxcp-config.yml").write_text("""
+transport:
+  provider: streamable-http
+""")
+                
+                # Mock DuckDB session
+                mock_db_instance = MagicMock()
+                mock_db_instance.close = MagicMock()
+                mock_db.return_value = mock_db_instance
+                
+                # Create server
+                server = RAWMCP(site_config_path=site_config_path)
+                
+                # Verify initial secret values
+                secrets = server.user_config['projects']['test']['profiles']['default']['secrets']
+                custom_secret = next(s for s in secrets if s['name'] == 'custom_secret')
+                python_secret = next(s for s in secrets if s['name'] == 'python_secret')
+                
+                assert custom_secret['type'] == 'custom'
+                assert custom_secret['parameters']['api_key'] == 'initial_api_key'
+                assert python_secret['type'] == 'python'
+                
+                # Change external values
+                secret_file.write_text('updated_api_key')
+                os.environ['CUSTOM_SECRET_TYPE'] = 'python_v2'
+                
+                # Call reload
+                server.reload_configuration()
+                
+                # Verify Python shutdown hooks were called
+                mock_py_shutdown.assert_called_once()
+                
+                # Verify new secret values
+                secrets = server.user_config['projects']['test']['profiles']['default']['secrets']
+                custom_secret = next(s for s in secrets if s['name'] == 'custom_secret')
+                python_secret = next(s for s in secrets if s['name'] == 'python_secret')
+                
+                assert custom_secret['parameters']['api_key'] == 'updated_api_key'
+                assert python_secret['type'] == 'python_v2'  # Type changed via env var
+                
+                # Verify DB session was recreated
+                assert mock_db_instance.close.called
+                assert mock_db.call_count >= 2
+    
     def teardown_method(self):
         """Clean up environment variables after each test."""
         # Clean up any test env vars
-        for var in ['TEST_DB_PASSWORD', 'TEST_ERROR_VAR']:
+        for var in ['TEST_DB_PASSWORD', 'TEST_ERROR_VAR', 'PLUGIN_API_KEY', 'PLUGIN_TIMEOUT', 'ENDPOINT_FEATURE', 'CUSTOM_SECRET_TYPE']:
             if var in os.environ:
                 del os.environ[var]
 
