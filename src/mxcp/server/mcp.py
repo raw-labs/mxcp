@@ -35,46 +35,187 @@ logger = logging.getLogger(__name__)
 class RAWMCP:
     """MXCP MCP Server implementation that bridges MXCP endpoints with MCP protocol."""
     
-    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None, stateless_http: bool = False, json_response: bool = False, host: str = "localhost", port: int = 8000, enable_sql_tools: Optional[bool] = None, readonly: bool = False):
+    def __init__(self, 
+                 site_config_path: Optional[Path] = None,
+                 profile: Optional[str] = None, 
+                 transport: Optional[str] = None,
+                 host: Optional[str] = None,
+                 port: Optional[int] = None,
+                 stateless_http: Optional[bool] = None,
+                 json_response: bool = False,
+                 enable_sql_tools: Optional[bool] = None, 
+                 readonly: bool = False,
+                 debug: bool = False):
         """Initialize the MXCP MCP server.
         
-        Args:
-            user_config: The user configuration loaded from ~/.mxcp/config.yml
-            site_config: The site configuration loaded from mxcp-site.yml
-            profile: Optional profile name to use for configuration
-            stateless_http: Whether to run in stateless HTTP mode
-            json_response: Whether to use JSON responses instead of SSE
-            host: The host to bind to
-            port: The port to bind to
-            enable_sql_tools: Whether to enable built-in SQL querying and schema exploration tools.
-                            If None, uses the value from site_config.sql_tools.enabled (defaults to False)
-            readonly: Whether to open DuckDB connection in read-only mode
-        """
-        # Store the provided configs (these may or may not be resolved)
-        # We'll properly initialize them in _initialize_runtime_components
-        self._initial_user_config = user_config
-        self._initial_site_config = site_config
-        self.profile_name = profile or site_config["profile"]
-        self.readonly = readonly
+        The server loads all configurations automatically and provides methods
+        to query its state. Command-line options override config file settings.
         
-        # Initialize external reference tracker
+        Args:
+            site_config_path: Optional path to find mxcp-site.yml. Defaults to current directory.
+            profile: Optional profile name to use. Defaults to site config profile.
+            transport: Optional transport override. Defaults to user config setting.
+            host: Optional host override. Defaults to user config setting.
+            port: Optional port override. Defaults to user config setting.
+            stateless_http: Optional stateless mode override. Defaults to user config setting.
+            json_response: Whether to use JSON responses instead of SSE
+            enable_sql_tools: Optional SQL tools override. Defaults to site config setting.
+            readonly: Whether to open DuckDB connection in read-only mode
+            debug: Enable debug logging
+        """
+        # Store the path for hot reload
+        self.site_config_path = site_config_path or Path.cwd()
+        self.debug = debug
+        
+        # Load configurations
+        logger.info("Loading configurations...")
+        from mxcp.config.site_config import load_site_config
+        from mxcp.config.user_config import load_user_config
+        
+        self._site_config_template = load_site_config(self.site_config_path)
+        self._user_config_template = load_user_config(self._site_config_template)
+        
+        # Store command-line overrides
+        self._cli_overrides = {
+            'profile': profile,
+            'transport': transport,
+            'host': host,
+            'port': port,
+            'stateless_http': stateless_http,
+            'enable_sql_tools': enable_sql_tools,
+            'readonly': readonly,
+            'json_response': json_response
+        }
+        
+        # Initialize external reference tracker for hot reload
         self.ref_tracker = ExternalRefTracker()
         
-        # Initialize the runtime components (this will set self.user_config, self.site_config, etc.)
+        # Resolve configurations
+        self._resolve_and_apply_configs()
+        
+        # Initialize runtime components
         self._initialize_runtime_components()
         
-        # Initialize OAuth authentication using profile-specific auth config
+        # Initialize OAuth authentication
+        self._initialize_oauth()
+        
+        # Initialize FastMCP
+        self._initialize_fastmcp()
+        
+        # Load and validate endpoints
+        self._load_endpoints()
+        
+        # Initialize audit logger
+        self._initialize_audit_logger()
+        
+        # Track transport mode and other state
+        self.transport_mode = None
+        self._shutdown_called = False
+        
+        # Create shared lock for thread-safety
+        self.db_lock = threading.Lock()
+        
+        # Register signal handlers
+        self._register_signal_handlers()
+
+    def _resolve_and_apply_configs(self):
+        """Resolve external references and apply CLI overrides."""
+        # Check if configs contain unresolved references
+        import json
+        config_str = json.dumps(self._site_config_template) + json.dumps(self._user_config_template)
+        needs_resolution = any(pattern in config_str for pattern in ['${', 'vault://', 'file://'])
+        
+        if needs_resolution:
+            # Set templates and resolve
+            logger.info("Resolving external configuration references...")
+            self.ref_tracker.set_template(self._site_config_template, self._user_config_template)
+            self._config_templates_loaded = True
+            self.site_config, self.user_config = self.ref_tracker.resolve_all()
+        else:
+            # Already resolved
+            self.site_config = self._site_config_template
+            self.user_config = self._user_config_template
+            self._config_templates_loaded = False
+            
+        # Apply profile override
+        self.profile_name = self._cli_overrides['profile'] or self.site_config["profile"]
+        self.active_profile = get_active_profile(self.user_config, self.site_config, self.profile_name)
+        
+        # Extract transport config with overrides
+        transport_config = self.user_config.get("transport", {})
+        self.transport = self._cli_overrides['transport'] or transport_config.get("provider", "streamable-http")
+        
+        http_config = transport_config.get("http", {})
+        self.host = self._cli_overrides['host'] or http_config.get("host", "localhost")
+        self.port = self._cli_overrides['port'] or http_config.get("port", 8000)
+        
+        config_stateless = http_config.get("stateless", False)
+        self.stateless_http = self._cli_overrides['stateless_http'] if self._cli_overrides['stateless_http'] is not None else config_stateless
+        
+        self.json_response = self._cli_overrides['json_response']
+        self.readonly = self._cli_overrides['readonly']
+        
+        # SQL tools setting
+        site_sql_tools = self.site_config.get("sql_tools", {}).get("enabled", False)
+        self.enable_sql_tools = self._cli_overrides['enable_sql_tools'] if self._cli_overrides['enable_sql_tools'] is not None else site_sql_tools
+    
+    def get_config_info(self) -> Dict[str, Any]:
+        """Get configuration information for display."""
+        return {
+            'project': self.site_config['project'],
+            'profile': self.profile_name,
+            'transport': self.transport,
+            'host': self.host,
+            'port': self.port,
+            'readonly': self.readonly,
+            'stateless': self.stateless_http,
+            'sql_tools_enabled': self.enable_sql_tools
+        }
+    
+    def get_endpoint_counts(self) -> Dict[str, int]:
+        """Get counts of valid endpoints by type."""
+        tool_count = sum(1 for _, endpoint, error in self._all_endpoints if error is None and "tool" in endpoint)
+        resource_count = sum(1 for _, endpoint, error in self._all_endpoints if error is None and "resource" in endpoint)
+        prompt_count = sum(1 for _, endpoint, error in self._all_endpoints if error is None and "prompt" in endpoint)
+        
+        return {
+            'tools': tool_count,
+            'resources': resource_count,
+            'prompts': prompt_count,
+            'total': tool_count + resource_count + prompt_count
+        }
+    
+    def _load_endpoints(self):
+        """Load and categorize endpoints."""
+        from mxcp.endpoints.loader import EndpointLoader
+        self.loader = EndpointLoader(self.site_config)
+        
+        # Store all endpoints for reference
+        self._all_endpoints = self.loader.discover_endpoints()
+        
+        # Split into valid and failed
+        self.endpoints = [(path, endpoint) for path, endpoint, error in self._all_endpoints if error is None]
+        self.skipped_endpoints = [{"path": str(path), "error": error} for path, _, error in self._all_endpoints if error is not None]
+        
+        # Log results
+        logger.info(f"Discovered {len(self.endpoints)} valid endpoints, {len(self.skipped_endpoints)} failed endpoints")
+        if self.skipped_endpoints:
+            for skipped in self.skipped_endpoints:
+                logger.warning(f"Failed to load endpoint {skipped['path']}: {skipped['error']}")
+    
+    def _initialize_oauth(self):
+        """Initialize OAuth authentication using profile-specific auth config."""
         auth_config = self.active_profile.get("auth", {})
-        self.oauth_handler = create_oauth_handler(auth_config, host=host, port=port, user_config=self.user_config)
+        self.oauth_handler = create_oauth_handler(auth_config, host=self.host, port=self.port, user_config=self.user_config)
         self.oauth_server = None
-        auth_settings = None
+        self.auth_settings = None
         
         if self.oauth_handler:
             self.oauth_server = GeneralOAuthAuthorizationServer(self.oauth_handler, auth_config, self.user_config)
             
             # Use URL builder for OAuth endpoints
             url_builder = create_url_builder(self.user_config)
-            base_url = url_builder.get_base_url(host=host, port=port)
+            base_url = url_builder.get_base_url(host=self.host, port=self.port)
             
             # Get authorization configuration
             auth_authorization = auth_config.get("authorization", {})
@@ -82,108 +223,46 @@ class RAWMCP:
             
             logger.info(f"Authorization configured - required scopes: {required_scopes or 'none (authentication only)'}")
             
-            auth_settings = AuthSettings(
+            self.auth_settings = AuthSettings(
                 issuer_url=base_url,
                 client_registration_options=ClientRegistrationOptions(
                     enabled=True,
-                    # Accept any scope during client registration
-                    valid_scopes=None,  # Always None = accept any scope
-                    # Set default scopes to match required scopes so new clients get the right permissions
+                    valid_scopes=None,  # Accept any scope
                     default_scopes=required_scopes if required_scopes else None,
                 ),
-                # Use the configured required scopes (empty list = no scopes required)
                 required_scopes=required_scopes if required_scopes else None,
             )
             logger.info(f"OAuth authentication enabled with provider: {auth_config.get('provider')}")
         else:
             logger.info("OAuth authentication disabled")
-        
-        # Initialize FastMCP with optional auth settings
+    
+    def _initialize_fastmcp(self):
+        """Initialize the FastMCP server."""
         fastmcp_kwargs = {
             "name": "MXCP Server",
-            "stateless_http": stateless_http,
-            "json_response": json_response,
-            "host": host,
-            "port": port
+            "stateless_http": self.stateless_http,
+            "json_response": self.json_response,
+            "host": self.host,
+            "port": self.port
         }
         
-        logger.info(f"Initializing FastMCP with host={host}, port={port}")
+        logger.info(f"Initializing FastMCP with host={self.host}, port={self.port}")
         
-        if auth_settings and self.oauth_server:
-            fastmcp_kwargs["auth"] = auth_settings
+        if self.auth_settings and self.oauth_server:
+            fastmcp_kwargs["auth"] = self.auth_settings
             fastmcp_kwargs["auth_server_provider"] = self.oauth_server
             
         self.mcp = FastMCP(**fastmcp_kwargs)
         
-        # Debug: Check what FastMCP actually set for host and port
-        logger.info(f"FastMCP settings after initialization: host={self.mcp.settings.host}, port={self.mcp.settings.port}")
-        
         # Initialize authentication middleware
         self.auth_middleware = AuthenticationMiddleware(self.oauth_handler, self.oauth_server)
-        logger.info(f"Authentication middleware initialized with oauth_handler: {self.oauth_handler}, oauth_server: {self.oauth_server}")
         
-        # Register OAuth callback route if authentication is enabled
+        # Register OAuth routes if enabled
         if self.oauth_handler and self.oauth_server:
-            callback_path = self.oauth_handler.callback_path
-            logger.info(f"Registering OAuth callback route: {callback_path}")
-            
-            # Use custom_route to register the callback
-            @self.mcp.custom_route(callback_path, methods=["GET"])
-            async def oauth_callback(request):
-                return await self.oauth_handler.on_callback(request, self.oauth_server)
-            
-            # Register OAuth Protected Resource metadata endpoint
-            @self.mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
-            async def oauth_protected_resource_metadata(request):
-                """Handle OAuth Protected Resource metadata requests (RFC 8693)"""
-                from starlette.responses import JSONResponse
-                
-                # Use URL builder with request context for proper scheme detection
-                url_builder = create_url_builder(self.user_config)
-                base_url = url_builder.get_base_url(request)
-                
-                # Get supported scopes from configuration
-                auth_authorization = auth_config.get("authorization", {})
-                supported_scopes = auth_authorization.get("required_scopes", [])
-                
-                metadata = {
-                    "resource": base_url,
-                    "authorization_servers": [base_url],
-                    "scopes_supported": supported_scopes,
-                    "bearer_methods_supported": ["header"],
-                    "resource_documentation": f"{base_url}/docs"
-                }
-                
-                return JSONResponse(
-                    content=metadata,
-                    headers={"Content-Type": "application/json"}
-                )
-        
-        self.loader = EndpointLoader(self.site_config)
-        
-        # Split endpoints into valid and failed
-        discovered = self.loader.discover_endpoints()
-        self.endpoints = [(path, endpoint) for path, endpoint, error in discovered if error is None]
-        self.skipped_endpoints = [{"path": str(path), "error": error} for path, _, error in discovered if error is not None]
-        
-        # Log discovery results
-        logger.info(f"Discovered {len(self.endpoints)} valid endpoints, {len(self.skipped_endpoints)} failed endpoints")
-        if self.skipped_endpoints:
-            for skipped in self.skipped_endpoints:
-                logger.warning(f"Failed to load endpoint {skipped['path']}: {skipped['error']}")
-        
-        # Determine SQL tools enabled state
-        if enable_sql_tools is None:
-            # Use site config value, defaulting to False if not specified
-            self.enable_sql_tools = site_config.get("sql_tools", {}).get("enabled", False)
-        else:
-            # Use explicitly provided value
-            self.enable_sql_tools = enable_sql_tools
-            
-        # Cache for dynamically created models
-        self._model_cache = {}
-
-        # Initialize audit logger if enabled
+            self._register_oauth_routes()
+    
+    def _initialize_audit_logger(self):
+        """Initialize audit logger if enabled."""
         profile_config = self.site_config["profiles"][self.profile_name]
         audit_config = profile_config.get("audit", {})
         if audit_config.get("enabled", False):
@@ -193,17 +272,6 @@ class RAWMCP:
             )
         else:
             self.audit_logger = None
-        
-        self.transport_mode = None
-        
-        # Create shared lock for thread-safety
-        self.db_lock = threading.Lock()
-        
-        # Track if we've already shut down to avoid double cleanup
-        self._shutdown_called = False
-        
-        # Register signal handlers for graceful shutdown and configuration reload
-        self._register_signal_handlers()
 
     def _register_signal_handlers(self):
         """Register signal handlers for graceful shutdown and reload."""
@@ -263,47 +331,26 @@ class RAWMCP:
 
     def _initialize_runtime_components(self):
         """
-        Initializes all reloadable, configuration-dependent components.
-        This includes loading configurations, creating the DB session, and
-        initializing the Python runtimes for endpoints and plugins.
-
-        This does NOT re-initialize the authentication provider or re-register endpoints.
+        Initializes runtime components (DB session and Python runtime).
         """
         logger.info("Initializing runtime components...")
         
-        # 1. Load raw configurations (templates with unresolved references)
-        if not hasattr(self, '_config_templates_loaded'):
-            logger.info("Loading configuration templates...")
-            
-            # Use the initial configs passed to __init__ as templates
-            # They might already be resolved (from CLI) or might be raw
-            # The ref tracker will handle both cases
-            self.ref_tracker.set_template(self._initial_site_config, self._initial_user_config)
-            self._config_templates_loaded = True
-            logger.info("Configuration templates loaded and external references tracked.")
-        
-        # 2. Resolve all external references
-        logger.info("Resolving external configuration references...")
-        self.site_config, self.user_config = self.ref_tracker.resolve_all()
-        
-        # Update active profile based on resolved configs
-        self.active_profile = get_active_profile(self.user_config, self.site_config, self.profile_name)
-        logger.info("External references resolved successfully.")
-
-        # 3. Create a new DuckDB session with the new config
-        logger.info("Creating new DuckDB session...")
+        # Create DuckDB session
+        logger.info("Creating DuckDB session...")
         self.db_session = DuckDBSession(
             self.user_config,
             self.site_config,
             self.profile_name,
             self.readonly
         )
-        logger.info("New DuckDB session created.")
+        logger.info("DuckDB session created.")
 
-        # 4. Initialize Python runtime and plugins
-        # This will import modules and run @on_init hooks, picking up the new config
+        # Initialize Python runtime and plugins
         logger.info("Initializing Python runtimes...")
         self._init_python_runtime()
+        
+        # Cache for dynamically created models
+        self._model_cache = {}
         
         logger.info("Runtime components initialization complete.")
 
@@ -315,19 +362,40 @@ class RAWMCP:
         configuration files themselves, making it safer for long-running services.
         
         The reload process:
-        1. Acquires lock to wait for in-progress queries
+        1. Loads raw config templates if not already loaded
         2. Resolves all external references again
         3. If values changed, recreates runtime components with new values
         """
         logger.info("Acquiring lock for configuration reload...")
         with self.db_lock:
-            logger.info("Lock acquired. Checking for external value changes...")
+            logger.info("Lock acquired. Starting configuration reload...")
             try:
+                # Ensure we have raw templates for external reference tracking
+                if not self._config_templates_loaded or not self.ref_tracker._template_config:
+                    logger.info("Loading raw configuration templates for hot reload...")
+                    
+                    # Load raw configs without resolving references
+                    from mxcp.config.site_config import load_site_config
+                    from mxcp.config.user_config import load_user_config
+                    
+                    # Determine site config path
+                    site_path = self.site_config_path or Path.cwd()
+                    
+                    # Load raw templates
+                    site_template = load_site_config(site_path)
+                    user_template = load_user_config(site_template, resolve_refs=False)
+                    
+                    # Set templates in tracker
+                    self.ref_tracker.set_template(site_template, user_template)
+                    self._config_templates_loaded = True
+                    logger.info("Raw configuration templates loaded.")
+                
                 # Save current configs for comparison
                 old_site_config = self.site_config
                 old_user_config = self.user_config
                 
                 # Resolve all external references again
+                logger.info("Resolving external configuration references...")
                 new_site_config, new_user_config = self.ref_tracker.resolve_all()
                 
                 # Check if anything actually changed
@@ -1320,4 +1388,42 @@ class RAWMCP:
             logger.info("MCP server started successfully.")
         except Exception as e:
             logger.error(f"Error running MCP server: {e}")
-            raise 
+            raise
+
+    def _register_oauth_routes(self):
+        """Register OAuth callback routes."""
+        callback_path = self.oauth_handler.callback_path
+        logger.info(f"Registering OAuth callback route: {callback_path}")
+        
+        # Use custom_route to register the callback
+        @self.mcp.custom_route(callback_path, methods=["GET"])
+        async def oauth_callback(request):
+            return await self.oauth_handler.on_callback(request, self.oauth_server)
+        
+        # Register OAuth Protected Resource metadata endpoint
+        @self.mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
+        async def oauth_protected_resource_metadata(request):
+            """Handle OAuth Protected Resource metadata requests (RFC 8693)"""
+            from starlette.responses import JSONResponse
+            
+            # Use URL builder with request context for proper scheme detection
+            url_builder = create_url_builder(self.user_config)
+            base_url = url_builder.get_base_url(request)
+            
+            # Get supported scopes from configuration
+            auth_config = self.active_profile.get("auth", {})
+            auth_authorization = auth_config.get("authorization", {})
+            supported_scopes = auth_authorization.get("required_scopes", [])
+            
+            metadata = {
+                "resource": base_url,
+                "authorization_servers": [base_url],
+                "scopes_supported": supported_scopes,
+                "bearer_methods_supported": ["header"],
+                "resource_documentation": f"{base_url}/docs"
+            }
+            
+            return JSONResponse(
+                content=metadata,
+                headers={"Content-Type": "application/json"}
+            ) 

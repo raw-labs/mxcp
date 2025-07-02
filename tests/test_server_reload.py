@@ -66,17 +66,39 @@ class TestServerReload:
         
         return site_config, user_config
     
-    def _create_server_with_mocks(self, site_config, user_config):
+    def _create_server_with_mocks(self, mock_configs):
         """Helper to create a server with all necessary mocks."""
-        with patch('mxcp.server.mcp.EndpointLoader') as mock_loader:
-            mock_loader.return_value.discover_endpoints.return_value = []
-            
-            with patch.object(RAWMCP, '_init_python_runtime'):
-                with patch.object(RAWMCP, 'register_endpoints'):
-                    with patch.object(RAWMCP, '_register_signal_handlers'):
-                        with patch('mxcp.server.mcp.DuckDBSession'):
-                            server = RAWMCP(user_config, site_config)
-                            return server
+        site_config, user_config = mock_configs
+        
+        with patch.object(RAWMCP, '_init_python_runtime'):
+            with patch.object(RAWMCP, '_register_signal_handlers'):
+                with patch('mxcp.server.mcp.DuckDBSession'):
+                    # Mock the config loading to return our test configs
+                    with patch('mxcp.config.site_config.load_site_config', return_value=site_config):
+                        with patch('mxcp.config.user_config.load_user_config', return_value=user_config):
+                            # Mock all initialization methods
+                            with patch.object(RAWMCP, '_initialize_oauth'):
+                                with patch.object(RAWMCP, '_initialize_fastmcp'):
+                                    with patch.object(RAWMCP, '_load_endpoints'):
+                                        with patch.object(RAWMCP, '_initialize_audit_logger'):
+                                            # Mock FastMCP
+                                            with patch('mxcp.server.mcp.FastMCP') as mock_fastmcp:
+                                                mock_mcp = MagicMock()
+                                                mock_fastmcp.return_value = mock_mcp
+                                                
+                                                server = RAWMCP(site_config_path=Path.cwd())
+                                                # Set required attributes manually since we're mocking initialization
+                                                server.mcp = mock_mcp
+                                                server._all_endpoints = []
+                                                server.endpoints = []
+                                                server.skipped_endpoints = []
+                                                server.loader = MagicMock()
+                                                server.audit_logger = None
+                                                server.oauth_handler = None
+                                                server.oauth_server = None
+                                                server.auth_middleware = MagicMock()
+                                                server._model_cache = {}
+                                                return server
     
     def test_reload_updates_external_values(self, mock_configs):
         """Test that reload updates external configuration values."""
@@ -86,7 +108,7 @@ class TestServerReload:
         os.environ['TEST_VALUE'] = 'initial_value'
         
         # Create server
-        server = self._create_server_with_mocks(site_config, user_config)
+        server = self._create_server_with_mocks(mock_configs)
         
         # Verify initial value was resolved
         profile = server.user_config['projects']['test_project']['profiles']['default']
@@ -113,7 +135,7 @@ class TestServerReload:
         os.environ['TEST_VALUE'] = 'same_value'
         
         # Create server
-        server = self._create_server_with_mocks(site_config, user_config)
+        server = self._create_server_with_mocks(mock_configs)
         
         # Mock the shutdown method to track if it's called
         shutdown_called = False
@@ -140,7 +162,7 @@ class TestServerReload:
         user_config['projects']['test_project']['profiles']['default']['secrets'][0]['parameters']['value'] = f'file://{secret_file}'
         
         # Create server
-        server = self._create_server_with_mocks(site_config, user_config)
+        server = self._create_server_with_mocks(mock_configs)
         
         # Verify initial value
         profile = server.user_config['projects']['test_project']['profiles']['default']
@@ -168,7 +190,7 @@ class TestServerReload:
         os.environ['TEST_VALUE'] = 'initial_value'
         
         # Create server
-        server = self._create_server_with_mocks(site_config, user_config)
+        server = self._create_server_with_mocks(mock_configs)
         
         # Verify initial state
         profile = server.user_config['projects']['test_project']['profiles']['default']
@@ -197,7 +219,7 @@ class TestServerReload:
         reload_called = threading.Event()
         
         # Create server
-        server = self._create_server_with_mocks(site_config, user_config)
+        server = self._create_server_with_mocks(mock_configs)
         
         # Mock reload_configuration to track calls
         def mock_reload():

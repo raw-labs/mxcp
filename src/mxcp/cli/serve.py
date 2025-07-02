@@ -1,15 +1,10 @@
 import click
 import signal
-from typing import Dict, Any, Optional
-from pydantic import BaseModel
+from typing import Optional
 from mxcp.server.mcp import RAWMCP
 from mxcp.cli.utils import output_error, configure_logging, get_env_flag, get_env_profile
-from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config
 from mxcp.config.analytics import track_command_with_timing
-
-class EndpointRequest(BaseModel):
-    params: Dict[str, Any] = {}
+from pathlib import Path
 
 @click.command(name="serve")
 @click.option("--profile", help="Profile name to use")
@@ -46,107 +41,86 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
         
     # Configure logging
     configure_logging(debug)
+    
+    # Convert sql-tools string to boolean
+    enable_sql_tools = None
+    if sql_tools == 'true':
+        enable_sql_tools = True
+    elif sql_tools == 'false':
+        enable_sql_tools = False
 
     try:
-        site_config = load_site_config()
-        user_config = load_user_config(site_config)
-
-        # Get transport settings from user config, with CLI overrides
-        transport_config = user_config.get("transport", {})
-        final_transport = transport or transport_config.get("provider", "streamable-http")
-        
-        # Get host and port from user config if not specified via CLI
-        http_config = transport_config.get("http", {})
-        if port is None:
-            final_port = http_config.get("port", 8000)
-        else:
-            final_port = port
-            
-        # Get host from user config (defaults to localhost)
-        final_host = http_config.get("host", "localhost")
-        
-        # Get stateless setting from user config, with CLI override
-        # CLI flag takes precedence over config setting
-        config_stateless = http_config.get("stateless", False)
-        final_stateless = stateless if stateless else config_stateless
-
-        # Determine SQL tools setting for server
-        if sql_tools == 'true':
-            enable_sql_tools_param = True
-        elif sql_tools == 'false':
-            enable_sql_tools_param = False
-        else:
-            enable_sql_tools_param = None  # Use site config default
-
-        # For display purposes, calculate what will actually be used
-        site_sql_tools_enabled = site_config.get("sql_tools", {}).get("enabled", False)
-        final_sql_tools_enabled = (
-            enable_sql_tools_param if enable_sql_tools_param is not None 
-            else site_sql_tools_enabled
+        # Create the server - it loads all configs and sets itself up
+        server = RAWMCP(
+            site_config_path=Path.cwd(),
+            profile=profile,
+            transport=transport,
+            port=port,
+            stateless_http=stateless if stateless else None,
+            enable_sql_tools=enable_sql_tools,
+            readonly=readonly,
+            debug=debug
         )
-
+        
+        # Get config info for display
+        config = server.get_config_info()
+        endpoint_counts = server.get_endpoint_counts()
+        
         # Show startup banner (except for stdio mode which needs clean output)
-        if final_transport != "stdio":
+        if config['transport'] != "stdio":
             click.echo("\n" + "="*60)
             click.echo(click.style("🚀 MXCP Server Starting", fg='green', bold=True).center(70))
             click.echo("="*60 + "\n")
             
             # Show configuration
             click.echo(f"{click.style('📋 Configuration:', fg='cyan', bold=True)}")
-            click.echo(f"   • Project: {click.style(site_config['project'], fg='yellow')}")
-            click.echo(f"   • Profile: {click.style(profile or site_config['profile'], fg='yellow')}")
-            click.echo(f"   • Transport: {click.style(final_transport, fg='yellow')}")
+            click.echo(f"   • Project: {click.style(config['project'], fg='yellow')}")
+            click.echo(f"   • Profile: {click.style(config['profile'], fg='yellow')}")
+            click.echo(f"   • Transport: {click.style(config['transport'], fg='yellow')}")
             
-            if final_transport in ["streamable-http", "sse"]:
-                click.echo(f"   • Host: {click.style(final_host, fg='yellow')}")
-                click.echo(f"   • Port: {click.style(str(final_port), fg='yellow')}")
+            if config['transport'] in ["streamable-http", "sse"]:
+                click.echo(f"   • Host: {click.style(config['host'], fg='yellow')}")
+                click.echo(f"   • Port: {click.style(str(config['port']), fg='yellow')}")
                 
-            if readonly:
+            if config['readonly']:
                 click.echo(f"   • Mode: {click.style('Read-only', fg='red')}")
             else:
                 click.echo(f"   • Mode: {click.style('Read-write', fg='green')}")
                 
-            if final_stateless:
+            if config['stateless']:
                 click.echo(f"   • HTTP Mode: {click.style('Stateless', fg='magenta')}")
                 
-            if final_sql_tools_enabled:
+            if config['sql_tools_enabled']:
                 click.echo(f"   • SQL Tools: {click.style('Enabled', fg='green')}")
             else:
                 click.echo(f"   • SQL Tools: {click.style('Disabled', fg='red')}")
             
-            # Count endpoints
-            from mxcp.endpoints.loader import EndpointLoader
-            loader = EndpointLoader(site_config)
-            endpoints = loader.discover_endpoints()
-            valid_endpoints = [e for e in endpoints if e[2] is None]
-            tool_count = sum(1 for e in valid_endpoints if "tool" in e[1])
-            resource_count = sum(1 for e in valid_endpoints if "resource" in e[1])
-            prompt_count = sum(1 for e in valid_endpoints if "prompt" in e[1])
-            
+            # Show endpoint counts
             click.echo(f"\n{click.style('📊 Endpoints:', fg='cyan', bold=True)}")
-            if tool_count > 0:
-                click.echo(f"   • Tools: {click.style(str(tool_count), fg='green')}")
-            if resource_count > 0:
-                click.echo(f"   • Resources: {click.style(str(resource_count), fg='green')}")
-            if prompt_count > 0:
-                click.echo(f"   • Prompts: {click.style(str(prompt_count), fg='green')}")
+            if endpoint_counts['tools'] > 0:
+                click.echo(f"   • Tools: {click.style(str(endpoint_counts['tools']), fg='green')}")
+            if endpoint_counts['resources'] > 0:
+                click.echo(f"   • Resources: {click.style(str(endpoint_counts['resources']), fg='green')}")
+            if endpoint_counts['prompts'] > 0:
+                click.echo(f"   • Prompts: {click.style(str(endpoint_counts['prompts']), fg='green')}")
             
-            if not valid_endpoints:
+            if endpoint_counts['total'] == 0:
                 click.echo(f"   {click.style('⚠️  No endpoints found!', fg='yellow')}")
                 click.echo(f"   Create tools in the 'tools/' directory, resources in 'resources/', etc.")
             
             click.echo("\n" + "-"*60)
             
-            if final_transport in ["streamable-http", "sse"]:
+            if config['transport'] in ["streamable-http", "sse"]:
                 click.echo(f"\n{click.style('✅ Server ready!', fg='green', bold=True)}")
-                click.echo(f"   Listening on {click.style(f'http://{final_host}:{final_port}', fg='cyan', underline=True)}")
+                url = f"http://{config['host']}:{config['port']}"
+                click.echo(f"   Listening on {click.style(url, fg='cyan', underline=True)}")
                 click.echo(f"\n{click.style('Press Ctrl+C to stop', fg='yellow')}\n")
             else:
                 click.echo(f"\n{click.style('✅ Server starting...', fg='green', bold=True)}\n")
 
         # Set up signal handler for graceful shutdown
         def signal_handler(signum, frame):
-            if final_transport != "stdio":
+            if config['transport'] != "stdio":
                 click.echo(f"\n{click.style('🛑 Shutting down gracefully...', fg='yellow')}")
             raise KeyboardInterrupt()
 
@@ -154,23 +128,13 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
-        # Pass the determined sql_tools value to the server
-        server = RAWMCP(
-            user_config, 
-            site_config, 
-            profile=profile, 
-            host=final_host,
-            port=final_port, 
-            enable_sql_tools=enable_sql_tools_param,
-            readonly=readonly,
-            stateless_http=final_stateless
-        )
         try:
-            server.run(transport=final_transport)
+            # Start the server
+            server.run(transport=config['transport'])
         except KeyboardInterrupt:
             # Gracefully shutdown the server
             server.shutdown()
-            if final_transport != "stdio":
+            if config['transport'] != "stdio":
                 click.echo(f"{click.style('👋 Server stopped', fg='cyan')}")
             raise
     except KeyboardInterrupt:
