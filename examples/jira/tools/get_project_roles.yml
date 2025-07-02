@@ -1,0 +1,45 @@
+mxcp: 1
+
+tool:
+  name: get_project_roles
+  description: |
+    Get all roles available in a project.
+    Returns a list of roles with their IDs and URLs.
+  type: tool
+  annotations:
+    title: Get Project Roles
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  language: python
+  source:
+    file: ../python/jira_endpoints.py
+  parameters:
+    - name: project_key
+      type: string
+      description: |
+        The project key (e.g., 'TEST' for project TEST).
+        This is the short identifier for the project.
+      examples: [
+        "TEST",
+        "PROJ",
+        "DEV"
+      ]
+  return:
+    type: array
+    items:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The role name
+        id:
+          type: string
+          description: The role ID
+  tests:
+    - name: "Get project roles"
+      description: "Verify project roles returns array of roles"
+      arguments:
+        - key: project_key
+          value: "RD"

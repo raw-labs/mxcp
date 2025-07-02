@@ -3,6 +3,9 @@ mxcp: 1
 tool:
   name: "search"
   description: "Use this tool when you want to quickly search for records across multiple Salesforce objects without knowing the exact field names. It's perfect for finding records by company names, people names, or locations. The search is case-insensitive and will match partial words. For example, searching for 'Acme' will find 'Acme Corp', 'Acme Inc', etc. across Account, Contact, Lead, and Opportunity records. If you need more control over which fields to search or which objects to include, use the sosl tool instead."
+  language: python
+  source:
+    file: ../python/salesforce_endpoints.py
   parameters:
     - name: search_term
       type: string
@@ -11,7 +14,15 @@ tool:
         - "Acme"
         - "John Smith"
         - "New York"
-  source:
-    code: SELECT search_salesforce($search_term);
+  return:
+    type: array
+    items:
+      type: object
   annotations:
-    readOnlyHint: true 
+    readOnlyHint: true
+  tests:
+    - name: "Basic search"
+      description: "Verify search returns array of results"
+      arguments:
+        - key: search_term
+          value: "Test"
