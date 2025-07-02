@@ -196,20 +196,134 @@ class RAWMCP:
         self.db_lock = threading.Lock()
         logger.info("Shared DuckDB session created successfully")
         
-        # Initialize Python runtime for endpoints
-        self._init_python_runtime()
-        
-        # Register cleanup handler for atexit as a safety net
-        atexit.register(self.shutdown)
-        
         # Track if we've already shut down to avoid double cleanup
         self._shutdown_called = False
         
-        # Register SIGUSR1 handler for database reload (Unix-like systems only)
-        if hasattr(signal, 'SIGUSR1'):
-            signal.signal(signal.SIGUSR1, self._handle_reload_signal)
-            logger.info("Registered SIGUSR1 handler for database reload")
+        # Initialize the runtime components (configs, db, python runtimes)
+        self._initialize_runtime_components()
+        
+        # Register signal handlers for graceful shutdown and configuration reload
+        self._register_signal_handlers()
 
+    def _register_signal_handlers(self):
+        """Register signal handlers for graceful shutdown and reload."""
+        if hasattr(signal, 'SIGHUP'):
+            signal.signal(signal.SIGHUP, self._handle_reload_signal)
+            logger.info("Registered SIGHUP handler for configuration reload.")
+        
+        # Handle SIGTERM (e.g., from `kill`) and SIGINT (e.g., from Ctrl+C)
+        signal.signal(signal.SIGTERM, self._handle_exit_signal)
+        signal.signal(signal.SIGINT, self._handle_exit_signal)
+
+    def _handle_exit_signal(self, signum, frame):
+        """Handle termination signals to ensure graceful shutdown."""
+        logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+        self.shutdown()
+        
+    def _handle_reload_signal(self, signum, frame):
+        """Handle SIGHUP signal to reload the configuration."""
+        logger.info("Received SIGHUP signal, initiating configuration reload...")
+        
+        # Run the reload in a new thread to avoid blocking the signal handler
+        reload_thread = threading.Thread(target=self.reload_configuration)
+        reload_thread.start()
+
+    def _shutdown_runtime_components(self):
+        """
+        Gracefully shuts down all reloadable, configuration-dependent components.
+        This includes running shutdown hooks for Python endpoints and plugins,
+        and closing the database session.
+        
+        This does NOT affect the authentication provider or endpoint registrations.
+        """
+        logger.info("Shutting down runtime components...")
+        
+        # 1. Shut down existing Python runtimes and plugins
+        from mxcp.runtime import _run_shutdown_hooks
+        from mxcp.plugins.base import run_plugin_shutdown_hooks
+        
+        # Run shutdown hooks for Python endpoints
+        _run_shutdown_hooks()
+        
+        # Run shutdown hooks for Python plugins
+        run_plugin_shutdown_hooks()
+        
+        # Clean up the Python loader to ensure modules can be reloaded
+        if hasattr(self, 'python_loader') and self.python_loader:
+            self.python_loader.cleanup()
+            logger.info("Cleaned up Python endpoint loader.")
+
+        # 2. Close the current DuckDB session
+        if self.db_session:
+            logger.info("Closing current DuckDB session...")
+            self.db_session.close()
+            self.db_session = None
+        
+        logger.info("Runtime components shutdown complete.")
+
+    def _initialize_runtime_components(self):
+        """
+        Initializes all reloadable, configuration-dependent components.
+        This includes loading configurations, creating the DB session, and
+        initializing the Python runtimes for endpoints and plugins.
+
+        This does NOT re-initialize the authentication provider or re-register endpoints.
+        """
+        logger.info("Initializing runtime components...")
+        
+        # 1. Load configurations from source
+        logger.info("Loading site and user configurations...")
+        from mxcp.config.site_config import load_site_config
+        from mxcp.config.user_config import load_user_config
+        
+        # Reload site config first
+        self.site_config = load_site_config()
+        # Reload user config, which depends on site config
+        self.user_config = load_user_config(self.site_config)
+        
+        # Update active profile based on new configs
+        self.active_profile = get_active_profile(self.user_config, self.site_config, self.profile_name)
+        logger.info("Configurations loaded successfully.")
+
+        # 2. Create a new DuckDB session with the new config
+        logger.info("Creating new DuckDB session...")
+        self.db_session = DuckDBSession(
+            self.user_config,
+            self.site_config,
+            self.profile_name,
+            self.readonly
+        )
+        logger.info("New DuckDB session created.")
+
+        # 3. Initialize Python runtime and plugins
+        # This will import modules and run @on_init hooks, picking up the new config
+        logger.info("Initializing Python runtimes...")
+        self._init_python_runtime()
+        
+        logger.info("Runtime components initialization complete.")
+
+    def reload_configuration(self):
+        """
+        Reloads the entire server configuration, including user/site configs,
+        the DuckDB session, and all Python runtimes (endpoints and plugins).
+        
+        This method is thread-safe. It acquires a lock to wait for any
+        in-progress database queries to complete before gracefully restarting
+        all configuration-dependent components.
+        """
+        logger.info("Acquiring lock for configuration reload...")
+        with self.db_lock:
+            logger.info("Lock acquired. Proceeding with configuration reload.")
+            try:
+                self._shutdown_runtime_components()
+                self._initialize_runtime_components()
+                logger.info("Configuration reload completed successfully.")
+            except Exception as e:
+                logger.error(f"Failed to reload configuration: {e}", exc_info=True)
+                # In case of failure, it's safer to shut down as the server state is unknown
+                logger.error("Server state is inconsistent due to reload failure. Initiating shutdown.")
+                self.shutdown()
+        
     def _init_python_runtime(self):
         """Initialize Python runtime and load all Python modules"""
         from mxcp.engine.python_loader import PythonEndpointLoader
@@ -309,7 +423,11 @@ class RAWMCP:
         logger.info("Shutting down MXCP server...")
         
         try:
-            # Close OAuth server persistence first - ensure it completes
+            # Gracefully shut down the reloadable runtime components first
+            # This handles python runtimes, plugins, and the db session.
+            self._shutdown_runtime_components()
+            
+            # Close OAuth server persistence - ensure it completes
             if self.oauth_server:
                 try:
                     self._ensure_async_completes(
@@ -320,26 +438,6 @@ class RAWMCP:
                 except Exception as e:
                     logger.error(f"Error closing OAuth server: {e}")
                     # Continue with shutdown even if OAuth server close fails
-            
-            # Run Python shutdown hooks and cleanup
-            try:
-                from mxcp.runtime import _run_shutdown_hooks
-                _run_shutdown_hooks()
-                
-                # Clean up Python loader
-                if hasattr(self, 'python_loader') and self.python_loader:
-                    self.python_loader.cleanup()
-                    logger.info("Cleaned up Python runtime")
-            except Exception as e:
-                logger.error(f"Error cleaning up Python runtime: {e}")
-            
-            # Close DuckDB session
-            if self.db_session:
-                try:
-                    self.db_session.close()
-                    logger.info("Closed DuckDB session and connection")
-                except Exception as e:
-                    logger.error(f"Error closing DuckDB session: {e}")
             
             # Shutdown audit logger if initialized
             if self.audit_logger:
@@ -1181,68 +1279,53 @@ class RAWMCP:
             raise
 
     def _handle_reload_signal(self, signum, frame):
-        """Handle SIGUSR1 signal to reload the DuckDB session."""
-        logger.info("Received SIGUSR1 signal - reloading DuckDB session...")
-        try:
-            self.reload_db_session()
-            logger.info("DuckDB session reloaded successfully")
-        except Exception as e:
-            logger.error(f"Failed to reload DuckDB session: {e}")
+        """Handle SIGHUP signal to reload the configuration."""
+        logger.info("Received SIGHUP signal, initiating configuration reload...")
+        
+        # Run the reload in a new thread to avoid blocking the signal handler
+        reload_thread = threading.Thread(target=self.reload_configuration)
+        reload_thread.start()
 
-    def reload_db_session(self):
-        """Reload the DuckDB session by closing the current one and creating a new one.
-        
-        This method is thread-safe and can be called while the server is running.
-        It will:
-        1. Acquire the DB lock to prevent concurrent access
-        2. Close the current session
-        3. Reload the site configuration (to pick up any env var changes)
-        4. Create a new session
-        
-        Note: Python endpoints will automatically use the new session through the
-        runtime context system. Init/shutdown hooks are not called as they're meant
-        for managing Python resources, not database connections.
-        """
-        logger.info("Starting DuckDB session reload...")
-        
-        # Acquire the lock to ensure no other threads are using the session
-        with self.db_lock:
+    def register_endpoints(self):
+        """Register all discovered endpoints with MCP."""
+        for path, endpoint_def in self.endpoints:
             try:
-                # Close the current session
-                if self.db_session:
-                    logger.info("Closing current DuckDB session...")
-                    self.db_session.close()
-                    self.db_session = None
+                # Validate endpoint before registration using shared session
+                validation_result = validate_endpoint(str(path), self.user_config, self.site_config, self.active_profile, self.db_session)
                 
-                # Reload site configuration to pick up any environment variable changes
-                from mxcp.config.site_config import load_site_config
-                logger.info("Reloading site configuration...")
-                self.site_config = load_site_config()
-                
-                # Create a new session
-                logger.info("Creating new DuckDB session...")
-                self.db_session = DuckDBSession(
-                    self.user_config, 
-                    self.site_config, 
-                    self.profile_name, 
-                    self.readonly
-                )
-                
-                logger.info("DuckDB session reload completed successfully")
-                
+                if validation_result["status"] != "ok":
+                    logger.warning(f"Skipping invalid endpoint {path}: {validation_result.get('message', 'Unknown error')}")
+                    self.skipped_endpoints.append({
+                        "path": str(path),
+                        "error": validation_result.get("message", "Unknown error")
+                    })
+                    continue
+
+                if "tool" in endpoint_def:
+                    self._register_tool(endpoint_def["tool"])
+                    logger.info(f"Registered tool endpoint from {path}: {endpoint_def['tool']['name']}")
+                elif "resource" in endpoint_def:
+                    self._register_resource(endpoint_def["resource"])
+                    logger.info(f"Registered resource endpoint from {path}: {endpoint_def['resource']['uri']}")
+                elif "prompt" in endpoint_def:
+                    self._register_prompt(endpoint_def["prompt"])
+                    logger.info(f"Registered prompt endpoint from {path}: {endpoint_def['prompt']['name']}")
+                else:
+                    logger.warning(f"Unknown endpoint type in {path}: {endpoint_def}")
             except Exception as e:
-                logger.error(f"Error during DuckDB session reload: {e}")
-                # Try to restore a working session if possible
-                if not self.db_session:
-                    logger.info("Attempting to create a new session after reload failure...")
-                    try:
-                        self.db_session = DuckDBSession(
-                            self.user_config, 
-                            self.site_config, 
-                            self.profile_name, 
-                            self.readonly
-                        )
-                        logger.info("Recovery session created successfully")
-                    except Exception as recovery_error:
-                        logger.error(f"Failed to create recovery session: {recovery_error}")
-                        raise 
+                logger.error(f"Error registering endpoint {path}: {e}")
+                self.skipped_endpoints.append({
+                    "path": str(path),
+                    "error": str(e)
+                })
+                continue
+
+        # Register DuckDB features if enabled
+        if self.enable_sql_tools:
+            self._register_duckdb_features()
+
+        # Report skipped endpoints
+        if self.skipped_endpoints:
+            logger.warning(f"Skipped {len(self.skipped_endpoints)} invalid endpoints:")
+            for skipped in self.skipped_endpoints:
+                logger.warning(f"  - {skipped['path']}: {skipped['error']}") 

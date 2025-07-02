@@ -321,11 +321,11 @@ class DataService:
         self.conn = db.connection
     
     def get_data(self):
-        # This will fail after a database reload
+        # This will fail after a configuration reload
         return self.conn.execute("SELECT * FROM data")
 ```
 
-The `db` proxy ensures your code always uses the current active connection, even after database reloads triggered by signals or configuration changes.
+The `db` proxy ensures your code always uses the current active connection, even after configuration reloads triggered by SIGHUP signals.
 
 1. **Error Handling**: Always handle potential errors gracefully
    ```python

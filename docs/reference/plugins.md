@@ -327,6 +327,88 @@ self.get_user_token() -> Optional[str]
 self.user_context -> Optional[UserContext]
 ```
 
+## Plugin Lifecycle and Resource Management
+
+MXCP plugins have a formal lifecycle that allows for graceful startup and shutdown. This is crucial for managing long-lived resources like HTTP clients, database connections, or connection pools, especially when the server performs a hot-reload of its configuration.
+
+### Lifecycle Overview
+
+- **Initialization**: When the server starts or reloads, it creates plugin instances by calling their `__init__` method
+- **Shutdown**: When the server shuts down or reloads, it calls shutdown hooks on all active plugins to clean up resources
+- **Hot Reload**: During a configuration reload (via `SIGHUP` signal), plugins are gracefully shut down and re-initialized with new configuration
+
+### Managing Resources with Shutdown Hooks
+
+There are two ways to implement shutdown logic in your plugins:
+
+#### 1. Override the `shutdown()` Method
+
+For plugins with complex cleanup logic, override the `shutdown()` method:
+
+```python
+import httpx
+from typing import Dict, Any
+
+class MXCPPlugin(MXCPBasePlugin):
+    def __init__(self, config: Dict[str, Any], user_context=None):
+        super().__init__(config, user_context)
+        # Initialize long-lived resources
+        self.client = httpx.Client(
+            base_url=config.get("api_url"),
+            timeout=int(config.get("timeout", 30))
+        )
+        self.connection_pool = self._create_pool(config)
+    
+    def shutdown(self):
+        """Called automatically on server shutdown or reload."""
+        # Clean up resources in reverse order of initialization
+        if hasattr(self, 'connection_pool'):
+            self.connection_pool.close()
+        if hasattr(self, 'client'):
+            self.client.close()
+    
+    @udf
+    def fetch_data(self, endpoint: str) -> str:
+        """Fetch data using the persistent HTTP client."""
+        response = self.client.get(endpoint)
+        return response.text
+```
+
+#### 2. Use the `@on_shutdown` Decorator
+
+For simpler cleanup tasks or when you need multiple cleanup functions:
+
+```python
+from mxcp.plugins import MXCPBasePlugin, udf, on_shutdown
+import tempfile
+
+class MXCPPlugin(MXCPBasePlugin):
+    def __init__(self, config: Dict[str, Any], user_context=None):
+        super().__init__(config, user_context)
+        self.temp_dir = tempfile.mkdtemp()
+        self.cache_file = open(f"{self.temp_dir}/cache.dat", "w")
+    
+    @on_shutdown
+    def cleanup_temp_files(self):
+        """Clean up temporary files on shutdown."""
+        self.cache_file.close()
+        import shutil
+        shutil.rmtree(self.temp_dir)
+    
+    @on_shutdown
+    def log_shutdown(self):
+        """Log shutdown event."""
+        import logging
+        logging.info(f"Plugin shutting down: {self.__class__.__name__}")
+```
+
+### Important Notes
+
+- Shutdown hooks are called in reverse order of plugin initialization
+- The `@on_shutdown` decorator can be used multiple times in the same class
+- Shutdown methods should handle errors gracefully and not raise exceptions
+- Both `shutdown()` and `@on_shutdown` methods are called during hot reloads
+
 ## Advanced Examples
 
 ### File Processing Plugin
@@ -501,19 +583,43 @@ def __init__(self, config: Dict[str, Any], user_context=None):
 
 ### 3. Resource Management
 
-Use context managers for external resources:
+Use context managers for short-lived resources within UDF calls, and the plugin lifecycle hooks for long-lived resources:
 
 ```python
+# Short-lived resource: use context manager
 @udf
-def query_database(self, sql: str) -> str:
-    """Query external database."""
-    conn_string = self._config.get("database_url")
-    
-    with psycopg2.connect(conn_string) as conn:
+def query_database(self, query: str) -> int:
+    """Execute a one-off database query."""
+    # Connection is created and closed for each call
+    with psycopg2.connect(self._config["database_url"]) as conn:
         with conn.cursor() as cursor:
-            cursor.execute(sql)
-            results = cursor.fetchall()
-            return str(len(results))
+            cursor.execute(query)
+            return cursor.rowcount
+
+# Long-lived resource: use lifecycle hooks
+class DatabasePlugin(MXCPBasePlugin):
+    def __init__(self, config: Dict[str, Any], user_context=None):
+        super().__init__(config, user_context)
+        # Connection pool lives for the plugin's lifetime
+        self.pool = psycopg2.pool.SimpleConnectionPool(
+            1, 20, config["database_url"]
+        )
+    
+    def shutdown(self):
+        """Close connection pool on shutdown."""
+        if hasattr(self, 'pool'):
+            self.pool.closeall()
+    
+    @udf
+    def query_pooled(self, query: str) -> int:
+        """Execute query using connection pool."""
+        conn = self.pool.getconn()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.rowcount
+        finally:
+            self.pool.putconn(conn)
 ```
 
 ### 4. Type Safety
@@ -707,4 +813,4 @@ Complete working examples are available in the `examples/plugin/` directory:
 - Explore the `examples/plugin/` directory for hands-on examples
 - Read the [Authentication Guide](../guides/authentication.md) to understand user context integration
 - Check the [Configuration Guide](../guides/configuration.md) for advanced config management
-- Review the [Type System](type-system.md) documentation for complex type mappings 
+- Review the [Type System](type-system.md) documentation for complex type mappings

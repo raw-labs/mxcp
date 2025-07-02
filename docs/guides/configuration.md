@@ -505,13 +505,19 @@ MXCP_DUCKDB_PATH="/path/to/shared.db" mxcp serve
 
 When `MXCP_DUCKDB_PATH` is set, it overrides the path specified in `profiles.<profile>.duckdb.path` for all profiles.
 
-### Signal-Based Database Reload (Unix/Linux/macOS)
+### Signal-Based Configuration Reload (Unix/Linux/macOS)
 
-When running `mxcp serve`, you can send a `SIGUSR1` signal to reload the DuckDB connection without restarting the server. This is useful for:
+When running `mxcp serve`, you can send a `SIGHUP` signal to reload the server's configuration without restarting. This performs a hot reload of:
 
-- Picking up changes to the DuckDB file made by external processes
-- Changing the database location via `MXCP_DUCKDB_PATH` without downtime
-- Recovering from temporary database issues
+- User and site configurations (re-reading from disk)
+- All secrets from environment variables, Vault, and file:// URLs
+- DuckDB connection with new credentials
+- Python runtime (endpoints and plugins) with new configuration
+
+**What is NOT reloaded:**
+- OAuth/authentication settings
+- Endpoint registrations (tools, resources, prompts)
+- Server settings (host, port, transport)
 
 **Example:**
 ```bash
@@ -519,47 +525,48 @@ When running `mxcp serve`, you can send a `SIGUSR1` signal to reload the DuckDB 
 mxcp serve &
 SERVER_PID=$!
 
-# Later, reload the database connection
-kill -USR1 $SERVER_PID
+# Later, reload the configuration
+kill -HUP $SERVER_PID
 
 # Or find the process and send the signal
-pkill -USR1 -f "mxcp serve"
+pkill -HUP -f "mxcp serve"
 ```
 
 **What happens during reload:**
-1. The server receives the SIGUSR1 signal
-2. Current database connections are safely closed
-3. Site configuration is reloaded (picking up any environment variable changes)
-4. A new database connection is established
+1. The server receives the SIGHUP signal
+2. Waits for any active requests to complete
+3. Runs shutdown hooks for Python endpoints and plugins
+4. Closes the current DuckDB connection
+5. Re-reads user and site configurations
+6. Re-evaluates all secrets (env vars, vault://, file://)
+7. Creates a new DuckDB connection with updated config
+8. Re-initializes Python runtimes with new configuration
 
-**Important for Python endpoints:**
-- Python endpoints automatically use the new database connection through the `mxcp.runtime.db` proxy
-- Do NOT store database connections in global variables or class attributes
-- Always access the database through `db.execute()` for each operation
-- Init/shutdown hooks (`@on_init`, `@on_shutdown`) are NOT called during reload - they're for managing Python resources like HTTP clients, not database connections
+**Important for Python endpoints and plugins:**
+- Implement proper cleanup using `@on_shutdown` or override `shutdown()` method
+- The runtime will be completely re-initialized, running `@on_init` hooks again
+- Don't store configuration values in global variables - access them through the runtime
 
-**Example of correct Python endpoint:**
-```python
-from mxcp.runtime import db
-
-# ✅ Good - accesses DB through runtime proxy
-def get_data(user_id: int) -> dict:
-    results = db.execute(
-        "SELECT * FROM users WHERE id = ?",
-        {"user_id": user_id}
-    )
-    return results[0] if results else None
-
-# ❌ Bad - don't do this!
-conn = db.connection  # Never store the connection
-def get_data_bad(user_id: int) -> dict:
-    return conn.execute("...")  # This won't work after reload
+**Example of configuration that benefits from hot reload:**
+```yaml
+# User config with secrets that might change
+projects:
+  my_project:
+    profiles:
+      production:
+        secrets:
+          - name: "database"
+            type: "postgresql"
+            parameters:
+              host: "${DB_HOST}"
+              password: "vault://secret/db#password"  # Can rotate in Vault
+              ssl_cert: "file:///etc/ssl/db.crt"     # Can update cert file
 ```
 
 **Notes:**
 - This feature is only available on Unix-like systems (Linux, macOS)
-- The reload is thread-safe and won't interrupt active requests
-- If the reload fails, the server attempts to restore the previous connection
+- The reload is atomic and thread-safe
+- If reload fails, the server initiates a graceful shutdown to prevent inconsistent state
 - Check server logs for reload status and any errors
 
 ## Model Configuration (for Evals)
