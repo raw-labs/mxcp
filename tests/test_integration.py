@@ -15,217 +15,115 @@ import tempfile
 import shutil
 from pathlib import Path
 from typing import Dict, Any, Optional
-import httpx
 import yaml
 
 # Import MCP SDK for making protocol calls
-try:
-    from mcp import ClientSession, StdioServerParameters
-    from mcp.client.stdio import stdio_client
-    from mcp.client.session import ClientSession
-    HAS_MCP_SDK = True
-except ImportError:
-    HAS_MCP_SDK = False
-    # Fallback to direct HTTP calls if MCP SDK not available
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
 
 
 class MCPTestClient:
-    """Client for making MCP protocol calls to a running server."""
+    """Client for making MCP protocol calls using the official SDK."""
     
     def __init__(self, port: int = 8765):
         self.port = port
-        self.base_url = f"http://localhost:{port}"
-        self.client = httpx.AsyncClient(timeout=30.0)
-        self.message_id = 0
-        self.session_id = None  # Track session ID
+        self.url = f"http://localhost:{port}/mcp/"
+        self.session = None
+        self.context = None
     
     async def __aenter__(self):
-        # Initialize the connection when entering context
-        await self.initialize()
+        # Connect using streamable HTTP transport
+        self.context = streamablehttp_client(self.url)
+        read_stream, write_stream, _ = await self.context.__aenter__()
+        
+        # Create session
+        self.session = ClientSession(read_stream, write_stream)
+        await self.session.__aenter__()
+        
+        # Initialize the connection
+        await self.session.initialize()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.client.aclose()
-    
-    def _next_id(self) -> str:
-        """Get next message ID for JSON-RPC."""
-        self.message_id += 1
-        return str(self.message_id)
-    
-    async def _read_sse_stream(self, response: httpx.Response) -> Dict[str, Any]:
-        """Read and parse SSE stream response."""
-        full_content = ""
-        line_count = 0
-        
-        async for line in response.aiter_lines():
-            line_count += 1
-            full_content += line + "\n"
-            
-            if line.startswith('data: '):
-                json_data = line[6:]  # Remove 'data: ' prefix
-                try:
-                    result = json.loads(json_data)
-                    # If we got a valid JSON-RPC response, return it
-                    if "jsonrpc" in result:
-                        return result
-                except json.JSONDecodeError as e:
-                    continue
-        
-        # If no lines were received, the server might have returned an empty stream
-        if line_count == 0:
-            return {"jsonrpc": "2.0", "result": {}}
-        
-        # If we couldn't parse any data, show what we got
-        raise ValueError(f"No valid JSON-RPC data found in SSE stream after {line_count} lines. Content: {full_content}")
-    
-    async def _send_request(self, method: str, params: Dict[str, Any]) -> tuple[Dict[str, Any], httpx.Response]:
-        """Send a JSON-RPC request and handle the response. Returns (result, response)."""
-        request = {
-            "jsonrpc": "2.0",
-            "id": self._next_id(),
-            "method": method,
-            "params": params
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream"
-        }
-        
-        # Add session ID header if we have one
-        if self.session_id:
-            headers["Mcp-Session-Id"] = self.session_id
-        
-        # Use stream=True to handle SSE responses properly
-        async with self.client.stream(
-            "POST",
-            f"{self.base_url}/mcp/",
-            json=request,
-            headers=headers
-        ) as response:
-            
-            # Check for 202 Accepted (which means no body)
-            if response.status_code == 202:
-                return {}, type('Response', (), {'headers': response.headers})()
-            
-            # If not successful, try to get error details
-            if not response.is_success:
-                try:
-                    error_text = await response.aread()
-                except:
-                    pass
-                response.raise_for_status()
-            
-            # Check content type
-            content_type = response.headers.get("content-type", "")
-            
-            # Store session ID if present (on first response)
-            session_id = response.headers.get("Mcp-Session-Id")
-            
-            if "text/event-stream" in content_type:
-                # Handle SSE stream
-                result = await self._read_sse_stream(response)
-            else:
-                # Handle regular JSON
-                content = await response.aread()
-                if content:
-                    result = json.loads(content)
-                else:
-                    result = {"jsonrpc": "2.0", "result": {}}
-            
-            if "error" in result:
-                raise Exception(f"MCP error: {result['error']}")
-            
-            # Return the result and a response-like object with headers
-            return result.get("result", {}), type('Response', (), {'headers': response.headers})()
-    
-    async def initialize(self):
-        """Initialize the MCP connection."""
-        result, response = await self._send_request("initialize", {
-            "protocolVersion": "2025-03-26",
-            "capabilities": {
-                "tools": {},
-                "resources": {},
-                "prompts": {}
-            },
-            "clientInfo": {
-                "name": "MXCP Integration Test Client",
-                "version": "1.0.0"
-            }
-        })
-        
-        # Extract session ID from response headers
-        self.session_id = response.headers.get("Mcp-Session-Id")
-        if self.session_id:
-            pass
-        
-        # Send initialized notification to complete handshake
-        await self._send_notification("notifications/initialized", {})
-        
-        return result
-    
-    async def _send_notification(self, method: str, params: Dict[str, Any]):
-        """Send a JSON-RPC notification (no response expected)."""
-        notification = {
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params
-            # No "id" field for notifications
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream"
-        }
-        
-        # Add session ID header if we have one
-        if self.session_id:
-            headers["Mcp-Session-Id"] = self.session_id
-        
-        response = await self.client.post(
-            f"{self.base_url}/mcp/",
-            json=notification,
-            headers=headers
-        )
-        
-        # For notifications, we expect 202 Accepted
-        if response.status_code != 202:
-            print(f"Unexpected status for notification: {response.status_code}")
-            print(f"Response: {response.text}")
+        try:
+            if self.session:
+                await self.session.__aexit__(exc_type, exc_val, exc_tb)
+        finally:
+            if self.context:
+                await self.context.__aexit__(exc_type, exc_val, exc_tb)
     
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Call a tool via MCP protocol."""
-        result, _ = await self._send_request("tools/call", {
-            "name": name,
-            "arguments": arguments
-        })
-        
-        # Extract the actual result from MCP format
-        if "content" in result and isinstance(result["content"], list) and len(result["content"]) > 0:
-            content = result["content"][0]
-            if content.get("type") == "text" and "text" in content:
-                # Parse the JSON text content
-                try:
-                    return json.loads(content["text"])
-                except json.JSONDecodeError:
-                    # If it's not JSON, return the text as-is
-                    return {"result": content["text"]}
-        
-        # Fallback to returning the raw result
-        return result
+        try:
+            result = await self.session.call_tool(name, arguments)
+            
+            # Debug: print what we got
+            if os.environ.get("MXCP_TEST_DEBUG"):
+                print(f"[DEBUG] Tool result type: {type(result)}")
+                print(f"[DEBUG] Tool result: {result}")
+                if hasattr(result, '__dict__'):
+                    print(f"[DEBUG] Tool result attributes: {result.__dict__}")
+            
+            # Extract the actual result from MCP format
+            if hasattr(result, 'content') and isinstance(result.content, list) and len(result.content) > 0:
+                content = result.content[0]
+                if hasattr(content, 'type') and content.type == "text" and hasattr(content, 'text'):
+                    # Parse the JSON text content
+                    try:
+                        parsed = json.loads(content.text)
+                        if os.environ.get("MXCP_TEST_DEBUG"):
+                            print(f"[DEBUG] Parsed result: {parsed}")
+                        return parsed
+                    except json.JSONDecodeError:
+                        # If it's not JSON, return the text as-is
+                        return {"result": content.text}
+            
+            # Check if result has an error attribute
+            if hasattr(result, 'isError') and result.isError:
+                # This is an error result
+                error_msg = str(result)
+                if hasattr(result, 'error'):
+                    error_msg = str(result.error)
+                return {"result": f"Error executing tool {name}: {error_msg}"}
+            
+            # Fallback to returning the raw result
+            return {"result": str(result)}
+        except Exception as e:
+            if os.environ.get("MXCP_TEST_DEBUG"):
+                import traceback
+                print(f"[DEBUG] Exception in call_tool: {e}")
+                print(f"[DEBUG] Traceback: {traceback.format_exc()}")
+            return {"result": f"Error executing tool {name}: {str(e)}"}
     
     async def list_tools(self) -> list:
         """List available tools."""
-        result, _ = await self._send_request("tools/list", {})
-        return result.get("tools", [])
+        response = await self.session.list_tools()
+        tools = response.tools if hasattr(response, 'tools') else []
+        # Convert tool objects to dictionaries for consistent interface
+        return [
+            {
+                "name": tool.name,
+                "description": tool.description if hasattr(tool, 'description') else None,
+                "inputSchema": tool.inputSchema if hasattr(tool, 'inputSchema') else {}
+            }
+            for tool in tools
+        ]
 
 
 class ServerProcess:
     """Manager for RAWMCP server subprocess."""
     
-    def __init__(self, working_dir: Path, port: int = 8765):
+    def __init__(self, working_dir: Path, port: int = None):
         self.working_dir = working_dir
-        self.port = port
+        # Use a random available port to avoid conflicts
+        if port is None:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(('', 0))
+            self.port = sock.getsockname()[1]
+            sock.close()
+        else:
+            self.port = port
         self.process: Optional[subprocess.Popen] = None
         self.original_dir = os.getcwd()
     
@@ -266,7 +164,9 @@ class ServerProcess:
                 # Enable output for debugging when needed
                 if os.environ.get("MXCP_TEST_DEBUG"):
                     print(f"[SERVER] {line.strip()}")
-                pass
+                # Always capture lines that might indicate the issue
+                if any(keyword in line.lower() for keyword in ["error", "errno", "traceback", "exception", "failed"]):
+                    print(f"[SERVER ERROR] {line.strip()}")
         
         output_thread = threading.Thread(target=read_output, daemon=True)
         output_thread.start()
@@ -482,7 +382,7 @@ class TestIntegration:
         with ServerProcess(integration_fixture_dir) as server:
             server.start()
             
-            async with MCPTestClient() as client:
+            async with MCPTestClient(server.port) as client:
                 # Call the echo tool
                 result = await client.call_tool("echo_message", {"message": "Hello MXCP!"})
                 
@@ -496,7 +396,7 @@ class TestIntegration:
         with ServerProcess(integration_fixture_dir) as server:
             server.start()
             
-            async with MCPTestClient() as client:
+            async with MCPTestClient(server.port) as client:
                 # Check initial secret value
                 result = await client.call_tool("check_secret", {})
                 
@@ -531,7 +431,7 @@ class TestIntegration:
         with ServerProcess(integration_fixture_dir) as server:
             server.start()
             
-            async with MCPTestClient() as client:
+            async with MCPTestClient(server.port) as client:
                 # Check initial values
                 result1 = await client.call_tool("check_secret", {})
                 assert result1["api_key"] == "file_secret_v1"
@@ -679,7 +579,7 @@ def check_all_secrets() -> dict:
         with ServerProcess(integration_fixture_dir) as server:
             server.start()
             
-            async with MCPTestClient() as client:
+            async with MCPTestClient(server.port) as client:
                 # Test non-DuckDB secrets
                 result = await client.call_tool("check_all_secrets", {})
                 
@@ -699,7 +599,7 @@ def check_all_secrets() -> dict:
         with ServerProcess(integration_fixture_dir) as server:
             server.start()
             
-            async with MCPTestClient() as client:
+            async with MCPTestClient(server.port) as client:
                 tools = await client.list_tools()
                 
                 # Should have our test tools
@@ -715,16 +615,3 @@ def check_all_secrets() -> dict:
                 assert echo_tool is not None, "echo_message tool not found"
                 assert echo_tool["description"] == "Echo a message"
                 assert len(echo_tool.get("inputSchema", {}).get("properties", {})) == 1
-
-
-@pytest.mark.skipif(not HAS_MCP_SDK, reason="MCP SDK not available")
-class TestIntegrationWithMCPSDK:
-    """Integration tests using the official MCP SDK (if available)."""
-    
-    @pytest.mark.asyncio
-    async def test_stdio_transport(self, integration_fixture_dir):
-        """Test using stdio transport with MCP SDK."""
-        # This would test stdio transport mode
-        # Implementation depends on MCP SDK availability
-        pass 
-        pass 
