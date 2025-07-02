@@ -176,7 +176,7 @@ The MCP server supports hot reloading of external configuration values via SIGHU
 **Implementation:**
 - `ExternalRefTracker` scans configs at startup, building a registry of all external references
 - On SIGHUP, only these tracked references are re-resolved
-- If values change, runtime components (DB, Python) are recreated with new values
+- Runtime components (DB, Python) are always recreated to ensure fresh state
 - If resolution fails, the server continues with existing values
 
 **Benefits:**

@@ -523,7 +523,7 @@ What gets refreshed:
 - ✅ Vault secrets (vault://)
 - ✅ File contents (file://)
 - ✅ Environment variables (${VAR})
-- ✅ DuckDB connection with new credentials
+- ✅ DuckDB connection (always recreated to pick up any database file changes)
 - ✅ Python runtimes with updated configs
 
 What does NOT change:
@@ -533,6 +533,8 @@ What does NOT change:
 - ❌ Registered endpoints
 
 This design ensures that only the values that are meant to be dynamic (secrets, tokens, etc.) are refreshed, while the service structure remains stable. This prevents accidental service disruption from configuration file changes.
+
+**Note on DuckDB Reload**: The DuckDB connection is always recreated during a reload, regardless of whether configuration values have changed. This ensures that any external changes to the DuckDB database file (new tables, data updates, etc.) are visible after the reload.
 
 ## Model Configuration (for Evals)
 

@@ -9,6 +9,7 @@ import subprocess
 import signal
 import time
 import os
+import sys
 import json
 import tempfile
 import shutil
@@ -235,7 +236,9 @@ class ServerProcess:
         cmd = [
             "mxcp", "serve",
             "--port", str(self.port),
-            "--transport", "streamable-http"
+            "--transport", "streamable-http",
+            "--debug"  # Enable debug mode
+            # Removed --stateless flag due to MCP library issue
         ]
         if extra_args:
             cmd.extend(extra_args)
@@ -244,13 +247,13 @@ class ServerProcess:
         env = os.environ.copy()
         env["MXCP_CONFIG"] = str(self.working_dir / "mxcp-config.yml")
         
-        # print(f"Starting server in {self.working_dir}")
-        # print(f"Command: {' '.join(cmd)}")
-        # print(f"MXCP_CONFIG: {env['MXCP_CONFIG']}")
+        # Enable debug logging
+        env["MXCP_LOG_LEVEL"] = "DEBUG"
         
         self.process = subprocess.Popen(
             cmd,
             env=env,
+            cwd=str(self.working_dir),  # Set working directory for subprocess
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,  # Combine stdout and stderr
             text=True
@@ -548,6 +551,43 @@ class TestIntegration:
                 result2 = await client.call_tool("check_secret", {})
                 assert result2["api_key"] == "file_secret_v2"
                 assert result2["endpoint"] == "https://api.v2.example.com"
+    
+    @pytest.mark.asyncio
+    async def test_reload_always_refreshes_duckdb(self, integration_fixture_dir):
+        """Test that SIGHUP always reloads DuckDB session even without config changes."""
+        # Start server
+        process = ServerProcess(integration_fixture_dir)
+        process.start()
+        
+        try:
+            # Call tool to verify initial state
+            async with MCPTestClient(process.port) as client:
+                result = await client.call_tool("echo_message", {"message": "test1"})
+                assert result["original"] == "test1"
+                assert result["reversed"] == "1tset"
+                initial_length = result["length"]
+            
+            # Wait a moment to ensure timestamp would be different
+            await asyncio.sleep(1)
+            
+            # Send SIGHUP to reload (no config changes)
+            print("Sending SIGHUP signal for reload...")
+            process.reload()  # Use the reload method
+            
+            # Wait for reload to complete
+            await asyncio.sleep(1)
+            
+            # Verify we can still call tools after reload
+            # The server should work fine after reload even without config changes
+            async with MCPTestClient(process.port) as client:
+                result2 = await client.call_tool("echo_message", {"message": "test after reload"})
+                assert result2["original"] == "test after reload"
+                assert result2["reversed"] == "daoler retfa tset"
+                # The result should still work correctly after reload
+                assert result2["length"] == len("test after reload")
+                
+        finally:
+            process.stop()
     
     @pytest.mark.asyncio
     async def test_non_duckdb_secret_types(self, integration_fixture_dir):

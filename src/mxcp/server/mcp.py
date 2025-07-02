@@ -402,9 +402,9 @@ class RAWMCP:
                 if (old_site_config == new_site_config and 
                     old_user_config == new_user_config):
                     logger.info("No changes detected in external configuration values.")
-                    return
-                
-                logger.info("External configuration values have changed. Reloading runtime components...")
+                    logger.info("Proceeding with reload anyway to refresh DuckDB session...")
+                else:
+                    logger.info("External configuration values have changed. Reloading runtime components...")
                 
                 # Shutdown runtime components
                 self._shutdown_runtime_components()

@@ -156,7 +156,7 @@ transport:
     @patch('mxcp.server.mcp.DuckDBSession')
     @patch('mxcp.server.mcp.EndpointLoader')
     def test_reload_no_changes(self, mock_loader, mock_db, mock_load_user_config):
-        """Test reload_configuration when no values change."""
+        """Test reload_configuration when no values change - DuckDB is always reloaded."""
         # Mock user config
         mock_load_user_config.return_value = get_mock_user_config()
         
@@ -186,13 +186,15 @@ transport:
                 # Create server
                 server = RAWMCP(site_config_path=site_config_path)
                 
-                # Mock the shutdown method
+                # Mock the shutdown and init methods
                 with patch.object(server, '_shutdown_runtime_components') as mock_shutdown:
-                    # Call reload
-                    server.reload_configuration()
-                    
-                    # Shutdown should NOT be called when nothing changed
-                    mock_shutdown.assert_not_called()
+                    with patch.object(server, '_init_python_runtime') as mock_init:
+                        # Call reload
+                        server.reload_configuration()
+                        
+                        # Shutdown SHOULD be called even when nothing changed (always reload DuckDB)
+                        mock_shutdown.assert_called_once()
+                        mock_init.assert_called_once()
     
     @patch('mxcp.config.user_config.load_user_config')
     @patch('mxcp.server.mcp.DuckDBSession')
