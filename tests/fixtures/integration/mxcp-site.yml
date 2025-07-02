@@ -1,0 +1,5 @@
+mxcp: 1
+project: integration_test
+profile: default
+secrets:
+  - test_secret 
