@@ -1,0 +1,33 @@
+mxcp: 1
+tool:
+  name: whoami
+  title: Current User Information
+  description: Display information about the current authenticated Salesforce user from OAuth context
+  tags:
+    - salesforce
+    - user
+    - auth
+  annotations:
+    readOnlyHint: true
+    idempotentHint: true
+  parameters: []
+  return:
+    type: object
+    description: Current user information from OAuth context
+    properties:
+      instanceUrl:
+        type: string
+        description: Salesforce instance URL for the authenticated user
+      hasAccessToken:
+        type: boolean
+        description: Whether an access token is available for the authenticated user
+      rawProfile:
+        type: object
+        description: Raw OAuth profile data containing detailed user and organization information
+  language: python
+  source:
+    file: ../python/salesforce_client.py
+  tests:
+    - name: whoami_basic
+      description: Get current user information
+      arguments: []
