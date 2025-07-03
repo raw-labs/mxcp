@@ -349,21 +349,6 @@ class TypeConverter:
         else:
             return obj
 
-    # Legacy method - kept for backward compatibility, but deprecated
-    @staticmethod
-    def convert_value(value: Any, param_def: Dict[str, Any]) -> Any:
-        """
-        DEPRECATED: Use convert_parameter() for input processing or validate_output() for output validation.
-        This method is kept for backward compatibility but has inconsistent behavior.
-        """
-        import warnings
-        warnings.warn(
-            "convert_value() is deprecated. Use convert_parameter() for input processing or validate_output() for output validation.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        return TypeConverter.convert_parameter(value, param_def)
-
 class EndpointExecutor:
     def __init__(self, endpoint_type: EndpointType, name: str, user_config: UserConfig, site_config: SiteConfig, 
                  session: DuckDBSession, profile: Optional[str] = None,
