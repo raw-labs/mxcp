@@ -6,6 +6,9 @@ from pathlib import Path
 from mxcp.config.types import SiteConfig, UserConfig
 from mxcp.config.migration import check_and_migrate_legacy_version
 from typing import Optional, Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 def find_repo_root() -> Path:
     """Find the repository root by looking for mxcp-site.yml.
@@ -117,6 +120,12 @@ def _apply_defaults(config: dict, repo_root: Path) -> dict:
     # Set default DuckDB path for the profile if not specified (now uses data directory)
     if "path" not in config["profiles"][profile]["duckdb"]:
         config["profiles"][profile]["duckdb"]["path"] = str(repo_root / paths_config["data"] / f"db-{profile}.duckdb")
+    
+    # Check for environment variable override
+    env_duckdb_path = os.environ.get("MXCP_DUCKDB_PATH")
+    if env_duckdb_path:
+        logger.info(f"Overriding DuckDB path with MXCP_DUCKDB_PATH: {env_duckdb_path}")
+        config["profiles"][profile]["duckdb"]["path"] = env_duckdb_path
         
     # Initialize drift config for the profile if not present
     if "drift" not in config["profiles"][profile]:
@@ -147,7 +156,10 @@ def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
         repo_path: Optional path to the repository root. If not provided, uses current directory.
         
     Returns:
-        The validated site configuration
+        The loaded and validated site configuration
+        
+    Raises:
+        FileNotFoundError: If mxcp-site.yml is not found
     """
     if repo_path is None:
         repo_path = Path.cwd()
@@ -161,7 +173,7 @@ def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
     
     # Check for legacy version format and provide migration guidance (stops execution)
     check_and_migrate_legacy_version(config, "site", str(config_path))
-    
+        
     # Load and apply JSON Schema validation
     schema_path = Path(__file__).parent / "schemas" / "mxcp-site-schema-1.json"
     with open(schema_path) as schema_file:

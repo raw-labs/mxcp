@@ -17,6 +17,72 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
 
+# Global registry for active plugin instances and shutdown hooks
+_active_plugins: List['MXCPBasePlugin'] = []
+_plugin_shutdown_hooks: List[Callable] = []
+
+def get_active_plugins() -> List['MXCPBasePlugin']:
+    """Returns a list of all active plugin instances."""
+    return _active_plugins
+
+def register_plugin(plugin: 'MXCPBasePlugin'):
+    """Adds a plugin instance to the global registry."""
+    logger.debug(f"Registering active plugin: {plugin.__class__.__name__}")
+    _active_plugins.append(plugin)
+
+def clear_plugin_registry():
+    """Clears all active plugins and shutdown hooks from the registry."""
+    logger.debug("Clearing plugin registry.")
+    _active_plugins.clear()
+    _plugin_shutdown_hooks.clear()
+
+def on_shutdown(func: Callable) -> Callable:
+    """
+    Decorator to register a function to be called on plugin shutdown.
+    
+    This is useful for cleaning up resources like database connections or temporary files.
+    The decorated function should take no arguments.
+    
+    Example:
+        class MyPlugin(MXCPBasePlugin):
+            def __init__(self, config):
+                super().__init__(config)
+                self.client = httpx.Client()
+                
+            @on_shutdown
+            def close_client(self):
+                self.client.close()
+    """
+    logger.debug(f"Registering plugin shutdown hook: {func.__name__}")
+    _plugin_shutdown_hooks.append(func)
+    return func
+
+def run_plugin_shutdown_hooks():
+    """
+    Executes all registered plugin shutdown hooks and calls the shutdown() method on all active plugins.
+    
+    This function iterates through all registered hooks and instances, calling them
+    to ensure a graceful shutdown. It logs errors but continues execution to ensure
+    all hooks are attempted.
+    """
+    logger.info(f"Running {len(_plugin_shutdown_hooks)} plugin shutdown hooks...")
+    for hook in reversed(_plugin_shutdown_hooks):
+        try:
+            hook()
+        except Exception as e:
+            logger.error(f"Error executing plugin shutdown hook {hook.__name__}: {e}", exc_info=True)
+            
+    logger.info(f"Calling shutdown() on {len(_active_plugins)} active plugins...")
+    for plugin in reversed(_active_plugins):
+        try:
+            plugin.shutdown()
+        except Exception as e:
+            logger.error(f"Error calling shutdown() on plugin {plugin.__class__.__name__}: {e}", exc_info=True)
+            
+    # Clear the registry after running all shutdown logic
+    clear_plugin_registry()
+    logger.info("Plugin shutdown process complete.")
+
 def udf(func: Callable[..., T]) -> Callable[..., T]:
     """Decorator to mark a method as a UDF (User Defined Function).
     
@@ -63,6 +129,8 @@ class MXCPBasePlugin:
         """
         self._config = config
         self._user_context = user_context
+        # Register the instance as active
+        register_plugin(self)
 
     @property
     def user_context(self) -> Optional['UserContext']:
@@ -243,3 +311,17 @@ class MXCPBasePlugin:
             obj for name, obj in inspect.getmembers(mod)
             if inspect.isclass(obj) and issubclass(obj, cls) and obj != cls
         ]
+
+    def shutdown(self):
+        """
+        Clean up plugin resources. Overwrite this method in your plugin
+        for custom shutdown logic. This is called automatically during a reload or
+        server shutdown.
+        
+        Example:
+            def shutdown(self):
+                print(f"Shutting down {self.__class__.__name__}")
+                if hasattr(self, 'client'):
+                    self.client.close()
+        """
+        pass

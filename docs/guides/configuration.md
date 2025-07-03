@@ -20,9 +20,13 @@ This guide covers all aspects of MXCP configuration, from user settings to endpo
 
 The user configuration file (`~/.mxcp/config.yml`) stores user-specific settings and secrets.
 
-### Environment Variable Interpolation
+### Dynamic Value Interpolation
 
-The user configuration file supports environment variable interpolation using `${ENV_VAR}` syntax. This allows you to reference environment variables in your configuration, which is particularly useful for sensitive values like passwords and API keys.
+The user configuration file supports several methods for injecting values dynamically:
+
+1. **Environment Variables** - Use `${ENV_VAR}` syntax
+2. **Vault Secrets** - Use `vault://path/to/secret#key` URLs
+3. **File References** - Use `file://path/to/file` URLs
 
 Example:
 ```yaml
@@ -37,12 +41,13 @@ projects:
             parameters:
               host: "localhost"
               port: "5432"
-              database: "${DB_NAME}"
-              username: "${DB_USER}"
-              password: "${DB_PASSWORD}"
+              database: "${DB_NAME}"               # From environment variable
+              username: "${DB_USER}"                # From environment variable
+              password: "vault://secret/db#password" # From Vault
+              ssl_cert: "file:///etc/ssl/db.crt"    # From file
 ```
 
-If any referenced environment variable is not set, MXCP will raise an error when loading the configuration.
+If any referenced value cannot be resolved (missing environment variable, Vault secret, or file), MXCP will raise an error when loading the configuration.
 
 ### Schema Version
 ```yaml
@@ -159,6 +164,68 @@ projects:
 **Supported Secret Engines:**
 - KV Secrets Engine v2 (default)
 - KV Secrets Engine v1 (fallback)
+
+### File References
+
+MXCP supports reading configuration values from local files using `file://` URLs. This is useful for:
+- Loading certificates or keys from files
+- Reading API tokens from secure file locations
+- Separating sensitive data from configuration files
+
+**File URL Format:**
+- Absolute paths: `file:///absolute/path/to/file`
+- Relative paths: `file://relative/path/to/file` (relative to current working directory)
+
+**Example:**
+```yaml
+mxcp: 1
+projects:
+  my_project:
+    profiles:
+      dev:
+        secrets:
+          - name: "ssl_certificates"
+            type: "custom"
+            parameters:
+              cert: "file:///etc/ssl/certs/server.crt"
+              key: "file:///etc/ssl/private/server.key"
+          - name: "api_config"
+            type: "api"
+            parameters:
+              api_key: "file://secrets/api_key.txt"
+              endpoint: "https://api.example.com"
+```
+
+**Important Notes:**
+- The file content is read when the configuration is loaded
+- Whitespace (including newlines) is automatically stripped from the file content
+- The file must exist and be readable when the configuration is loaded
+- Use appropriate file permissions to protect sensitive files
+- Relative paths are resolved from the current working directory, not the config file location
+
+### Combining Interpolation Methods
+
+You can combine environment variables, Vault URLs, and file references in the same configuration:
+
+```yaml
+mxcp: 1
+vault:
+  enabled: true
+  address: "${VAULT_ADDR}"
+  token_env: "VAULT_TOKEN"
+projects:
+  my_project:
+    profiles:
+      dev:
+        secrets:
+          - name: "app_config"
+            type: "custom"
+            parameters:
+              database_host: "${DB_HOST}"                    # Environment variable
+              database_password: "vault://secret/db#password" # Vault secret
+              ssl_cert: "file:///etc/ssl/app.crt"            # File reference
+              api_key: "file://keys/api.key"                 # Relative file path
+```
 
 ## Repository Configuration
 
@@ -416,6 +483,58 @@ MXCP can be configured using environment variables:
 - `MXCP_DEBUG`: Enable debug logging
 - `MXCP_PROFILE`: Set default profile
 - `MXCP_READONLY`: Enable read-only mode
+- `MXCP_DUCKDB_PATH`: Override the DuckDB file location (see below)
+
+### DuckDB Path Override
+
+The `MXCP_DUCKDB_PATH` environment variable allows you to override the DuckDB database file location configured in `mxcp-site.yml`. This is useful for:
+
+- Using a centralized database location across different projects
+- Running tests with a temporary database
+- Deploying to environments where the configured path isn't writable
+
+**Example:**
+```bash
+# Override DuckDB location for all commands
+export MXCP_DUCKDB_PATH="/tmp/test.duckdb"
+mxcp run my_tool
+
+# Or set it for a single command
+MXCP_DUCKDB_PATH="/path/to/shared.db" mxcp serve
+```
+
+When `MXCP_DUCKDB_PATH` is set, it overrides the path specified in `profiles.<profile>.duckdb.path` for all profiles.
+
+### Configuration Reload
+
+For long-running MCP servers, you can reload external configuration values (secrets from vault://, file://, and environment variables) without restarting the service:
+
+```bash
+# Send SIGHUP signal to reload external values
+kill -HUP <pid>
+```
+
+The reload process:
+1. **Only external references are refreshed** - the configuration file structure is NOT re-read
+2. **Service remains available** - queries wait for the reload to complete
+3. **Automatic rollback on failure** - if new values cause errors, the server continues with old values
+
+What gets refreshed:
+- ✅ Vault secrets (vault://)
+- ✅ File contents (file://)
+- ✅ Environment variables (${VAR})
+- ✅ DuckDB connection (always recreated to pick up any database file changes)
+- ✅ Python runtimes with updated configs
+
+What does NOT change:
+- ❌ Configuration file structure
+- ❌ OAuth provider settings
+- ❌ Server host/port settings
+- ❌ Registered endpoints
+
+This design ensures that only the values that are meant to be dynamic (secrets, tokens, etc.) are refreshed, while the service structure remains stable. This prevents accidental service disruption from configuration file changes.
+
+**Note on DuckDB Reload**: The DuckDB connection is always recreated during a reload, regardless of whether configuration values have changed. This ensures that any external changes to the DuckDB database file (new tables, data updates, etc.) are visible after the reload.
 
 ## Model Configuration (for Evals)
 

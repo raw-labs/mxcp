@@ -30,35 +30,13 @@ def change_to_mcp_repo(mcp_repo_path):
         os.chdir(original_dir)
 
 @pytest.fixture(scope="module")
-def test_user_config(mcp_repo_path):
-    """Load test user configuration."""
-    original_dir = os.getcwd()
-    os.chdir(mcp_repo_path)
-    try:
-        site_config = load_site_config()
-        return load_user_config(site_config)
-    finally:
-        os.chdir(original_dir)
-
-@pytest.fixture(scope="module")
-def test_site_config(mcp_repo_path):
-    """Load test site configuration."""
-    original_dir = os.getcwd()
-    os.chdir(mcp_repo_path)
-    try:
-        return load_site_config()
-    finally:
-        os.chdir(original_dir)
-
-@pytest.fixture(scope="module")
-def mcp_server(test_user_config, test_site_config, mcp_repo_path):
+def mcp_server(mcp_repo_path):
     """Create a RAWMCP instance for testing."""
     original_dir = os.getcwd()
     os.chdir(mcp_repo_path)
     try:
         server = RAWMCP(
-            user_config=test_user_config,
-            site_config=test_site_config,
+            site_config_path=mcp_repo_path,
             stateless_http=True,
             json_response=True,
             host="localhost",

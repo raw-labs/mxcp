@@ -1,0 +1,16 @@
+mxcp: 1
+transport:
+  provider: streamable-http
+  http:
+    port: 8765
+    host: localhost
+projects:
+  integration_test:
+    profiles:
+      default:
+        secrets:
+          - name: test_secret
+            type: custom
+            parameters:
+              api_key: "initial_key_123"
+              endpoint: "https://api.example.com" 

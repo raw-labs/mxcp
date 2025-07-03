@@ -5,6 +5,6 @@ This module provides the base Plugin class and utilities for extending MXCP's fu
 with custom data processing capabilities.
 """
 
-from mxcp.plugins.base import MXCPBasePlugin, udf
+from mxcp.plugins.base import MXCPBasePlugin, udf, on_shutdown
 
-__all__ = ['MXCPBasePlugin', 'udf'] 
+__all__ = ['MXCPBasePlugin', 'udf', 'on_shutdown'] 

@@ -66,6 +66,10 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v"
 asyncio_mode = "auto"  # Enable async test support
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
 
 [tool.black]
 line-length = 100
