@@ -6,6 +6,8 @@ from mxcp.endpoints.types import EndpointDefinition
 from mxcp.config.site_config import SiteConfig
 import json
 from jsonschema import validate
+from referencing import Registry, Resource
+from referencing.jsonschema import DRAFT7
 import os
 import logging
 
@@ -66,11 +68,27 @@ class EndpointLoader:
                 return endpoint_data[endpoint_type].get("enabled", True)
         return True
 
-    def _load_schema(self, schema_name: str) -> dict:
-        """Load a schema file by name"""
-        schema_path = Path(__file__).parent / "schemas" / schema_name
+    def _load_schema(self, schema_name: str) -> Tuple[dict, Registry]:
+        """Load a schema file by name and create a registry for cross-file references"""
+        schemas_dir = (Path(__file__).parent / "schemas").resolve()
+        schema_path = schemas_dir / schema_name
+        
         with open(schema_path) as f:
-            return json.load(f)
+            schema = json.load(f)
+        
+        # Load common schema for registry
+        common_schema_path = schemas_dir / "common-types-schema-1.json"
+        with open(common_schema_path) as common_file:
+            common_schema = json.load(common_file)
+        
+        # Create registry with common schema
+        # The URI needs to match what's expected in the $ref
+        registry = Registry().with_resource(
+            uri="common-types-schema-1.json",
+            resource=Resource.from_contents(common_schema)
+        )
+        
+        return schema, registry
 
     def _discover_in_directory(
         self, 
@@ -98,7 +116,7 @@ class EndpointLoader:
             logger.info(f"Directory {directory} does not exist, skipping {endpoint_type} discovery")
             return endpoints
             
-        schema = self._load_schema(schema_name)
+        schema, registry = self._load_schema(schema_name)
         
         for f in directory.rglob("*.yml"):
             try:
@@ -115,8 +133,8 @@ class EndpointLoader:
                         logger.warning(f"Skipping {f}: Expected {endpoint_type} definition but not found")
                         continue
                         
-                    # Validate against schema
-                    validate(instance=data, schema=schema)
+                    # Validate against schema with registry
+                    validate(instance=data, schema=schema, registry=registry)
                     
                     # Check if endpoint is enabled
                     if not self._is_endpoint_enabled(data):
@@ -199,7 +217,7 @@ class EndpointLoader:
                 logger.error(f"Directory {search_dir} does not exist")
                 return None
             
-            schema = self._load_schema(schema_name)
+            schema, registry = self._load_schema(schema_name)
             
             # Search in the appropriate directory
             for f in search_dir.rglob("*.yml"):
@@ -238,8 +256,8 @@ class EndpointLoader:
                                 logger.info(f"Skipping disabled endpoint: {f}")
                                 continue
                             
-                            # Validate against schema
-                            validate(instance=data, schema=schema)
+                            # Validate against schema with registry
+                            validate(instance=data, schema=schema, registry=registry)
                             self._endpoints[str(f)] = data
                             return (f, data)
                             
