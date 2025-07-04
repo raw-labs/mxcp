@@ -90,6 +90,9 @@ class RAWMCP:
         # Initialize external reference tracker for hot reload
         self.ref_tracker = ExternalRefTracker()
         
+        # Create shared lock for thread-safety (needed by runtime components)
+        self.db_lock = threading.Lock()
+        
         # Resolve configurations
         self._resolve_and_apply_configs()
         
@@ -111,9 +114,6 @@ class RAWMCP:
         # Track transport mode and other state
         self.transport_mode = None
         self._shutdown_called = False
-        
-        # Create shared lock for thread-safety
-        self.db_lock = threading.Lock()
         
         # Register signal handlers
         self._register_signal_handlers()
@@ -439,7 +439,7 @@ class RAWMCP:
     def _init_python_runtime(self):
         """Initialize Python runtime and load all Python modules"""
         from mxcp.engine.python_loader import PythonEndpointLoader
-        from mxcp.runtime import _run_init_hooks
+        from mxcp.runtime import _run_init_hooks, _set_runtime_context, _clear_runtime_context
         from mxcp.config.site_config import find_repo_root
         
         logger.info("Initializing Python runtime for endpoints...")
@@ -452,8 +452,21 @@ class RAWMCP:
             # Preload all modules in python/ directory
             self.python_loader.preload_all_modules()
             
-            # Run init hooks
-            _run_init_hooks()
+            # Set runtime context before running init hooks so they can access secrets/config
+            _set_runtime_context(
+                self.db_session,
+                self.user_config,
+                self.site_config,
+                self.db_session.plugins,
+                self.db_lock
+            )
+            
+            try:
+                # Run init hooks with runtime context available
+                _run_init_hooks()
+            finally:
+                # Clear runtime context after init hooks complete
+                _clear_runtime_context()
             
             logger.info("Python runtime initialized successfully")
         except Exception as e:
