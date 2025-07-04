@@ -1,0 +1,56 @@
+mxcp: 1
+
+tool:
+  name: search_user
+  description: |
+    Search for users by query string (username, email, or display name).
+    Returns a list of matching users with their details.
+  type: tool
+  annotations:
+    title: Search User
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  language: python
+  source:
+    file: ../python/jira_endpoints.py
+  parameters:
+    - name: query
+      type: string
+      description: |
+        Search term - can be username, email, display name, or partial matches.
+        The search is case-insensitive and supports partial matching.
+      examples: [
+        "ben@raw-labs.com",
+        "Benjamin Gaidioz",
+        "ben",
+        "benjamin",
+        "gaidioz"
+      ]
+  return:
+    type: array
+    items:
+      type: object
+      properties:
+        accountId:
+          type: string
+          description: The account ID
+        displayName:
+          type: string
+          description: The display name
+        emailAddress:
+          type: string
+          description: The email address
+        active:
+          type: boolean
+          description: Whether the user is active
+        timeZone:
+          type: string
+          description: The user's time zone
+  tests:
+    - name: "Search by name"
+      description: "Verify user search by name returns results"
+      arguments:
+        - key: query
+          value: "Ben"
