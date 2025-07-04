@@ -93,7 +93,14 @@ class PythonExecutor(ExecutorPlugin):
         >>> executor.shutdown()
     """
     
-    def __init__(self, repo_root: Optional[Path] = None):
+    def __init__(
+        self, 
+        repo_root: Optional[Path] = None,
+        user_config: Optional[Dict] = None,
+        site_config: Optional[Dict] = None,
+        duckdb_session = None,
+        plugins: Optional[Dict] = None
+    ):
         """Initialize Python executor.
         
         Creates Python loader, preloads all modules to register hooks,
@@ -101,6 +108,10 @@ class PythonExecutor(ExecutorPlugin):
         
         Args:
             repo_root: Repository root directory. If None, will use current working directory.
+            user_config: User configuration for runtime context during init hooks
+            site_config: Site configuration for runtime context during init hooks
+            duckdb_session: DuckDB session for runtime context during init hooks
+            plugins: Plugins dict for runtime context during init hooks
         """
         self.repo_root = repo_root
         if not self.repo_root:
@@ -119,11 +130,33 @@ class PythonExecutor(ExecutorPlugin):
             logger.info("Preloading Python modules to register hooks...")
             self._loader.preload_all_modules()
             
-            # Then run init hooks on the now-registered hooks
+            # Then run init hooks with runtime context if available
             from mxcp.runtime import run_init_hooks
             logger.info("Running init hooks after module preload...")
-            run_init_hooks()
-            logger.info("Init hooks completed successfully")
+            
+            # Set up ExecutionContext for init hooks if we have the necessary context
+            context_token = None
+            if user_config and site_config and duckdb_session:
+                from ..context import ExecutionContext, set_execution_context
+                context = ExecutionContext()
+                context.set("user_config", user_config)
+                context.set("site_config", site_config)
+                context.set("duckdb_session", duckdb_session)
+                if plugins:
+                    context.set("plugins", plugins)
+                context_token = set_execution_context(context)
+                logger.info("Set up ExecutionContext for init hooks")
+            
+            try:
+                run_init_hooks()
+                logger.info("Init hooks completed successfully")
+            finally:
+                # Clean up context if we set it up
+                if context_token:
+                    from ..context import reset_execution_context
+                    reset_execution_context(context_token)
+                    logger.info("Cleaned up ExecutionContext after init hooks")
+                    
         except ImportError:
             logger.debug("Runtime module not available for init hooks")
         except Exception as e:

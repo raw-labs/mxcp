@@ -1,0 +1,13 @@
+mxcp: 1
+tool:
+  name: get_global_var
+  description: Get the global variable
+  language: python
+  source:
+    file: ../python/test_endpoints.py
+  return:
+    type: string 
+  tests:
+    - name: quick_check
+      arguments: []
+      result_contains_text: "initial_key_123"
