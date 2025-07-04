@@ -9,13 +9,20 @@ from typing import Dict, Any, List, Optional
 import logging
 import json
 import simple_salesforce
-from mxcp.runtime import config
+from mxcp.runtime import config, on_init, on_shutdown
 
 logger = logging.getLogger(__name__)
 
+# Global Salesforce client for reuse across all function calls
+sf_client: Optional[simple_salesforce.Salesforce] = None
 
-def _get_salesforce_client() -> simple_salesforce.Salesforce:
-    """Get configured Salesforce client from secrets."""
+
+@on_init
+def setup_salesforce_client():
+    """Initialize Salesforce client when server starts."""
+    global sf_client
+    logger.info("Initializing Salesforce client...")
+    
     sf_config = config.get_secret("salesforce")
     if not sf_config:
         raise ValueError("Salesforce configuration not found. Please configure Salesforce secrets in your user config.")
@@ -25,13 +32,32 @@ def _get_salesforce_client() -> simple_salesforce.Salesforce:
     if missing_keys:
         raise ValueError(f"Missing Salesforce configuration keys: {', '.join(missing_keys)}")
     
-    return simple_salesforce.Salesforce(
+    sf_client = simple_salesforce.Salesforce(
         username=sf_config["username"],
         password=sf_config["password"],
         security_token=sf_config["security_token"],
         instance_url=sf_config["instance_url"],
         client_id=sf_config["client_id"]
     )
+    
+    logger.info("Salesforce client initialized successfully")
+
+
+@on_shutdown
+def cleanup_salesforce_client():
+    """Clean up Salesforce client when server stops."""
+    global sf_client
+    if sf_client:
+        # Salesforce client doesn't need explicit cleanup, but we'll clear the reference
+        sf_client = None
+        logger.info("Salesforce client cleaned up")
+
+
+def _get_salesforce_client() -> simple_salesforce.Salesforce:
+    """Get the global Salesforce client."""
+    if sf_client is None:
+        raise RuntimeError("Salesforce client not initialized. Make sure the server is started properly.")
+    return sf_client
 
 
 def soql(query: str) -> List[Dict[str, Any]]:

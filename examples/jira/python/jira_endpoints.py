@@ -8,13 +8,20 @@ This is a simpler alternative to the plugin-based approach.
 from typing import Dict, Any, List, Optional
 import logging
 from atlassian import Jira
-from mxcp.runtime import config, db
+from mxcp.runtime import config, db, on_init, on_shutdown
 
 logger = logging.getLogger(__name__)
 
+# Global JIRA client for reuse across all function calls
+jira_client: Optional[Jira] = None
 
-def _get_jira_client() -> Jira:
-    """Get configured JIRA client from secrets."""
+
+@on_init
+def setup_jira_client():
+    """Initialize JIRA client when server starts."""
+    global jira_client
+    logger.info("Initializing JIRA client...")
+    
     jira_config = config.get_secret("jira")
     if not jira_config:
         raise ValueError("JIRA configuration not found. Please configure JIRA secrets in your user config.")
@@ -24,12 +31,31 @@ def _get_jira_client() -> Jira:
     if missing_keys:
         raise ValueError(f"Missing JIRA configuration keys: {', '.join(missing_keys)}")
     
-    return Jira(
+    jira_client = Jira(
         url=jira_config["url"],
         username=jira_config["username"],
         password=jira_config["password"],
         cloud=True
     )
+    
+    logger.info("JIRA client initialized successfully")
+
+
+@on_shutdown
+def cleanup_jira_client():
+    """Clean up JIRA client when server stops."""
+    global jira_client
+    if jira_client:
+        # JIRA client doesn't need explicit cleanup, but we'll clear the reference
+        jira_client = None
+        logger.info("JIRA client cleaned up")
+
+
+def _get_jira_client() -> Jira:
+    """Get the global JIRA client."""
+    if jira_client is None:
+        raise RuntimeError("JIRA client not initialized. Make sure the server is started properly.")
+    return jira_client
 
 
 def jql_query(query: str, start: Optional[int] = 0, limit: Optional[int] = None) -> List[Dict[str, Any]]:
