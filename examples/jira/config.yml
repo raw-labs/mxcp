@@ -11,7 +11,7 @@ projects:
           - name: "jira"
             type: "python"
             parameters:
-              url: "https://your-domain.atlassian.net"
-              username: "your-email@example.com"
-              password: "your-api-token"
+              url: "${JIRA_URL}"
+              username: "${JIRA_USERNAME}"
+              password: "${JIRA_API_TOKEN}"
 
