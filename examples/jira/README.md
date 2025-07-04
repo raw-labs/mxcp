@@ -1,6 +1,6 @@
 # MXCP Jira Python Endpoints Example
 
-This example demonstrates how to use MXCP with Jira data using **plain Python endpoints** instead of plugins. This approach is simpler, more direct, and easier to debug than the plugin-based approach.
+This example demonstrates how to use MXCP with Jira data using Python endpoints. This approach uses Python functions directly as MCP tools.
 
 ## Overview
 
@@ -11,13 +11,12 @@ This example provides Python MCP endpoints that allow you to:
 - List projects and their details
 - Get project metadata
 
-## Key Differences from Plugin Approach
+## Implementation Approach
 
-- **No custom plugins required** - just plain Python functions
-- **Direct MCP tool calls** - no SQL wrapper layer needed
-- **Simpler configuration** - no plugin registration required
-- **Easier debugging** - standard Python debugging works naturally
-- **More flexible** - can return any JSON-serializable data
+This example uses Python functions that are exposed as MCP tools:
+- Python functions handle the Jira API interactions
+- Tool definitions map to these Python functions
+- Results are returned as JSON data
 
 ## Configuration
 
@@ -43,31 +42,17 @@ Add the following to your MXCP user config (`~/.mxcp/config.yml`):
 mxcp: 1
 
 projects:
-  jira-python-demo:
+  jira-demo:
     profiles:
       default:
         secrets:
-          # JIRA credentials - using "python" type to demonstrate behavior
           - name: "jira"
-            type: "python"  # This will cause DuckDB injection to fail (but continue gracefully)
+            type: "python"
             parameters:
               url: "https://your-domain.atlassian.net"
               username: "your-email@example.com"
               password: "your-api-token"  # Use the API token you created above
 ```
-
-### Experimental Setup: DuckDB Secret Injection
-
-This example is set up to demonstrate what happens when:
-1. **Secret is required** - Listed in `mxcp-site.yml`'s `secrets` array
-2. **Invalid DuckDB type** - Using `type: "python"` which DuckDB doesn't understand
-
-**Expected behavior:**
-- DuckDB injection will fail during startup (logged as debug message)
-- Python endpoints will still work perfectly via `config.get_secret()`  
-- Server will continue running normally
-
-This shows MXCP's graceful handling of unsupported secret types!
 
 ### 3. Site Configuration
 
@@ -75,18 +60,16 @@ Create an `mxcp-site.yml` file:
 
 ```yaml
 mxcp: 1
-project: jira-python-demo
+project: jira-demo
 profile: default
 secrets:
-  - jira  # This forces the secret to be injected into DuckDB
+  - jira
 ```
-
-Note: We're listing the JIRA secret as required to demonstrate DuckDB injection behavior.
 
 ## Available Tools
 
 ### JQL Query
-Execute JQL queries directly as Python function calls:
+Execute JQL queries:
 ```bash
 mxcp run tool jql_query --param query="project = TEST" --param limit=10
 ```
@@ -133,47 +116,11 @@ Get users and groups for a specific role in a project:
 mxcp run tool get_project_role_users --param project_key="TEST" --param role_name="Developers"
 ```
 
-
-
-## Example Usage
-
-1. Start the MXCP server:
-   ```bash
-   mxcp serve
-   ```
-
-2. Or run tools directly:
-      ```bash
-   # Query recent issues
-   mxcp run tool jql_query --param query="project = TEST ORDER BY created DESC" --param limit=5
-   
-   # Get specific issue details
-   mxcp run tool get_issue --param issue_key="RD-123"
-   
-        # Get specific user by account ID
-     mxcp run tool get_user --param account_id="557058:ab168c94-8485-405c-88e6-6458375eb30b"
-    
-    # Search for users
-    mxcp run tool search_user --param query="admin"
-   
-   # List all projects
-   mxcp run tool list_projects
-   
-       # Get specific project
-    mxcp run tool get_project --param project_key="TEST"
-    
-    # Get project roles
-    mxcp run tool get_project_roles --param project_key="TEST"
-    
-    # Get users for specific role
-    mxcp run tool get_project_role_users --param project_key="TEST" --param role_name="Developers"
-    ```
-
 ## Project Structure
 
 ```
 jira-python/
-├── mxcp-site.yml           # Simple site configuration
+├── mxcp-site.yml           # Site configuration
 ├── python/                 # Python implementations
 │   └── jira_endpoints.py   # All JIRA endpoint functions
 ├── tools/                  # Tool definitions
@@ -187,28 +134,3 @@ jira-python/
 │   └── get_project_role_users.yml
 └── README.md
 ```
-
-## Key Features
-
-- **Direct Python Functions**: No SQL wrapper layer needed
-- **Async Support**: Functions can be async for better performance
-- **Database Integration**: Can optionally store results in DuckDB
-- **Error Handling**: Proper error responses for invalid requests
-- **Type Safety**: Full type hints for better IDE support
-- **Logging**: Comprehensive logging for debugging
-
-## Migration from Plugin Approach
-
-This example demonstrates how much simpler the Python endpoint approach is:
-
-- **Plugin approach**: Plugin class → UDFs → SQL calls → Tool definitions
-- **Python approach**: Python functions → Tool definitions
-
-The functionality is identical, but the implementation is much more straightforward!
-
-## Notes
-
-- Make sure to keep your API token secure and never commit it to version control
-- The plugin requires proper authentication and API permissions to work with your Jira instance
-- Functions return JSON data that can be directly used by MCP clients
-- Results can optionally be stored in DuckDB for further SQL analysis 
