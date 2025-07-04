@@ -4,7 +4,7 @@ mxcp: 1
 # Copy this to ~/.mxcp/config.yml and update with your JIRA details
 
 projects:
-  jira-python-demo:
+  jira-demo:
     profiles:
       default:
         secrets:

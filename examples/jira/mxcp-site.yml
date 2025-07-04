@@ -1,5 +1,5 @@
 mxcp: 1
-project: jira-python-demo
+project: jira-demo
 profile: default
 secrets:
   - jira
