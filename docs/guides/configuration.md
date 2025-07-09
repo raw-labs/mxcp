@@ -24,7 +24,7 @@ The user configuration file (`~/.mxcp/config.yml`) stores user-specific settings
 
 The user configuration file supports several methods for injecting values dynamically:
 
-1. **Environment Variables** - Use `${ENV_VAR}` syntax
+1. **Environment Variables** - Use `$\{ENV_VAR\}` syntax
 2. **Vault Secrets** - Use `vault://path/to/secret#key` URLs
 3. **File References** - Use `file://path/to/file` URLs
 
@@ -522,7 +522,7 @@ The reload process:
 What gets refreshed:
 - ✅ Vault secrets (vault://)
 - ✅ File contents (file://)
-- ✅ Environment variables (${VAR})
+- ✅ Environment variables ($\{VAR\})
 - ✅ DuckDB connection (always recreated to pick up any database file changes)
 - ✅ Python runtimes with updated configs
 
