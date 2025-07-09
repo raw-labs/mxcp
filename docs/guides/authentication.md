@@ -54,6 +54,7 @@ Currently supported providers:
 - `github` (GitHub OAuth)
 - `atlassian` (Atlassian Cloud - JIRA & Confluence)
 - `salesforce` (Salesforce Cloud)
+- `keycloak` (Keycloak - Open Source Identity and Access Management)
 
 ## Provider Configuration
 
@@ -549,6 +550,216 @@ FROM read_json_auto(
 
 **Finding Your Salesforce Instance URL:**
 The instance URL is provided in the OAuth token response and varies by org (e.g., `https://na1.salesforce.com`, `https://eu2.salesforce.com`).
+
+### Keycloak
+
+MXCP supports OAuth authentication with Keycloak, an open-source identity and access management solution. This allows your MCP server to authenticate users through Keycloak, enabling single sign-on across multiple applications and integration with various identity providers.
+
+#### Creating a Keycloak Client
+
+Before configuring MXCP, you need to create a client in your Keycloak realm:
+
+**Step 1: Access Keycloak Admin Console**
+
+1. Log in to your Keycloak Admin Console (typically at `http://your-keycloak-server:8080/admin`)
+2. Select your realm (or create a new one if needed)
+
+**Step 2: Create a New Client**
+
+1. In the sidebar, click **Clients**
+2. Click **Create client**
+3. Configure the client:
+   - **Client type**: OpenID Connect
+   - **Client ID**: Choose a unique identifier (e.g., `mxcp-client`)
+   - Click **Next**
+
+**Step 3: Configure Client Settings**
+
+1. **Client authentication**: Toggle **ON** (for confidential client)
+2. **Authorization**: Can be left OFF unless you need fine-grained authorization
+3. Enable the following in **Authentication flow**:
+   - **Standard flow** (Authorization Code flow)
+   - **Direct access grants** (optional, for testing)
+4. Click **Next**
+
+**Step 4: Configure Login Settings**
+
+1. **Valid redirect URIs**: Add your MXCP callback URL
+   - For local development: `http://localhost:8000/*`
+   - For production: `https://your-domain.com/*`
+2. **Valid post logout redirect URIs**: Same as redirect URIs
+3. **Web origins**: Add `+` to allow all Valid Redirect URI origins
+4. Click **Save**
+
+**Step 5: Get Client Credentials**
+
+1. Go to the **Credentials** tab
+2. Copy the **Client secret** (you'll need this for MXCP configuration)
+
+#### Environment Variables
+
+Set these environment variables with your Keycloak credentials:
+
+```bash
+export KEYCLOAK_CLIENT_ID="mxcp-client"
+export KEYCLOAK_CLIENT_SECRET="your-client-secret-here"
+export KEYCLOAK_REALM="your-realm-name"
+export KEYCLOAK_SERVER_URL="http://localhost:8080"  # Your Keycloak server URL
+```
+
+#### MXCP Configuration
+
+Configure Keycloak OAuth in your profile's auth section:
+
+```yaml
+projects:
+  my_project:
+    profiles:
+      dev:
+        auth:
+          provider: keycloak
+          clients:
+            - client_id: "${KEYCLOAK_CLIENT_ID}"
+              client_secret: "${KEYCLOAK_CLIENT_SECRET}"
+              name: "My MXCP Application"
+              redirect_uris:
+                - "http://localhost:8000/keycloak/callback"
+              scopes:
+                - "mxcp:access"
+          keycloak:
+            client_id: "${KEYCLOAK_CLIENT_ID}"
+            client_secret: "${KEYCLOAK_CLIENT_SECRET}"
+            realm: "${KEYCLOAK_REALM}"
+            server_url: "${KEYCLOAK_SERVER_URL}"
+            scope: "openid profile email"
+            callback_path: "/keycloak/callback"
+```
+
+#### Configuration Options
+
+- `client_id`: Your Keycloak client ID
+- `client_secret`: Your Keycloak client secret
+- `realm`: The Keycloak realm name where your client is configured
+- `server_url`: Base URL of your Keycloak server (without `/auth` suffix)
+- `scope`: OAuth scopes to request (default: "openid profile email")
+- `callback_path`: Callback path for OAuth flow (default: "/keycloak/callback")
+
+#### Advanced Keycloak Features
+
+**Multiple Realms:**
+You can use different realms for different environments:
+
+```yaml
+# Development realm
+dev:
+  auth:
+    provider: keycloak
+    keycloak:
+      realm: "development"
+      # ... other config
+
+# Production realm
+prod:
+  auth:
+    provider: keycloak
+    keycloak:
+      realm: "production"
+      # ... other config
+```
+
+**Custom Scopes:**
+Keycloak allows you to define custom scopes and map them to user attributes or roles:
+
+```yaml
+keycloak:
+  scope: "openid profile email custom_scope"
+```
+
+**Identity Brokering:**
+Keycloak can act as a broker for other identity providers (Google, SAML, etc.). Users authenticated through these providers will work seamlessly with MXCP.
+
+#### Testing Your Configuration
+
+1. Start your MXCP server:
+   ```bash
+   mxcp serve --debug
+   ```
+
+2. The authentication flow will begin when a client connects
+3. Users will be redirected to Keycloak for authentication
+4. After successful login, they'll be redirected back to your callback URL
+5. Check the logs for successful authentication
+
+#### Troubleshooting
+
+**Common Issues:**
+
+1. **Invalid Client Configuration**:
+   ```
+   ValueError: Keycloak OAuth configuration is incomplete
+   ```
+   - Ensure all required fields (`client_id`, `client_secret`, `realm`, `server_url`) are provided
+   - Check that environment variables are set correctly
+
+2. **Callback URL Mismatch**:
+   ```
+   HTTPException: Invalid state parameter
+   ```
+   - Verify the redirect URI in your Keycloak client matches your MXCP configuration
+   - Ensure the URL scheme (http/https) is correct
+
+3. **Realm Not Found**:
+   ```
+   404 Not Found
+   ```
+   - Check that the realm name in your configuration matches the Keycloak realm
+   - Verify the server URL is correct (should not include `/auth` suffix)
+
+4. **Invalid Client Credentials**:
+   ```
+   401 Unauthorized
+   ```
+   - Verify client ID and secret are correct
+   - Ensure the client is enabled in Keycloak
+   - Check that "Client authentication" is ON for confidential clients
+
+**Debug Tips:**
+
+- Enable debug logging: `mxcp serve --debug`
+- Check Keycloak logs for authentication errors
+- Use Keycloak's built-in account console to test user login
+- Verify OAuth endpoints using `.well-known/openid-configuration`:
+  ```
+  curl http://localhost:8080/realms/your-realm/.well-known/openid-configuration
+  ```
+
+#### Security Best Practices
+
+- **Store credentials securely**: Use environment variables, not config files
+- **Use HTTPS**: Required for production OAuth flows
+- **Realm isolation**: Use separate realms for different environments
+- **Client access**: Configure client-specific roles and scopes
+- **Session management**: Configure appropriate session timeouts in Keycloak
+- **Token validation**: Enable token signature validation
+- **Audit logging**: Enable Keycloak's event logging for security monitoring
+
+#### Working with Keycloak Tokens
+
+Once authenticated, you can use the user's Keycloak token to access protected resources:
+
+```sql
+-- Example: Use Keycloak token to access a protected API
+SELECT *
+FROM read_json_auto(
+    'https://api.example.com/protected/resource',
+    headers = MAP {
+        'Authorization': 'Bearer ' || get_user_external_token(),
+        'Content-Type': 'application/json'
+    }
+);
+```
+
+Keycloak tokens are JWTs that contain user claims and can be decoded to access user information directly.
 
 ## OAuth Client Registration
 

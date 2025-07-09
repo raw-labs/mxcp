@@ -1,0 +1,26 @@
+mxcp: 1
+projects:
+  keycloak-demo:
+    profiles:
+      dev:
+        secrets:
+          - name: keycloak_creds
+            type: oauth
+            parameters:
+              provider: keycloak
+        auth:
+          provider: keycloak
+          keycloak:
+            client_id: "${KEYCLOAK_CLIENT_ID}"
+            client_secret: "${KEYCLOAK_CLIENT_SECRET}"
+            realm: "${KEYCLOAK_REALM}"
+            server_url: "${KEYCLOAK_SERVER_URL}"
+            scope: "openid profile email"
+            callback_path: "/keycloak/callback"
+          clients:
+            - client_id: "mcp-cli"
+              name: "MCP CLI Client"
+              redirect_uris:
+                - "http://127.0.0.1:49153/oauth/callback"
+              scopes:
+                - "mxcp:access" 

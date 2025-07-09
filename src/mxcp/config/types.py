@@ -127,6 +127,14 @@ class UserSalesforceAuthConfig(TypedDict):
     auth_url: str
     token_url: str
 
+class UserKeycloakAuthConfig(TypedDict):
+    client_id: str
+    client_secret: str
+    realm: str
+    server_url: str
+    scope: Optional[str]
+    callback_path: str
+
 class UserAuthPersistenceConfig(TypedDict, total=False):
     type: Optional[Literal["sqlite"]]
     path: Optional[str]
@@ -135,11 +143,12 @@ class UserAuthorizationConfig(TypedDict, total=False):
     required_scopes: Optional[List[str]]
 
 class UserAuthConfig(TypedDict, total=False):
-    provider: Optional[Literal["none", "github", "atlassian", "salesforce"]]
+    provider: Optional[Literal["none", "github", "atlassian", "salesforce", "keycloak"]]
     clients: Optional[List[UserOAuthClientConfig]]
     github: Optional[UserGitHubAuthConfig]
     atlassian: Optional[UserAtlassianAuthConfig]
     salesforce: Optional[UserSalesforceAuthConfig]
+    keycloak: Optional[UserKeycloakAuthConfig]
     authorization: Optional[UserAuthorizationConfig]
     persistence: Optional[UserAuthPersistenceConfig]
 
