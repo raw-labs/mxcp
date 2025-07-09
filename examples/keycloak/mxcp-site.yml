@@ -1,0 +1,5 @@
+mxcp: 1
+project: keycloak-demo
+profile: dev
+secrets:
+  - keycloak_creds 

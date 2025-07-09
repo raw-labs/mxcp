@@ -213,7 +213,7 @@
                       "properties": {
                         "provider": {
                           "type": "string",
-                          "enum": ["none", "github", "atlassian", "salesforce"],
+                          "enum": ["none", "github", "atlassian", "salesforce", "keycloak"],
                           "default": "none",
                           "description": "OAuth provider to use for authentication"
                         },
@@ -386,6 +386,41 @@
                               "format": "uri",
                               "description": "Salesforce token exchange URL.",
                               "default": "https://login.salesforce.com/services/oauth2/token"
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "keycloak": {
+                          "type": "object",
+                          "description": "Keycloak OAuth configuration (required when provider is 'keycloak').",
+                          "required": ["client_id", "client_secret", "realm", "server_url"],
+                          "properties": {
+                            "client_id": {
+                              "type": "string",
+                              "description": "Keycloak OAuth client ID."
+                            },
+                            "client_secret": {
+                              "type": "string",
+                              "description": "Keycloak OAuth client secret."
+                            },
+                            "realm": {
+                              "type": "string",
+                              "description": "Keycloak realm name."
+                            },
+                            "server_url": {
+                              "type": "string",
+                              "format": "uri",
+                              "description": "Keycloak server base URL (e.g., 'http://localhost:8080')."
+                            },
+                            "scope": {
+                              "type": "string",
+                              "description": "OAuth scopes to request (space-separated).",
+                              "default": "openid profile email"
+                            },
+                            "callback_path": {
+                              "type": "string",
+                              "description": "Callback path for OAuth flow.",
+                              "default": "/keycloak/callback"
                             }
                           },
                           "additionalProperties": false
