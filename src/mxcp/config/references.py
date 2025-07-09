@@ -230,26 +230,38 @@ def resolve_onepassword_url(op_url: str, op_config: Optional[Dict[str, Any]]) ->
     else:
         secret_ref = f"op://{vault_name}/{item_name}/{field_name}"
     
-    # Set up environment variables for the SDK
+    # Get the configured token
     token_env = op_config.get('token_env', 'OP_SERVICE_ACCOUNT_TOKEN')
     op_token = os.environ.get(token_env)
     if not op_token:
         raise ValueError(f"1Password service account token not found in environment variable '{token_env}'")
     
-    # The new SDK expects the token in OP_SERVICE_ACCOUNT_TOKEN
-    os.environ['OP_SERVICE_ACCOUNT_TOKEN'] = op_token
+    # Temporarily set OP_SERVICE_ACCOUNT_TOKEN if needed
+    # The 1Password SDK specifically requires this environment variable name
+    original_token = os.environ.get('OP_SERVICE_ACCOUNT_TOKEN')
+    token_was_set = original_token is not None
     
-    # Initialize 1Password client
     try:
-        client = onepassword.Client()
+        # Only set the token if it's not already set to the correct value
+        if original_token != op_token:
+            os.environ['OP_SERVICE_ACCOUNT_TOKEN'] = op_token
         
-        # Resolve the secret reference directly
+        # Initialize 1Password client and resolve the secret
+        client = onepassword.Client()
         secret_value = client.secrets.resolve(secret_ref)
         
         return secret_value
         
     except Exception as e:
         raise ValueError(f"Failed to resolve 1Password URL '{op_url}': {e}") from e
+    finally:
+        # Restore the original state to avoid global side effects
+        if original_token != op_token:
+            if token_was_set:
+                os.environ['OP_SERVICE_ACCOUNT_TOKEN'] = original_token
+            else:
+                # Remove the variable if it wasn't originally set
+                os.environ.pop('OP_SERVICE_ACCOUNT_TOKEN', None)
 
 
 def resolve_value(value: str, vault_config: Optional[Dict[str, Any]] = None, op_config: Optional[Dict[str, Any]] = None) -> str:
