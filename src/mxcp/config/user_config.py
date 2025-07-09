@@ -113,14 +113,18 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True, res
     2. Vault integration using vault:// URLs:
         password: vault://secret/db#password
     
-    3. File path references using file:// URLs:
+    3. 1Password integration using op:// URLs:
+        password: op://vault/item/field
+        totp: op://vault/item/field?attribute=otp
+    
+    4. File path references using file:// URLs:
         api_key: file:///path/to/api_key.txt
         ssl_cert: file://certs/server.crt
     
     Args:
         site_config: The site configuration loaded from mxcp-site.yml
         generate_default: Whether to generate a default config if the file doesn't exist
-        resolve_refs: Whether to resolve external references (vault://, file://, ${ENV_VAR}).
+        resolve_refs: Whether to resolve external references (vault://, op://, file://, ${ENV_VAR}).
                      Set to False to get the raw template configuration.
         
     Returns:
@@ -151,7 +155,8 @@ def load_user_config(site_config: SiteConfig, generate_default: bool = True, res
         # Interpolate environment variables and vault URLs in the config if requested
         if resolve_refs:
             vault_config = config.get('vault')
-            config = interpolate_all(config, vault_config)
+            op_config = config.get('onepassword')
+            config = interpolate_all(config, vault_config, op_config)
             
         # Ensure project and profile exist in config
         project_name = site_config["project"]

@@ -79,6 +79,10 @@ class UserVaultConfig(TypedDict):
     address: Optional[str]
     token_env: Optional[str]
 
+class UserOnePasswordConfig(TypedDict):
+    enabled: bool
+    token_env: Optional[str]
+
 class UserHttpTransportConfig(TypedDict, total=False):
     port: Optional[int]
     host: Optional[str]
@@ -162,5 +166,6 @@ class UserConfig(TypedDict):
     mxcp: str
     projects: Dict[str, UserProjectConfig]
     vault: Optional[UserVaultConfig]
+    onepassword: Optional[UserOnePasswordConfig]
     transport: Optional[UserTransportConfig]
     models: Optional[UserModelsConfig]

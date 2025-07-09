@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 ENV_VAR_PATTERN = re.compile(r'\${([A-Za-z0-9_]+)}')
 VAULT_URL_PATTERN = re.compile(r'vault://([^#]+)(?:#(.+))?')
 FILE_URL_PATTERN = re.compile(r'file://(.+)')
+ONEPASSWORD_URL_PATTERN = re.compile(r'op://([^/]+)/([^/]+)/([^/?]+)(?:\?attribute=(otp))?$')
 
 
 def is_external_reference(value: Any) -> bool:
@@ -28,6 +29,7 @@ def is_external_reference(value: Any) -> bool:
     return (
         value.startswith('vault://') or
         value.startswith('file://') or
+        value.startswith('op://') or
         ENV_VAR_PATTERN.search(value) is not None
     )
 
@@ -38,6 +40,8 @@ def detect_reference_type(value: str) -> Optional[str]:
         return 'vault'
     elif value.startswith('file://'):
         return 'file'
+    elif value.startswith('op://'):
+        return 'onepassword'
     elif ENV_VAR_PATTERN.search(value):
         return 'env'
     return None
@@ -188,12 +192,85 @@ def resolve_file_url(file_url: str) -> str:
         raise ValueError(f"Error reading file '{file_path}': {e}")
 
 
-def resolve_value(value: str, vault_config: Optional[Dict[str, Any]] = None) -> str:
+def resolve_onepassword_url(op_url: str, op_config: Optional[Dict[str, Any]]) -> str:
+    """Resolve a 1Password op:// URL to retrieve the secret value.
+    
+    Args:
+        op_url: The op:// URL to resolve (e.g., op://vault/item/field or op://vault/item/field?attribute=otp)
+        op_config: The 1Password configuration from user config
+        
+    Returns:
+        The resolved secret value
+        
+    Raises:
+        ValueError: If 1Password is not configured or URL is invalid
+        ImportError: If onepassword-sdk library is not available
+    """
+    if not op_config or not op_config.get('enabled', False):
+        raise ValueError(f"1Password URL '{op_url}' found but 1Password is not enabled in configuration")
+    
+    # Parse the 1Password URL
+    match = ONEPASSWORD_URL_PATTERN.match(op_url)
+    if not match:
+        raise ValueError(f"Invalid 1Password URL format: '{op_url}'. Expected format: op://vault/item/field or op://vault/item/field?attribute=otp")
+    
+    vault_name = match.group(1)
+    item_name = match.group(2)
+    field_name = match.group(3)
+    attribute = match.group(4)  # Optional attribute like 'otp'
+    
+    try:
+        import onepassword  # type: ignore
+    except ImportError:
+        raise ImportError("onepassword-sdk library is required for 1Password integration. Install with: pip install 'mxcp[onepassword]'")
+    
+    # Build the secret reference - new SDK format
+    if attribute == 'otp':
+        secret_ref = f"op://{vault_name}/{item_name}/{field_name}?attribute=totp"
+    else:
+        secret_ref = f"op://{vault_name}/{item_name}/{field_name}"
+    
+    # Get the configured token
+    token_env = op_config.get('token_env', 'OP_SERVICE_ACCOUNT_TOKEN')
+    op_token = os.environ.get(token_env)
+    if not op_token:
+        raise ValueError(f"1Password service account token not found in environment variable '{token_env}'")
+    
+    # Temporarily set OP_SERVICE_ACCOUNT_TOKEN if needed
+    # The 1Password SDK specifically requires this environment variable name
+    original_token = os.environ.get('OP_SERVICE_ACCOUNT_TOKEN')
+    token_was_set = original_token is not None
+    
+    try:
+        # Only set the token if it's not already set to the correct value
+        if original_token != op_token:
+            os.environ['OP_SERVICE_ACCOUNT_TOKEN'] = op_token
+        
+        # Initialize 1Password client and resolve the secret
+        client = onepassword.Client()
+        secret_value = client.secrets.resolve(secret_ref)
+        
+        return secret_value
+        
+    except Exception as e:
+        raise ValueError(f"Failed to resolve 1Password URL '{op_url}': {e}") from e
+    finally:
+        # Restore the original state to avoid global side effects
+        if original_token != op_token:
+            if token_was_set:
+                os.environ['OP_SERVICE_ACCOUNT_TOKEN'] = original_token
+            else:
+                # Remove the variable if it wasn't originally set
+                os.environ.pop('OP_SERVICE_ACCOUNT_TOKEN', None)
+
+
+def resolve_value(value: str, vault_config: Optional[Dict[str, Any]] = None, op_config: Optional[Dict[str, Any]] = None) -> str:
     """Resolve a single string value that may contain external references.
     
     Args:
         value: String value to resolve
         vault_config: Optional vault configuration
+        op_config: Optional 1Password configuration
         
     Returns:
         Resolved value
@@ -205,26 +282,29 @@ def resolve_value(value: str, vault_config: Optional[Dict[str, Any]] = None) -> 
         return resolve_vault_url(value, vault_config)
     elif value.startswith('file://'):
         return resolve_file_url(value)
+    elif value.startswith('op://'):
+        return resolve_onepassword_url(value, op_config)
     else:
         return resolve_env_var(value)
 
 
-def interpolate_all(config: Any, vault_config: Optional[Dict[str, Any]] = None) -> Any:
+def interpolate_all(config: Any, vault_config: Optional[Dict[str, Any]] = None, op_config: Optional[Dict[str, Any]] = None) -> Any:
     """Recursively interpolate all external references in a configuration.
     
     Args:
         config: Configuration structure (dict, list, or scalar)
         vault_config: Optional vault configuration
+        op_config: Optional 1Password configuration
         
     Returns:
         Configuration with all references resolved
     """
     if isinstance(config, str) and is_external_reference(config):
-        return resolve_value(config, vault_config)
+        return resolve_value(config, vault_config, op_config)
     elif isinstance(config, dict):
-        return {k: interpolate_all(v, vault_config) for k, v in config.items()}
+        return {k: interpolate_all(v, vault_config, op_config) for k, v in config.items()}
     elif isinstance(config, list):
-        return [interpolate_all(item, vault_config) for item in config]
+        return [interpolate_all(item, vault_config, op_config) for item in config]
     else:
         return config
 

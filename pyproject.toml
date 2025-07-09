@@ -49,6 +49,13 @@ dev = [
 vault = [
     "hvac>=2.0.0",  # HashiCorp Vault client for vault:// URL support
 ]
+onepassword = [
+    "onepassword-sdk>=0.3.0",  # 1Password SDK for op:// URL support
+]
+all = [
+    "hvac>=2.0.0",  # HashiCorp Vault client for vault:// URL support
+    "onepassword-sdk>=0.3.0",  # 1Password SDK for op:// URL support
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

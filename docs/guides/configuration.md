@@ -165,6 +165,61 @@ projects:
 - KV Secrets Engine v2 (default)
 - KV Secrets Engine v1 (fallback)
 
+### 1Password Integration (Optional)
+
+MXCP supports 1Password for secure secret management using service accounts. When enabled, you can use `op://` URLs in your configuration to retrieve secrets from 1Password.
+
+```yaml
+onepassword:
+  enabled: true
+  token_env: "OP_SERVICE_ACCOUNT_TOKEN"  # Environment variable containing the service account token
+```
+
+#### Using 1Password URLs
+
+Once 1Password is configured, you can use `op://` URLs anywhere in your configuration where you would normally put sensitive values:
+
+```yaml
+mxcp: 1
+onepassword:
+  enabled: true
+  token_env: "OP_SERVICE_ACCOUNT_TOKEN"
+projects:
+  my_project:
+    profiles:
+      dev:
+        secrets:
+          - name: "db_credentials"
+            type: "database"
+            parameters:
+              host: "localhost"
+              port: "5432"
+              database: "mydb"
+              username: "op://vault/database-creds/username"
+              password: "op://vault/database-creds/password"
+              totp: "op://vault/database-creds/totp?attribute=otp"
+```
+
+**1Password URL Format:** `op://vault/item/field[?attribute=otp]`
+
+- `vault`: The name or ID of the vault in 1Password
+- `item`: The name or ID of the item in 1Password
+- `field`: The name or ID of the field within the item
+- `?attribute=otp`: Optional parameter to retrieve TOTP/OTP value
+
+**Requirements:**
+- The `onepassword-sdk` Python library must be installed: `pip install "mxcp[onepassword]"` or `pip install onepassword-sdk`
+- 1Password service account must be configured with appropriate vault access
+- 1Password must be configured with `enabled: true`
+- The service account token must be available in the specified environment variable (default: `OP_SERVICE_ACCOUNT_TOKEN`)
+
+**Examples:**
+- Basic field: `op://Private/Login Item/username`
+- Password field: `op://Private/Login Item/password`
+- TOTP/OTP: `op://Private/Login Item/totp?attribute=otp`
+- Using vault ID: `op://hfnjvi6aymbsnfc2gshk5b6o5q/Login Item/password`
+- Using item ID: `op://Private/j5hbqmr7nz3uqsw3j5qam2fgji/password`
+
 ### File References
 
 MXCP supports reading configuration values from local files using `file://` URLs. This is useful for:
@@ -205,7 +260,7 @@ projects:
 
 ### Combining Interpolation Methods
 
-You can combine environment variables, Vault URLs, and file references in the same configuration:
+You can combine environment variables, Vault URLs, 1Password URLs, and file references in the same configuration:
 
 ```yaml
 mxcp: 1
@@ -213,6 +268,9 @@ vault:
   enabled: true
   address: "${VAULT_ADDR}"
   token_env: "VAULT_TOKEN"
+onepassword:
+  enabled: true
+  token_env: "OP_SERVICE_ACCOUNT_TOKEN"
 projects:
   my_project:
     profiles:
@@ -221,10 +279,12 @@ projects:
           - name: "app_config"
             type: "custom"
             parameters:
-              database_host: "${DB_HOST}"                    # Environment variable
-              database_password: "vault://secret/db#password" # Vault secret
-              ssl_cert: "file:///etc/ssl/app.crt"            # File reference
-              api_key: "file://keys/api.key"                 # Relative file path
+              database_host: "${DB_HOST}"                       # Environment variable
+              database_password: "vault://secret/db#password"   # Vault secret
+              api_key: "op://Private/api-keys/production"       # 1Password secret
+              totp: "op://Private/api-keys/totp?attribute=otp"  # 1Password TOTP
+              ssl_cert: "file:///etc/ssl/app.crt"               # File reference
+              ssl_key: "file://keys/app.key"                    # Relative file path
 ```
 
 ## Repository Configuration
