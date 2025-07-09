@@ -41,7 +41,9 @@ First, install MXCP:
 pip install mxcp
 
 # For advanced features (optional)
-pip install "mxcp[vault]"  # HashiCorp Vault integration
+pip install "mxcp[vault]"      # HashiCorp Vault integration
+pip install "mxcp[onepassword]" # 1Password integration
+pip install "mxcp[all]"        # All optional features
 ```
 
 ## Path 1: Hello World (2 minutes)

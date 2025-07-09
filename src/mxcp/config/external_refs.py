@@ -31,10 +31,10 @@ class ExternalRef:
     last_checked: float = 0.0
     last_error: Optional[str] = None
     
-    def resolve(self, vault_config: Optional[Dict[str, Any]] = None) -> Any:
+    def resolve(self, vault_config: Optional[Dict[str, Any]] = None, op_config: Optional[Dict[str, Any]] = None) -> Any:
         """Resolve this reference to its current value."""
         try:
-            value = resolve_value(self.source, vault_config)
+            value = resolve_value(self.source, vault_config, op_config)
             self.last_error = None
             return value
         except Exception as e:
@@ -72,11 +72,12 @@ class ExternalRefTracker:
         for ref in self.refs:
             logger.debug(f"  {ref.ref_type}: {ref.source} at {'.'.join(map(str, ref.path))}")
     
-    def resolve_all(self, vault_config: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def resolve_all(self, vault_config: Optional[Dict[str, Any]] = None, op_config: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Resolve all external references and return updated configs.
         
         Args:
             vault_config: Optional vault configuration. If not provided, will try to extract from template.
+            op_config: Optional 1Password configuration. If not provided, will try to extract from template.
             
         Returns:
             Tuple of (site_config, user_config) with resolved values
@@ -88,6 +89,10 @@ class ExternalRefTracker:
         if vault_config is None and 'user' in self._template_config:
             vault_config = self._template_config['user'].get('vault')
         
+        # If op_config not provided, try to get it from the template
+        if op_config is None and 'user' in self._template_config:
+            op_config = self._template_config['user'].get('onepassword')
+        
         # Deep copy the template
         resolved = copy.deepcopy(self._template_config)
         
@@ -95,7 +100,7 @@ class ExternalRefTracker:
         resolution_errors = []
         for ref in self.refs:
             try:
-                value = ref.resolve(vault_config)
+                value = ref.resolve(vault_config, op_config)
                 ref.last_resolved = value
                 ref.last_checked = time.time()
                 

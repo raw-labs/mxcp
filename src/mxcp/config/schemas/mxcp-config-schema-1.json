@@ -27,6 +27,20 @@
       },
       "additionalProperties": false
     },
+    "onepassword": {
+      "type": "object",
+      "description": "Configuration for 1Password integration using service account.",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "token_env": {
+          "type": "string",
+          "description": "The environment variable name containing the 1Password service account token.",
+          "default": "OP_SERVICE_ACCOUNT_TOKEN"
+        }
+      },
+      "additionalProperties": false
+    },
     "transport": {
       "type": "object",
       "description": "Default transport configuration for serving endpoints.",

@@ -40,6 +40,9 @@ Welcome to the MXCP development community! This guide will help you get started 
 4. Install development dependencies:
    ```bash
    pip install -e ".[dev]"
+   
+   # For testing optional integrations
+   pip install -e ".[dev,all]"  # Includes vault, onepassword, etc.
    ```
 
 ## Architecture Patterns
