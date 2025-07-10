@@ -264,6 +264,224 @@
         }
       },
       "additionalProperties": false
+    },
+    "lifecycle": {
+      "type": "object",
+      "description": "Development lifecycle commands configuration.",
+      "properties": {
+        "setup": {
+          "type": "object",
+          "description": "Setup commands for initializing the project.",
+          "properties": {
+            "description": {
+              "type": "string",
+              "description": "Description of the setup process."
+            },
+            "commands": {
+              "type": "array",
+              "description": "List of commands to run during setup.",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "description": "Command to execute."
+                  },
+                  {
+                    "type": "object",
+                    "required": ["command"],
+                    "properties": {
+                      "command": {
+                        "type": "string",
+                        "description": "Command to execute."
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "Human-readable name for the command."
+                      },
+                      "condition": {
+                        "type": "string",
+                        "description": "Condition for executing the command (e.g., 'if_not_exists:path')."
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "test": {
+          "type": "object",
+          "description": "Test commands with different levels.",
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]+$": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "description": "Description of this test level."
+                },
+                "commands": {
+                  "type": "array",
+                  "description": "List of commands to run for this test level.",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "description": "Command to execute."
+                      },
+                      {
+                        "type": "object",
+                        "required": ["command"],
+                        "properties": {
+                          "command": {
+                            "type": "string",
+                            "description": "Command to execute."
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Human-readable name for the command."
+                          },
+                          "condition": {
+                            "type": "string",
+                            "description": "Condition for executing the command."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "deploy": {
+          "type": "object",
+          "description": "Deployment configuration.",
+          "properties": {
+            "description": {
+              "type": "string",
+              "description": "Description of the deployment process."
+            },
+            "targets": {
+              "type": "object",
+              "description": "Deployment targets.",
+              "patternProperties": {
+                "^[a-zA-Z0-9_-]+$": {
+                  "type": "object",
+                  "properties": {
+                    "description": {
+                      "type": "string",
+                      "description": "Description of this deployment target."
+                    },
+                    "commands": {
+                      "type": "array",
+                      "description": "List of commands to run for deployment.",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "description": "Command to execute."
+                          },
+                          {
+                            "type": "object",
+                            "required": ["command"],
+                            "properties": {
+                              "command": {
+                                "type": "string",
+                                "description": "Command to execute."
+                              },
+                              "name": {
+                                "type": "string",
+                                "description": "Human-readable name for the command."
+                              },
+                              "condition": {
+                                "type": "string",
+                                "description": "Condition for executing the command."
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    },
+                    "environment": {
+                      "type": "object",
+                      "description": "Environment variable requirements.",
+                      "properties": {
+                        "required": {
+                          "type": "array",
+                          "description": "List of required environment variables.",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "custom": {
+          "type": "object",
+          "description": "Custom lifecycle commands.",
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]+$": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "description": "Description of this custom command."
+                },
+                "commands": {
+                  "type": "array",
+                  "description": "List of commands to run.",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "description": "Command to execute."
+                      },
+                      {
+                        "type": "object",
+                        "required": ["command"],
+                        "properties": {
+                          "command": {
+                            "type": "string",
+                            "description": "Command to execute."
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Human-readable name for the command."
+                          },
+                          "condition": {
+                            "type": "string",
+                            "description": "Condition for executing the command."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

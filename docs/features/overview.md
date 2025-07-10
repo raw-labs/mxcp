@@ -110,6 +110,13 @@ MXCP provides a comprehensive set of enterprise features designed for production
 - **Operations**: Log queries, drift checks
 - **Development**: Live reload, debug mode
 
+### [Lifecycle Commands](./lifecycle-commands.md)
+- **Standardized Workflows**: Setup, test, deploy commands
+- **Cross-Platform**: Works on Windows, macOS, Linux
+- **Configuration-Driven**: Define workflows in mxcp-site.yml
+- **Custom Commands**: Project-specific automations
+- **Progress Reporting**: Clear feedback with named steps
+
 ## 🔌 Integrations
 
 ### [LLM Platforms](../guides/integrations.md#llm-integration)
