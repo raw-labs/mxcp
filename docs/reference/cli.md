@@ -490,6 +490,137 @@ Audit logs are stored in JSONL (JSON Lines) format, which allows concurrent read
 
 For more information, see the [Audit Logging Guide](../features/auditing.md).
 
+### `mxcp dev`
+
+Development lifecycle commands for managing common workflows like setup, testing, and deployment.
+
+> 📖 Learn more about standardizing development workflows in the [Lifecycle Commands Guide](../features/lifecycle-commands.md).
+
+**Usage:**
+```bash
+mxcp dev SUBCOMMAND [OPTIONS]
+```
+
+**Subcommands:**
+- `setup`: Run project setup commands
+- `test`: Run project tests at different levels
+- `deploy`: Deploy project to specified target
+- `run`: Run a custom lifecycle command
+- `list`: List all available lifecycle commands
+
+#### `mxcp dev setup`
+
+Initialize your project with all required dependencies and configurations.
+
+```bash
+mxcp dev setup [OPTIONS]
+```
+
+**Options:**
+- `--dry-run`: Preview commands without executing them
+- `--verbose`, `-v`: Show command output in real-time
+- `--debug`: Show detailed debug information
+
+**Examples:**
+```bash
+mxcp dev setup                # Run all setup commands
+mxcp dev setup --dry-run      # Preview what would be executed
+mxcp dev setup --verbose      # Show command output
+```
+
+#### `mxcp dev test`
+
+Run project tests at different levels (light, full, unit).
+
+```bash
+mxcp dev test [OPTIONS]
+```
+
+**Options:**
+- `--level`: Test level to run (light, full, unit) - default: light
+- `--dry-run`: Preview commands without executing them
+- `--verbose`, `-v`: Show command output in real-time
+- `--debug`: Show detailed debug information
+
+**Examples:**
+```bash
+mxcp dev test                      # Run quick tests (default)
+mxcp dev test --level full         # Run comprehensive test suite
+mxcp dev test --level unit         # Run unit tests only
+mxcp dev test --dry-run            # Preview test commands
+```
+
+#### `mxcp dev deploy`
+
+Deploy project to a configured target environment.
+
+```bash
+mxcp dev deploy --target TARGET [OPTIONS]
+```
+
+**Options:**
+- `--target`: Deployment target (required)
+- `--dry-run`: Preview commands without executing them
+- `--verbose`, `-v`: Show command output in real-time
+- `--debug`: Show detailed debug information
+
+**Examples:**
+```bash
+mxcp dev deploy --target local         # Deploy locally
+mxcp dev deploy --target staging       # Deploy to staging
+mxcp dev deploy --target production    # Deploy to production
+mxcp dev deploy --target prod --dry-run # Preview deployment
+```
+
+#### `mxcp dev run`
+
+Run a custom lifecycle command defined in your configuration.
+
+```bash
+mxcp dev run COMMAND_NAME [OPTIONS]
+```
+
+**Arguments:**
+- `COMMAND_NAME`: Name of the custom command to run
+
+**Options:**
+- `--dry-run`: Preview commands without executing them
+- `--verbose`, `-v`: Show command output in real-time
+- `--debug`: Show detailed debug information
+
+**Examples:**
+```bash
+mxcp dev run generate-data     # Run data generation command
+mxcp dev run coverage          # Generate test coverage report
+mxcp dev run clean             # Clean temporary files
+mxcp dev run validate --dry-run # Preview validation commands
+```
+
+#### `mxcp dev list`
+
+List all available lifecycle commands in your project.
+
+```bash
+mxcp dev list [OPTIONS]
+```
+
+**Options:**
+- `--debug`: Show detailed debug information
+
+**Examples:**
+```bash
+mxcp dev list     # Show all available lifecycle commands
+```
+
+**Description:**
+The dev commands read lifecycle configuration from your `mxcp-site.yml` file. Commands can include:
+- Shell commands for any platform (Windows/macOS/Linux)
+- Conditional execution based on file existence
+- Environment variable validation
+- Progress reporting with named steps
+
+Lifecycle commands help standardize workflows across your team and eliminate the need for scattered scripts in different directories.
+
 ### `mxcp dbt-config`
 
 Generate or patch dbt side-car files (dbt_project.yml + profiles.yml).

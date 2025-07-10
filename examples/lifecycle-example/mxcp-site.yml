@@ -1,0 +1,158 @@
+mxcp: 1
+project: "lifecycle-example"
+profile: "default"
+
+# New lifecycle configuration section
+lifecycle:
+  # Project setup commands
+  setup:
+    description: "Initialize project dependencies and environment"
+    commands:
+      - command: "pip install -r requirements.txt"
+        name: "Install Python dependencies"
+      - command: "dbt deps"
+        name: "Install dbt dependencies"
+        condition: "if_not_exists:dbt_packages"
+      - command: "dbt seed"
+        name: "Load seed data"
+      - command: "python scripts/setup_database.py"
+        name: "Initialize database schema"
+  
+  # Test commands with different levels
+  test:
+    light:
+      description: "Run quick validation tests (< 1 minute)"
+      commands:
+        - command: "dbt test --select tag:quick"
+          name: "Quick dbt tests"
+        - command: "mxcp test"
+          name: "MXCP validation tests"
+    
+    full:
+      description: "Run comprehensive test suite"
+      commands:
+        - command: "dbt test"
+          name: "All dbt tests"
+        - command: "mxcp test"
+          name: "MXCP tests"
+        - command: "python -m pytest tests/"
+          name: "Python unit tests"
+        - command: "python tests/integration/test_e2e.py"
+          name: "End-to-end tests"
+    
+    unit:
+      description: "Run unit tests only"
+      commands:
+        - command: "python -m pytest tests/unit -v"
+          name: "Python unit tests"
+  
+  # Deployment configurations
+  deploy:
+    description: "Deploy the MXCP service"
+    targets:
+      local:
+        description: "Run locally with Docker"
+        commands:
+          - command: "docker build -t mxcp-local ."
+            name: "Build Docker image"
+          - command: "docker run -d -p 8000:8000 --name mxcp-local mxcp-local"
+            name: "Start local container"
+      
+      staging:
+        description: "Deploy to staging environment"
+        commands:
+          - command: "./scripts/validate_staging.sh"
+            name: "Validate staging environment"
+          - command: "docker build -t mxcp-staging ."
+            name: "Build staging image"
+          - command: "docker push mxcp-staging"
+            name: "Push to registry"
+          - command: "./scripts/deploy_staging.sh"
+            name: "Deploy to staging"
+        environment:
+          required: ["STAGING_HOST", "DOCKER_REGISTRY"]
+      
+      production:
+        description: "Deploy to AWS App Runner"
+        commands:
+          - command: "./scripts/pre_deploy_checks.sh"
+            name: "Pre-deployment checks"
+          - command: "aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_REGISTRY"
+            name: "Login to ECR"
+          - command: "docker build -t $ECR_REGISTRY/mxcp:latest ."
+            name: "Build production image"
+          - command: "docker push $ECR_REGISTRY/mxcp:latest"
+            name: "Push to ECR"
+          - command: "aws apprunner update-service --service-arn $APPRUNNER_SERVICE_ARN"
+            name: "Update App Runner service"
+        environment:
+          required: ["AWS_REGION", "AWS_ACCOUNT_ID", "ECR_REGISTRY", "APPRUNNER_SERVICE_ARN"]
+  
+  # Custom lifecycle commands
+  custom:
+    generate-data:
+      description: "Generate synthetic test data"
+      commands:
+        - command: "python scripts/generate_synthetic_data.py --records 1000"
+          name: "Generate test records"
+        - command: "dbt run --select +synthetic_data"
+          name: "Process synthetic data"
+    
+    download-data:
+      description: "Download real data from production"
+      commands:
+        - command: "python scripts/check_permissions.py"
+          name: "Check data access permissions"
+        - command: "python scripts/download_production_data.py --sample 0.01"
+          name: "Download 1% sample"
+        - command: "python scripts/anonymize_data.py"
+          name: "Anonymize sensitive data"
+    
+    coverage:
+      description: "Generate test coverage report"
+      commands:
+        - command: "coverage run -m pytest tests/"
+          name: "Run tests with coverage"
+        - command: "coverage report"
+          name: "Display coverage report"
+        - command: "coverage html"
+          name: "Generate HTML report"
+    
+    clean:
+      description: "Clean up temporary files and caches"
+      commands:
+        - command: "find . -type d -name __pycache__ -exec rm -rf {} +"
+          name: "Remove Python caches"
+        - command: "rm -rf target/ dbt_packages/ logs/"
+          name: "Remove build artifacts"
+        - command: "docker system prune -f"
+          name: "Clean Docker resources"
+    
+    validate:
+      description: "Validate project configuration and dependencies"
+      commands:
+        - command: "python scripts/validate_config.py"
+          name: "Validate configuration files"
+        - command: "dbt compile"
+          name: "Compile dbt models"
+        - command: "mxcp lint"
+          name: "Lint MXCP configuration"
+        - command: "python -m pip check"
+          name: "Check Python dependencies"
+
+# Standard MXCP configuration continues below...
+dbt:
+  enabled: true
+  project_name: "lifecycle_example"
+
+tools:
+  - name: "example_tool"
+    description: "Example tool for lifecycle demo"
+    parameters:
+      - name: "input"
+        type: "string"
+        description: "Input parameter"
+    endpoint:
+      type: "python"
+      file: "example_tool.py"
+      handler: "handle_request" 
