@@ -54,6 +54,7 @@ core = [
     "pyyaml>=6.0.1",  # YAML parsing for configuration files
     "hvac>=2.0.0",  # HashiCorp Vault client for vault:// URL support
     "onepassword-sdk>=0.3.0",  # 1Password SDK for op:// URL support
+    "posthog>=3.0.0",  # For anonymous usage analytics in core modules
 ]
 onepassword = [
     "onepassword-sdk>=0.3.0",  # 1Password SDK for op:// URL support
@@ -65,7 +66,7 @@ all = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["mxcp", "mxcp.audit", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.server", "mxcp.auth", "mxcp.drift", "mxcp.drift.schemas", "mxcp.endpoints", "mxcp.endpoints.schemas", "mxcp.engine", "mxcp.plugins", "mxcp.policies", "mxcp.evals", "mxcp.evals.schemas", "mxcp.runtime"]
+packages = ["mxcp", "mxcp.audit", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.server", "mxcp.auth", "mxcp.drift", "mxcp.drift.schemas", "mxcp.endpoints", "mxcp.endpoints.schemas", "mxcp.engine", "mxcp.plugins", "mxcp.policies", "mxcp.evals", "mxcp.evals.schemas", "mxcp.runtime", "mxcp.core", "mxcp.core.analytics", "mxcp.core.config", "mxcp.core.config.resolvers", "mxcp.core.config.schemas", "mxcp.validator", "mxcp.validator.schemas"]
 include-package-data = true
 
 [tool.setuptools.package-data]
@@ -73,6 +74,8 @@ include-package-data = true
 "mxcp.endpoints.schemas" = ["*.json"]
 "mxcp.drift.schemas" = ["*.json"]
 "mxcp.evals.schemas" = ["*.json"]
+"mxcp.core.config.schemas" = ["*.json"]
+"mxcp.validator.schemas" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

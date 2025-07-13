@@ -74,7 +74,7 @@ def load_resolver_config(config_path: Optional[Path] = None) -> ResolverConfig:
         return ResolverConfig(vault=None, onepassword=None)
     
     # Validate against schema
-    schema_path = Path(__file__).parent / "resolver-config-schema.json"
+    schema_path = Path(__file__).parent / "schemas" / "resolver-config-schema.json"
     try:
         with open(schema_path, 'r') as f:
             schema = json.load(f)
