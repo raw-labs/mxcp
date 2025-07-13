@@ -49,6 +49,12 @@ dev = [
 vault = [
     "hvac>=2.0.0",  # HashiCorp Vault client for vault:// URL support
 ]
+core = [
+    "jsonschema>=4.0.0",  # JSON schema validation for config files
+    "pyyaml>=6.0.1",  # YAML parsing for configuration files
+    "hvac>=2.0.0",  # HashiCorp Vault client for vault:// URL support
+    "onepassword-sdk>=0.3.0",  # 1Password SDK for op:// URL support
+]
 onepassword = [
     "onepassword-sdk>=0.3.0",  # 1Password SDK for op:// URL support
 ]
