@@ -51,6 +51,7 @@ Example usage:
 
 import asyncio
 import functools
+import inspect
 import logging
 import sys
 import tempfile
@@ -58,7 +59,8 @@ from contextvars import copy_context
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable, List, TYPE_CHECKING
 
-from ..interfaces import ExecutorPlugin, ExecutionContext
+from ..interfaces import ExecutorPlugin
+from mxcp.core import ExecutionContext
 
 if TYPE_CHECKING:
     from .python_plugin.loader import PythonEndpointLoader
@@ -112,20 +114,30 @@ class PythonExecutor(ExecutorPlugin):
     def __init__(self, repo_root: Optional[Path] = None):
         """Initialize Python executor.
         
+        Creates Python loader and discovers hooks immediately.
+        
         Args:
-            repo_root: Repository root directory. If None, will detect from context.
+            repo_root: Repository root directory. If None, will use current working directory.
         """
         self.repo_root = repo_root
         if not self.repo_root:
             logger.warning("No repo root provided, using current working directory")
             self.repo_root = Path.cwd()
 
-        self._context: Optional[ExecutionContext] = None
-        self._loader: Optional['PythonEndpointLoader'] = None
         self._init_hooks: List[Callable] = []
         self._shutdown_hooks: List[Callable] = []
         self._hooks_discovered = False
-    
+        
+        # Initialize Python loader immediately
+        from .python_plugin.loader import PythonEndpointLoader
+        self._loader = PythonEndpointLoader(self.repo_root)
+        
+        # Discover and run initialization hooks
+        self._discover_hooks()
+        self._run_init_hooks()
+        
+        logger.info("Python executor initialized")
+
     @property
     def language(self) -> str:
         """The language this executor handles."""
@@ -137,29 +149,12 @@ class PythonExecutor(ExecutorPlugin):
         if not self._loader:
             raise RuntimeError("Python loader not initialized")
         return self._loader
-    
-    def startup(self, context: ExecutionContext) -> None:
-        """Initialize the Python executor.
-        
-        Args:
-            context: Runtime context with configuration
-        """
-        self._context = context
-        
-        # Initialize Python loader
-        from .python_plugin.loader import PythonEndpointLoader
-        # repo_root is guaranteed to be set by __init__ if it was None
-        assert self.repo_root is not None, "repo_root should be set by __init__"
-        self._loader = PythonEndpointLoader(self.repo_root)
-        
-        # Discover and run initialization hooks
-        self._discover_hooks()
-        self._run_init_hooks()
-        
-        logger.info("Python executor initialized")
-    
+
     def shutdown(self) -> None:
-        """Clean up Python executor resources."""
+        """Shut down the Python executor.
+        
+        Runs shutdown hooks and cleans up the loader.
+        """
         logger.info("Python executor shutting down")
         
         # Run shutdown hooks
@@ -167,46 +162,10 @@ class PythonExecutor(ExecutorPlugin):
         
         # Clean up loader
         if self._loader:
-            # The loader doesn't have explicit cleanup, but we can clear references
-            self._loader = None
-        
-        self._context = None
-        self._init_hooks.clear()
-        self._shutdown_hooks.clear()
-        self._hooks_discovered = False
-        
+            self._loader.cleanup()
+            
         logger.info("Python executor shutdown complete")
-    
-    def reload(self, context: ExecutionContext) -> None:
-        """Reload Python executor with new context.
-        
-        Args:
-            context: New runtime context
-        """
-        logger.info("Reloading Python executor")
-        
-        # Run shutdown hooks with old context
-        self._run_shutdown_hooks()
-        
-        # Update context
-        old_context = self._context
-        self._context = context
-        
-        # Reload modules if needed
-        if self._loader:
-            # Clear cached modules to force reload
-            self._loader._loaded_modules.clear()
-        
-        # Rediscover hooks if context changed significantly
-        if old_context is None or old_context.site_config != context.site_config:
-            self._hooks_discovered = False
-            self._discover_hooks()
-        
-        # Run init hooks with new context
-        self._run_init_hooks()
-        
-        logger.info("Python executor reloaded")
-    
+
     def validate_source(self, source_code: str) -> bool:
         """Validate Python source code syntax.
         
@@ -252,9 +211,9 @@ class PythonExecutor(ExecutorPlugin):
         try:
             # Check if it's a file path or inline code
             if self._is_file_path(source_code):
-                return await self._execute_from_file(source_code, params)
+                return await self._execute_from_file(source_code, params, context)
             else:
-                return await self._execute_inline(source_code, params)
+                return await self._execute_inline(source_code, params, context)
         except Exception as e:
             logger.error(f"Python execution failed: {e}")
             raise RuntimeError(f"Failed to execute Python code: {e}")
@@ -268,7 +227,7 @@ class PythonExecutor(ExecutorPlugin):
             not source_code.strip().startswith('return')
         )
     
-    async def _execute_from_file(self, file_path: str, params: Dict[str, Any]) -> Any:
+    async def _execute_from_file(self, file_path: str, params: Dict[str, Any], context: ExecutionContext) -> Any:
         """Execute Python code from a file."""
         try:
             # Load the module using the correct method name
@@ -293,13 +252,13 @@ class PythonExecutor(ExecutorPlugin):
                     raise AttributeError(f"No callable function found in {file_path}")
             
             # Execute the function
-            return await self._execute_function(func, params)
+            return await self._execute_function(func, params, context)
             
         except Exception as e:
             logger.error(f"Failed to execute file {file_path}: {e}")
             raise
     
-    async def _execute_inline(self, source_code: str, params: Dict[str, Any]) -> Any:
+    async def _execute_inline(self, source_code: str, params: Dict[str, Any], context: ExecutionContext) -> Any:
         """Execute inline Python code."""
         try:
             # Create execution namespace with parameters
@@ -331,19 +290,37 @@ class PythonExecutor(ExecutorPlugin):
                 # Execute the code
                 exec(compile(wrapped_code, f.name, 'exec'), namespace)
             
-            # Return the result
+            # Check for explicit result variables first
             if '__result' in namespace:
                 return namespace['__result']
             elif 'result' in namespace:
                 return namespace['result']
-            else:
-                return None
+            
+            # If no explicit result, look for callable functions and try to find one to execute
+            callables = {name: obj for name, obj in namespace.items() 
+                        if callable(obj) and not name.startswith('_') and not name in {'pd', 'np', 'pandas', 'numpy'}}
+            
+            if callables:
+                # Try to find a function whose signature matches the parameters
+                for func_name, func in callables.items():
+                    try:
+                        sig = inspect.signature(func)
+                        # Check if the function parameters match our input parameters
+                        func_params = list(sig.parameters.keys())
+                        if set(params.keys()).issubset(set(func_params)) or len(func_params) == 0:
+                            # Call the function
+                            return await self._execute_function(func, params, context)
+                    except Exception:
+                        continue
+            
+            # If no suitable function found, return None
+            return None
             
         except Exception as e:
             logger.error(f"Failed to execute inline code: {e}")
             raise
     
-    async def _execute_function(self, func: Callable, params: Dict[str, Any]) -> Any:
+    async def _execute_function(self, func: Callable, params: Dict[str, Any], context: ExecutionContext) -> Any:
         """Execute a function with parameters."""
         try:
             # Check if function is async

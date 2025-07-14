@@ -2,73 +2,48 @@
 
 This package provides a pluggable execution engine for MXCP that handles
 execution of source code in different languages (SQL, Python, etc.) with
-proper validation and lifecycle management.
+proper validation.
 
 The executor system consists of:
 - ExecutionEngine: Main orchestrator for validation and execution
 - ExecutorPlugin: Base interface for language-specific executors
-- ExecutionContext: Runtime context with shared configuration and user info
-- LifecycleManager: Manages startup/shutdown/reload of multiple engines
+- ExecutionContext: Runtime context with user info for execution
 
 Each executor creates and manages its own internal resources (database sessions,
-plugins, locking, etc.) based on the shared configuration context.
+plugins, locking, etc.) based on constructor configuration.
 
 Example usage:
-    >>> from mxcp.executor import (
-    ...     ExecutionEngine, ExecutionContext, LifecycleManager,
-    ...     create_execution_context
-    ... )
+    >>> from mxcp.executor import ExecutionEngine
     >>> from mxcp.executor.plugins import DuckDBExecutor, PythonExecutor
+    >>> from mxcp.core import ExecutionContext
     >>> 
-    >>> # Create and configure engines
-    >>> sql_engine = ExecutionEngine(strict=False)
-    >>> sql_engine.register_executor(DuckDBExecutor())
+    >>> # Create executors with configuration
+    >>> database_config = DatabaseConfig(path=":memory:", readonly=False, extensions=[])
+    >>> duckdb_executor = DuckDBExecutor(database_config, [], plugin_config, [])
+    >>> python_executor = PythonExecutor(repo_root="/path/to/repo")
     >>> 
-    >>> python_engine = ExecutionEngine(strict=True)
-    >>> python_engine.register_executor(PythonExecutor())
+    >>> # Create and configure engine
+    >>> engine = ExecutionEngine(strict=False)
+    >>> engine.register_executor(duckdb_executor)
+    >>> engine.register_executor(python_executor)
     >>> 
-    >>> # Create lifecycle manager
-    >>> manager = LifecycleManager()
-    >>> manager.register_engine("sql", sql_engine)
-    >>> manager.register_engine("python", python_engine)
-    >>> 
-    >>> # Create context and start up (executors create their own resources)
-    >>> context = create_execution_context(
-    ...     user_config=user_config,
-    ...     site_config=site_config,
-    ...     user_context=user_context
-    ... )
-    >>> manager.startup(context)
-    >>> 
-    >>> # Execute with per-query validation
-    >>> sql_engine = manager.get_engine("sql")
-    >>> input_schema = [{"name": "limit", "type": "integer", "default": 10}]
-    >>> output_schema = {"type": "array", "items": {"type": "object"}}
-    >>> 
-    >>> result = await sql_engine.execute(
-    ...     language="sql",
-    ...     source_code="SELECT * FROM users LIMIT $limit",
-    ...     params={"limit": 5},
-    ...     input_schema=input_schema,
-    ...     output_schema=output_schema
-    ... )
-    >>> 
-    >>> # Execute Python without validation
-    >>> python_engine = manager.get_engine("python")
-    >>> result = await python_engine.execute(
-    ...     language="python",
-    ...     source_code="return sum(data)",
-    ...     params={"data": [1, 2, 3, 4, 5]}
-    ... )
+    >>> # Execute code with runtime context
+    >>> context = ExecutionContext(username="user", provider="github")
+    >>> result = await engine.execute("sql", "SELECT 1", {}, context)
 """
 
-from .interfaces import ExecutionEngine, ExecutionContext, ExecutorPlugin
-from .lifecycle import LifecycleManager, create_execution_context
+from .interfaces import ExecutorPlugin, ExecutionEngine
+
+# Import executor implementations - these create the dependency on the plugins module
+from .plugins import DuckDBExecutor, PythonExecutor
+
+# Import from core for user convenience  
+from mxcp.core import ExecutionContext
 
 __all__ = [
-    "ExecutionEngine",
-    "ExecutionContext", 
     "ExecutorPlugin",
-    "LifecycleManager",
-    "create_execution_context",
+    "ExecutionEngine", 
+    "ExecutionContext",
+    "DuckDBExecutor",
+    "PythonExecutor",
 ] 
