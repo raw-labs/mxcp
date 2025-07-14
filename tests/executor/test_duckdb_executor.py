@@ -98,11 +98,11 @@ class TestDuckDBExecutorBasics:
         
     def test_executor_initialization_with_options(self):
         """Test executor initialization with various options."""
-        # Test with readonly database
+        # Test with different configuration (can't use readonly with :memory:)
         database_config = DatabaseConfig(
             path=":memory:",
-            readonly=True,
-            extensions=[]
+            readonly=False,
+            extensions=[ExtensionDefinition(name="json")]
         )
         plugin_config = PluginConfig(
             plugins_path="plugins",
@@ -128,8 +128,8 @@ class TestDuckDBExecutorBasics:
         
         initial_session = executor1.session
         
-        # Create new executor with different configuration 
-        new_config = DatabaseConfig(path=":memory:", readonly=True, extensions=[])
+        # Create new executor with different configuration (different extensions)
+        new_config = DatabaseConfig(path=":memory:", readonly=False, extensions=[ExtensionDefinition(name="json")])
         executor2 = DuckDBExecutor(new_config, [], plugin_config, [])
         
         # Sessions should be different
@@ -255,7 +255,12 @@ class TestDuckDBSQLExecution:
         
         assert len(result) == 1
         assert result[0]["json_col"] is not None
-        assert result[0]["array_col"] == [1, 2, 3]
+        import numpy as np
+        # DuckDB may return numpy arrays, so convert to list for comparison
+        array_result = result[0]["array_col"]
+        if isinstance(array_result, np.ndarray):
+            array_result = array_result.tolist()
+        assert array_result == [1, 2, 3]
         assert result[0]["struct_col"] == {"nested": {"value": "test"}}
 
 

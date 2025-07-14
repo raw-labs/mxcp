@@ -110,7 +110,7 @@ class DuckDBSession:
         # Load plugins
         context_for_plugins = None # No longer passed to constructor
         
-        self.plugins = load_plugins(self.plugins_definitions, self.plugin_config, self.conn, context_for_plugins)
+        self.plugins = load_plugins(self.plugins_definitions, self.plugin_config, self.conn)
         
         # Create user token UDFs that call get_user_context() dynamically
         self._create_user_token_udfs()

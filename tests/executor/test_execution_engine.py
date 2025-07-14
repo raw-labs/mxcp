@@ -95,15 +95,15 @@ class TestExecutionEngineBasics:
         """Test engine initialization."""
         engine = ExecutionEngine()
         
-        assert not engine.is_initialized()
-        assert engine.get_available_languages() == []
+        assert len(engine._executors) == 0
+        assert len(engine._executors) == 0
     
     def test_engine_initialization_strict_mode(self):
         """Test engine initialization in strict mode."""
         engine = ExecutionEngine(strict=True)
         
-        assert not engine.is_initialized()
-        assert engine.get_available_languages() == []
+        assert len(engine._executors) == 0
+        assert len(engine._executors) == 0
     
     def test_executor_registration(self, temp_repo_dir):
         """Test registering executor plugins."""
@@ -115,7 +115,7 @@ class TestExecutionEngineBasics:
         engine.register_executor(python_executor)
         engine.register_executor(duckdb_executor)
         
-        available_languages = engine.get_available_languages()
+        available_languages = list(engine._executors.keys())
         assert "python" in available_languages
         assert "sql" in available_languages
     
@@ -136,15 +136,14 @@ class TestExecutionEngineBasics:
         """Test engine startup and shutdown lifecycle."""
         engine = engine_with_executors
         
-        assert not engine.is_initialized()
+        assert len(engine._executors) == 0
         
         # Startup
-        engine.startup(mock_context)
-        assert engine.is_initialized()
+        assert len(engine._executors) > 0
         
         # Shutdown
         engine.shutdown()
-        assert not engine.is_initialized()
+        assert len(engine._executors) == 0
     
     def test_simplified_lifecycle(self, engine_with_executors, mock_context):
         """Test simplified engine lifecycle (no startup/reload needed)."""
@@ -168,7 +167,6 @@ class TestExecutionEngineCodeExecution:
     async def test_python_execution(self, engine_with_executors, mock_context):
         """Test Python code execution through engine."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         code = """
 def add_numbers(a, b):
@@ -178,7 +176,7 @@ def add_numbers(a, b):
         result = await engine.execute(
             language="python",
             source_code=code,
-            params={"a": 5, "b": 3}
+            params={"a": 5, "b": 3}, context=mock_context
         )
         
         assert result == {"result": 8}
@@ -187,12 +185,11 @@ def add_numbers(a, b):
     async def test_sql_execution(self, engine_with_executors, mock_context):
         """Test SQL execution through engine."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         result = await engine.execute(
             language="sql",
             source_code="SELECT $a + $b as result",
-            params={"a": 5, "b": 3}
+            params={"a": 5, "b": 3}, context=mock_context
         )
         
         assert len(result) == 1
@@ -202,25 +199,26 @@ def add_numbers(a, b):
     async def test_unsupported_language_error(self, engine_with_executors, mock_context):
         """Test error for unsupported language."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         with pytest.raises(ValueError, match="No executor found for language"):
             await engine.execute(
                 language="javascript",
                 source_code="console.log('hello')",
-                params={}
+                params={}, context=mock_context
             )
     
     @pytest.mark.asyncio
-    async def test_execution_before_startup(self, engine_with_executors):
-        """Test error when executing before startup."""
-        engine = engine_with_executors
+    async def test_execution_with_unregistered_language(self, mock_context):
+        """Test error when executing with unregistered language."""
+        engine = ExecutionEngine()
+        # Don't register any executors
         
-        with pytest.raises(RuntimeError, match="not initialized"):
+        with pytest.raises(ValueError, match="No executor registered for language"):
             await engine.execute(
                 language="python",
                 source_code="def test(): return 'hello'",
-                params={}
+                params={},
+                context=mock_context
             )
 
 
@@ -231,7 +229,6 @@ class TestExecutionEngineValidation:
     async def test_input_validation_with_schema(self, engine_with_executors, mock_context):
         """Test input parameter validation."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         input_schema = [
             {
@@ -255,7 +252,7 @@ def add_numbers(a, b):
         result = await engine.execute(
             language="python",
             source_code=code,
-            params={"a": 5, "b": 3},
+            params={"a": 5, "b": 3}, context=mock_context,
             input_schema=input_schema
         )
         
@@ -265,7 +262,6 @@ def add_numbers(a, b):
     async def test_input_validation_failure(self, engine_with_executors, mock_context):
         """Test input validation failure."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         input_schema = [
             {
@@ -285,7 +281,7 @@ def test_function(a):
             await engine.execute(
                 language="python",
                 source_code=code,
-                params={"a": "not_a_number"},
+                params={"a": "not_a_number"}, context=mock_context,
                 input_schema=input_schema
             )
     
@@ -293,7 +289,6 @@ def test_function(a):
     async def test_output_validation_with_schema(self, engine_with_executors, mock_context):
         """Test output validation."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         output_schema = {
             "type": "object",
@@ -311,7 +306,7 @@ def calculate():
         result = await engine.execute(
             language="python",
             source_code=code,
-            params={},
+            params={}, context=mock_context,
             output_schema=output_schema
         )
         
@@ -321,7 +316,6 @@ def calculate():
     async def test_output_validation_failure(self, engine_with_executors, mock_context):
         """Test output validation failure."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         output_schema = {
             "type": "object",
@@ -340,7 +334,7 @@ def calculate():
             await engine.execute(
                 language="python",
                 source_code=code,
-                params={},
+                params={}, context=mock_context,
                 output_schema=output_schema
             )
     
@@ -348,7 +342,6 @@ def calculate():
     async def test_default_parameter_handling(self, engine_with_executors, mock_context):
         """Test handling of default parameters."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         input_schema = [
             {
@@ -373,7 +366,7 @@ def greet(name, greeting="Hello"):
         result = await engine.execute(
             language="python",
             source_code=code,
-            params={"name": "World"},
+            params={"name": "World"}, context=mock_context,
             input_schema=input_schema
         )
         
@@ -383,7 +376,7 @@ def greet(name, greeting="Hello"):
         result = await engine.execute(
             language="python",
             source_code=code,
-            params={"name": "World", "greeting": "Hi"},
+            params={"name": "World", "greeting": "Hi"}, context=mock_context,
             input_schema=input_schema
         )
         
@@ -397,14 +390,13 @@ class TestExecutionEngineErrorHandling:
     async def test_executor_error_propagation(self, engine_with_executors, mock_context):
         """Test that executor errors are properly propagated."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         # Python syntax error
         with pytest.raises(Exception):
             await engine.execute(
                 language="python",
                 source_code="def invalid syntax:",
-                params={}
+                params={}, context=mock_context
             )
         
         # SQL syntax error
@@ -412,14 +404,13 @@ class TestExecutionEngineErrorHandling:
             await engine.execute(
                 language="sql",
                 source_code="SELECT FROM WHERE",
-                params={}
+                params={}, context=mock_context
             )
     
     @pytest.mark.asyncio
     async def test_validation_error_handling(self, engine_with_executors, mock_context):
         """Test validation error handling."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         input_schema = [
             {
@@ -434,7 +425,7 @@ class TestExecutionEngineErrorHandling:
             await engine.execute(
                 language="python",
                 source_code="def test(): return 'hello'",
-                params={},
+                params={}, context=mock_context,
                 input_schema=input_schema
             )
     
@@ -442,26 +433,25 @@ class TestExecutionEngineErrorHandling:
     async def test_engine_state_consistency(self, engine_with_executors, mock_context):
         """Test that engine remains in consistent state after errors."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         # Cause an error
         try:
             await engine.execute(
                 language="python",
                 source_code="def invalid syntax:",
-                params={}
+                params={}, context=mock_context
             )
         except Exception:
             pass
         
         # Engine should still be usable
-        assert engine.is_initialized()
+        assert len(engine._executors) > 0
         
         # Should be able to execute valid code
         result = await engine.execute(
             language="python",
             source_code="def test(): return {'status': 'ok'}",
-            params={}
+            params={}, context=mock_context
         )
         
         assert result == {"status": "ok"}
@@ -474,7 +464,6 @@ class TestExecutionEngineIntegration:
     async def test_multiple_language_execution(self, engine_with_executors, mock_context):
         """Test executing different languages in sequence."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         # Create table with SQL
         await engine.execute(
@@ -485,7 +474,7 @@ class TestExecutionEngineIntegration:
                     name VARCHAR
                 )
             """,
-            params={}
+            params={}, context=mock_context
         )
         
         # Insert data with SQL
@@ -496,7 +485,7 @@ class TestExecutionEngineIntegration:
                 (1, 'first'),
                 (2, 'second')
             """,
-            params={}
+            params={}, context=mock_context
         )
         
         # Process with Python (conceptually - Python executor doesn't have DB access in these tests)
@@ -507,7 +496,7 @@ def process_data():
     # In real usage, this would access the database
     return {"processed": True, "count": 2}
 """,
-            params={}
+            params={}, context=mock_context
         )
         
         assert result == {"processed": True, "count": 2}
@@ -516,7 +505,7 @@ def process_data():
         sql_result = await engine.execute(
             language="sql",
             source_code="SELECT COUNT(*) as total FROM test_integration",
-            params={}
+            params={}, context=mock_context
         )
         
         assert sql_result[0]["total"] == 2
@@ -525,19 +514,18 @@ def process_data():
     async def test_concurrent_execution(self, engine_with_executors, mock_context):
         """Test concurrent execution of different languages."""
         engine = engine_with_executors
-        engine.startup(mock_context)
         
         # Execute both languages concurrently
         python_task = engine.execute(
             language="python",
             source_code="def slow_calc(): return {'result': 42}",
-            params={}
+            params={}, context=mock_context
         )
         
         sql_task = engine.execute(
             language="sql",
             source_code="SELECT 24 + 18 as result",
-            params={}
+            params={}, context=mock_context
         )
         
         python_result, sql_result = await asyncio.gather(python_task, sql_task)
@@ -558,17 +546,15 @@ def process_data():
         engine2.register_executor(DuckDBExecutor(database_config=DatabaseConfig(path=":memory:", readonly=False, extensions=[]), plugins=[], plugin_config=PluginConfig(plugins_path="plugins", config={}), secrets=[]))
         
         # Start both engines
-        engine1.startup(mock_context)
-        engine2.startup(mock_context)
         
         # Engines should be independent
-        assert engine1.is_initialized()
-        assert engine2.is_initialized()
+        assert len(engine1._executors) > 0
+        assert len(engine2._executors) > 0
         
         # Shutdown one engine
         engine1.shutdown()
-        assert not engine1.is_initialized()
-        assert engine2.is_initialized()
+        assert len(engine1._executors) == 0
+        assert len(engine2._executors) > 0
         
         # Cleanup
         engine2.shutdown() 

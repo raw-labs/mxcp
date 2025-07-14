@@ -220,11 +220,12 @@ class PythonExecutor(ExecutorPlugin):
     
     def _is_file_path(self, source_code: str) -> bool:
         """Check if source code is a file path."""
-        # Simple heuristic: if it's a single line ending with .py, treat as file
+        # Simple heuristic: if it's a single line ending with .py or .py:function, treat as file
+        stripped = source_code.strip()
         return (
-            '\n' not in source_code.strip() and 
-            source_code.strip().endswith('.py') and 
-            not source_code.strip().startswith('return')
+            '\n' not in stripped and 
+            (stripped.endswith('.py') or '.py:' in stripped) and 
+            not stripped.startswith('return')
         )
     
     async def _execute_from_file(self, file_path: str, params: Dict[str, Any], context: ExecutionContext) -> Any:
