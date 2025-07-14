@@ -49,7 +49,7 @@ class TestPythonExecutorBasics:
         assert executor.language == "python"
         assert executor.repo_root == temp_repo_dir
         # Executor is ready immediately after construction
-        assert executor._loader is None
+        assert executor._loader is not None  # Ready immediately after construction
     
     def test_executor_initialization_without_repo_root(self):
         """Test executor initialization without explicit repo root."""
@@ -62,9 +62,8 @@ class TestPythonExecutorBasics:
         """Test executor startup and shutdown lifecycle."""
         executor = PythonExecutor(repo_root=temp_repo_dir)
         
-        # Initially not started
-        with pytest.raises(RuntimeError, match="Python loader not initialized"):
-            _ = executor.loader
+        # Should be ready immediately after construction
+        assert executor.loader is not None
         
         # Start up
         # Executor is ready immediately after construction
@@ -523,10 +522,11 @@ def test_returns():
         assert result["list"] == [1, 2, 3]
         assert result["dict"] == {"nested": True}
         
-        # Date/time types should be serialized to strings
-        assert isinstance(result["datetime"], str)
-        assert isinstance(result["date"], str)
-        assert isinstance(result["time"], str)
+        # Date/time types should be returned as Python objects
+        import datetime as dt
+        assert isinstance(result["datetime"], dt.datetime)
+        assert isinstance(result["date"], dt.date)  
+        assert isinstance(result["time"], dt.time)
     
     @pytest.mark.asyncio
     async def test_complex_return_structures(self, temp_repo_dir, mock_context):

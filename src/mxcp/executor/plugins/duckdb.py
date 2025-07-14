@@ -249,10 +249,11 @@ class DuckDBExecutor(ExecutorPlugin):
                 raise RuntimeError("No DuckDB session available")
             
             with self._db_lock:
-                result = session.conn.execute(sql)
-                if hasattr(result, 'fetchall'):
-                    return result.fetchall()
-                return result
+                # Use the same pattern as the old code: fetchdf().to_dict("records")
+                # to return dictionaries instead of tuples
+                from pandas import NaT
+                result = session.conn.execute(sql, params)
+                return result.fetchdf().replace({NaT: None}).to_dict("records")
         except Exception as e:
             logger.error(f"Raw SQL execution failed: {e}")
             raise 
