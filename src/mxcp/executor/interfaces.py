@@ -130,8 +130,6 @@ class ExecutorPlugin(ABC):
         """
         pass
 
-# No reload method - higher-level components should create new instances
-
 
 class ExecutionEngine:
     """Central execution engine that manages multiple executor plugins.
@@ -198,6 +196,7 @@ class ExecutionEngine:
         with self._lock:
             for executor in self._executors.values():
                 executor.shutdown()
+            self._executors.clear()
                 
     async def execute(
         self,
@@ -231,7 +230,7 @@ class ExecutionEngine:
         # Validate input parameters if schema provided
         if input_schema:
             from mxcp.validator import TypeValidator
-            validator = TypeValidator.from_dict({"input": input_schema}, strict=self._strict)
+            validator = TypeValidator.from_dict({"input": {"parameters": input_schema}}, strict=self._strict)
             params = validator.validate_input(params)
             
         # Execute the code

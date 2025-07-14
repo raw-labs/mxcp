@@ -214,9 +214,13 @@ class PythonExecutor(ExecutorPlugin):
                 return await self._execute_from_file(source_code, params, context)
             else:
                 return await self._execute_inline(source_code, params, context)
-        except Exception as e:
+        except (ImportError, SyntaxError) as e:
+            # These are executor-level errors that should be wrapped
             logger.error(f"Python execution failed: {e}")
             raise RuntimeError(f"Failed to execute Python code: {e}")
+        except Exception:
+            # Let other exceptions (FileNotFoundError, AttributeError, runtime errors) propagate
+            raise
     
     def _is_file_path(self, source_code: str) -> bool:
         """Check if source code is a file path."""
@@ -231,26 +235,41 @@ class PythonExecutor(ExecutorPlugin):
     async def _execute_from_file(self, file_path: str, params: Dict[str, Any], context: ExecutionContext) -> Any:
         """Execute Python code from a file."""
         try:
-            # Load the module using the correct method name
-            module = self.loader.load_python_module(Path(file_path))
-            
-            # Get the main function (assume it's named 'main' or matches the file name)
-            file_name = Path(file_path).stem
-            function_name = 'main'  # Default to 'main'
-            
-            # Try to find the function
-            if hasattr(module, function_name):
-                func = getattr(module, function_name)
-            elif hasattr(module, file_name):
-                func = getattr(module, file_name)
+            # Parse file path and function name (e.g., "python/test_module.py:multiply")
+            if ':' in file_path:
+                actual_file_path, function_name = file_path.split(':', 1)
             else:
-                # Look for any callable function that's not a built-in
-                functions = [name for name in dir(module) 
-                           if callable(getattr(module, name)) and not name.startswith('_')]
-                if functions:
-                    func = getattr(module, functions[0])
+                actual_file_path = file_path
+                function_name = None
+            
+            # Load the module using the correct method name
+            module = self.loader.load_python_module(Path(actual_file_path))
+            
+            # Determine function to call
+            if function_name:
+                # Specific function requested
+                if hasattr(module, function_name):
+                    func = getattr(module, function_name)
                 else:
-                    raise AttributeError(f"No callable function found in {file_path}")
+                    raise AttributeError(f"Function '{function_name}' not found in {actual_file_path}")
+            else:
+                # Get the main function (assume it's named 'main' or matches the file name)
+                file_name = Path(actual_file_path).stem
+                fallback_function_name = 'main'  # Default to 'main'
+                
+                # Try to find the function
+                if hasattr(module, fallback_function_name):
+                    func = getattr(module, fallback_function_name)
+                elif hasattr(module, file_name):
+                    func = getattr(module, file_name)
+                else:
+                    # Look for any callable function that's not a built-in
+                    functions = [name for name in dir(module) 
+                               if callable(getattr(module, name)) and not name.startswith('_')]
+                    if functions:
+                        func = getattr(module, functions[0])
+                    else:
+                        raise AttributeError(f"No callable function found in {actual_file_path}")
             
             # Execute the function
             return await self._execute_function(func, params, context)
@@ -311,7 +330,8 @@ class PythonExecutor(ExecutorPlugin):
                         if set(params.keys()).issubset(set(func_params)) or len(func_params) == 0:
                             # Call the function
                             return await self._execute_function(func, params, context)
-                    except Exception:
+                    except (ValueError, TypeError, AttributeError) as e:
+                        # Only catch errors related to introspection, not runtime errors
                         continue
             
             # If no suitable function found, return None
