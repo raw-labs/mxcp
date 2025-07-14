@@ -10,7 +10,8 @@ from pathlib import Path
 import logging
 
 from .api_types import (
-    EndpointType, EndpointInfo, EndpointIdentifier, Parameters, UserContext, SeverityLevel
+    EndpointType, EndpointInfo, EndpointIdentifier, Parameters, UserContext, SeverityLevel,
+    TestStatus, ValidationStatus
 )
 from .results import (
     ListResult, RunResult, TestSuiteResult, ValidationResult, LintResult, EvalSuiteResult,
@@ -26,9 +27,9 @@ class Site:
     
     This class provides a clean API for all site operations including:
     - Endpoint discovery and listing
+    - Validating endpoint configurations
     - Running endpoints with parameters
     - Testing endpoints
-    - Validating endpoint configurations
     - Linting for best practices
     - Running evaluations
     
@@ -73,6 +74,174 @@ class Site:
         self._site_config = None
         self._user_config = None
     
+    # Helper Methods for Discovery and Aggregation
+    def _discover_all_endpoints(self, *, enabled_only: bool = True, 
+                               profile: Optional[str] = None, debug: bool = False) -> List[EndpointInfo]:
+        """
+        Discover all endpoints in the site.
+        
+        Args:
+            enabled_only: Only include enabled endpoints
+            profile: Profile name to use
+            debug: Show detailed debug information
+            
+        Returns:
+            List of discovered endpoints
+        """
+        # TODO: Implement using EndpointLoader.discover_endpoints()
+        # Similar to how run_all_tests works
+        raise NotImplementedError("Endpoint discovery not yet implemented")
+    
+    def _discover_endpoints_by_type(self, endpoint_type: Union[str, EndpointType], *,
+                                   enabled_only: bool = True, profile: Optional[str] = None, 
+                                   debug: bool = False) -> List[EndpointInfo]:
+        """
+        Discover all endpoints of a specific type.
+        
+        Args:
+            endpoint_type: Type of endpoints to discover
+            enabled_only: Only include enabled endpoints  
+            profile: Profile name to use
+            debug: Show detailed debug information
+            
+        Returns:
+            List of discovered endpoints of the specified type
+        """
+        # TODO: Implement filtering by type
+        all_endpoints = self._discover_all_endpoints(enabled_only=enabled_only, profile=profile, debug=debug)
+        endpoint_type_enum = EndpointType(endpoint_type) if isinstance(endpoint_type, str) else endpoint_type
+        return [ep for ep in all_endpoints if ep.type == endpoint_type_enum]
+    
+    def _discover_all_eval_suites(self, *, profile: Optional[str] = None, 
+                                 debug: bool = False) -> List[str]:
+        """
+        Discover all evaluation suites in the site.
+        
+        Args:
+            profile: Profile name to use
+            debug: Show detailed debug information
+            
+        Returns:
+            List of evaluation suite names
+        """
+        # TODO: Implement using EvalLoader.discover_eval_suites() or similar
+        # Similar to how run_all_tests works
+        raise NotImplementedError("Eval suite discovery not yet implemented")
+    
+    def _aggregate_test_results(self, endpoint_results: List[TestSuiteResult]) -> AggregateTestResult:
+        """
+        Aggregate individual test results into a summary.
+        
+        Args:
+            endpoint_results: List of individual endpoint test results
+            
+        Returns:
+            Aggregated test results
+        """
+        
+        total_tests = sum(r.total_tests for r in endpoint_results)
+        passed_tests = sum(r.passed_tests for r in endpoint_results)
+        failed_tests = sum(r.failed_tests for r in endpoint_results)
+        error_tests = sum(r.error_tests for r in endpoint_results)
+        skipped_tests = sum(r.skipped_tests for r in endpoint_results)
+        duration = sum(r.duration for r in endpoint_results)
+        
+        # Determine overall status
+        if error_tests > 0:
+            overall_status = TestStatus.ERROR
+        elif failed_tests > 0:
+            overall_status = TestStatus.FAILED
+        else:
+            overall_status = TestStatus.PASSED
+        
+        return AggregateTestResult(
+            endpoint_results=endpoint_results,
+            total_endpoints=len(endpoint_results),
+            total_tests=total_tests,
+            passed_tests=passed_tests,
+            failed_tests=failed_tests,
+            error_tests=error_tests,
+            skipped_tests=skipped_tests,
+            duration=duration,
+            overall_status=overall_status
+        )
+    
+    def _aggregate_validation_results(self, endpoint_results: List[ValidationResult]) -> AggregateValidationResult:
+        """
+        Aggregate individual validation results into a summary.
+        
+        Args:
+            endpoint_results: List of individual endpoint validation results
+            
+        Returns:
+            Aggregated validation results
+        """
+        
+        valid_endpoints = sum(1 for r in endpoint_results if r.status == ValidationStatus.OK)
+        invalid_endpoints = len(endpoint_results) - valid_endpoints
+        
+        overall_status = ValidationStatus.OK if invalid_endpoints == 0 else ValidationStatus.ERROR
+        
+        return AggregateValidationResult(
+            endpoint_results=endpoint_results,
+            total_endpoints=len(endpoint_results),
+            valid_endpoints=valid_endpoints,
+            invalid_endpoints=invalid_endpoints,
+            overall_status=overall_status
+        )
+    
+    def _aggregate_lint_results(self, endpoint_results: List[LintResult]) -> AggregateLintResult:
+        """
+        Aggregate individual lint results into a summary.
+        
+        Args:
+            endpoint_results: List of individual endpoint lint results
+            
+        Returns:
+            Aggregated lint results
+        """
+        endpoints_with_issues = sum(1 for r in endpoint_results if len(r.issues) > 0)
+        total_issues = sum(len(r.issues) for r in endpoint_results)
+        error_count = sum(r.error_count for r in endpoint_results)
+        warning_count = sum(r.warning_count for r in endpoint_results)
+        info_count = sum(r.info_count for r in endpoint_results)
+        
+        return AggregateLintResult(
+            endpoint_results=endpoint_results,
+            total_endpoints=len(endpoint_results),
+            endpoints_with_issues=endpoints_with_issues,
+            total_issues=total_issues,
+            error_count=error_count,
+            warning_count=warning_count,
+            info_count=info_count
+        )
+    
+    def _aggregate_eval_results(self, suite_results: List[EvalSuiteResult]) -> AggregateEvalResult:
+        """
+        Aggregate individual eval suite results into a summary.
+        
+        Args:
+            suite_results: List of individual eval suite results
+            
+        Returns:
+            Aggregated eval results
+        """
+        total_tests = sum(r.total_tests for r in suite_results)
+        passed_tests = sum(r.passed_tests for r in suite_results)
+        failed_tests = sum(r.failed_tests for r in suite_results)
+        duration = sum(r.duration for r in suite_results)
+        all_passed = all(r.all_passed for r in suite_results)
+        
+        return AggregateEvalResult(
+            suite_results=suite_results,
+            total_suites=len(suite_results),
+            total_tests=total_tests,
+            passed_tests=passed_tests,
+            failed_tests=failed_tests,
+            duration=duration,
+            all_passed=all_passed
+        )
+    
     # Endpoint Discovery and Listing
     def list_endpoints(self, *, endpoint_type: Optional[Union[str, EndpointType]] = None,
                       enabled_only: bool = True, include_tags: bool = False,
@@ -90,8 +259,22 @@ class Site:
         Returns:
             ListResult containing endpoint information
         """
-        # TODO: Implement endpoint discovery
-        raise NotImplementedError("Endpoint listing not yet implemented")
+        if endpoint_type:
+            endpoints = self._discover_endpoints_by_type(endpoint_type, enabled_only=enabled_only, 
+                                                        profile=profile, debug=debug)
+        else:
+            endpoints = self._discover_all_endpoints(enabled_only=enabled_only, profile=profile, debug=debug)
+        
+        # Count by type
+        by_type = {}
+        for endpoint_type_enum in EndpointType:
+            by_type[endpoint_type_enum] = sum(1 for ep in endpoints if ep.type == endpoint_type_enum)
+        
+        return ListResult(
+            endpoints=endpoints,
+            total_count=len(endpoints),
+            by_type=by_type
+        )
     
     def get_endpoint_info(self, endpoint_type: Union[str, EndpointType], name: str, *,
                          profile: Optional[str] = None, debug: bool = False) -> Optional[EndpointInfo]:
@@ -109,6 +292,74 @@ class Site:
         """
         # TODO: Implement endpoint info retrieval
         raise NotImplementedError("Endpoint info retrieval not yet implemented")
+    
+    # Validation
+    def validate_endpoint(self, endpoint_type: Union[str, EndpointType], name: str, *,
+                         profile: Optional[str] = None, readonly: bool = False,
+                         debug: bool = False) -> ValidationResult:
+        """
+        Validate a specific endpoint configuration.
+        
+        Args:
+            endpoint_type: Type of endpoint ("tool", "resource", "prompt")
+            name: Name of the endpoint
+            profile: Profile name to use
+            readonly: Open database connection in read-only mode
+            debug: Show detailed debug information
+            
+        Returns:
+            ValidationResult containing validation status and details
+        """
+        # TODO: Implement endpoint validation
+        raise NotImplementedError("Endpoint validation not yet implemented")
+    
+    def validate_all_endpoints(self, *, profile: Optional[str] = None, readonly: bool = False,
+                              debug: bool = False) -> AggregateValidationResult:
+        """
+        Validate all endpoints in the site.
+        
+        Args:
+            profile: Profile name to use
+            readonly: Open database connection in read-only mode
+            debug: Show detailed debug information
+            
+        Returns:
+            AggregateValidationResult containing validation results for all endpoints
+        """
+        endpoints = self._discover_all_endpoints(profile=profile, debug=debug)
+        results = []
+        
+        for endpoint in endpoints:
+            result = self.validate_endpoint(endpoint.type.value, endpoint.name,
+                                          profile=profile, readonly=readonly, debug=debug)
+            results.append(result)
+        
+        return self._aggregate_validation_results(results)
+    
+    def validate_endpoints_by_type(self, endpoint_type: Union[str, EndpointType], *,
+                                  profile: Optional[str] = None, readonly: bool = False,
+                                  debug: bool = False) -> AggregateValidationResult:
+        """
+        Validate all endpoints of a specific type.
+        
+        Args:
+            endpoint_type: Type of endpoints to validate ("tool", "resource", "prompt")
+            profile: Profile name to use
+            readonly: Open database connection in read-only mode
+            debug: Show detailed debug information
+            
+        Returns:
+            AggregateValidationResult containing validation results for all endpoints of the specified type
+        """
+        endpoints = self._discover_endpoints_by_type(endpoint_type, profile=profile, debug=debug)
+        results = []
+        
+        for endpoint in endpoints:
+            result = self.validate_endpoint(endpoint.type.value, endpoint.name,
+                                          profile=profile, readonly=readonly, debug=debug)
+            results.append(result)
+        
+        return self._aggregate_validation_results(results)
     
     # Endpoint Execution
     def run_endpoint(self, endpoint_type: Union[str, EndpointType], name: str, 
@@ -171,8 +422,16 @@ class Site:
         Returns:
             AggregateTestResult containing results for all endpoints
         """
-        # TODO: Implement testing all endpoints
-        raise NotImplementedError("Testing all endpoints not yet implemented")
+        endpoints = self._discover_all_endpoints(profile=profile, debug=debug)
+        results = []
+        
+        for endpoint in endpoints:
+            result = self.test_endpoint(endpoint.type.value, endpoint.name,
+                                      profile=profile, user_context=user_context,
+                                      readonly=readonly, debug=debug)
+            results.append(result)
+        
+        return self._aggregate_test_results(results)
     
     def test_endpoints_by_type(self, endpoint_type: Union[str, EndpointType], *,
                               profile: Optional[str] = None, 
@@ -191,62 +450,16 @@ class Site:
         Returns:
             AggregateTestResult containing results for all endpoints of the specified type
         """
-        # TODO: Implement testing by type
-        raise NotImplementedError("Testing by type not yet implemented")
-    
-    # Validation
-    def validate_endpoint(self, endpoint_type: Union[str, EndpointType], name: str, *,
-                         profile: Optional[str] = None, readonly: bool = False,
-                         debug: bool = False) -> ValidationResult:
-        """
-        Validate a specific endpoint configuration.
+        endpoints = self._discover_endpoints_by_type(endpoint_type, profile=profile, debug=debug)
+        results = []
         
-        Args:
-            endpoint_type: Type of endpoint ("tool", "resource", "prompt")
-            name: Name of the endpoint
-            profile: Profile name to use
-            readonly: Open database connection in read-only mode
-            debug: Show detailed debug information
-            
-        Returns:
-            ValidationResult containing validation status and details
-        """
-        # TODO: Implement endpoint validation
-        raise NotImplementedError("Endpoint validation not yet implemented")
-    
-    def validate_all_endpoints(self, *, profile: Optional[str] = None, readonly: bool = False,
-                              debug: bool = False) -> AggregateValidationResult:
-        """
-        Validate all endpoints in the site.
+        for endpoint in endpoints:
+            result = self.test_endpoint(endpoint.type.value, endpoint.name,
+                                      profile=profile, user_context=user_context,
+                                      readonly=readonly, debug=debug)
+            results.append(result)
         
-        Args:
-            profile: Profile name to use
-            readonly: Open database connection in read-only mode
-            debug: Show detailed debug information
-            
-        Returns:
-            AggregateValidationResult containing validation results for all endpoints
-        """
-        # TODO: Implement validation for all endpoints
-        raise NotImplementedError("Validating all endpoints not yet implemented")
-    
-    def validate_endpoints_by_type(self, endpoint_type: Union[str, EndpointType], *,
-                                  profile: Optional[str] = None, readonly: bool = False,
-                                  debug: bool = False) -> AggregateValidationResult:
-        """
-        Validate all endpoints of a specific type.
-        
-        Args:
-            endpoint_type: Type of endpoints to validate ("tool", "resource", "prompt")
-            profile: Profile name to use
-            readonly: Open database connection in read-only mode
-            debug: Show detailed debug information
-            
-        Returns:
-            AggregateValidationResult containing validation results for all endpoints of the specified type
-        """
-        # TODO: Implement validation by type
-        raise NotImplementedError("Validating by type not yet implemented")
+        return self._aggregate_test_results(results)
     
     # Linting
     def lint_endpoint(self, endpoint_type: Union[str, EndpointType], name: str, *,
@@ -282,8 +495,15 @@ class Site:
         Returns:
             AggregateLintResult containing linting results for all endpoints
         """
-        # TODO: Implement linting for all endpoints
-        raise NotImplementedError("Linting all endpoints not yet implemented")
+        endpoints = self._discover_all_endpoints(profile=profile, debug=debug)
+        results = []
+        
+        for endpoint in endpoints:
+            result = self.lint_endpoint(endpoint.type.value, endpoint.name,
+                                      profile=profile, severity=severity, debug=debug)
+            results.append(result)
+        
+        return self._aggregate_lint_results(results)
     
     def lint_endpoints_by_type(self, endpoint_type: Union[str, EndpointType], *,
                               profile: Optional[str] = None, 
@@ -301,8 +521,15 @@ class Site:
         Returns:
             AggregateLintResult containing linting results for all endpoints of the specified type
         """
-        # TODO: Implement linting by type
-        raise NotImplementedError("Linting by type not yet implemented")
+        endpoints = self._discover_endpoints_by_type(endpoint_type, profile=profile, debug=debug)
+        results = []
+        
+        for endpoint in endpoints:
+            result = self.lint_endpoint(endpoint.type.value, endpoint.name,
+                                      profile=profile, severity=severity, debug=debug)
+            results.append(result)
+        
+        return self._aggregate_lint_results(results)
     
     # Evaluations
     def run_eval_suite(self, suite_name: str, *, profile: Optional[str] = None,
@@ -340,8 +567,15 @@ class Site:
         Returns:
             AggregateEvalResult containing results for all evaluation suites
         """
-        # TODO: Implement running all evaluation suites
-        raise NotImplementedError("Running all evaluation suites not yet implemented")
+        suite_names = self._discover_all_eval_suites(profile=profile, debug=debug)
+        results = []
+        
+        for suite_name in suite_names:
+            result = self.run_eval_suite(suite_name, profile=profile, 
+                                       user_context=user_context, model=model, debug=debug)
+            results.append(result)
+        
+        return self._aggregate_eval_results(results)
     
     # Utility methods
     def get_site_info(self) -> Dict[str, Any]:
@@ -357,13 +591,4 @@ class Site:
             "status": "initialized"
         }
     
-    def refresh(self) -> None:
-        """
-        Refresh the site configuration and endpoint cache.
-        
-        This method should be called if the site configuration or endpoints
-        have changed on disk.
-        """
-        # TODO: Implement site refresh
-        logger.info("Site refresh not yet implemented")
-        pass 
+ 
