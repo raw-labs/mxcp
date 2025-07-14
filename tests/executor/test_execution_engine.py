@@ -133,13 +133,11 @@ class TestExecutionEngineBasics:
             engine.register_executor(python_executor2)
     
     def test_startup_shutdown_lifecycle(self, engine_with_executors, mock_context):
-        """Test engine startup and shutdown lifecycle."""
+        """Test engine shutdown lifecycle (executors are ready immediately after registration)."""
         engine = engine_with_executors
         
-        assert len(engine._executors) == 0
-        
-        # Startup
-        assert len(engine._executors) > 0
+        # Executors are ready immediately after registration
+        assert len(engine._executors) == 2
         
         # Shutdown
         engine.shutdown()
@@ -200,7 +198,7 @@ def add_numbers(a, b):
         """Test error for unsupported language."""
         engine = engine_with_executors
         
-        with pytest.raises(ValueError, match="No executor found for language"):
+        with pytest.raises(ValueError, match="Language .* not supported"):
             await engine.execute(
                 language="javascript",
                 source_code="console.log('hello')",
@@ -213,7 +211,7 @@ def add_numbers(a, b):
         engine = ExecutionEngine()
         # Don't register any executors
         
-        with pytest.raises(ValueError, match="No executor registered for language"):
+        with pytest.raises(ValueError, match="Language .* not supported"):
             await engine.execute(
                 language="python",
                 source_code="def test(): return 'hello'",
