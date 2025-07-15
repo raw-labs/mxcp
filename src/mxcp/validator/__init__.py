@@ -162,7 +162,8 @@ def flexible_function(*args, **kwargs):
 ```
 """
 
-from .core import TypeValidator, ValidationError
+# Re-export core functionality from SDK
+from mxcp.sdk.validator import TypeValidator, ValidationError
 from .decorators import validate
 from .loaders import load_schema, load_schema_from_file
 
