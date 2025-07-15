@@ -1,7 +1,7 @@
 import os
 import pytest
 from pathlib import Path
-from mxcp.endpoints.schema import validate_endpoint, validate_all_endpoints
+from mxcp.endpoints.validate import validate_endpoint, validate_all_endpoints
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
 from mxcp.engine.duckdb_session import DuckDBSession
@@ -110,7 +110,7 @@ def test_validate_invalid_parameter_name(validation_repo_path, site_config, user
         endpoint_path = "tools/invalid_parameter_name.yml"
         result = validate_endpoint(endpoint_path, user_config, site_config, test_profile, test_session)
         assert result["status"] == "error"
-        assert "schema validation error: 'user/id' does not match" in result["message"].lower()
+        assert "'user/id' does not match" in result["message"].lower()
     finally:
         os.chdir(original_dir)
 
