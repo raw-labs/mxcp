@@ -697,7 +697,7 @@ class EndpointExecutor:
             
 
 
-async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, session: DuckDBSession, profile: Optional[str] = None, user_context: Optional['UserContext'] = None) -> EndpointResult:
+async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, session: DuckDBSession, profile: Optional[str] = None, validate_output: bool = True, user_context: Optional['UserContext'] = None) -> EndpointResult:
     """Execute an endpoint by type and name.
     
     Args:
@@ -708,6 +708,7 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
         site_config: The site configuration
         session: DuckDB session to use for execution
         profile: Optional profile name to override the default profile
+        validate_output: Whether to validate the output against the return type definition (default: True)
         user_context: Optional user context for policy enforcement
         
     Returns:
@@ -720,4 +721,4 @@ async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any]
         raise ValueError(f"Invalid endpoint type: {endpoint_type}. Must be one of: {', '.join(t.value for t in EndpointType)}")
         
     executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config, session, profile)
-    return await executor.execute(params, user_context=user_context) 
+    return await executor.execute(params, validate_output=validate_output, user_context=user_context) 

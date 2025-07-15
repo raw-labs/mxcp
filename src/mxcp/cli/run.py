@@ -3,7 +3,7 @@ import json
 import asyncio
 from typing import Dict, Any, Optional
 from pathlib import Path
-from mxcp.endpoints.runner import run_endpoint as execute_endpoint
+from mxcp.endpoints.executor import execute_endpoint
 from mxcp.endpoints.executor import EndpointType
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config, get_active_profile
