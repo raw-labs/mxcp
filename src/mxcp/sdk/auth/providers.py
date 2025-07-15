@@ -23,8 +23,8 @@ from mcp.server.auth.provider import (
     construct_redirect_uri,
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
-from mxcp.config.types import UserAuthConfig
-from mxcp.auth.persistence import (
+from .types import AuthConfig, ExternalUserInfo, UserContext, StateMeta
+from .persistence import (
     AuthPersistenceBackend,
     create_persistence_backend,
     PersistedAccessToken,
@@ -41,44 +41,7 @@ logger = logging.getLogger(__name__)
 # We'll use the standard MCP OAuthClientInformationFull instead of a custom class
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# Generic data containers
-# ────────────────────────────────────────────────────────────────────────────
 
-@dataclass
-class ExternalUserInfo:
-    """Result of exchanging an auth‑code with an external IdP."""
-
-    id: str
-    scopes: list[str]
-    raw_token: str  # original token from the IdP (JWT or opaque)
-    provider: str
-
-
-@dataclass
-class UserContext:
-    """Standardized user context that all OAuth providers must return.
-    
-    This represents the common denominator of user information across all providers.
-    Some fields may be None if the provider doesn't support them.
-    """
-    
-    provider: str  # Provider name (e.g., 'github', 'google', 'microsoft')
-    user_id: str   # Unique user identifier from the provider
-    username: str  # Display username/handle
-    email: Optional[str] = None      # User's email address
-    name: Optional[str] = None       # User's display name
-    avatar_url: Optional[str] = None # User's profile picture URL
-    raw_profile: Optional[Dict[str, Any]] = None  # Raw profile data for debugging
-    external_token: Optional[str] = None  # Original OAuth provider token
-
-
-@dataclass
-class StateMeta:
-    redirect_uri: str
-    code_challenge: Optional[str]
-    redirect_uri_provided_explicitly: bool
-    client_id: str
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -136,7 +99,7 @@ class ExternalOAuthHandler(ABC):
 class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
     """OAuth authorization server that bridges external OAuth providers with MCP."""
 
-    def __init__(self, handler: ExternalOAuthHandler, auth_config: Optional[UserAuthConfig] = None, user_config: Optional[Dict[str, Any]] = None):
+    def __init__(self, handler: ExternalOAuthHandler, auth_config: Optional[AuthConfig] = None, user_config: Optional[Dict[str, Any]] = None):
         self.handler = handler
         self.auth_config = auth_config
         self.user_config = user_config
@@ -224,7 +187,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
         except Exception as e:
             logger.error(f"Failed to load clients from persistence: {e}")
 
-    async def _register_configured_clients(self, auth_config: UserAuthConfig):
+    async def _register_configured_clients(self, auth_config: AuthConfig):
         """Register pre-configured OAuth clients from user config."""
         clients = auth_config.get("clients", [])
         
@@ -652,49 +615,4 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider):
                     logger.error(f"Error revoking token from persistence: {e}")
 
 
-def create_oauth_handler(auth_config: UserAuthConfig, host: str = "localhost", port: int = 8000, user_config: Optional[Dict[str, Any]] = None) -> Optional[ExternalOAuthHandler]:
-    """Create an OAuth handler based on the auth configuration.
-    
-    Args:
-        auth_config: The auth configuration from user config
-        host: The server host to use for callback URLs
-        port: The server port to use for callback URLs
-        user_config: Full user configuration for transport settings
-        
-    Returns:
-        OAuth handler instance or None if provider is 'none'
-    """
-    provider = auth_config.get("provider", "none")
-    
-    if provider == "none":
-        return None
-    elif provider == "github":
-        from .github import GitHubOAuthHandler
-        # Pass transport config to GitHub handler
-        enhanced_auth_config = dict(auth_config)
-        if user_config and "transport" in user_config:
-            enhanced_auth_config["transport"] = user_config["transport"]
-        return GitHubOAuthHandler(enhanced_auth_config, host=host, port=port)
-    elif provider == "atlassian":
-        from .atlassian import AtlassianOAuthHandler
-        # Pass transport config to Atlassian handler
-        enhanced_auth_config = dict(auth_config)
-        if user_config and "transport" in user_config:
-            enhanced_auth_config["transport"] = user_config["transport"]
-        return AtlassianOAuthHandler(enhanced_auth_config, host=host, port=port)
-    elif provider == "salesforce":
-        from .salesforce import SalesforceOAuthHandler
-        # Pass transport config to Salesforce handler
-        enhanced_auth_config = dict(auth_config)
-        if user_config and "transport" in user_config:
-            enhanced_auth_config["transport"] = user_config["transport"]
-        return SalesforceOAuthHandler(enhanced_auth_config, host=host, port=port)
-    elif provider == "keycloak":
-        from .keycloak import KeycloakOAuthHandler
-        # Pass transport config to Keycloak handler
-        enhanced_auth_config = dict(auth_config)
-        if user_config and "transport" in user_config:
-            enhanced_auth_config["transport"] = user_config["transport"]
-        return KeycloakOAuthHandler(enhanced_auth_config, host=host, port=port)
-    else:
-        raise ValueError(f"Unsupported auth provider: {provider}") 
+ 

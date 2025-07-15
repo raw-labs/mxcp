@@ -10,7 +10,7 @@ import json
 import requests
 from atlassian import Jira
 from mxcp.plugins import MXCPBasePlugin, udf
-from mxcp.auth.context import get_user_context
+from mxcp.sdk.auth.context import get_user_context
 
 logger = logging.getLogger(__name__)
 

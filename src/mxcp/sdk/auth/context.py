@@ -3,7 +3,7 @@
 import contextvars
 from typing import Optional
 
-from .providers import UserContext
+from .types import UserContext
 
 # Create a contextvar to store the user context
 # The default is None, indicating no authenticated user is present

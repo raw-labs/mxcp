@@ -10,7 +10,7 @@ from mxcp.config.site_config import load_site_config, get_active_profile
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.cli.table_renderer import format_result_for_display
 from mxcp.config.analytics import track_command_with_timing
-from mxcp.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext
 from mxcp.engine.duckdb_session import DuckDBSession
 
 @click.command(name="run")

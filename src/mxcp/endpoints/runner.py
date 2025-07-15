@@ -5,7 +5,7 @@ from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
 
 if TYPE_CHECKING:
-    from mxcp.auth.providers import UserContext
+    from mxcp.sdk.auth.providers import UserContext
     from mxcp.engine.duckdb_session import DuckDBSession
 
 async def run_endpoint(endpoint_type: str, name: str, args: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, session: 'DuckDBSession', profile: str, validate_output: bool = True, user_context: Optional['UserContext'] = None) -> List[Dict[str, Any]]:

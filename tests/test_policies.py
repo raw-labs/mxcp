@@ -1,6 +1,6 @@
 """Tests for policy enforcement functionality."""
 import pytest
-from mxcp.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext
 from mxcp.policies import (
     PolicyAction,
     PolicyDefinition,

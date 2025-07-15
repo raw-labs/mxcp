@@ -21,10 +21,10 @@ import threading
 import functools
 
 if TYPE_CHECKING:
-    from mxcp.auth.providers import UserContext
+    from mxcp.sdk.auth.providers import UserContext
 
 # Import the context function
-from mxcp.auth.context import get_user_context
+from mxcp.sdk.auth.context import get_user_context
 
 logger = logging.getLogger(__name__)
 
