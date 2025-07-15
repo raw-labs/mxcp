@@ -12,7 +12,7 @@ from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.executor import EndpointExecutor, EndpointType, EndpointResult
 from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig, get_active_profile
-from mxcp.endpoints.schema import validate_endpoint
+from mxcp.endpoints.validate import validate_endpoint
 from makefun import create_function
 from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.sdk.auth.providers import GeneralOAuthAuthorizationServer

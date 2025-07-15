@@ -1,12 +1,14 @@
 import click
 import json
+import asyncio
 from typing import Dict, Any, Optional
 from pathlib import Path
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
+from mxcp.config.execution_engine import create_execution_engine
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.cli.table_renderer import render_table
-from mxcp.engine.duckdb_session import DuckDBSession
+from mxcp.sdk.executor import ExecutionContext
 from mxcp.config.analytics import track_command_with_timing
 
 @click.command(name="query")
@@ -34,6 +36,12 @@ def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profi
         mxcp query "SELECT * FROM sales" --profile production --json-output
         mxcp query "SELECT * FROM users" --readonly
     """
+    # Run the async implementation
+    asyncio.run(_query_async(sql, file, param, profile, json_output, debug, readonly))
+
+
+async def _query_async(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profile: Optional[str], json_output: bool, debug: bool, readonly: bool):
+    """Async implementation of the query command."""
     # Get values from environment variables if not set by flags
     if not profile:
         profile = get_env_profile()
@@ -87,6 +95,10 @@ def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profi
             with open(file) as f:
                 query_sql = f.read()
 
+        # Ensure we have a query to execute
+        if not query_sql:
+            raise click.BadParameter("SQL query cannot be empty")
+
         # Show what we're executing (only in non-JSON mode)
         if not json_output:
             click.echo(f"\n{click.style('🔍 Executing Query', fg='cyan', bold=True)}")
@@ -117,11 +129,20 @@ def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profi
             
             click.echo(f"\n{click.style('⏳ Running...', fg='yellow')}")
 
-        # Execute query
-        session = DuckDBSession(user_config, site_config, readonly=readonly)
+        # Create execution engine with readonly configuration if specified
+        engine = create_execution_engine(user_config, site_config, profile_name, readonly=readonly)
+        
         try:
-            # Execute query and convert to DataFrame to preserve column names
-            result = session.execute_query_to_dict(query_sql, params)
+            # Create execution context
+            context = ExecutionContext()
+            
+            # Execute query using SDK executor with SQL language
+            result = await engine.execute(
+                language="sql",
+                source_code=query_sql,
+                params=params,
+                context=context
+            )
             
             if json_output:
                 output_result(result, json_output, debug)
@@ -145,7 +166,7 @@ def query(sql: Optional[str], file: Optional[str], param: tuple[str, ...], profi
                 click.echo()  # Empty line at end
                 
         finally:
-            session.close()
+            engine.shutdown()
             
     except Exception as e:
         if json_output:

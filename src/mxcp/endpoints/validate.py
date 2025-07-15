@@ -9,6 +9,7 @@ from referencing.jsonschema import DRAFT7
 from mxcp.engine.duckdb_session import DuckDBSession
 import os
 from mxcp.config.site_config import find_repo_root
+from mxcp.config.types import SiteConfig, UserConfig
 from mxcp.endpoints.executor import get_endpoint_source_code
 from mxcp.endpoints.loader import EndpointLoader
 import re
@@ -16,7 +17,7 @@ from jinja2 import Environment, meta
 
 RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
 
-def validate_resource_uri_vs_params(res_def, path):
+def _validate_resource_uri_vs_params(res_def, path):
     uri_params = set(RESOURCE_VAR_RE.findall(res_def["uri"]))
     yaml_params = {p["name"] for p in res_def.get("parameters", [])}
 
@@ -33,7 +34,7 @@ def validate_resource_uri_vs_params(res_def, path):
         }
     return None
 
-def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
+def validate_all_endpoints(user_config: UserConfig, site_config: SiteConfig, profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
     """Validate all endpoints in the repository.
     
     Args:
@@ -61,11 +62,14 @@ def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, A
             if error:
                 results.append({"status": "error", "path": path_str, "message": error})
                 has_errors = True
-            else:
+            elif endpoint:
                 result = validate_endpoint_payload(endpoint, path_str, user_config, site_config, profile, shared_session)
                 results.append(result)
                 if result["status"] == "error":
                     has_errors = True
+            else:
+                results.append({"status": "error", "path": path_str, "message": "Failed to load endpoint"})
+                has_errors = True
         
         return {
             "status": "error" if has_errors else "ok",
@@ -74,7 +78,7 @@ def validate_all_endpoints(user_config: Dict[str, Any], site_config: Dict[str, A
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-def extract_template_variables(template: str) -> set[str]:
+def _extract_template_variables(template: str) -> set[str]:
     """Extract all Jinja template variables using Jinja2's own parser."""
     env = Environment()
     ast = env.parse(template)
@@ -88,42 +92,10 @@ def extract_template_variables(template: str) -> set[str]:
         base_vars.add(parts[0])
     return base_vars
 
-def load_endpoint(path: str) -> Tuple[Dict[str, Any], str, str]:
-    """Load and parse an endpoint file.
-    
-    Args:
-        path: Path to the endpoint file
-        
-    Returns:
-        Tuple containing:
-        - The loaded endpoint dictionary
-        - The endpoint type (tool/resource/prompt)
-        - The endpoint name
-    """
-    with open(path) as f:
-        endpoint = yaml.safe_load(f)
-        
-    # Determine endpoint type and name
-    endpoint_type = None
-    name = None
-    for t in ("tool", "resource", "prompt"):
-        if t in endpoint:
-            endpoint_type = t
-            if t == "tool":
-                name = endpoint[t]["name"]
-            elif t == "resource":
-                name = endpoint[t]["uri"]
-            elif t == "prompt":
-                name = endpoint[t]["name"]
-            break
-            
-    if not endpoint_type or not name:
-        raise ValueError("No valid endpoint type (tool/resource/prompt) found")
-        
-    return endpoint, endpoint_type, name
 
-def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: Dict[str, Any], 
-                            site_config: Dict[str, Any], profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
+
+def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: UserConfig, 
+                            site_config: SiteConfig, profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
     """Validate a single endpoint payload.
     
     Args:
@@ -216,7 +188,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
                     return {"status": "error", "path": relative_path, "message": f"Message {i} prompt must be a string"}
                 
                 # Extract and validate template variables
-                template_vars = extract_template_variables(msg["prompt"])
+                template_vars = _extract_template_variables(msg["prompt"])
                 undefined_vars = template_vars - defined_params
                 if undefined_vars:
                     return {
@@ -229,7 +201,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         
         # For resources, validate URI vs parameters
         if endpoint_type == "resource":
-            err = validate_resource_uri_vs_params(endpoint["resource"], relative_path)
+            err = _validate_resource_uri_vs_params(endpoint["resource"], relative_path)
             if err:
                 return err
 
@@ -264,6 +236,8 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
 
         # Use the provided shared session - guaranteed to be connected
         con = shared_session.conn
+        if not con:
+            return {"status": "error", "path": relative_path, "message": "Database connection not available"}
             
         try:
             con.execute("PREPARE my_query AS " + sql_query)
@@ -304,35 +278,27 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
     except Exception as e:
         return {"status": "error", "path": relative_path, "message": str(e)}
 
-def validate_endpoint(path: str, user_config: Dict[str, Any], site_config: Dict[str, Any], profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
+def validate_endpoint(path: str, user_config: UserConfig, site_config: SiteConfig, profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
     """Validate a single endpoint file.
-    
-    This is a convenience function that combines loading and validation.
-    For better performance when validating multiple endpoints, use load_endpoint
-    and validate_endpoint_payload separately.
     """
     try:
-        endpoint, _, _ = load_endpoint(path)
-        return validate_endpoint_payload(endpoint, path, user_config, site_config, profile, shared_session)
+        # Use EndpointLoader to properly load and validate the endpoint
+        loader = EndpointLoader(site_config)
+        all_endpoints = loader.discover_endpoints()
+        
+        # Find the endpoint that matches the given path
+        path_obj = Path(path).resolve()
+        for endpoint_path, endpoint, error in all_endpoints:
+            if endpoint_path.resolve() == path_obj:
+                if error:
+                    return {"status": "error", "path": path, "message": error}
+                elif endpoint:
+                    return validate_endpoint_payload(endpoint, path, user_config, site_config, profile, shared_session)
+                else:
+                    return {"status": "error", "path": path, "message": "Failed to load endpoint"}
+        
+        # If not found in discovered endpoints, it might not be a valid endpoint file
+        return {"status": "error", "path": path, "message": "Endpoint file not found or not a valid endpoint"}
+        
     except Exception as e:
         return {"status": "error", "path": path, "message": str(e)}
-
-def is_type_compatible(yaml_type, sql_type):
-    """Check if YAML type is compatible with SQL type."""
-    # Expanded type mapping based on design docs
-    type_map = {
-        "string": ["VARCHAR", "TEXT"],
-        "integer": ["INTEGER", "BIGINT"],
-        "number": ["DOUBLE", "FLOAT"],
-        "boolean": ["BOOLEAN"],
-        "array": ["ARRAY"],
-        "object": ["STRUCT"],
-        "uuid": ["VARCHAR"],  # Custom format
-        "email": ["VARCHAR"],  # Custom format
-        "uri": ["VARCHAR"],  # Custom format
-        "date": ["DATE"],  # Custom format
-        "time": ["TIME"],  # Custom format
-        "date-time": ["TIMESTAMP WITH TIME ZONE"],  # Custom format
-        "duration": ["INTERVAL"]  # Custom format
-    }
-    return sql_type in type_map.get(yaml_type, [])

@@ -5,10 +5,12 @@ import os
 import sys
 import json
 import shutil
-from mxcp.cli.utils import output_error, configure_logging, get_env_flag, get_env_profile
+
+from mxcp.cli.utils import output_error, configure_logging, get_env_profile
 from mxcp.config.user_config import load_user_config
+from mxcp.config.site_config import load_site_config
+from mxcp.config.duckdb_session import create_duckdb_session
 from mxcp.config.analytics import track_command_with_timing
-from typing import Optional
 
 def check_existing_mxcp_repo(target_dir: Path) -> bool:
     """Check if there's a mxcp-site.yml in the target directory or any parent directory."""
@@ -334,15 +336,12 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
             click.echo("✓ Created example hello world endpoint")
             
         # Load configs (this will handle migration checks)
-        from mxcp.config.site_config import load_site_config
-        from mxcp.engine.duckdb_session import DuckDBSession
-        
         site_config = load_site_config(target_dir)
         new_user_config = load_user_config(site_config)
         
         # Initialize DuckDB session to create .duckdb file
         try:
-            session = DuckDBSession(new_user_config, site_config)
+            session = create_duckdb_session(site_config, new_user_config, readonly=False)
             session.close()  # Database file is created when session connects in constructor
             click.echo("✓ Initialized DuckDB database")
         except Exception as e:

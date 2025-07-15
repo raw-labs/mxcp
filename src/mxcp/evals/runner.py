@@ -2,7 +2,8 @@ from typing import Dict, Any, Optional, List
 from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
 from mxcp.sdk.auth import UserContext
-from mxcp.evals.loader import discover_eval_files, load_eval_suite, find_repo_root
+from mxcp.evals.loader import discover_eval_files, load_eval_suite
+from mxcp.config.execution_engine import create_execution_engine, find_repo_root
 from mxcp.evals.types import EvalSuite, EvalTest, EndpointType, ToolEndpoint, ResourceEndpoint
 from mxcp.sdk.evals import LLMExecutor, ToolDefinition, ParameterDefinition, ModelConfigType, ClaudeConfig, OpenAIConfig
 from mxcp.sdk.executor import ExecutionEngine
@@ -157,75 +158,7 @@ def _convert_endpoints_to_tool_definitions(endpoints: List[EndpointType]) -> Lis
     
     return tool_definitions
 
-def _create_execution_engine(user_config: UserConfig, site_config: SiteConfig, profile: Optional[str]) -> ExecutionEngine:
-    """Create an ExecutionEngine with DuckDBExecutor and PythonExecutor.
-    
-    Args:
-        user_config: User configuration  
-        site_config: Site configuration
-        profile: Profile to use
-        
-    Returns:
-        Configured ExecutionEngine
-    """
-    from mxcp.sdk.executor.plugins.duckdb_plugin.types import DatabaseConfig, PluginDefinition, PluginConfig, SecretDefinition
-    from mxcp.sdk.executor.plugins.duckdb_plugin.types import ExtensionDefinition
-    
-    # Create ExecutionEngine
-    engine = ExecutionEngine(strict=False)
-    
-    # Create DuckDB executor
-    # Get database config from user config 
-    db_config = user_config.get("database", {})
-    database_config = DatabaseConfig(
-        path=db_config.get("path", ":memory:") if db_config else ":memory:",
-        readonly=db_config.get("readonly", False) if db_config else False,
-        extensions=[ExtensionDefinition(name=ext) for ext in db_config.get("extensions", [])] if db_config else []
-    )
-    
-    # Get plugins config
-    plugins_list = []
-    plugins_config = user_config.get("plugins", {}) if user_config else {}
-    if plugins_config:
-        plugins_dict = plugins_config.get("plugins", {})
-        if plugins_dict:
-            plugins_list = [
-                PluginDefinition(name=name, module=config.get("module", name), config=name) 
-                for name, config in plugins_dict.items()
-                if isinstance(config, dict) and config.get("module")
-            ]
-    
-    plugin_config = PluginConfig(
-        plugins_path=plugins_config.get("plugins_path", "plugins") if plugins_config else "plugins",
-        config=plugins_config.get("config", {}) if plugins_config else {}
-    )
-    
-    # Get secrets
-    secrets_list = []
-    secrets_config = user_config.get("secrets", {}) if user_config else {}
-    if secrets_config:
-        secrets_dict = secrets_config.get("secrets", {})
-        if secrets_dict:
-            secrets_list = [
-                SecretDefinition(name=name, type=secret.get("type", "GENERIC"), parameters=secret.get("parameters", {}))
-                for name, secret in secrets_dict.items()
-                if isinstance(secret, dict) and secret.get("type")
-            ]
-    
-    duckdb_executor = DuckDBExecutor(
-        database_config=database_config,
-        plugins=plugins_list,
-        plugin_config=plugin_config,
-        secrets=secrets_list
-    )
-    engine.register_executor(duckdb_executor)
-    
-    # Create Python executor
-    repo_root = find_repo_root()
-    python_executor = PythonExecutor(repo_root=repo_root)
-    engine.register_executor(python_executor)
-    
-    return engine
+
 
 
 async def run_eval_suite(suite_name: str, user_config: UserConfig, site_config: SiteConfig,
@@ -274,7 +207,7 @@ async def run_eval_suite(suite_name: str, user_config: UserConfig, site_config: 
     tool_definitions = _convert_endpoints_to_tool_definitions(endpoints)
     
     # Create execution engine
-    engine = _create_execution_engine(user_config, site_config, profile)
+    engine = create_execution_engine(user_config, site_config, profile)
     
     # Create tool executor that bridges LLM calls to endpoint execution
     tool_executor = EndpointToolExecutor(engine, endpoints)
