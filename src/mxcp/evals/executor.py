@@ -5,7 +5,7 @@ from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.executor import execute_endpoint
 from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
-from mxcp.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext
 from mxcp.engine.duckdb_session import DuckDBSession
 import os
 

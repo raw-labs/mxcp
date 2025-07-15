@@ -11,7 +11,7 @@ except ImportError:
     raise ImportError("celpy is required for policy enforcement. Install with: pip install cel-python")
 
 if TYPE_CHECKING:
-    from mxcp.auth.providers import UserContext
+    from mxcp.sdk.auth.providers import UserContext
 
 logger = logging.getLogger(__name__)
 

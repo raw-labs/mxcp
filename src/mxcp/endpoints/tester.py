@@ -4,7 +4,7 @@ from mxcp.endpoints.loader import EndpointLoader
 from mxcp.config.site_config import SiteConfig, find_repo_root
 from mxcp.config.user_config import UserConfig
 from mxcp.engine.duckdb_session import DuckDBSession
-from mxcp.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext
 import time
 import json
 import logging

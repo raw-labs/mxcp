@@ -10,9 +10,11 @@ from starlette.responses import RedirectResponse, HTMLResponse, Response
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
-from .providers import ExternalOAuthHandler, ExternalUserInfo, StateMeta, UserContext
-from mxcp.config.types import UserAuthConfig
-from mxcp.auth.url_utils import URLBuilder
+from .providers import ExternalOAuthHandler
+from .types import ExternalUserInfo, StateMeta, UserContext
+from .types import SalesforceAuthConfig, HttpTransportConfig
+from typing import Optional
+from .url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -20,50 +22,33 @@ logger = logging.getLogger(__name__)
 class SalesforceOAuthHandler(ExternalOAuthHandler):
     """Salesforce OAuth provider implementation for Salesforce Cloud."""
 
-    def __init__(self, auth_config: UserAuthConfig, host: str = "localhost", port: int = 8000):
+    def __init__(self, salesforce_config: SalesforceAuthConfig, transport_config: Optional[HttpTransportConfig] = None, host: str = "localhost", port: int = 8000):
         """Initialize Salesforce OAuth handler.
         
         Args:
-            auth_config: The auth configuration from user config
+            salesforce_config: Salesforce-specific OAuth configuration
+            transport_config: HTTP transport configuration for URL building
             host: The server host for callback URLs
             port: The server port for callback URLs
         """
-        logger.info(f"SalesforceOAuthHandler init: {auth_config}")
+        logger.info(f"SalesforceOAuthHandler init: {salesforce_config}")
         
-        salesforce_config = auth_config.get("salesforce", {})
-        
-        # Validate required Salesforce configuration
-        required_fields = ["client_id", "client_secret"]
-        missing_fields = [field for field in required_fields if not salesforce_config.get(field)]
-        if missing_fields:
-            raise ValueError(f"Salesforce OAuth configuration is incomplete. Missing: {', '.join(missing_fields)}")
-        
+        # Required fields are enforced by TypedDict structure
         self.client_id = salesforce_config["client_id"]
         self.client_secret = salesforce_config["client_secret"]
         
-        # Salesforce OAuth endpoints - can be customized for sandbox vs production
-        self.auth_url = salesforce_config.get("auth_url", "https://login.salesforce.com/services/oauth2/authorize")
-        self.token_url = salesforce_config.get("token_url", "https://login.salesforce.com/services/oauth2/token")
+        # Salesforce OAuth endpoints
+        self.auth_url = salesforce_config["auth_url"]
+        self.token_url = salesforce_config["token_url"]
         
-        # Default scopes for Salesforce access
-        default_scopes = [
-            "api",           # Access to Salesforce APIs
-            "refresh_token", # For refresh tokens
-            "openid",        # OpenID Connect for user info
-            "profile",       # Access to user profile information
-            "email"          # Access to user email
-        ]
-        self.scope = salesforce_config.get("scope", " ".join(default_scopes))
+        # Use configured scope or default
+        self.scope = salesforce_config.get("scope", "api refresh_token openid profile email")
         
-        self._callback_path = salesforce_config.get("callback_path", "/salesforce/callback")
+        self._callback_path = salesforce_config["callback_path"]
         self.host = host
         self.port = port
         
         # Initialize URL builder for proper scheme detection
-        # Extract transport config from auth_config if available
-        transport_config = None
-        if "transport" in auth_config:
-            transport_config = auth_config["transport"].get("http", {})
         self.url_builder = URLBuilder(transport_config)
         
         # State storage for OAuth flow
@@ -86,9 +71,8 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
             code_challenge=params.code_challenge,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             client_id=client_id,
+            callback_url=full_callback_url,
         )
-        # Store the callback URL separately for consistency
-        self._state_store[state + "_callback"] = full_callback_url
         
         logger.info(f"Salesforce OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}")
         
@@ -113,16 +97,15 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         self._state_store.pop(state, None)
 
     def cleanup_state(self, state: str):
-        """Clean up state and associated callback URL after OAuth flow completion."""
+        """Clean up state after OAuth flow completion."""
         self._pop_state(state)
-        self._state_store.pop(state + "_callback", None)
 
     # ----- code exchange -----
     async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
         meta = self.get_state_metadata(state)
         
         # Use the stored callback URL for consistency
-        full_callback_url = self._state_store.get(state + "_callback")
+        full_callback_url = meta.callback_url
         if not full_callback_url:
             # Fallback to constructing it using URL builder
             full_callback_url = self.url_builder.build_callback_url(
@@ -168,7 +151,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
     def callback_path(self) -> str:  # noqa: D401
         return self._callback_path
 
-    async def on_callback(self, request: Request, provider: "GeneralOAuthAuthorizationServer") -> Response:  # noqa: E501
+    async def on_callback(self, request: Request, provider) -> Response:  # noqa: E501
         code = request.query_params.get("code")
         state = request.query_params.get("state")
         if not code or not state:

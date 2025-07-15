@@ -11,9 +11,11 @@ from starlette.responses import RedirectResponse, HTMLResponse, Response
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
-from .providers import ExternalOAuthHandler, ExternalUserInfo, StateMeta, UserContext
-from mxcp.config.types import UserAuthConfig
-from mxcp.auth.url_utils import URLBuilder
+from .providers import ExternalOAuthHandler
+from .types import ExternalUserInfo, StateMeta, UserContext
+from .types import KeycloakAuthConfig, HttpTransportConfig
+from typing import Optional
+from .url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -21,30 +23,24 @@ logger = logging.getLogger(__name__)
 class KeycloakOAuthHandler(ExternalOAuthHandler):
     """Keycloak OAuth provider implementation."""
 
-    def __init__(self, auth_config: UserAuthConfig, host: str = "localhost", port: int = 8000):
+    def __init__(self, keycloak_config: KeycloakAuthConfig, transport_config: Optional[HttpTransportConfig] = None, host: str = "localhost", port: int = 8000):
         """Initialize Keycloak OAuth handler.
         
         Args:
-            auth_config: The auth configuration from user config
+            keycloak_config: Keycloak-specific OAuth configuration
+            transport_config: HTTP transport configuration for URL building
             host: The server host for callback URLs
             port: The server port for callback URLs
         """
-        logger.info(f"KeycloakOAuthHandler init: {auth_config}")
+        logger.info(f"KeycloakOAuthHandler init: {keycloak_config}")
         
-        keycloak_config = auth_config.get("keycloak", {})
-        
-        # Validate required Keycloak configuration
-        required_fields = ["client_id", "client_secret", "realm", "server_url"]
-        missing_fields = [field for field in required_fields if not keycloak_config.get(field)]
-        if missing_fields:
-            raise ValueError(f"Keycloak OAuth configuration is incomplete. Missing: {', '.join(missing_fields)}")
-        
+        # Required fields are enforced by TypedDict structure
         self.client_id = keycloak_config["client_id"]
         self.client_secret = keycloak_config["client_secret"]
         self.realm = keycloak_config["realm"]
         self.server_url = keycloak_config["server_url"].rstrip('/')
         self.scope = keycloak_config.get("scope", "openid profile email")
-        self._callback_path = keycloak_config.get("callback_path", "/keycloak/callback")
+        self._callback_path = keycloak_config["callback_path"]
         
         # Construct Keycloak OAuth endpoints
         realm_base = f"{self.server_url}/realms/{self.realm}/protocol/openid-connect"
@@ -56,8 +52,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         self.port = port
         
         # Create URL builder
-        transport_config = auth_config.get("transport", {})
-        self.url_builder = URLBuilder(host, port, transport_config)
+        self.url_builder = URLBuilder(transport_config)
         
         # Internal state management
         self._state_store: Dict[str, StateMeta] = {}

@@ -8,7 +8,7 @@ from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.cli.utils import output_result, output_error, configure_logging
 from mxcp.config.analytics import track_command_with_timing
-from mxcp.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext
 from mxcp.evals.runner import run_eval_suite, run_all_evals
 
 def format_eval_results(results: Dict[str, Any], debug: bool = False) -> str:

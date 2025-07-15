@@ -9,7 +9,7 @@ from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.config.analytics import track_command_with_timing
-from mxcp.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext
 
 def format_test_results(results, debug: bool = False):
     """Format test results for human-readable output"""

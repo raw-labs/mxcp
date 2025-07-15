@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Atlassian OAuth provider implementation for MXCP authentication."""
+"""GitHub OAuth provider implementation for MXCP authentication."""
 import logging
 import secrets
 from typing import Dict, Any
@@ -10,61 +10,40 @@ from starlette.responses import RedirectResponse, HTMLResponse, Response
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
-from .providers import ExternalOAuthHandler, ExternalUserInfo, StateMeta, UserContext
-from mxcp.config.types import UserAuthConfig
-from mxcp.auth.url_utils import URLBuilder
+from .providers import ExternalOAuthHandler
+from .types import ExternalUserInfo, StateMeta, UserContext
+from .types import GitHubAuthConfig, HttpTransportConfig
+from typing import Optional
+from .url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
 
 
-class AtlassianOAuthHandler(ExternalOAuthHandler):
-    """Atlassian OAuth provider implementation for JIRA and Confluence Cloud."""
+class GitHubOAuthHandler(ExternalOAuthHandler):
+    """GitHub OAuth provider implementation."""
 
-    def __init__(self, auth_config: UserAuthConfig, host: str = "localhost", port: int = 8000):
-        """Initialize Atlassian OAuth handler.
+    def __init__(self, github_config: GitHubAuthConfig, transport_config: Optional[HttpTransportConfig] = None, host: str = "localhost", port: int = 8000):
+        """Initialize GitHub OAuth handler.
         
         Args:
-            auth_config: The auth configuration from user config
+            github_config: GitHub-specific OAuth configuration
+            transport_config: HTTP transport configuration for URL building
             host: The server host for callback URLs
             port: The server port for callback URLs
         """
-        logger.info(f"AtlassianOAuthHandler init: {auth_config}")
+        logger.info(f"GitHubOAuthHandler init: {github_config}")
         
-        atlassian_config = auth_config.get("atlassian", {})
-        
-        # Validate required Atlassian configuration
-        required_fields = ["client_id", "client_secret"]
-        missing_fields = [field for field in required_fields if not atlassian_config.get(field)]
-        if missing_fields:
-            raise ValueError(f"Atlassian OAuth configuration is incomplete. Missing: {', '.join(missing_fields)}")
-        
-        self.client_id = atlassian_config["client_id"]
-        self.client_secret = atlassian_config["client_secret"]
-        
-        # Atlassian OAuth endpoints are standardized
-        self.auth_url = atlassian_config.get("auth_url", "https://auth.atlassian.com/authorize")
-        self.token_url = atlassian_config.get("token_url", "https://auth.atlassian.com/oauth/token")
-        
-        # Default scopes for JIRA and Confluence access
-        default_scopes = [
-            "read:me",
-            "read:jira-work",
-            "read:jira-user", 
-            "read:confluence-content.all",
-            "read:confluence-user",
-            "offline_access"  # For refresh tokens
-        ]
-        self.scope = atlassian_config.get("scope", " ".join(default_scopes))
-        
-        self._callback_path = atlassian_config.get("callback_path", "/atlassian/callback")
+        # Required fields are enforced by TypedDict structure
+        self.client_id = github_config["client_id"]
+        self.client_secret = github_config["client_secret"]
+        self.scope = github_config.get("scope", "user:email")
+        self._callback_path = github_config["callback_path"]
+        self.auth_url = github_config["auth_url"]
+        self.token_url = github_config["token_url"]
         self.host = host
         self.port = port
         
         # Initialize URL builder for proper scheme detection
-        # Extract transport config from auth_config if available
-        transport_config = None
-        if "transport" in auth_config:
-            transport_config = auth_config["transport"].get("http", {})
         self.url_builder = URLBuilder(transport_config)
         
         # State storage for OAuth flow
@@ -91,18 +70,12 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         # Store the callback URL separately for consistency
         self._state_store[state + "_callback"] = full_callback_url
         
-        logger.info(f"Atlassian OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}")
+        logger.info(f"GitHub OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}")
         
-        # Atlassian requires specific parameters
         return (
-            f"{self.auth_url}?"
-            f"audience=api.atlassian.com&"
-            f"client_id={self.client_id}&"
-            f"scope={self.scope}&"
-            f"redirect_uri={full_callback_url}&"
-            f"state={state}&"
-            f"response_type=code&"
-            f"prompt=consent"
+            f"{self.auth_url}?client_id={self.client_id}"
+            f"&redirect_uri={full_callback_url}"
+            f"&scope={self.scope}&state={state}"
         )
 
     # ----- state helpers -----
@@ -134,36 +107,35 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
                 port=self.port
             )
         
-        logger.info(f"Atlassian OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}")
+        logger.info(f"GitHub OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}")
         
         async with create_mcp_http_client() as client:
             resp = await client.post(
                 self.token_url,
-                json={
-                    "grant_type": "authorization_code",
+                data={
                     "client_id": self.client_id,
                     "client_secret": self.client_secret,
                     "code": code,
                     "redirect_uri": full_callback_url,
                 },
-                headers={"Content-Type": "application/json"},
+                headers={"Accept": "application/json"},
             )
         if resp.status_code != 200:
-            logger.error(f"Atlassian token exchange failed: {resp.status_code} {resp.text}")
+            logger.error(f"GitHub token exchange failed: {resp.status_code} {resp.text}")
             raise HTTPException(400, "Failed to exchange code for token")
         payload = resp.json()
         if "error" in payload:
-            logger.error(f"Atlassian token exchange error: {payload}")
+            logger.error(f"GitHub token exchange error: {payload}")
             raise HTTPException(400, payload.get("error_description", payload["error"]))
         
         # Don't clean up state here - let handle_callback do it after getting metadata
-        logger.info(f"Atlassian OAuth token exchange successful for client: {meta.client_id}")
+        logger.info(f"GitHub OAuth token exchange successful for client: {meta.client_id}")
         
         return ExternalUserInfo(
             id=meta.client_id,
             scopes=[],
             raw_token=payload["access_token"],
-            provider="atlassian",
+            provider="github",
         )
 
     # ----- callback -----
@@ -182,18 +154,18 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         except HTTPException:
             raise
         except Exception as exc:
-            logger.error("Atlassian callback failed", exc_info=exc)
+            logger.error("GitHub callback failed", exc_info=exc)
             return HTMLResponse(status_code=500, content="oauth_failure")
 
     # ----- user context -----
     async def get_user_context(self, token: str) -> UserContext:
-        """Get standardized user context from Atlassian.
+        """Get standardized user context from GitHub.
         
         Args:
-            token: Atlassian OAuth access token
+            token: GitHub OAuth access token
             
         Returns:
-            UserContext with Atlassian user information
+            UserContext with GitHub user information
             
         Raises:
             HTTPException: If token is invalid or user info cannot be retrieved
@@ -201,42 +173,28 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         try:
             user_profile = await self._fetch_user_profile(token)
             
-            # Extract Atlassian-specific fields and map to standard UserContext
+            # Extract GitHub-specific fields and map to standard UserContext
             return UserContext(
-                provider="atlassian",
-                user_id=str(user_profile.get("account_id", "")),
-                username=user_profile.get("nickname", f"user_{user_profile.get('account_id', 'unknown')}"),
+                provider="github",
+                user_id=str(user_profile.get("id", "")),
+                username=user_profile.get("login", f"user_{user_profile.get('id', 'unknown')}"),
                 email=user_profile.get("email"),
                 name=user_profile.get("name"),
-                avatar_url=user_profile.get("picture"),
+                avatar_url=user_profile.get("avatar_url"),
                 raw_profile=user_profile
             )
         except Exception as e:
-            logger.error(f"Failed to get Atlassian user context: {e}")
+            logger.error(f"Failed to get GitHub user context: {e}")
             raise HTTPException(500, f"Failed to retrieve user information: {e}")
 
     # ----- private helper -----
     async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
-        """Fetch raw user profile from Atlassian User Identity API (private implementation detail)."""
-        logger.info(f"Fetching Atlassian user profile with token: {token[:10]}...")
-        
+        """Fetch raw user profile from GitHub API (private implementation detail)."""
         async with create_mcp_http_client() as client:
             resp = await client.get(
-                "https://api.atlassian.com/me",
+                "https://api.github.com/user",
                 headers={"Authorization": f"Bearer {token}"},
             )
-        
-        logger.info(f"Atlassian User Identity API response: {resp.status_code}")
-        
         if resp.status_code != 200:
-            error_body = ""
-            try:
-                error_body = resp.text
-                logger.error(f"Atlassian User Identity API error {resp.status_code}: {error_body}")
-            except Exception:
-                logger.error(f"Atlassian User Identity API error {resp.status_code}: Unable to read response body")
-            raise ValueError(f"Atlassian API error: {resp.status_code} - {error_body}")
-        
-        user_data = resp.json()
-        logger.info(f"Successfully fetched Atlassian user profile for account_id: {user_data.get('account_id', 'unknown')}")
-        return user_data 
+            raise ValueError(f"GitHub API error: {resp.status_code}")
+        return resp.json() 

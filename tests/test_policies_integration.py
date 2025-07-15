@@ -6,7 +6,7 @@ from pathlib import Path
 from mxcp.endpoints.executor import EndpointExecutor, EndpointType, execute_endpoint
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
-from mxcp.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext
 from mxcp.policies import PolicyEnforcementError
 from mxcp.engine.duckdb_session import DuckDBSession
 

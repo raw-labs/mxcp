@@ -5,7 +5,7 @@ from mxcp.engine.secret_injection import inject_secrets
 from mxcp.engine.extension_loader import load_extensions
 from mxcp.engine.plugin_loader import load_plugins
 from mxcp.plugins import MXCPBasePlugin
-from mxcp.auth.context import get_user_context
+from mxcp.sdk.auth.context import get_user_context
 import logging
 from pathlib import Path
 from pandas import NaT

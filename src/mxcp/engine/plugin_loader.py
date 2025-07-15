@@ -9,7 +9,7 @@ from mxcp.plugins import MXCPBasePlugin
 import inspect
 
 if TYPE_CHECKING:
-    from mxcp.auth.providers import UserContext
+    from mxcp.sdk.auth.providers import UserContext
 
 logger = logging.getLogger(__name__)
 

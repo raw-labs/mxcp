@@ -1,7 +1,7 @@
 from typing import Dict, Any, Optional, List
 from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
-from mxcp.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext
 from mxcp.evals.loader import discover_eval_files, load_eval_suite, find_repo_root
 from mxcp.evals.types import EvalSuite, EvalTest
 from mxcp.evals.executor import LLMExecutor

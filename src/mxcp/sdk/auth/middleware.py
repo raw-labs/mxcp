@@ -5,8 +5,9 @@ from typing import Any, Dict, Optional, Callable
 from functools import wraps
 
 from mcp.server.auth.middleware.auth_context import get_access_token
-from mxcp.auth.providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer, UserContext
-from mxcp.auth.context import set_user_context, reset_user_context
+from .providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from .types import UserContext
+from .context import set_user_context, reset_user_context
 
 logger = logging.getLogger(__name__)
 

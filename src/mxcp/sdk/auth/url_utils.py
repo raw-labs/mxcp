@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 from urllib.parse import urlparse, urlunparse, urljoin
 
 from starlette.requests import Request
-from mxcp.config.types import UserAuthConfig, UserHttpTransportConfig
+from .types import AuthConfig, HttpTransportConfig
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class URLBuilder:
     - Fallback to request scheme
     """
     
-    def __init__(self, transport_config: Optional[UserHttpTransportConfig] = None):
+    def __init__(self, transport_config: Optional[HttpTransportConfig] = None):
         """Initialize URL builder with transport configuration.
         
         Args:
@@ -133,14 +133,4 @@ class URLBuilder:
         return "http"
 
 
-def create_url_builder(user_config: Dict[str, Any]) -> URLBuilder:
-    """Create a URL builder from user configuration.
-    
-    Args:
-        user_config: User configuration dictionary
-        
-    Returns:
-        Configured URLBuilder instance
-    """
-    transport_config = user_config.get("transport", {}).get("http", {})
-    return URLBuilder(transport_config) 
+ 
