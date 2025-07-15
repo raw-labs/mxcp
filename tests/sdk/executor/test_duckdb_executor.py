@@ -13,11 +13,12 @@ from pathlib import Path
 from typing import Dict, Any
 from unittest.mock import Mock, patch
 
-from mxcp.executor.plugins import DuckDBExecutor
-from mxcp.executor.plugins.duckdb_plugin.types import (
+from mxcp.sdk.executor.plugins import DuckDBExecutor
+from mxcp.sdk.executor.plugins.duckdb_plugin.types import (
     DatabaseConfig, ExtensionDefinition, PluginDefinition, PluginConfig, SecretDefinition
 )
-from mxcp.core import ExecutionContext
+from mxcp.sdk.executor import ExecutionContext
+from mxcp.sdk.auth import UserContext
 
 
 @pytest.fixture
@@ -68,13 +69,14 @@ def mock_plugin_config():
 @pytest.fixture 
 def mock_context():
     """Create a mock execution context for user authentication."""
-    return ExecutionContext(
+    user_context = UserContext(
         user_id="test_user_123",
         username="test_user",
         provider="test",
         external_token="test_token_123",
         email="test@example.com"
     )
+    return ExecutionContext(user_context=user_context)
 
 
 @pytest.fixture

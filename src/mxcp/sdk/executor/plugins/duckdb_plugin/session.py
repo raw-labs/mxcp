@@ -11,7 +11,7 @@ from .secret_injection import inject_secrets
 from .extension_loader import load_extensions
 from .plugin_loader import load_plugins
 from mxcp.plugins import MXCPBasePlugin
-from mxcp.core import ExecutionContext
+from ...context import ExecutionContext
 import logging
 from pathlib import Path
 from pandas import NaT
@@ -129,7 +129,7 @@ class DuckDBSession:
         def get_user_external_token() -> str:
             """Return the current user's OAuth provider token (e.g., GitHub token)."""
             # Get the execution context dynamically when the function is called
-            from mxcp.core.context import get_execution_context
+            from ...context import get_execution_context
             context = get_execution_context()
             if context and context.external_token:
                 return context.external_token
@@ -138,7 +138,7 @@ class DuckDBSession:
         def get_username() -> str:
             """Return the current user's username."""
             # Get the execution context dynamically when the function is called
-            from mxcp.core.context import get_execution_context
+            from ...context import get_execution_context
             context = get_execution_context()
             if context and context.username:
                 return context.username
@@ -147,7 +147,7 @@ class DuckDBSession:
         def get_user_provider() -> str:
             """Return the current user's OAuth provider (e.g., 'github', 'atlassian')."""
             # Get the execution context dynamically when the function is called
-            from mxcp.core.context import get_execution_context
+            from ...context import get_execution_context
             context = get_execution_context()
             if context and context.provider:
                 return context.provider
@@ -156,7 +156,7 @@ class DuckDBSession:
         def get_user_email() -> str:
             """Return the current user's email address."""
             # Get the execution context dynamically when the function is called
-            from mxcp.core.context import get_execution_context
+            from ...context import get_execution_context
             context = get_execution_context()
             if context and context.email:
                 return context.email

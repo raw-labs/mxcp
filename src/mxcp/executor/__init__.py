@@ -1,49 +1,51 @@
-"""MXCP Executor System.
+"""MXCP Executor module - backward compatibility wrapper.
 
-This package provides a pluggable execution engine for MXCP that handles
-execution of source code in different languages (SQL, Python, etc.) with
-proper validation.
+This module re-exports everything from mxcp.sdk.executor to maintain
+backward compatibility with existing code. New code should import from
+mxcp.sdk.executor directly.
 
-The executor system consists of:
-- ExecutionEngine: Main orchestrator for validation and execution
-- ExecutorPlugin: Base interface for language-specific executors
+Key exports:
+- ExecutionEngine: Main orchestrator for code execution
+- ExecutorPlugin: Base interface for language executors
 - ExecutionContext: Runtime context with user info for execution
-
-Each executor creates and manages its own internal resources (database sessions,
-plugins, locking, etc.) based on constructor configuration.
 
 Example usage:
     >>> from mxcp.executor import ExecutionEngine
     >>> from mxcp.executor.plugins import DuckDBExecutor, PythonExecutor
-    >>> from mxcp.core import ExecutionContext
+    >>> from mxcp.sdk.executor import ExecutionContext
+    >>> from mxcp.sdk.auth import UserContext
     >>> 
-    >>> # Create executors with configuration
-    >>> database_config = DatabaseConfig(path=":memory:", readonly=False, extensions=[])
-    >>> duckdb_executor = DuckDBExecutor(database_config, [], plugin_config, [])
-    >>> python_executor = PythonExecutor(repo_root="/path/to/repo")
+    >>> # Create user context
+    >>> user_context = UserContext(username="user", provider="github")
     >>> 
-    >>> # Create and configure engine
-    >>> engine = ExecutionEngine(strict=False)
-    >>> engine.register_executor(duckdb_executor)
-    >>> engine.register_executor(python_executor)
+    >>> # Create execution context
+    >>> context = ExecutionContext(user_context=user_context)
     >>> 
-    >>> # Execute code with runtime context
-    >>> context = ExecutionContext(username="user", provider="github")
-    >>> result = await engine.execute("sql", "SELECT 1", {}, context)
+    >>> # Create engine with executors
+    >>> engine = ExecutionEngine()
+    >>> engine.register_executor(DuckDBExecutor())
+    >>> engine.register_executor(PythonExecutor())
 """
 
-from .interfaces import ExecutorPlugin, ExecutionEngine
+# Re-export everything from SDK for backward compatibility
+from mxcp.sdk.executor import (
+    ExecutionContext,
+    get_execution_context,
+    set_execution_context,
+    reset_execution_context,
+    ExecutorPlugin,
+    ExecutionEngine,
+)
 
-# Import executor implementations - these create the dependency on the plugins module
-from .plugins import DuckDBExecutor, PythonExecutor
-
-# Import from core for user convenience  
-from mxcp.core import ExecutionContext
+# Re-export plugins submodule for backward compatibility
+from mxcp.sdk.executor import plugins
 
 __all__ = [
-    "ExecutorPlugin",
-    "ExecutionEngine", 
     "ExecutionContext",
-    "DuckDBExecutor",
-    "PythonExecutor",
+    "get_execution_context",
+    "set_execution_context",
+    "reset_execution_context",
+    "ExecutorPlugin",
+    "ExecutionEngine",
+    "plugins",
 ] 

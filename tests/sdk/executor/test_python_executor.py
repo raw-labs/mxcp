@@ -13,8 +13,9 @@ from pathlib import Path
 from typing import Dict, Any
 from unittest.mock import Mock, patch
 
-from mxcp.executor.plugins import PythonExecutor
-from mxcp.core import ExecutionContext
+from mxcp.sdk.executor.plugins import PythonExecutor
+from mxcp.sdk.executor import ExecutionContext
+from mxcp.sdk.auth import UserContext
 
 
 @pytest.fixture
@@ -30,13 +31,14 @@ def temp_repo_dir():
 def mock_context():
     """Create a mock execution context."""
     # Create minimal context with user information
-    return ExecutionContext(
+    user_context = UserContext(
         user_id="test_user_123",
         username="test_user",
         provider="test",
         external_token="test_token_123",
         email="test@example.com"
     )
+    return ExecutionContext(user_context=user_context)
 
 
 class TestPythonExecutorBasics:

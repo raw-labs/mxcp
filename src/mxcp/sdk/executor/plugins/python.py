@@ -4,8 +4,8 @@ This plugin handles Python code execution with full lifecycle management,
 including runtime hooks, context management, and module loading.
 
 Example usage:
-    >>> from mxcp.executor import ExecutionEngine, ExecutionContext
-    >>> from mxcp.executor.plugins import PythonExecutor
+    >>> from mxcp.sdk.executor import ExecutionEngine, ExecutionContext
+    >>> from mxcp.sdk.executor.plugins import PythonExecutor
     >>> from pathlib import Path
     >>> 
     >>> # Create Python executor
@@ -60,7 +60,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Callable, List, TYPE_CHECKING
 
 from ..interfaces import ExecutorPlugin
-from mxcp.core import ExecutionContext
+from ..context import ExecutionContext
 
 if TYPE_CHECKING:
     from .python_plugin.loader import PythonEndpointLoader
@@ -75,8 +75,8 @@ class PythonExecutor(ExecutorPlugin):
     including runtime hooks, context management, and module loading.
     
     Example usage:
-        >>> from mxcp.executor.plugins import PythonExecutor
-        >>> from mxcp.executor import ExecutionContext
+        >>> from mxcp.sdk.executor.plugins import PythonExecutor
+        >>> from mxcp.sdk.executor import ExecutionContext
         >>> from pathlib import Path
         >>> 
         >>> # Create executor

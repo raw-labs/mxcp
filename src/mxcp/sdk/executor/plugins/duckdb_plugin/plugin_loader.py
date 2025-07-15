@@ -16,7 +16,7 @@ from mxcp.plugins import MXCPBasePlugin
 import inspect
 
 if TYPE_CHECKING:
-    from mxcp.core import ExecutionContext
+    from ...context import ExecutionContext
 
 logger = logging.getLogger(__name__)
 

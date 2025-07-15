@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import Dict, Any
 from unittest.mock import Mock
 
-from mxcp.executor import ExecutionEngine
-from mxcp.executor.plugins import PythonExecutor, DuckDBExecutor
-from mxcp.executor.plugins.duckdb_plugin.types import DatabaseConfig, PluginConfig
-from mxcp.core import ExecutionContext
+from mxcp.sdk.executor import ExecutionEngine, ExecutionContext
+from mxcp.sdk.executor.plugins import PythonExecutor, DuckDBExecutor
+from mxcp.sdk.executor.plugins.duckdb_plugin.types import DatabaseConfig, PluginConfig
+from mxcp.sdk.auth import UserContext
 from mxcp.validator import TypeValidator, ValidationError
 
 
@@ -65,13 +65,14 @@ def mock_site_config():
 @pytest.fixture
 def mock_context(mock_user_config, mock_site_config):
     """Create a mock execution context with configs."""
-    return ExecutionContext(
+    user_context = UserContext(
         user_id="test_user_123",
         username="test_user",
         provider="test",
         external_token="test_token_123",
         email="test@example.com"
     )
+    return ExecutionContext(user_context=user_context)
 
 
 @pytest.fixture
