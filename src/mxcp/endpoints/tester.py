@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from mxcp.endpoints.executor import execute_endpoint, EndpointType, EndpointExecutor
+from mxcp.endpoints.executor import execute_endpoint, EndpointType
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.config.site_config import SiteConfig, find_repo_root
 from mxcp.config.user_config import UserConfig
