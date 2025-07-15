@@ -222,8 +222,6 @@ class TypeValidator:
             # Add parameter-specific fields
             param_dict['name'] = p.name
             param_dict['default'] = p.default
-            if p.examples is not None:
-                param_dict['examples'] = p.examples
             result.append(param_dict)
             
         return result
@@ -271,6 +269,8 @@ class TypeValidator:
             result['uniqueItems'] = schema.unique_items
         if schema.enum is not None:
             result['enum'] = schema.enum
+        if schema.examples is not None:
+            result['examples'] = schema.examples
             
         # Handle nested schemas
         if schema.items:

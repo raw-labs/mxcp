@@ -127,6 +127,11 @@
               "description": "List of allowed values",
               "items": {},
               "minItems": 1
+            },
+            "examples": {
+              "type": "array",
+              "description": "Example values for this type",
+              "items": {}
             }
           }
         }
@@ -154,16 +159,6 @@
             },
             "default": {
               "description": "Optional default value if none is provided"
-            },
-            "examples": {
-              "type": "array",
-              "description": "Example values for this parameter",
-              "items": {}
-            },
-            "enum": {
-              "type": "array",
-              "description": "List of allowed values",
-              "items": {}
             }
           }
         }

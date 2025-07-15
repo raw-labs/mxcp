@@ -36,6 +36,7 @@ class BaseTypeSchema:
     
     # Value constraints
     enum: Optional[List[Any]] = None
+    examples: Optional[List[Any]] = None
     
     def _update_from_dict(self, data: Dict[str, Any]) -> None:
         """Update fields from dictionary, handling nested schemas."""
@@ -66,7 +67,7 @@ class BaseTypeSchema:
                 
         # Set other fields directly
         for field in ['type', 'description', 'format', 'sensitive', 'minimum', 
-                      'maximum', 'items', 'properties', 'required', 'enum']:
+                      'maximum', 'items', 'properties', 'required', 'enum', 'examples']:
             if field in data:
                 setattr(self, field, data[field])
 
@@ -76,7 +77,6 @@ class ParameterSchema(BaseTypeSchema):
     """Schema definition for a parameter."""
     name: str = ""  # Required, but set after base class init
     default: Optional[Any] = None
-    examples: Optional[List[Any]] = None
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ParameterSchema':
@@ -84,8 +84,7 @@ class ParameterSchema(BaseTypeSchema):
         instance = cls(
             name=data['name'],
             type=data['type'],
-            default=data.get('default'),
-            examples=data.get('examples')
+            default=data.get('default')
         )
         instance._update_from_dict(data)
         return instance
