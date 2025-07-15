@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 from mxcp.cli.utils import output_error, output_result, configure_logging
 from mxcp.config.site_config import load_site_config
-from mxcp.audit.query import AuditQuery
+from mxcp.sdk.audit import AuditQuery
 
 
 @click.command(name="log")
