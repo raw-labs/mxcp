@@ -692,33 +692,3 @@ class EndpointExecutor:
         finally:
             # Clear runtime context after execution
             _clear_runtime_context()
-    
-
-            
-
-
-async def execute_endpoint(endpoint_type: str, name: str, params: Dict[str, Any], user_config: UserConfig, site_config: SiteConfig, session: DuckDBSession, profile: Optional[str] = None, validate_output: bool = True, user_context: Optional['UserContext'] = None) -> EndpointResult:
-    """Execute an endpoint by type and name.
-    
-    Args:
-        endpoint_type: The type of endpoint (tool, resource, or prompt)
-        name: The name of the endpoint
-        params: Dictionary of parameter name/value pairs
-        user_config: The user configuration
-        site_config: The site configuration
-        session: DuckDB session to use for execution
-        profile: Optional profile name to override the default profile
-        validate_output: Whether to validate the output against the return type definition (default: True)
-        user_context: Optional user context for policy enforcement
-        
-    Returns:
-        For tools and resources: Any type based on the endpoint definition (scalar, list, dict, etc.)
-        For prompts: List[Dict[str, Any]] where each dict represents a message with role, prompt, and type
-    """
-    try:
-        endpoint_type_enum = EndpointType(endpoint_type.lower())
-    except ValueError:
-        raise ValueError(f"Invalid endpoint type: {endpoint_type}. Must be one of: {', '.join(t.value for t in EndpointType)}")
-        
-    executor = EndpointExecutor(endpoint_type_enum, name, user_config, site_config, session, profile)
-    return await executor.execute(params, validate_output=validate_output, user_context=user_context) 
