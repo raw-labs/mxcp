@@ -10,7 +10,6 @@ tool:
     - name: data
       type: object
       description: A complex object parameter
-      default: null
       properties:
         nested:
           type: object
