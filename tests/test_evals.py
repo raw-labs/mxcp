@@ -2,9 +2,10 @@ import pytest
 from pathlib import Path
 import yaml
 import os
-from mxcp.evals.loader import discover_eval_files, load_eval_suite
-from mxcp.evals.runner import get_model_config
+from mxcp.config.site_config import SiteConfig
 from mxcp.config.user_config import UserConfig
+from mxcp.evals.loader import discover_eval_files, load_eval_suite
+from mxcp.sdk.auth import UserContext
 
 
 def test_discover_eval_files(tmp_path):
@@ -104,43 +105,6 @@ tests:
     assert assertions["must_not_call"] == ["dangerous_tool"]
     assert assertions["answer_contains"] == ["success"]
     assert assertions["answer_not_contains"] == ["error"]
-
-
-def test_get_model_config():
-    """Test getting model configuration"""
-    user_config: UserConfig = {
-        "mxcp": 1,
-        "models": {
-            "default": "claude-3-haiku",
-            "models": {
-                "claude-3-haiku": {
-                    "type": "claude",
-                    "api_key": "$\{ANTHROPIC_API_KEY\}",
-                    "timeout": 30
-                },
-                "gpt-4": {
-                    "type": "openai",
-                    "api_key": "test-key",
-                    "base_url": "https://api.openai.com/v1"
-                }
-            }
-        }
-    }
-    
-    # Test getting specific model
-    config = get_model_config(user_config, "claude-3-haiku")
-    assert config is not None
-    assert config["type"] == "claude"
-    assert config["api_key"] == "$\{ANTHROPIC_API_KEY\}"
-    
-    # Test getting default model
-    config = get_model_config(user_config, None)
-    assert config is not None
-    assert config["type"] == "claude"
-    
-    # Test non-existent model
-    config = get_model_config(user_config, "non-existent")
-    assert config is None
 
 
 def test_eval_file_validation(tmp_path):

@@ -1,197 +1,185 @@
 import json
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-from mxcp.endpoints.loader import EndpointLoader
-from mxcp.endpoints.executor import execute_endpoint
-from mxcp.config.user_config import UserConfig
-from mxcp.config.site_config import SiteConfig
-from mxcp.sdk.auth.providers import UserContext
-from mxcp.engine.duckdb_session import DuckDBSession
-import os
+from mxcp.sdk.auth import UserContext
+from mxcp.sdk.executor import ExecutionEngine, ExecutionContext
+from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
+from .types import ModelConfigType, EndpointType, ToolEndpoint, ResourceEndpoint
 
 logger = logging.getLogger(__name__)
 
 class LLMExecutor:
-    """Executes LLM calls for eval tests"""
+    """Executes LLM calls for eval tests.
     
-    def __init__(self, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str], session: DuckDBSession):
-        self.user_config = user_config
-        self.site_config = site_config
-        self.profile = profile
-        self.session = session
-        
-        # Load all available endpoints
-        self.loader = EndpointLoader(site_config)
-        self.endpoints = self._load_all_endpoints()
-        
-    def _load_all_endpoints(self) -> List[Dict[str, Any]]:
-        """Load all available endpoints with their full metadata"""
-        endpoints = []
-        discovered = self.loader.discover_endpoints()
-        
-        for path, endpoint_def, error in discovered:
-            if error is None and endpoint_def:
-                # Extract endpoint info with ALL metadata
-                if "tool" in endpoint_def:
-                    tool = endpoint_def["tool"]
-                    endpoints.append({
-                        "type": "tool",
-                        "name": tool["name"],
-                        "description": tool.get("description", ""),
-                        "parameters": tool.get("parameters", []),
-                        "return": tool.get("return"),
-                        "annotations": tool.get("annotations", {}),
-                        "tags": tool.get("tags", []),
-                        "source": tool.get("source", {})
-                    })
-                elif "resource" in endpoint_def:
-                    resource = endpoint_def["resource"]
-                    endpoints.append({
-                        "type": "resource",
-                        "uri": resource["uri"],
-                        "description": resource.get("description", ""),
-                        "parameters": resource.get("parameters", []),
-                        "return": resource.get("return"),
-                        "mime_type": resource.get("mime_type"),
-                        "tags": resource.get("tags", []),
-                        "source": resource.get("source", {})
-                    })
-        
-        return endpoints
+    This class handles LLM interactions with proper model configuration
+    and loaded endpoints passed as constructor parameters.
+    """
     
-    def _format_endpoint_for_prompt(self, endpoint: Dict[str, Any]) -> str:
-        """Format an endpoint with ALL metadata for the prompt"""
+    def __init__(self, model_config: ModelConfigType, endpoints: List[EndpointType], engine: ExecutionEngine):
+        """Initialize LLM executor with model config, loaded endpoints, and execution engine.
+        
+        Args:
+            model_config: Configuration for the LLM model (Claude, OpenAI, etc.)
+            endpoints: List of pre-loaded endpoints (tools and resources)
+            engine: ExecutionEngine for endpoint execution
+        """
+        self.model_config = model_config
+        self.endpoints = endpoints
+        self.engine = engine
+        
+        logger.info(f"LLM executor initialized with model: {model_config.name} ({model_config.get_type()})")
+        logger.info(f"Available endpoints: {len(endpoints)}")
+    
+    def _format_tool_for_prompt(self, tool: ToolEndpoint) -> str:
+        """Format a tool endpoint for inclusion in the prompt."""
         lines = []
+        lines.append(f"Tool: {tool.name}")
         
-        if endpoint["type"] == "tool":
-            lines.append(f"Tool: {endpoint['name']}")
-        else:
-            lines.append(f"Resource: {endpoint['uri']}")
+        if tool.description:
+            lines.append(f"Description: {tool.description}")
         
-        if endpoint.get("description"):
-            lines.append(f"Description: {endpoint['description']}")
-        
-        # Format parameters with full type info
-        if endpoint.get("parameters"):
+        # Format parameters
+        if tool.parameters:
             lines.append("Parameters:")
-            for param in endpoint["parameters"]:
-                param_line = f"  - {param['name']} ({param['type']}): {param['description']}"
+            for param in tool.parameters:
+                param_name = param.get("name", "unknown")
+                param_type = param.get("type", "any")
+                default = param.get("default")
+                description = param.get("description", "")
                 
-                # Add all constraints and metadata
-                extras = []
-                if "default" in param:
-                    extras.append(f"default={json.dumps(param['default'])}")
-                if "examples" in param:
-                    extras.append(f"examples={json.dumps(param['examples'])}")
-                if "enum" in param:
-                    extras.append(f"enum={json.dumps(param['enum'])}")
-                if "format" in param:
-                    extras.append(f"format={param['format']}")
-                if "minLength" in param:
-                    extras.append(f"minLength={param['minLength']}")
-                if "maxLength" in param:
-                    extras.append(f"maxLength={param['maxLength']}")
-                if "minimum" in param:
-                    extras.append(f"minimum={param['minimum']}")
-                if "maximum" in param:
-                    extras.append(f"maximum={param['maximum']}")
-                if "minItems" in param:
-                    extras.append(f"minItems={param['minItems']}")
-                if "maxItems" in param:
-                    extras.append(f"maxItems={param['maxItems']}")
-                if param.get("sensitive"):
-                    extras.append("sensitive=true")
-                
-                if extras:
-                    param_line += f" [{', '.join(extras)}]"
-                
+                param_line = f"  - {param_name} ({param_type})"
+                if default is not None:
+                    param_line += f" [default: {default}]"
+                if description:
+                    param_line += f": {description}"
                 lines.append(param_line)
-                
-                # Add nested type info for objects/arrays
-                if param["type"] == "object" and "properties" in param:
-                    for prop_name, prop_def in param["properties"].items():
-                        lines.append(f"    - {prop_name}: {json.dumps(prop_def)}")
-                elif param["type"] == "array" and "items" in param:
-                    lines.append(f"    - items: {json.dumps(param['items'])}")
+        else:
+            lines.append("Parameters: None")
         
         # Format return type
-        if endpoint.get("return"):
-            lines.append(f"Returns: {json.dumps(endpoint['return'])}")
+        if tool.return_type:
+            return_type_str = tool.return_type.get("type", "any")
+            return_description = tool.return_type.get("description", "")
+            return_line = f"Returns: {return_type_str}"
+            if return_description:
+                return_line += f" - {return_description}"
+            lines.append(return_line)
         
-        # Add behavioral hints
-        if endpoint.get("annotations"):
-            hints = []
-            for key, value in endpoint["annotations"].items():
-                if value is True:
-                    hints.append(key.replace("Hint", ""))
-            if hints:
-                lines.append(f"Behavioral hints: {', '.join(hints)}")
+        # Format annotations if any
+        if tool.annotations:
+            lines.append(f"Annotations: {json.dumps(tool.annotations)}")
         
-        if endpoint.get("tags"):
-            lines.append(f"Tags: {', '.join(endpoint['tags'])}")
+        # Format tags
+        if tool.tags:
+            lines.append(f"Tags: {', '.join(tool.tags)}")
+        
+        # Format source if available
+        if tool.source:
+            lines.append(f"Source: {json.dumps(tool.source)}")
         
         return "\n".join(lines)
     
-    def _get_model_prompt(self, model: str, user_prompt: str, available_tools: str, conversation_history: List[Dict[str, str]] = None) -> str:
-        """Get model-specific prompt template"""
+    def _format_resource_for_prompt(self, resource: ResourceEndpoint) -> str:
+        """Format a resource endpoint for inclusion in the prompt."""
+        lines = []
+        lines.append(f"Resource: {resource.uri}")
         
-        if model.startswith("claude"):
+        if resource.description:
+            lines.append(f"Description: {resource.description}")
+        
+        # Format parameters
+        if resource.parameters:
+            lines.append("Parameters:")
+            for param in resource.parameters:
+                param_name = param.get("name", "unknown")
+                param_type = param.get("type", "any")
+                default = param.get("default")
+                description = param.get("description", "")
+                
+                param_line = f"  - {param_name} ({param_type})"
+                if default is not None:
+                    param_line += f" [default: {default}]"
+                if description:
+                    param_line += f": {description}"
+                lines.append(param_line)
+        else:
+            lines.append("Parameters: None")
+        
+        # Format return type
+        if resource.return_type:
+            return_type_str = resource.return_type.get("type", "any")
+            return_description = resource.return_type.get("description", "")
+            return_line = f"Returns: {return_type_str}"
+            if return_description:
+                return_line += f" - {return_description}"
+            lines.append(return_line)
+        
+        # Format MIME type
+        if resource.mime_type:
+            lines.append(f"MIME Type: {resource.mime_type}")
+        
+        # Format tags
+        if resource.tags:
+            lines.append(f"Tags: {', '.join(resource.tags)}")
+        
+        # Format source if available
+        if resource.source:
+            lines.append(f"Source: {json.dumps(resource.source)}")
+        
+        return "\n".join(lines)
+        
+    def _get_model_prompt(self, model: str, user_prompt: str, available_tools: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> str:
+        """Get model-specific prompt format"""
+        model_type = self.model_config.get_type()
+        
+        if model_type == "claude":
             return self._get_claude_prompt(user_prompt, available_tools, conversation_history)
-        elif model.startswith("gpt"):
+        elif model_type == "openai":
             return self._get_openai_prompt(user_prompt, available_tools, conversation_history)
         else:
-            # Default prompt
             return self._get_default_prompt(user_prompt, available_tools, conversation_history)
     
-    def _get_claude_prompt(self, user_prompt: str, available_tools: str, conversation_history: List[Dict[str, str]] = None) -> str:
+    def _get_claude_prompt(self, user_prompt: str, available_tools: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> str:
         """Claude-specific prompt format"""
-        system_prompt = f"""You are a helpful assistant with access to the following tools:
-
-{available_tools}
-
-When the user asks you to do something that requires using a tool, you MUST respond with a JSON object in this exact format:
-{{
-  "tool": "tool_name",
-  "arguments": {{
-    "param1": "value1",
-    "param2": "value2"
-  }}
-}}
-
-If you need to use multiple tools, respond with an array of tool calls:
-[
-  {{"tool": "tool1", "arguments": {{"param": "value"}}}},
-  {{"tool": "tool2", "arguments": {{"param": "value"}}}}
-]
-
-Only respond with JSON when you need to use a tool. Otherwise, respond normally with text.
-After receiving tool results, incorporate them into your response to the user."""
-
-        messages = []
-        
-        # Add conversation history if any
-        if conversation_history:
-            for msg in conversation_history:
-                messages.append(f"{msg['role']}: {msg['content']}")
-        
-        # Add current user prompt
-        messages.append(f"User: {user_prompt}")
-        
-        return system_prompt + "\n\n" + "\n\n".join(messages)
-    
-    def _get_openai_prompt(self, user_prompt: str, available_tools: str, conversation_history: List[Dict[str, str]] = None) -> str:
-        """OpenAI-specific prompt format"""
-        system_prompt = f"""You are a helpful assistant with access to the following tools:
+        system_prompt = f"""You are a helpful assistant with access to the following tools and resources:
 
 {available_tools}
 
 To use a tool, respond with a JSON object:
 {{"tool": "tool_name", "arguments": {{"param": "value"}}}}
 
-For multiple tools, use an array:
-[{{"tool": "tool1", "arguments": {{}}}}, {{"tool": "tool2", "arguments": {{}}}}]
+To use a resource, respond with a JSON object:
+{{"tool": "resource_uri", "arguments": {{"param": "value"}}}}
 
-Only output JSON when calling tools. Otherwise respond with regular text."""
+For multiple tool/resource calls, use an array:
+[{{"tool": "tool1", "arguments": {{}}}}, {{"tool": "resource_uri", "arguments": {{}}}}]
+
+Only output JSON when calling tools or resources. Otherwise respond with regular text."""
+
+        messages = []
+        if conversation_history:
+            for msg in conversation_history:
+                messages.append(f"{msg['role']}: {msg['content']}")
+        messages.append(f"Human: {user_prompt}")
+        
+        return system_prompt + "\n\n" + "\n\n".join(messages)
+
+    def _get_openai_prompt(self, user_prompt: str, available_tools: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> str:
+        """OpenAI-specific prompt format"""
+        system_prompt = f"""You are a helpful assistant with access to the following tools and resources:
+
+{available_tools}
+
+To use a tool, respond with a JSON object:
+{{"tool": "tool_name", "arguments": {{"param": "value"}}}}
+
+To use a resource, respond with a JSON object:
+{{"tool": "resource_uri", "arguments": {{"param": "value"}}}}
+
+For multiple tool/resource calls, use an array:
+[{{"tool": "tool1", "arguments": {{}}}}, {{"tool": "resource_uri", "arguments": {{}}}}]
+
+Only output JSON when calling tools or resources. Otherwise respond with regular text."""
 
         messages = []
         if conversation_history:
@@ -201,18 +189,31 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
         
         return system_prompt + "\n\n" + "\n\n".join(messages)
     
-    def _get_default_prompt(self, user_prompt: str, available_tools: str, conversation_history: List[Dict[str, str]] = None) -> str:
+    def _get_default_prompt(self, user_prompt: str, available_tools: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> str:
         """Default prompt format"""
         return self._get_claude_prompt(user_prompt, available_tools, conversation_history)
     
-    async def execute_prompt(self, prompt: str, model: str, user_context: Optional[UserContext] = None) -> Tuple[str, List[Dict[str, Any]]]:
+    async def execute_prompt(self, prompt: str, user_context: Optional[UserContext] = None) -> Tuple[str, List[Dict[str, Any]]]:
         """Execute a prompt and return the response and tool calls made"""
         
-        # Format all available endpoints
-        available_tools = "\n\n".join([
-            self._format_endpoint_for_prompt(endpoint) 
-            for endpoint in self.endpoints
-        ])
+        # Format all available endpoints - separate tools and resources
+        tool_sections = []
+        resource_sections = []
+        
+        for endpoint in self.endpoints:
+            if isinstance(endpoint, ToolEndpoint):
+                tool_sections.append(self._format_tool_for_prompt(endpoint))
+            elif isinstance(endpoint, ResourceEndpoint):
+                resource_sections.append(self._format_resource_for_prompt(endpoint))
+        
+        # Combine tools and resources
+        available_tools = ""
+        if tool_sections:
+            available_tools += "=== TOOLS ===\n\n" + "\n\n".join(tool_sections)
+        if resource_sections:
+            if available_tools:
+                available_tools += "\n\n"
+            available_tools += "=== RESOURCES ===\n\n" + "\n\n".join(resource_sections)
         
         conversation_history = []
         tool_calls_made = []
@@ -220,10 +221,10 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
         
         for iteration in range(max_iterations):
             # Get model-specific prompt
-            full_prompt = self._get_model_prompt(model, prompt, available_tools, conversation_history)
+            full_prompt = self._get_model_prompt(self.model_config.name, prompt, available_tools, conversation_history)
             
             # Call the LLM
-            response = await self._call_llm(model, full_prompt)
+            response = await self._call_llm(full_prompt)
             
             # Check if response contains tool calls
             tool_calls = self._extract_tool_calls(response)
@@ -238,27 +239,31 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
                 tool_calls_made.append(tool_call)
                 
                 try:
-                    # Find the tool endpoint
+                    # Find the tool/resource endpoint
                     tool_name = tool_call["tool"]
-                    endpoint = next((e for e in self.endpoints if e.get("name") == tool_name or e.get("uri") == tool_name), None)
+                    endpoint = None
+                    
+                    # Check tools first
+                    for ep in self.endpoints:
+                        if isinstance(ep, ToolEndpoint) and ep.name == tool_name:
+                            endpoint = ep
+                            break
+                        elif isinstance(ep, ResourceEndpoint) and ep.uri == tool_name:
+                            endpoint = ep
+                            break
                     
                     if not endpoint:
                         tool_results.append({
                             "tool": tool_name,
-                            "error": f"Tool '{tool_name}' not found"
+                            "error": f"Tool or resource '{tool_name}' not found"
                         })
                         continue
                     
-                    # Execute the tool
-                    endpoint_type = "tool" if endpoint["type"] == "tool" else "resource"
-                    result = await execute_endpoint(
-                        endpoint_type,
-                        tool_name,
+                    # Execute the endpoint using SDK executor
+                    result = await self._execute_endpoint_with_sdk(
+                        endpoint,
                         tool_call.get("arguments", {}),
-                        self.user_config,
-                        self.site_config,
-                        self.session,
-                        user_context=user_context
+                        user_context
                     )
                     
                     tool_results.append({
@@ -285,139 +290,152 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
             # Continue conversation with tool results
             prompt = "Please incorporate the tool results into your response."
         
-        return "Maximum iterations reached", tool_calls_made
+        # If we reach here, we hit the max iterations
+        return response, tool_calls_made
+
+    async def _execute_endpoint_with_sdk(self, endpoint: EndpointType, params: Dict[str, Any], user_context: Optional[UserContext] = None) -> Any:
+        """Execute an endpoint using the SDK execution engine.
+        
+        Args:
+            endpoint: The endpoint to execute (ToolEndpoint or ResourceEndpoint) 
+            params: Parameters for execution
+            user_context: Optional user context
+            
+        Returns:
+            Result of endpoint execution
+        """
+        # Create execution context
+        context = ExecutionContext(user_context=user_context)
+        
+        # Determine the source code and language
+        source_info = endpoint.source.get("code") if endpoint.source else None
+        if not source_info:
+            source_file = endpoint.source.get("file") if endpoint.source else None
+            if source_file:
+                source_info = source_file
+            else:
+                raise ValueError(f"No source code or file found for endpoint")
+        
+        # Determine language - default to SQL for backward compatibility
+        language = "sql"  # Default
+        if endpoint.source and "language" in endpoint.source:
+            language = endpoint.source["language"]
+        elif isinstance(source_info, str) and source_info.endswith((".py", ".python")):
+            language = "python"
+        
+        # Execute using the SDK engine
+        result = await self.engine.execute(
+            language=language,
+            source_code=source_info,
+            params=params,
+            context=context
+        )
+        
+        return result
     
     def _extract_tool_calls(self, response: str) -> List[Dict[str, Any]]:
         """Extract tool calls from LLM response"""
         try:
-            # Try to parse as JSON
-            parsed = json.loads(response.strip())
-            
-            # Handle single tool call
-            if isinstance(parsed, dict) and "tool" in parsed:
-                return [parsed]
-            
-            # Handle multiple tool calls
-            elif isinstance(parsed, list):
-                return [item for item in parsed if isinstance(item, dict) and "tool" in item]
-            
+            # Try to parse as JSON (single tool call)
+            tool_call = json.loads(response.strip())
+            if isinstance(tool_call, dict) and "tool" in tool_call:
+                return [tool_call]
+            elif isinstance(tool_call, list):
+                # Multiple tool calls
+                return [tc for tc in tool_call if isinstance(tc, dict) and "tool" in tc]
         except json.JSONDecodeError:
-            # Not JSON, check if JSON is embedded in the response
-            import re
-            
-            # Look for JSON objects or arrays in the response
-            json_pattern = r'(\{[^{}]*\}|\[[^\[\]]*\])'
-            matches = re.findall(json_pattern, response)
-            
-            for match in matches:
-                try:
-                    parsed = json.loads(match)
-                    if isinstance(parsed, dict) and "tool" in parsed:
-                        return [parsed]
-                    elif isinstance(parsed, list):
-                        return [item for item in parsed if isinstance(item, dict) and "tool" in item]
-                except:
-                    continue
+            pass
         
-        return []
+        # If not pure JSON, look for JSON in the response
+        import re
+        json_pattern = r'\{[^}]*"tool"[^}]*\}'
+        matches = re.findall(json_pattern, response)
+        
+        tool_calls = []
+        for match in matches:
+            try:
+                tool_call = json.loads(match)
+                if "tool" in tool_call:
+                    tool_calls.append(tool_call)
+            except json.JSONDecodeError:
+                continue
+        
+        return tool_calls
     
-    async def _call_llm(self, model: str, prompt: str) -> str:
-        """Call the actual LLM API"""
+    async def _call_llm(self, prompt: str) -> str:
+        """Call the actual LLM API using the configured model"""
         
         # Log the full prompt in debug mode
-        logger.debug(f"=== LLM Request to {model} ===")
+        logger.debug(f"=== LLM Request to {self.model_config.name} ===")
         logger.debug(f"Full prompt:\n{prompt}")
         logger.debug("=== End of prompt ===")
         
-        # Get model configuration
-        models_config = self.user_config.get("models", {})
-        model_config = models_config.get("models", {}).get(model, {})
-        
-        if not model_config:
-            raise ValueError(f"Model '{model}' not configured in user config")
-        
-        model_type = model_config.get("type")
+        model_type = self.model_config.get_type()
         
         if model_type == "claude":
-            return await self._call_claude(model, prompt, model_config)
+            return await self._call_claude(prompt)
         elif model_type == "openai":
-            return await self._call_openai(model, prompt, model_config)
+            return await self._call_openai(prompt)
         else:
             raise ValueError(f"Unknown model type: {model_type}")
     
-    async def _call_claude(self, model: str, prompt: str, config: Dict[str, Any]) -> str:
+    async def _call_claude(self, prompt: str) -> str:
         """Call Claude API"""
         import httpx
         
-        # Get API key
-        api_key = config.get("api_key")        
-        if not api_key:
-            raise ValueError(f"No API key configured for model '{model}'")
-        
-        base_url = config.get("base_url", "https://api.anthropic.com")
-        timeout = config.get("timeout", 30)
-        
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{base_url}/v1/messages",
+                f"{self.model_config.base_url}/v1/messages",
                 headers={
-                    "x-api-key": api_key,
+                    "x-api-key": self.model_config.api_key,
                     "anthropic-version": "2023-06-01",
                     "content-type": "application/json"
                 },
                 json={
-                    "model": model,
+                    "model": self.model_config.name,
                     "messages": [{"role": "user", "content": prompt}],
                     "max_tokens": 4096
                 },
-                timeout=timeout
+                timeout=self.model_config.timeout
             )
             
             response.raise_for_status()
             data = response.json()
             
             # Log response in debug mode
-            logger.debug(f"=== LLM Response from {model} ===")
+            logger.debug(f"=== LLM Response from {self.model_config.name} ===")
             logger.debug(f"Response: {data['content'][0]['text'][:500]}...")  # First 500 chars
             logger.debug("=== End of response ===")
             
             return data["content"][0]["text"]
     
-    async def _call_openai(self, model: str, prompt: str, config: Dict[str, Any]) -> str:
+    async def _call_openai(self, prompt: str) -> str:
         """Call OpenAI API"""
         import httpx
         
-        # Get API key
-        api_key = config.get("api_key")        
-        if not api_key:
-            raise ValueError(f"No API key configured for model '{model}'")
-        
-        base_url = config.get("base_url", "https://api.openai.com/v1")
-        timeout = config.get("timeout", 30)
-        
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{base_url}/chat/completions",
+                f"{self.model_config.base_url}/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {api_key}",
+                    "Authorization": f"Bearer {self.model_config.api_key}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": model,
+                    "model": self.model_config.name,
                     "messages": [
                         {"role": "system", "content": "You are a helpful assistant."},
                         {"role": "user", "content": prompt}
                     ],
                     "max_tokens": 4096
                 },
-                timeout=timeout
+                timeout=self.model_config.timeout
             )
             
             response.raise_for_status()
             data = response.json()
             
             # Log response in debug mode
-            logger.debug(f"=== LLM Response from {model} ===")
+            logger.debug(f"=== LLM Response from {self.model_config.name} ===")
             logger.debug(f"Response: {data['choices'][0]['message']['content'][:500]}...")  # First 500 chars
             logger.debug("=== End of response ===")
             
