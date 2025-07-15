@@ -4,7 +4,7 @@ from functools import wraps
 from typing import Dict, Any, Optional, Union, Callable, TypeVar
 import inspect
 from pathlib import Path
-from .core import TypeValidator
+from mxcp.sdk.validator import TypeValidator
 from .loaders import load_schema_from_file
 
 T = TypeVar('T')

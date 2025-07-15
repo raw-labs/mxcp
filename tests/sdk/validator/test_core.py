@@ -1,10 +1,10 @@
-"""Tests for mxcp.validator.core module."""
+"""Tests for mxcp.sdk.validator.core module."""
 
 import pytest
 import pandas as pd
 import numpy as np
 from datetime import datetime, date, time
-from mxcp.validator import TypeValidator, ValidationError
+from mxcp.sdk.validator import TypeValidator, ValidationError
 
 
 class TestTypeValidator:
