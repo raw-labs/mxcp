@@ -36,7 +36,7 @@ def chdir_to_fixtures():
     os.chdir(original_dir)
 
 def test_simple_parameters(runner):
-    result = runner.invoke(run_endpoint, ["tool", "test_tool", "--param", "name=value"])
+    result = runner.invoke(run_endpoint, ["tool", "test_tool", "--param", "name=value", "--param", "data={}"])
     print("CLI OUTPUT:\n", result.output)
     assert result.exit_code == 0
 

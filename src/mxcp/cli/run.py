@@ -3,18 +3,95 @@ import json
 import asyncio
 from typing import Dict, Any, Optional
 from pathlib import Path
-from mxcp.endpoints.executor import execute_endpoint
-from mxcp.endpoints.executor import EndpointType
-from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config, get_active_profile
+from mxcp.endpoints.loader import EndpointLoader
+from mxcp.endpoints.executor import get_endpoint_source_code
+from mxcp.config.user_config import load_user_config, UserConfig
+from mxcp.config.site_config import load_site_config, get_active_profile, find_repo_root, SiteConfig
+from mxcp.config.execution_engine import create_execution_engine
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.cli.table_renderer import format_result_for_display
 from mxcp.config.analytics import track_command_with_timing
 from mxcp.sdk.auth.providers import UserContext
-from mxcp.engine.duckdb_session import DuckDBSession
+from mxcp.sdk.executor import ExecutionContext
+
+async def _execute_endpoint_sdk(
+    endpoint_type: str, 
+    name: str, 
+    params: Dict[str, Any], 
+    user_config: UserConfig, 
+    site_config: SiteConfig, 
+    profile_name: str,
+    readonly: bool,
+    skip_output_validation: bool,
+    user_context: Optional[UserContext]
+) -> Any:
+    """Execute endpoint using SDK executor system."""
+    
+    # Find repository root
+    repo_root = find_repo_root()
+    if not repo_root:
+        raise ValueError("Could not find repository root (no mxcp-site.yml found)")
+    
+    # Load the endpoint using EndpointLoader
+    loader = EndpointLoader(site_config)
+    endpoint_result = loader.load_endpoint(endpoint_type, name)
+    
+    if not endpoint_result:
+        raise ValueError(f"Endpoint '{name}' not found in {endpoint_type}s")
+    
+    endpoint_file_path, endpoint_definition = endpoint_result
+    
+    # endpoint_definition is the raw dict containing the full endpoint structure
+    # Extract the type-specific data
+    if endpoint_type not in endpoint_definition:
+        raise ValueError(f"No {endpoint_type} definition found in endpoint")
+    
+    endpoint_dict = endpoint_definition[endpoint_type]
+    
+    # Get source code and determine language (cast to dict for function signature)
+    source_code = get_endpoint_source_code(dict(endpoint_definition), endpoint_type, endpoint_file_path, repo_root)
+    
+    # Determine language based on endpoint definition or file extension
+    language = endpoint_dict.get("language")
+    if not language:
+        # Infer from source: if it's a file ending in .py, it's python; otherwise SQL
+        if source_code.strip().endswith('.py') or '.py:' in source_code:
+            language = "python"
+        else:
+            language = "sql"
+    
+    # Create execution engine
+    engine = create_execution_engine(user_config, site_config, profile_name, readonly=readonly)
+    
+    try:
+        # Create execution context
+        execution_context = ExecutionContext(user_context=user_context)
+        
+        # Get validation schemas if not skipping validation
+        input_schema = None
+        output_schema = None
+        if not skip_output_validation:
+            input_schema = endpoint_dict.get("parameters")
+            output_schema = endpoint_dict.get("return_type")
+        
+        # Execute using the SDK engine
+        result = await engine.execute(
+            language=language,
+            source_code=source_code,
+            params=params,
+            context=execution_context,
+            input_schema=input_schema,
+            output_schema=output_schema
+        )
+        
+        return result
+        
+    finally:
+        # Shutdown the engine
+        engine.shutdown()
 
 @click.command(name="run")
-@click.argument("endpoint_type", type=click.Choice([t.value for t in EndpointType]))
+@click.argument("endpoint_type", type=click.Choice(["tool", "resource", "prompt"]))
 @click.argument("name")
 @click.option("--param", "-p", multiple=True, help="Parameter in format name=value or name=@file.json for complex values")
 @click.option("--user-context", "-u", help="User context as JSON string or @file.json")
@@ -134,28 +211,25 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
             
             params[key] = value
             
-        # Create DuckDB session - connection will be established on-demand
-        session = DuckDBSession(user_config, site_config, profile_name, readonly=readonly)
+        # Execute endpoint using SDK executor system
+        result = asyncio.run(_execute_endpoint_sdk(
+            endpoint_type, name, params, user_config, site_config, profile_name, 
+            readonly, skip_output_validation, user_context_obj
+        ))
         
-        try:
-            # Execute endpoint with explicit session
-            result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, session, profile_name, validate_output=not skip_output_validation, user_context=user_context_obj))
+        # Output result
+        if json_output:
+            output_result(result, json_output, debug)
+        else:
+            # Add success indicator
+            click.echo(f"{click.style('✅ Success!', fg='green', bold=True)}")
             
-            # Output result
-            if json_output:
-                output_result(result, json_output, debug)
-            else:
-                # Add success indicator
-                click.echo(f"{click.style('✅ Success!', fg='green', bold=True)}")
+            # Use the table renderer for nice formatting
+            format_result_for_display(result)
                 
-                # Use the table renderer for nice formatting
-                format_result_for_display(result)
-                    
-                # Add execution time if available in debug mode
-                if debug:
-                    click.echo(f"\n{click.style('⏱️  Execution completed', fg='cyan')}")
-        finally:
-            session.close()
+            # Add execution time if available in debug mode
+            if debug:
+                click.echo(f"\n{click.style('⏱️  Execution completed', fg='cyan')}")
             
     except Exception as e:
         if json_output:
