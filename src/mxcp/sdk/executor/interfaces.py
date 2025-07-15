@@ -5,9 +5,8 @@ handles execution of source code in different languages (SQL, Python, etc.)
 with proper validation and lifecycle management.
 
 Example usage:
-    >>> from mxcp.executor import ExecutionEngine
-    >>> from mxcp.core import ExecutionContext
-    >>> from mxcp.executor.plugins import DuckDBExecutor, PythonExecutor
+    >>> from mxcp.sdk.executor import ExecutionEngine, ExecutionContext
+    >>> from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
     >>> 
     >>> # Create engine and register executors
     >>> engine = ExecutionEngine(strict=False)
@@ -58,7 +57,7 @@ from contextvars import ContextVar
 if TYPE_CHECKING:
     from mxcp.validator import TypeValidator
 
-from mxcp.core import ExecutionContext
+from .context import ExecutionContext
 
 
 class ExecutorPlugin(ABC):
@@ -72,8 +71,8 @@ class ExecutorPlugin(ABC):
     Higher-level components handle lifecycle management by creating/destroying instances.
     
     Example implementation:
-        >>> from mxcp.executor.interfaces import ExecutorPlugin
-        >>> from mxcp.core import ExecutionContext
+        >>> from mxcp.sdk.executor.interfaces import ExecutorPlugin
+        >>> from mxcp.sdk.executor import ExecutionContext
         >>> 
         >>> class CustomExecutor(ExecutorPlugin):
         ...     def __init__(self, config):
@@ -143,9 +142,9 @@ class ExecutionEngine:
     No separate startup step is required.
     
     Example usage:
-        >>> from mxcp.executor import ExecutionEngine
-        >>> from mxcp.core import ExecutionContext
-        >>> from mxcp.executor.plugins import DuckDBExecutor, PythonExecutor
+        >>> from mxcp.sdk.executor import ExecutionEngine
+        >>> from mxcp.sdk.executor import ExecutionContext
+        >>> from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
         >>> 
         >>> # Create engine and register executors (ready immediately)
         >>> engine = ExecutionEngine(strict=False)

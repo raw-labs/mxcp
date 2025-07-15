@@ -5,8 +5,8 @@ support and lifecycle management. It creates and manages its own DuckDB session
 and handles plugin loading internally.
 
 Example usage:
-    >>> from mxcp.executor import ExecutionEngine, ExecutionContext
-    >>> from mxcp.executor.plugins import DuckDBExecutor
+    >>> from mxcp.sdk.executor import ExecutionEngine, ExecutionContext
+    >>> from mxcp.sdk.executor.plugins import DuckDBExecutor
     >>> 
     >>> # Create DuckDB executor (creates its own session)
     >>> executor = DuckDBExecutor()
@@ -48,7 +48,7 @@ import threading
 from typing import Dict, Any, Optional, List, TYPE_CHECKING
 
 from ..interfaces import ExecutorPlugin
-from mxcp.core import ExecutionContext
+from ..context import ExecutionContext
 
 if TYPE_CHECKING:
     from .duckdb_plugin.session import DuckDBSession
@@ -65,8 +65,8 @@ class DuckDBExecutor(ExecutorPlugin):
     Creates and manages its own DuckDB session with the provided configuration.
     
     Example usage:
-        >>> from mxcp.executor.plugins import DuckDBExecutor
-        >>> from mxcp.executor.plugins.duckdb_plugin.types import (
+        >>> from mxcp.sdk.executor.plugins import DuckDBExecutor
+        >>> from mxcp.sdk.executor.plugins.duckdb_plugin.types import (
         ...     DatabaseConfig, ExtensionDefinition, PluginDefinition, 
         ...     PluginConfig, SecretDefinition
         ... )
@@ -204,7 +204,7 @@ class DuckDBExecutor(ExecutorPlugin):
         """
         try:
             # Set execution context for UDFs to read dynamically
-            from mxcp.core.context import set_execution_context, reset_execution_context
+            from ..context import set_execution_context, reset_execution_context
             
             # Set execution context for this execution
             context_token = set_execution_context(context)
