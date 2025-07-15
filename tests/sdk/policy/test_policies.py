@@ -1,76 +1,84 @@
-"""Tests for policy enforcement functionality."""
+"""Tests for SDK policy enforcement functionality.
+
+These tests focus on the core policy enforcement functionality in mxcp.sdk.policy
+without any dependencies on configuration parsing or other MXCP modules.
+All PolicySet objects are created directly using SDK types.
+"""
 import pytest
-from mxcp.sdk.auth.providers import UserContext
-from mxcp.policies import (
+from mxcp.sdk.auth import UserContext
+from mxcp.sdk.policy import (
     PolicyAction,
     PolicyDefinition,
     PolicySet,
     PolicyEnforcer,
-    PolicyEnforcementError,
-    parse_policies_from_config
+    PolicyEnforcementError
 )
 
 
-class TestPolicyParsing:
-    """Test policy configuration parsing."""
+class TestPolicySetCreation:
+    """Test creating PolicySet objects directly."""
     
-    def test_parse_empty_policies(self):
-        """Test parsing empty policies configuration."""
-        result = parse_policies_from_config(None)
-        assert result is None
+    def test_create_empty_policy_set(self):
+        """Test creating an empty PolicySet."""
+        # Create empty PolicySet
+        policy_set = PolicySet(
+            input_policies=[],
+            output_policies=[]
+        )
         
-        result = parse_policies_from_config({})
-        assert result is not None  # Empty dict should return empty PolicySet
-        assert len(result.input_policies) == 0
-        assert len(result.output_policies) == 0
+        assert policy_set is not None
+        assert len(policy_set.input_policies) == 0
+        assert len(policy_set.output_policies) == 0
     
-    def test_parse_input_policies(self):
-        """Test parsing input policies."""
-        config = {
-            "input": [
-                {
-                    "condition": "user.role == 'guest'",
-                    "action": "deny",
-                    "reason": "Guests not allowed"
-                }
+    def test_create_input_policies(self):
+        """Test creating input policies."""
+        # Create PolicySet with input policies
+        policy_set = PolicySet(
+            input_policies=[
+                PolicyDefinition(
+                    condition="user.role == 'guest'",
+                    action=PolicyAction.DENY,
+                    reason="Guests not allowed"
+                )
+            ],
+            output_policies=[]
+        )
+        
+        assert policy_set is not None
+        assert len(policy_set.input_policies) == 1
+        assert policy_set.input_policies[0].condition == "user.role == 'guest'"
+        assert policy_set.input_policies[0].action == PolicyAction.DENY
+        assert policy_set.input_policies[0].reason == "Guests not allowed"
+    
+    def test_create_output_policies(self):
+        """Test creating output policies with field filtering."""
+        # Create PolicySet with output policies
+        policy_set = PolicySet(
+            input_policies=[],
+            output_policies=[
+                PolicyDefinition(
+                    condition="user.role != 'admin'",
+                    action=PolicyAction.FILTER_FIELDS,
+                    fields=["salary", "ssn"]
+                ),
+                PolicyDefinition(
+                    condition="true",
+                    action=PolicyAction.MASK_FIELDS,
+                    fields=["phone"]
+                )
             ]
-        }
+        )
         
-        result = parse_policies_from_config(config)
-        assert result is not None
-        assert len(result.input_policies) == 1
-        assert result.input_policies[0].condition == "user.role == 'guest'"
-        assert result.input_policies[0].action == PolicyAction.DENY
-        assert result.input_policies[0].reason == "Guests not allowed"
-    
-    def test_parse_output_policies(self):
-        """Test parsing output policies with field filtering."""
-        config = {
-            "output": [
-                {
-                    "condition": "user.role != 'admin'",
-                    "action": "filter_fields",
-                    "fields": ["salary", "ssn"]
-                },
-                {
-                    "condition": "true",
-                    "action": "mask_fields",
-                    "fields": ["phone"]
-                }
-            ]
-        }
-        
-        result = parse_policies_from_config(config)
-        assert result is not None
-        assert len(result.output_policies) == 2
+        assert policy_set is not None
+        assert len(policy_set.output_policies) == 2
         
         # Check filter_fields policy
-        assert result.output_policies[0].action == PolicyAction.FILTER_FIELDS
-        assert result.output_policies[0].fields == ["salary", "ssn"]
+        assert policy_set.output_policies[0].action == PolicyAction.FILTER_FIELDS
+        assert policy_set.output_policies[0].fields == ["salary", "ssn"]
         
         # Check mask_fields policy
-        assert result.output_policies[1].action == PolicyAction.MASK_FIELDS
-        assert result.output_policies[1].fields == ["phone"]
+        assert policy_set.output_policies[1].action == PolicyAction.MASK_FIELDS
+        assert policy_set.output_policies[1].fields == ["phone"]
 
 
 class TestPolicyEnforcement:
@@ -544,23 +552,24 @@ class TestPolicyEnforcement:
         assert action is None
 
 
-class TestPolicyConfigParsing:
-    """Test parsing of filter_sensitive_fields from configuration."""
+class TestFilterSensitivePolicies:
+    """Test filter_sensitive_fields policy action."""
     
-    def test_parse_filter_sensitive_fields_policy(self):
-        """Test parsing filter_sensitive_fields action from config."""
-        config = {
-            "output": [
-                {
-                    "condition": "user.role != 'admin'",
-                    "action": "filter_sensitive_fields",
-                    "reason": "Non-admin users cannot see sensitive data"
-                }
+    def test_create_filter_sensitive_fields_policy(self):
+        """Test creating filter_sensitive_fields policy."""
+        # Create PolicySet with filter_sensitive_fields policy
+        policy_set = PolicySet(
+            input_policies=[],
+            output_policies=[
+                PolicyDefinition(
+                    condition="user.role != 'admin'",
+                    action=PolicyAction.FILTER_SENSITIVE_FIELDS,
+                    reason="Non-admin users cannot see sensitive data"
+                )
             ]
-        }
+        )
         
-        policy_set = parse_policies_from_config(config)
-        
+        assert policy_set is not None
         assert len(policy_set.output_policies) == 1
         policy = policy_set.output_policies[0]
         assert policy.action == PolicyAction.FILTER_SENSITIVE_FIELDS
