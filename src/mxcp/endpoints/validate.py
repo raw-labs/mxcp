@@ -1,17 +1,13 @@
-import duckdb
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
-import yaml
 import json
 from jsonschema import validate as jsonschema_validate
 from referencing import Registry, Resource
-from referencing.jsonschema import DRAFT7
-from mxcp.engine.duckdb_session import DuckDBSession
-import os
 from mxcp.config.site_config import find_repo_root
-from mxcp.config.types import SiteConfig, UserConfig
+from mxcp.config.types import SiteConfig
 from mxcp.endpoints.executor import get_endpoint_source_code
 from mxcp.endpoints.loader import EndpointLoader
+from mxcp.sdk.executor import ExecutionEngine
 import re
 from jinja2 import Environment, meta
 
@@ -34,14 +30,12 @@ def _validate_resource_uri_vs_params(res_def, path):
         }
     return None
 
-def validate_all_endpoints(user_config: UserConfig, site_config: SiteConfig, profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
+def validate_all_endpoints(site_config: SiteConfig, execution_engine: ExecutionEngine) -> Dict[str, Any]:
     """Validate all endpoints in the repository.
     
     Args:
-        user_config: User configuration
         site_config: Site configuration
-        profile: Profile name
-        shared_session: DuckDB session to use for validation
+        execution_engine: SDK execution engine to use for validation
         
     Returns:
         Dictionary with validation status and details for each endpoint
@@ -63,7 +57,7 @@ def validate_all_endpoints(user_config: UserConfig, site_config: SiteConfig, pro
                 results.append({"status": "error", "path": path_str, "message": error})
                 has_errors = True
             elif endpoint:
-                result = validate_endpoint_payload(endpoint, path_str, user_config, site_config, profile, shared_session)
+                result = validate_endpoint_payload(endpoint, path_str, execution_engine)
                 results.append(result)
                 if result["status"] == "error":
                     has_errors = True
@@ -94,17 +88,13 @@ def _extract_template_variables(template: str) -> set[str]:
 
 
 
-def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: UserConfig, 
-                            site_config: SiteConfig, profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
+def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, execution_engine: ExecutionEngine) -> Dict[str, Any]:
     """Validate a single endpoint payload.
     
     Args:
         endpoint: The loaded endpoint dictionary
         path: Path to the endpoint file (for file operations)
-        user_config: User configuration
-        site_config: Site configuration
-        profile: Profile name
-        shared_session: DuckDB session to use for validation
+        execution_engine: SDK execution engine to use for validation
         
     Returns:
         Dictionary with validation status and details
@@ -234,18 +224,23 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
         if not sql_query:
             return {"status": "error", "path": relative_path, "message": "No SQL query found"}
 
-        # Use the provided shared session - guaranteed to be connected
-        con = shared_session.conn
-        if not con:
-            return {"status": "error", "path": relative_path, "message": "Database connection not available"}
-            
+        # Validate SQL syntax using SDK execution engine
         try:
-            con.execute("PREPARE my_query AS " + sql_query)
+            # Determine language based on endpoint type
+            language = "sql" if endpoint_type in ["tool", "resource"] else "python"
+            
+            # Validate source code syntax
+            if not execution_engine.validate_source(language, sql_query):
+                return {"status": "error", "path": relative_path, "message": "Source code syntax validation failed"}
+            
+            # Extract parameter names using SDK execution engine
+            sql_param_names = execution_engine.extract_parameters(language, sql_query)
         except Exception as e:
-            return {"status": "error", "path": relative_path, "message": f"SQL parsing error: {str(e)}"}
-
-        # Get parameter names using duckdb.extract_statements
-        sql_param_names = duckdb.extract_statements(sql_query)[0].named_parameters
+            return {"status": "error", "path": relative_path, "message": f"Source code validation error: {str(e)}"}
+        
+        # Convert to list if needed (ensure consistent type)
+        if not isinstance(sql_param_names, list):
+            sql_param_names = list(sql_param_names)
 
         # Extract parameters from YAML
         yaml_params = endpoint[endpoint_type].get("parameters", [])
@@ -278,7 +273,7 @@ def validate_endpoint_payload(endpoint: Dict[str, Any], path: str, user_config: 
     except Exception as e:
         return {"status": "error", "path": relative_path, "message": str(e)}
 
-def validate_endpoint(path: str, user_config: UserConfig, site_config: SiteConfig, profile: str, shared_session: DuckDBSession) -> Dict[str, Any]:
+def validate_endpoint(path: str, site_config: SiteConfig, execution_engine: ExecutionEngine) -> Dict[str, Any]:
     """Validate a single endpoint file.
     """
     try:
@@ -293,7 +288,7 @@ def validate_endpoint(path: str, user_config: UserConfig, site_config: SiteConfi
                 if error:
                     return {"status": "error", "path": path, "message": error}
                 elif endpoint:
-                    return validate_endpoint_payload(endpoint, path, user_config, site_config, profile, shared_session)
+                    return validate_endpoint_payload(endpoint, path, execution_engine)
                 else:
                     return {"status": "error", "path": path, "message": "Failed to load endpoint"}
         
