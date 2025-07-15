@@ -8,46 +8,11 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any, Optional, Literal, List
-from dataclasses import dataclass, asdict
+from typing import Dict, Any, Optional, List
+
+from .types import CallerType, EventType, PolicyDecision, Status, LogEvent
 
 logger = logging.getLogger(__name__)
-
-# Type aliases
-CallerType = Literal["cli", "http", "stdio"]
-EventType = Literal["tool", "resource", "prompt"]
-PolicyDecision = Literal["allow", "deny", "warn", "n/a"]
-Status = Literal["success", "error"]
-
-
-@dataclass
-class LogEvent:
-    """Represents an audit log event."""
-    timestamp: datetime
-    caller: CallerType
-    type: EventType
-    name: str
-    input_json: str  # JSON string with redacted sensitive data
-    duration_ms: int
-    policy_decision: PolicyDecision
-    reason: Optional[str]
-    status: Status
-    error: Optional[str]
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            "timestamp": self.timestamp.isoformat(),
-            "caller": self.caller,
-            "type": self.type,
-            "name": self.name,
-            "input_json": self.input_json,
-            "duration_ms": self.duration_ms,
-            "policy_decision": self.policy_decision,
-            "reason": self.reason,
-            "status": self.status,
-            "error": self.error
-        }
 
 
 class AuditLogger:
