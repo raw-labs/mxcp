@@ -186,6 +186,25 @@ class DuckDBExecutor(ExecutorPlugin):
             logger.debug(f"SQL validation failed: {e}")
             return False
     
+    def extract_parameters(self, source_code: str) -> List[str]:
+        """Extract parameter names from SQL source code.
+        
+        Args:
+            source_code: SQL code to analyze
+            
+        Returns:
+            List of parameter names found in the SQL (e.g., ['id', 'name'] from "SELECT * FROM table WHERE id = $id AND name = $name")
+        """
+        try:
+            # Use DuckDB's extract_statements to get parameter names
+            statements = duckdb.extract_statements(source_code)
+            if statements:
+                return list(statements[0].named_parameters)
+            return []
+        except Exception as e:
+            logger.debug(f"Parameter extraction failed: {e}")
+            return []
+    
     async def execute(
         self,
         source_code: str,

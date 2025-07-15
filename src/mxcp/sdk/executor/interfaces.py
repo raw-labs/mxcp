@@ -129,6 +129,30 @@ class ExecutorPlugin(ABC):
         """
         pass
 
+    @abstractmethod
+    def validate_source(self, source_code: str) -> bool:
+        """Validate source code syntax without execution.
+        
+        Args:
+            source_code: The source code to validate
+            
+        Returns:
+            True if valid, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    def extract_parameters(self, source_code: str) -> List[str]:
+        """Extract parameter names from source code.
+        
+        Args:
+            source_code: The source code to analyze
+            
+        Returns:
+            List of parameter names found in the source code
+        """
+        pass
+
 
 class ExecutionEngine:
     """Central execution engine that manages multiple executor plugins.
@@ -242,4 +266,48 @@ class ExecutionEngine:
             validator = TypeValidator.from_dict({"output": output_schema}, strict=self._strict)
             result = validator.validate_output(result)
             
-        return result 
+        return result
+    
+    def validate_source(self, language: str, source_code: str) -> bool:
+        """Validate source code syntax without execution.
+        
+        Args:
+            language: The programming language
+            source_code: The source code to validate
+            
+        Returns:
+            True if valid, False otherwise
+            
+        Raises:
+            ValueError: If language is not supported
+        """
+        if language not in self._executors:
+            available = list(self._executors.keys())
+            raise ValueError(f"Language '{language}' not supported. Available: {available}")
+            
+        executor = self._executors[language]
+        return executor.validate_source(source_code)
+    
+    def extract_parameters(self, language: str, source_code: str) -> List[str]:
+        """Extract parameter names from source code.
+        
+        Args:
+            language: The programming language
+            source_code: The source code to analyze
+            
+        Returns:
+            List of parameter names found in the source code
+            
+        Raises:
+            ValueError: If language is not supported
+        """
+        if language not in self._executors:
+            available = list(self._executors.keys())
+            raise ValueError(f"Language '{language}' not supported. Available: {available}")
+            
+        executor = self._executors[language]
+        if hasattr(executor, 'extract_parameters'):
+            return executor.extract_parameters(source_code)
+        else:
+            # Fallback for executors that don't implement parameter extraction
+            return [] 

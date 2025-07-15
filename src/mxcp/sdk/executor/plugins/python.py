@@ -192,6 +192,114 @@ class PythonExecutor(ExecutorPlugin):
             logger.debug(f"Python validation failed: {e}")
             return False
     
+    def extract_parameters(self, source_code: str) -> List[str]:
+        """Extract parameter names from Python source code.
+        
+        Args:
+            source_code: Python code to analyze
+            
+        Returns:
+            List of parameter names found in the Python code
+        """
+        try:
+            # Check if it's a file path
+            if self._is_file_path(source_code):
+                return self._extract_parameters_from_file(source_code)
+            else:
+                return self._extract_parameters_from_inline(source_code)
+        except Exception as e:
+            logger.debug(f"Python parameter extraction failed: {e}")
+            return []
+    
+    def _extract_parameters_from_file(self, file_path: str) -> List[str]:
+        """Extract parameters from a Python file."""
+        try:
+            # Parse file path and function name
+            if ':' in file_path:
+                actual_file_path, function_name = file_path.split(':', 1)
+            else:
+                actual_file_path = file_path
+                function_name = None
+            
+            # Load the module
+            module = self.loader.load_python_module(Path(actual_file_path))
+            
+            # Find the target function
+            if function_name:
+                if hasattr(module, function_name):
+                    func = getattr(module, function_name)
+                else:
+                    return []
+            else:
+                # Find main function or first callable
+                file_name = Path(actual_file_path).stem
+                func = None
+                
+                if hasattr(module, 'main'):
+                    func = getattr(module, 'main')
+                elif hasattr(module, file_name):
+                    func = getattr(module, file_name)
+                else:
+                    # Find any callable function
+                    functions = [name for name in dir(module) 
+                               if callable(getattr(module, name)) and not name.startswith('_')]
+                    if functions:
+                        func = getattr(module, functions[0])
+                
+                if not func:
+                    return []
+            
+            # Extract function signature
+            if callable(func):
+                sig = inspect.signature(func)
+                return list(sig.parameters.keys())
+            
+            return []
+            
+        except Exception as e:
+            logger.debug(f"Failed to extract parameters from file {file_path}: {e}")
+            return []
+    
+    def _extract_parameters_from_inline(self, source_code: str) -> List[str]:
+        """Extract parameters from inline Python code."""
+        try:
+            import ast
+            
+            # Handle return statements by wrapping in a function
+            if source_code.strip().startswith('return '):
+                # For simple return expressions, analyze what variables are referenced
+                return_expr = source_code.strip()[7:]  # Remove 'return '
+                tree = ast.parse(return_expr, mode='eval')
+                
+                # Find all variable names used in the expression
+                params = []
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                        if node.id not in ['pd', 'np', 'pandas', 'numpy'] and node.id not in params:
+                            params.append(node.id)
+                return params
+            else:
+                # For more complex code, try to find function definitions
+                tree = ast.parse(source_code)
+                
+                # Look for function definitions
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef):
+                        # Return parameters of the first function found
+                        return [arg.arg for arg in node.args.args]
+                
+                # If no function found, analyze variable references
+                params = []
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                        if node.id not in ['pd', 'np', 'pandas', 'numpy'] and node.id not in params:
+                            params.append(node.id)
+                return params
+                
+        except Exception as e:
+            logger.debug(f"Failed to extract parameters from inline code: {e}")
+            return []
+    
     async def execute(
         self,
         source_code: str,
