@@ -1,41 +1,7 @@
 from typing import TypedDict, List, Optional, Dict, Any, Literal, Union
 from dataclasses import dataclass, field
-from abc import ABC, abstractmethod
 
-# LLM Model configuration types
-@dataclass
-class ModelConfig(ABC):
-    """Base class for LLM model configurations."""
-    name: str
-    api_key: str
-    
-    @abstractmethod
-    def get_type(self) -> str:
-        """Get the type identifier for this model."""
-        pass
-
-@dataclass
-class ClaudeConfig(ModelConfig):
-    """Configuration for Claude/Anthropic models."""
-    base_url: str = "https://api.anthropic.com"
-    timeout: int = 30
-    
-    def get_type(self) -> str:
-        return "claude"
-
-@dataclass
-class OpenAIConfig(ModelConfig):
-    """Configuration for OpenAI models."""
-    base_url: str = "https://api.openai.com/v1"
-    timeout: int = 30
-    
-    def get_type(self) -> str:
-        return "openai"
-
-# Union type for all supported model configurations
-ModelConfigType = Union[ClaudeConfig, OpenAIConfig]
-
-# Endpoint types
+# Endpoint types specific to evals context (contain source info, etc.)
 @dataclass
 class ToolEndpoint:
     """Represents a loaded tool endpoint."""

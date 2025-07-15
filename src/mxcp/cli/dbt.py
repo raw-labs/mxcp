@@ -4,7 +4,7 @@ import subprocess
 import click
 from ..config.site_config import load_site_config, find_repo_root
 from ..config.user_config import load_user_config
-from ..engine.dbt_runner import configure_dbt
+from ..dbt.runner import configure_dbt
 from .utils import configure_logging, check_command_available
 
 @click.command(name="dbt-config")
