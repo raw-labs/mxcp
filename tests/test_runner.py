@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 from pathlib import Path
-from mxcp.endpoints.runner import run_endpoint
+from mxcp.endpoints.executor import execute_endpoint as run_endpoint
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.engine.duckdb_session import DuckDBSession
@@ -71,9 +71,9 @@ async def test_simple_tool_missing_arg(test_repo_path, test_user_config, test_si
         endpoint_type = "tool"
         name = "simple_tool"
         args = {"a": 1}  # Missing 'b'
-        with pytest.raises(RuntimeError) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_session, test_profile)
-        assert "Required parameter missing" in str(exc_info.value)
+        assert "Required parameter missing: b" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 
@@ -86,9 +86,9 @@ async def test_simple_tool_wrong_type(test_repo_path, test_user_config, test_sit
         endpoint_type = "tool"
         name = "simple_tool"
         args = {"a": "not_a_number", "b": 2}
-        with pytest.raises(RuntimeError) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_session, test_profile)
-        assert "Error converting parameter" in str(exc_info.value)
+        assert "Expected number, got str" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 
@@ -116,9 +116,9 @@ async def test_date_resource_invalid_date(test_repo_path, test_user_config, test
         endpoint_type = "resource"
         name = "data://date.resource"
         args = {"date": "not-a-date", "format": "iso"}
-        with pytest.raises(RuntimeError) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_session, test_profile)
-        assert "Error converting parameter" in str(exc_info.value)
+        assert "time data 'not-a-date' does not match format" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 
@@ -131,9 +131,9 @@ async def test_date_resource_invalid_format(test_repo_path, test_user_config, te
         endpoint_type = "resource"
         name = "data://date.resource"
         args = {"date": "2024-03-20", "format": "invalid_format"}
-        with pytest.raises(RuntimeError) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_session, test_profile)
-        assert "Invalid value for format" in str(exc_info.value)
+        assert "Must be one of: ['iso', 'unix', 'human']" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 
@@ -184,7 +184,7 @@ async def test_greeting_prompt_name_too_long(test_repo_path, test_user_config, t
         endpoint_type = "prompt"
         name = "greeting_prompt"
         args = {"name": "A" * 51, "time_of_day": "morning"}  # 51 chars > maxLength 50
-        with pytest.raises(RuntimeError) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_session, test_profile)
         assert "String must be at most 50 characters long" in str(exc_info.value)
     finally:
@@ -199,7 +199,7 @@ async def test_nonexistent_endpoint(test_repo_path, test_user_config, test_site_
         endpoint_type = "tool"
         name = "nonexistent"
         args = {}
-        with pytest.raises(RuntimeError) as exc_info:
+        with pytest.raises(FileNotFoundError) as exc_info:
             await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_session, test_profile)
         assert "not found" in str(exc_info.value)
     finally:
@@ -218,11 +218,11 @@ async def test_invalid_endpoint_yaml(test_repo_path, test_user_config, test_site
             f.write("invalid: yaml: content: [")
         try:
             args = {}
-            with pytest.raises(RuntimeError) as exc_info:
+            with pytest.raises(FileNotFoundError) as exc_info:
                 await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_session, test_profile)
-            assert "Error running endpoint" in str(exc_info.value)
+            assert "not found" in str(exc_info.value)
         finally:
-            invalid_path.unlink()
+            invalid_path.unlink(missing_ok=True)
     finally:
         os.chdir(original_dir)
 
@@ -235,9 +235,9 @@ async def test_greeting_prompt_missing_required_param(test_repo_path, test_user_
         endpoint_type = "prompt"
         name = "greeting_prompt"
         args = {"time_of_day": "morning"}  # Missing required 'name' parameter
-        with pytest.raises(RuntimeError) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             await run_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_session, test_profile)
-        assert "Required parameter missing" in str(exc_info.value)
+        assert "Required parameter missing: name" in str(exc_info.value)
     finally:
         os.chdir(original_dir)
 

@@ -13,7 +13,7 @@ from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.endpoints.executor import EndpointExecutor, EndpointType
-from mxcp.endpoints.runner import run_endpoint
+from mxcp.endpoints.executor import execute_endpoint as run_endpoint
 from mxcp.runtime import _set_runtime_context, _clear_runtime_context
 
 
