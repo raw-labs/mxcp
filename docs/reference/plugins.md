@@ -767,8 +767,8 @@ mxcp serve --debug
 **2. Check Plugin Loading**
 Look for log messages like:
 ```
-INFO:mxcp.engine.plugin_loader:Loaded plugin my_cipher from my_plugin
-INFO:mxcp.plugins.base:Adding UDF: encrypt with args ['VARCHAR'] and return type VARCHAR
+[...] Loaded plugin my_cipher from my_plugin
+[...] Adding UDF: encrypt with args ['VARCHAR'] and return type VARCHAR
 ```
 
 **3. Test SQL Functions**
