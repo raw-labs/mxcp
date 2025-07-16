@@ -139,6 +139,7 @@ tool:
             endpoint_type="tool",
             name="get_greeting",
             params={"name": "World"},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -177,6 +178,7 @@ tool:
             endpoint_type="tool",
             name="calculate_pi",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -215,6 +217,7 @@ tool:
             endpoint_type="tool",
             name="count_items",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -253,6 +256,7 @@ tool:
             endpoint_type="tool",
             name="is_valid",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -300,6 +304,7 @@ tool:
             endpoint_type="tool",
             name="get_current_datetime",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -353,6 +358,7 @@ tool:
             endpoint_type="tool",
             name="get_users",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -395,6 +401,7 @@ tool:
             endpoint_type="tool",
             name="get_numbers",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -436,6 +443,7 @@ tool:
             endpoint_type="tool",
             name="get_tags",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -477,6 +485,7 @@ tool:
             endpoint_type="tool",
             name="get_flags",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -520,6 +529,7 @@ tool:
             endpoint_type="tool",
             name="get_matrix",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -577,6 +587,7 @@ tool:
             endpoint_type="tool",
             name="get_user_info",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -641,6 +652,7 @@ tool:
             endpoint_type="tool",
             name="get_company_info",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -690,6 +702,7 @@ tool:
             endpoint_type="tool",
             name="get_nothing",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -729,6 +742,7 @@ tool:
             endpoint_type="tool",
             name="get_empty_list",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -767,6 +781,7 @@ tool:
                 endpoint_type="tool",
                 name="get_not_a_list",
                 params={},
+                user_config=user_config,
                 site_config=site_config,
                 execution_engine=execution_engine
             )
@@ -805,6 +820,7 @@ tool:
                 endpoint_type="tool",
                 name="get_not_an_object",
                 params={},
+                user_config=user_config,
                 site_config=site_config,
                 execution_engine=execution_engine
             )
@@ -846,6 +862,7 @@ tool:
             endpoint_type="tool",
             name="get_mixed_data",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -905,6 +922,7 @@ tool:
                 endpoint_type="tool",
                 name="get_invalid_emails",
                 params={},
+                user_config=user_config,
                 site_config=site_config,
                 execution_engine=execution_engine
             )
@@ -956,6 +974,7 @@ tool:
                 endpoint_type="tool",
                 name="get_incomplete_user",
                 params={},
+                user_config=user_config,
                 site_config=site_config,
                 execution_engine=execution_engine
             )
@@ -1006,6 +1025,7 @@ tool:
                 endpoint_type="tool",
                 name="get_user_wrong_age",
                 params={},
+                user_config=user_config,
                 site_config=site_config,
                 execution_engine=execution_engine
             )
@@ -1046,6 +1066,7 @@ tool:
                 endpoint_type="tool",
                 name="get_long_name",
                 params={},
+                user_config=user_config,
                 site_config=site_config,
                 execution_engine=execution_engine
             )
@@ -1087,6 +1108,7 @@ tool:
                 endpoint_type="tool",
                 name="get_score",
                 params={},
+                user_config=user_config,
                 site_config=site_config,
                 execution_engine=execution_engine
             )
@@ -1129,6 +1151,7 @@ tool:
                 endpoint_type="tool",
                 name="get_small_list",
                 params={},
+                user_config=user_config,
                 site_config=site_config,
                 execution_engine=execution_engine
             )
@@ -1169,6 +1192,7 @@ tool:
                 endpoint_type="tool",
                 name="get_email",
                 params={},
+                user_config=user_config,
                 site_config=site_config,
                 execution_engine=execution_engine
             )

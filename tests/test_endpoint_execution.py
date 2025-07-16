@@ -105,7 +105,7 @@ def test_parameter_validation(site_config, test_repo_path):
         os.chdir(original_dir)
 
 @pytest.mark.asyncio
-async def test_sql_execution(execution_engine, site_config, test_repo_path):
+async def test_sql_execution(execution_engine, user_config, site_config, test_repo_path):
     """Test SQL execution with parameter conversion"""
     # Change to test repo directory for relative path resolution
     original_dir = os.getcwd()
@@ -127,6 +127,7 @@ async def test_sql_execution(execution_engine, site_config, test_repo_path):
             endpoint_type="tool",
             name="example",
             params=params,
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )

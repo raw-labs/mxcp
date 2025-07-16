@@ -50,7 +50,7 @@ def execution_engine(user_config, site_config, test_profile):
     engine.shutdown()
 
 @pytest.mark.asyncio
-async def test_secret_injection(execution_engine, site_config, test_repo_path):
+async def test_secret_injection(execution_engine, user_config, site_config, test_repo_path):
     """Test that secrets are properly injected into DuckDB session"""
     # Change to test repo directory for relative path resolution
     original_dir = os.getcwd()
@@ -60,6 +60,7 @@ async def test_secret_injection(execution_engine, site_config, test_repo_path):
             endpoint_type="tool",
             name="secret_test",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
@@ -71,7 +72,7 @@ async def test_secret_injection(execution_engine, site_config, test_repo_path):
         os.chdir(original_dir)
 
 @pytest.mark.asyncio
-async def test_http_headers_injection(execution_engine, site_config, test_repo_path):
+async def test_http_headers_injection(execution_engine, user_config, site_config, test_repo_path):
     """Test that HTTP headers are properly injected as MAP type"""
     # Change to test repo directory for relative path resolution
     original_dir = os.getcwd()
@@ -81,6 +82,7 @@ async def test_http_headers_injection(execution_engine, site_config, test_repo_p
             endpoint_type="tool",
             name="http_headers_test",
             params={},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )

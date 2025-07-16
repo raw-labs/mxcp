@@ -202,7 +202,7 @@ async def run_tests_with_session(endpoint_type: str, name: str, user_config: Use
                 logger.info(f"Using CLI-provided user context")
             
             try:
-                result = await execute_endpoint_with_engine(endpoint_type, name, params, site_config, execution_engine, False, test_user_context)
+                result = await execute_endpoint_with_engine(endpoint_type, name, params, user_config, site_config, execution_engine, False, test_user_context)
                 logger.info(f"Execution result: {result}")
                 
                 # Normalize result for comparison

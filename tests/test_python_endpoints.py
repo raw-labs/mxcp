@@ -112,36 +112,45 @@ def test_configs(temp_project_dir):
 
 
 @pytest.fixture
-def test_session(test_configs):
-    """Create a test DuckDB session."""
-    user_config, site_config = test_configs
-    session = DuckDBSession(user_config, site_config, profile="test")
-    
-    # Create test table
-    session.conn.execute("""
-        CREATE TABLE test_data (
-            id INTEGER,
-            name VARCHAR,
-            value DOUBLE
-        )
-    """)
-    session.conn.execute("""
-        INSERT INTO test_data VALUES 
-        (1, 'Alice', 100.5),
-        (2, 'Bob', 200.7),
-        (3, 'Charlie', 300.9)
-    """)
-    
-    yield session
-    
-    session.close()
-
-
-@pytest.fixture
 def execution_engine(test_configs):
-    """Create execution engine for tests."""
+    """Create execution engine for tests and set up test data."""
     user_config, site_config = test_configs
-    return create_execution_engine(user_config, site_config)
+    engine = create_execution_engine(user_config, site_config)
+    
+    # Get the DuckDB executor from the engine
+    duckdb_executor = None
+    for executor in engine._executors.values():
+        if hasattr(executor, 'language') and executor.language == "sql":
+            duckdb_executor = executor
+            break
+    
+    if duckdb_executor:
+        # Get the DuckDB session and connection
+        from mxcp.sdk.executor.plugins import DuckDBExecutor
+        if isinstance(duckdb_executor, DuckDBExecutor):
+            session = duckdb_executor.session
+            conn = session.conn
+            
+            # Create test table if connection exists
+            if conn:
+                conn.execute("""
+                    CREATE TABLE test_data (
+                        id INTEGER,
+                        name VARCHAR,
+                        value DOUBLE
+                    )
+                """)
+                conn.execute("""
+                    INSERT INTO test_data VALUES 
+                    (1, 'Alice', 100.5),
+                    (2, 'Bob', 200.7),
+                    (3, 'Charlie', 300.9)
+                """)
+    
+    yield engine
+    
+    # Clean up - the engine shutdown should handle this
+    engine.shutdown()
 
 
 def test_python_loader(temp_project_dir):
@@ -176,7 +185,7 @@ def add_numbers(a: int, b: int) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_python_endpoint_with_db(temp_project_dir, test_configs, test_session, execution_engine):
+async def test_python_endpoint_with_db(temp_project_dir, test_configs, execution_engine):
     """Test Python endpoint with database access."""
     user_config, site_config = test_configs
     
@@ -218,6 +227,7 @@ tool:
         endpoint_type="tool",
         name="get_data",
         params={"min_value": 200},
+        user_config=user_config,
         site_config=site_config,
         execution_engine=execution_engine
     )
@@ -229,7 +239,7 @@ tool:
 
 
 @pytest.mark.asyncio
-async def test_python_endpoint_with_secrets(temp_project_dir, test_configs, test_session, execution_engine):
+async def test_python_endpoint_with_secrets(temp_project_dir, test_configs, execution_engine):
     """Test Python endpoint accessing secrets."""
     user_config, site_config = test_configs
     
@@ -274,6 +284,7 @@ tool:
         endpoint_type="tool",
         name="get_secret_info",
         params={},
+        user_config=user_config,
         site_config=site_config,
         execution_engine=execution_engine
     )
@@ -347,7 +358,7 @@ def check_state() -> dict:
 
 
 @pytest.mark.asyncio
-async def test_async_python_endpoint(temp_project_dir, test_configs, test_session, execution_engine):
+async def test_async_python_endpoint(temp_project_dir, test_configs, execution_engine):
     """Test async Python endpoint."""
     user_config, site_config = test_configs
     
@@ -392,6 +403,7 @@ tool:
         endpoint_type="tool",
         name="slow_query",
         params={"delay": 0.1},
+        user_config=user_config,
         site_config=site_config,
         execution_engine=execution_engine
     )
@@ -651,7 +663,7 @@ tool:
 
 
 @pytest.mark.asyncio
-async def test_python_endpoint_error_handling(temp_project_dir, test_configs, test_session, execution_engine):
+async def test_python_endpoint_error_handling(temp_project_dir, test_configs, execution_engine):
     """Test error handling in Python endpoints."""
     user_config, site_config = test_configs
     
@@ -690,6 +702,7 @@ tool:
         endpoint_type="tool",
         name="divide_numbers",
         params={"a": 10, "b": 2},
+        user_config=user_config,
         site_config=site_config,
         execution_engine=execution_engine
     )
@@ -701,6 +714,7 @@ tool:
             endpoint_type="tool",
             name="divide_numbers",
             params={"a": 10, "b": 0},
+            user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )

@@ -17,6 +17,9 @@ from mxcp.sdk.auth.providers import UserContext
 from mxcp.policies import parse_policies_from_config, PolicyEnforcementError
 from mxcp.sdk.executor.interfaces import ExecutionEngine
 from mxcp.sdk.policy import PolicyEnforcer
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 async def execute_endpoint(
@@ -60,6 +63,7 @@ async def execute_endpoint(
             endpoint_type=endpoint_type,
             name=name,
             params=params,
+            user_config=user_config,
             site_config=site_config,
             execution_engine=engine,
             skip_output_validation=skip_output_validation,
@@ -75,8 +79,9 @@ async def execute_endpoint_with_engine(
     endpoint_type: str,
     name: str,
     params: Dict[str, Any],
-    site_config: SiteConfig,  # Need this for EndpointLoader
-    execution_engine,  # Receive engine from outside
+    user_config: UserConfig,
+    site_config: SiteConfig,
+    execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: Optional[UserContext] = None
 ) -> Any:
@@ -146,7 +151,7 @@ async def execute_endpoint_with_engine(
     else:
         result = await _execute_code_with_engine(
             endpoint_dict, dict(endpoint_definition), endpoint_file_path, repo_root,
-            params, execution_engine, skip_output_validation, site_config
+            params, execution_engine, skip_output_validation, user_config, site_config
         )
     
     # Enforce output policies (symmetry with input policy enforcement above)
@@ -293,6 +298,7 @@ async def _execute_code_with_engine(
     params: Dict[str, Any],
     execution_engine: ExecutionEngine,
     skip_output_validation: bool,
+    user_config: UserConfig,
     site_config: SiteConfig,
     user_context: Optional[UserContext] = None
 ) -> Any:
@@ -310,23 +316,21 @@ async def _execute_code_with_engine(
     execution_context = ExecutionContext(user_context=user_context)
     
     # Populate context with data that runtime module expects
+    execution_context.set("user_config", user_config)
     execution_context.set("site_config", site_config)
+    if hasattr(execution_engine, '_executors') and "sql" in execution_engine._executors:
+        sql_executor = execution_engine._executors["sql"]
+        from mxcp.sdk.executor.plugins import DuckDBExecutor
+        if isinstance(sql_executor, DuckDBExecutor):
+            logger.info("Found DuckDB executor via direct access, setting session in context")
+            execution_context.set("duckdb_session", sql_executor.session)
+            
+            # Get plugins from the session if available
+            if hasattr(sql_executor.session, 'plugins'):
+                execution_context.set("plugins", sql_executor.session.plugins)
+    else:
+        logger.error("Could not find SQL executor anywhere")
     
-    # Get user_config from engine context if available
-    if hasattr(execution_engine, '_engine_context') and execution_engine._engine_context:
-        engine_context = execution_engine._engine_context
-        if "user_config" in engine_context:
-            execution_context.set("user_config", engine_context["user_config"])
-        
-        # Get DuckDB session from SQL executor
-        if "sql" in execution_engine._executors:
-            sql_executor = execution_engine._executors["sql"]
-            if hasattr(sql_executor, '_session'):
-                execution_context.set("duckdb_session", sql_executor._session)
-                
-                # Get plugins from the session if available
-                if hasattr(sql_executor._session, 'plugins'):
-                    execution_context.set("plugins", sql_executor._session.plugins)
     
     # Get validation schemas - SDK executor handles input validation internally
     input_schema = None
