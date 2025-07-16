@@ -17,7 +17,6 @@ from makefun import create_function
 from mxcp.engine.duckdb_session import DuckDBSession
 from mxcp.sdk.auth.providers import GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
-from mxcp.sdk.auth.context import get_user_context
 from mxcp.core.auth_helpers import create_oauth_handler, create_url_builder
 from mxcp.sdk.audit import AuditLogger
 from mcp.types import ToolAnnotations

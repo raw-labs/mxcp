@@ -4,8 +4,8 @@ import asyncio
 from typing import Dict, Any, Optional
 from pathlib import Path
 from mxcp.endpoints.sdk_executor import execute_endpoint
-from mxcp.config.user_config import load_user_config, UserConfig
-from mxcp.config.site_config import load_site_config, get_active_profile, find_repo_root, SiteConfig
+from mxcp.config.user_config import load_user_config
+from mxcp.config.site_config import load_site_config
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.cli.table_renderer import format_result_for_display
 from mxcp.config.analytics import track_command_with_timing

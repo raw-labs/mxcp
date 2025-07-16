@@ -15,6 +15,7 @@ from mxcp.endpoints.executor import get_endpoint_source_code
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.auth.providers import UserContext
 from mxcp.policies import parse_policies_from_config, PolicyEnforcementError
+from mxcp.sdk.executor.interfaces import ExecutionEngine
 from mxcp.sdk.policy import PolicyEnforcer
 
 
@@ -30,10 +31,7 @@ async def execute_endpoint(
     user_context: Optional[UserContext] = None
 ) -> Any:
     """Execute endpoint using SDK executor system.
-    
-    This is the modern replacement for the legacy execute_endpoint function.
-    It uses the SDK executor system instead of hardcoded DuckDBSession.
-    
+        
     Args:
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
         name: Name of the endpoint to execute
@@ -148,7 +146,7 @@ async def execute_endpoint_with_engine(
     else:
         result = await _execute_code_with_engine(
             endpoint_dict, dict(endpoint_definition), endpoint_file_path, repo_root,
-            params, execution_engine, skip_output_validation
+            params, execution_engine, skip_output_validation, site_config
         )
     
     # Enforce output policies (symmetry with input policy enforcement above)
@@ -210,34 +208,125 @@ async def _execute_prompt_with_validation(
     return processed_messages
 
 
+async def _prepare_source_code(
+    endpoint_dict: dict,
+    endpoint_definition: dict,
+    endpoint_file_path: Path,
+    repo_root: Path
+) -> tuple[str, str]:
+    """Prepare source code and determine language for SDK executor.
+    
+    Args:
+        endpoint_dict: The endpoint-specific dictionary (tool/resource/prompt data)
+        endpoint_definition: The full endpoint definition dictionary
+        endpoint_file_path: Path to the endpoint YAML file
+        repo_root: Repository root path
+        
+    Returns:
+        Tuple of (language, source_code) where:
+        - language: "python", "sql", etc.
+        - source_code: Either inline code, file path, or file_path:function_name
+        
+    Raises:
+        ValueError: If no source code or file specified in endpoint definition
+    """
+    # Determine language based on endpoint definition or file extension
+    language = endpoint_dict.get("language")
+    
+    # Handle source code vs file path for SDK executor
+    source = endpoint_dict.get("source", {})
+    if "code" in source:
+        # Inline code - pass directly
+        source_code = source["code"]
+        if not language:
+            language = "sql"  # Default for inline code
+    elif "file" in source:
+        # File source - for Python, pass file path; for SQL, read content
+        file_path = source["file"]
+        if not language:
+            # Infer language from file extension
+            if file_path.endswith('.py'):
+                language = "python"
+            else:
+                language = "sql"
+        
+        if language == "python":
+            # For Python files, resolve the file path correctly and pass to SDK executor
+            # The file_path is relative to the endpoint YAML file, so resolve it first
+            resolved_file_path = Path(file_path)
+            if not resolved_file_path.is_absolute():
+                resolved_file_path = endpoint_file_path.parent / file_path
+            
+            # Convert back to relative path from repo root for SDK executor
+            try:
+                relative_to_repo = resolved_file_path.relative_to(repo_root)
+                file_path_for_executor = str(relative_to_repo)
+            except ValueError:
+                # If the file is outside repo root, use absolute path
+                file_path_for_executor = str(resolved_file_path)
+            
+            # Determine the function name from endpoint name
+            endpoint_type = "tool" if "tool" in endpoint_definition else "resource"
+            function_name = endpoint_dict.get("name") if endpoint_type == "tool" else None
+            
+            if function_name:
+                # Pass file path with function name (e.g., "python/module.py:function_name")
+                source_code = f"{file_path_for_executor}:{function_name}"
+            else:
+                # Just the file path for resources or when no function name
+                source_code = file_path_for_executor
+        else:
+            # For SQL files, read the content (existing behavior)
+            endpoint_type = "tool" if "tool" in endpoint_definition else "resource"
+            source_code = get_endpoint_source_code(dict(endpoint_definition), endpoint_type, endpoint_file_path, repo_root)
+    else:
+        raise ValueError("No source code or file specified in endpoint definition")
+    
+    return language, source_code
+
+
 async def _execute_code_with_engine(
     endpoint_dict: dict,
     endpoint_definition: dict,
     endpoint_file_path: Path,
     repo_root: Path,
     params: Dict[str, Any],
-    execution_engine,
-    skip_output_validation: bool
+    execution_engine: ExecutionEngine,
+    skip_output_validation: bool,
+    site_config: SiteConfig,
+    user_context: Optional[UserContext] = None
 ) -> Any:
     """Execute tool/resource endpoint using SDK execution engine.
     
     The SDK executor handles input validation internally via input_schema.
     We only need to handle output policy enforcement here.
     """
-    # Get source code and determine language (cast to dict for function signature)
-    source_code = get_endpoint_source_code(dict(endpoint_definition), "tool" if "tool" in endpoint_definition else "resource", endpoint_file_path, repo_root)
+    # Prepare source code and language
+    language, source_code = await _prepare_source_code(
+        endpoint_dict, endpoint_definition, endpoint_file_path, repo_root
+    )
+
+    # Create execution context and populate with runtime data for the runtime module
+    execution_context = ExecutionContext(user_context=user_context)
     
-    # Determine language based on endpoint definition or file extension
-    language = endpoint_dict.get("language")
-    if not language:
-        # Infer from source: if it's a file ending in .py, it's python; otherwise SQL
-        if source_code.strip().endswith('.py') or '.py:' in source_code:
-            language = "python"
-        else:
-            language = "sql"
+    # Populate context with data that runtime module expects
+    execution_context.set("site_config", site_config)
     
-    # Create execution context (user_context will be passed from the main function)
-    execution_context = ExecutionContext(user_context=None)
+    # Get user_config from engine context if available
+    if hasattr(execution_engine, '_engine_context') and execution_engine._engine_context:
+        engine_context = execution_engine._engine_context
+        if "user_config" in engine_context:
+            execution_context.set("user_config", engine_context["user_config"])
+        
+        # Get DuckDB session from SQL executor
+        if "sql" in execution_engine._executors:
+            sql_executor = execution_engine._executors["sql"]
+            if hasattr(sql_executor, '_session'):
+                execution_context.set("duckdb_session", sql_executor._session)
+                
+                # Get plugins from the session if available
+                if hasattr(sql_executor._session, 'plugins'):
+                    execution_context.set("plugins", sql_executor._session.plugins)
     
     # Get validation schemas - SDK executor handles input validation internally
     input_schema = None
@@ -256,4 +345,4 @@ async def _execute_code_with_engine(
         output_schema=output_schema
     )
     
-    return result 
+    return result

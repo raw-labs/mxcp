@@ -23,9 +23,6 @@ import functools
 if TYPE_CHECKING:
     from mxcp.sdk.auth.providers import UserContext
 
-# Import the context function
-from mxcp.sdk.auth.context import get_user_context
-
 logger = logging.getLogger(__name__)
 
 class EndpointType(Enum):

@@ -61,7 +61,7 @@ async def test_run_invalid_tool(tester_repo_path, site_config, user_config):
         # Check error causes for each error test
         error_msgs = [test["error"] for test in result["tests"] if test["status"] == "error"]
         assert any("Required parameter missing: count" in str(msg) for msg in error_msgs)
-        assert any("invalid literal for int()" in str(msg) or "Error converting parameter count" in str(msg) for msg in error_msgs)
+        assert any("Error validating parameter 'count'" in str(msg) and "Expected integer, got str" in str(msg) for msg in error_msgs)
         assert any("Unknown parameter: extra" in str(msg) for msg in error_msgs)
     finally:
         os.chdir(original_dir)

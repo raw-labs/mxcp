@@ -19,7 +19,6 @@ from .providers import (
     ExternalOAuthHandler,
     GeneralOAuthAuthorizationServer,
 )
-from .context import get_user_context, set_user_context, reset_user_context
 from .middleware import AuthenticationMiddleware
 
 __all__ = [
@@ -38,9 +37,5 @@ __all__ = [
     "ExternalUserInfo",
     "UserContext",
     "GeneralOAuthAuthorizationServer",
-    "AuthenticationMiddleware",
-    # Functions
-    "get_user_context",
-    "set_user_context",
-    "reset_user_context",
+    "AuthenticationMiddleware"
 ] 

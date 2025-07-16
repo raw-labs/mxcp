@@ -2,123 +2,158 @@
 MXCP Runtime module for Python endpoints.
 
 This module provides access to runtime services for Python endpoints.
+Uses the SDK executor context system for proper context access.
 """
-from typing import Optional, Dict, Any, List, Callable, TYPE_CHECKING
-import threading
-from contextvars import ContextVar
-import logging
+import contextvars
+from typing import Optional, Dict, Any, List, Callable
 
-if TYPE_CHECKING:
-    from mxcp.engine.duckdb_session import DuckDBSession
-    from mxcp.config.user_config import UserConfig
-    from mxcp.config.site_config import SiteConfig
-    from mxcp.plugins import MXCPBasePlugin
+from mxcp.sdk.executor.context import get_execution_context, set_execution_context, reset_execution_context, ExecutionContext
+
+import logging
 
 logger = logging.getLogger(__name__)
 
-# Context variables for thread-safe access
-_session_context: ContextVar[Optional['DuckDBSession']] = ContextVar('session', default=None)
-_user_config_context: ContextVar[Optional['UserConfig']] = ContextVar('user_config', default=None)
-_site_config_context: ContextVar[Optional['SiteConfig']] = ContextVar('site_config', default=None)
-_plugins_context: ContextVar[Optional[Dict[str, 'MXCPBasePlugin']]] = ContextVar('plugins', default=None)
-_lock_context: ContextVar[Optional[threading.Lock]] = ContextVar('lock', default=None)
-
 
 class DatabaseProxy:
-    """Proxy for database operations with automatic locking"""
+    """Proxy for database operations using the current execution context."""
     
     def execute(self, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """Execute a SQL query and return results as list of dicts"""
-        session = _session_context.get()
+        """Execute a SQL query using the current execution context."""
+        context = get_execution_context()
+        if not context:
+            raise RuntimeError("No execution context available - function not called from MXCP executor")
+        
+        session = context.get("duckdb_session")
         if not session:
-            raise RuntimeError("No database session available in runtime context")
-            
-        lock = _lock_context.get()
-        if lock:
-            with lock:
-                return session.execute_query_to_dict(query, params)
+            raise RuntimeError("No DuckDB session available in execution context")
+
+        if params:
+            result = session.conn.execute(query, params).fetchdf()
         else:
-            return session.execute_query_to_dict(query, params)
+            result = session.conn.execute(query).fetchdf()
+        
+        # Convert DataFrame to list of dicts
+        return result.to_dict('records')
     
     @property
     def connection(self):
-        """Get the raw DuckDB connection (use with caution in server mode)"""
-        session = _session_context.get()
+        """Get the raw DuckDB connection (use with caution)."""
+        context = get_execution_context()
+        if not context:
+            raise RuntimeError("No execution context available - function not called from MXCP executor")
+        
+        session = context.get("duckdb_session")
         if not session:
-            raise RuntimeError("No database session available in runtime context")
+            raise RuntimeError("No DuckDB session available in execution context")
+        
         return session.conn
 
 
 class ConfigProxy:
-    """Proxy for configuration access"""
+    """Proxy for configuration access using the current execution context."""
     
-    def get_secret(self, key: str) -> Optional[Dict[str, Any]]:
-        """Get a secret's parameters from the user configuration.
+    def get_secret(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get secret parameters by name."""
+        context = get_execution_context()
+        if not context:
+            raise RuntimeError("No execution context available - function not called from MXCP executor")
+
+        site_config = context.get("site_config")
+        user_config = context.get("user_config")
         
-        Returns the entire parameters dict which can contain:
-        - Simple string values: {"key": "value"}
-        - Nested maps: {"EXTRA_HTTP_HEADERS": {"Header": "Value"}}
-        - Any combination of the above
-        """
-        user_config = _user_config_context.get()
-        if not user_config:
+        if not user_config or not site_config:
             return None
-            
-        # Get current project and profile from site config
-        site_config = _site_config_context.get()
-        if not site_config:
-            return None
-            
+        
+        # Get project and profile from site config
         project = site_config.get("project")
         profile = site_config.get("profile")
         
+        if not project or not profile:
+            return None
+        
         try:
+            # Navigate to the secrets in user config: projects -> project -> profiles -> profile -> secrets
             project_config = user_config["projects"][project]
             profile_config = project_config["profiles"][profile]
             secrets = profile_config.get("secrets", [])
             
-            # Secrets is now an array of secret objects
+            # Find secret by name and return its parameters
             for secret in secrets:
-                if secret.get("name") == key:
-                    # Return the entire parameters dict for any secret type
+                if secret.get("name") == name:
                     return secret.get("parameters", {})
-                    
+            
             return None
         except (KeyError, TypeError):
             return None
     
     def get_setting(self, key: str, default: Any = None) -> Any:
-        """Get a configuration setting from site config"""
-        site_config = _site_config_context.get()
+        """Get configuration setting from site config."""
+        context = get_execution_context()
+        if not context:
+            raise RuntimeError("No execution context available - function not called from MXCP executor")
+        
+        site_config = context.get("site_config")
         if not site_config:
             return default
-        return site_config.get(key, default)
+        
+        # Support nested key access (e.g., "dbt.enabled")
+        if "." in key:
+            keys = key.split(".")
+            value = site_config
+            for k in keys:
+                if isinstance(value, dict) and k in value:
+                    value = value[k]
+                else:
+                    return default
+            return value
+        else:
+            return site_config.get(key, default)
     
     @property
-    def user_config(self) -> Optional['UserConfig']:
-        """Get the full user configuration"""
-        return _user_config_context.get()
+    def user_config(self) -> Optional[Dict[str, Any]]:
+        """Access full user configuration."""
+        context = get_execution_context()
+        if not context:
+            return None
+        
+        return context.get("user_config")
     
     @property
-    def site_config(self) -> Optional['SiteConfig']:
-        """Get the full site configuration"""
-        return _site_config_context.get()
+    def site_config(self) -> Optional[Dict[str, Any]]:
+        """Access full site configuration."""
+        context = get_execution_context()
+        if not context:
+            return None
+        
+        return context.get("site_config")
 
 
 class PluginsProxy:
-    """Proxy for plugin access"""
+    """Proxy for plugin access using the current execution context."""
     
-    def get(self, name: str) -> Optional['MXCPBasePlugin']:
-        """Get a plugin by name"""
-        plugins = _plugins_context.get()
+    def get(self, name: str):
+        """Get plugin by name."""
+        context = get_execution_context()
+        if not context:
+            raise RuntimeError("No execution context available - function not called from MXCP executor")
+        
+        plugins = context.get("plugins")
         if not plugins:
             return None
+        
         return plugins.get(name)
     
     def list(self) -> List[str]:
-        """List available plugin names"""
-        plugins = _plugins_context.get()
-        return list(plugins.keys()) if plugins else []
+        """Get list of available plugin names."""
+        context = get_execution_context()
+        if not context:
+            raise RuntimeError("No execution context available - function not called from MXCP executor")
+        
+        plugins = context.get("plugins")
+        if not plugins:
+            return []
+        
+        return list(plugins.keys())
 
 
 # Create singleton proxies
@@ -127,8 +162,8 @@ config = ConfigProxy()
 plugins = PluginsProxy()
 
 # Lifecycle hooks
-_init_hooks: List[Callable] = []
-_shutdown_hooks: List[Callable] = []
+_registered_init_hooks: List[Callable] = []
+_registered_shutdown_hooks: List[Callable] = []
 
 
 def on_init(func: Callable) -> Callable:
@@ -140,7 +175,7 @@ def on_init(func: Callable) -> Callable:
         def setup():
             print("Initializing my module")
     """
-    _init_hooks.append(func)
+    _registered_init_hooks.append(func)
     return func
 
 
@@ -153,38 +188,13 @@ def on_shutdown(func: Callable) -> Callable:
         def cleanup():
             print("Cleaning up resources")
     """
-    _shutdown_hooks.append(func)
+    _registered_shutdown_hooks.append(func)
     return func
 
 
-# Internal functions for setting context
-def _set_runtime_context(
-    session: 'DuckDBSession',
-    user_config: 'UserConfig', 
-    site_config: 'SiteConfig',
-    plugins: Dict[str, 'MXCPBasePlugin'],
-    db_lock: Optional[threading.Lock] = None
-):
-    """Set the runtime context (called internally by MXCP)"""
-    _session_context.set(session)
-    _user_config_context.set(user_config)
-    _site_config_context.set(site_config)
-    _plugins_context.set(plugins)
-    _lock_context.set(db_lock)
-
-
-def _clear_runtime_context():
-    """Clear the runtime context (called internally by MXCP)"""
-    _session_context.set(None)
-    _user_config_context.set(None)
-    _site_config_context.set(None)
-    _plugins_context.set(None)
-    _lock_context.set(None)
-
-
-def _run_init_hooks():
-    """Run initialization hooks"""
-    for hook in _init_hooks:
+def run_init_hooks():
+    """Run all registered init hooks."""
+    for hook in _registered_init_hooks:
         try:
             logger.info(f"Running init hook: {hook.__name__}")
             hook()
@@ -192,11 +202,58 @@ def _run_init_hooks():
             logger.error(f"Error in init hook {hook.__name__}: {e}")
 
 
-def _run_shutdown_hooks():
-    """Run shutdown hooks"""
-    for hook in _shutdown_hooks:
+def run_shutdown_hooks():
+    """Run all registered shutdown hooks."""
+    for hook in _registered_shutdown_hooks:
         try:
             logger.info(f"Running shutdown hook: {hook.__name__}")
             hook()
         except Exception as e:
-            logger.error(f"Error in shutdown hook {hook.__name__}: {e}") 
+            logger.error(f"Error in shutdown hook {hook.__name__}: {e}")
+
+
+# Backward compatibility functions for tests
+# TODO: Remove this once we fix the test suite
+_current_context_token: Optional[contextvars.Token] = None
+
+
+# TODO: Remove this once we fix the test suite
+def _set_runtime_context(session, user_config: Dict[str, Any], site_config: Dict[str, Any], plugins: Dict[str, Any], db_lock=None) -> None:
+    """
+    Backward compatibility function for tests.
+    Sets up execution context with the provided parameters.
+    """
+    global _current_context_token
+    
+    # Create execution context
+    context = ExecutionContext()
+    context.set("duckdb_session", session)
+    context.set("user_config", user_config)
+    context.set("site_config", site_config)
+    context.set("plugins", plugins)
+    if db_lock is not None:
+        context.set("db_lock", db_lock)
+    
+    # Set it as current context
+    _current_context_token = set_execution_context(context)
+
+
+# TODO: Remove this once we fix the test suite
+def _clear_runtime_context() -> None:
+    """
+    Backward compatibility function for tests.
+    Clears the current execution context.
+    """
+    global _current_context_token
+    
+    if _current_context_token:
+        reset_execution_context(_current_context_token)
+        _current_context_token = None
+
+
+# Expose hook lists and functions for backward compatibility
+# TODO: Remove this once we fix the test suite
+_init_hooks = _registered_init_hooks
+_shutdown_hooks = _registered_shutdown_hooks
+_run_init_hooks = run_init_hooks
+_run_shutdown_hooks = run_shutdown_hooks

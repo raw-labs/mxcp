@@ -219,7 +219,16 @@ class ServerProcess:
                 self.process.kill()
                 self.process.wait()
         
-        os.chdir(self.original_dir)
+        # Safely restore original directory
+        try:
+            os.chdir(self.original_dir)
+        except (FileNotFoundError, OSError):
+            # Original directory may no longer exist, go to a safe location
+            try:
+                os.chdir(Path(__file__).parent)
+            except (FileNotFoundError, OSError):
+                # Last resort - go to home directory
+                os.chdir(os.path.expanduser("~"))
     
     def __enter__(self):
         return self
@@ -455,11 +464,8 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_reload_always_refreshes_duckdb(self, integration_fixture_dir):
         """Test that SIGHUP always reloads DuckDB session even without config changes."""
-        # Start server
-        process = ServerProcess(integration_fixture_dir)
-        process.start()
-        
-        try:
+        # Use context manager to ensure proper cleanup
+        with ServerProcess(integration_fixture_dir) as process:
             # Call tool to verify initial state
             async with MCPTestClient(process.port) as client:
                 result = await client.call_tool("echo_message", {"message": "test1"})
@@ -485,9 +491,6 @@ class TestIntegration:
                 assert result2["reversed"] == "daoler retfa tset"
                 # The result should still work correctly after reload
                 assert result2["length"] == len("test after reload")
-                
-        finally:
-            process.stop()
     
     @pytest.mark.asyncio
     async def test_non_duckdb_secret_types(self, integration_fixture_dir):

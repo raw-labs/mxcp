@@ -5,7 +5,6 @@ from mxcp.engine.secret_injection import inject_secrets
 from mxcp.engine.extension_loader import load_extensions
 from mxcp.engine.plugin_loader import load_plugins
 from mxcp.plugins import MXCPBasePlugin
-from mxcp.sdk.auth.context import get_user_context
 import logging
 from pathlib import Path
 from pandas import NaT
@@ -136,6 +135,7 @@ class DuckDBSession:
         inject_secrets(self.conn, self.site_config, self.user_config, profile_name)
         
         # Load plugins
+        from mxcp.sdk.auth.context import get_user_context
         user_context = get_user_context()
         self.plugins = load_plugins(self.site_config, self.user_config, project, profile_name, self.conn, user_context)
         
@@ -153,6 +153,7 @@ class DuckDBSession:
         def get_user_external_token() -> str:
             """Return the current user's OAuth provider token (e.g., GitHub token)."""
             # Get the user context dynamically when the function is called
+            from mxcp.sdk.auth.context import get_user_context
             user_context = get_user_context()
             if user_context and user_context.external_token:
                 return user_context.external_token
@@ -161,6 +162,7 @@ class DuckDBSession:
         def get_username() -> str:
             """Return the current user's username."""
             # Get the user context dynamically when the function is called
+            from mxcp.sdk.auth.context import get_user_context
             user_context = get_user_context()
             if user_context:
                 return user_context.username
@@ -169,6 +171,7 @@ class DuckDBSession:
         def get_user_provider() -> str:
             """Return the current user's OAuth provider (e.g., 'github', 'atlassian')."""
             # Get the user context dynamically when the function is called
+            from mxcp.sdk.auth.context import get_user_context
             user_context = get_user_context()
             if user_context:
                 return user_context.provider
@@ -177,6 +180,7 @@ class DuckDBSession:
         def get_user_email() -> str:
             """Return the current user's email address."""
             # Get the user context dynamically when the function is called
+            from mxcp.sdk.auth.context import get_user_context
             user_context = get_user_context()
             if user_context and user_context.email:
                 return user_context.email
