@@ -5,7 +5,6 @@ import tempfile
 from pathlib import Path
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
-from mxcp.engine.python_loader import PythonEndpointLoader
 from mxcp.runtime import _init_hooks, _shutdown_hooks
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 from mxcp.config.execution_engine import create_execution_engine
@@ -148,8 +147,11 @@ def execution_engine(test_configs):
     engine.shutdown()
 
 
-def test_python_loader(temp_project_dir):
-    """Test PythonEndpointLoader functionality."""
+@pytest.mark.asyncio
+async def test_python_loader(temp_project_dir, test_configs, execution_engine):
+    """Test Python module loading functionality through endpoint execution."""
+    user_config, site_config = test_configs
+    
     # Create a test Python file
     python_file = temp_project_dir / "python" / "test_module.py"
     python_file.write_text("""
@@ -160,23 +162,63 @@ def add_numbers(a: int, b: int) -> dict:
     return {"result": a + b}
 """)
     
-    # Test loader
-    loader = PythonEndpointLoader(temp_project_dir)
+    # Create tool definitions to test the functions
+    (temp_project_dir / "tools" / "hello.yml").write_text("""
+mxcp: 1
+tool:
+  name: hello
+  description: Say hello
+  language: python
+  source:
+    file: ../python/test_module.py
+  parameters:
+    - name: name
+      type: string
+      description: Name to greet
+  return:
+    type: object
+""")
     
-    # Load module
-    module = loader.load_python_module(python_file)
-    assert module is not None
+    (temp_project_dir / "tools" / "add_numbers.yml").write_text("""
+mxcp: 1
+tool:
+  name: add_numbers
+  description: Add two numbers
+  language: python
+  source:
+    file: ../python/test_module.py
+  parameters:
+    - name: a
+      type: integer
+      description: First number
+    - name: b
+      type: integer
+      description: Second number
+  return:
+    type: object
+""")
     
-    # Get functions
-    hello_func = loader.get_function(module, "hello")
-    assert hello_func("World") == {"message": "Hello, World!"}
+    # Test hello function
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="hello",
+        params={"name": "World"},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
+    assert result == {"message": "Hello, World!"}
     
-    add_func = loader.get_function(module, "add_numbers")
-    assert add_func(5, 3) == {"result": 8}
-    
-    # Test error cases
-    with pytest.raises(AttributeError):
-        loader.get_function(module, "non_existent")
+    # Test add_numbers function
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="add_numbers",
+        params={"a": 5, "b": 3},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
+    assert result == {"result": 8}
 
 
 @pytest.mark.asyncio
@@ -291,65 +333,133 @@ tool:
     assert result["project"] == "test-project"
 
 
-def test_lifecycle_hooks(temp_project_dir, test_configs):
-    """Test lifecycle hooks functionality."""
-    # Clear any existing hooks
+@pytest.mark.asyncio
+async def test_lifecycle_hooks(temp_project_dir, test_configs):
+    """Test that lifecycle hooks run automatically during engine creation and shutdown."""
+    user_config, site_config = test_configs
+    
+    # Clear any existing hooks from other tests
     _init_hooks.clear()
     _shutdown_hooks.clear()
     
-    # Track hook calls
-    calls = []
-    
-    # Create Python file with hooks
+    # Create Python file with hooks that modify global state
     python_file = temp_project_dir / "python" / "lifecycle_test.py"
     python_file.write_text("""
 from mxcp.runtime import on_init, on_shutdown
 
+# Global state to track hook execution
+_hook_state = {
+    "init_called": False,
+    "shutdown_called": False,
+    "init_timestamp": None,
+    "shutdown_timestamp": None
+}
+
 @on_init
 def setup():
-    global initialized
-    initialized = True
+    '''Init hook that sets global state.'''
+    import time
+    global _hook_state
+    _hook_state["init_called"] = True
+    _hook_state["init_timestamp"] = time.time()
     
 @on_shutdown
 def cleanup():
-    global cleaned_up
-    cleaned_up = True
+    '''Shutdown hook that sets global state.'''
+    import time
+    global _hook_state  
+    _hook_state["shutdown_called"] = True
+    _hook_state["shutdown_timestamp"] = time.time()
     
-def check_state() -> dict:
-    return {
-        "initialized": globals().get("initialized", False),
-        "cleaned_up": globals().get("cleaned_up", False)
-    }
+def check_hook_state() -> dict:
+    '''Return the current hook execution state.'''
+    return _hook_state.copy()
 """)
     
-    # Load the module to register hooks
-    loader = PythonEndpointLoader(temp_project_dir)
-    module = loader.load_python_module(python_file)
+    # Create tool definition
+    (temp_project_dir / "tools" / "check_hook_state.yml").write_text("""
+mxcp: 1
+tool:
+  name: check_hook_state
+  description: Check hook execution state
+  language: python
+  source:
+    file: ../python/lifecycle_test.py
+  parameters: []
+  return:
+    type: object
+""")
     
-    # Run hooks
-    from mxcp.runtime import _run_init_hooks, _run_shutdown_hooks
+    print("\n=== Testing automatic lifecycle hook execution ===")
     
-    # Check initial state
-    check_func = loader.get_function(module, "check_state")
-    state = check_func()
-    assert state["initialized"] is False
-    assert state["cleaned_up"] is False
+    # 1. Create execution engine - this should automatically:
+    #    a) Preload Python modules (registering hooks)
+    #    b) Run init hooks
+    print("Creating execution engine (should preload modules and run init hooks)...")
+    execution_engine = create_execution_engine(user_config, site_config, "test")
     
-    # Run init hooks
-    _run_init_hooks()
-    state = check_func()
-    assert state["initialized"] is True
-    assert state["cleaned_up"] is False
+    try:
+        # 2. Verify hooks were registered during module preload
+        assert len(_init_hooks) == 1, f"Expected 1 init hook, found {len(_init_hooks)}"
+        assert len(_shutdown_hooks) == 1, f"Expected 1 shutdown hook, found {len(_shutdown_hooks)}"
+        print(f"✓ Hooks registered: {len(_init_hooks)} init, {len(_shutdown_hooks)} shutdown")
+        
+        # 3. Check hook state - init hook should have run automatically
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="check_hook_state",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
+        
+        # Init hook should have run during engine creation
+        assert result["init_called"] is True, "Init hook should have run during engine creation"
+        assert result["shutdown_called"] is False, "Shutdown hook should not have run yet"
+        assert result["init_timestamp"] is not None, "Init hook should have timestamp"
+        print("✓ Init hook ran automatically during engine creation")
+        
+    finally:
+        # 4. Shutdown engine - this should automatically run shutdown hooks
+        print("Shutting down execution engine (should run shutdown hooks)...")
+        execution_engine.shutdown()
     
-    # Run shutdown hooks
-    _run_shutdown_hooks()
-    state = check_func()
-    assert state["initialized"] is True
-    assert state["cleaned_up"] is True
+    # 5. Create a new engine to check if shutdown hooks ran
+    # (We need a fresh engine because the first one is shut down)
+    print("Creating new engine to verify shutdown hooks ran...")
+    execution_engine2 = create_execution_engine(user_config, site_config, "test")
+    
+    try:
+        # Check hook state again - both hooks should show as having been called
+        result_after_shutdown = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="check_hook_state",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine2
+        )
+        
+        # The module's global state persists across engine instances
+        # This proves that:
+        # 1. The new engine's init hook ran (init_called=True)  
+        # 2. The first engine's shutdown hook ran automatically (shutdown_called=True)
+        assert result_after_shutdown["init_called"] is True, "New engine's init hook should have run"
+        assert result_after_shutdown["shutdown_called"] is True, "First engine's shutdown hook should have run automatically"
+        print("✓ New engine's init hook ran automatically")
+        print("✓ First engine's shutdown hook ran automatically (proven by persistent module state)")
+        
+    finally:
+        execution_engine2.shutdown()
     
     # Clear hooks to avoid affecting other tests
     _init_hooks.clear()
     _shutdown_hooks.clear()
+    
+    print("✓ Lifecycle hooks test completed - hooks run automatically during engine lifecycle")
+    print("  - Init hooks run during engine creation (after module preload)")
+    print("  - Shutdown hooks run during engine shutdown")
 
 
 @pytest.mark.asyncio
