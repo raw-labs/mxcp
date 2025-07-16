@@ -8,7 +8,8 @@ import asyncio
 from datetime import datetime, date, time
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
-from mxcp.engine.duckdb_session import DuckDBSession
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+from mxcp.config.execution_engine import create_execution_engine
 from mxcp.endpoints.executor import EndpointExecutor, EndpointType
 from mxcp.runtime import _set_runtime_context, _clear_runtime_context
 
@@ -95,18 +96,17 @@ def test_configs(temp_project_dir):
 
 
 @pytest.fixture
-def test_session(test_configs):
-    """Create a test DuckDB session."""
+def execution_engine(test_configs):
+    """Create execution engine for tests."""
     user_config, site_config = test_configs
-    session = DuckDBSession(user_config, site_config, profile="test")
-    yield session
-    session.close()
+    return create_execution_engine(user_config, site_config)
 
 
 class TestScalarReturnTypes:
     """Test scalar return types (string, number, integer, boolean, datetime)."""
     
-    def test_string_return(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_string_return(self, temp_project_dir, test_configs, execution_engine):
         """Test returning a simple string."""
         user_config, site_config = test_configs
         
@@ -135,29 +135,19 @@ tool:
     type: string
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_greeting",
+            params={"name": "World"},
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_greeting",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({"name": "World"})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == "Hello, World!"
-            assert isinstance(result, str)
-            
-        finally:
-            _clear_runtime_context()
+        assert result == "Hello, World!"
+        assert isinstance(result, str)
     
-    def test_number_return(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_number_return(self, temp_project_dir, test_configs, execution_engine):
         """Test returning a number (float)."""
         user_config, site_config = test_configs
         
@@ -183,29 +173,19 @@ tool:
     type: number
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="calculate_pi",
+            params={},
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "calculate_pi",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == 3.14159
-            assert isinstance(result, float)
-            
-        finally:
-            _clear_runtime_context()
+        assert result == 3.14159
+        assert isinstance(result, float)
     
-    def test_integer_return(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_integer_return(self, temp_project_dir, test_configs, execution_engine):
         """Test returning an integer."""
         user_config, site_config = test_configs
         
@@ -231,29 +211,19 @@ tool:
     type: integer
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="count_items",
+            params={},
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "count_items",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == 42
-            assert isinstance(result, int)
-            
-        finally:
-            _clear_runtime_context()
+        assert result == 42
+        assert isinstance(result, int)
     
-    def test_boolean_return(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_boolean_return(self, temp_project_dir, test_configs, execution_engine):
         """Test returning a boolean."""
         user_config, site_config = test_configs
         
@@ -279,29 +249,19 @@ tool:
     type: boolean
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="is_valid",
+            params={},
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "is_valid",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result is True
-            assert isinstance(result, bool)
-            
-        finally:
-            _clear_runtime_context()
+        assert result is True
+        assert isinstance(result, bool)
     
-    def test_datetime_return(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_datetime_return(self, temp_project_dir, test_configs, execution_engine):
         """Test returning datetime values."""
         user_config, site_config = test_configs
         
@@ -336,34 +296,24 @@ tool:
     format: date-time
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_current_datetime",
+            params={},
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_current_datetime",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            # Should be serialized to ISO format
-            assert result == "2024-01-15T14:30:45"
-            assert isinstance(result, str)
-            
-        finally:
-            _clear_runtime_context()
+        # Should be serialized to ISO format
+        assert result == "2024-01-15T14:30:45"
+        assert isinstance(result, str)
 
 
 class TestArrayReturnTypes:
     """Test array return types - currently only supports list of dicts."""
     
-    def test_array_of_dicts_works(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_array_of_dicts_works(self, temp_project_dir, test_configs, execution_engine):
         """Test that returning list of dicts works (current behavior)."""
         user_config, site_config = test_configs
         
@@ -399,29 +349,18 @@ tool:
           type: string
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_users",
+            params={},
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_users",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == [
-                {"id": 1, "name": "Alice"},
-                {"id": 2, "name": "Bob"}
-            ]
-            
-        finally:
-            _clear_runtime_context()
+        assert result == [
+            {"id": 1, "name": "Alice"},
+            {"id": 2, "name": "Bob"}
+        ]
     
     def test_array_of_numbers(self, temp_project_dir, test_configs, test_session):
         """Test returning list of numbers."""
