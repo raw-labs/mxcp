@@ -11,6 +11,8 @@ from mxcp.endpoints.executor import EndpointExecutor, EndpointType
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.engine.python_loader import PythonEndpointLoader
 from mxcp.runtime import _set_runtime_context, _clear_runtime_context, db, config, _init_hooks, _shutdown_hooks
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+from mxcp.config.execution_engine import create_execution_engine
 import asyncio
 import yaml
 
@@ -135,6 +137,13 @@ def test_session(test_configs):
     session.close()
 
 
+@pytest.fixture
+def execution_engine(test_configs):
+    """Create execution engine for tests."""
+    user_config, site_config = test_configs
+    return create_execution_engine(user_config, site_config)
+
+
 def test_python_loader(temp_project_dir):
     """Test PythonEndpointLoader functionality."""
     # Create a test Python file
@@ -166,7 +175,8 @@ def add_numbers(a: int, b: int) -> dict:
         loader.get_function(module, "non_existent")
 
 
-def test_python_endpoint_with_db(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_python_endpoint_with_db(temp_project_dir, test_configs, test_session, execution_engine):
     """Test Python endpoint with database access."""
     user_config, site_config = test_configs
     
@@ -204,36 +214,22 @@ tool:
     type: array
 """)
     
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="get_data",
+        params={"min_value": 200},
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
     
-    try:
-        # Execute endpoint
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "get_data",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        # Run async execution
-        async def run_test():
-            result = await executor.execute({"min_value": 200})
-            return result
-        
-        result = asyncio.run(run_test())
-        
-        # Check results
-        assert len(result) == 2
-        assert result[0]["name"] == "Bob"
-        assert result[1]["name"] == "Charlie"
-        
-    finally:
-        _clear_runtime_context()
+    # Check results
+    assert len(result) == 2
+    assert result[0]["name"] == "Bob"
+    assert result[1]["name"] == "Charlie"
 
 
-def test_python_endpoint_with_secrets(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_python_endpoint_with_secrets(temp_project_dir, test_configs, test_session, execution_engine):
     """Test Python endpoint accessing secrets."""
     user_config, site_config = test_configs
     
@@ -274,34 +270,19 @@ tool:
     type: object
 """)
     
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="get_secret_info",
+        params={},
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
     
-    try:
-        # Execute endpoint
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "get_secret_info",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        # Run async execution
-        async def run_test():
-            result = await executor.execute({})
-            return result
-        
-        result = asyncio.run(run_test())
-        
-        # Check results
-        assert result["has_api_key"] is True
-        assert result["api_key_starts_with"] == "test-"
-        assert result["missing_key"] is None
-        assert result["project"] == "test-project"
-        
-    finally:
-        _clear_runtime_context()
+    # Check results
+    assert result["has_api_key"] is True
+    assert result["api_key_starts_with"] == "test-"
+    assert result["missing_key"] is None
+    assert result["project"] == "test-project"
 
 
 def test_lifecycle_hooks(temp_project_dir, test_configs, test_session):
@@ -365,7 +346,8 @@ def check_state() -> dict:
     _shutdown_hooks.clear()
 
 
-def test_async_python_endpoint(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_async_python_endpoint(temp_project_dir, test_configs, test_session, execution_engine):
     """Test async Python endpoint."""
     user_config, site_config = test_configs
     
@@ -406,32 +388,17 @@ tool:
     type: object
 """)
     
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="slow_query",
+        params={"delay": 0.1},
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
     
-    try:
-        # Execute endpoint
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "slow_query",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        # Run async execution
-        async def run_test():
-            result = await executor.execute({"delay": 0.1})
-            return result
-        
-        result = asyncio.run(run_test())
-        
-        # Check results
-        assert result["delayed"] == 0.1
-        assert result["count"] == 3
-        
-    finally:
-        _clear_runtime_context()
+    # Check results
+    assert result["delayed"] == 0.1
+    assert result["count"] == 3
 
 
 def test_async_context_propagation(temp_project_dir, test_configs, test_session):
@@ -683,7 +650,8 @@ tool:
 
 
 
-def test_python_endpoint_error_handling(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_python_endpoint_error_handling(temp_project_dir, test_configs, test_session, execution_engine):
     """Test error handling in Python endpoints."""
     user_config, site_config = test_configs
     
@@ -718,28 +686,24 @@ tool:
 """)
     
     # Execute endpoint with valid inputs
-    executor = EndpointExecutor(
-        EndpointType.TOOL,
-        "divide_numbers",
-        user_config,
-        site_config,
-        test_session
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="divide_numbers",
+        params={"a": 10, "b": 2},
+        site_config=site_config,
+        execution_engine=execution_engine
     )
-    
-    async def run_valid():
-        result = await executor.execute({"a": 10, "b": 2})
-        return result
-    
-    result = asyncio.run(run_valid())
     assert result["result"] == 5.0
     
     # Execute with error
-    async def run_error():
-        result = await executor.execute({"a": 10, "b": 0})
-        return result
-    
     with pytest.raises(ValueError, match="Cannot divide by zero"):
-        asyncio.run(run_error())
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="divide_numbers",
+            params={"a": 10, "b": 0},
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
 
 
 def test_python_endpoint_all_types(temp_project_dir, test_configs, test_session):
