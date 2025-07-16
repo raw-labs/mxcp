@@ -10,8 +10,6 @@ from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 from mxcp.config.execution_engine import create_execution_engine
-from mxcp.endpoints.executor import EndpointExecutor, EndpointType
-from mxcp.runtime import _set_runtime_context, _clear_runtime_context
 
 
 @pytest.fixture

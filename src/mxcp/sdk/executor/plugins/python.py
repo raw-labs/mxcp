@@ -96,7 +96,8 @@ class PythonExecutor(ExecutorPlugin):
     def __init__(self, repo_root: Optional[Path] = None):
         """Initialize Python executor.
         
-        Creates Python loader and discovers hooks immediately.
+        Creates Python loader, preloads all modules to register hooks,
+        and runs init hooks to complete initialization.
         
         Args:
             repo_root: Repository root directory. If None, will use current working directory.
@@ -111,7 +112,23 @@ class PythonExecutor(ExecutorPlugin):
         from .python_plugin.loader import PythonEndpointLoader
         self._loader = PythonEndpointLoader(self.repo_root)
         
-        # Note: Init hooks will be discovered and run when modules are loaded
+        # Preload all Python modules to register hooks, then run init hooks
+        # This ensures complete Python runtime initialization
+        try:
+            # First, preload all Python modules which registers the hooks
+            logger.info("Preloading Python modules to register hooks...")
+            self._loader.preload_all_modules()
+            
+            # Then run init hooks on the now-registered hooks
+            from mxcp.runtime import run_init_hooks
+            logger.info("Running init hooks after module preload...")
+            run_init_hooks()
+            logger.info("Init hooks completed successfully")
+        except ImportError:
+            logger.debug("Runtime module not available for init hooks")
+        except Exception as e:
+            logger.warning(f"Init hooks failed during Python executor initialization: {e}")
+            # Don't fail executor creation if hooks fail
         
         logger.info("Python executor initialized")
 
