@@ -132,7 +132,7 @@ async def execute_endpoint_with_engine(
             policy_enforcer = PolicyEnforcer(policy_set)
     
     # Enforce input policies if policy enforcer exists
-    if policy_enforcer and user_context:
+    if policy_enforcer:
         try:
             policy_enforcer.enforce_input_policies(user_context, params)
         except PolicyEnforcementError as e:
@@ -150,7 +150,7 @@ async def execute_endpoint_with_engine(
         )
     
     # Enforce output policies (symmetry with input policy enforcement above)
-    if policy_enforcer and user_context:
+    if policy_enforcer:
         try:
             result, action = policy_enforcer.enforce_output_policies(user_context, result, endpoint_dict)
         except PolicyEnforcementError as e:
