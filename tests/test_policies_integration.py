@@ -3,7 +3,6 @@ import pytest
 import asyncio
 import os
 from pathlib import Path
-from mxcp.endpoints.executor import EndpointExecutor, EndpointType
 from mxcp.endpoints.sdk_executor import execute_endpoint
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
@@ -157,19 +156,19 @@ class TestPolicyIntegration:
         )
         
         # Verify basic fields are present
-        assert result[0]["id"] == "emp123"
-        assert result[0]["name"] == "John Doe"
-        assert result[0]["email"] == "john.doe@company.com"
-        assert result[0]["department"] == "Engineering"
+        assert result["id"] == "emp123"
+        assert result["name"] == "John Doe"
+        assert result["email"] == "john.doe@company.com"
+        assert result["department"] == "Engineering"
         
         # Verify salary is filtered out (not admin/hr)
-        assert "salary" not in result[0]
+        assert "salary" not in result
         
         # Verify SSN is masked (not hr)
-        assert result[0]["ssn"] == "****"
+        assert result["ssn"] == "****"
         
         # Verify phone is filtered out (no pii.view permission)
-        assert "phone" not in result[0]
+        assert "phone" not in result
     
     @pytest.mark.asyncio
     async def test_hr_user_access(self, user_config, site_config):
@@ -193,19 +192,19 @@ class TestPolicyIntegration:
         )
         
         # Verify all fields are present
-        assert result[0]["id"] == "emp123"
-        assert result[0]["name"] == "John Doe"
-        assert result[0]["email"] == "john.doe@company.com"
-        assert result[0]["department"] == "Engineering"
+        assert result["id"] == "emp123"
+        assert result["name"] == "John Doe"
+        assert result["email"] == "john.doe@company.com"
+        assert result["department"] == "Engineering"
         
         # HR can see salary
-        assert result[0]["salary"] == 85000
+        assert result["salary"] == 85000
         
         # HR can see real SSN (not masked)
-        assert result[0]["ssn"] == "123-45-6789"
+        assert result["ssn"] == "123-45-6789"
         
         # HR with pii.view can see phone
-        assert result[0]["phone"] == "555-1234"
+        assert result["phone"] == "555-1234"
         
         # Test HR viewing another employee
         result2 = await execute_endpoint(
@@ -218,9 +217,9 @@ class TestPolicyIntegration:
             user_context=user_context
         )
         
-        assert result2[0]["id"] == "emp456"
-        assert result2[0]["name"] == "Jane Smith"
-        assert result2[0]["ssn"] == "987-65-4321"  # Real SSN
+        assert result2["id"] == "emp456"
+        assert result2["name"] == "Jane Smith"
+        assert result2["ssn"] == "987-65-4321"  # Real SSN
     
     @pytest.mark.asyncio
     async def test_admin_user_access(self, user_config, site_config):
@@ -244,13 +243,13 @@ class TestPolicyIntegration:
         )
         
         # Admin can see salary
-        assert result[0]["salary"] == 85000
+        assert result["salary"] == 85000
         
         # Admin can see phone (has pii.view)
-        assert result[0]["phone"] == "555-1234"
+        assert result["phone"] == "555-1234"
         
         # But SSN is still masked (only HR can see unmasked SSN)
-        assert result[0]["ssn"] == "****"
+        assert result["ssn"] == "****"
     
     @pytest.mark.asyncio
     async def test_user_without_pii_permission(self, user_config, site_config):
@@ -273,10 +272,10 @@ class TestPolicyIntegration:
         )
         
         # HR without pii.view cannot see phone
-        assert "phone" not in result[0]
+        assert "phone" not in result
         
         # But can still see unmasked SSN (HR role)
-        assert result[0]["ssn"] == "123-45-6789"
+        assert result["ssn"] == "123-45-6789"
     
     @pytest.mark.asyncio
     async def test_anonymous_user_denied(self, user_config, site_config):
@@ -323,13 +322,13 @@ class TestPolicyEnforcementEdgeCases:
         
         # Verify multiple policies were applied:
         # 1. salary filtered (not admin/hr)
-        assert "salary" not in result[0]
+        assert "salary" not in result
         
         # 2. SSN masked (not hr)
-        assert result[0]["ssn"] == "****"
+        assert result["ssn"] == "****"
         
         # 3. phone filtered (no pii.view)
-        assert "phone" not in result[0]
+        assert "phone" not in result
     
     @pytest.mark.asyncio
     async def test_policy_with_complex_conditions(self, user_config, site_config):
@@ -354,7 +353,7 @@ class TestPolicyEnforcementEdgeCases:
             user_context=admin_context
         )
         
-        assert result[0]["id"] == "emp456"  # Admin can view it
+        assert result["id"] == "emp456"  # Admin can view it
         
         # HR can also view any employee
         hr_context = UserContext(
@@ -374,7 +373,7 @@ class TestPolicyEnforcementEdgeCases:
             user_context=hr_context
         )
         
-        assert result[0]["id"] == "emp123"  # HR can view it 
+        assert result["id"] == "emp123"  # HR can view it 
 
     @pytest.mark.asyncio
     async def test_policy_with_nonexistent_fields(self, user_config, site_config):
@@ -404,23 +403,23 @@ class TestPolicyEnforcementEdgeCases:
         # The employee_info endpoint should return:
         # id, name, email, department, hire_date, salary (filtered), ssn (masked), phone (filtered)
         expected_fields = {"id", "name", "email", "department", "ssn", "hire_date"}
-        assert set(result[0].keys()) == expected_fields
+        assert set(result.keys()) == expected_fields
         
         # Verify that existing fields were properly processed:
         # - salary was filtered out (user is not admin/hr)
-        assert "salary" not in result[0]
+        assert "salary" not in result
         
         # - ssn was masked (user is not hr)
-        assert result[0]["ssn"] == "****"
+        assert result["ssn"] == "****"
         
         # - phone was filtered out (user doesn't have pii.view permission)
-        assert "phone" not in result[0]
+        assert "phone" not in result
         
         # - Regular fields remain untouched
-        assert result[0]["id"] == "emp123"
-        assert result[0]["name"] == "John Doe"
-        assert result[0]["email"] == "john.doe@company.com"
-        assert result[0]["department"] == "Engineering"
+        assert result["id"] == "emp123"
+        assert result["name"] == "John Doe"
+        assert result["email"] == "john.doe@company.com"
+        assert result["department"] == "Engineering"
         
         # The key test: policies reference non-existent fields like 
         # "internal_notes", "performance_rating", "manager_comments" etc.
@@ -451,12 +450,12 @@ class TestPolicyEnforcementEdgeCases:
         
         # Should only have the 3 fields that actually exist in the response
         expected_fields = {"id", "name", "email"}
-        assert set(result[0].keys()) == expected_fields
+        assert set(result.keys()) == expected_fields
         
         # Verify the actual data is correct
-        assert result[0]["id"] == "user123"
-        assert result[0]["name"] == "Test User"
-        assert result[0]["email"] == "test@example.com"
+        assert result["id"] == "user123"
+        assert result["name"] == "Test User"
+        assert result["email"] == "test@example.com"
         
         # All non-existent fields referenced in policies should be silently ignored
         non_existent_fields = [
@@ -575,8 +574,8 @@ class TestPolicyEnforcementEdgeCases:
         )
         
         # Verify the endpoint executed successfully
-        assert result[0]["id"] == "test_value"
-        assert result[0]["name"] == "Test User for test_value"
+        assert result["id"] == "test_value"
+        assert result["name"] == "Test User for test_value"
         
         # Test 2: Admin user should be denied (policy condition is true)
         admin_context = UserContext(
