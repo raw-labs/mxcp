@@ -2,10 +2,10 @@ import pytest
 import asyncio
 from pathlib import Path
 import os
-from mxcp.endpoints.executor import EndpointExecutor, EndpointType
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
-from mxcp.engine.duckdb_session import DuckDBSession
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
@@ -43,49 +43,51 @@ def test_profile():
     return "test_profile"
 
 @pytest.fixture
-def test_session(user_config, site_config, test_profile):
-    """Create a test DuckDB session."""
-    session = DuckDBSession(user_config, site_config, test_profile, readonly=True)
-    yield session
-    session.close()
-
-@pytest.fixture
-def executor(test_repo_path, user_config, site_config, test_profile, test_session):
-    """Create an executor for secret injection tests."""
-    # Change to test repo directory
-    original_dir = os.getcwd()
-    os.chdir(test_repo_path)
-    try:
-        executor = EndpointExecutor(EndpointType.TOOL, "secret_test", user_config, site_config, test_session, test_profile)
-        yield executor
-    finally:
-        os.chdir(original_dir)
-
-@pytest.fixture
-def http_headers_executor(test_repo_path, user_config, site_config, test_profile, test_session):
-    """Create an executor for HTTP headers injection tests."""
-    # Change to test repo directory
-    original_dir = os.getcwd()
-    os.chdir(test_repo_path)
-    try:
-        executor = EndpointExecutor(EndpointType.TOOL, "http_headers_test", user_config, site_config, test_session, test_profile)
-        yield executor
-    finally:
-        os.chdir(original_dir)
+def execution_engine(user_config, site_config, test_profile):
+    """Create execution engine for secret injection tests."""
+    engine = create_execution_engine(user_config, site_config, test_profile, readonly=True)
+    yield engine
+    engine.shutdown()
 
 @pytest.mark.asyncio
-async def test_secret_injection(executor):
+async def test_secret_injection(execution_engine, site_config, test_repo_path):
     """Test that secrets are properly injected into DuckDB session"""
-    executor._load_endpoint()
-    result = await executor.execute({})
-    assert isinstance(result, dict)
-    assert "bearer_token=bearer_token" in result["secret_value"]
+    # Change to test repo directory for relative path resolution
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="secret_test",
+            params={},
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
+        
+        # With return type transformation, this should be a single dict
+        assert isinstance(result, dict)
+        assert "bearer_token=bearer_token" in result["secret_value"]
+    finally:
+        os.chdir(original_dir)
 
 @pytest.mark.asyncio
-async def test_http_headers_injection(http_headers_executor):
+async def test_http_headers_injection(execution_engine, site_config, test_repo_path):
     """Test that HTTP headers are properly injected as MAP type"""
-    http_headers_executor._load_endpoint()
-    result = await http_headers_executor.execute({})
-    assert isinstance(result, dict)
-    assert "Authorization=Bearer test_token" in result["secret_value"]
-    assert "X-Custom-Header=custom_value" in result["secret_value"]
+    # Change to test repo directory for relative path resolution
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="http_headers_test",
+            params={},
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
+        
+        # With return type transformation, this should be a single dict
+        assert isinstance(result, dict)
+        assert "Authorization=Bearer test_token" in result["secret_value"]
+        assert "X-Custom-Header=custom_value" in result["secret_value"]
+    finally:
+        os.chdir(original_dir)
