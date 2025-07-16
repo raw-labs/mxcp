@@ -296,7 +296,7 @@ tool:
     assert result["project"] == "test-project"
 
 
-def test_lifecycle_hooks(temp_project_dir, test_configs, test_session):
+def test_lifecycle_hooks(temp_project_dir, test_configs):
     """Test lifecycle hooks functionality."""
     # Clear any existing hooks
     _init_hooks.clear()
@@ -413,7 +413,8 @@ tool:
     assert result["count"] == 3
 
 
-def test_async_context_propagation(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_async_context_propagation(temp_project_dir, test_configs, execution_engine):
     """Test that context variables propagate correctly in async Python endpoints after fix."""
     user_config, site_config = test_configs
     
@@ -491,42 +492,29 @@ tool:
     type: object
 """)
     
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="test_context_access",
+        params={},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
     
-    try:
-        # Execute endpoint
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "test_context_access",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        # Run async execution
-        async def run_test():
-            result = await executor.execute({})
-            return result
-        
-        result = asyncio.run(run_test())
-        
-        # Verify context was properly available
-        assert result["db_access_works"] is True, "Database access should work in async function"
-        assert result["row_count"] == 3, "Should be able to query database"
-        assert result["config_access_works"] is True, "Config access should work in async function"
-        assert result["project"] == "test-project", "Should be able to read project name"
-        assert result["secret_value"] == "test-api-key-123", "Should be able to read secret"
-        
-        # Verify nested async also had context
-        assert result["nested_result"]["nested_works"] is True, "Nested async should have context"
-        assert result["nested_result"]["name"] == "Alice", "Nested async should be able to query DB"
-        
-    finally:
-        _clear_runtime_context()
+    # Verify context was properly available
+    assert result["db_access_works"] is True, "Database access should work in async function"
+    assert result["row_count"] == 3, "Should be able to query database"
+    assert result["config_access_works"] is True, "Config access should work in async function"
+    assert result["project"] == "test-project", "Should be able to read project name"
+    assert result["secret_value"] == "test-api-key-123", "Should be able to read secret"
+    
+    # Verify nested async calls work
+    assert result["nested_result"]["nested_works"] is True, "Nested async calls should work"
+    assert result["nested_result"]["name"] == "Alice", "Should get correct data from nested call"
 
 
-def test_python_endpoint_with_non_duckdb_secret_type(temp_project_dir):
+@pytest.mark.asyncio
+async def test_python_endpoint_with_non_duckdb_secret_type(temp_project_dir, test_configs, execution_engine):
     """Test Python endpoint accessing secrets with non-DuckDB types (e.g., 'custom', 'python')."""
     # Create custom user config with non-DuckDB secret type
     user_config_data = {
@@ -720,7 +708,8 @@ tool:
         )
 
 
-def test_python_endpoint_all_types(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_python_endpoint_all_types(temp_project_dir, test_configs, execution_engine):
     """Test Python endpoints with all supported parameter and return types."""
     user_config, site_config = test_configs
     
@@ -979,16 +968,10 @@ tool:
     
     try:
         # Test 1: All parameter types
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "test_all_param_types",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        async def test_all_params():
-            result = await executor.execute({
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_all_param_types",
+            params={
                 "str_param": "hello",
                 "int_param": 42,
                 "float_param": 3.14,
@@ -999,10 +982,11 @@ tool:
                 "email_param": "test@example.com",
                 "enum_param": "option2"
                 # optional_param not provided, should use default
-            })
-            return result
-        
-        result = asyncio.run(test_all_params())
+            },
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         assert result["str_param"] == "Received: hello"
         assert result["int_param"] == 84
         assert abs(result["float_param"] - 4.71) < 0.01  # Use approximate comparison for floats
@@ -1021,52 +1005,61 @@ tool:
         
         # Test invalid email format
         async def test_invalid_email():
-            await executor.execute({
-                "str_param": "hello",
-                "int_param": 42,
-                "float_param": 3.14,
-                "bool_param": True,
-                "array_param": ["item1", "item2"],
-                "obj_param": {"key1": "value1", "key2": 123},
-                "date_param": "2024-01-15",
-                "email_param": "invalid-email",  # Missing @ and domain
-                "enum_param": "option2"
-            })
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="test_all_param_types",
+                params={
+                    "str_param": "hello",
+                    "int_param": 42,
+                    "float_param": 3.14,
+                    "bool_param": True,
+                    "array_param": ["item1", "item2"],
+                    "obj_param": {"key1": "value1", "key2": 123},
+                    "date_param": "2024-01-15",
+                    "email_param": "invalid-email",  # Missing @ and domain
+                    "enum_param": "option2"
+                },
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
+            )
         
         with pytest.raises(ValueError, match="Invalid email format"):
             asyncio.run(test_invalid_email())
         
         # Test invalid enum value
         async def test_invalid_enum():
-            await executor.execute({
-                "str_param": "hello",
-                "int_param": 42,
-                "float_param": 3.14,
-                "bool_param": True,
-                "array_param": ["item1", "item2"],
-                "obj_param": {"key1": "value1", "key2": 123},
-                "date_param": "2024-01-15",
-                "email_param": "test@example.com",
-                "enum_param": "invalid_option"  # Not in allowed enum values
-            })
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="test_all_param_types",
+                params={
+                    "str_param": "hello",
+                    "int_param": 42,
+                    "float_param": 3.14,
+                    "bool_param": True,
+                    "array_param": ["item1", "item2"],
+                    "obj_param": {"key1": "value1", "key2": 123},
+                    "date_param": "2024-01-15",
+                    "email_param": "test@example.com",
+                    "enum_param": "invalid_option"  # Not in allowed enum values
+                },
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
+            )
         
         with pytest.raises(ValueError, match="Must be one of"):
             asyncio.run(test_invalid_enum())
         
         # Test 2: Array return with timestamps
-        executor2 = EndpointExecutor(
-            EndpointType.TOOL,
-            "test_array_return",
-            user_config,
-            site_config,
-            test_session
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_array_return",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
         )
-        
-        async def test_array():
-            result = await executor2.execute({})
-            return result
-        
-        result = asyncio.run(test_array())
         assert len(result) == 3
         assert all(isinstance(item["created"], str) for item in result)
         assert result[0]["name"] == "First"
@@ -1080,119 +1073,138 @@ tool:
         ]
         
         for tool_name, expected in scalar_tests:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                tool_name,
-                user_config,
-                site_config,
-                test_session
+            result = await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name=tool_name,
+                params={},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            
-            async def test_scalar():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(test_scalar())
             if expected == str:
                 assert isinstance(result, str)  # For datetime
             else:
                 assert result == expected
         
         # Test 4: Constraints validation
-        executor4 = EndpointExecutor(
-            EndpointType.TOOL,
-            "test_constraints",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        # Valid constraints
-        async def test_valid_constraints():
-            result = await executor4.execute({
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_constraints",
+            params={
                 "str_min_max": "hello",
                 "int_min_max": 50,
                 "array_min_max": ["a", "b", "c"],
                 "str_pattern": "Hello"
-            })
-            return result
-        
-        result = asyncio.run(test_valid_constraints())
+            },
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         assert result["str_length"] == 5
         assert result["int_value"] == 50
         
         # Test constraint violations
         async def test_string_too_short():
-            await executor4.execute({
-                "str_min_max": "hi",  # Too short
-                "int_min_max": 50,
-                "array_min_max": ["a", "b"],
-                "str_pattern": "Hello"
-            })
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="test_constraints",
+                params={
+                    "str_min_max": "hi",  # Too short
+                    "int_min_max": 50,
+                    "array_min_max": ["a", "b"],
+                    "str_pattern": "Hello"
+                },
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
+            )
         
         with pytest.raises(ValueError, match="at least 3 characters"):
             asyncio.run(test_string_too_short())
         
         async def test_int_out_of_range():
-            await executor4.execute({
-                "str_min_max": "hello",
-                "int_min_max": 150,  # Too large
-                "array_min_max": ["a", "b"],
-                "str_pattern": "Hello"
-            })
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="test_constraints",
+                params={
+                    "str_min_max": "hello",
+                    "int_min_max": 150,  # Too large
+                    "array_min_max": ["a", "b"],
+                    "str_pattern": "Hello"
+                },
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
+            )
         
         with pytest.raises(ValueError, match="<= 100"):
             asyncio.run(test_int_out_of_range())
         
         # Test pattern validation failure
         async def test_pattern_mismatch():
-            await executor4.execute({
-                "str_min_max": "hello",
-                "int_min_max": 50,
-                "array_min_max": ["a", "b"],
-                "str_pattern": "hello"  # Should start with capital letter
-            })
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="test_constraints",
+                params={
+                    "str_min_max": "hello",
+                    "int_min_max": 50,
+                    "array_min_max": ["a", "b"],
+                    "str_pattern": "hello"  # Should start with capital letter
+                },
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
+            )
         
         # Pattern validation is currently not implemented in TypeConverter
         # This would need to be added to fully support JSON Schema pattern validation
         
         # Test array size constraints
         async def test_array_too_small():
-            await executor4.execute({
-                "str_min_max": "hello",
-                "int_min_max": 50,
-                "array_min_max": ["a"],  # Too few items (min 2)
-                "str_pattern": "Hello"
-            })
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="test_constraints",
+                params={
+                    "str_min_max": "hello",
+                    "int_min_max": 50,
+                    "array_min_max": ["a"],  # Too few items (min 2)
+                    "str_pattern": "Hello"
+                },
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
+            )
         
         with pytest.raises(ValueError, match="at least 2 items"):
             asyncio.run(test_array_too_small())
         
         async def test_array_too_large():
-            await executor4.execute({
-                "str_min_max": "hello",
-                "int_min_max": 50,
-                "array_min_max": ["a", "b", "c", "d", "e", "f"],  # Too many items (max 5)
-                "str_pattern": "Hello"
-            })
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="test_constraints",
+                params={
+                    "str_min_max": "hello",
+                    "int_min_max": 50,
+                    "array_min_max": ["a", "b", "c", "d", "e", "f"],  # Too many items (max 5)
+                    "str_pattern": "Hello"
+                },
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
+            )
         
         with pytest.raises(ValueError, match="at most 5 items"):
             asyncio.run(test_array_too_large())
         
         # Test 5: SQL with timestamps
-        executor5 = EndpointExecutor(
-            EndpointType.TOOL,
-            "test_sql_with_dates",
-            user_config,
-            site_config,
-            test_session
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_sql_with_dates",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
         )
-        
-        async def test_sql_dates():
-            result = await executor5.execute({})
-            return result
-        
-        result = asyncio.run(test_sql_dates())
         assert len(result) == 2
         # Check all timestamps are serialized as strings
         for row in result:
