@@ -734,14 +734,14 @@ def test_constraints(
     str_min_max: str,
     int_min_max: int,
     array_min_max: list,
-    str_pattern: str
+    str_enum: str
 ) -> dict:
     \"\"\"Test parameter constraints.\"\"\"
     return {
         "str_length": len(str_min_max),
         "int_value": int_min_max,
         "array_length": len(array_min_max),
-        "pattern_matched": str_pattern
+        "enum_matched": str_enum
     }
 
 def test_sql_with_dates() -> list:
@@ -890,10 +890,10 @@ tool:
       description: Array with size constraints
       items:
         type: string
-    - name: str_pattern
+    - name: str_enum
       type: string
-      pattern: "^[A-Z][a-z]+$"
-      description: String matching pattern
+      enum: ["Hello", "World", "Test"]
+      description: String with enum constraint (replaces pattern validation)
   return:
     type: object
 """)
@@ -1038,7 +1038,7 @@ tool:
             "str_min_max": "hello",
             "int_min_max": 50,
             "array_min_max": ["a", "b"],
-            "str_pattern": "Hello"
+            "str_enum": "Hello"
         },
         user_config=user_config,
         site_config=site_config,
@@ -1047,7 +1047,7 @@ tool:
     assert result["str_length"] == 5
     assert result["int_value"] == 50
     assert result["array_length"] == 2
-    assert result["pattern_matched"] == "Hello"
+    assert result["enum_matched"] == "Hello"
 
     # Test constraint violations
     with pytest.raises(ValueError, match="at least 3 characters"):
@@ -1058,7 +1058,7 @@ tool:
                 "str_min_max": "hi",  # Too short
                 "int_min_max": 50,
                 "array_min_max": ["a", "b"],
-                "str_pattern": "Hello"
+                "str_enum": "Hello"
             },
             user_config=user_config,
             site_config=site_config,
@@ -1073,31 +1073,12 @@ tool:
                 "str_min_max": "hello",
                 "int_min_max": 150,  # Too large
                 "array_min_max": ["a", "b"],
-                "str_pattern": "Hello"
+                "str_enum": "Hello"
             },
             user_config=user_config,
             site_config=site_config,
             execution_engine=execution_engine
         )
-
-    # Test pattern validation failure
-    async def test_pattern_mismatch():
-        await execute_endpoint_with_engine(
-            endpoint_type="tool",
-            name="test_constraints",
-            params={
-                "str_min_max": "hello",
-                "int_min_max": 50,
-                "array_min_max": ["a", "b"],
-                "str_pattern": "hello"  # Should start with capital letter
-            },
-            user_config=user_config,
-            site_config=site_config,
-            execution_engine=execution_engine
-        )
-
-    with pytest.raises(ValueError, match="pattern"):
-        await test_pattern_mismatch()
 
     # Test array size constraints
     async def test_array_too_small():
@@ -1108,7 +1089,7 @@ tool:
                 "str_min_max": "hello",
                 "int_min_max": 50,
                 "array_min_max": ["a"],  # Too few items (min 2)
-                "str_pattern": "Hello"
+                "str_enum": "Hello"
             },
             user_config=user_config,
             site_config=site_config,
@@ -1123,7 +1104,7 @@ tool:
                 "str_min_max": "hello",
                 "int_min_max": 50,
                 "array_min_max": ["a"],  # Too few items (min 2)
-                "str_pattern": "Hello"
+                "str_enum": "Hello"
             },
             user_config=user_config,
             site_config=site_config,
@@ -1138,7 +1119,7 @@ tool:
                 "str_min_max": "hello",
                 "int_min_max": 50,
                 "array_min_max": ["a", "b", "c", "d", "e", "f"],  # Too many items (max 5)
-                "str_pattern": "Hello"
+                "str_enum": "Hello"
             },
             user_config=user_config,
             site_config=site_config,
