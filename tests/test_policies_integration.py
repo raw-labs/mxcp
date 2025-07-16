@@ -8,7 +8,6 @@ from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.sdk.auth.providers import UserContext
 from mxcp.policies import PolicyEnforcementError
-from mxcp.engine.duckdb_session import DuckDBSession
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -53,14 +52,6 @@ def chdir_to_fixtures(test_repo_path):
     os.chdir(test_repo_path)
     yield
     os.chdir(original_dir)
-
-
-@pytest.fixture
-def test_session(user_config, site_config):
-    """Create a test DuckDB session."""
-    session = DuckDBSession(user_config, site_config, "test", readonly=True)
-    yield session
-    session.close()
 
 
 class TestPolicyIntegration:

@@ -3,7 +3,7 @@ from pathlib import Path
 from mxcp.endpoints.sdk_executor import execute_endpoint
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
-from mxcp.engine.duckdb_session import DuckDBSession
+
 import os
 
 @pytest.fixture(scope="session", autouse=True)
@@ -40,12 +40,7 @@ def test_site_config(test_repo_path):
 def test_profile():
     return "test_profile"
 
-@pytest.fixture
-def test_session(test_user_config, test_site_config, test_profile):
-    """Create a test DuckDB session."""
-    session = DuckDBSession(test_user_config, test_site_config, test_profile, readonly=True)
-    yield session
-    session.close()
+
 
 @pytest.mark.asyncio
 async def test_simple_tool_success(test_repo_path, test_user_config, test_site_config, test_profile):
@@ -57,7 +52,7 @@ async def test_simple_tool_success(test_repo_path, test_user_config, test_site_c
         name = "simple_tool"
         args = {"a": 1, "b": 2}
         result = await execute_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
-        assert result == [{'result': 3.0}]
+        assert result == 3.0
     finally:
         os.chdir(original_dir)
 
@@ -101,7 +96,7 @@ async def test_date_resource_success(test_repo_path, test_user_config, test_site
         name = "data://date.resource"
         args = {"date": "2024-03-20", "format": "iso"}
         result = await execute_endpoint(endpoint_type, name, args, test_user_config, test_site_config, test_profile)
-        assert result == [{"date": "2024-03-20", "format": "iso"}]
+        assert result == {"date": "2024-03-20", "format": "iso"}
     finally:
         os.chdir(original_dir)
 
