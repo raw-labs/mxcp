@@ -13,47 +13,71 @@ from mxcp.sdk.auth import UserContext
 
 @dataclass
 class ExecutionContext:
-    """Runtime context for MXCP executor components.
+    """Simplified runtime context for MXCP executor components.
     
-    This context provides:
-    - User information via UserContext from mxcp.sdk.auth
-    - Extensible context_data for component-specific state
+    This context provides simple key-value storage where:
+    - Keys are strings
+    - Values can be anything
     
     Example usage:
         >>> from mxcp.sdk.executor import ExecutionContext
-        >>> from mxcp.sdk.auth import UserContext
         >>> 
-        >>> # Create user context
-        >>> user_context = UserContext(
-        ...     user_id="user123",
-        ...     username="john.doe",
-        ...     provider="github",
-        ...     external_token="ghp_xxx",
-        ...     email="john@example.com"
-        ... )
+        >>> # Create context
+        >>> context = ExecutionContext()
         >>> 
-        >>> # Create execution context with user info
-        >>> context = ExecutionContext(user_context=user_context)
+        >>> # Simple key-value operations
+        >>> context.set("session", db_session)
+        >>> context.set("site_config", config_dict)
+        >>> context.update("user_count", 42)
         >>> 
-        >>> # Access user information
-        >>> print(f"User: {context.username}")
-        >>> print(f"Provider: {context.provider}")
+        >>> # Retrieve values
+        >>> session = context.get("session")
+        >>> config = context.get("site_config")
+        >>> count = context.get("user_count", default=0)
         >>> 
-        >>> # Store component-specific data
-        >>> context.set_context_data("validator", {"strict_mode": True})
-        >>> validator_config = context.get_context_data("validator")
-        >>> 
-        >>> # Create minimal context for testing
-        >>> test_context = ExecutionContext()
+        >>> # Store user information
+        >>> context.set("user_id", "user123")
+        >>> context.set("username", "john.doe")
     """
     
-    # User information from mxcp.sdk.auth
+    # User information from mxcp.sdk.auth (for backward compatibility)
     user_context: Optional[UserContext] = None
     
-    # Extensible context data for components
-    context_data: Dict[str, Any] = field(default_factory=dict)
+    # Simple key-value storage
+    _data: Dict[str, Any] = field(default_factory=dict)
     
-    # Convenience properties for backward compatibility
+    # Simple key-value operations (new interface)
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get a value by key.
+        
+        Args:
+            key: The key to look up
+            default: Default value if key not found
+            
+        Returns:
+            The value for the key, or default if not found
+        """
+        return self._data.get(key, default)
+    
+    def set(self, key: str, value: Any) -> None:
+        """Set a value for a key.
+        
+        Args:
+            key: The key to set
+            value: The value to store
+        """
+        self._data[key] = value
+    
+    def update(self, key: str, value: Any) -> None:
+        """Update/set a value for a key (alias for set).
+        
+        Args:
+            key: The key to update
+            value: The value to store
+        """
+        self._data[key] = value
+    
+    # Convenience properties for user context
     @property
     def user_id(self) -> Optional[str]:
         """Get user ID from user context."""
@@ -79,37 +103,6 @@ class ExecutionContext:
         """Get email from user context."""
         return self.user_context.email if self.user_context else None
     
-    def get_context_data(self, component: str) -> Optional[Dict[str, Any]]:
-        """Get context data for a specific component.
-        
-        Args:
-            component: The component name (e.g., "validator", "executor", "audit")
-            
-        Returns:
-            The context data for the component, or None if not found
-        """
-        return self.context_data.get(component)
-    
-    def set_context_data(self, component: str, data: Dict[str, Any]) -> None:
-        """Set context data for a specific component.
-        
-        Args:
-            component: The component name (e.g., "validator", "executor", "audit")
-            data: The context data to store
-        """
-        self.context_data[component] = data
-    
-    def update_context_data(self, component: str, data: Dict[str, Any]) -> None:
-        """Update context data for a specific component.
-        
-        Args:
-            component: The component name (e.g., "validator", "executor", "audit")
-            data: The context data to merge with existing data
-        """
-        if component not in self.context_data:
-            self.context_data[component] = {}
-        self.context_data[component].update(data)
-    
     def has_user_info(self) -> bool:
         """Check if user information is available.
         
@@ -130,7 +123,7 @@ class ExecutionContext:
         # Create a new context with current values
         new_context = ExecutionContext(
             user_context=self.user_context,
-            context_data=self.context_data.copy()
+            _data=self._data.copy()
         )
         
         # Update any provided fields

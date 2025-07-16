@@ -22,14 +22,14 @@ Example usage:
     >>> 
     >>> # Create execution context
     >>> user_context = UserContext(provider="github", user_id="user123", username="user")
-    >>> context = ExecutionContext(user_context=user_context)
+    >>> exec_context = ExecutionContext(user_context=user_context)
     >>> 
     >>> # Execute SQL
     >>> result = await engine.execute(
     ...     language="sql",
     ...     source_code="SELECT * FROM users WHERE active = $active",
     ...     params={"active": True},
-    ...     context=context
+    ...     context=exec_context
     ... )
     >>> 
     >>> # Execute Python
@@ -37,7 +37,7 @@ Example usage:
     ...     language="python", 
     ...     source_code="return sum(numbers)",
     ...     params={"numbers": [1, 2, 3, 4, 5]},
-    ...     context=context
+    ...     context=exec_context
     ... )
 """
 
@@ -66,6 +66,9 @@ def create_execution_engine(
     - DuckDB executor for SQL execution with plugins, extensions, and secrets
     - Python executor for Python code execution with lifecycle hooks
     
+    The engine is fully initialized and ready for execution. Init hooks
+    are run during engine creation.
+    
     Args:
         user_config: User configuration containing secrets and plugin configs by profile
         site_config: Site configuration containing database paths, extensions, and plugin definitions
@@ -90,7 +93,8 @@ def create_execution_engine(
         >>> engine = create_execution_engine(user_config, site_config)
         >>> 
         >>> # Engine is ready to use with both SQL and Python execution
-        >>> # No startup() call needed - executors are ready immediately
+        >>> # Init hooks have already run during creation
+        >>> # Call engine.shutdown() when done to run shutdown hooks
     """
     try:
         from mxcp.sdk.executor.plugins.duckdb_plugin.types import (

@@ -15,14 +15,6 @@ Example usage:
     >>> engine = ExecutionEngine()
     >>> engine.register_executor(executor)
     >>> 
-    >>> # Initialize with context (executor creates session from config)
-    >>> context = ExecutionContext(
-    ...     user_config=user_config,
-    ...     site_config=site_config,
-    ...     user_context=user_context
-    ... )
-    >>> engine.startup(context)
-    >>> 
     >>> # Execute SQL with parameters
     >>> result = await engine.execute(
     ...     language="sql",

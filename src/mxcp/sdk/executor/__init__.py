@@ -1,7 +1,7 @@
 """MXCP SDK Executor module.
 
 This module provides the core execution framework for MXCP, including:
-- ExecutionContext: Runtime context with user information
+- ExecutionContext: Runtime context for execution state (sessions, configs, plugins)
 - ExecutorPlugin: Base interface for execution plugins
 - ExecutionEngine: Main engine for executing code across different languages
 

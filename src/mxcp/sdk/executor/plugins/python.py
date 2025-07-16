@@ -15,14 +15,6 @@ Example usage:
     >>> engine = ExecutionEngine()
     >>> engine.register_executor(executor)
     >>> 
-    >>> # Initialize with context
-    >>> context = ExecutionContext(
-    ...     user_config=user_config,
-    ...     site_config=site_config,
-    ...     user_context=user_context
-    ... )
-    >>> engine.startup(context)
-    >>> 
     >>> # Execute inline Python code
     >>> result = await engine.execute(
     ...     language="python",
@@ -50,12 +42,9 @@ Example usage:
 """
 
 import asyncio
-import functools
 import inspect
 import logging
-import sys
 import tempfile
-from contextvars import copy_context
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable, List, TYPE_CHECKING
 
@@ -82,26 +71,19 @@ class PythonExecutor(ExecutorPlugin):
         >>> # Create executor
         >>> executor = PythonExecutor(repo_root=Path("/path/to/repo"))
         >>> 
-        >>> # Initialize with context
-        >>> context = ExecutionContext(
-        ...     user_config=user_config,
-        ...     site_config=site_config,
-        ...     user_context=user_context
-        ... )
-        >>> executor.startup(context)
-        >>> 
         >>> # Execute inline Python code
+        >>> exec_context = ExecutionContext(user_context=user_context)
         >>> result = await executor.execute(
         ...     "return sum(data)",
         ...     {"data": [1, 2, 3, 4, 5]},
-        ...     context
+        ...     exec_context
         ... )
         >>> 
         >>> # Execute Python file
         >>> result = await executor.execute(
         ...     "data_analysis.py",
         ...     {"dataset": "sales_data"},
-        ...     context
+        ...     exec_context
         ... )
         >>> 
         >>> # Validate Python syntax
@@ -124,17 +106,12 @@ class PythonExecutor(ExecutorPlugin):
             logger.warning("No repo root provided, using current working directory")
             self.repo_root = Path.cwd()
 
-        self._init_hooks: List[Callable] = []
-        self._shutdown_hooks: List[Callable] = []
-        self._hooks_discovered = False
         
         # Initialize Python loader immediately
         from .python_plugin.loader import PythonEndpointLoader
         self._loader = PythonEndpointLoader(self.repo_root)
         
-        # Discover and run initialization hooks
-        self._discover_hooks()
-        self._run_init_hooks()
+        # Note: Init hooks will be discovered and run when modules are loaded
         
         logger.info("Python executor initialized")
 
@@ -153,12 +130,19 @@ class PythonExecutor(ExecutorPlugin):
     def shutdown(self) -> None:
         """Shut down the Python executor.
         
-        Runs shutdown hooks and cleans up the loader.
+        This is where shutdown hooks should run - once per engine shutdown.
         """
-        logger.info("Python executor shutting down")
+        logger.info("Python executor shutting down - running shutdown hooks")
         
         # Run shutdown hooks
-        self._run_shutdown_hooks()
+        try:
+            from mxcp.runtime import run_shutdown_hooks
+            logger.info("Running engine-level shutdown hooks...")
+            run_shutdown_hooks()
+        except ImportError:
+            logger.warning("Runtime module not available for shutdown hooks")
+        except Exception as e:
+            logger.error(f"Failed to run shutdown hooks: {e}")
         
         # Clean up loader
         if self._loader:
@@ -318,9 +302,12 @@ class PythonExecutor(ExecutorPlugin):
         """
         try:
             # Check if it's a file path or inline code
+            logger.info(f"Executing Python source: {repr(source_code[:100])}...")
             if self._is_file_path(source_code):
+                logger.info(f"Detected as file path, using _execute_from_file")
                 return await self._execute_from_file(source_code, params, context)
             else:
+                logger.info(f"Detected as inline code, using _execute_inline")
                 return await self._execute_inline(source_code, params, context)
         except (ImportError, SyntaxError) as e:
             # These are executor-level errors that should be wrapped
@@ -352,6 +339,7 @@ class PythonExecutor(ExecutorPlugin):
             
             # Load the module using the correct method name
             module = self.loader.load_python_module(Path(actual_file_path))
+            
             
             # Determine function to call
             if function_name:
@@ -451,60 +439,35 @@ class PythonExecutor(ExecutorPlugin):
     
     async def _execute_function(self, func: Callable, params: Dict[str, Any], context: ExecutionContext) -> Any:
         """Execute a function with parameters."""
+        
         try:
+            from ..context import set_execution_context, reset_execution_context
+            
             # Check if function is async
             if asyncio.iscoroutinefunction(func):
-                return await func(**params)
+                # For async functions, set context and let contextvars propagate it
+                context_token = set_execution_context(context)
+                try:
+                    result = await func(**params)
+                finally:
+                    reset_execution_context(context_token)
             else:
+                # For sync functions, set context only in the worker thread
+                def sync_function_wrapper():
+                    from ..context import set_execution_context, reset_execution_context
+                    thread_token = set_execution_context(context)
+                    try:
+                        return func(**params)
+                    finally:
+                        reset_execution_context(thread_token)
+                
                 # Run in thread pool to avoid blocking
                 loop = asyncio.get_event_loop()
-                return await loop.run_in_executor(
-                    None, 
-                    functools.partial(func, **params)
-                )
+                result = await loop.run_in_executor(None, sync_function_wrapper)
+            
+            return result
+                
         except Exception as e:
             logger.error(f"Function execution failed: {e}")
             raise
     
-    def _discover_hooks(self) -> None:
-        """Discover lifecycle hooks in Python modules."""
-        if self._hooks_discovered:
-            return
-        
-        self._init_hooks.clear()
-        self._shutdown_hooks.clear()
-        
-        try:
-            if not self._loader:
-                return
-            
-            # Look for lifecycle hooks in loaded modules  
-            for module_name, module in self._loader._loaded_modules.items():
-                # Look for functions with hook decorators
-                for attr_name in dir(module):
-                    attr = getattr(module, attr_name)
-                    if callable(attr) and hasattr(attr, '_mxcp_on_init'):
-                        self._init_hooks.append(attr)
-                    elif callable(attr) and hasattr(attr, '_mxcp_on_shutdown'):
-                        self._shutdown_hooks.append(attr)
-                        
-        except Exception as e:
-            logger.warning(f"Failed to discover lifecycle hooks: {e}")
-        
-        self._hooks_discovered = True
-    
-    def _run_init_hooks(self) -> None:
-        """Run initialization hooks."""
-        for hook in self._init_hooks:
-            try:
-                hook()
-            except Exception as e:
-                logger.error(f"Error running init hook {hook.__name__}: {e}")
-    
-    def _run_shutdown_hooks(self) -> None:
-        """Run shutdown hooks."""
-        for hook in self._shutdown_hooks:
-            try:
-                hook()
-            except Exception as e:
-                logger.error(f"Error running shutdown hook {hook.__name__}: {e}") 

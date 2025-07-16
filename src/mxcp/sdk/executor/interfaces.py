@@ -13,39 +13,19 @@ Example usage:
     >>> engine.register_executor(DuckDBExecutor())
     >>> engine.register_executor(PythonExecutor())
     >>> 
-    >>> # Initialize with context (shared runtime information)
-    >>> context = ExecutionContext(
-    ...     user_config=user_config,
-    ...     site_config=site_config,
-    ...     user_context=user_context
-    ... )
-    >>> engine.startup(context)
-    >>> 
-    >>> # Execute SQL with validation
-    >>> sql_schema = {
-    ...     "input": [{"name": "limit", "type": "integer", "default": 10}],
-    ...     "output": {"type": "array", "items": {"type": "object"}}
-    ... }
+    >>> # Execute SQL with validation (per-request execution context)
+    >>> exec_context = ExecutionContext()
+    >>> exec_context.set("duckdb_session", duckdb_session)
+    >>> exec_context.set("site_config", site_config)
     >>> result = await engine.execute(
     ...     language="sql",
     ...     source_code="SELECT * FROM table LIMIT $limit",
     ...     params={"limit": 5},
-    ...     input_schema=sql_schema["input"],
-    ...     output_schema=sql_schema["output"]
+    ...     context=exec_context
     ... )
     >>> 
-    >>> # Execute Python with validation
-    >>> python_schema = {
-    ...     "input": [{"name": "data", "type": "array", "items": {"type": "number"}}],
-    ...     "output": {"type": "number"}
-    ... }
-    >>> result = await engine.execute(
-    ...     language="python",
-    ...     source_code="return sum(data) / len(data)",
-    ...     params={"data": [1, 2, 3, 4, 5]},
-    ...     input_schema=python_schema["input"],
-    ...     output_schema=python_schema["output"]
-    ... )
+    >>> # Shutdown (shutdown hooks run here)
+    >>> engine.shutdown()
 """
 
 from abc import ABC, abstractmethod
@@ -92,7 +72,6 @@ class ExecutorPlugin(ABC):
         ...     def shutdown(self) -> None:
         ...         # Clean up internal resources
         ...         self._internal_session.close()
-        ...         self._internal_plugins.clear()
     """
 
     @property
@@ -125,7 +104,7 @@ class ExecutorPlugin(ABC):
         """Shut down the executor and clean up resources.
         
         This is called when the executor is being stopped.
-        Executors should clean up their internal resources here.
+        Executors should run shutdown hooks and clean up their internal resources here.
         """
         pass
 
@@ -159,35 +138,36 @@ class ExecutionEngine:
     
     The engine handles:
     - Registration of executor plugins for different languages
-    - Input/output validation using mxcp.
+    - Engine lifecycle management (startup/shutdown)
+    - Input/output validation using mxcp.validator
     - Routing execution requests to appropriate executors
     
     Executors are ready to use immediately after registration.
-    No separate startup step is required.
+    Call startup() to initialize engine-level context and run init hooks.
     
     Example usage:
         >>> from mxcp.sdk.executor import ExecutionEngine
         >>> from mxcp.sdk.executor import ExecutionContext
         >>> from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
         >>> 
-        >>> # Create engine and register executors (ready immediately)
+        >>> # Create engine and register executors
         >>> engine = ExecutionEngine(strict=False)
         >>> engine.register_executor(DuckDBExecutor(...))
         >>> engine.register_executor(PythonExecutor(...))
         >>> 
-        >>> # Execute code with validation
-        >>> context = ExecutionContext(username="user", provider="github")
+        >>> # Execute code with per-request context
+        >>> exec_context = ExecutionContext(user_context=user_context)
+        >>> exec_context.set("duckdb_session", duckdb_session) 
+        >>> exec_context.set("site_config", site_config)
         >>> result = await engine.execute(
         ...     language="python",
         ...     source_code="return x + y",
         ...     params={"x": 1, "y": 2},
-        ...     context=context,
-        ...     input_schema=[
-        ...         {"name": "x", "type": "integer"},
-        ...         {"name": "y", "type": "integer"}
-        ...     ],
-        ...     output_schema={"type": "integer"}
+        ...     context=exec_context
         ... )
+        >>> 
+        >>> # Shutdown engine (shutdown hooks run here)
+        >>> engine.shutdown()
     """
     
     def __init__(self, strict: bool = False):
@@ -199,7 +179,7 @@ class ExecutionEngine:
         self._executors: Dict[str, ExecutorPlugin] = {}
         self._strict = strict
         self._lock = threading.Lock()
-        
+
     def register_executor(self, executor: ExecutorPlugin) -> None:
         """Register an executor plugin.
         
@@ -215,12 +195,16 @@ class ExecutionEngine:
         self._executors[language] = executor
             
     def shutdown(self) -> None:
-        """Shut down all registered executors."""
+        """Shut down all registered executors.
+        
+        This calls shutdown() on all registered executors.
+        This is where shutdown hooks should run.
+        """
         with self._lock:
             for executor in self._executors.values():
                 executor.shutdown()
             self._executors.clear()
-                
+    
     async def execute(
         self,
         language: str,
