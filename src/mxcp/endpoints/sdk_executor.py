@@ -333,16 +333,101 @@ async def _execute_code_with_engine(
     output_schema = None
     if not skip_output_validation:
         input_schema = endpoint_dict.get("parameters")
-        output_schema = endpoint_dict.get("return_type")
+        output_schema = endpoint_dict.get("return")
     
-    # Execute using the provided SDK engine - validation happens inside execute()
+    # Execute using the provided SDK engine 
+    # NOTE: We don't pass output_schema here because we need to transform the result first
+    # for backward compatibility, then validate the transformed result
     result = await execution_engine.execute(
         language=language,
         source_code=source_code,
         params=params,
         context=execution_context,
         input_schema=input_schema,
-        output_schema=output_schema
+        output_schema=None  # Skip SDK validation, we'll validate after transformation
     )
     
+    # ====================================================================
+    # CRITICAL: Result transformation for backward compatibility
+    # ====================================================================
+    # 
+    # The SDK executor always returns arrays for SQL (e.g., [{"col": "val"}])
+    # but the old EndpointExecutor transformed results based on return type:
+    #
+    # - return.type: "array"  → [{"col": "val"}, {"col": "val"}] (unchanged)
+    # - return.type: "object" → {"col": "val"} (extract single dict)  
+    # - return.type: "string" → "val" (extract single scalar value)
+    #
+    # This transformation MUST happen BEFORE policy enforcement because:
+    # 1. Output validation expects the transformed shape
+    # 2. Policy enforcement expects the transformed shape  
+    # 3. This matches the old EndpointExecutor behavior exactly
+    #
+    # Without this, endpoints with return.type="object" would break during
+    # migration from old EndpointExecutor to new SDK execution engine.
+    # ====================================================================
+    
+    if language == "sql" and endpoint_dict.get("return"):
+        result = _transform_sql_result_for_return_type(result, endpoint_dict["return"])
+    
+    # Now validate the transformed result (matching old EndpointExecutor behavior)
+    if output_schema and not skip_output_validation:
+        from mxcp.validator import TypeValidator
+        # Use the same validator as old system (mxcp.validator, not mxcp.sdk.validator)
+        schema_dict = {"output": output_schema}
+        validator = TypeValidator.from_dict(schema_dict)
+        result = validator.validate_output(result)
+    
     return result
+
+
+def _transform_sql_result_for_return_type(result: Any, return_def: dict) -> Any:
+    """Transform SQL result based on return type definition.
+    
+    This replicates the exact logic from the old EndpointExecutor._execute_sql method
+    to maintain backward compatibility during the migration to SDK execution engine.
+    
+    Args:
+        result: SQL result from SDK executor (always a list of dicts)
+        return_def: Return type definition from endpoint YAML
+        
+    Returns:
+        Transformed result based on return type:
+        - type: "array" → unchanged list
+        - type: "object" → single dict (if exactly 1 row)
+        - type: scalar → single value (if exactly 1 row, 1 column)
+        
+    Raises:
+        ValueError: If result shape doesn't match return type expectations
+    """
+    return_type = return_def.get("type")
+    
+    # If return type is array or not specified, don't transform
+    if return_type == "array" or not return_type:
+        return result
+    
+    # For non-array types, we expect exactly one row
+    if not isinstance(result, list):
+        return result  # Not a list, return as-is
+        
+    if len(result) == 0:
+        raise ValueError("SQL query returned no rows")
+    if len(result) > 1:
+        raise ValueError(f"SQL query returned multiple rows ({len(result)}), but return type is '{return_type}'")
+    
+    # We have exactly one row
+    row = result[0]
+    
+    if return_type == "object":
+        # Return the single dict
+        return row
+    else:
+        # Scalar type (string, number, boolean, etc.)
+        if not isinstance(row, dict):
+            return row  # Not a dict, return as-is
+            
+        if len(row) != 1:
+            raise ValueError(f"SQL query returned multiple columns ({len(row)}), but return type is '{return_type}'")
+        
+        # Return the single column value
+        return next(iter(row.values()))
