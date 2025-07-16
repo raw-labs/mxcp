@@ -120,9 +120,6 @@ class DuckDBSession:
 
     def _create_user_token_udfs(self):
         """Create UDFs for accessing user tokens that dynamically read from context.
-        
-        UDFs are created once and call get_user_context() when invoked, following
-        the same pattern as the existing mxcp.engine implementation.
         """
         logger.info("Creating user token UDFs")
         
