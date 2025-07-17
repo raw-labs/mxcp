@@ -355,8 +355,8 @@ async def _execute_code_with_engine(
     # CRITICAL: Result transformation for backward compatibility
     # ====================================================================
     # 
-    # The SDK executor always returns arrays for SQL (e.g., [{"col": "val"}])
-    # but the old EndpointExecutor transformed results based on return type:
+    # The SDK executor always returns arrays for SQL (e.g., [{"col": "val"}]).
+    # Here, we transform the results based on return type:
     #
     # - return.type: "array"  → [{"col": "val"}, {"col": "val"}] (unchanged)
     # - return.type: "object" → {"col": "val"} (extract single dict)  
@@ -365,10 +365,9 @@ async def _execute_code_with_engine(
     # This transformation MUST happen BEFORE policy enforcement because:
     # 1. Output validation expects the transformed shape
     # 2. Policy enforcement expects the transformed shape  
-    # 3. This matches the old EndpointExecutor behavior exactly
     #
-    # Without this, endpoints with return.type="object" would break during
-    # migration from old EndpointExecutor to new SDK execution engine.
+    # Without this, endpoints with return.type="object" would break due to
+    # e.g. the SDK executor returning a list of dicts instead of a single dict.
     # ====================================================================
     
     if language == "sql" and endpoint_dict.get("return"):
