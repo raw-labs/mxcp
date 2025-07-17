@@ -1,7 +1,7 @@
 """Tests for parameter name validation."""
 
 import pytest
-from mxcp.validator import TypeValidator, ValidationError
+from mxcp.sdk.validator import TypeValidator
 from mxcp.validator.loaders import validate_schema_structure
 
 

@@ -15,7 +15,7 @@ from mxcp.sdk.executor import ExecutionEngine, ExecutionContext
 from mxcp.sdk.executor.plugins import PythonExecutor, DuckDBExecutor
 from mxcp.sdk.executor.plugins.duckdb_plugin.types import DatabaseConfig, PluginConfig
 from mxcp.sdk.auth import UserContext
-from mxcp.validator import TypeValidator, ValidationError
+from mxcp.sdk.validator import ValidationError
 
 
 @pytest.fixture
