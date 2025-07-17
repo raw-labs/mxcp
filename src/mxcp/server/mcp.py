@@ -25,6 +25,7 @@ import signal
 from mxcp.config.external_refs import ExternalRefTracker
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+from mxcp.sdk.auth.context import get_user_context
 
 logger = logging.getLogger(__name__)
 

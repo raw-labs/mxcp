@@ -466,6 +466,8 @@ class TestIntegration:
         """Test that SIGHUP always reloads DuckDB session even without config changes."""
         # Use context manager to ensure proper cleanup
         with ServerProcess(integration_fixture_dir) as process:
+            process.start()  # Add missing start() call
+            
             # Call tool to verify initial state
             async with MCPTestClient(process.port) as client:
                 result = await client.call_tool("echo_message", {"message": "test1"})
