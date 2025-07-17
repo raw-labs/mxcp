@@ -1,9 +1,9 @@
 """Advanced tests for validator functionality."""
 
 import pytest
-import pandas as pd
-from datetime import datetime, date
-from mxcp.validator import validate, TypeValidator, ValidationError
+from datetime import date
+from mxcp.sdk.validator import TypeValidator, ValidationError
+from mxcp.validator import validate
 
 
 class TestAdvancedValidation:

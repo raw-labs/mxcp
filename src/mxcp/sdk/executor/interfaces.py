@@ -35,7 +35,7 @@ import threading
 from contextvars import ContextVar
 
 if TYPE_CHECKING:
-    from mxcp.validator import TypeValidator
+    from mxcp.sdk.validator import TypeValidator
 
 from .context import ExecutionContext
 
@@ -236,7 +236,7 @@ class ExecutionEngine:
             
         # Validate input parameters if schema provided
         if input_schema:
-            from mxcp.validator import TypeValidator
+            from mxcp.sdk.validator import TypeValidator
             validator = TypeValidator.from_dict({"input": {"parameters": input_schema}}, strict=self._strict)
             params = validator.validate_input(params)
             
@@ -246,7 +246,7 @@ class ExecutionEngine:
         
         # Validate output if schema provided
         if output_schema:
-            from mxcp.validator import TypeValidator
+            from mxcp.sdk.validator import TypeValidator
             validator = TypeValidator.from_dict({"output": output_schema}, strict=self._strict)
             result = validator.validate_output(result)
             

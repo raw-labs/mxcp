@@ -1,9 +1,7 @@
 """Tests for JSON schema compatibility with endpoint schemas."""
 
 import pytest
-import json
-from pathlib import Path
-from mxcp.validator import TypeValidator, ValidationError
+from mxcp.sdk.validator import TypeValidator, ValidationError
 from mxcp.validator.loaders import validate_schema_structure
 
 

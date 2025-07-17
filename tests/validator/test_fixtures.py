@@ -2,7 +2,8 @@
 
 import pytest
 from pathlib import Path
-from mxcp.validator import validate, TypeValidator, ValidationError, load_schema_from_file
+from mxcp.sdk.validator import TypeValidator, ValidationError
+from mxcp.validator import validate, load_schema_from_file
 
 
 class TestFixtures:

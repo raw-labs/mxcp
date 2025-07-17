@@ -175,9 +175,8 @@ async def _execute_prompt_with_validation(
     Handles defaults, constraints, template rendering - everything the SDK does.
     """
     from jinja2 import Template
-    from mxcp.validator import TypeValidator
+    from mxcp.sdk.validator import TypeValidator
     
-    # Use the SAME validator as SDK executor (not the incomplete mxcp.sdk.validator)
     validated_params = params
     if not skip_output_validation:
         input_schema = endpoint_dict.get("parameters")
@@ -373,10 +372,10 @@ async def _execute_code_with_engine(
     if language == "sql" and endpoint_dict.get("return"):
         result = _transform_sql_result_for_return_type(result, endpoint_dict["return"])
     
-    # Now validate the transformed result (matching old EndpointExecutor behavior)
+    # Now validate the transformed result
     if output_schema and not skip_output_validation:
-        from mxcp.validator import TypeValidator
-        # Use the same validator as old system (mxcp.validator, not mxcp.sdk.validator)
+        from mxcp.sdk.validator import TypeValidator
+
         schema_dict = {"output": output_schema}
         validator = TypeValidator.from_dict(schema_dict)
         result = validator.validate_output(result)
