@@ -89,16 +89,28 @@ class TestPythonExecutorBasics:
         python_file = temp_repo_dir / "python" / "test_module.py"
         python_file.write_text("def test_func(): return 'test'")
         loader1.load_python_module(python_file)
-        assert len(loader1._loaded_modules) == 1
+        modules_count_after_manual_load = len(loader1._loaded_modules)
         
         # Create new executor instance with same config
+        # This will auto-preload all modules, including the one we just created
         executor2 = PythonExecutor(repo_root=temp_repo_dir)
         loader2 = executor2._loader
         assert loader2 is not None
         
-        # New instance should have fresh state
+        # New instance should have separate loader object
         assert loader2 is not loader1
-        assert len(loader2._loaded_modules) == 0  # Fresh cache
+        
+        # Both loaders should have loaded the same module due to auto-preloading
+        # but they should be separate instances with their own state
+        assert len(loader2._loaded_modules) == modules_count_after_manual_load
+        
+        # Verify they have separate state by loading an additional module on loader1
+        python_file2 = temp_repo_dir / "python" / "test_module2.py"
+        python_file2.write_text("def test_func2(): return 'test2'")
+        loader1.load_python_module(python_file2)
+        
+        # loader1 should now have one more module than loader2
+        assert len(loader1._loaded_modules) == len(loader2._loaded_modules) + 1
         
         # Clean up
         executor1.shutdown()
