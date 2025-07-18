@@ -7,7 +7,6 @@ from mxcp.endpoints.sdk_executor import execute_endpoint
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
 from mxcp.sdk.auth.providers import UserContext
-from mxcp.policies import PolicyEnforcementError
 
 
 @pytest.fixture(scope="session", autouse=True)

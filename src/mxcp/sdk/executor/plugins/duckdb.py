@@ -147,6 +147,17 @@ class DuckDBExecutor(ExecutorPlugin):
         
         if self._session:
             try:
+                # Shutdown DuckDB plugins first (plugins loaded into this session)
+                if hasattr(self._session, 'plugins') and self._session.plugins:
+                    logger.info(f"Shutting down {len(self._session.plugins)} DuckDB plugins...")
+                    for plugin_name, plugin in self._session.plugins.items():
+                        try:
+                            plugin.shutdown()
+                            logger.info(f"Shut down DuckDB plugin: {plugin_name}")
+                        except Exception as e:
+                            logger.error(f"Error shutting down plugin {plugin_name}: {e}")
+                
+                # Now close the session
                 self._session.close()
                 logger.info("DuckDB session closed")
             except Exception as e:

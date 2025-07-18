@@ -1,6 +1,5 @@
 import os
 import pytest
-import asyncio
 from pathlib import Path
 from mxcp.endpoints.tester import run_tests, run_all_tests
 from mxcp.config.site_config import load_site_config

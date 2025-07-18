@@ -303,16 +303,12 @@ class RAWMCP:
         """
         logger.info("Shutting down runtime components...")
         
-        # Shut down execution engine (handles Python hooks and DB session automatically)
+        # Shut down execution engine (handles all executor-specific shutdown including plugins)
         if hasattr(self, 'execution_engine') and self.execution_engine:
             logger.info("Shutting down execution engine...")
             self.execution_engine.shutdown()
             self.execution_engine = None
             logger.info("Execution engine shutdown complete.")
-        
-        # Run shutdown hooks for Python plugins (separate from endpoint hooks)
-        from mxcp.plugins.base import run_plugin_shutdown_hooks
-        run_plugin_shutdown_hooks()
         
         logger.info("Runtime components shutdown complete.")
 

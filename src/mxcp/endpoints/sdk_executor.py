@@ -14,9 +14,9 @@ from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.executor import get_endpoint_source_code
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.auth.providers import UserContext
-from mxcp.policies import parse_policies_from_config, PolicyEnforcementError
+from mxcp.policies import parse_policies_from_config
 from mxcp.sdk.executor.interfaces import ExecutionEngine
-from mxcp.sdk.policy import PolicyEnforcer
+from mxcp.sdk.policy import PolicyEnforcer, PolicyEnforcementError
 import logging
 
 logger = logging.getLogger(__name__)
