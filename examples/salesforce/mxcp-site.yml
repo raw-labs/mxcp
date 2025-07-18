@@ -1,6 +1,6 @@
 mxcp: 1
-project: salesforce-demo
-profile: dev
+project: salesforce-raw
+profile: prod
 
 extensions:
   - json

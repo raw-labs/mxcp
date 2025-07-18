@@ -1,0 +1,25 @@
+mxcp: 1
+
+tool:
+  name: "aggregate_opportunity_revenue"
+  description: "Calculate total weighted revenue from Salesforce Opportunities with filtering by date range."
+  required: []
+  parameters:
+    - name: close_date_start
+      type: string
+      description: "Start date for close date range (YYYY-MM-DD)"
+      examples: ["2024-01-01", "2024-06-01"]
+      default: ""
+    - name: close_date_end
+      type: string
+      description: "End date for close date range (YYYY-MM-DD)"
+      examples: ["2024-12-31", "2024-06-30"]
+      default: ""
+  source:
+    code: |
+      SELECT aggregate_opportunity_revenue_salesforce(
+        $close_date_start,
+        $close_date_end
+      );
+  annotations:
+    readOnlyHint: true 

@@ -1,0 +1,10 @@
+mxcp: 1
+
+tool:
+  name: "get_opportunity_stages"
+  description: "Get the list of available opportunity stage values from Salesforce."
+  parameters: []
+  source:
+    code: SELECT get_opportunity_stages_salesforce();
+  annotations:
+    readOnlyHint: true 

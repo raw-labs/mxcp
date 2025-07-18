@@ -1,0 +1,75 @@
+mxcp: 1
+
+tool:
+  name: "search_leads"
+  description: "Search for Salesforce Leads with advanced filtering and pagination."
+  required: []
+  parameters:
+    - name: lead_rating
+      type: string
+      description: "Comma-separated list of lead ratings (e.g., 'Hot,Warm,Cold')"
+      examples: ["Hot", "Hot,Warm", "Hot,Warm,Cold"]
+      default: ""
+    - name: lead_email
+      type: string
+      description: "Email to search for (partial match)"
+      examples: ["@acme.com", "john@", "@gmail.com"]
+      default: ""
+    - name: lead_name
+      type: string
+      description: "Name to search for (partial match)"
+      examples: ["John", "Smith", "Acme Corp"]
+      default: ""
+    - name: lead_owner_id
+      type: string
+      description: "Salesforce User ID of the lead owner"
+      default: ""
+    - name: lead_converted_date_range_start
+      type: string
+      description: "Start date for conversion date range (YYYY-MM-DD)"
+      examples: ["2024-01-01", "2024-06-01"]
+      default: ""
+    - name: lead_converted_date_range_end
+      type: string
+      description: "End date for conversion date range (YYYY-MM-DD)"
+      examples: ["2024-12-31", "2024-06-30"]
+      default: ""
+    - name: min_employees
+      type: integer
+      description: "Minimum number of employees"
+      minimum: 0
+      examples: [50, 100, 500]
+      default: 0
+    - name: max_employees
+      type: integer
+      description: "Maximum number of employees"
+      minimum: 0
+      examples: [100, 500, 1000]
+      default: 0
+    - name: page
+      type: integer
+      description: "Page number (1-based)"
+      default: 1
+      minimum: 1
+    - name: page_size
+      type: integer
+      description: "Number of records per page"
+      default: 25
+      minimum: 1
+      maximum: 100
+  source:
+    code: |
+      SELECT search_leads_salesforce(
+        $lead_rating,
+        $lead_email,
+        $lead_name,
+        $lead_owner_id,
+        $lead_converted_date_range_start,
+        $lead_converted_date_range_end,
+        $min_employees,
+        $max_employees,
+        $page,
+        $page_size
+      );
+  annotations:
+    readOnlyHint: true 

@@ -1,0 +1,10 @@
+mxcp: 1
+
+tool:
+  name: "get_lead_ratings"
+  description: "Get the list of valid lead rating values from Salesforce. Use this to understand what rating values are available before searching for leads by rating."
+  parameters: []
+  source:
+    code: SELECT get_lead_ratings_salesforce();
+  annotations:
+    readOnlyHint: true 

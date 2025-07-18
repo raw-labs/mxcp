@@ -1,0 +1,92 @@
+mxcp: 1
+
+tool:
+  name: "search_opportunities"
+  description: "Search for Salesforce Opportunities with advanced filtering and pagination."
+  required: []
+  parameters:
+    - name: opportunity_name
+      type: string
+      description: "Opportunity name to search for (partial match)"
+      examples: ["Generator", "SLA", "Kitchen"]
+      default: ""
+    - name: stage_name
+      type: string
+      description: "Comma-separated list of stage names (e.g., 'Qualification,Closed Won')"
+      examples: ["Qualification", "Closed Won", "Proposal/Price Quote", "Id. Decision Makers"]
+      default: ""
+    - name: opportunity_type
+      type: string
+      description: "Opportunity type to filter by"
+      examples: ["New Customer", "Existing Customer - Upgrade", "Existing Customer - Replacement"]
+      default: ""
+    - name: lead_source
+      type: string
+      description: "Lead source to filter by"
+      examples: ["Purchased List", "Web", "Phone Inquiry", "Partner Referral"]
+      default: ""
+    - name: account_id
+      type: string
+      description: "Salesforce Account ID to filter by"
+      examples: ["001Qy00000KYSRsIAP"]
+      default: ""
+    - name: owner_id
+      type: string
+      description: "Salesforce User ID of the opportunity owner"
+      examples: ["005Qy0000055xW1IAI"]
+      default: ""
+    - name: opportunity_id
+      type: string
+      description: "Specific opportunity ID to retrieve"
+      examples: ["006Qy000005TJEcIAO"]
+      default: ""
+    - name: close_date_start
+      type: string
+      description: "Start date for close date range (YYYY-MM-DD)"
+      examples: ["2024-01-01", "2024-06-01"]
+      default: ""
+    - name: close_date_end
+      type: string
+      description: "End date for close date range (YYYY-MM-DD)"
+      examples: ["2024-12-31", "2024-06-30"]
+      default: ""
+    - name: created_date_start
+      type: string
+      description: "Start date for creation date range (YYYY-MM-DD)"
+      examples: ["2024-01-01", "2024-05-01"]
+      default: ""
+    - name: created_date_end
+      type: string
+      description: "End date for creation date range (YYYY-MM-DD)"
+      examples: ["2024-12-31", "2024-05-31"]
+      default: ""
+    - name: page
+      type: integer
+      description: "Page number (1-based)"
+      default: 1
+      minimum: 1
+    - name: page_size
+      type: integer
+      description: "Number of records per page"
+      default: 25
+      minimum: 1
+      maximum: 100
+  source:
+    code: |
+      SELECT search_opportunities_salesforce(
+        $opportunity_name,
+        $stage_name,
+        $opportunity_type,
+        $lead_source,
+        $account_id,
+        $owner_id,
+        $opportunity_id,
+        $close_date_start,
+        $close_date_end,
+        $created_date_start,
+        $created_date_end,
+        $page,
+        $page_size
+      );
+  annotations:
+    readOnlyHint: true 

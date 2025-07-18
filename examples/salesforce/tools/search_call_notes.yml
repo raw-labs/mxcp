@@ -1,0 +1,62 @@
+mxcp: 1
+
+tool:
+  name: "search_call_notes"
+  description: "Search for call notes from Salesforce Tasks with filtering and pagination."
+  required: []
+  parameters:
+    - name: what_id
+      type: string
+      description: "Account or Opportunity ID the call is related to"
+      examples: ["001Qy00000KYSRsIAP"]
+      default: ""
+    - name: who_id
+      type: string
+      description: "Contact or Lead ID the call is with"
+      examples: ["003Qy000007uT24IAE"]
+      default: ""
+    - name: owner_id
+      type: string
+      description: "Salesforce User ID of the task owner"
+      examples: ["005Qy0000055xW1IAI"]
+      default: ""
+    - name: subject_filter
+      type: string
+      description: "Subject to filter by (partial match)"
+      examples: ["Call", "Follow up", "Demo"]
+      default: ""
+    - name: created_date_start
+      type: string
+      description: "Start date for creation date range (YYYY-MM-DD)"
+      examples: ["2024-01-01", "2024-06-01"]
+      default: ""
+    - name: created_date_end
+      type: string
+      description: "End date for creation date range (YYYY-MM-DD)"
+      examples: ["2024-12-31", "2024-06-30"]
+      default: ""
+    - name: page
+      type: integer
+      description: "Page number (1-based)"
+      default: 1
+      minimum: 1
+    - name: page_size
+      type: integer
+      description: "Number of records per page"
+      default: 25
+      minimum: 1
+      maximum: 100
+  source:
+    code: |
+      SELECT search_call_notes_salesforce(
+        $what_id,
+        $who_id,
+        $owner_id,
+        $subject_filter,
+        $created_date_start,
+        $created_date_end,
+        $page,
+        $page_size
+      );
+  annotations:
+    readOnlyHint: true 
