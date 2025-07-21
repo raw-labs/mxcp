@@ -12,4 +12,4 @@ projects:
               username: "${SALESFORCE_USERNAME}"
               password: "${SALESFORCE_PASSWORD}"
               security_token: "${SALESFORCE_TOKEN}"
-              client_id: "${SALESFORCE_CLIENT_SECRET}"
+              client_id: "${SALESFORCE_CLIENT_ID}"
