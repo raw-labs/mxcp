@@ -2,7 +2,3 @@ mxcp: 1
 project: jira-oauth-demo
 profile: dev
 
-plugin:
-  - name: jira
-    module: mxcp_plugin_jira_oauth
-    config: jira_oauth

@@ -3,28 +3,51 @@ mxcp: 1
 tool:
   name: get_user
   description: |
-    Get details for a specific user in your Jira instance by their username using OAuth authentication.
-    Returns a JSON string containing the user's details.
+    Get a specific user by their unique account ID.
+    Returns detailed user information including display name, email, and account status.
   type: tool
   annotations:
-    title: Get User Details (OAuth)
+    title: Get User
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true
     openWorldHint: true
+  language: python
+  source:
+    file: ../python/jira_endpoints.py
   parameters:
-    - name: username
+    - name: account_id
       type: string
       description: |
-        The username to search for. This is typically the user's email address or username in Jira.
+        The unique Atlassian account ID for the user.
+        This is typically in the format: "557058:ab168c94-8485-405c-88e6-6458375eb30b"
+        You can get account IDs from other API calls like get_issue or search_user.
       examples: [
-        "john.doe@example.com",
-        "jane.smith"
+        "557058:ab168c94-8485-405c-88e6-6458375eb30b",
+        "5b10ac8d82e05b22cc7d4ef5",
+        "712020:0e99e8b3-7b3a-4b7c-9a1f-9e5d8c7b4a3e"
       ]
   return:
-    type: string
-    description: |
-      A JSON string containing the user's details.
-  language: "sql"
-  source:
-    file: "../sql/get_user.sql" 
+    type: object
+    properties:
+      accountId:
+        type: string
+        description: The account ID
+      displayName:
+        type: string
+        description: The display name
+      emailAddress:
+        type: string
+        description: The email address
+      active:
+        type: boolean
+        description: Whether the user is active
+      timeZone:
+        type: string
+        description: The user's time zone
+  tests:
+    - name: "Get user by account ID"
+      description: "Just run the tool"
+      arguments:
+        - key: account_id
+          value: "557058:ab168c94-8485-405c-88e6-6458375eb30b"

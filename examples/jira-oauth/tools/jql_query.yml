@@ -1,18 +1,21 @@
 mxcp: 1
 
 tool:
-  name: jql
+  name: jql_query
   description: |
-    Execute a JQL (Jira Query Language) query to search for issues in your Jira instance using OAuth authentication.
-    Returns a JSON string containing the matching issues with their details.
+    Execute a JQL (Jira Query Language) query to search for issues in your Jira instance.
+    Returns a list of issues with their details.
     Use the start and limit parameters to paginate through large result sets.
   type: tool
   annotations:
-    title: JQL Query (OAuth)
+    title: JQL Query
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true
     openWorldHint: true
+  language: python
+  source:
+    file: ../python/jira_endpoints.py
   parameters:
     - name: query
       type: string
@@ -33,6 +36,7 @@ tool:
         The index of the first result to return (0-based).
         Use this for pagination: start=0 for first page, start=50 for second page, etc.
         Defaults to 0 if not specified.
+      default: 0
       examples: [0, 50, 100]
     - name: limit
       type: integer
@@ -41,10 +45,40 @@ tool:
         If not specified, returns all matching results.
         Recommended to use with start parameter for pagination.
       examples: [50, 100, 200]
+      default: null
   return:
-    type: string
-    description: |
-      A JSON string containing an array of Jira issues.
-  language: "sql"
-  source:
-    file: "../sql/jql.sql" 
+    type: array
+    items:
+      type: object
+      properties:
+        key:
+          type: string
+        summary:
+          type: string
+        status:
+          type: string
+        assignee:
+          type: string
+        reporter:
+          type: string
+        created:
+          type: string
+        updated:
+          type: string
+        url:
+          type: string
+  tests:
+    - name: "Basic project query"
+      description: "Verify JQL query returns array of issues"
+      arguments:
+        - key: query
+          value: "project = RD"
+        - key: limit
+          value: 1
+    - name: "Status filter query"
+      description: "Verify JQL query with status filter"
+      arguments:
+        - key: query
+          value: "status = 'In Progress'"
+        - key: limit
+          value: 1

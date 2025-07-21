@@ -85,17 +85,6 @@ projects:
         # OAuth Configuration
         auth:
           provider: atlassian
-          clients:
-            - client_id: "${ATLASSIAN_CLIENT_ID}"
-              client_secret: "${ATLASSIAN_CLIENT_SECRET}"
-              name: "MXCP Jira Integration"
-              redirect_uris:
-                # For production, use your actual domain (must match base_url above)
-                - "https://your-domain.com/atlassian/callback"
-                # For local development, uncomment the line below:
-                # - "http://localhost:8000/atlassian/callback"
-              scopes:
-                - "mxcp:access"
           atlassian:
             client_id: "${ATLASSIAN_CLIENT_ID}"
             client_secret: "${ATLASSIAN_CLIENT_SECRET}"
@@ -103,11 +92,6 @@ projects:
             callback_path: "/atlassian/callback"
             auth_url: "https://auth.atlassian.com/authorize"
             token_url: "https://auth.atlassian.com/oauth/token"
-        
-        # Plugin Configuration (minimal setup required!)
-        plugin:
-          config:
-            jira_oauth: {}  # Named 'jira_oauth' here, but UDFs use 'jira' suffix from mxcp-site.yml
 ```
 
 ### Step 5: Install and Run

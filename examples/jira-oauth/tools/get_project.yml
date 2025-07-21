@@ -3,30 +3,74 @@ mxcp: 1
 tool:
   name: get_project
   description: |
-    Get details for a specific project in your Jira instance by its project key using OAuth authentication.
-    Returns a JSON string containing the project's details.
+    Get details for a specific project by its key.
+    Returns comprehensive project information including description, settings, and lead.
   type: tool
   annotations:
-    title: Get Project Details (OAuth)
+    title: Get Project
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true
     openWorldHint: true
+  language: python
+  source:
+    file: ../python/jira_endpoints.py
   parameters:
     - name: project_key
       type: string
       description: |
-        The project key to search for. This is the short identifier for the project (e.g., 'TEST' for project TEST).
-        Project keys are typically uppercase and contain only letters and numbers.
+        The project key (e.g., 'TEST' for project TEST).
+        This is the short identifier for the project.
       examples: [
         "TEST",
         "PROJ",
         "DEV"
       ]
   return:
-    type: string
-    description: |
-      A JSON string containing the project's details.
-  language: "sql"
-  source:
-    file: "../sql/get_project.sql" 
+    type: object
+    properties:
+      key:
+        type: string
+        description: The project key
+      name:
+        type: string
+        description: The project name
+      description:
+        type: string
+        description: The project description
+      projectTypeKey:
+        type: string
+        description: The project type key
+      simplified:
+        type: boolean
+        description: Whether the project is simplified
+      style:
+        type: string
+        description: The project style
+      isPrivate:
+        type: boolean
+        description: Whether the project is private
+      archived:
+        type: boolean
+        description: Whether the project is archived
+      lead:
+        type: object
+        properties:
+          displayName:
+            type: string
+          emailAddress:
+            type: string
+          accountId:
+            type: string
+          active:
+            type: boolean
+        description: The project lead information
+      url:
+        type: string
+        description: The project URL
+  tests:
+    - name: "Get project by key"
+      description: "Verify project retrieval returns expected structure"
+      arguments:
+        - key: project_key
+          value: "RD"
