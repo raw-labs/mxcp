@@ -1,10 +1,86 @@
 """
 Salesforce MCP tools using simple_salesforce with MXCP OAuth authentication.
 """
+import threading
+from functools import wraps
 from typing import Dict, Any, List, Optional
 from mxcp.auth.context import get_user_context
 from simple_salesforce import Salesforce
+from simple_salesforce.exceptions import SalesforceExpiredSession
+from mxcp.runtime import on_init, on_shutdown
+import logging
 
+# Thread-safe cache for Salesforce clients
+_client_cache = None
+_cache_lock = None
+
+@on_init
+def init_client_cache():
+    """
+    Initialize the Salesforce client cache.
+    """
+    global _client_cache, _cache_lock
+    _client_cache = {}
+    _cache_lock = threading.Lock()
+
+@on_shutdown
+def clear_client_cache():
+    """
+    Clear the Salesforce client cache.
+    """
+    global _client_cache, _cache_lock
+    _client_cache = None
+    _cache_lock = None
+
+def _get_cache_key(context):
+    """Generate a cache key based on user context."""
+    if not context:
+        return None
+    
+    # Use user ID and instance URL as cache key
+    user_id = getattr(context, 'user_id', None) or getattr(context, 'id', None)
+    
+    # Extract instance URL
+    instance_url = None
+    if context.raw_profile and 'urls' in context.raw_profile:
+        urls = context.raw_profile['urls']
+        instance_url = urls.get('custom_domain')
+        if not instance_url:
+            for url_key in ['rest', 'enterprise', 'partner']:
+                if url_key in urls:
+                    service_url = urls[url_key]
+                    instance_url = service_url.split('/services/')[0]
+                    break
+    
+    if user_id and instance_url:
+        return f"{user_id}:{instance_url}"
+    
+    return None
+
+def with_session_retry(func):
+    """
+    Decorator that automatically retries API calls with cache invalidation when sessions expire.
+    
+    This handles the race condition where a session might expire between cache validation
+    and the actual API call.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except SalesforceExpiredSession:
+            logging.error("Salesforce session expired")
+            # Session expired during the call - invalidate cache and retry once
+            context = get_user_context()
+            cache_key = _get_cache_key(context)
+            if cache_key:
+                with _cache_lock:
+                    # Remove the expired client from cache
+                    _client_cache.pop(cache_key, None)
+            
+            # Retry the function call - this will get a fresh client
+            return func(*args, **kwargs)
+    return wrapper
 
 def _escape_sosl_search_term(search_term: str) -> str:
     """
@@ -27,8 +103,8 @@ def _get_salesforce_client():
     """
     Create and return an authenticated Salesforce client using OAuth tokens from user_context.
     
-    Uses the MXCP authentication system to get OAuth tokens for the authenticated user.
-    The tokens are automatically managed by MXCP's Salesforce OAuth provider.
+    Uses caching to avoid recreating clients unnecessarily. Clients are cached per user
+    and instance URL combination in a thread-safe manner.
     """
     try:
         # Get the authenticated user's context
@@ -37,6 +113,18 @@ def _get_salesforce_client():
         if not context:
             raise ValueError("No user context available. User must be authenticated.")
         
+        # Generate cache key
+        cache_key = _get_cache_key(context)
+        
+        # Try to get cached client first
+        if cache_key:
+            with _cache_lock:
+                if cache_key in _client_cache:
+                    logging.info("Using cached Salesforce client")
+                    # Return cached client - retry decorator will handle any session expiry
+                    return _client_cache[cache_key]
+        
+        logging.info("No cached Salesforce client found, creating new one")
         # Extract Salesforce OAuth tokens from user context
         access_token = context.external_token
         
@@ -73,12 +161,18 @@ def _get_salesforce_client():
             instance_url=instance_url
         )
         
+        # Cache the client if we have a valid cache key
+        if cache_key:
+            with _cache_lock:
+                _client_cache[cache_key] = sf
+        
         return sf
         
     except Exception as e:
         raise ValueError(f"Failed to authenticate with Salesforce: {str(e)}")
 
 
+@with_session_retry
 def list_sobjects(filter: Optional[str] = None) -> List[str]:
     """
     List all available Salesforce objects (sObjects) in the org.
@@ -117,6 +211,7 @@ def list_sobjects(filter: Optional[str] = None) -> List[str]:
         raise Exception(f"Error listing Salesforce objects: {str(e)}")
 
 
+@with_session_retry
 def describe_sobject(object_name: str) -> Dict[str, Any]:
     """
     Get detailed field information for a specific Salesforce object (sObject).
@@ -156,6 +251,7 @@ def describe_sobject(object_name: str) -> Dict[str, Any]:
     return fields_info
 
 
+@with_session_retry
 def get_sobject(object_name: str, record_id: str) -> Dict[str, Any]:
     """
     Retrieve a specific Salesforce record by its object type and ID.
@@ -181,6 +277,7 @@ def get_sobject(object_name: str, record_id: str) -> Dict[str, Any]:
     return record
 
 
+@with_session_retry
 def soql(query: str) -> List[Dict[str, Any]]:
     """
     Execute an arbitrary SOQL (Salesforce Object Query Language) query.
@@ -205,6 +302,7 @@ def soql(query: str) -> List[Dict[str, Any]]:
     return records
 
 
+@with_session_retry
 def search(search_term: str) -> List[Dict[str, Any]]:
     """
     Search for records across all searchable Salesforce objects using a simple search term.
@@ -238,6 +336,7 @@ def search(search_term: str) -> List[Dict[str, Any]]:
     return all_records
 
 
+@with_session_retry
 def sosl(query: str) -> List[Dict[str, Any]]:
     """
     Execute an arbitrary SOSL (Salesforce Object Search Language) query.
