@@ -1,6 +1,6 @@
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING
+from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING, Callable
 import duckdb
 import yaml
 from datetime import datetime, date, time
@@ -486,6 +486,40 @@ class EndpointExecutor:
         # Find repository root
         repo_root = find_repo_root()
         return get_endpoint_source_code(self.endpoint, self.endpoint_type.value, self.endpoint_file_path, repo_root)
+        
+    def _load_function(self, file_path: Path, function_name: str) -> Callable:
+        """Load Python function and run init hooks if module was freshly loaded
+        
+        Args:
+            file_path: Path to the Python file containing the function
+            function_name: Name of the function to retrieve
+            
+        Returns:
+            The loaded function object
+        """
+        from mxcp.engine.python_loader import PythonEndpointLoader
+        import sys
+        
+        repo_root = find_repo_root()
+        loader = PythonEndpointLoader(repo_root)
+        
+        # Check if module is already cached before loading
+        # In server mode: modules are preloaded and cached, so was_cached=True after first load
+        # In CLI mode: fresh process each time, so was_cached=False always
+        abs_path = file_path.resolve()
+        cache_key = str(abs_path)
+        module_name = loader._get_module_name(abs_path)
+        was_cached = (cache_key in loader._loaded_modules) or (module_name in sys.modules)
+        
+        module = loader.load_python_module(file_path)
+        
+        # Only run init hooks if module was freshly loaded (not from cache)
+        if not was_cached:
+            from mxcp.runtime import _run_init_hooks
+            _run_init_hooks()
+            
+        # Get the specific function from the module
+        return loader.get_function(module, function_name)
             
     async def execute(self, params: Dict[str, Any], validate_output: bool = True, user_context: Optional['UserContext'] = None) -> EndpointResult:
         """Execute the endpoint with given parameters.
@@ -644,7 +678,6 @@ class EndpointExecutor:
         from mxcp.engine.python_loader import PythonEndpointLoader
         from mxcp.runtime import _set_runtime_context, _clear_runtime_context
         import asyncio
-        import sys
         from contextvars import copy_context
         
         # Get source file path
@@ -666,27 +699,8 @@ class EndpointExecutor:
         )
         
         try:
-            # Load Python module (init hooks run with runtime context available)
-            repo_root = find_repo_root()
-            loader = PythonEndpointLoader(repo_root)
-            
-            # Check if module is already cached before loading
-            # In server mode: modules are preloaded and cached, so was_cached=True after first load
-            # In CLI mode: fresh process each time, so was_cached=False always
-            abs_path = file_path.resolve()
-            cache_key = str(abs_path)
-            module_name = loader._get_module_name(abs_path)
-            was_cached = (cache_key in loader._loaded_modules) or (module_name in sys.modules)
-            
-            module = loader.load_python_module(file_path)
-            
-            # Only run init hooks if module was freshly loaded (not from cache)
-            if not was_cached:
-                from mxcp.runtime import _run_init_hooks
-                _run_init_hooks()
-            
-            # Get function with same name as endpoint
-            func = loader.get_function(module, self.name)
+            # Load Python function and run init hooks if needed
+            func = self._load_function(file_path, self.name)
             
             # Execute function (runtime context already set)
             if asyncio.iscoroutinefunction(func):
