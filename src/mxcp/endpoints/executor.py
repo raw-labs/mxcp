@@ -644,6 +644,7 @@ class EndpointExecutor:
         from mxcp.engine.python_loader import PythonEndpointLoader
         from mxcp.runtime import _set_runtime_context, _clear_runtime_context
         import asyncio
+        import sys
         from contextvars import copy_context
         
         # Get source file path
@@ -655,15 +656,7 @@ class EndpointExecutor:
         if not file_path.is_absolute():
             file_path = self.endpoint_file_path.parent / file_path
         
-        # Load Python module
-        repo_root = find_repo_root()
-        loader = PythonEndpointLoader(repo_root)
-        module = loader.load_python_module(file_path)
-        
-        # Get function with same name as endpoint
-        func = loader.get_function(module, self.name)
-        
-        # Set runtime context for this execution
+        # Set runtime context before loading Python module so @on_init hooks can access secrets/config
         _set_runtime_context(
             self.session,
             self.user_config,
@@ -673,7 +666,29 @@ class EndpointExecutor:
         )
         
         try:
-            # Execute function
+            # Load Python module (init hooks run with runtime context available)
+            repo_root = find_repo_root()
+            loader = PythonEndpointLoader(repo_root)
+            
+            # Check if module is already cached before loading
+            # In server mode: modules are preloaded and cached, so was_cached=True after first load
+            # In CLI mode: fresh process each time, so was_cached=False always
+            abs_path = file_path.resolve()
+            cache_key = str(abs_path)
+            module_name = loader._get_module_name(abs_path)
+            was_cached = (cache_key in loader._loaded_modules) or (module_name in sys.modules)
+            
+            module = loader.load_python_module(file_path)
+            
+            # Only run init hooks if module was freshly loaded (not from cache)
+            if not was_cached:
+                from mxcp.runtime import _run_init_hooks
+                _run_init_hooks()
+            
+            # Get function with same name as endpoint
+            func = loader.get_function(module, self.name)
+            
+            # Execute function (runtime context already set)
             if asyncio.iscoroutinefunction(func):
                 # Async function - await directly (context propagates automatically)
                 result = await func(**params)
