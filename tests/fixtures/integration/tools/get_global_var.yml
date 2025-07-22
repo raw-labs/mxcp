@@ -7,3 +7,7 @@ tool:
     file: ../python/test_endpoints.py
   return:
     type: string 
+  tests:
+    - name: quick_check
+      arguments: []
+      result_contains_text: "initial_key_123"
