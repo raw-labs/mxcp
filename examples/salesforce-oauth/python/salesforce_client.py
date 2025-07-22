@@ -367,10 +367,10 @@ def whoami() -> Dict[str, Any]:
     """
     Get basic information about the currently authenticated Salesforce user from the user context.
     
-    Returns basic user information from the MXCP authentication context without making API calls.
+    Returns essential user information from the MXCP authentication context without making API calls.
     
     Returns:
-        dict: Dictionary containing basic current user information from authentication context
+        dict: Dictionary containing essential current user information
     """
     context = get_user_context()
     
@@ -390,11 +390,16 @@ def whoami() -> Dict[str, Any]:
                     instance_url = service_url.split('/services/')[0]
                     break
     
-    # Build the response object with available context information
+    # Extract essential user information from raw profile
+    raw_profile = context.raw_profile or {}
+    
     user_info = {
-        'instanceUrl': instance_url,
-        'hasAccessToken': bool(context.external_token),
-        'rawProfile': context.raw_profile
+        'user_id': raw_profile.get('user_id'),
+        'email': raw_profile.get('email'),
+        'name': raw_profile.get('name'),
+        'preferred_username': raw_profile.get('preferred_username'),
+        'organization_id': raw_profile.get('organization_id'),
+        'instanceUrl': instance_url
     }
     
     return user_info

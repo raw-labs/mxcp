@@ -2,7 +2,9 @@ mxcp: 1
 tool:
   name: whoami
   title: Current User Information
-  description: Display information about the current authenticated Salesforce user from OAuth context
+  description: |
+    Get the current authenticated user's information (user_id, email, name) from OAuth context.
+    Use this tool before executing personalized SOQL queries to identify the user for filtering records by ownership or assignment.
   tags:
     - salesforce
     - user
@@ -13,17 +15,26 @@ tool:
   parameters: []
   return:
     type: object
-    description: Current user information from OAuth context
+    description: Essential current user information from OAuth context
     properties:
+      user_id:
+        type: string
+        description: Salesforce user ID
+      email:
+        type: string
+        description: User's email address
+      name:
+        type: string
+        description: User's full name
+      preferred_username:
+        type: string
+        description: User's preferred username
+      organization_id:
+        type: string
+        description: Salesforce organization ID
       instanceUrl:
         type: string
         description: Salesforce instance URL for the authenticated user
-      hasAccessToken:
-        type: boolean
-        description: Whether an access token is available for the authenticated user
-      rawProfile:
-        type: object
-        description: Raw OAuth profile data containing detailed user and organization information
   language: python
   source:
     file: ../python/salesforce_client.py
