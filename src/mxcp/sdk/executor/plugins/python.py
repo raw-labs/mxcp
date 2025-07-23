@@ -481,7 +481,7 @@ class PythonExecutor(ExecutorPlugin):
                         continue
             
             # If no suitable function found, return None
-            return None
+            raise ValueError("No suitable function found in inline code")
             
         except Exception as e:
             logger.error(f"Failed to execute inline code: {e}")
