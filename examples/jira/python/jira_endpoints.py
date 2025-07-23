@@ -5,40 +5,50 @@ This module provides direct Python MCP endpoints for querying Atlassian JIRA.
 This is a simpler alternative to the plugin-based approach.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 import logging
 from atlassian import Jira
 from mxcp.runtime import config, db, on_init, on_shutdown
+import threading
+import functools
+import time
 
 logger = logging.getLogger(__name__)
 
 # Global JIRA client for reuse across all function calls
 jira_client: Optional[Jira] = None
+# Thread lock to protect client initialization
+_client_lock = threading.Lock()
 
 
 @on_init
 def setup_jira_client():
-    """Initialize JIRA client when server starts."""
+    """Initialize JIRA client when server starts.
+    
+    Thread-safe: multiple threads can safely call this simultaneously.
+    """
     global jira_client
-    logger.info("Initializing JIRA client...")
     
-    jira_config = config.get_secret("jira")
-    if not jira_config:
-        raise ValueError("JIRA configuration not found. Please configure JIRA secrets in your user config.")
-    
-    required_keys = ["url", "username", "password"]
-    missing_keys = [key for key in required_keys if not jira_config.get(key)]
-    if missing_keys:
-        raise ValueError(f"Missing JIRA configuration keys: {', '.join(missing_keys)}")
-    
-    jira_client = Jira(
-        url=jira_config["url"],
-        username=jira_config["username"],
-        password=jira_config["password"],
-        cloud=True
-    )
-    
-    logger.info("JIRA client initialized successfully")
+    with _client_lock:
+        logger.info("Initializing JIRA client...")
+        
+        jira_config = config.get_secret("jira")
+        if not jira_config:
+            raise ValueError("JIRA configuration not found. Please configure JIRA secrets in your user config.")
+        
+        required_keys = ["url", "username", "password"]
+        missing_keys = [key for key in required_keys if not jira_config.get(key)]
+        if missing_keys:
+            raise ValueError(f"Missing JIRA configuration keys: {', '.join(missing_keys)}")
+        
+        jira_client = Jira(
+            url=jira_config["url"],
+            username=jira_config["username"],
+            password=jira_config["password"],
+            cloud=True
+        )
+        
+        logger.info("JIRA client initialized successfully")
 
 
 @on_shutdown
@@ -51,6 +61,68 @@ def cleanup_jira_client():
         logger.info("JIRA client cleaned up")
 
 
+def retry_on_session_expiration(func: Callable) -> Callable:
+    """
+    Decorator that automatically retries functions on JIRA session expiration.
+    
+    This only retries on HTTP 401 Unauthorized errors, not other authentication failures.
+    Retries up to 2 times on session expiration (3 total attempts).
+    Thread-safe: setup_jira_client() handles concurrent access internally.
+    
+    Usage:
+        @retry_on_session_expiration
+        def my_jira_function():
+            # Function that might fail due to session expiration
+            pass
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        max_retries = 2  # Hardcoded: 2 retries = 3 total attempts
+        
+        for attempt in range(max_retries + 1):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                # Check if this is a 401 Unauthorized error (session expired)
+                if _is_session_expired(e):
+                    if attempt < max_retries:
+                        logger.warning(f"Session expired on attempt {attempt + 1} in {func.__name__}: {e}")
+                        logger.info(f"Retrying after re-initializing client (attempt {attempt + 2}/{max_retries + 1})")
+                        
+                        try:
+                            setup_jira_client()  # Thread-safe internally
+                            time.sleep(0.1)  # Small delay to avoid immediate retry
+                        except Exception as setup_error:
+                            logger.error(f"Failed to re-initialize JIRA client: {setup_error}")
+                            raise setup_error  # Raise the setup error, not the original session error
+                    else:
+                        # Last attempt failed, re-raise the session expiration error
+                        raise e
+                else:
+                    # Not a session expiration error, re-raise immediately
+                    raise e
+    
+    return wrapper
+
+
+def _is_session_expired(exception: Exception) -> bool:
+    """Check if the exception indicates a JIRA session has expired."""
+    error_msg = str(exception).lower()
+    
+    # Check for HTTP 401 Unauthorized
+    if "401" in error_msg or "unauthorized" in error_msg:
+        return True
+    
+    # Check for common session expiration messages
+    if any(phrase in error_msg for phrase in [
+        "session expired", "session invalid", "authentication failed",
+        "invalid session", "session timeout"
+    ]):
+        return True
+    
+    return False
+
+
 def _get_jira_client() -> Jira:
     """Get the global JIRA client."""
     if jira_client is None:
@@ -58,6 +130,7 @@ def _get_jira_client() -> Jira:
     return jira_client
 
 
+@retry_on_session_expiration
 def jql_query(query: str, start: Optional[int] = 0, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """Execute a JQL query against Jira.
 
@@ -118,6 +191,7 @@ def jql_query(query: str, start: Optional[int] = 0, limit: Optional[int] = None)
     return cleaned
 
 
+@retry_on_session_expiration
 def get_issue(issue_key: str) -> Dict[str, Any]:
     """Get detailed information for a specific JIRA issue by its key.
 
@@ -179,6 +253,7 @@ def get_issue(issue_key: str) -> Dict[str, Any]:
     return cleaned_issue
 
 
+@retry_on_session_expiration
 def get_user(account_id: str) -> Dict[str, Any]:
     """Get a specific user by their unique account ID.
 
@@ -208,6 +283,7 @@ def get_user(account_id: str) -> Dict[str, Any]:
     }
 
 
+@retry_on_session_expiration
 def search_user(query: str) -> List[Dict[str, Any]]:
     """Search for users by query string (username, email, or display name).
 
@@ -241,6 +317,7 @@ def search_user(query: str) -> List[Dict[str, Any]]:
     return filtered_users
 
 
+@retry_on_session_expiration
 def list_projects() -> List[Dict[str, Any]]:
     """Return a concise list of Jira projects.
     
@@ -270,6 +347,7 @@ def list_projects() -> List[Dict[str, Any]]:
     return concise
 
 
+@retry_on_session_expiration
 def get_project(project_key: str) -> Dict[str, Any]:
     """Get details for a specific project by its key.
 
@@ -324,6 +402,7 @@ def get_project(project_key: str) -> Dict[str, Any]:
     return cleaned_info
 
 
+@retry_on_session_expiration
 def get_project_roles(project_key: str) -> List[Dict[str, Any]]:
     """Get all roles available in a project.
 
@@ -367,6 +446,7 @@ def get_project_roles(project_key: str) -> List[Dict[str, Any]]:
             raise ValueError(f"Error retrieving project roles for '{project_key}': {e}") from e
 
 
+@retry_on_session_expiration
 def get_project_role_users(project_key: str, role_name: str) -> Dict[str, Any]:
     """Get users and groups for a specific role in a project.
 
@@ -443,7 +523,11 @@ def get_project_role_users(project_key: str, role_name: str) -> Dict[str, Any]:
     except Exception as e:
         # Handle various possible errors from the JIRA API
         error_msg = str(e).lower()
-        if "404" in error_msg or "not found" in error_msg:
+        
+        # Don't handle 401 errors here - let the retry decorator handle them
+        if "401" in error_msg or "unauthorized" in error_msg:
+            raise e  # Let the retry decorator catch this
+        elif "404" in error_msg or "not found" in error_msg:
             raise ValueError(f"Project '{project_key}' not found in JIRA")
         elif "403" in error_msg or "forbidden" in error_msg:
             raise ValueError(f"Access denied to project '{project_key}' in JIRA")
