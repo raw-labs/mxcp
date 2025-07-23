@@ -1,0 +1,114 @@
+mxcp: 1
+
+tool:
+  name: get_issue
+  description: |
+    Get detailed information for a specific JIRA issue by its key.
+    Returns comprehensive issue information including all fields, assignee, reporter, etc.
+  type: tool
+  annotations:
+    title: Get Issue
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  language: python
+  source:
+    file: ../python/jira_endpoints.py
+  parameters:
+    - name: issue_key
+      type: string
+      description: |
+        The issue key (e.g., 'RD-123', 'TEST-456').
+        This is the unique identifier for the issue visible in the Jira UI.
+      examples: [
+        "RD-123",
+        "TEST-456",
+        "PROJ-789"
+      ]
+  return:
+    type: object
+    properties:
+      key:
+        type: string
+        description: The issue key
+      id:
+        type: string
+        description: The issue ID
+      summary:
+        type: string
+        description: The issue summary
+      description:
+        type: string
+        description: The issue description
+      status:
+        type: string
+        description: The current status
+      assignee:
+        type: string
+        description: The assignee display name
+      assignee_account_id:
+        type: string
+        description: The assignee account ID
+      reporter:
+        type: string
+        description: The reporter display name
+      reporter_account_id:
+        type: string
+        description: The reporter account ID
+      issue_type:
+        type: string
+        description: The issue type
+      priority:
+        type: string
+        description: The priority level
+      resolution:
+        type: string
+        description: The resolution
+      resolution_date:
+        type: string
+        description: The resolution date
+      created:
+        type: string
+        description: The creation date
+      updated:
+        type: string
+        description: The last update date
+      due_date:
+        type: string
+        description: The due date
+      labels:
+        type: array
+        items:
+          type: string
+        description: The issue labels
+      components:
+        type: array
+        items:
+          type: string
+        description: The issue components
+      fix_versions:
+        type: array
+        items:
+          type: string
+        description: The fix versions
+      project:
+        type: object
+        properties:
+          key:
+            type: string
+          name:
+            type: string
+        description: The project information
+      parent:
+        type: string
+        description: The parent issue key
+      url:
+        type: string
+        description: The issue URL
+  tests:
+    - name: "Get issue by key"
+      description: "Verify issue retrieval returns expected structure"
+      arguments:
+        - key: issue_key
+          value: "RD-15333"

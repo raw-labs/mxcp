@@ -3,8 +3,36 @@ mxcp: 1
 tool:
   name: "list_sobjects"
   description: "Use this tool to get a list of all Salesforce object names available in your org. This is essential for exploring your Salesforce instance and understanding what data you can access. The tool returns a simple list of object names (e.g., ['Account', 'Contact', 'Opportunity']). Use this before using other tools to ensure you're using valid object names. For example, use this to find custom objects in your org or to verify the exact spelling of standard objects. If you need detailed information about a specific object's structure, use the describe_sobject tool instead."
-  parameters: []
+  language: python
   source:
-    code: SELECT list_sobjects_salesforce();
+    file: ../python/salesforce_endpoints.py
+  parameters:
+    - name: filter
+      type: string
+      description: "Optional fuzzy filter to match object names (case-insensitive substring search). Examples: 'account', '__c' for custom objects, 'contact', etc. If not provided, all objects are returned."
+      examples:
+        - "account"
+        - "__c"
+        - "contact"
+      default: null
+  return:
+    type: array
+    items:
+      type: string
   annotations:
-    readOnlyHint: true 
+    readOnlyHint: true
+  tests:
+    - name: "Contains standard objects"
+      description: "Verify standard Salesforce objects are present"
+      arguments: []
+      result_contains_all:
+        - "Account"
+        - "Contact"
+        - "Opportunity" 
+    - name: "filter"
+      description: "Verify the filter is applied"
+      arguments:
+        - key: filter
+          value: "count"
+      result_contains_all:
+        - "Account"
