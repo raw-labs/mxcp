@@ -68,7 +68,7 @@ class TypeValidator:
         
         # Check for required parameters (those without defaults)
         for param_schema in self.schema.input_parameters:
-            if param_schema.default is None and param_schema.name not in params:
+            if not param_schema.has_default and param_schema.name not in params:
                 raise ValidationError(f"Required parameter missing: {param_schema.name}")
         
         # Validate each parameter
@@ -185,7 +185,7 @@ class TypeValidator:
         
         if self.schema.input_parameters:
             for param_schema in self.schema.input_parameters:
-                if param_schema.name not in result and param_schema.default is not None:
+                if param_schema.name not in result and param_schema.has_default:
                     result[param_schema.name] = param_schema.default
                 
         return result
