@@ -225,6 +225,7 @@ class RAWMCP:
             
             self.auth_settings = AuthSettings(
                 issuer_url=base_url,
+                resource_server_url=None,
                 client_registration_options=ClientRegistrationOptions(
                     enabled=True,
                     valid_scopes=None,  # Accept any scope
@@ -1426,4 +1427,4 @@ class RAWMCP:
             return JSONResponse(
                 content=metadata,
                 headers={"Content-Type": "application/json"}
-            ) 
+            )

@@ -11,7 +11,7 @@ readme = "README.md"
 license = "BUSL-1.1"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp>=1.9.0",  # Official MCP Python SDK
+    "mcp~=1.12.0",  # Official MCP Python SDK
     "click>=8.1.7",
     "pyyaml>=6.0.1",
     "jsonschema",
