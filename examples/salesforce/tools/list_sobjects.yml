@@ -22,10 +22,6 @@ tool:
   annotations:
     readOnlyHint: true
   tests:
-    - name: "Returns array of object names"
-      description: "Verify the tool returns an array of Salesforce object names"
-      arguments: []
-      result_contains_item: "Account"
     - name: "Contains standard objects"
       description: "Verify standard Salesforce objects are present"
       arguments: []
@@ -33,3 +29,10 @@ tool:
         - "Account"
         - "Contact"
         - "Opportunity" 
+    - name: "filter"
+      description: "Verify the filter is applied"
+      arguments:
+        - key: filter
+          value: "count"
+      result_contains_all:
+        - "Account"
