@@ -20,5 +20,5 @@ tool:
     - name: verify_lifecycle
       arguments: []
       result_contains:
-        init_called: false
-        lifecycle_works: false 
+        init_called: true
+        lifecycle_works: true 

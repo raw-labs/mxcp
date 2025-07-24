@@ -1,0 +1,33 @@
+mxcp: 1
+tool:
+  name: soql
+  description: |
+    Execute a SOQL (Salesforce Object Query Language) query. Returns query results as an array of records.
+    For personalized queries (e.g., 'my tasks', 'my opportunities'), use the whoami tool first to get the current user's ID for filtering (e.g., WHERE OwnerId = 'user_id').
+  tags: ["salesforce", "query", "data"]
+  annotations:
+    title: "Execute SOQL Query"
+    readOnlyHint: true
+    idempotentHint: true
+  parameters:
+    - name: query
+      type: string
+      description: "SOQL query string to execute"
+      examples: ["SELECT Id, Name FROM Account LIMIT 10", "SELECT Id, Email FROM Contact WHERE LastName = 'Smith'"]
+  return:
+    type: array
+    description: "Query results"
+    items:
+      type: object
+      description: "Record data"
+      additionalProperties: true
+  language: python
+  source:
+    file: ../python/salesforce_client.py
+  tests:
+    - name: "Simple Account query"
+      description: "Test executing a basic SOQL query on Account object"
+      arguments:
+        - key: query
+          value: "SELECT Id, Name FROM Account LIMIT 1"
+      result_length: 1 
