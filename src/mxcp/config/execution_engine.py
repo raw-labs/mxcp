@@ -198,7 +198,15 @@ def create_execution_engine(
         if repo_root is None:
             repo_root = find_repo_root()
         
-        python_executor = PythonExecutor(repo_root=repo_root)
+        # Create Python executor with runtime context for init hooks
+        # This ensures init hooks have access to config, db, and plugins
+        python_executor = PythonExecutor(
+            repo_root=repo_root,
+            user_config=user_config,
+            site_config=site_config,
+            duckdb_session=duckdb_executor.session,
+            plugins=duckdb_executor.session.plugins
+        )
         engine.register_executor(python_executor)
         logger.info("Registered Python executor")
         
