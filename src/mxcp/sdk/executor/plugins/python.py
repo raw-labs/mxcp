@@ -469,7 +469,7 @@ class PythonExecutor(ExecutorPlugin):
                 finally:
                     reset_execution_context(context_token)
             else:
-                # For sync functions, set context only in the worker thread
+                # For sync functions, use copy_context to propagate all context variables to thread
                 def sync_function_wrapper():
                     from ..context import set_execution_context, reset_execution_context
                     thread_token = set_execution_context(context)
@@ -478,9 +478,11 @@ class PythonExecutor(ExecutorPlugin):
                     finally:
                         reset_execution_context(thread_token)
                 
-                # Run in thread pool to avoid blocking
+                # Copy current context (including auth context) and run in thread pool
+                import contextvars
+                ctx = contextvars.copy_context()
                 loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(None, sync_function_wrapper)
+                result = await loop.run_in_executor(None, ctx.run, sync_function_wrapper)
             
             return result
                 
