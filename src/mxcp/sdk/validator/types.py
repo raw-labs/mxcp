@@ -77,14 +77,19 @@ class ParameterSchema(BaseTypeSchema):
     """Schema definition for a parameter."""
     name: str = ""  # Required, but set after base class init
     default: Optional[Any] = None
+    has_default: bool = False
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ParameterSchema':
         """Create ParameterSchema from dictionary."""
+        has_default = 'default' in data
+        default_value = data['default'] if has_default else None
+        
         instance = cls(
             name=data['name'],
             type=data['type'],
-            default=data.get('default')
+            default=default_value,
+            has_default=has_default
         )
         instance._update_from_dict(data)
         return instance
