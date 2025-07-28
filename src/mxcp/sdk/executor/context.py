@@ -7,7 +7,6 @@ and extensible state between MXCP components.
 import contextvars
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
-from contextlib import contextmanager
 
 from mxcp.sdk.auth import UserContext
 
@@ -178,56 +177,4 @@ def reset_execution_context(token: contextvars.Token) -> None:
     Args:
         token: The token returned by set_execution_context
     """
-    execution_context_var.reset(token)
-
-
-@contextmanager
-def execution_context_for_init_hooks(
-    user_config: Optional[Dict] = None,
-    site_config: Optional[Dict] = None,
-    duckdb_session = None,
-    plugins: Optional[Dict] = None
-):
-    """
-    Context manager for setting up ExecutionContext for init hooks.
-    
-    This helper function creates an ExecutionContext with the provided
-    runtime data, sets it as the current context, and automatically
-    cleans it up when done.
-    
-    Args:
-        user_config: User configuration for runtime context
-        site_config: Site configuration for runtime context
-        duckdb_session: DuckDB session for runtime context
-        plugins: Plugins dict for runtime context
-        
-    Yields:
-        The ExecutionContext that was created and set
-        
-    Example:
-        >>> with execution_context_for_init_hooks(user_config, site_config, session) as context:
-        ...     run_init_hooks()  # init hooks have access to context
-    """
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    context = None
-    token = None
-    
-    try:
-        if user_config and site_config and duckdb_session:
-            context = ExecutionContext()
-            context.set("user_config", user_config)
-            context.set("site_config", site_config)
-            context.set("duckdb_session", duckdb_session)
-            if plugins:
-                context.set("plugins", plugins)
-            token = set_execution_context(context)
-            logger.info("Set up ExecutionContext for init hooks")
-        
-        yield context
-        
-    finally:
-        if token:
-            reset_execution_context(token)
-            logger.info("Cleaned up ExecutionContext after init hooks") 
+    execution_context_var.reset(token) 

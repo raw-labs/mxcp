@@ -13,8 +13,7 @@ from .context import (
     ExecutionContext,
     get_execution_context,
     set_execution_context,
-    reset_execution_context,
-    execution_context_for_init_hooks
+    reset_execution_context
 )
 from .interfaces import ExecutorPlugin, ExecutionEngine
 
@@ -24,7 +23,6 @@ __all__ = [
     "get_execution_context",
     "set_execution_context",
     "reset_execution_context",
-    "execution_context_for_init_hooks",
     
     # Interfaces
     "ExecutorPlugin",

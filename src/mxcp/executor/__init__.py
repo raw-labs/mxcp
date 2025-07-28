@@ -33,7 +33,6 @@ from mxcp.sdk.executor import (
     get_execution_context,
     set_execution_context,
     reset_execution_context,
-    execution_context_for_init_hooks,
     ExecutorPlugin,
     ExecutionEngine,
 )
@@ -46,7 +45,6 @@ __all__ = [
     "get_execution_context",
     "set_execution_context",
     "reset_execution_context",
-    "execution_context_for_init_hooks",
     "ExecutorPlugin",
     "ExecutionEngine",
     "plugins",
