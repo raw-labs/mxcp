@@ -41,16 +41,66 @@ Example usage:
     ... )
 """
 
-from typing import Optional
+from typing import Optional, Dict, Any
 from pathlib import Path
+from contextlib import contextmanager
 import logging
 
 from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
-from mxcp.sdk.executor import ExecutionEngine
+from mxcp.sdk.executor import ExecutionEngine, ExecutionContext, set_execution_context, reset_execution_context
 from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def execution_context_for_init_hooks(
+    user_config: Optional[UserConfig] = None,
+    site_config: Optional[SiteConfig] = None,
+    duckdb_session = None,
+    plugins: Optional[Dict] = None
+):
+    """
+    Context manager for setting up ExecutionContext for init hooks.
+    
+    This helper function creates an ExecutionContext with the provided
+    runtime data, sets it as the current context, and automatically
+    cleans it up when done.
+    
+    Args:
+        user_config: UserConfig object containing user configuration for runtime context
+        site_config: SiteConfig object containing site configuration for runtime context
+        duckdb_session: DuckDB session for runtime context
+        plugins: Plugins dict for runtime context
+        
+    Yields:
+        The ExecutionContext that was created and set
+        
+    Example:
+        >>> with execution_context_for_init_hooks(user_config, site_config, session) as context:
+        ...     run_init_hooks()  # init hooks have access to context
+    """
+    context = None
+    token = None
+    
+    try:
+        if user_config and site_config and duckdb_session:
+            context = ExecutionContext()
+            context.set("user_config", user_config)
+            context.set("site_config", site_config)
+            context.set("duckdb_session", duckdb_session)
+            if plugins:
+                context.set("plugins", plugins)
+            token = set_execution_context(context)
+            logger.info("Set up ExecutionContext for init hooks")
+        
+        yield context
+        
+    finally:
+        if token:
+            reset_execution_context(token)
+            logger.info("Cleaned up ExecutionContext after init hooks")
 
 
 def create_execution_engine(
@@ -198,7 +248,15 @@ def create_execution_engine(
         if repo_root is None:
             repo_root = find_repo_root()
         
-        python_executor = PythonExecutor(repo_root=repo_root)
+        # Create Python executor with runtime context for init hooks
+        # This ensures init hooks have access to config, db, and plugins
+        with execution_context_for_init_hooks(
+            user_config=user_config,
+            site_config=site_config,
+            duckdb_session=duckdb_executor.session,
+            plugins=duckdb_executor.session.plugins
+        ):
+            python_executor = PythonExecutor(repo_root=repo_root)
         engine.register_executor(python_executor)
         logger.info("Registered Python executor")
         

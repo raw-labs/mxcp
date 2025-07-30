@@ -447,8 +447,8 @@ class PythonExecutor(ExecutorPlugin):
                         # Only catch errors related to introspection, not runtime errors
                         continue
             
-            # If no suitable function found, return None
-            return None
+            # No suitable function found
+            raise ValueError("No suitable function found in inline code")
             
         except Exception as e:
             logger.error(f"Failed to execute inline code: {e}")

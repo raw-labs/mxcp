@@ -620,3 +620,14 @@ def check_all_secrets() -> dict:
                 assert echo_tool is not None, "echo_message tool not found"
                 assert echo_tool["description"] == "Echo a message"
                 assert len(echo_tool.get("inputSchema", {}).get("properties", {})) == 1
+
+
+    @pytest.mark.asyncio
+    async def test_global_var(self, integration_fixture_dir):
+        """Test that global variables are set correctly."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+            
+            async with MCPTestClient(server.port) as client:
+                result = await client.call_tool("get_global_var", {})
+                assert result["result"] == "initial_key_123"
