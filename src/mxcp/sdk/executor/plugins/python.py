@@ -99,9 +99,6 @@ class PythonExecutor(ExecutorPlugin):
         Creates Python loader, preloads all modules to register hooks,
         and runs init hooks to complete initialization.
         
-        Note: ExecutionContext for init hooks should be set up externally
-        using execution_context_for_init_hooks() before calling this constructor.
-        
         Args:
             repo_root: Repository root directory. If None, will use current working directory.
         """
@@ -122,13 +119,11 @@ class PythonExecutor(ExecutorPlugin):
             logger.info("Preloading Python modules to register hooks...")
             self._loader.preload_all_modules()
             
-            # Then run init hooks - ExecutionContext should be set up externally
+            # Then run init hooks on the now-registered hooks
             from mxcp.runtime import run_init_hooks
             logger.info("Running init hooks after module preload...")
-            
             run_init_hooks()
             logger.info("Init hooks completed successfully")
-                    
         except ImportError:
             logger.debug("Runtime module not available for init hooks")
         except Exception as e:
