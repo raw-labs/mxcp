@@ -56,8 +56,8 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def execution_context_for_init_hooks(
-    user_config: Optional[Dict] = None,
-    site_config: Optional[Dict] = None,
+    user_config: Optional[UserConfig] = None,
+    site_config: Optional[SiteConfig] = None,
     duckdb_session = None,
     plugins: Optional[Dict] = None
 ):
@@ -69,8 +69,8 @@ def execution_context_for_init_hooks(
     cleans it up when done.
     
     Args:
-        user_config: User configuration for runtime context
-        site_config: Site configuration for runtime context
+        user_config: UserConfig object containing user configuration for runtime context
+        site_config: SiteConfig object containing site configuration for runtime context
         duckdb_session: DuckDB session for runtime context
         plugins: Plugins dict for runtime context
         
