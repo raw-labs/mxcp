@@ -18,7 +18,7 @@ from unittest.mock import patch, MagicMock
 from typing import Dict, Any
 
 # Import all the new architecture components
-from mxcp.core.config import (
+from mxcp.sdk.core.config import (
     ResolverEngine,
     ResolverConfig,
     ResolvedReference,

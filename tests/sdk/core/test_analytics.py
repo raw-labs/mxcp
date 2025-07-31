@@ -1,5 +1,5 @@
 """
-Comprehensive tests for mxcp.core.analytics module.
+Comprehensive tests for mxcp.sdk.core.analytics module.
 
 This test suite covers all aspects of the analytics functionality including:
 - PostHog client initialization and configuration
@@ -18,7 +18,7 @@ import time
 from unittest.mock import Mock, patch, MagicMock
 from concurrent.futures import ThreadPoolExecutor
 
-from mxcp.core.analytics import (
+from mxcp.sdk.core.analytics import (
     initialize_analytics,
     is_analytics_opted_out,
     track_event,
@@ -75,14 +75,14 @@ class TestAnalyticsConfiguration:
 class TestAnalyticsInitialization:
     """Test analytics initialization with different scenarios."""
     
-    @patch('mxcp.core.analytics.Posthog')
+    @patch('mxcp.sdk.core.analytics.Posthog')
     def test_initialize_analytics_when_enabled(self, mock_posthog):
         """Test analytics initialization when not opted out."""
         mock_client = Mock()
         mock_posthog.return_value = mock_client
         
         with patch.dict(os.environ, {"MXCP_DISABLE_ANALYTICS": "false"}):
-            with patch('mxcp.core.analytics.posthog_client', None):
+            with patch('mxcp.sdk.core.analytics.posthog_client', None):
                 initialize_analytics()
                 
                 mock_posthog.assert_called_once_with(
@@ -93,11 +93,11 @@ class TestAnalyticsInitialization:
                     timeout=POSTHOG_TIMEOUT
                 )
     
-    @patch('mxcp.core.analytics.Posthog')
+    @patch('mxcp.sdk.core.analytics.Posthog')
     def test_initialize_analytics_when_opted_out(self, mock_posthog):
         """Test analytics initialization when opted out."""
         with patch.dict(os.environ, {"MXCP_DISABLE_ANALYTICS": "true"}):
-            with patch('mxcp.core.analytics.posthog_client', None):
+            with patch('mxcp.sdk.core.analytics.posthog_client', None):
                 initialize_analytics()
                 
                 mock_posthog.assert_not_called()
@@ -105,7 +105,7 @@ class TestAnalyticsInitialization:
 class TestEventTracking:
     """Test event tracking functionality."""
     
-    @patch('mxcp.core.analytics.posthog_client')
+    @patch('mxcp.sdk.core.analytics.posthog_client')
     def test_track_event_basic(self, mock_client):
         """Test basic event tracking."""
         mock_client.capture = Mock()
@@ -125,7 +125,7 @@ class TestEventTracking:
             assert call_args[1]['properties']['app'] == "mxcp"
             assert call_args[1]['properties']['version'] == PACKAGE_VERSION
     
-    @patch('mxcp.core.analytics.posthog_client')
+    @patch('mxcp.sdk.core.analytics.posthog_client')
     def test_track_event_with_properties(self, mock_client):
         """Test event tracking with custom properties."""
         mock_client.capture = Mock()
@@ -153,7 +153,7 @@ class TestEventTracking:
             assert properties['success'] is True
             assert properties['file_size'] == 1024
     
-    @patch('mxcp.core.analytics.posthog_client')
+    @patch('mxcp.sdk.core.analytics.posthog_client')
     def test_track_event_when_opted_out(self, mock_client):
         """Test that events are not tracked when opted out."""
         mock_client.capture = Mock()
@@ -167,7 +167,7 @@ class TestEventTracking:
             # Verify no events were tracked
             mock_client.capture.assert_not_called()
     
-    @patch('mxcp.core.analytics.posthog_client')
+    @patch('mxcp.sdk.core.analytics.posthog_client')
     def test_track_event_client_none(self, mock_client):
         """Test event tracking when client is None."""
         mock_client = None
@@ -179,7 +179,7 @@ class TestEventTracking:
             # Wait for potential async operation
             time.sleep(0.1)
     
-    @patch('mxcp.core.analytics.posthog_client')
+    @patch('mxcp.sdk.core.analytics.posthog_client')
     def test_track_event_error_handling(self, mock_client):
         """Test that analytics errors are handled gracefully."""
         mock_client.capture = Mock(side_effect=Exception("Analytics error"))
@@ -197,7 +197,7 @@ class TestEventTracking:
 class TestCommandTracking:
     """Test command tracking functionality."""
     
-    @patch('mxcp.core.analytics.track_event')
+    @patch('mxcp.sdk.core.analytics.track_event')
     def test_track_command_success(self, mock_track_event):
         """Test tracking successful command execution."""
         track_command("validate", True, duration_ms=150.2)
@@ -210,7 +210,7 @@ class TestCommandTracking:
         
         mock_track_event.assert_called_once_with("cli_command_executed", expected_properties)
     
-    @patch('mxcp.core.analytics.track_event')
+    @patch('mxcp.sdk.core.analytics.track_event')
     def test_track_command_failure(self, mock_track_event):
         """Test tracking failed command execution."""
         track_command("run", False, error="Configuration not found", duration_ms=25.8)
@@ -224,7 +224,7 @@ class TestCommandTracking:
         
         mock_track_event.assert_called_once_with("cli_command_executed", expected_properties)
     
-    @patch('mxcp.core.analytics.track_event')
+    @patch('mxcp.sdk.core.analytics.track_event')
     def test_track_command_minimal(self, mock_track_event):
         """Test tracking command with minimal parameters."""
         track_command("init", True)
@@ -236,7 +236,7 @@ class TestCommandTracking:
         
         mock_track_event.assert_called_once_with("cli_command_executed", expected_properties)
     
-    @patch('mxcp.core.analytics.track_command')
+    @patch('mxcp.sdk.core.analytics.track_command')
     def test_track_base_command(self, mock_track_command):
         """Test tracking base command execution."""
         track_base_command()
@@ -246,7 +246,7 @@ class TestCommandTracking:
 class TestTimingDecorator:
     """Test the timing decorator functionality."""
     
-    @patch('mxcp.core.analytics.track_command')
+    @patch('mxcp.sdk.core.analytics.track_command')
     def test_timing_decorator_success(self, mock_track_command):
         """Test timing decorator with successful function execution."""
         
@@ -269,7 +269,7 @@ class TestTimingDecorator:
         assert call_kwargs.get('duration_ms') is not None
         assert call_kwargs.get('duration_ms') > 0
     
-    @patch('mxcp.core.analytics.track_command')
+    @patch('mxcp.sdk.core.analytics.track_command')
     def test_timing_decorator_failure(self, mock_track_command):
         """Test timing decorator with function that raises exception."""
         
@@ -303,7 +303,7 @@ class TestTimingDecorator:
         assert documented_function.__name__ == "documented_function"
         assert documented_function.__doc__ == "This is a test function."
     
-    @patch('mxcp.core.analytics.track_command')
+    @patch('mxcp.sdk.core.analytics.track_command')
     def test_timing_decorator_with_args_kwargs(self, mock_track_command):
         """Test timing decorator with function that takes arguments."""
         
@@ -324,7 +324,7 @@ class TestTimingDecorator:
 class TestThreadSafety:
     """Test thread safety of analytics operations."""
     
-    @patch('mxcp.core.analytics.posthog_client')
+    @patch('mxcp.sdk.core.analytics.posthog_client')
     def test_concurrent_event_tracking(self, mock_client):
         """Test concurrent event tracking from multiple threads."""
         mock_client.capture = Mock()
@@ -348,7 +348,7 @@ class TestThreadSafety:
         # Verify all events were tracked
         assert mock_client.capture.call_count == 15  # 3 threads * 5 events each
     
-    @patch('mxcp.core.analytics.track_command')
+    @patch('mxcp.sdk.core.analytics.track_command')
     def test_concurrent_decorator_usage(self, mock_track_command):
         """Test concurrent usage of timing decorator."""
         
@@ -378,7 +378,7 @@ class TestThreadSafety:
 class TestErrorHandling:
     """Test error handling and fault tolerance."""
     
-    @patch('mxcp.core.analytics.posthog_client')
+    @patch('mxcp.sdk.core.analytics.posthog_client')
     def test_posthog_client_error_handling(self, mock_client):
         """Test error handling when PostHog client raises exceptions."""
         mock_client.capture = Mock(side_effect=Exception("PostHog error"))
@@ -393,17 +393,17 @@ class TestErrorHandling:
             # Verify capture was called
             mock_client.capture.assert_called_once()
     
-    @patch('mxcp.core.analytics.analytics_executor')
+    @patch('mxcp.sdk.core.analytics.analytics_executor')
     def test_thread_pool_error_handling(self, mock_executor):
         """Test error handling when thread pool operations fail."""
         mock_executor.submit = Mock(side_effect=Exception("Thread pool error"))
         
         with patch.dict(os.environ, {"MXCP_DISABLE_ANALYTICS": "false"}):
-            with patch('mxcp.core.analytics.posthog_client', Mock()):
+            with patch('mxcp.sdk.core.analytics.posthog_client', Mock()):
                 # This should not raise an exception
                 track_event("test_event")
     
-    @patch('mxcp.core.analytics.track_command')
+    @patch('mxcp.sdk.core.analytics.track_command')
     def test_decorator_analytics_error_handling(self, mock_track_command):
         """Test that decorator still works when analytics tracking fails."""
         mock_track_command.side_effect = Exception("Analytics error")

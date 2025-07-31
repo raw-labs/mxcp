@@ -37,7 +37,7 @@ status, timing, and detailed error information for debugging and monitoring.
 ## Quick Start
 
 ```python
-from mxcp.core.config import ResolverEngine
+from mxcp.sdk.core.config import ResolverEngine
 
 # Basic usage with default configuration  
 with ResolverEngine() as engine:
@@ -86,7 +86,7 @@ summary = engine.get_reference_summary()
 Extend the system with custom resolver plugins:
 
 ```python
-from mxcp.core.config import ResolverPlugin
+from mxcp.sdk.core.config import ResolverPlugin
 
 class CustomResolver(ResolverPlugin):
     @property

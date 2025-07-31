@@ -19,7 +19,7 @@ Key Features:
 
 Quick Start:
     ```python
-    from mxcp.core.analytics import initialize_analytics, track_event, track_command
+    from mxcp.sdk.core.analytics import initialize_analytics, track_event, track_command
     
     # Initialize analytics (call once at application startup)
     initialize_analytics()
@@ -91,7 +91,7 @@ def initialize_analytics() -> None:
     
     Example:
         ```python
-        from mxcp.core.analytics import initialize_analytics
+        from mxcp.sdk.core.analytics import initialize_analytics
         
         # Call once at application startup
         initialize_analytics()
@@ -129,7 +129,7 @@ def is_analytics_opted_out() -> bool:
     
     Example:
         ```python
-        from mxcp.core.analytics import is_analytics_opted_out
+        from mxcp.sdk.core.analytics import is_analytics_opted_out
         
         if not is_analytics_opted_out():
             # Analytics is enabled
@@ -169,7 +169,7 @@ def track_event(event_name: str, properties: Optional[dict] = None) -> None:
     
     Example:
         ```python
-        from mxcp.core.analytics import track_event
+        from mxcp.sdk.core.analytics import track_event
         
         # Simple event tracking
         track_event("user_login")
@@ -245,7 +245,7 @@ def track_command(command_name: str, success: bool, error: Optional[str] = None,
     
     Example:
         ```python
-        from mxcp.core.analytics import track_command
+        from mxcp.sdk.core.analytics import track_command
         
         # Track successful command
         track_command("validate", success=True, duration_ms=150.2)
@@ -283,7 +283,7 @@ def track_base_command() -> None:
     
     Example:
         ```python
-        from mxcp.core.analytics import track_base_command
+        from mxcp.sdk.core.analytics import track_base_command
         
         # Called when user runs 'mxcp' without arguments
         track_base_command()
@@ -323,7 +323,7 @@ def track_command_with_timing(command_name: str) -> Any:
     
     Example:
         ```python
-        from mxcp.core.analytics import track_command_with_timing
+        from mxcp.sdk.core.analytics import track_command_with_timing
         
         @track_command_with_timing("validate_config")
         def validate_config(config_path: str) -> bool:

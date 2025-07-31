@@ -112,7 +112,7 @@ class ResolverEngine:
     ### Basic Usage
     
     ```python
-    from mxcp.core.config import ResolverEngine
+    from mxcp.sdk.core.config import ResolverEngine
     
     # Create engine with default configuration
     engine = ResolverEngine()
@@ -178,7 +178,7 @@ class ResolverEngine:
     ### Custom Resolvers
     
     ```python
-    from mxcp.core.config import ResolverPlugin
+    from mxcp.sdk.core.config import ResolverPlugin
     
     class CustomResolver(ResolverPlugin):
         @property

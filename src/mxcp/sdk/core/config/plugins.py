@@ -51,7 +51,7 @@ class ResolverPlugin(ABC):
     ```python
     import re
     from typing import List
-    from mxcp.core.config import ResolverPlugin
+    from mxcp.sdk.core.config import ResolverPlugin
     
     class DatabaseResolver(ResolverPlugin):
         '''Resolver for database connection strings like db://connection_name'''
@@ -158,7 +158,7 @@ class ResolverPlugin(ABC):
     Or through the global registry:
     
     ```python
-    from mxcp.core.config.plugins import register_resolver
+    from mxcp.sdk.core.config.plugins import register_resolver
     register_resolver(DatabaseResolver(config))
     ```
     """
