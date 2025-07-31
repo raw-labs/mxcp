@@ -12,9 +12,11 @@ from mxcp.endpoints.executor import EndpointType
 from mxcp.config.site_config import get_active_profile
 from mxcp.endpoints.validate import validate_endpoint
 from makefun import create_function
-from mxcp.sdk.auth.providers import GeneralOAuthAuthorizationServer
+from mxcp.sdk.auth.providers import GeneralOAuthAuthorizationServer, ExternalOAuthHandler
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
-from mxcp.core.auth_helpers import create_oauth_handler, create_url_builder
+from mxcp.sdk.auth.url_utils import URLBuilder
+from mxcp.config.types import UserAuthConfig, UserHttpTransportConfig
+from mxcp.sdk.auth.types import AuthConfig, HttpTransportConfig
 from mxcp.sdk.audit import AuditLogger
 from mcp.types import ToolAnnotations
 from pydantic import Field, create_model
@@ -28,6 +30,100 @@ from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 from mxcp.sdk.auth.context import get_user_context
 
 logger = logging.getLogger(__name__)
+
+
+def translate_transport_config(user_transport_config: Optional[UserHttpTransportConfig]) -> Optional[HttpTransportConfig]:
+    """Translate user HTTP transport config to SDK transport config.
+    
+    Args:
+        user_transport_config: User configuration transport section
+        
+    Returns:
+        SDK-compatible HTTP transport configuration
+    """
+    if not user_transport_config:
+        return None
+        
+    return {
+        "port": user_transport_config.get("port"),
+        "host": user_transport_config.get("host"),
+        "scheme": user_transport_config.get("scheme"),
+        "base_url": user_transport_config.get("base_url"),
+        "trust_proxy": user_transport_config.get("trust_proxy"),
+        "stateless": user_transport_config.get("stateless"),
+    }
+
+
+def create_oauth_handler(user_auth_config: UserAuthConfig, host: str = "localhost", port: int = 8000, user_config: Optional[Dict[str, Any]] = None) -> Optional[ExternalOAuthHandler]:
+    """Create an OAuth handler from user configuration.
+    
+    This helper translates user config to SDK types and instantiates the appropriate handler.
+    
+    Args:
+        user_auth_config: User authentication configuration
+        host: The server host to use for callback URLs
+        port: The server port to use for callback URLs
+        user_config: Full user configuration for transport settings (optional)
+        
+    Returns:
+        OAuth handler instance or None if provider is 'none'
+    """
+    provider = user_auth_config.get("provider", "none")
+    
+    if provider == "none":
+        return None
+    
+    # Extract transport config if available
+    transport_config = None
+    if user_config and "transport" in user_config:
+        user_transport = user_config["transport"].get("http")
+        transport_config = translate_transport_config(user_transport)
+    
+    if provider == "github":
+        from mxcp.sdk.auth.github import GitHubOAuthHandler
+        github_config = user_auth_config.get("github")
+        if not github_config:
+            raise ValueError("GitHub provider selected but no GitHub configuration found")
+        return GitHubOAuthHandler(github_config, transport_config, host=host, port=port)
+        
+    elif provider == "atlassian":
+        from mxcp.sdk.auth.atlassian import AtlassianOAuthHandler
+        atlassian_config = user_auth_config.get("atlassian")
+        if not atlassian_config:
+            raise ValueError("Atlassian provider selected but no Atlassian configuration found")
+        return AtlassianOAuthHandler(atlassian_config, transport_config, host=host, port=port)
+        
+    elif provider == "salesforce":
+        from mxcp.sdk.auth.salesforce import SalesforceOAuthHandler
+        salesforce_config = user_auth_config.get("salesforce")
+        if not salesforce_config:
+            raise ValueError("Salesforce provider selected but no Salesforce configuration found")
+        return SalesforceOAuthHandler(salesforce_config, transport_config, host=host, port=port)
+        
+    elif provider == "keycloak":
+        from mxcp.sdk.auth.keycloak import KeycloakOAuthHandler
+        keycloak_config = user_auth_config.get("keycloak")
+        if not keycloak_config:
+            raise ValueError("Keycloak provider selected but no Keycloak configuration found")
+        return KeycloakOAuthHandler(keycloak_config, transport_config, host=host, port=port)
+        
+    else:
+        raise ValueError(f"Unsupported auth provider: {provider}")
+
+
+def create_url_builder(user_config: Dict[str, Any]) -> URLBuilder:
+    """Create a URL builder from user configuration.
+    
+    Args:
+        user_config: User configuration dictionary
+        
+    Returns:
+        Configured URLBuilder instance
+    """
+    user_transport_config = user_config.get("transport", {}).get("http", {})
+    transport_config = translate_transport_config(user_transport_config)
+    return URLBuilder(transport_config)
+
 
 class RAWMCP:
     """MXCP MCP Server implementation that bridges MXCP endpoints with MCP protocol."""

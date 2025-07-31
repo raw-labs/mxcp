@@ -7,7 +7,6 @@ corresponding endpoints and executing them through the SDK ExecutionEngine.
 from typing import Dict, Any, List, Optional
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionEngine, ExecutionContext
-from mxcp.sdk.evals import ToolExecutor
 from .types import EndpointType, ToolEndpoint, ResourceEndpoint
 import logging
 

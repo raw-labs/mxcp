@@ -4,10 +4,8 @@ from mxcp.config.site_config import SiteConfig
 from mxcp.sdk.auth import UserContext
 from mxcp.evals.loader import discover_eval_files, load_eval_suite
 from mxcp.config.execution_engine import create_execution_engine, find_repo_root
-from mxcp.evals.types import EvalSuite, EvalTest, EndpointType, ToolEndpoint, ResourceEndpoint
+from mxcp.evals.types import EndpointType, ToolEndpoint, ResourceEndpoint
 from mxcp.sdk.evals import LLMExecutor, ToolDefinition, ParameterDefinition, ModelConfigType, ClaudeConfig, OpenAIConfig
-from mxcp.sdk.executor import ExecutionEngine
-from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.evals.tool_executor import EndpointToolExecutor
 import logging
