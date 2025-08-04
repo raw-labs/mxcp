@@ -7,7 +7,6 @@ configuration parsing functionality.
 
 from typing import Any, Dict, Optional
 
-# Re-export all SDK policy types for backward compatibility
 from mxcp.sdk.policy import (
     PolicyAction,
     PolicyDefinition,
