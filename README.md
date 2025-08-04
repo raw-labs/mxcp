@@ -369,10 +369,14 @@ Unlike simple MCP servers, MXCP provides:
 # Install globally
 pip install mxcp
 
-# Install with optional integrations
-pip install "mxcp[vault]"      # HashiCorp Vault integration
-pip install "mxcp[onepassword]" # 1Password integration
-pip install "mxcp[all]"        # All optional features
+# Install with optional features
+
+# SDK secret providers (for config resolvers)
+pip install "mxcp[vault]"         # HashiCorp Vault integration
+pip install "mxcp[onepassword]"   # 1Password integration
+
+# Everything optional (secret providers + dev tools)
+pip install "mxcp[all]"           # All optional features
 
 # Or develop locally
 git clone https://github.com/raw-labs/mxcp.git && cd mxcp
