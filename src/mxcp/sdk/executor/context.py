@@ -40,7 +40,7 @@ class ExecutionContext:
         >>> context.set("username", "john.doe")
     """
     
-    # User information from mxcp.sdk.auth (for backward compatibility)
+    # User information
     user_context: Optional[UserContext] = None
     
     # Simple key-value storage

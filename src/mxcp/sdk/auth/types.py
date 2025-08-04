@@ -152,7 +152,4 @@ class StateMeta:
     client_id: str
     callback_url: Optional[str] = None  # Store callback URL for OAuth providers
 
-
-# Type aliases for backward compatibility during migration
-UserAuthConfig = AuthConfig  # Alias for transition period
-UserHttpTransportConfig = HttpTransportConfig  # Alias for transition period 
+ 

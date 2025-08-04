@@ -162,8 +162,8 @@ config = ConfigProxy()
 plugins = PluginsProxy()
 
 # Lifecycle hooks
-_registered_init_hooks: List[Callable] = []
-_registered_shutdown_hooks: List[Callable] = []
+_init_hooks: List[Callable] = []
+_shutdown_hooks: List[Callable] = []
 
 
 def on_init(func: Callable) -> Callable:
@@ -175,7 +175,7 @@ def on_init(func: Callable) -> Callable:
         def setup():
             print("Initializing my module")
     """
-    _registered_init_hooks.append(func)
+    _init_hooks.append(func)
     return func
 
 
@@ -188,13 +188,13 @@ def on_shutdown(func: Callable) -> Callable:
         def cleanup():
             print("Cleaning up resources")
     """
-    _registered_shutdown_hooks.append(func)
+    _shutdown_hooks.append(func)
     return func
 
 
 def run_init_hooks():
     """Run all registered init hooks."""
-    for hook in _registered_init_hooks:
+    for hook in _init_hooks:
         try:
             logger.info(f"Running init hook: {hook.__name__}")
             hook()
@@ -204,7 +204,7 @@ def run_init_hooks():
 
 def run_shutdown_hooks():
     """Run all registered shutdown hooks."""
-    for hook in _registered_shutdown_hooks:
+    for hook in _shutdown_hooks:
         try:
             logger.info(f"Running shutdown hook: {hook.__name__}")
             hook()
@@ -212,48 +212,4 @@ def run_shutdown_hooks():
             logger.error(f"Error in shutdown hook {hook.__name__}: {e}")
 
 
-# Backward compatibility functions for tests
-# TODO: Remove this once we fix the test suite
-_current_context_token: Optional[contextvars.Token] = None
 
-
-# TODO: Remove this once we fix the test suite
-def _set_runtime_context(session, user_config: Dict[str, Any], site_config: Dict[str, Any], plugins: Dict[str, Any], db_lock=None) -> None:
-    """
-    Backward compatibility function for tests.
-    Sets up execution context with the provided parameters.
-    """
-    global _current_context_token
-    
-    # Create execution context
-    context = ExecutionContext()
-    context.set("duckdb_session", session)
-    context.set("user_config", user_config)
-    context.set("site_config", site_config)
-    context.set("plugins", plugins)
-    if db_lock is not None:
-        context.set("db_lock", db_lock)
-    
-    # Set it as current context
-    _current_context_token = set_execution_context(context)
-
-
-# TODO: Remove this once we fix the test suite
-def _clear_runtime_context() -> None:
-    """
-    Backward compatibility function for tests.
-    Clears the current execution context.
-    """
-    global _current_context_token
-    
-    if _current_context_token:
-        reset_execution_context(_current_context_token)
-        _current_context_token = None
-
-
-# Expose hook lists and functions for backward compatibility
-# TODO: Remove this once we fix the test suite
-_init_hooks = _registered_init_hooks
-_shutdown_hooks = _registered_shutdown_hooks
-_run_init_hooks = run_init_hooks
-_run_shutdown_hooks = run_shutdown_hooks
