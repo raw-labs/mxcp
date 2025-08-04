@@ -1,0 +1,95 @@
+name: Performance Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly on Mondays at 2 AM
+
+jobs:
+  performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+    
+    - name: Set up Python
+      run: uv python install 3.11
+    
+    - name: Install dependencies
+      run: uv sync --all-extras --dev
+    
+    - name: Run performance benchmarks
+      run: |
+        # Add performance testing tools
+        uv add --dev pytest-benchmark memory-profiler
+        
+        # Run performance tests if they exist
+        if [ -d "tests/performance" ]; then
+          uv run pytest tests/performance/ --benchmark-only --benchmark-json=benchmark-results.json
+        else
+          echo "No performance tests found - creating basic performance check"
+          uv run python -c "
+          import time
+          import sys
+          sys.path.insert(0, 'src')
+          
+          # Basic import performance test
+          start = time.time()
+          import mxcp
+          import_time = time.time() - start
+          
+          print(f'Import time: {import_time:.4f}s')
+          if import_time > 2.0:
+              print('⚠️  Warning: Import time is high')
+              exit(1)
+          else:
+              print('✓ Import performance is acceptable')
+          "
+        fi
+    
+    - name: Memory usage check
+      run: |
+        uv run python -c "
+        import sys
+        sys.path.insert(0, 'src')
+        import psutil
+        import os
+        
+        # Get initial memory
+        process = psutil.Process(os.getpid())
+        initial_memory = process.memory_info().rss / 1024 / 1024  # MB
+        
+        # Import main modules
+        import mxcp
+        from mxcp.endpoints.loader import EndpointLoader
+        from mxcp.sdk.executor import ExecutionEngine
+        
+        final_memory = process.memory_info().rss / 1024 / 1024  # MB
+        memory_increase = final_memory - initial_memory
+        
+        print(f'Initial memory: {initial_memory:.2f} MB')
+        print(f'Final memory: {final_memory:.2f} MB')
+        print(f'Memory increase: {memory_increase:.2f} MB')
+        
+        if memory_increase > 100:  # More than 100MB increase
+            print('⚠️  Warning: High memory usage on import')
+            exit(1)
+        else:
+            print('✓ Memory usage is acceptable')
+        "
+    
+    - name: Upload performance results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-results
+        path: |
+          benchmark-results.json
+        retention-days: 30
