@@ -1,9 +1,83 @@
 # -*- coding: utf-8 -*-
-"""MXCP SDK Validator Module - Core type validation functionality.
+"""MXCP SDK Validator - OpenAPI-style type validation and conversion.
 
-This module provides standalone type validation based on MXCP's OpenAPI-style
-type system, without dependencies on decorators, YAML loaders, or JSON schema
-conversion utilities.
+This module provides comprehensive type validation functionality including:
+- Input parameter validation with default values and constraints
+- Output result validation with schema compliance
+- Type conversion between Python and OpenAPI types
+- Sensitive field masking and data protection
+
+## Key Components
+
+### Core Classes
+- `TypeValidator`: Main validation engine for inputs and outputs
+- `TypeConverter`: Handles type conversion and coercion
+- `ValidationError`: Exception raised for validation failures
+
+### Schema Types
+- `ValidationSchema`: Complete validation configuration
+- `ParameterSchema`: Individual parameter definition  
+- `TypeSchema`: Type definitions (string, number, object, array, etc.)
+
+## Quick Examples
+
+### Input Validation
+```python
+from mxcp.sdk.validator import TypeValidator, ValidationSchema
+
+# Define validation schema
+schema = ValidationSchema(
+    parameters=[
+        {
+            "name": "user_id",
+            "type": "string",
+            "required": True,
+            "pattern": "^user_[0-9]+$"
+        },
+        {
+            "name": "limit", 
+            "type": "integer",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 100
+        }
+    ]
+)
+
+# Validate inputs
+validator = TypeValidator(schema)
+validated_params = validator.validate_input({
+    "user_id": "user_123",
+    "limit": 25
+})
+# Returns: {"user_id": "user_123", "limit": 25}
+```
+
+### Output Validation
+```python
+# Define output schema
+schema = ValidationSchema(
+    return_type={
+        "type": "object",
+        "properties": {
+            "users": {"type": "array", "items": {"type": "object"}},
+            "total": {"type": "integer"},
+            "sensitive_data": {"type": "string", "sensitive": True}
+        }
+    }
+)
+
+# Validate and mask sensitive output
+result = {
+    "users": [{"name": "Alice"}, {"name": "Bob"}],
+    "total": 2,
+    "sensitive_data": "secret-value"
+}
+
+validator = TypeValidator(schema)
+validated_output = validator.validate_output(result)
+# sensitive_data is automatically masked: "[REDACTED]"
+```
 """
 
 from .types import (
