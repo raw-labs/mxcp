@@ -8,7 +8,7 @@ import atexit
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
-from mxcp.endpoints.executor import EndpointType
+from mxcp.endpoints.utils import EndpointType
 from mxcp.config.site_config import get_active_profile
 from mxcp.endpoints.validate import validate_endpoint
 from makefun import create_function

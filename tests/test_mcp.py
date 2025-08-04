@@ -4,12 +4,8 @@ import asyncio
 import aiohttp
 from pathlib import Path
 from mxcp.server.mcp import RAWMCP
-from mxcp.endpoints.executor import EndpointType
 import json
-from unittest.mock import Mock, patch, AsyncMock
-import time
-from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config
+from unittest.mock import patch
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():

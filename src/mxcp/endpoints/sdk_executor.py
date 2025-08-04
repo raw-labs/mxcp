@@ -11,7 +11,7 @@ from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig, find_repo_root
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.endpoints.loader import EndpointLoader
-from mxcp.endpoints.executor import get_endpoint_source_code
+from mxcp.endpoints.utils import prepare_source_for_execution
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.auth.providers import UserContext
 from mxcp.policies import parse_policies_from_config
@@ -234,59 +234,17 @@ async def _prepare_source_code(
     Raises:
         ValueError: If no source code or file specified in endpoint definition
     """
-    # Determine language based on endpoint definition or file extension
-    language = endpoint_dict.get("language")
+    # Determine endpoint type
+    endpoint_type = "tool" if "tool" in endpoint_definition else "resource"
     
-    # Handle source code vs file path for SDK executor
-    source = endpoint_dict.get("source", {})
-    if "code" in source:
-        # Inline code - pass directly
-        source_code = source["code"]
-        if not language:
-            language = "sql"  # Default for inline code
-    elif "file" in source:
-        # File source - for Python, pass file path; for SQL, read content
-        file_path = source["file"]
-        if not language:
-            # Infer language from file extension
-            if file_path.endswith('.py'):
-                language = "python"
-            else:
-                language = "sql"
-        
-        if language == "python":
-            # For Python files, resolve the file path correctly and pass to SDK executor
-            # The file_path is relative to the endpoint YAML file, so resolve it first
-            resolved_file_path = Path(file_path)
-            if not resolved_file_path.is_absolute():
-                resolved_file_path = endpoint_file_path.parent / file_path
-            
-            # Convert back to relative path from repo root for SDK executor
-            try:
-                relative_to_repo = resolved_file_path.relative_to(repo_root)
-                file_path_for_executor = str(relative_to_repo)
-            except ValueError:
-                # If the file is outside repo root, use absolute path
-                file_path_for_executor = str(resolved_file_path)
-            
-            # Determine the function name from endpoint name
-            endpoint_type = "tool" if "tool" in endpoint_definition else "resource"
-            function_name = endpoint_dict.get("name") if endpoint_type == "tool" else None
-            
-            if function_name:
-                # Pass file path with function name (e.g., "python/module.py:function_name")
-                source_code = f"{file_path_for_executor}:{function_name}"
-            else:
-                # Just the file path for resources or when no function name
-                source_code = file_path_for_executor
-        else:
-            # For SQL files, read the content (existing behavior)
-            endpoint_type = "tool" if "tool" in endpoint_definition else "resource"
-            source_code = get_endpoint_source_code(dict(endpoint_definition), endpoint_type, endpoint_file_path, repo_root)
-    else:
-        raise ValueError("No source code or file specified in endpoint definition")
-    
-    return language, source_code
+    # Use consolidated utility with SDK executor-specific function name handling
+    return prepare_source_for_execution(
+        endpoint_definition,
+        endpoint_type,
+        endpoint_file_path,
+        repo_root,
+        include_function_name=True
+    )
 
 
 async def _execute_code_with_engine(

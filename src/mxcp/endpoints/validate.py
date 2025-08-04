@@ -5,7 +5,7 @@ from jsonschema import validate as jsonschema_validate
 from referencing import Registry, Resource
 from mxcp.config.site_config import find_repo_root
 from mxcp.config.types import SiteConfig
-from mxcp.endpoints.executor import get_endpoint_source_code
+from mxcp.endpoints.utils import get_endpoint_source_code
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.sdk.executor import ExecutionEngine
 import re

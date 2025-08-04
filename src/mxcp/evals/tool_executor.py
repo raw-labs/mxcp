@@ -7,6 +7,7 @@ corresponding endpoints and executing them through the SDK ExecutionEngine.
 from typing import Dict, Any, List, Optional
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionEngine, ExecutionContext
+from mxcp.endpoints.utils import extract_source_info, detect_language_from_source
 from .types import EndpointType, ToolEndpoint, ResourceEndpoint
 import logging
 
@@ -116,31 +117,12 @@ class EndpointToolExecutor:
         if not endpoint.source:
             raise ValueError(f"No source found for endpoint {self._get_endpoint_name(endpoint)}")
         
-        # Check for inline code first
-        if "code" in endpoint.source:
-            return endpoint.source["code"]
-        
-        # Check for file reference
-        if "file" in endpoint.source:
-            return endpoint.source["file"]
-        
-        raise ValueError(f"No source code or file found for endpoint {self._get_endpoint_name(endpoint)}")
+        source_type, source_value = extract_source_info(endpoint.source)
+        return source_value
     
     def _get_language(self, endpoint: EndpointType, source_info: str) -> str:
         """Determine the programming language for the endpoint."""
-        # Check if language is explicitly specified
-        if endpoint.source and "language" in endpoint.source:
-            return endpoint.source["language"]
-        
-        # Infer from file extension
-        if isinstance(source_info, str):
-            if source_info.endswith((".py", ".python")):
-                return "python"
-            elif source_info.endswith((".sql", ".SQL")):
-                return "sql"
-        
-        # Default to SQL for backward compatibility
-        return "sql"
+        return detect_language_from_source(endpoint.source, source_info)
     
     def _get_endpoint_name(self, endpoint: EndpointType) -> str:
         """Get a descriptive name for the endpoint."""
