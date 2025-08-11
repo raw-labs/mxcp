@@ -23,7 +23,7 @@ Audit schemas can define retention policies that specify how long audit records 
 retention_days: 90  # Keep records for 90 days
 ```
 
-The `mxcp audit cleanup` command applies these retention policies by deleting records older than the specified retention period.
+The `mxcp log-cleanup` command applies these retention policies by deleting records older than the specified retention period.
 
 ## Manual Cleanup
 
@@ -31,16 +31,16 @@ Run cleanup manually:
 
 ```bash
 # Apply retention policies
-mxcp audit cleanup
+mxcp log-cleanup
 
 # Preview what would be deleted (dry run)
-mxcp audit cleanup --dry-run
+mxcp log-cleanup --dry-run
 
 # Use specific profile
-mxcp audit cleanup --profile production
+mxcp log-cleanup --profile production
 
 # Output as JSON
-mxcp audit cleanup --json
+mxcp log-cleanup --json
 ```
 
 ## Automated Cleanup
@@ -54,7 +54,7 @@ Add to your crontab to run daily at 2 AM:
 crontab -e
 
 # Add this line
-0 2 * * * cd /path/to/your/mxcp/project && /usr/bin/mxcp audit cleanup
+0 2 * * * cd /path/to/your/mxcp/project && /usr/bin/mxcp log-cleanup
 ```
 
 ### Using systemd
@@ -105,10 +105,10 @@ View cleanup results:
 journalctl -u mxcp-audit-cleanup.service
 
 # Run with debug output
-mxcp audit cleanup --debug
+mxcp log-cleanup --debug
 
 # Get JSON output for monitoring
-mxcp audit cleanup --json | jq
+mxcp log-cleanup --json | jq
 ```
 
 Example JSON output:

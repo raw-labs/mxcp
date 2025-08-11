@@ -1,4 +1,4 @@
-"""Test the audit cleanup CLI command."""
+"""Test the log cleanup CLI command."""
 import json
 import pytest
 import tempfile
@@ -8,7 +8,7 @@ from pathlib import Path
 from click.testing import CliRunner
 from datetime import datetime, timedelta, timezone
 
-from mxcp.cli.audit import cleanup
+from mxcp.cli.log_cleanup import log_cleanup
 from mxcp.sdk.audit import AuditLogger, AuditSchema
 
 
@@ -44,7 +44,7 @@ profiles:
         Path("audit").mkdir(parents=True)
         Path("audit/test.jsonl").touch()
         
-        result = runner.invoke(cleanup, ['--json', '--dry-run'])
+        result = runner.invoke(log_cleanup, ['--json', '--dry-run'])
         if result.exit_code != 0:
             print(f"Error output: {result.output}")
             print(f"Exception: {result.exception}")
@@ -75,6 +75,6 @@ profiles:
       enabled: false
 """)
         
-        result = runner.invoke(cleanup, [])
+        result = runner.invoke(log_cleanup, [])
         assert result.exit_code == 0
         assert "Audit logging is not enabled" in result.output

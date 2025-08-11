@@ -442,24 +442,12 @@ Compares the current state of your database and endpoints against a previously g
 
 Exit code is 1 if drift is detected, 0 if no drift. For more information, see the [Drift Detection Guide](../features/drift-detection.md).
 
-### `mxcp audit`
-
-Manage MXCP audit logs and policies.
-
-```bash
-mxcp audit COMMAND [OPTIONS]
-```
-
-**Commands:**
-- `log`: Query audit logs
-- `cleanup`: Apply retention policies
-
-#### `mxcp audit log`
+### `mxcp log`
 
 Query MXCP audit logs for tool, resource, and prompt executions.
 
 ```bash
-mxcp audit log [OPTIONS]
+mxcp log [OPTIONS]
 ```
 
 **Options:**
@@ -502,12 +490,12 @@ Audit logs are stored in JSONL (JSON Lines) format, which allows concurrent read
 
 For more information, see the [Audit Logging Guide](../features/auditing.md).
 
-#### `mxcp audit cleanup`
+### `mxcp log-cleanup`
 
 Apply retention policies to remove old audit records.
 
 ```bash
-mxcp audit cleanup [OPTIONS]
+mxcp log-cleanup [OPTIONS]
 ```
 
 **Options:**
@@ -518,13 +506,13 @@ mxcp audit cleanup [OPTIONS]
 
 **Examples:**
 ```bash
-mxcp audit cleanup                  # Apply retention policies
-mxcp audit cleanup --dry-run        # Preview what would be deleted
-mxcp audit cleanup --profile prod   # Use specific profile
-mxcp audit cleanup --json           # Output results as JSON
+mxcp log-cleanup                  # Apply retention policies
+mxcp log-cleanup --dry-run        # Preview what would be deleted
+mxcp log-cleanup --profile prod   # Use specific profile
+mxcp log-cleanup --json           # Output results as JSON
 
 # Schedule with cron (daily at 2 AM)
-0 2 * * * /usr/bin/mxcp audit cleanup
+0 2 * * * /usr/bin/mxcp log-cleanup
 ```
 
 **Description:**

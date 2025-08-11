@@ -14,7 +14,7 @@ from mxcp.audit.exporters import export_to_duckdb, export_to_csv
 from mxcp.sdk.audit import AuditLogger
 
 
-@click.command()
+@click.command(name="log")
 @click.option("--profile", help="Profile name to use")
 @click.option("--tool", help="Filter by specific tool name")
 @click.option("--resource", help="Filter by specific resource URI")

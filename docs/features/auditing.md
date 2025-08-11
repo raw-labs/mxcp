@@ -2,7 +2,7 @@
 title: "Audit Logging"
 description: "Track all tool, resource, and prompt executions with MXCP's enterprise-grade audit logging. Essential for security, compliance, and usage analysis."
 keywords:
-  - mxcp audit logging
+  - mxcp audit logging (log querying)
   - compliance logging
   - security auditing
   - usage tracking

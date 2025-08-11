@@ -1,4 +1,4 @@
-"""CLI commands for audit management operations."""
+"""CLI command for audit log cleanup operations."""
 
 import asyncio
 import click
@@ -10,18 +10,12 @@ from mxcp.config.site_config import load_site_config
 from mxcp.sdk.audit import AuditLogger
 
 
-@click.group(name="audit")
-def audit():
-    """Manage MXCP audit logs and policies."""
-    pass
-
-
-@audit.command()
+@click.command(name="log-cleanup")
 @click.option("--profile", help="Profile name to use")
 @click.option("--dry-run", is_flag=True, help="Show what would be deleted without actually deleting")
 @click.option("--json", "json_output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-def cleanup(profile: Optional[str], dry_run: bool, json_output: bool, debug: bool):
+def log_cleanup(profile: Optional[str], dry_run: bool, json_output: bool, debug: bool):
     """Apply retention policies to remove old audit records.
     
     This command deletes audit records older than their schema's retention policy.
@@ -29,17 +23,17 @@ def cleanup(profile: Optional[str], dry_run: bool, json_output: bool, debug: boo
     
     \b
     Examples:
-        mxcp audit cleanup                  # Apply retention policies
-        mxcp audit cleanup --dry-run        # Preview what would be deleted
-        mxcp audit cleanup --profile prod   # Use specific profile
-        mxcp audit cleanup --json           # Output results as JSON
+        mxcp log-cleanup                  # Apply retention policies
+        mxcp log-cleanup --dry-run        # Preview what would be deleted
+        mxcp log-cleanup --profile prod   # Use specific profile
+        mxcp log-cleanup --json           # Output results as JSON
     
     This command is designed to be run periodically via cron or systemd timer:
         # Cron example (daily at 2 AM):
-        0 2 * * * /usr/bin/mxcp audit cleanup
+        0 2 * * * /usr/bin/mxcp log-cleanup
         
         # Systemd timer example:
-        See mxcp-audit-cleanup.service and mxcp-audit-cleanup.timer
+        See mxcp-log-cleanup.service and mxcp-log-cleanup.timer
     """
     asyncio.run(_cleanup_async(profile, dry_run, json_output, debug))
 
@@ -170,8 +164,3 @@ async def _cleanup_async(
     finally:
         if audit_logger:
             audit_logger.shutdown()
-
-
-# Add the log command to the audit group
-from mxcp.cli.log import log
-audit.add_command(log)
