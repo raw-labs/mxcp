@@ -1054,8 +1054,8 @@ class RAWMCP:
                 
                 # Log the audit event
                 if self.audit_logger:
-                    self.audit_logger.log_event(
-                        caller=caller,
+                    await self.audit_logger.log_event(
+                        caller_type=caller,
                         event_type=endpoint_key,  # "tool", "resource", or "prompt"
                         name=endpoint_def.get('name', endpoint_def.get('uri', 'unknown')),
                         input_params=kwargs,
@@ -1064,7 +1064,7 @@ class RAWMCP:
                         reason=policy_reason,
                         status=status,
                         error=error_msg,
-                        endpoint_def=endpoint_def  # Pass the endpoint definition for schema-based redaction
+                        output_data=result  # Return the result as output_data
                     )
 
         # -------------------------------------------------------------------

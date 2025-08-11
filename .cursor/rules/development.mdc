@@ -1,0 +1,11 @@
+---
+description: Development practices and import management
+globs: ["**/*.py", "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"]
+alwaysApply: true
+---
+
+# Development Practices
+
+- Do not create "backward compatibility" support in the code unless explicitly asked; this is a new s/w stack being used and it has no users yet, so backward compat is not a concern
+- Do not create re-export modules or wrapper functions just to maintain old import paths - update imports directly to use the new locations
+- When consolidating or refactoring modules, always update all imports to use the new structure rather than preserving old import paths

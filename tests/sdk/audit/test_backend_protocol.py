@@ -143,34 +143,34 @@ async def test_backend_record_querying(backend):
         backend.shutdown()
     
     # Query all records
-    all_records = await backend.query_records()
+    all_records = [r async for r in backend.query_records()]
     assert len(all_records) == 4
     
     # Query by operation type
-    tool_records = await backend.query_records(operation_types=["tool"])
+    tool_records = [r async for r in backend.query_records(operation_types=["tool"])]
     assert len(tool_records) == 3
     
     # Query by operation names
-    specific_records = await backend.query_records(operation_names=["tool_a", "tool_b"])
+    specific_records = [r async for r in backend.query_records(operation_names=["tool_a", "tool_b"])]
     assert len(specific_records) == 2
     
     # Query by user
-    alice_records = await backend.query_records(user_ids=["alice"])
+    alice_records = [r async for r in backend.query_records(user_ids=["alice"])]
     assert len(alice_records) == 3
     
     # Query with limit
-    limited_records = await backend.query_records(limit=2)
+    limited_records = [r async for r in backend.query_records(limit=2)]
     assert len(limited_records) == 2
     
     # Query with offset
-    offset_records = await backend.query_records(limit=2, offset=2)
+    offset_records = [r async for r in backend.query_records(limit=2, offset=2)]
     assert len(offset_records) == 2
     
     # Combined filters
-    alice_tools = await backend.query_records(
+    alice_tools = [r async for r in backend.query_records(
         operation_types=["tool"],
         user_ids=["alice"]
-    )
+    )]
     assert len(alice_tools) == 2
 
 
@@ -302,16 +302,16 @@ async def test_backend_time_filtering(backend):
     start_time = base_time - timedelta(minutes=30)
     end_time = base_time + timedelta(minutes=30)
     
-    filtered_records = await backend.query_records(
+    filtered_records = [r async for r in backend.query_records(
         start_time=start_time,
         end_time=end_time
-    )
+    )]
     
     # Should only get the record at base_time (within 30 min window)
     assert len(filtered_records) == 1
     
     # Query with only start time (should get records at base_time and base_time + 1 hour)
-    recent_records = await backend.query_records(start_time=start_time)
+    recent_records = [r async for r in backend.query_records(start_time=start_time)]
     assert len(recent_records) == 2
 
 
@@ -414,7 +414,7 @@ async def test_backend_retention_policies(backend):
     assert deleted_counts["retention_test:v1"] >= 1  # Should have deleted the old record
     
     # Verify old record is gone but new record remains
-    remaining_records = await backend.query_records()
+    remaining_records = [r async for r in backend.query_records()]
     assert len(remaining_records) == 1
     assert remaining_records[0].operation_name == "new_tool"
 

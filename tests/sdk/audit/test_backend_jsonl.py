@@ -297,22 +297,22 @@ async def test_jsonl_query_filtering():
         # Test various query filters
         
         # Filter by operation type
-        tool_records = await backend.query_records(operation_types=["tool"])
+        tool_records = [r async for r in backend.query_records(operation_types=["tool"])]
         assert len(tool_records) == 3
         
         # Filter by operation names
-        specific_tools = await backend.query_records(operation_names=["tool_a", "tool_b"])
+        specific_tools = [r async for r in backend.query_records(operation_names=["tool_a", "tool_b"])]
         assert len(specific_tools) == 2
         
         # Filter by user
-        alice_records = await backend.query_records(user_ids=["alice"])
+        alice_records = [r async for r in backend.query_records(user_ids=["alice"])]
         assert len(alice_records) == 2
         
         # Combine filters
-        alice_tools = await backend.query_records(
+        alice_tools = [r async for r in backend.query_records(
             operation_types=["tool"], 
             user_ids=["alice"]
-        )
+        )]
         assert len(alice_tools) == 1
         assert alice_tools[0].operation_name == "tool_a"
 
@@ -395,5 +395,5 @@ async def test_jsonl_retention_policy():
         assert deleted_counts["retention_test:v1"] == 1
         
         # Verify record is gone
-        remaining_records = await backend.query_records()
+        remaining_records = [r async for r in backend.query_records()]
         assert len(remaining_records) == 0

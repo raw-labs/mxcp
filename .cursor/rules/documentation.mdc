@@ -1,0 +1,11 @@
+---
+description: Documentation standards and practices
+globs: ["**/*.py", "**/*.md", "**/*.rst"]
+alwaysApply: true
+---
+
+# Documentation Standards
+
+- Use pydoc (docstrings) for documentation, not README.md files
+- Module-level docstrings may include code examples if they add clarity
+- No standalone example files - examples belong in docstrings only

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -129,7 +129,7 @@ async def generate_snapshot(
         tables = get_duckdb_tables(conn)
         snapshot = DriftSnapshot(
             version=1,
-            generated_at=datetime.utcnow().isoformat() + "Z",
+            generated_at=datetime.now(timezone.utc).isoformat(),
             tables=tables,
             resources=resources
         )

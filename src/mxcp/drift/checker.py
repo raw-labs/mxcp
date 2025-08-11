@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 import logging
@@ -315,7 +315,7 @@ async def check_drift(
     # Create drift report
     report = DriftReport(
         version=1,
-        generated_at=datetime.utcnow().isoformat() + "Z",
+        generated_at=datetime.now(timezone.utc).isoformat(),
         baseline_snapshot_path=str(baseline_snapshot_path),
         current_snapshot_generated_at=current_snapshot["generated_at"],
         baseline_snapshot_generated_at=baseline_snapshot["generated_at"],

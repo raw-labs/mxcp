@@ -1,0 +1,13 @@
+---
+description: Testing standards and practices
+globs: ["**/test_*.py", "**/tests/**", "**/*_test.py"]
+alwaysApply: true
+---
+
+# Testing Standards
+
+- Tests should be in a package structure matching the code (e.g., tests/validator/ for src/mxcp/validator/). Test data should go under tests/fixtures/validator/
+- Use descriptive test names that match the functionality being tested
+- NO example usage files - all code should be either tests or production code
+- Use `uv run pytest` to run tests (not just `pytest`)
+- Don't always create new test suites; check first if the new tests should be added to existing test suites

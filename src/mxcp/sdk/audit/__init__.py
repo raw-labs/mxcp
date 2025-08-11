@@ -98,8 +98,8 @@ logger.create_schema(auth_schema)
 logger.create_schema(api_schema)
 
 # Log authentication event
-logger.log_event(
-    caller="http",
+await logger.log_event(
+    caller_type="http",
     event_type="auth",
     name="user_login",
     input_params={
@@ -115,8 +115,8 @@ logger.log_event(
 )
 
 # Log API call
-logger.log_event(
-    caller="http",
+await logger.log_event(
+    caller_type="http",
     event_type="api",
     name="api_request",
     input_params={
