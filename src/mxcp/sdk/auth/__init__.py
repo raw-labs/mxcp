@@ -30,7 +30,7 @@ from mxcp.sdk.auth import UserContext, set_user_context, get_user_context
 # Create and set user context
 user = UserContext(
     username="alice",
-    role="analyst", 
+    role="analyst",
     scopes=["read:data", "write:reports"]
 )
 set_user_context(user)
@@ -58,31 +58,31 @@ config = AuthConfig(
 ```
 """
 
-from .types import (
-    AuthConfig,
-    HttpTransportConfig,
-    OAuthClientConfig,
-    GitHubAuthConfig,
+from ._types import (
     AtlassianAuthConfig,
-    SalesforceAuthConfig,
-    KeycloakAuthConfig,
-    AuthPersistenceConfig,
+    AuthConfig,
     AuthorizationConfig,
+    AuthPersistenceConfig,
     ExternalUserInfo,
-    UserContext,
+    GitHubAuthConfig,
+    HttpTransportConfig,
+    KeycloakAuthConfig,
+    OAuthClientConfig,
+    SalesforceAuthConfig,
     StateMeta,
+    UserContext,
 )
+from .context import get_user_context, reset_user_context, set_user_context
+from .middleware import AuthenticationMiddleware
 from .providers import (
     ExternalOAuthHandler,
     GeneralOAuthAuthorizationServer,
 )
-from .middleware import AuthenticationMiddleware
-from .context import get_user_context, set_user_context, reset_user_context
 
 __all__ = [
     # Types
     "AuthConfig",
-    "HttpTransportConfig", 
+    "HttpTransportConfig",
     "OAuthClientConfig",
     "GitHubAuthConfig",
     "AtlassianAuthConfig",
@@ -99,5 +99,5 @@ __all__ = [
     # Context management
     "get_user_context",
     "set_user_context",
-    "reset_user_context"
-] 
+    "reset_user_context",
+]

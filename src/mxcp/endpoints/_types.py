@@ -1,12 +1,15 @@
-from typing import TypedDict, List, Optional, Union, Literal
+from typing import List, Literal, Optional, TypedDict, Union
+
 
 class SourceDefinition(TypedDict):
     code: str
     file: str
 
+
 class TestArgument(TypedDict):
     key: str
     value: object
+
 
 class TestDefinition(TypedDict):
     name: str
@@ -20,6 +23,7 @@ class TestDefinition(TypedDict):
     result_contains_all: Optional[List[object]]  # All items must be present (any order)
     result_length: Optional[int]  # Array must have specific length
     result_contains_text: Optional[str]  # Substring match for strings
+
 
 class TypeDefinition(TypedDict):
     type: str
@@ -35,10 +39,13 @@ class TypeDefinition(TypedDict):
     minItems: Optional[int]
     maxItems: Optional[int]
     uniqueItems: Optional[bool]
-    items: Optional['TypeDefinition']
-    properties: Optional[dict[str, 'TypeDefinition']]
+    items: Optional["TypeDefinition"]
+    properties: Optional[dict[str, "TypeDefinition"]]
     required: Optional[List[str]]
-    additionalProperties: Optional[bool]  # Whether to allow additional properties not defined in the schema
+    additionalProperties: Optional[
+        bool
+    ]  # Whether to allow additional properties not defined in the schema
+
 
 class ParamDefinition(TypedDict):
     name: str
@@ -58,15 +65,18 @@ class ParamDefinition(TypedDict):
     properties: Optional[dict[str, TypeDefinition]]
     required: Optional[List[str]]
 
+
 class PolicyRule(TypedDict):
     condition: str
     action: Literal["deny", "filter_fields", "mask_fields", "filter_sensitive_fields"]
     reason: Optional[str]
     fields: Optional[List[str]]  # For filter_fields and mask_fields actions
 
+
 class PoliciesDefinition(TypedDict):
     input: Optional[List[PolicyRule]]
     output: Optional[List[PolicyRule]]
+
 
 class ToolDefinition(TypedDict):
     name: str
@@ -81,6 +91,7 @@ class ToolDefinition(TypedDict):
     tests: Optional[List[TestDefinition]]
     policies: Optional[PoliciesDefinition]
 
+
 class ResourceDefinition(TypedDict):
     uri: str
     description: Optional[str]
@@ -94,10 +105,12 @@ class ResourceDefinition(TypedDict):
     tests: Optional[List[TestDefinition]]
     policies: Optional[PoliciesDefinition]
 
+
 class PromptMessage(TypedDict):
     prompt: str
     role: Optional[str]
     type: Optional[str]
+
 
 class PromptDefinition(TypedDict):
     name: str
@@ -109,6 +122,7 @@ class PromptDefinition(TypedDict):
     enabled: Optional[bool]
     tests: Optional[List[TestDefinition]]
     policies: Optional[PoliciesDefinition]
+
 
 class EndpointDefinition(TypedDict):
     mxcp: str

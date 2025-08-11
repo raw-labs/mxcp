@@ -1,18 +1,20 @@
 """Tests for concurrent execution of Python endpoints without database operations."""
-import pytest
+
 import asyncio
+import os
+import tempfile
 import threading
 import time
-import tempfile
-import os
-import yaml
-from pathlib import Path
 from collections import defaultdict
-from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config
-from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
-from mxcp.config.execution_engine import create_execution_engine
+from pathlib import Path
 
+import pytest
+import yaml
+
+from mxcp.config.execution_engine import create_execution_engine
+from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 
 # Global shared state for testing thread safety
 shared_counter = 0
@@ -26,37 +28,29 @@ def temp_project_dir():
     """Create a temporary project directory structure."""
     with tempfile.TemporaryDirectory() as tmpdir:
         project_dir = Path(tmpdir)
-        
+
         # Create directory structure
         (project_dir / "tools").mkdir()
         (project_dir / "python").mkdir()
-        
+
         # Create mxcp-site.yml
         site_config = {
             "mxcp": 1,
             "project": "test-concurrent",
             "profile": "test",
-            "profiles": {
-                "test": {
-                    "duckdb": {
-                        "path": ":memory:"  # Use in-memory database
-                    }
-                }
-            },
-            "paths": {
-                "tools": "tools"
-            }
+            "profiles": {"test": {"duckdb": {"path": ":memory:"}}},  # Use in-memory database
+            "paths": {"tools": "tools"},
         }
-        
+
         with open(project_dir / "mxcp-site.yml", "w") as f:
             yaml.dump(site_config, f)
-        
+
         # Change to project directory
         original_dir = os.getcwd()
         os.chdir(project_dir)
-        
+
         yield project_dir
-        
+
         # Restore original directory
         os.chdir(original_dir)
 
@@ -75,39 +69,35 @@ def test_configs(temp_project_dir):
                             {
                                 "name": "api_key",
                                 "type": "value",
-                                "parameters": {
-                                    "value": "test-key-123"
-                                }
+                                "parameters": {"value": "test-key-123"},
                             },
                             {
                                 "name": "api_secret",
-                                "type": "value", 
-                                "parameters": {
-                                    "value": "test-secret-456"
-                                }
-                            }
+                                "type": "value",
+                                "parameters": {"value": "test-secret-456"},
+                            },
                         ],
-                        "plugin": {"config": {}}
+                        "plugin": {"config": {}},
                     }
                 }
             }
-        }
+        },
     }
-    
+
     # Write user config to file
     config_path = temp_project_dir / "mxcp-config.yml"
     with open(config_path, "w") as f:
         yaml.dump(user_config_data, f)
-    
+
     # Set environment variable to point to our config
     os.environ["MXCP_CONFIG"] = str(config_path)
-    
+
     # Load configs
     site_config = load_site_config()
     user_config = load_user_config(site_config)
-    
+
     yield user_config, site_config
-    
+
     # Clean up environment variable
     if "MXCP_CONFIG" in os.environ:
         del os.environ["MXCP_CONFIG"]
@@ -117,15 +107,15 @@ def test_configs(temp_project_dir):
 def execution_engine(test_configs):
     """Create an execution engine with test database setup."""
     user_config, site_config = test_configs
-    
+
     # Create execution engine
     engine = create_execution_engine(user_config, site_config, "test")
-    
+
     # Store user_config on engine for runtime context access
-    setattr(engine, '_user_config', user_config)
-    
+    setattr(engine, "_user_config", user_config)
+
     yield engine
-    
+
     # Cleanup
     engine.shutdown()
 
@@ -143,10 +133,11 @@ def reset_global_state():
 async def test_concurrent_sync_python_functions(temp_project_dir, test_configs, execution_engine):
     """Test concurrent execution of synchronous Python functions."""
     user_config, site_config = test_configs
-    
+
     # Create Python file with sync functions
     python_file = temp_project_dir / "python" / "concurrent_sync.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 import threading
 import time
 import random
@@ -288,10 +279,12 @@ def cpu_intensive_task(iterations: int) -> dict:
         "result": result,
         "duration": duration
     }
-""")
-    
+"""
+    )
+
     # Create tool definitions
-    (temp_project_dir / "tools" / "increment_shared_counter.yml").write_text("""
+    (temp_project_dir / "tools" / "increment_shared_counter.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: increment_shared_counter
@@ -309,9 +302,11 @@ tool:
       default: 0.001
   return:
     type: object
-""")
-    
-    (temp_project_dir / "tools" / "safe_increment_counter.yml").write_text("""
+"""
+    )
+
+    (temp_project_dir / "tools" / "safe_increment_counter.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: safe_increment_counter
@@ -325,9 +320,11 @@ tool:
       description: Amount to increment
   return:
     type: object
-""")
-    
-    (temp_project_dir / "tools" / "test_context_access.yml").write_text("""
+"""
+    )
+
+    (temp_project_dir / "tools" / "test_context_access.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: test_context_access
@@ -338,9 +335,11 @@ tool:
   parameters: []
   return:
     type: object
-""")
-    
-    (temp_project_dir / "tools" / "cpu_intensive_task.yml").write_text("""
+"""
+    )
+
+    (temp_project_dir / "tools" / "cpu_intensive_task.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: cpu_intensive_task
@@ -354,18 +353,20 @@ tool:
       description: Number of iterations
   return:
     type: object
-""")
-    
+"""
+    )
+
     print("\n=== Testing concurrent sync functions ===")
-    
+
     # Test 1: Race conditions with unsafe increment
     async def test_race_conditions():
         # Clear counter file
         import tempfile
-        counter_file = os.path.join(tempfile.gettempdir(), 'mxcp_test_counter.txt')
+
+        counter_file = os.path.join(tempfile.gettempdir(), "mxcp_test_counter.txt")
         if os.path.exists(counter_file):
             os.remove(counter_file)
-        
+
         tasks = []
         for i in range(20):
             task = execute_endpoint_with_engine(
@@ -374,45 +375,46 @@ tool:
                 params={"amount": 1, "delay": 0.0001},
                 user_config=user_config,
                 site_config=site_config,
-                execution_engine=execution_engine
+                execution_engine=execution_engine,
             )
             tasks.append(task)
-        
+
         results = await asyncio.gather(*tasks)
-        
+
         # Read final value from file
         try:
-            with open(counter_file, 'r') as f:
+            with open(counter_file, "r") as f:
                 final_value = int(f.read().strip())
         except (FileNotFoundError, ValueError):
             final_value = 0
-        
+
         print(f"\nRace condition test:")
         print(f"  Final counter value: {final_value} (expected: 20)")
         print(f"  Number of executions: {len(results)}")
-        
+
         # Check for race conditions
         unique_old_values = set(r["old_value"] for r in results)
         print(f"  Unique old values seen: {len(unique_old_values)}")
-        
+
         # With race conditions, we likely see duplicate old_values
         # and final value < 20
         if final_value < 20:
             print(f"  ✓ Race condition detected: {final_value} < 20")
-        
+
         return final_value
-    
+
     # Test 2: Thread-safe increment
     async def test_thread_safe():
         # Clear counter file
         import tempfile
-        counter_file = os.path.join(tempfile.gettempdir(), 'mxcp_test_counter_safe.txt')
-        lock_file = counter_file + '.lock'
+
+        counter_file = os.path.join(tempfile.gettempdir(), "mxcp_test_counter_safe.txt")
+        lock_file = counter_file + ".lock"
         if os.path.exists(counter_file):
             os.remove(counter_file)
         if os.path.exists(lock_file):
             os.remove(lock_file)
-        
+
         tasks = []
         for i in range(20):
             task = execute_endpoint_with_engine(
@@ -421,25 +423,25 @@ tool:
                 params={"amount": 1},
                 user_config=user_config,
                 site_config=site_config,
-                execution_engine=execution_engine
+                execution_engine=execution_engine,
             )
             tasks.append(task)
-        
+
         results = await asyncio.gather(*tasks)
-        
+
         # Read final value from file
-        with open(counter_file, 'r') as f:
+        with open(counter_file, "r") as f:
             final_value = int(f.read().strip())
-        
+
         print(f"\nThread-safe test:")
         print(f"  Final counter value: {final_value} (expected: 20)")
-        
+
         # Verify sequential increments
         old_values = sorted([r["old_value"] for r in results])
         assert old_values == list(range(20))
         assert final_value == 20
         print(f"  ✓ All increments were sequential")
-    
+
     # Test 3: Context isolation
     async def test_context_isolation():
         tasks = []
@@ -450,40 +452,40 @@ tool:
                 params={},
                 user_config=user_config,
                 site_config=site_config,
-                execution_engine=execution_engine
+                execution_engine=execution_engine,
             )
             tasks.append(task)
-        
+
         results = await asyncio.gather(*tasks)
-        
+
         print(f"\nContext isolation test:")
         print(f"  Number of executions: {len(results)}")
-        
+
         # All should have access to secrets
         assert all(r["has_api_key"] for r in results)
         assert all(r["api_key_starts"] == "test-" for r in results)
         assert all(r["has_api_secret"] for r in results)
         assert all(r["missing_secret"] is None for r in results)
-        
+
         # Thread-local counters should be independent
         thread_counters = defaultdict(list)
         for r in results:
             thread_counters[r["thread_id"]].append(r["thread_local_counter"])
-        
+
         print(f"  Threads used: {len(thread_counters)}")
         for thread_id, counters in thread_counters.items():
             print(f"    {thread_id}: {counters}")
-        
+
         # Each thread's counter should increment sequentially
         for thread_id, counters in thread_counters.items():
             assert counters == list(range(1, len(counters) + 1))
-        
+
         print(f"  ✓ Thread-local storage working correctly")
-    
+
     # Test 4: CPU-bound tasks
     async def test_cpu_bound():
         start_time = time.time()
-        
+
         tasks = []
         for i in range(5):
             task = execute_endpoint_with_engine(
@@ -492,25 +494,25 @@ tool:
                 params={"iterations": 100000},
                 user_config=user_config,
                 site_config=site_config,
-                execution_engine=execution_engine
+                execution_engine=execution_engine,
             )
             tasks.append(task)
-        
+
         results = await asyncio.gather(*tasks)
         total_time = time.time() - start_time
-        
+
         print(f"\nCPU-bound test:")
         print(f"  Tasks: {len(results)}")
         print(f"  Total time: {total_time:.2f}s")
-        
+
         # Check that work was distributed across threads
         thread_ids = set(r["thread_id"] for r in results)
         print(f"  Threads used: {len(thread_ids)}")
-        
+
         # All results should be the same
         expected_result = sum(i**2 for i in range(100000))
         assert all(r["result"] == expected_result for r in results)
-    
+
     # Run all tests
     race_value = await test_race_conditions()
     await test_thread_safe()
@@ -522,10 +524,11 @@ tool:
 async def test_concurrent_async_python_functions(temp_project_dir, test_configs, execution_engine):
     """Test concurrent execution of async Python functions."""
     user_config, site_config = test_configs
-    
+
     # Create Python file with async functions
     python_file = temp_project_dir / "python" / "concurrent_async.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 import asyncio
 import time
 from mxcp.runtime import config
@@ -641,10 +644,12 @@ async def _nested_context_test(level: int) -> dict:
         "task_id": str(task_id),
         "has_secret": api_secret is not None
     }
-""")
-    
+"""
+    )
+
     # Create tool definitions
-    (temp_project_dir / "tools" / "async_task.yml").write_text("""
+    (temp_project_dir / "tools" / "async_task.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: async_task
@@ -661,9 +666,11 @@ tool:
       description: Task duration in seconds
   return:
     type: object
-""")
-    
-    (temp_project_dir / "tools" / "parallel_subtasks.yml").write_text("""
+"""
+    )
+
+    (temp_project_dir / "tools" / "parallel_subtasks.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: parallel_subtasks
@@ -677,9 +684,11 @@ tool:
       description: Number of subtasks
   return:
     type: object
-""")
-    
-    (temp_project_dir / "tools" / "test_async_context.yml").write_text("""
+"""
+    )
+
+    (temp_project_dir / "tools" / "test_async_context.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: test_async_context
@@ -690,10 +699,11 @@ tool:
   parameters: []
   return:
     type: object
-""")
-    
+"""
+    )
+
     print("\n=== Testing concurrent async functions ===")
-    
+
     # Test 1: Concurrent async execution
     async def test_async_concurrency():
         tasks = []
@@ -704,29 +714,29 @@ tool:
                 params={"task_id": i, "duration": 0.05},
                 user_config=user_config,
                 site_config=site_config,
-                execution_engine=execution_engine
+                execution_engine=execution_engine,
             )
             tasks.append(task)
-        
+
         start_time = time.time()
         results = await asyncio.gather(*tasks)
         total_time = time.time() - start_time
-        
+
         print(f"\nAsync concurrency test:")
         print(f"  Tasks: {len(results)}")
         print(f"  Total time: {total_time:.2f}s")
         print(f"  Max concurrent: {max(r['max_concurrent_seen'] for r in results)}")
-        
+
         # Should complete much faster than serial (10 * 0.05 = 0.5s)
         assert total_time < 0.2  # Allow for overhead
-        
+
         # Should see high concurrency
-        max_concurrent_seen = max(r['max_concurrent_seen'] for r in results)
+        max_concurrent_seen = max(r["max_concurrent_seen"] for r in results)
         print(f"  ✓ High concurrency achieved: {max_concurrent_seen}")
-        
+
         # All should have context
-        assert all(r['has_secret'] for r in results)
-    
+        assert all(r["has_secret"] for r in results)
+
     # Test 2: Parallel subtasks within async function
     async def test_parallel_subtasks():
         result = await execute_endpoint_with_engine(
@@ -735,21 +745,21 @@ tool:
             params={"count": 20},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
-        
+
         print(f"\nParallel subtasks test:")
         print(f"  Subtasks: {result['count']}")
         print(f"  Total duration: {result['total_duration']:.3f}s")
         print(f"  Average duration: {result['avg_duration']:.3f}s")
-        
+
         # Should be much faster than serial
-        assert result['total_duration'] < 0.1  # 20 * 0.01 = 0.2s serial
-        
+        assert result["total_duration"] < 0.1  # 20 * 0.01 = 0.2s serial
+
         # All subtasks should have context
-        assert all(r['project'] == 'test-concurrent' for r in result['results'])
+        assert all(r["project"] == "test-concurrent" for r in result["results"])
         print(f"  ✓ All subtasks had access to context")
-    
+
     # Test 3: Context propagation in nested async
     async def test_async_context_propagation():
         result = await execute_endpoint_with_engine(
@@ -758,28 +768,28 @@ tool:
             params={},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
-        
+
         print(f"\nAsync context propagation test:")
         print(f"  Main task has secret: {result['main_has_secret']}")
         print(f"  Sequential nested: {len(result['nested_sequential'])}")
         print(f"  Concurrent nested: {len(result['nested_concurrent'])}")
-        
+
         # All levels should have context
-        assert result['main_has_secret']
-        assert all(r['has_secret'] for r in result['nested_sequential'])
-        assert all(r['has_secret'] for r in result['nested_concurrent'])
-        
+        assert result["main_has_secret"]
+        assert all(r["has_secret"] for r in result["nested_sequential"])
+        assert all(r["has_secret"] for r in result["nested_concurrent"])
+
         # Task IDs should be different
-        all_task_ids = [result['main_task_id']]
-        all_task_ids.extend(r['task_id'] for r in result['nested_sequential'])
-        all_task_ids.extend(r['task_id'] for r in result['nested_concurrent'])
-        
+        all_task_ids = [result["main_task_id"]]
+        all_task_ids.extend(r["task_id"] for r in result["nested_sequential"])
+        all_task_ids.extend(r["task_id"] for r in result["nested_concurrent"])
+
         unique_task_ids = set(all_task_ids)
         print(f"  Unique task IDs: {len(unique_task_ids)}")
         print(f"  ✓ Context propagated to all nested tasks")
-    
+
     # Run all tests
     await test_async_concurrency()
     await test_parallel_subtasks()
@@ -790,10 +800,11 @@ tool:
 async def test_mixed_sync_async_stress(temp_project_dir, test_configs, execution_engine):
     """Stress test with mixed sync/async execution."""
     user_config, site_config = test_configs
-    
+
     # Create Python files with stress test functions
     sync_file = temp_project_dir / "python" / "sync_stress.py"
-    sync_file.write_text("""
+    sync_file.write_text(
+        """
 import time
 import threading
 from mxcp.runtime import config
@@ -812,10 +823,12 @@ def sync_stress_endpoint(request_id: int) -> dict:
         "duration": time.time() - start_time,
         "type": "sync"
     }
-""")
-    
+"""
+    )
+
     async_file = temp_project_dir / "python" / "async_stress.py"
-    async_file.write_text("""
+    async_file.write_text(
+        """
 import asyncio
 import time
 from mxcp.runtime import config
@@ -832,10 +845,12 @@ async def async_stress_endpoint(request_id: int) -> dict:
         "duration": time.time() - start_time,
         "type": "async"
     }
-""")
+"""
+    )
 
     # Create tool configurations
-    (temp_project_dir / "tools" / "sync_stress_endpoint.yml").write_text("""
+    (temp_project_dir / "tools" / "sync_stress_endpoint.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: sync_stress_endpoint
@@ -849,9 +864,11 @@ tool:
       description: Request ID
   return:
     type: object
-""")
+"""
+    )
 
-    (temp_project_dir / "tools" / "async_stress_endpoint.yml").write_text("""
+    (temp_project_dir / "tools" / "async_stress_endpoint.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: async_stress_endpoint
@@ -865,14 +882,15 @@ tool:
       description: Request ID
   return:
     type: object
-""")
+"""
+    )
 
     print("\n=== Testing mixed sync/async stress ===")
-    
+
     # Test concurrent sync/async execution
     async def test_mixed_execution():
         tasks = []
-        
+
         # Create mixed workload
         for i in range(50):
             # Alternate between sync and async
@@ -883,7 +901,7 @@ tool:
                     params={"request_id": i},
                     user_config=user_config,
                     site_config=site_config,
-                    execution_engine=execution_engine
+                    execution_engine=execution_engine,
                 )
             else:
                 task = execute_endpoint_with_engine(
@@ -892,33 +910,33 @@ tool:
                     params={"request_id": i},
                     user_config=user_config,
                     site_config=site_config,
-                    execution_engine=execution_engine
+                    execution_engine=execution_engine,
                 )
-            
+
             tasks.append(task)
-        
+
         start_time = time.time()
         results = await asyncio.gather(*tasks)
         total_time = time.time() - start_time
-        
+
         # Analyze results
         sync_results = [r for r in results if r["type"] == "sync"]
         async_results = [r for r in results if r["type"] == "async"]
-        
+
         print(f"\nMixed execution test:")
         print(f"  Total tasks: {len(results)}")
         print(f"  Sync tasks: {len(sync_results)}")
         print(f"  Async tasks: {len(async_results)}")
         print(f"  Total time: {total_time:.2f}s")
-        
+
         # Verify all request IDs are accounted for
         request_ids = sorted([r["request_id"] for r in results])
         expected_ids = list(range(50))
         assert request_ids == expected_ids
-    
+
     # Execute stress test and get execution statistics
     await test_mixed_execution()
-    
+
     print("✓ Mixed sync/async stress test completed successfully")
 
 
@@ -926,10 +944,11 @@ tool:
 async def test_error_handling_and_cleanup(temp_project_dir, test_configs, execution_engine):
     """Test error handling and cleanup in concurrent scenarios."""
     user_config, site_config = test_configs
-    
+
     # Create Python file with functions that can fail and track resources
     python_file = temp_project_dir / "python" / "error_handling.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 import asyncio
 import time
 import threading
@@ -1020,10 +1039,12 @@ def get_resource_stats() -> dict:
             "allocated_list": allocated_resources.copy(),
             "freed_list": freed_resources.copy()
         }
-""")
+"""
+    )
 
     # Create tool configurations
-    (temp_project_dir / "tools" / "failing_function.yml").write_text("""
+    (temp_project_dir / "tools" / "failing_function.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: failing_function
@@ -1040,9 +1061,11 @@ tool:
       description: Type of error to simulate
   return:
     type: object
-""")
+"""
+    )
 
-    (temp_project_dir / "tools" / "async_failing_function.yml").write_text("""
+    (temp_project_dir / "tools" / "async_failing_function.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: async_failing_function
@@ -1059,9 +1082,11 @@ tool:
       description: Type of error to simulate
   return:
     type: object
-""")
+"""
+    )
 
-    (temp_project_dir / "tools" / "get_resource_stats.yml").write_text("""
+    (temp_project_dir / "tools" / "get_resource_stats.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: get_resource_stats
@@ -1072,14 +1097,15 @@ tool:
   parameters: []
   return:
     type: object
-""")
+"""
+    )
 
     print("\n=== Testing error handling and cleanup ===")
-    
+
     async def test_concurrent_failures():
         # Mix of successful and failing tasks
         tasks = []
-        
+
         # Some will succeed
         for i in range(5):
             task = execute_endpoint_with_engine(
@@ -1088,10 +1114,10 @@ tool:
                 params={"fail_after": 0.001, "error_type": "none"},
                 user_config=user_config,
                 site_config=site_config,
-                execution_engine=execution_engine
+                execution_engine=execution_engine,
             )
             tasks.append(task)
-        
+
         # Some will fail with different errors
         error_types = ["ValueError", "RuntimeError", "KeyError"]
         for i in range(15):
@@ -1101,13 +1127,13 @@ tool:
                 params={"fail_after": 0.001, "error_type": error_types[i % len(error_types)]},
                 user_config=user_config,
                 site_config=site_config,
-                execution_engine=execution_engine
+                execution_engine=execution_engine,
             )
             tasks.append(task)
-        
+
         # Gather all results, including exceptions
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         # Get resource stats
         stats_executor = await execute_endpoint_with_engine(
             endpoint_type="tool",
@@ -1115,15 +1141,17 @@ tool:
             params={},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
-        
+
         # Analyze results
-        successes = [r for r in results if isinstance(r, dict) and r.get('status') == 'success']
-        value_errors = [r for r in results if isinstance(r, Exception) and 'ValueError' in str(r)]
-        runtime_errors = [r for r in results if isinstance(r, Exception) and 'RuntimeError' in str(r)]
-        key_errors = [r for r in results if isinstance(r, Exception) and 'KeyError' in str(r)]
-        
+        successes = [r for r in results if isinstance(r, dict) and r.get("status") == "success"]
+        value_errors = [r for r in results if isinstance(r, Exception) and "ValueError" in str(r)]
+        runtime_errors = [
+            r for r in results if isinstance(r, Exception) and "RuntimeError" in str(r)
+        ]
+        key_errors = [r for r in results if isinstance(r, Exception) and "KeyError" in str(r)]
+
         print(f"\nError handling test:")
         print(f"  Total tasks: {len(results)}")
         print(f"  Successes: {len(successes)}")
@@ -1131,16 +1159,16 @@ tool:
         print(f"  RuntimeErrors: {len(runtime_errors)}")
         print(f"  KeyErrors: {len(key_errors)}")
         print(f"  Resource stats: {stats_executor}")
-        
+
         # Verify cleanup happened even with errors
-        assert stats_executor['leaked'] == 0, f"Resources leaked: {stats_executor['leaked']}"
+        assert stats_executor["leaked"] == 0, f"Resources leaked: {stats_executor['leaked']}"
         print(f"  ✓ All resources cleaned up properly")
-        
+
         # Verify expected number of successes
         assert len(successes) == 5
-    
+
     await test_concurrent_failures()
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"]) 
+    pytest.main([__file__, "-v"])

@@ -1,41 +1,68 @@
-import click
-import json
 import asyncio
-from typing import Dict, Any, Optional
+import json
 from pathlib import Path
-from mxcp.endpoints.sdk_executor import execute_endpoint
-from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config
-from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
+from typing import Any, Dict, Optional
+
+import click
+
 from mxcp.cli.table_renderer import format_result_for_display
+from mxcp.cli.utils import (
+    configure_logging,
+    get_env_flag,
+    get_env_profile,
+    output_error,
+    output_result,
+)
 from mxcp.config.analytics import track_command_with_timing
+from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
+from mxcp.endpoints.sdk_executor import execute_endpoint
 from mxcp.sdk.auth.providers import UserContext
 
 
 @click.command(name="run")
 @click.argument("endpoint_type", type=click.Choice(["tool", "resource", "prompt"]))
 @click.argument("name")
-@click.option("--param", "-p", multiple=True, help="Parameter in format name=value or name=@file.json for complex values")
+@click.option(
+    "--param",
+    "-p",
+    multiple=True,
+    help="Parameter in format name=value or name=@file.json for complex values",
+)
 @click.option("--user-context", "-u", help="User context as JSON string or @file.json")
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-@click.option("--skip-output-validation", is_flag=True, help="Skip output validation against the return type definition")
+@click.option(
+    "--skip-output-validation",
+    is_flag=True,
+    help="Skip output validation against the return type definition",
+)
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("run")
-def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_context: Optional[str], profile: Optional[str], json_output: bool, debug: bool, skip_output_validation: bool, readonly: bool):
+def run_endpoint(
+    endpoint_type: str,
+    name: str,
+    param: tuple[str, ...],
+    user_context: Optional[str],
+    profile: Optional[str],
+    json_output: bool,
+    debug: bool,
+    skip_output_validation: bool,
+    readonly: bool,
+):
     """Run an endpoint (tool, resource, or prompt).
-    
+
     \b
     Parameters can be provided in two ways:
     1. Simple values: --param name=value
     2. Complex values from JSON file: --param name=@file.json
-    
+
     \b
     User context can be provided for policy enforcement:
     --user-context '{"user_id": "123", "role": "admin", "permissions": ["read", "write"]}'
     --user-context @user_context.json
-    
+
     \b
     Examples:
         mxcp run tool my_tool --param name=value
@@ -48,14 +75,16 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
         profile = get_env_profile()
     if not readonly:
         readonly = get_env_flag("MXCP_READONLY")
-        
+
     # Configure logging
     configure_logging(debug)
 
     try:
         # Show what we're running (only in non-JSON mode)
         if not json_output:
-            click.echo(f"\n{click.style('🚀 Running', fg='cyan', bold=True)} {click.style(endpoint_type, fg='yellow')} {click.style(name, fg='green', bold=True)}")
+            click.echo(
+                f"\n{click.style('🚀 Running', fg='cyan', bold=True)} {click.style(endpoint_type, fg='yellow')} {click.style(name, fg='green', bold=True)}"
+            )
             if param:
                 click.echo(f"{click.style('📋 Parameters:', fg='cyan')}")
                 for p in param:
@@ -74,9 +103,9 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
         # Load configs
         site_config = load_site_config()
         user_config = load_user_config(site_config)
-        
+
         profile_name = profile or site_config["profile"]
-        
+
         # Parse user context if provided
         user_context_obj = None
         if user_context:
@@ -96,7 +125,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
                     context_data = json.loads(user_context)
                 except json.JSONDecodeError as e:
                     raise click.BadParameter(f"Invalid JSON in user context: {e}")
-            
+
             # Create UserContext object from the data
             user_context_obj = UserContext(
                 provider="cli",  # Special provider for CLI usage
@@ -105,9 +134,9 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
                 email=context_data.get("email"),
                 name=context_data.get("name"),
                 avatar_url=context_data.get("avatar_url"),
-                raw_profile=context_data  # Store full context for policy access
+                raw_profile=context_data,  # Store full context for policy access
             )
-        
+
         # Parse parameters
         params: Dict[str, Any] = {}
         for p in param:
@@ -117,9 +146,9 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
                     output_error(click.BadParameter(error_msg), json_output, debug)
                 else:
                     raise click.BadParameter(error_msg)
-                    
+
             key, value = p.split("=", 1)
-            
+
             # Handle JSON file input
             if value.startswith("@"):
                 file_path = Path(value[1:])
@@ -130,29 +159,38 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
                         value = json.load(f)
                 except json.JSONDecodeError as e:
                     raise click.BadParameter(f"Invalid JSON in file {file_path}: {e}")
-            
+
             params[key] = value
-            
+
         # Execute endpoint using SDK executor system
-        result = asyncio.run(execute_endpoint(
-            endpoint_type, name, params, user_config, site_config, profile_name, 
-            readonly, skip_output_validation, user_context_obj
-        ))
-        
+        result = asyncio.run(
+            execute_endpoint(
+                endpoint_type,
+                name,
+                params,
+                user_config,
+                site_config,
+                profile_name,
+                readonly,
+                skip_output_validation,
+                user_context_obj,
+            )
+        )
+
         # Output result
         if json_output:
             output_result(result, json_output, debug)
         else:
             # Add success indicator
             click.echo(f"{click.style('✅ Success!', fg='green', bold=True)}")
-            
+
             # Use the table renderer for nice formatting
             format_result_for_display(result)
-                
+
             # Add execution time if available in debug mode
             if debug:
                 click.echo(f"\n{click.style('⏱️  Execution completed', fg='cyan')}")
-            
+
     except Exception as e:
         if json_output:
             output_error(e, json_output, debug)
@@ -160,6 +198,7 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
             click.echo(f"\n{click.style('❌ Error:', fg='red', bold=True)} {str(e)}")
             if debug:
                 import traceback
+
                 click.echo(f"\n{click.style('🔍 Stack trace:', fg='yellow')}")
                 click.echo(traceback.format_exc())
             click.get_current_context().exit(1)

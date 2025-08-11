@@ -1,16 +1,18 @@
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
 import click
 import yaml
-from pathlib import Path
-import os
-import sys
-import json
-import shutil
 
-from mxcp.cli.utils import output_error, configure_logging, get_env_profile
-from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config
-from mxcp.config.duckdb_session import create_duckdb_session
+from mxcp.cli.utils import configure_logging, get_env_profile, output_error
 from mxcp.config.analytics import track_command_with_timing
+from mxcp.config.duckdb_session import create_duckdb_session
+from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
+
 
 def check_existing_mxcp_repo(target_dir: Path) -> bool:
     """Check if there's a mxcp-site.yml in the target directory or any parent directory."""
@@ -19,50 +21,50 @@ def check_existing_mxcp_repo(target_dir: Path) -> bool:
             return True
     return False
 
+
 def check_existing_duckdb(target_dir: Path, profile: str = "default") -> bool:
     """Check if there's a .duckdb file for the given profile in the target directory."""
     return (target_dir / f"db-{profile}.duckdb").exists()
 
+
 def check_project_exists_in_user_config(project_name: str) -> bool:
     """Check if the project name already exists in the user config file.
-    
+
     This function directly reads the config file without modifying it,
     unlike load_user_config which always ensures projects/profiles exist.
     """
     config_path = Path(os.environ.get("MXCP_CONFIG", Path.home() / ".mxcp" / "config.yml"))
-    
+
     if not config_path.exists():
         return False
-    
+
     try:
         with open(config_path) as f:
             config = yaml.safe_load(f)
-        
+
         if not config:
             return False
-            
+
         return project_name in config.get("projects", {})
     except Exception:
         # If we can't read the config, assume project doesn't exist
         return False
 
+
 def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str):
     """Create the mxcp-site.yml file with the given project and profile names."""
-    config = {
-        "mxcp": 1,
-        "project": project_name,
-        "profile": profile_name
-    }
-    
+    config = {"mxcp": 1, "project": project_name, "profile": profile_name}
+
     with open(target_dir / "mxcp-site.yml", "w") as f:
         yaml.dump(config, f, default_flow_style=False)
+
 
 def create_hello_world_files(target_dir: Path):
     """Create example hello world endpoint files and directory structure."""
     # Create all directories for the new structure
     directories = [
         "tools",
-        "resources", 
+        "resources",
         "prompts",
         "evals",
         "python",
@@ -70,25 +72,34 @@ def create_hello_world_files(target_dir: Path):
         "sql",
         "drift",
         "audit",
-        "data"
+        "data",
     ]
-    
+
     for directory in directories:
         dir_path = target_dir / directory
         dir_path.mkdir(exist_ok=True)
-        
+
         # Create .gitkeep files for empty directories
-        if directory in ["resources", "prompts", "evals", "python", "plugins", "drift", "audit", "data"]:
+        if directory in [
+            "resources",
+            "prompts",
+            "evals",
+            "python",
+            "plugins",
+            "drift",
+            "audit",
+            "data",
+        ]:
             gitkeep_file = dir_path / ".gitkeep"
             gitkeep_file.touch()
 
     # Create hello-world.sql in the sql directory
     hello_world_sql = """SELECT 'Hello, ' || $name || '!' as greeting
 """
-    
+
     with open(target_dir / "sql" / "hello-world.sql", "w") as f:
         f.write(hello_world_sql)
-    
+
     # Create hello-world.yml in the tools directory
     hello_world_yml = {
         "mxcp": 1,
@@ -101,70 +112,72 @@ def create_hello_world_files(target_dir: Path):
                     "name": "name",
                     "type": "string",
                     "description": "Name to greet",
-                    "examples": ["World", "Alice", "Bob"]
+                    "examples": ["World", "Alice", "Bob"],
                 }
             ],
-            "return": {
-                "type": "string",
-                "description": "Greeting message"
-            },
-            "source": {
-                "file": "../sql/hello-world.sql"
-            }
-        }
+            "return": {"type": "string", "description": "Greeting message"},
+            "source": {"file": "../sql/hello-world.sql"},
+        },
     }
-    
+
     with open(target_dir / "tools" / "hello-world.yml", "w") as f:
         yaml.dump(hello_world_yml, f, default_flow_style=False, sort_keys=False)
+
 
 def detect_python_environment():
     """Detect the current Python environment type and relevant paths."""
     # Check if we're in a virtual environment
-    in_venv = hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
-    
+    in_venv = hasattr(sys, "real_prefix") or (
+        hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
+    )
+
     # Get the virtual environment path if in one
     venv_path = None
     if in_venv:
         venv_path = sys.prefix
-    
+
     # Check for common virtual environment indicators
-    is_poetry = os.environ.get('POETRY_ACTIVE') == '1'
-    is_conda = os.environ.get('CONDA_DEFAULT_ENV') is not None
-    is_pipenv = os.environ.get('PIPENV_ACTIVE') == '1'
-    
+    is_poetry = os.environ.get("POETRY_ACTIVE") == "1"
+    is_conda = os.environ.get("CONDA_DEFAULT_ENV") is not None
+    is_pipenv = os.environ.get("PIPENV_ACTIVE") == "1"
+
     # Get mxcp executable path
-    mxcp_path = shutil.which('mxcp')
-    
+    mxcp_path = shutil.which("mxcp")
+
     return {
-        'in_venv': in_venv,
-        'venv_path': venv_path,
-        'is_poetry': is_poetry,
-        'is_conda': is_conda,
-        'is_pipenv': is_pipenv,
-        'mxcp_path': mxcp_path,
-        'python_path': sys.executable
+        "in_venv": in_venv,
+        "venv_path": venv_path,
+        "is_poetry": is_poetry,
+        "is_conda": is_conda,
+        "is_pipenv": is_pipenv,
+        "mxcp_path": mxcp_path,
+        "python_path": sys.executable,
     }
+
 
 def generate_claude_config(project_dir: Path, project_name: str):
     """Generate Claude Desktop configuration."""
     env_info = detect_python_environment()
-    
+
     # Create the command based on environment
-    if env_info['in_venv']:
+    if env_info["in_venv"]:
         # Use the venv's Python to ensure mxcp is available
-        if os.name == 'nt':  # Windows
-            activate_path = Path(env_info['venv_path']) / 'Scripts' / 'activate.bat'
+        if os.name == "nt":  # Windows
+            activate_path = Path(env_info["venv_path"]) / "Scripts" / "activate.bat"
             command = "cmd.exe"
             args = ["/c", f"cd /d {project_dir} && {activate_path} && mxcp serve --transport stdio"]
         else:  # Unix-like
-            activate_path = Path(env_info['venv_path']) / 'bin' / 'activate'
+            activate_path = Path(env_info["venv_path"]) / "bin" / "activate"
             command = "bash"
-            args = ["-c", f"cd {project_dir} && source {activate_path} && mxcp serve --transport stdio"]
+            args = [
+                "-c",
+                f"cd {project_dir} && source {activate_path} && mxcp serve --transport stdio",
+            ]
     else:
         # System-wide installation
         command = "mxcp"
         args = ["serve", "--transport", "stdio"]
-        
+
     config = {
         "mcpServers": {
             project_name: {
@@ -173,27 +186,30 @@ def generate_claude_config(project_dir: Path, project_name: str):
             }
         }
     }
-    
+
     # Add cwd for system-wide installation
-    if not env_info['in_venv']:
+    if not env_info["in_venv"]:
         config["mcpServers"][project_name]["cwd"] = str(project_dir)
-    
+
     # Add environment variables if needed
-    if env_info['in_venv']:
+    if env_info["in_venv"]:
         config["mcpServers"][project_name]["env"] = {
             "PATH": f"{Path(env_info['venv_path']) / 'bin'}:{os.environ.get('PATH', '')}",
-            "HOME": str(Path.home())
+            "HOME": str(Path.home()),
         }
-    
+
     return config
 
-def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, config_generated: bool = True):
+
+def show_next_steps(
+    project_dir: Path, project_name: str, bootstrap: bool, config_generated: bool = True
+):
     """Show helpful next steps after initialization."""
-    click.echo("\n" + "="*60)
-    click.echo(click.style("✨ MXCP project initialized successfully!", fg='green', bold=True))
-    click.echo("="*60 + "\n")
-    
-    click.echo(click.style("📁 Project Structure:", fg='cyan', bold=True))
+    click.echo("\n" + "=" * 60)
+    click.echo(click.style("✨ MXCP project initialized successfully!", fg="green", bold=True))
+    click.echo("=" * 60 + "\n")
+
+    click.echo(click.style("📁 Project Structure:", fg="cyan", bold=True))
     click.echo(f"   {project_dir}/")
     click.echo(f"   ├── mxcp-site.yml       # Project configuration")
     if bootstrap:
@@ -220,9 +236,9 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
         click.echo(f"   ├── drift/              # Drift snapshots will be stored here")
         click.echo(f"   ├── audit/              # Audit logs will be stored here")
         click.echo(f"   └── data/               # Database files will be stored here")
-    
+
     click.echo(f"\n{click.style('🚀 Next Steps:', fg='cyan', bold=True)}\n")
-    
+
     # Step 1: Test locally
     click.echo(f"{click.style('1. Test your setup locally:', fg='yellow')}")
     click.echo(f"   cd {project_dir}")
@@ -231,11 +247,11 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
     else:
         click.echo(f"   # Create your first tool in tools/")
         click.echo(f"   # Then run: mxcp run tool <tool_name>")
-    
+
     # Step 2: Start the server
     click.echo(f"\n{click.style('2. Start the MCP server:', fg='yellow')}")
     click.echo(f"   mxcp serve")
-    
+
     # Step 3: Connect to Claude
     click.echo(f"\n{click.style('3. Connect to Claude Desktop:', fg='yellow')}")
     if config_generated:
@@ -250,7 +266,7 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
         click.echo(f"   %APPDATA%\\Claude\\claude_desktop_config.json")
     else:
         click.echo(f"   ~/.config/Claude/claude_desktop_config.json")
-    
+
     # Step 4: Explore more
     click.echo(f"\n{click.style('4. Learn more:', fg='yellow')}")
     click.echo(f"   • List all endpoints:     mxcp list")
@@ -258,19 +274,22 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
     click.echo(f"   • Enable SQL tools:       Edit mxcp-site.yml (sql_tools: enabled: true)")
     click.echo(f"   • Add dbt integration:    Create dbt_project.yml and run dbt models")
     click.echo(f"   • View documentation:     https://mxcp.dev")
-    
+
     if bootstrap:
         click.echo(f"\n{click.style('💡 Try it now:', fg='green')}")
-        click.echo(f"   In Claude Desktop, ask: \"Use the hello_world tool to greet Alice\"")
-    
+        click.echo(f'   In Claude Desktop, ask: "Use the hello_world tool to greet Alice"')
+
     click.echo(f"\n{click.style('📚 Resources:', fg='cyan', bold=True)}")
     click.echo(f"   • Documentation: https://mxcp.dev")
     click.echo(f"   • Examples: https://github.com/raw-labs/mxcp/tree/main/examples")
     click.echo(f"   • Discord: https://discord.gg/XeqRp5Ud")
     click.echo("")
 
+
 @click.command(name="init")
-@click.argument("folder", type=click.Path(file_okay=False, dir_okay=True, writable=True), default=".")
+@click.argument(
+    "folder", type=click.Path(file_okay=False, dir_okay=True, writable=True), default="."
+)
 @click.option("--project", help="Project name (defaults to folder name)")
 @click.option("--profile", help="Profile name (defaults to 'default')")
 @click.option("--bootstrap", is_flag=True, help="Create example hello world endpoint")
@@ -278,13 +297,13 @@ def show_next_steps(project_dir: Path, project_name: str, bootstrap: bool, confi
 @track_command_with_timing("init")
 def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
     """Initialize a new MXCP repository.
-    
+
     \b
     This command creates a new MXCP repository by:
     1. Creating a mxcp-site.yml file with project and profile configuration
     2. Optionally creating example endpoint files
     3. Generating a server_config.json for Claude Desktop integration
-    
+
     \b
     Examples:
         mxcp init                   # Initialize in current directory
@@ -295,50 +314,52 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
     # Get values from environment variables if not set by flags
     if not profile:
         profile = get_env_profile()
-        
+
     # Configure logging
     configure_logging(debug)
-    
+
     try:
         target_dir = Path(folder).resolve()
-        
+
         # Check if we're trying to create a repo inside another one
         if check_existing_mxcp_repo(target_dir):
             raise click.ClickException("Cannot create a MXCP repository inside another one")
-            
+
         # Check if .duckdb file already exists for this profile
         if check_existing_duckdb(target_dir, profile):
-            raise click.ClickException(f"Cannot create a MXCP repository in a directory with an existing db-{profile}.duckdb file")
-        
+            raise click.ClickException(
+                f"Cannot create a MXCP repository in a directory with an existing db-{profile}.duckdb file"
+            )
+
         # Create target directory if it doesn't exist
         target_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Determine project name (default to directory name)
         if not project:
             project = target_dir.name
-        
+
         # Determine profile name (default to 'default')
         if not profile:
             profile = "default"
-            
+
         # Check if project exists in user config
         if check_project_exists_in_user_config(project):
             if not click.confirm(f"Project '{project}' already exists in your config. Continue?"):
                 return
-            
+
         # Create mxcp-site.yml
         create_mxcp_site_yml(target_dir, project, profile)
         click.echo(f"✓ Created mxcp-site.yml")
-        
+
         # Create example files if requested
         if bootstrap:
             create_hello_world_files(target_dir)
             click.echo("✓ Created example hello world endpoint")
-            
+
         # Load configs (this will handle migration checks)
         site_config = load_site_config(target_dir)
         new_user_config = load_user_config(site_config)
-        
+
         # Initialize DuckDB session to create .duckdb file
         try:
             session = create_duckdb_session(site_config, new_user_config, readonly=False)
@@ -346,19 +367,19 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
             click.echo("✓ Initialized DuckDB database")
         except Exception as e:
             click.echo(f"⚠️  Warning: Failed to initialize DuckDB database: {e}")
-            
+
         # Generate Claude Desktop config
         try:
             # Ask if user wants to generate Claude Desktop config
             if click.confirm("\nWould you like to generate a Claude Desktop configuration file?"):
                 claude_config = generate_claude_config(target_dir, project)
                 config_path = target_dir / "server_config.json"
-                
-                with open(config_path, 'w') as f:
+
+                with open(config_path, "w") as f:
                     json.dump(claude_config, f, indent=2)
-                
+
                 click.echo(f"✓ Generated server_config.json for Claude Desktop")
-                
+
                 # Show the config content
                 click.echo("\nGenerated configuration:")
                 click.echo(json.dumps(claude_config, indent=2))
@@ -369,9 +390,9 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
         except Exception as e:
             click.echo(f"⚠️  Warning: Failed to generate Claude config: {e}")
             config_generated = False
-            
+
         # Show next steps
         show_next_steps(target_dir, project, bootstrap, config_generated)
-            
+
     except Exception as e:
-        output_error(e, json_output=False, debug=debug) 
+        output_error(e, json_output=False, debug=debug)

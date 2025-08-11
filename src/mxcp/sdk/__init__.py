@@ -2,7 +2,7 @@
 """MXCP SDK - Enterprise-grade MCP framework for building production AI tools.
 
 The MXCP SDK provides a comprehensive, standalone framework for building secure,
-scalable AI applications with built-in authentication, policy enforcement, 
+scalable AI applications with built-in authentication, policy enforcement,
 audit logging, and execution engines.
 
 ## Core Modules
@@ -10,7 +10,7 @@ audit logging, and execution engines.
 ### Authentication (`mxcp.sdk.auth`)
 OAuth providers, user context management, and authentication middleware.
 
-### Execution (`mxcp.sdk.executor`)  
+### Execution (`mxcp.sdk.executor`)
 Multi-language execution engine with DuckDB and Python support.
 
 ### Policy Enforcement (`mxcp.sdk.policy`)
@@ -55,8 +55,8 @@ result = await engine.execute(
 ## Design Principles
 
 - **Security First**: Built-in authentication, authorization, and audit logging
-- **Type Safety**: Comprehensive validation with clear error messages  
+- **Type Safety**: Comprehensive validation with clear error messages
 - **Plugin Architecture**: Extensible execution engines and auth providers
 - **Zero Dependencies**: Clean separation from main MXCP CLI package
 - **Production Ready**: Thread-safe, async-compatible, enterprise features
-""" 
+"""

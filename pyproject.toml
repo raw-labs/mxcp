@@ -81,14 +81,15 @@ all = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["mxcp", "mxcp.cli", "mxcp.config", "mxcp.config.schemas", "mxcp.dbt", "mxcp.drift.schemas", "mxcp.endpoints.schemas", "mxcp.evals", "mxcp.evals.schemas", "mxcp.plugins", "mxcp.policies", "mxcp.runtime", "mxcp.sdk", "mxcp.sdk.audit", "mxcp.sdk.auth", "mxcp.sdk.core", "mxcp.sdk.core.analytics", "mxcp.sdk.core.config", "mxcp.sdk.core.config.resolvers", "mxcp.sdk.evals", "mxcp.sdk.executor", "mxcp.sdk.executor.plugins", "mxcp.sdk.executor.plugins.duckdb_plugin", "mxcp.sdk.executor.plugins.python_plugin", "mxcp.sdk.policy", "mxcp.sdk.validator", "mxcp.validator"]
+packages = ["mxcp", "mxcp.cli", "mxcp.config", "mxcp.config.config_schemas", "mxcp.dbt", "mxcp.drift.drift_schemas", "mxcp.endpoints.endpoint_schemas", "mxcp.evals", "mxcp.evals.eval_schemas", "mxcp.plugins", "mxcp.policies", "mxcp.runtime", "mxcp.sdk", "mxcp.sdk.audit", "mxcp.sdk.auth", "mxcp.sdk.core", "mxcp.sdk.core.analytics", "mxcp.sdk.core.config", "mxcp.sdk.core.config.resolvers", "mxcp.sdk.evals", "mxcp.sdk.executor", "mxcp.sdk.executor.plugins", "mxcp.sdk.executor.plugins.duckdb_plugin", "mxcp.sdk.executor.plugins.python_plugin", "mxcp.sdk.policy", "mxcp.sdk.validator", "mxcp.validator"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-"mxcp.config.schemas" = ["*.json"]
-"mxcp.endpoints.schemas" = ["*.json"]
-"mxcp.drift.schemas" = ["*.json"]
-"mxcp.evals.schemas" = ["*.json"]
+"mxcp" = ["py.typed"]
+"mxcp.config.config_schemas" = ["*.json"]
+"mxcp.endpoints.endpoint_schemas" = ["*.json"]
+"mxcp.drift.drift_schemas" = ["*.json"]
+"mxcp.evals.eval_schemas" = ["*.json"]
 "mxcp.sdk.core.config.schemas" = ["*.json"]
 "mxcp.validator.schemas" = ["*.json"]
 
@@ -122,6 +123,10 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 show_error_codes = true
 strict = true
+# Tell mypy where to find the source code
+packages = ["mxcp"]
+# Explicitly set the source directory
+mypy_path = "src"
 
 [[tool.mypy.overrides]]
 module = [

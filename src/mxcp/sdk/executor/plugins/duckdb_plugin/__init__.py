@@ -1,17 +1,20 @@
 """DuckDB executor plugin package."""
 
-from .session import DuckDBSession, execute_query_to_dict
-from .types import (
-    DatabaseConfig, ExtensionDefinition, PluginDefinition, 
-    PluginConfig, SecretDefinition
+from ._types import (
+    DatabaseConfig,
+    ExtensionDefinition,
+    PluginConfig,
+    PluginDefinition,
+    SecretDefinition,
 )
+from .session import DuckDBSession, execute_query_to_dict
 
 __all__ = [
-    "DuckDBSession", 
+    "DuckDBSession",
     "execute_query_to_dict",
     "DatabaseConfig",
-    "ExtensionDefinition", 
+    "ExtensionDefinition",
     "PluginDefinition",
     "PluginConfig",
-    "SecretDefinition"
-] 
+    "SecretDefinition",
+]

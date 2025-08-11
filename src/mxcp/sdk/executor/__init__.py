@@ -2,7 +2,7 @@
 
 This module provides the core execution framework for MXCP, including:
 - `ExecutionContext`: Runtime context for execution state (sessions, configs, plugins)
-- `ExecutorPlugin`: Base interface for execution plugins  
+- `ExecutorPlugin`: Base interface for execution plugins
 - `ExecutionEngine`: Main engine for executing code across different languages
 
 The executor system supports multiple languages through a plugin architecture,
@@ -33,14 +33,14 @@ result = await engine.execute(
 
 # Execute Python
 result = await engine.execute(
-    language="python", 
+    language="python",
     source_code="return {'result': len(params.get('items', []))}",
     params={"items": [1, 2, 3]},
     context=context
 )
 ```
 
-### Context Management  
+### Context Management
 ```python
 from mxcp.sdk.executor import get_execution_context, set_execution_context
 
@@ -54,10 +54,10 @@ db_session = context.get("duckdb_session")
 from .context import (
     ExecutionContext,
     get_execution_context,
+    reset_execution_context,
     set_execution_context,
-    reset_execution_context
 )
-from .interfaces import ExecutorPlugin, ExecutionEngine
+from .interfaces import ExecutionEngine, ExecutorPlugin
 
 __all__ = [
     # Context
@@ -65,8 +65,7 @@ __all__ = [
     "get_execution_context",
     "set_execution_context",
     "reset_execution_context",
-    
     # Interfaces
     "ExecutorPlugin",
     "ExecutionEngine",
-] 
+]

@@ -16,7 +16,7 @@ This module provides comprehensive type validation functionality including:
 
 ### Schema Types
 - `ValidationSchema`: Complete validation configuration
-- `ParameterSchema`: Individual parameter definition  
+- `ParameterSchema`: Individual parameter definition
 - `TypeSchema`: Type definitions (string, number, object, array, etc.)
 
 ## Quick Examples
@@ -35,7 +35,7 @@ schema = ValidationSchema(
             "pattern": "^user_[0-9]+$"
         },
         {
-            "name": "limit", 
+            "name": "limit",
             "type": "integer",
             "default": 10,
             "minimum": 1,
@@ -80,10 +80,10 @@ validated_output = validator.validate_output(result)
 ```
 """
 
-from .types import (
+from ._types import (
     BaseTypeSchema,
-    TypeSchema,
     ParameterSchema,
+    TypeSchema,
     ValidationSchema,
 )
 from .converters import (
@@ -95,7 +95,7 @@ from .core import TypeValidator
 __all__ = [
     # Types
     "BaseTypeSchema",
-    "TypeSchema", 
+    "TypeSchema",
     "ParameterSchema",
     "ValidationSchema",
     # Converter classes
@@ -103,4 +103,4 @@ __all__ = [
     "ValidationError",
     # Core validator
     "TypeValidator",
-] 
+]

@@ -4,16 +4,17 @@ This module consolidates common functionality used across endpoint loading,
 execution, and validation to avoid code duplication.
 """
 
+import logging
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional
-import logging
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
 class EndpointType(Enum):
     """Endpoint type enumeration."""
+
     TOOL = "tool"
     RESOURCE = "resource"
     PROMPT = "prompt"

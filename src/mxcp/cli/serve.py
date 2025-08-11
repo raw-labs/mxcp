@@ -1,27 +1,52 @@
-import click
 import signal
-from typing import Optional
-from mxcp.server.mcp import RAWMCP
-from mxcp.cli.utils import output_error, configure_logging, get_env_flag, get_env_profile
-from mxcp.config.analytics import track_command_with_timing
 from pathlib import Path
+from typing import Optional
+
+import click
+
+from mxcp.cli.utils import configure_logging, get_env_flag, get_env_profile, output_error
+from mxcp.config.analytics import track_command_with_timing
+from mxcp.server.mcp import RAWMCP
+
 
 @click.command(name="serve")
 @click.option("--profile", help="Profile name to use")
-@click.option("--transport", type=click.Choice(["streamable-http", "sse", "stdio"]), help="Transport protocol to use (defaults to user config setting)")
-@click.option("--port", type=int, help="Port number to use for HTTP transport (defaults to user config setting)")
+@click.option(
+    "--transport",
+    type=click.Choice(["streamable-http", "sse", "stdio"]),
+    help="Transport protocol to use (defaults to user config setting)",
+)
+@click.option(
+    "--port",
+    type=int,
+    help="Port number to use for HTTP transport (defaults to user config setting)",
+)
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-@click.option("--sql-tools", type=click.Choice(['true', 'false']), help="Enable or disable built-in SQL querying and schema exploration tools")
+@click.option(
+    "--sql-tools",
+    type=click.Choice(["true", "false"]),
+    help="Enable or disable built-in SQL querying and schema exploration tools",
+)
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
-@click.option("--stateless", is_flag=True, help="Enable stateless HTTP mode (for serverless deployments)")
+@click.option(
+    "--stateless", is_flag=True, help="Enable stateless HTTP mode (for serverless deployments)"
+)
 @track_command_with_timing("serve")
-def serve(profile: Optional[str], transport: Optional[str], port: Optional[int], debug: bool, sql_tools: Optional[str], readonly: bool, stateless: bool):
+def serve(
+    profile: Optional[str],
+    transport: Optional[str],
+    port: Optional[int],
+    debug: bool,
+    sql_tools: Optional[str],
+    readonly: bool,
+    stateless: bool,
+):
     """Start the MXCP MCP server to expose endpoints via HTTP or stdio.
-    
+
     This command starts a server that exposes your MXCP endpoints as an MCP-compatible
     interface. By default, it uses the transport configuration from your user config,
     but can also be overridden with command line options.
-    
+
     \b
     Examples:
         mxcp serve                   # Use transport settings from user config
@@ -38,15 +63,15 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
         profile = get_env_profile()
     if not readonly:
         readonly = get_env_flag("MXCP_READONLY")
-        
+
     # Configure logging
     configure_logging(debug)
-    
+
     # Convert sql-tools string to boolean
     enable_sql_tools = None
-    if sql_tools == 'true':
+    if sql_tools == "true":
         enable_sql_tools = True
-    elif sql_tools == 'false':
+    elif sql_tools == "false":
         enable_sql_tools = False
 
     try:
@@ -59,58 +84,64 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
             stateless_http=stateless if stateless else None,
             enable_sql_tools=enable_sql_tools,
             readonly=readonly,
-            debug=debug
+            debug=debug,
         )
-        
+
         # Get config info for display
         config = server.get_config_info()
         endpoint_counts = server.get_endpoint_counts()
-        
+
         # Show startup banner (except for stdio mode which needs clean output)
-        if config['transport'] != "stdio":
-            click.echo("\n" + "="*60)
-            click.echo(click.style("🚀 MXCP Server Starting", fg='green', bold=True).center(70))
-            click.echo("="*60 + "\n")
-            
+        if config["transport"] != "stdio":
+            click.echo("\n" + "=" * 60)
+            click.echo(click.style("🚀 MXCP Server Starting", fg="green", bold=True).center(70))
+            click.echo("=" * 60 + "\n")
+
             # Show configuration
             click.echo(f"{click.style('📋 Configuration:', fg='cyan', bold=True)}")
             click.echo(f"   • Project: {click.style(config['project'], fg='yellow')}")
             click.echo(f"   • Profile: {click.style(config['profile'], fg='yellow')}")
             click.echo(f"   • Transport: {click.style(config['transport'], fg='yellow')}")
-            
-            if config['transport'] in ["streamable-http", "sse"]:
+
+            if config["transport"] in ["streamable-http", "sse"]:
                 click.echo(f"   • Host: {click.style(config['host'], fg='yellow')}")
                 click.echo(f"   • Port: {click.style(str(config['port']), fg='yellow')}")
-                
-            if config['readonly']:
+
+            if config["readonly"]:
                 click.echo(f"   • Mode: {click.style('Read-only', fg='red')}")
             else:
                 click.echo(f"   • Mode: {click.style('Read-write', fg='green')}")
-                
-            if config['stateless']:
+
+            if config["stateless"]:
                 click.echo(f"   • HTTP Mode: {click.style('Stateless', fg='magenta')}")
-                
-            if config['sql_tools_enabled']:
+
+            if config["sql_tools_enabled"]:
                 click.echo(f"   • SQL Tools: {click.style('Enabled', fg='green')}")
             else:
                 click.echo(f"   • SQL Tools: {click.style('Disabled', fg='red')}")
-            
+
             # Show endpoint counts
             click.echo(f"\n{click.style('📊 Endpoints:', fg='cyan', bold=True)}")
-            if endpoint_counts['tools'] > 0:
+            if endpoint_counts["tools"] > 0:
                 click.echo(f"   • Tools: {click.style(str(endpoint_counts['tools']), fg='green')}")
-            if endpoint_counts['resources'] > 0:
-                click.echo(f"   • Resources: {click.style(str(endpoint_counts['resources']), fg='green')}")
-            if endpoint_counts['prompts'] > 0:
-                click.echo(f"   • Prompts: {click.style(str(endpoint_counts['prompts']), fg='green')}")
-            
-            if endpoint_counts['total'] == 0:
+            if endpoint_counts["resources"] > 0:
+                click.echo(
+                    f"   • Resources: {click.style(str(endpoint_counts['resources']), fg='green')}"
+                )
+            if endpoint_counts["prompts"] > 0:
+                click.echo(
+                    f"   • Prompts: {click.style(str(endpoint_counts['prompts']), fg='green')}"
+                )
+
+            if endpoint_counts["total"] == 0:
                 click.echo(f"   {click.style('⚠️  No endpoints found!', fg='yellow')}")
-                click.echo(f"   Create tools in the 'tools/' directory, resources in 'resources/', etc.")
-            
-            click.echo("\n" + "-"*60)
-            
-            if config['transport'] in ["streamable-http", "sse"]:
+                click.echo(
+                    f"   Create tools in the 'tools/' directory, resources in 'resources/', etc."
+                )
+
+            click.echo("\n" + "-" * 60)
+
+            if config["transport"] in ["streamable-http", "sse"]:
                 click.echo(f"\n{click.style('✅ Server ready!', fg='green', bold=True)}")
                 url = f"http://{config['host']}:{config['port']}"
                 click.echo(f"   Listening on {click.style(url, fg='cyan', underline=True)}")
@@ -120,7 +151,7 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
 
         # Set up signal handler for graceful shutdown
         def signal_handler(signum, frame):
-            if config['transport'] != "stdio":
+            if config["transport"] != "stdio":
                 click.echo(f"\n{click.style('🛑 Shutting down gracefully...', fg='yellow')}")
             raise KeyboardInterrupt()
 
@@ -130,11 +161,11 @@ def serve(profile: Optional[str], transport: Optional[str], port: Optional[int],
 
         try:
             # Start the server
-            server.run(transport=config['transport'])
+            server.run(transport=config["transport"])
         except KeyboardInterrupt:
             # Gracefully shutdown the server
             server.shutdown()
-            if config['transport'] != "stdio":
+            if config["transport"] != "stdio":
                 click.echo(f"{click.style('👋 Server stopped', fg='cyan')}")
             raise
     except KeyboardInterrupt:

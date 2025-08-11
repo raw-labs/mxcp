@@ -5,27 +5,30 @@ Handles backward compatibility and provides helpful migration guidance
 for users upgrading from pre-production versions.
 """
 
-def check_and_migrate_legacy_version(config_data: dict, config_type: str, config_path: str = None) -> None:
+
+def check_and_migrate_legacy_version(
+    config_data: dict, config_type: str, config_path: str = None
+) -> None:
     """
     Check for legacy version format and provide migration guidance.
-    
+
     Args:
         config_data: The loaded YAML configuration data
-        config_type: Type of config ("site" or "user")  
+        config_type: Type of config ("site" or "user")
         config_path: Path to the config file (for error message)
-        
+
     Raises:
         ValueError: If legacy version format is detected with migration instructions
     """
     if not isinstance(config_data, dict):
         return
-        
+
     mxcp_version = config_data.get("mxcp")
-    
+
     # Check for old string-based versioning (e.g., "1.0.0", "1", etc.)
     if isinstance(mxcp_version, str):
         config_file = config_path or f"mxcp-{config_type}.yml"
-        
+
         if config_type == "site":
             migration_msg = f"""
 🚨 MIGRATION REQUIRED: Pre-production MXCP version detected
@@ -93,5 +96,5 @@ to:
 This affects your global MXCP settings. After fixing this, you may also need 
 to update your project files to use the new directory structure.
 """
-        
-        raise ValueError(migration_msg.strip()) 
+
+        raise ValueError(migration_msg.strip())

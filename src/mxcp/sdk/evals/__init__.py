@@ -9,15 +9,15 @@ The main components are:
 - Tool definition types for describing available tools to the LLM
 """
 
+from ._types import ClaudeConfig, ModelConfigType, OpenAIConfig, ParameterDefinition, ToolDefinition
 from .executor import LLMExecutor, ToolExecutor
-from .types import ToolDefinition, ParameterDefinition, ModelConfigType, ClaudeConfig, OpenAIConfig
 
 __all__ = [
     "LLMExecutor",
-    "ToolExecutor", 
+    "ToolExecutor",
     "ToolDefinition",
     "ParameterDefinition",
     "ModelConfigType",
     "ClaudeConfig",
     "OpenAIConfig",
-] 
+]

@@ -11,4 +11,4 @@ __all__ = [
     "load_schema_from_file",
 ]
 
-__version__ = "0.1.0" 
+__version__ = "0.1.0"

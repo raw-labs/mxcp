@@ -1,19 +1,26 @@
-import os
-import pytest
 import asyncio
+import os
 from pathlib import Path
-from mxcp.endpoints.tester import run_tests, run_all_tests
+
+import pytest
+
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
+from mxcp.endpoints.tester import run_all_tests, run_tests
+
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
-    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "tester" / "mxcp-config.yml")
+    os.environ["MXCP_CONFIG"] = str(
+        Path(__file__).parent / "fixtures" / "tester" / "mxcp-config.yml"
+    )
+
 
 @pytest.fixture
 def tester_repo_path():
     """Path to the tester test repository."""
     return Path(__file__).parent / "fixtures" / "tester"
+
 
 @pytest.fixture
 def site_config(tester_repo_path):
@@ -24,6 +31,7 @@ def site_config(tester_repo_path):
         return load_site_config()
     finally:
         os.chdir(original_dir)
+
 
 @pytest.fixture
 def user_config(tester_repo_path):
@@ -36,6 +44,7 @@ def user_config(tester_repo_path):
     finally:
         os.chdir(original_dir)
 
+
 @pytest.mark.asyncio
 async def test_run_valid_tool(tester_repo_path, site_config, user_config):
     """Test running tests for a valid tool endpoint."""
@@ -46,6 +55,7 @@ async def test_run_valid_tool(tester_repo_path, site_config, user_config):
         assert result["status"] == "ok"
     finally:
         os.chdir(original_dir)
+
 
 @pytest.mark.asyncio
 async def test_run_invalid_tool(tester_repo_path, site_config, user_config):
@@ -60,10 +70,15 @@ async def test_run_invalid_tool(tester_repo_path, site_config, user_config):
         # Check error causes for each error test
         error_msgs = [test["error"] for test in result["tests"] if test["status"] == "error"]
         assert any("Required parameter missing: count" in str(msg) for msg in error_msgs)
-        assert any("Error validating parameter 'count'" in str(msg) and "Expected integer, got str" in str(msg) for msg in error_msgs)
+        assert any(
+            "Error validating parameter 'count'" in str(msg)
+            and "Expected integer, got str" in str(msg)
+            for msg in error_msgs
+        )
         assert any("Unknown parameter: extra" in str(msg) for msg in error_msgs)
     finally:
         os.chdir(original_dir)
+
 
 @pytest.mark.asyncio
 async def test_run_valid_resource(tester_repo_path, site_config, user_config):
@@ -71,16 +86,23 @@ async def test_run_valid_resource(tester_repo_path, site_config, user_config):
     original_dir = os.getcwd()
     os.chdir(tester_repo_path)
     try:
-        result = await run_tests("resource", "data://valid.resource", user_config, site_config, None)
+        result = await run_tests(
+            "resource", "data://valid.resource", user_config, site_config, None
+        )
         assert result["status"] == "error"  # Overall status is error because of the failing test
         assert result["tests_run"] == 2
-        assert any(test["status"] == "passed" for test in result["tests"])  # valid filter test should pass
-        assert any(test["status"] == "error" for test in result["tests"])   # no filter test should error
+        assert any(
+            test["status"] == "passed" for test in result["tests"]
+        )  # valid filter test should pass
+        assert any(
+            test["status"] == "error" for test in result["tests"]
+        )  # no filter test should error
         # Check error cause for the error test
         error_msgs = [test["error"] for test in result["tests"] if test["status"] == "error"]
         assert any("Required parameter missing: filter" in str(msg) for msg in error_msgs)
     finally:
         os.chdir(original_dir)
+
 
 @pytest.mark.asyncio
 async def test_run_valid_prompt(tester_repo_path, site_config, user_config):
@@ -98,6 +120,7 @@ async def test_run_valid_prompt(tester_repo_path, site_config, user_config):
     finally:
         os.chdir(original_dir)
 
+
 @pytest.mark.asyncio
 async def test_run_nonexistent_endpoint(tester_repo_path, site_config, user_config):
     """Test running tests for a non-existent endpoint."""
@@ -109,6 +132,7 @@ async def test_run_nonexistent_endpoint(tester_repo_path, site_config, user_conf
         assert "Endpoint not found" in result["message"]
     finally:
         os.chdir(original_dir)
+
 
 @pytest.mark.asyncio
 async def test_run_all_tests(tester_repo_path, site_config, user_config):
@@ -126,10 +150,21 @@ async def test_run_all_tests(tester_repo_path, site_config, user_config):
         assert "resource" in endpoint_types
         assert "prompt" in endpoint_types
         # Optionally, check that at least one error cause is present in endpoints
-        error_causes = [test["error"] for ep in result["endpoints"] for test in ep.get("test_results", {}).get("tests", []) if test["status"] == "error"]
-        assert any("Required parameter missing" in str(msg) or "messages" in str(msg) or "Unknown parameter" in str(msg) for msg in error_causes)
+        error_causes = [
+            test["error"]
+            for ep in result["endpoints"]
+            for test in ep.get("test_results", {}).get("tests", [])
+            if test["status"] == "error"
+        ]
+        assert any(
+            "Required parameter missing" in str(msg)
+            or "messages" in str(msg)
+            or "Unknown parameter" in str(msg)
+            for msg in error_causes
+        )
     finally:
         os.chdir(original_dir)
+
 
 @pytest.mark.asyncio
 async def test_run_missing_param_tool(tester_repo_path, site_config, user_config):
@@ -143,6 +178,7 @@ async def test_run_missing_param_tool(tester_repo_path, site_config, user_config
     finally:
         os.chdir(original_dir)
 
+
 @pytest.mark.asyncio
 async def test_run_mismatched_result(tester_repo_path, site_config, user_config):
     """Test running tests for a tool endpoint with mismatched expected result."""
@@ -152,4 +188,4 @@ async def test_run_mismatched_result(tester_repo_path, site_config, user_config)
         result = await run_tests("tool", "mismatched_result", user_config, site_config, None)
         assert result["status"] == "failed"  # Overall status should be failed
     finally:
-        os.chdir(original_dir) 
+        os.chdir(original_dir)

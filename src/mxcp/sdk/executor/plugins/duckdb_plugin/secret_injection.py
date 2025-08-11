@@ -5,17 +5,19 @@ This module handles secret injection into DuckDB sessions.
 This is a cloned version of the secret injection for the executor plugin system.
 """
 
-from typing import Dict, Any, List
-from .types import SecretDefinition
 import logging
+from typing import Any, Dict, List
+
+from ._types import SecretDefinition
 
 logger = logging.getLogger(__name__)
+
 
 def inject_secrets(con, secrets: List[SecretDefinition]):
     """Inject secrets into DuckDB session"""
     logger.debug(f"Injecting {len(secrets)} secrets")
     logger.debug(f"Found secrets: {[s.name for s in secrets]}")
-    
+
     # Create secrets in DuckDB
     for secret in secrets:
         # Build CREATE TEMPORARY SECRET statement
@@ -28,14 +30,14 @@ def inject_secrets(con, secrets: List[SecretDefinition]):
                 params.append(f"{key} MAP {{{', '.join(map_items)}}}")
             else:
                 params.append(f"{key} '{value}'")
-        
+
         create_secret_sql = f"""
         CREATE TEMPORARY SECRET {secret.name} (
             TYPE {secret.type},
             {', '.join(params)}
         )
         """
-        
+
         try:
             logger.debug(f"Creating secret with SQL: {create_secret_sql}")
             con.execute(create_secret_sql)
@@ -43,4 +45,6 @@ def inject_secrets(con, secrets: List[SecretDefinition]):
             # Log the error but continue - this allows MXCP to support any secret type
             # while DuckDB only creates the ones it understands
             logger.debug(f"Could not create secret '{secret.name}' in DuckDB: {e}")
-            logger.debug("This secret will still be accessible via config.get_secret() in Python endpoints") 
+            logger.debug(
+                "This secret will still be accessible via config.get_secret() in Python endpoints"
+            )

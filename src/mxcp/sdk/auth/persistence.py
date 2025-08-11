@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 """OAuth persistence backends for MXCP authentication."""
-import sqlite3
-import json
-import time
-import logging
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, asdict
-from pathlib import Path
-from typing import Optional, Dict, List, Any
-from contextlib import asynccontextmanager
 import asyncio
+import json
+import logging
+import sqlite3
 import threading
+import time
+from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from mcp.server.auth.provider import AccessToken, AuthorizationCode
 from mcp.shared.auth import OAuthClientInformationFull
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PersistedAccessToken:
     """Persisted access token data."""
+
     token: str
     client_id: str
     external_token: Optional[str]
@@ -33,6 +34,7 @@ class PersistedAccessToken:
 @dataclass
 class PersistedAuthCode:
     """Persisted authorization code data."""
+
     code: str
     client_id: str
     redirect_uri: str
@@ -46,6 +48,7 @@ class PersistedAuthCode:
 @dataclass
 class PersistedClient:
     """Persisted OAuth client data."""
+
     client_id: str
     client_secret: Optional[str]
     redirect_uris: List[str]
@@ -138,7 +141,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
 
     def __init__(self, db_path: Path):
         """Initialize SQLite persistence backend.
-        
+
         Args:
             db_path: Path to the SQLite database file
         """
@@ -152,35 +155,31 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         """Initialize the SQLite database and create tables."""
         if self._initialized:
             return
-        
-        await asyncio.get_event_loop().run_in_executor(
-            self._executor, self._sync_initialize
-        )
+
+        await asyncio.get_event_loop().run_in_executor(self._executor, self._sync_initialize)
 
     def _sync_initialize(self) -> None:
         """Synchronous initialization method."""
         with self._lock:
             if self._initialized:
                 return
-                
+
             # Ensure directory exists
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Connect to database
             self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
             self.conn.row_factory = sqlite3.Row  # Enable column access by name
-            
+
             # Create tables
             self._create_tables_sync()
-            
+
             self._initialized = True
             logger.info(f"Initialized SQLite OAuth persistence at {self.db_path}")
 
     async def close(self) -> None:
         """Close the database connection."""
-        await asyncio.get_event_loop().run_in_executor(
-            self._executor, self._sync_close
-        )
+        await asyncio.get_event_loop().run_in_executor(self._executor, self._sync_close)
         # Shutdown the executor
         self._executor.shutdown(wait=True)
 
@@ -195,9 +194,10 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
     def _create_tables_sync(self) -> None:
         """Create the necessary database tables (synchronous)."""
         cursor = self.conn.cursor()
-        
+
         # Access tokens table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS access_tokens (
                 token TEXT PRIMARY KEY,
                 client_id TEXT NOT NULL,
@@ -206,16 +206,20 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
                 expires_at REAL,
                 created_at REAL NOT NULL
             )
-        """)
-        
+        """
+        )
+
         # Create index separately for better compatibility
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_access_tokens_expires_at 
             ON access_tokens(expires_at)
-        """)
-        
+        """
+        )
+
         # Authorization codes table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS auth_codes (
                 code TEXT PRIMARY KEY,
                 client_id TEXT NOT NULL,
@@ -226,16 +230,20 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
                 code_challenge TEXT,
                 created_at REAL NOT NULL
             )
-        """)
-        
+        """
+        )
+
         # Create index separately
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_auth_codes_expires_at 
             ON auth_codes(expires_at)
-        """)
-        
+        """
+        )
+
         # OAuth clients table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS oauth_clients (
                 client_id TEXT PRIMARY KEY,
                 client_secret TEXT,
@@ -246,8 +254,9 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
                 client_name TEXT NOT NULL,
                 created_at REAL NOT NULL
             )
-        """)
-        
+        """
+        )
+
         self.conn.commit()
 
     # Token operations
@@ -261,18 +270,21 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         """Synchronous token storage."""
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT OR REPLACE INTO access_tokens 
                 (token, client_id, external_token, scopes, expires_at, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                token_data.token,
-                token_data.client_id,
-                token_data.external_token,
-                json.dumps(token_data.scopes),
-                token_data.expires_at,
-                token_data.created_at
-            ))
+            """,
+                (
+                    token_data.token,
+                    token_data.client_id,
+                    token_data.external_token,
+                    json.dumps(token_data.scopes),
+                    token_data.expires_at,
+                    token_data.created_at,
+                ),
+            )
             self.conn.commit()
 
     async def load_token(self, token: str) -> Optional[PersistedAccessToken]:
@@ -285,22 +297,25 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         """Synchronous token loading."""
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT token, client_id, external_token, scopes, expires_at, created_at
                 FROM access_tokens WHERE token = ?
-            """, (token,))
-            
+            """,
+                (token,),
+            )
+
             row = cursor.fetchone()
             if not row:
                 return None
-                
+
             return PersistedAccessToken(
                 token=row["token"],
                 client_id=row["client_id"],
                 external_token=row["external_token"],
                 scopes=json.loads(row["scopes"]),
                 expires_at=row["expires_at"],
-                created_at=row["created_at"]
+                created_at=row["created_at"],
             )
 
     async def delete_token(self, token: str) -> None:
@@ -327,10 +342,13 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         current_time = time.time()
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 DELETE FROM access_tokens 
                 WHERE expires_at IS NOT NULL AND expires_at < ?
-            """, (current_time,))
+            """,
+                (current_time,),
+            )
             deleted_count = cursor.rowcount
             self.conn.commit()
             return deleted_count
@@ -346,21 +364,24 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         """Synchronous auth code storage."""
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT OR REPLACE INTO auth_codes 
                 (code, client_id, redirect_uri, redirect_uri_provided_explicitly, 
                  expires_at, scopes, code_challenge, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                code_data.code,
-                code_data.client_id,
-                code_data.redirect_uri,
-                int(code_data.redirect_uri_provided_explicitly),
-                code_data.expires_at,
-                json.dumps(code_data.scopes),
-                code_data.code_challenge,
-                code_data.created_at
-            ))
+            """,
+                (
+                    code_data.code,
+                    code_data.client_id,
+                    code_data.redirect_uri,
+                    int(code_data.redirect_uri_provided_explicitly),
+                    code_data.expires_at,
+                    json.dumps(code_data.scopes),
+                    code_data.code_challenge,
+                    code_data.created_at,
+                ),
+            )
             self.conn.commit()
 
     async def load_auth_code(self, code: str) -> Optional[PersistedAuthCode]:
@@ -373,16 +394,19 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         """Synchronous auth code loading."""
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT code, client_id, redirect_uri, redirect_uri_provided_explicitly,
                        expires_at, scopes, code_challenge, created_at
                 FROM auth_codes WHERE code = ?
-            """, (code,))
-            
+            """,
+                (code,),
+            )
+
             row = cursor.fetchone()
             if not row:
                 return None
-                
+
             return PersistedAuthCode(
                 code=row["code"],
                 client_id=row["client_id"],
@@ -391,7 +415,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
                 expires_at=row["expires_at"],
                 scopes=json.loads(row["scopes"]),
                 code_challenge=row["code_challenge"],
-                created_at=row["created_at"]
+                created_at=row["created_at"],
             )
 
     async def delete_auth_code(self, code: str) -> None:
@@ -418,9 +442,12 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         current_time = time.time()
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 DELETE FROM auth_codes WHERE expires_at < ?
-            """, (current_time,))
+            """,
+                (current_time,),
+            )
             deleted_count = cursor.rowcount
             self.conn.commit()
             return deleted_count
@@ -436,21 +463,24 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         """Synchronous client storage."""
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT OR REPLACE INTO oauth_clients 
                 (client_id, client_secret, redirect_uris, grant_types, 
                  response_types, scope, client_name, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                client_data.client_id,
-                client_data.client_secret,
-                json.dumps(client_data.redirect_uris),
-                json.dumps(client_data.grant_types),
-                json.dumps(client_data.response_types),
-                client_data.scope,
-                client_data.client_name,
-                client_data.created_at
-            ))
+            """,
+                (
+                    client_data.client_id,
+                    client_data.client_secret,
+                    json.dumps(client_data.redirect_uris),
+                    json.dumps(client_data.grant_types),
+                    json.dumps(client_data.response_types),
+                    client_data.scope,
+                    client_data.client_name,
+                    client_data.created_at,
+                ),
+            )
             self.conn.commit()
 
     async def load_client(self, client_id: str) -> Optional[PersistedClient]:
@@ -463,16 +493,19 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         """Synchronous client loading."""
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT client_id, client_secret, redirect_uris, grant_types,
                        response_types, scope, client_name, created_at
                 FROM oauth_clients WHERE client_id = ?
-            """, (client_id,))
-            
+            """,
+                (client_id,),
+            )
+
             row = cursor.fetchone()
             if not row:
                 return None
-                
+
             return PersistedClient(
                 client_id=row["client_id"],
                 client_secret=row["client_secret"],
@@ -481,7 +514,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
                 response_types=json.loads(row["response_types"]),
                 scope=row["scope"],
                 client_name=row["client_name"],
-                created_at=row["created_at"]
+                created_at=row["created_at"],
             )
 
     async def delete_client(self, client_id: str) -> None:
@@ -507,44 +540,52 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         """Synchronous client listing."""
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT client_id, client_secret, redirect_uris, grant_types,
                        response_types, scope, client_name, created_at
                 FROM oauth_clients ORDER BY created_at DESC
-            """)
-            
+            """
+            )
+
             clients = []
             for row in cursor.fetchall():
-                clients.append(PersistedClient(
-                    client_id=row["client_id"],
-                    client_secret=row["client_secret"],
-                    redirect_uris=json.loads(row["redirect_uris"]),
-                    grant_types=json.loads(row["grant_types"]),
-                    response_types=json.loads(row["response_types"]),
-                    scope=row["scope"],
-                    client_name=row["client_name"],
-                    created_at=row["created_at"]
-                ))
+                clients.append(
+                    PersistedClient(
+                        client_id=row["client_id"],
+                        client_secret=row["client_secret"],
+                        redirect_uris=json.loads(row["redirect_uris"]),
+                        grant_types=json.loads(row["grant_types"]),
+                        response_types=json.loads(row["response_types"]),
+                        scope=row["scope"],
+                        client_name=row["client_name"],
+                        created_at=row["created_at"],
+                    )
+                )
             return clients
 
 
-def create_persistence_backend(persistence_config: Optional[Dict[str, Any]]) -> Optional[AuthPersistenceBackend]:
+def create_persistence_backend(
+    persistence_config: Optional[Dict[str, Any]],
+) -> Optional[AuthPersistenceBackend]:
     """Create a persistence backend based on configuration.
-    
+
     Args:
         persistence_config: Persistence configuration from user config
-        
+
     Returns:
         Persistence backend instance or None if disabled
     """
     if not persistence_config:
         # No persistence configured
         return None
-    
+
     backend_type = persistence_config["type"]  # Should always be present due to config defaults
-    
+
     if backend_type == "sqlite":
-        db_path = Path(persistence_config["path"])  # Should always be present due to config defaults
+        db_path = Path(
+            persistence_config["path"]
+        )  # Should always be present due to config defaults
         return SQLiteAuthPersistence(db_path)
     else:
-        raise ValueError(f"Unsupported persistence backend type: {backend_type}") 
+        raise ValueError(f"Unsupported persistence backend type: {backend_type}")

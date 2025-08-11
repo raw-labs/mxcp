@@ -1,19 +1,26 @@
 import os
-import pytest
 from pathlib import Path
-from mxcp.endpoints.validate import validate_endpoint, validate_all_endpoints
+
+import pytest
+
+from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
-from mxcp.config.execution_engine import create_execution_engine
+from mxcp.endpoints.validate import validate_all_endpoints, validate_endpoint
+
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
-    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "validation" / "mxcp-config.yml")
+    os.environ["MXCP_CONFIG"] = str(
+        Path(__file__).parent / "fixtures" / "validation" / "mxcp-config.yml"
+    )
+
 
 @pytest.fixture
 def validation_repo_path():
     """Path to the validation test repository."""
     return Path(__file__).parent / "fixtures" / "validation"
+
 
 @pytest.fixture
 def site_config(validation_repo_path):
@@ -24,6 +31,7 @@ def site_config(validation_repo_path):
         return load_site_config()
     finally:
         os.chdir(original_dir)
+
 
 @pytest.fixture
 def user_config(validation_repo_path):
@@ -36,17 +44,22 @@ def user_config(validation_repo_path):
     finally:
         os.chdir(original_dir)
 
+
 @pytest.fixture
 def test_profile():
     """Test profile name."""
     return "test_profile"
 
+
 @pytest.fixture
 def test_execution_engine(user_config, site_config, test_profile):
     """Create a test ExecutionEngine."""
-    execution_engine = create_execution_engine(user_config, site_config, test_profile, readonly=True)
+    execution_engine = create_execution_engine(
+        user_config, site_config, test_profile, readonly=True
+    )
     yield execution_engine
     execution_engine.shutdown()
+
 
 def test_validate_valid_endpoint(validation_repo_path, site_config, test_execution_engine):
     """Test validation of a valid endpoint."""
@@ -60,6 +73,7 @@ def test_validate_valid_endpoint(validation_repo_path, site_config, test_executi
     finally:
         os.chdir(original_dir)
 
+
 def test_validate_valid_prompt(validation_repo_path, site_config, test_execution_engine):
     """Test validation of a valid prompt endpoint."""
     original_dir = os.getcwd()
@@ -71,6 +85,7 @@ def test_validate_valid_prompt(validation_repo_path, site_config, test_execution
         assert result["path"] == endpoint_path
     finally:
         os.chdir(original_dir)
+
 
 def test_validate_invalid_prompt(validation_repo_path, site_config, test_execution_engine):
     """Test validation of a prompt endpoint with undefined template variables."""
@@ -88,7 +103,10 @@ def test_validate_invalid_prompt(validation_repo_path, site_config, test_executi
     finally:
         os.chdir(original_dir)
 
-@pytest.mark.skip(reason="Type checking temporarily disabled until DuckDB provides better parameter type inference")
+
+@pytest.mark.skip(
+    reason="Type checking temporarily disabled until DuckDB provides better parameter type inference"
+)
 def test_validate_invalid_type(validation_repo_path, site_config, test_execution_engine):
     """Test validation of an endpoint with type mismatch."""
     original_dir = os.getcwd()
@@ -102,6 +120,7 @@ def test_validate_invalid_type(validation_repo_path, site_config, test_execution
     finally:
         os.chdir(original_dir)
 
+
 def test_validate_invalid_parameter_name(validation_repo_path, site_config, test_execution_engine):
     """Test validation of an endpoint with an invalid parameter name."""
     original_dir = os.getcwd()
@@ -113,6 +132,7 @@ def test_validate_invalid_parameter_name(validation_repo_path, site_config, test
         assert "'user/id' does not match" in result["message"].lower()
     finally:
         os.chdir(original_dir)
+
 
 def test_validate_missing_param(validation_repo_path, site_config, test_execution_engine):
     """Test validation of an endpoint with missing parameter."""
@@ -126,6 +146,7 @@ def test_validate_missing_param(validation_repo_path, site_config, test_executio
         assert "extra_param" in result["message"]
     finally:
         os.chdir(original_dir)
+
 
 def test_validate_all_endpoints(validation_repo_path, site_config, test_execution_engine):
     """Test validation of all endpoints in the repository."""
@@ -142,7 +163,10 @@ def test_validate_all_endpoints(validation_repo_path, site_config, test_executio
     finally:
         os.chdir(original_dir)
 
-def test_validate_complex_jinja_prompt_valid(validation_repo_path, site_config, test_execution_engine):
+
+def test_validate_complex_jinja_prompt_valid(
+    validation_repo_path, site_config, test_execution_engine
+):
     """Test validation of a prompt endpoint with valid complex Jinja2 features."""
     original_dir = os.getcwd()
     os.chdir(validation_repo_path)
@@ -154,7 +178,10 @@ def test_validate_complex_jinja_prompt_valid(validation_repo_path, site_config, 
     finally:
         os.chdir(original_dir)
 
-def test_validate_complex_jinja_prompt_invalid(validation_repo_path, site_config, test_execution_engine):
+
+def test_validate_complex_jinja_prompt_invalid(
+    validation_repo_path, site_config, test_execution_engine
+):
     """Test validation of a prompt endpoint with invalid complex Jinja2 features."""
     original_dir = os.getcwd()
     os.chdir(validation_repo_path)
@@ -169,4 +196,4 @@ def test_validate_complex_jinja_prompt_invalid(validation_repo_path, site_config
         assert "items" in result["message"]
         assert "item" in result["message"]
     finally:
-        os.chdir(original_dir) 
+        os.chdir(original_dir)
