@@ -1,0 +1,16 @@
+---
+description: Code and file organization standards
+globs: ["**/*.py", "**/*.yml", "**/*.yaml", "**/*.json"]
+alwaysApply: true
+---
+
+# Code Organization
+
+- Avoid code duplication - use inheritance or composition when classes share common fields
+- Keep related functionality together in modules
+
+# File Organization
+
+- JSON schema files should be kept in a schemas/ subdirectory within the module
+- Configuration files should use YAML format
+- NO example files anywhere - not in tests, not in fixtures, nowhere

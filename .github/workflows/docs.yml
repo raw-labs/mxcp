@@ -1,0 +1,70 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+    
+    - name: Set up Python
+      run: uv python install 3.11
+    
+    - name: Install dependencies
+      run: uv sync --dev
+    
+    - name: Check docstring coverage
+      run: |
+        uv add --dev interrogate
+        uv run interrogate src/mxcp --fail-under=80 --verbose
+    
+    - name: Validate README examples
+      run: |
+        # Test that code examples in README.md are valid
+        uv run python -c "
+        import re
+        with open('README.md') as f:
+            content = f.read()
+        # Extract Python code blocks and validate syntax
+        code_blocks = re.findall(r'```python\n(.*?)\n```', content, re.DOTALL)
+        for i, code in enumerate(code_blocks):
+            try:
+                compile(code, f'README_block_{i}', 'exec')
+                print(f'✓ Code block {i+1} is valid')
+            except SyntaxError as e:
+                print(f'✗ Code block {i+1} has syntax error: {e}')
+                raise
+        "
+    
+    - name: Check for broken internal links
+      run: |
+        # Basic check for internal markdown links
+        uv run python -c "
+        import re, os
+        with open('README.md') as f:
+            content = f.read()
+        
+        # Find internal links [text](./path/to/file)
+        internal_links = re.findall(r'\[.*?\]\(\./([^)]+)\)', content)
+        broken_links = []
+        
+        for link in internal_links:
+            if not os.path.exists(link):
+                broken_links.append(link)
+        
+        if broken_links:
+            print('✗ Broken internal links found:')
+            for link in broken_links:
+                print(f'  - {link}')
+            exit(1)
+        else:
+            print('✓ All internal links are valid')
+        "

@@ -490,6 +490,38 @@ Audit logs are stored in JSONL (JSON Lines) format, which allows concurrent read
 
 For more information, see the [Audit Logging Guide](../features/auditing.md).
 
+### `mxcp log-cleanup`
+
+Apply retention policies to remove old audit records.
+
+```bash
+mxcp log-cleanup [OPTIONS]
+```
+
+**Options:**
+- `--profile`: Profile name to use
+- `--dry-run`: Show what would be deleted without actually deleting
+- `--json`: Output in JSON format
+- `--debug`: Show detailed debug information
+
+**Examples:**
+```bash
+mxcp log-cleanup                  # Apply retention policies
+mxcp log-cleanup --dry-run        # Preview what would be deleted
+mxcp log-cleanup --profile prod   # Use specific profile
+mxcp log-cleanup --json           # Output results as JSON
+
+# Schedule with cron (daily at 2 AM)
+0 2 * * * /usr/bin/mxcp log-cleanup
+```
+
+**Description:**
+Deletes audit records older than their schema's retention policy. Each audit schema can define a `retention_days` value specifying how long records should be kept. This command is designed to be run periodically via cron or systemd timer.
+
+The `--dry-run` option shows what would be deleted without making changes, useful for testing retention policies before deploying automated cleanup.
+
+For more information, see the [Audit Cleanup Guide](../guides/audit-cleanup.md).
+
 ### `mxcp dbt-config`
 
 Generate or patch dbt side-car files (dbt_project.yml + profiles.yml).

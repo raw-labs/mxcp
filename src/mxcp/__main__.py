@@ -11,6 +11,7 @@ from mxcp.config.analytics import initialize_analytics, track_base_command
 from mxcp.cli.drift_snapshot import drift_snapshot
 from mxcp.cli.drift_check import drift_check
 from mxcp.cli.log import log
+from mxcp.cli.log_cleanup import log_cleanup
 from mxcp.cli.lint import lint
 from mxcp.cli.evals import evals
 
@@ -35,3 +36,4 @@ cli.add_command(dbt_wrapper)
 cli.add_command(drift_snapshot)
 cli.add_command(drift_check)
 cli.add_command(log)
+cli.add_command(log_cleanup)

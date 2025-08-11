@@ -23,6 +23,7 @@ This comprehensive guide provides everything DevOps professionals need to deploy
 - [Architecture Overview](#architecture-overview)
 - [Deployment Requirements](#deployment-requirements)
 - [Containerization with Docker](#containerization-with-docker)
+- [Systemd Service Management](#systemd-service-management)
 - [Configuration Management](#configuration-management)
 - [Authentication Setup](#authentication-setup)
 - [Signal Handling & Hot Reload](#signal-handling--hot-reload)
@@ -337,6 +338,296 @@ spec:
   - port: 80
     targetPort: 8000
   type: LoadBalancer
+```
+
+## Systemd Service Management
+
+For systems using systemd (most modern Linux distributions), MXCP can be managed as a system service. This provides automatic startup, restart on failure, and integration with system logging.
+
+### Systemd Service Files
+
+#### Basic Service Configuration
+
+Create `/etc/systemd/system/mxcp.service`:
+
+```ini
+[Unit]
+Description=MXCP Model Context Protocol Server
+After=network.target
+Documentation=https://github.com/your-org/mxcp
+
+[Service]
+Type=simple
+User=mxcp
+Group=mxcp
+WorkingDirectory=/opt/mxcp
+ExecStart=/usr/local/bin/mxcp serve --transport http --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=10
+
+# Environment
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="MXCP_CONFIG_PATH=/etc/mxcp/config.yml"
+EnvironmentFile=-/etc/mxcp/environment
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/mxcp/data /opt/mxcp/audit /opt/mxcp/drift
+
+# Resource limits
+MemoryLimit=2G
+CPUQuota=80%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mxcp
+
+[Install]
+WantedBy=multi-user.target
+```
+
+#### Environment File
+
+Create `/etc/mxcp/environment` for sensitive variables:
+
+```bash
+# OAuth credentials
+GITHUB_CLIENT_ID=your-client-id
+GITHUB_CLIENT_SECRET=your-client-secret
+
+# Database credentials
+DB_HOST=localhost
+DB_USER=mxcp_user
+DB_PASSWORD=secure_password
+
+# Vault integration
+VAULT_ADDR=https://vault.example.com
+VAULT_TOKEN=your-vault-token
+```
+
+### Audit Cleanup Timer
+
+To automatically clean up old audit logs, create a timer service:
+
+#### Service File
+
+Create `/etc/systemd/system/mxcp-log-cleanup.service`:
+
+```ini
+[Unit]
+Description=MXCP Audit Log Cleanup
+After=network.target
+
+[Service]
+Type=oneshot
+User=mxcp
+Group=mxcp
+WorkingDirectory=/opt/mxcp
+ExecStart=/usr/local/bin/mxcp log-cleanup
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/mxcp/audit
+
+# Resource limits
+MemoryLimit=1G
+CPUQuota=50%
+```
+
+#### Timer File
+
+Create `/etc/systemd/system/mxcp-log-cleanup.timer`:
+
+```ini
+[Unit]
+Description=Run MXCP Audit Cleanup daily at 2 AM
+Requires=mxcp-log-cleanup.service
+
+[Timer]
+# Run daily at 2:00 AM
+OnCalendar=daily
+AccuracySec=1h
+Persistent=true
+
+# Randomize start time by up to 30 minutes to avoid thundering herd
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target
+```
+
+### Installation and Management
+
+#### Initial Setup
+
+```bash
+# Create system user
+sudo useradd -r -s /bin/false -d /opt/mxcp mxcp
+
+# Create directories
+sudo mkdir -p /opt/mxcp/{data,audit,drift,logs}
+sudo mkdir -p /etc/mxcp
+sudo chown -R mxcp:mxcp /opt/mxcp
+
+# Install MXCP
+sudo pip install mxcp -t /usr/local
+
+# Copy configuration files
+sudo cp mxcp-site.yml /opt/mxcp/
+sudo cp -r tools resources prompts /opt/mxcp/
+sudo cp config.yml /etc/mxcp/
+sudo chown mxcp:mxcp /etc/mxcp/config.yml
+sudo chmod 600 /etc/mxcp/config.yml
+
+# Install systemd files
+sudo cp mxcp.service /etc/systemd/system/
+sudo cp mxcp-log-cleanup.* /etc/systemd/system/
+
+# Reload systemd
+sudo systemctl daemon-reload
+```
+
+#### Service Management
+
+```bash
+# Enable and start MXCP
+sudo systemctl enable mxcp.service
+sudo systemctl start mxcp.service
+
+# Enable audit cleanup timer
+sudo systemctl enable mxcp-log-cleanup.timer
+sudo systemctl start mxcp-log-cleanup.timer
+
+# Check status
+sudo systemctl status mxcp.service
+sudo systemctl list-timers mxcp-log-cleanup.timer
+
+# View logs
+sudo journalctl -u mxcp.service -f
+sudo journalctl -u mxcp-log-cleanup.service --since "1 hour ago"
+
+# Restart service (e.g., after configuration change)
+sudo systemctl restart mxcp.service
+
+# Stop service
+sudo systemctl stop mxcp.service
+```
+
+### Multiple Profiles
+
+To run multiple MXCP instances with different profiles:
+
+```bash
+# Create profile-specific service files
+sudo cp mxcp.service /etc/systemd/system/mxcp-prod.service
+sudo cp mxcp.service /etc/systemd/system/mxcp-dev.service
+
+# Edit each service file
+# mxcp-prod.service:
+ExecStart=/usr/local/bin/mxcp serve --profile prod --transport http --port 8000
+
+# mxcp-dev.service:
+ExecStart=/usr/local/bin/mxcp serve --profile dev --transport http --port 8001
+
+# Create separate audit cleanup services
+# mxcp-log-cleanup-prod.service:
+ExecStart=/usr/local/bin/mxcp log-cleanup --profile prod
+
+# mxcp-log-cleanup-dev.service:
+ExecStart=/usr/local/bin/mxcp log-cleanup --profile dev
+```
+
+### Integration with System Monitoring
+
+Systemd integrates with various monitoring tools:
+
+```bash
+# Prometheus node exporter will automatically collect systemd metrics
+# Access via: node_systemd_unit_state{name="mxcp.service"}
+
+# For custom metrics, use systemd-cat
+echo "mxcp_custom_metric{type=\"startup\"} 1" | systemd-cat -t mxcp-metrics
+
+# Set up systemd journal forwarding to syslog
+sudo mkdir -p /etc/systemd/journald.conf.d/
+cat <<EOF | sudo tee /etc/systemd/journald.conf.d/forward-to-syslog.conf
+[Journal]
+ForwardToSyslog=yes
+EOF
+```
+
+### Systemd Security Features
+
+Take advantage of systemd's security features:
+
+```ini
+# Additional security options for production
+[Service]
+# Filesystem isolation
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+
+# Capability restrictions
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# System call filtering
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+```
+
+### Troubleshooting Systemd Services
+
+```bash
+# Check service logs
+sudo journalctl -u mxcp.service --since "10 minutes ago"
+
+# Check service configuration
+sudo systemctl cat mxcp.service
+
+# Verify service environment
+sudo systemctl show-environment
+
+# Debug startup issues
+sudo journalctl -xe
+
+# Test service configuration
+sudo systemd-analyze verify mxcp.service
+
+# Run service manually for debugging
+sudo -u mxcp /usr/local/bin/mxcp serve --debug
+```
+
+### Cron Alternative
+
+If you prefer cron over systemd timers:
+
+```bash
+# Add to mxcp user's crontab
+sudo -u mxcp crontab -e
+
+# Run audit cleanup daily at 2 AM
+0 2 * * * cd /opt/mxcp && /usr/local/bin/mxcp log-cleanup >> /opt/mxcp/logs/cleanup.log 2>&1
+
+# Run drift check weekly
+0 3 * * 0 cd /opt/mxcp && /usr/local/bin/mxcp drift-check >> /opt/mxcp/logs/drift.log 2>&1
 ```
 
 ## Configuration Management

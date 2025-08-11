@@ -1,0 +1,11 @@
+---
+description: Dependency management guidelines
+globs: ["**/pyproject.toml", "**/requirements.txt", "**/setup.py", "**/package.json"]
+alwaysApply: true
+---
+
+# Dependency Management
+
+- Use existing dependencies where possible (e.g., pandas, numpy are already available)
+- Avoid adding new dependencies without clear justification
+- Remember to add dependencies to pyproject.toml as needed, under the corresponding component
