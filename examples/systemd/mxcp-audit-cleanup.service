@@ -1,0 +1,26 @@
+[Unit]
+Description=MXCP Audit Log Cleanup
+After=network.target
+
+[Service]
+Type=oneshot
+User=mxcp
+Group=mxcp
+WorkingDirectory=/path/to/your/mxcp/project
+ExecStart=/usr/bin/mxcp audit cleanup
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/path/to/your/mxcp/project/audit
+
+# Resource limits
+MemoryLimit=1G
+CPUQuota=50%
+
+# Environment
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"

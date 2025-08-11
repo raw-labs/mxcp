@@ -1,15 +1,20 @@
 """CLI command for querying MXCP audit logs."""
 
+import asyncio
 import click
 import json
 from pathlib import Path
 from typing import Optional
+
 from mxcp.cli.utils import output_error, output_result, configure_logging
 from mxcp.config.site_config import load_site_config
-from mxcp.sdk.audit import AuditQuery
+from mxcp.audit import format_audit_record, parse_time_since
+from mxcp.audit.utils import map_legacy_query_params
+from mxcp.audit.exporters import export_to_duckdb, export_to_csv
+from mxcp.sdk.audit import AuditLogger
 
 
-@click.command(name="log")
+@click.command()
 @click.option("--profile", help="Profile name to use")
 @click.option("--tool", help="Filter by specific tool name")
 @click.option("--resource", help="Filter by specific resource URI")
@@ -64,190 +69,206 @@ def log(
     Note: Audit logs are stored in JSONL format for concurrent access.
     The log file can be read while the server is running.
     """
+    asyncio.run(_log_async(
+        profile, tool, resource, prompt, event_type, policy, status, since,
+        limit, export_csv_path, export_duckdb_path, json_output, debug
+    ))
+
+
+async def _log_async(
+    profile: Optional[str],
+    tool: Optional[str],
+    resource: Optional[str], 
+    prompt: Optional[str],
+    event_type: Optional[str],
+    policy: Optional[str],
+    status: Optional[str],
+    since: Optional[str],
+    limit: int,
+    export_csv_path: Optional[str],
+    export_duckdb_path: Optional[str],
+    json_output: bool,
+    debug: bool
+):
+    """Async implementation of log command."""
     # Configure logging
     configure_logging(debug)
     
+    audit_logger = None
     try:
-        # Load site configuration
-        site_config = load_site_config()
-        profile_name = profile or site_config["profile"]
+        # Load site config and extract audit settings directly
+        try:
+            site_config = load_site_config()
+            profile_name = profile or site_config["profile"]
+            
+            if profile_name not in site_config["profiles"]:
+                raise ValueError(f"Profile '{profile_name}' not found in configuration")
+            
+            profile_config = site_config["profiles"][profile_name]
+            audit_config = profile_config.get("audit", {})
+            
+            if not audit_config.get("enabled", False):
+                raise ValueError(f"Audit logging is not enabled for profile '{profile_name}'. Enable it in mxcp-site.yml under profiles.{profile_name}.audit.enabled")
+            
+            if "path" not in audit_config:
+                raise ValueError("Audit configuration missing required 'path' field")
+            
+            log_path = Path(audit_config["path"])
+            
+        except ValueError as e:
+            output_error(e, json_output, debug)
         
-        # Check if profile exists
-        if profile_name not in site_config["profiles"]:
-            if json_output:
-                click.echo(json.dumps({
-                    "status": "error",
-                    "error": f"Profile '{profile_name}' not found in configuration"
-                }))
-            else:
-                click.echo(f"Error: Profile '{profile_name}' not found in configuration", err=True)
-            return
+        # Create audit logger directly  
+        audit_logger = await AuditLogger.jsonl(log_path)
         
-        # Get audit configuration
-        profile_config = site_config["profiles"][profile_name]
-        audit_config = profile_config.get("audit", {})
-        
-        if not audit_config.get("enabled", False):
-            if json_output:
-                click.echo(json.dumps({
-                    "status": "error",
-                    "error": f"Audit logging is not enabled for profile '{profile_name}'. Enable it in mxcp-site.yml under profiles.{profile_name}.audit.enabled"
-                }))
-            else:
-                click.echo(f"Audit logging is not enabled for profile '{profile_name}'.", err=True)
-                click.echo(f"Enable it in mxcp-site.yml under profiles.{profile_name}.audit.enabled", err=True)
-            return
-        
-        # Get audit log file path
-        log_path = Path(audit_config["path"])
-        
-        if not log_path.exists():
-            if json_output:
-                click.echo(json.dumps({
-                    "status": "error",
-                    "error": f"Audit log file not found at {log_path}. The log file is created when audit logging is enabled and events are logged."
-                }))
-            else:
-                click.echo(f"Audit log file not found at {log_path}.", err=True)
-                click.echo("The log file is created when audit logging is enabled and events are logged.", err=True)
-            return
-        
-        # Create query interface
-        query_interface = AuditQuery(log_path)
-        
-        # Handle export to DuckDB
+        # Handle exports first
         if export_duckdb_path:
-            row_count = query_interface.export_to_duckdb(Path(export_duckdb_path))
-            output_result(
-                f"Exported {row_count} log entries to DuckDB database: {export_duckdb_path}",
-                json_output
-            )
-            return
+            try:
+                # Build filters for DuckDB export
+                filters = {}
+                if tool:
+                    filters['tool'] = tool
+                if resource:
+                    filters['resource'] = resource
+                if prompt:
+                    filters['prompt'] = prompt
+                if event_type:
+                    filters['event_type'] = event_type
+                if status:
+                    filters['status'] = status
+                if policy:
+                    filters['policy'] = policy
+                if since:
+                    filters['since'] = parse_time_since(since).isoformat()
+                
+                count = await export_to_duckdb(audit_logger, Path(export_duckdb_path), filters=filters)
+                export_result = {
+                    "exported": count,
+                    "format": "duckdb", 
+                    "path": export_duckdb_path
+                }
+                if json_output:
+                    output_result(export_result, json_output, debug)
+                else:
+                    click.echo(f"Exported {count} records to {export_duckdb_path}")
+                return
+            except Exception as e:
+                output_error(e, json_output, debug)
         
-        # Handle export to CSV
         if export_csv_path:
-            row_count = query_interface.export_to_csv(
-                Path(export_csv_path),
+            try:
+                # Build filters for CSV export
+                filters = {}
+                if tool:
+                    filters['tool'] = tool
+                if resource:
+                    filters['resource'] = resource
+                if prompt:
+                    filters['prompt'] = prompt
+                if event_type:
+                    filters['event_type'] = event_type
+                if status:
+                    filters['status'] = status
+                if policy:
+                    filters['policy'] = policy
+                if since:
+                    filters['since'] = parse_time_since(since).isoformat()
+                
+                count = await export_to_csv(audit_logger, Path(export_csv_path), filters=filters)
+                export_result = {
+                    "exported": count,
+                    "format": "csv",
+                    "path": export_csv_path
+                }
+                if json_output:
+                    output_result(export_result, json_output, debug)
+                else:
+                    click.echo(f"Exported {count} records to {export_csv_path}")
+                return
+            except Exception as e:
+                output_error(e, json_output, debug)
+        
+        # Query records using legacy parameters
+        try:
+            query_params = map_legacy_query_params(
                 tool=tool,
                 resource=resource,
                 prompt=prompt,
                 event_type=event_type,
                 policy=policy,
                 status=status,
-                since=since
+                since=since,
+                limit=limit
             )
-            output_result(
-                f"Exported {row_count} log entries to {export_csv_path}",
-                json_output
-            )
-            return
         
-        # Query logs
-        logs = query_interface.query_logs(
-            tool=tool,
-            resource=resource,
-            prompt=prompt,
-            event_type=event_type,
-            policy=policy,
-            status=status,
-            since=since,
-            limit=limit
-        )
-        
-        if not logs:
+            # Output results using standard CLI pattern
             if json_output:
-                click.echo(json.dumps([]))
+                # Prepare result in standard format for output_result
+                records_data = []
+                count = 0
+                async for record in audit_logger.query_records(**query_params):
+                    record_dict = {
+                        'record_id': record.record_id,
+                        'timestamp': record.timestamp.isoformat(),
+                        'caller_type': record.caller_type,
+                        'operation_type': record.operation_type,
+                        'operation_name': record.operation_name,
+                        'duration_ms': record.duration_ms,
+                        'user_id': record.user_id,
+                        'session_id': record.session_id,
+                        'trace_id': record.trace_id,
+                                            'operation_status': record.operation_status,
+                    'error': record.error,
+                    'business_context': record.business_context,
+                    'policy_decision': record.policy_decision
+                    }
+                    records_data.append(record_dict)
+                    count += 1
+                
+                result = {
+                    "count": count,
+                    "records": records_data
+                }
+                output_result(result, json_output, debug)
             else:
-                click.echo("No logs found matching the specified criteria.")
-            return
+                # Human-readable output with streaming display
+                count = 0
+                first_record = True
+                
+                async for record in audit_logger.query_records(**query_params):
+                    if first_record:
+                        click.echo("\nAudit records:")
+                        click.echo("=" * 80)
+                        first_record = False
+                    
+                    formatted = format_audit_record(record, json_format=False)
+                    click.echo(formatted)
+                    
+                    if debug:
+                        # Show additional details in debug mode
+                        if record.error:
+                            click.echo(f"  Error: {record.error}")
+                        if record.business_context:
+                            click.echo(f"  Context: {record.business_context}")
+                        click.echo()
+                    
+                    count += 1
+                
+                if count == 0:
+                    click.echo("No audit records found matching the criteria.")
+                else:
+                    click.echo("=" * 80)
+                    click.echo(f"\nTotal records: {count}")
         
-        # Output results
-        if json_output:
-            click.echo(json.dumps(logs, indent=2))
-        else:
-            # Format for display
-            # Header
-            click.echo("\nAudit Log Entries:")
-            click.echo("-" * 100)
-            
-            # Column widths
-            time_width = 19  # YYYY-MM-DDTHH:MM:SS
-            type_width = 8
-            status_width = 7
-            policy_width = 6
-            duration_width = 8
-            caller_width = 6
-            name_width = 100 - time_width - type_width - status_width - policy_width - duration_width - caller_width - 11  # 11 for separators
-            
-            # Header row
-            header = (
-                f"{'Time':<{time_width}} │ "
-                f"{'Type':<{type_width}} │ "
-                f"{'Name':<{name_width}} │ "
-                f"{'Status':<{status_width}} │ "
-                f"{'Policy':<{policy_width}} │ "
-                f"{'MS':<{duration_width}} │ "
-                f"{'Caller':<{caller_width}}"
-            )
-            click.echo(header)
-            click.echo("-" * 100)
-            
-            # Data rows
-            for log in logs:
-                # Format timestamp - show just time for today, full date otherwise
-                timestamp = log['timestamp']
-                if 'T' in timestamp:
-                    timestamp_short = timestamp.split('.')[0]  # Remove milliseconds
-                else:
-                    timestamp_short = timestamp[:19]
-                
-                # Truncate name if too long
-                name = log['name']
-                if len(name) > name_width:
-                    name = name[:name_width-3] + "..."
-                
-                # Format row
-                row = (
-                    f"{timestamp_short:<{time_width}} │ "
-                    f"{log['type']:<{type_width}} │ "
-                    f"{name:<{name_width}} │ "
-                    f"{log['status']:<{status_width}} │ "
-                    f"{log['policy_decision']:<{policy_width}} │ "
-                    f"{log['duration_ms']:<{duration_width}} │ "
-                    f"{log['caller']:<{caller_width}}"
-                )
-                
-                # Color code based on status
-                if log['status'] == 'error':
-                    click.echo(click.style(row, fg='red'))
-                elif log['policy_decision'] == 'deny':
-                    click.echo(click.style(row, fg='yellow'))
-                else:
-                    click.echo(row)
-                
-                # Show error message if present
-                if log.get('error') and log['status'] == 'error':
-                    click.echo(f"      └─ Error: {log['error']}")
-            
-            click.echo("-" * 100)
-            
-            # Summary
-            click.echo(f"\nShowing {len(logs)} log entries")
-            
-            # Count summaries
-            error_count = sum(1 for log in logs if log['status'] == 'error')
-            denied_count = sum(1 for log in logs if log['policy_decision'] == 'deny')
-            
-            if error_count > 0:
-                click.echo(click.style(f"  • {error_count} errors found", fg='red'))
-            if denied_count > 0:
-                click.echo(click.style(f"  • {denied_count} denied executions", fg='yellow'))
-            
-            # Hints
-            if error_count > 0 and not status:
-                click.echo("\nTip: Use --status error to see only errors")
-            if denied_count > 0 and not policy:
-                click.echo("Tip: Use --policy denied to see only denied executions")
+        except Exception as e:
+            output_error(e, json_output, debug)
     
     except Exception as e:
-        output_error(e, json_output, debug) 
+        output_error(e, json_output, debug)
+    finally:
+        # Clean up resources
+        try:
+            if audit_logger:
+                audit_logger.shutdown()
+        except:
+            pass

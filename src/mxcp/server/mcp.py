@@ -357,15 +357,17 @@ class RAWMCP:
     
     def _initialize_audit_logger(self):
         """Initialize audit logger if enabled."""
+        import asyncio
+        
         profile_config = self.site_config["profiles"][self.profile_name]
         audit_config = profile_config.get("audit", {})
         if audit_config.get("enabled", False):
-            self.audit_logger = AuditLogger(
-                log_path=Path(audit_config["path"]),
-                enabled=True
-            )
+            log_path = Path(audit_config["path"])
+            # Ensure parent directory exists
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            self.audit_logger = asyncio.run(AuditLogger.jsonl(log_path))
         else:
-            self.audit_logger = None
+            self.audit_logger = asyncio.run(AuditLogger.disabled())
 
     def _register_signal_handlers(self):
         """Register signal handlers for graceful shutdown and reload."""

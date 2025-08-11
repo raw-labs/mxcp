@@ -1,32 +1,36 @@
-# MXCP-specific development rules
+---
+description: MXCP coding conventions
+globs:
+alwaysApply: true
+---
 
-## Development
+# Development
 - Do not create "backward compatibility" support in the code unless explicitly asked; this is a new s/w stack being used and it has no users yet, so backward compat is not a concern
 - Do not create re-export modules or wrapper functions just to maintain old import paths - update imports directly to use the new locations
 - When consolidating or refactoring modules, always update all imports to use the new structure rather than preserving old import paths
 
-## Documentation
+# Documentation
 - Use pydoc (docstrings) for documentation, not README.md files
 - Module-level docstrings may include code examples if they add clarity
 - No standalone example files - examples belong in docstrings only
 
-## Dependencies
+# Dependencies
 - Use existing dependencies where possible (e.g., pandas, numpy are already available)
 - Avoid adding new dependencies without clear justification
 - Remember to add dependencies to pyproject.toml as needed, under the corresponding component
 
-## Tests
+# Tests
 - Tests should be in a package structure matching the code (e.g., tests/validator/ for src/mxcp/validator/). Test data should go under tests/fixtures/validator/
 - Use descriptive test names that match the functionality being tested
 - NO example usage files - all code should be either tests or production code
 - Use `uv` to run pytest
 - Don't always create new test suites; check first if the new tests should be added to existing test suites
 
-## Code Organization
+# Code Organization
 - Avoid code duplication - use inheritance or composition when classes share common fields
 - Keep related functionality together in modules
 
-## File Organization
+# File Organization
 - JSON schema files should be kept in a schemas/ subdirectory within the module
 - Configuration files should use YAML format
 - NO example files anywhere - not in tests, not in fixtures, nowhere 

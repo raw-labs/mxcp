@@ -442,12 +442,24 @@ Compares the current state of your database and endpoints against a previously g
 
 Exit code is 1 if drift is detected, 0 if no drift. For more information, see the [Drift Detection Guide](../features/drift-detection.md).
 
-### `mxcp log`
+### `mxcp audit`
+
+Manage MXCP audit logs and policies.
+
+```bash
+mxcp audit COMMAND [OPTIONS]
+```
+
+**Commands:**
+- `log`: Query audit logs
+- `cleanup`: Apply retention policies
+
+#### `mxcp audit log`
 
 Query MXCP audit logs for tool, resource, and prompt executions.
 
 ```bash
-mxcp log [OPTIONS]
+mxcp audit log [OPTIONS]
 ```
 
 **Options:**
@@ -489,6 +501,38 @@ Queries the audit logs to show execution history for tools, resources, and promp
 Audit logs are stored in JSONL (JSON Lines) format, which allows concurrent reading while the server is running - no database locking issues. The `--export-duckdb` option allows you to convert the logs to a DuckDB database for complex SQL analysis.
 
 For more information, see the [Audit Logging Guide](../features/auditing.md).
+
+#### `mxcp audit cleanup`
+
+Apply retention policies to remove old audit records.
+
+```bash
+mxcp audit cleanup [OPTIONS]
+```
+
+**Options:**
+- `--profile`: Profile name to use
+- `--dry-run`: Show what would be deleted without actually deleting
+- `--json`: Output in JSON format
+- `--debug`: Show detailed debug information
+
+**Examples:**
+```bash
+mxcp audit cleanup                  # Apply retention policies
+mxcp audit cleanup --dry-run        # Preview what would be deleted
+mxcp audit cleanup --profile prod   # Use specific profile
+mxcp audit cleanup --json           # Output results as JSON
+
+# Schedule with cron (daily at 2 AM)
+0 2 * * * /usr/bin/mxcp audit cleanup
+```
+
+**Description:**
+Deletes audit records older than their schema's retention policy. Each audit schema can define a `retention_days` value specifying how long records should be kept. This command is designed to be run periodically via cron or systemd timer.
+
+The `--dry-run` option shows what would be deleted without making changes, useful for testing retention policies before deploying automated cleanup.
+
+For more information, see the [Audit Cleanup Guide](../guides/audit-cleanup.md).
 
 ### `mxcp dbt-config`
 
