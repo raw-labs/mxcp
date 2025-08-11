@@ -28,6 +28,7 @@ from mxcp.config.external_refs import ExternalRefTracker
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 from mxcp.sdk.auth.context import get_user_context
+from mxcp.audit.schemas import ENDPOINT_EXECUTION_SCHEMA
 
 logger = logging.getLogger(__name__)
 
@@ -366,8 +367,24 @@ class RAWMCP:
             # Ensure parent directory exists
             log_path.parent.mkdir(parents=True, exist_ok=True)
             self.audit_logger = asyncio.run(AuditLogger.jsonl(log_path))
+            # Register the endpoint execution schema
+            asyncio.run(self._register_audit_schema())
         else:
             self.audit_logger = asyncio.run(AuditLogger.disabled())
+    
+    async def _register_audit_schema(self):
+        """Register the application's audit schema."""
+        try:
+            # Check if schema already exists
+            existing = await self.audit_logger.get_schema(
+                ENDPOINT_EXECUTION_SCHEMA.schema_name, 
+                ENDPOINT_EXECUTION_SCHEMA.version
+            )
+            if not existing:
+                await self.audit_logger.create_schema(ENDPOINT_EXECUTION_SCHEMA)
+                logger.info(f"Registered audit schema: {ENDPOINT_EXECUTION_SCHEMA.get_schema_id()}")
+        except Exception as e:
+            logger.warning(f"Failed to register audit schema: {e}")
 
     def _register_signal_handlers(self):
         """Register signal handlers for graceful shutdown and reload."""
@@ -1060,6 +1077,7 @@ class RAWMCP:
                         name=endpoint_def.get('name', endpoint_def.get('uri', 'unknown')),
                         input_params=kwargs,
                         duration_ms=duration_ms,
+                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
                         policy_decision=policy_decision,
                         reason=policy_reason,
                         status=status,
@@ -1204,17 +1222,19 @@ class RAWMCP:
                 if self.audit_logger:
                     # Determine caller type
                     caller = "stdio" if self.transport_mode == "stdio" else "http"
-                    self.audit_logger.log_event(
-                        caller=caller,
+                    import asyncio
+                    asyncio.run(self.audit_logger.log_event(
+                        caller_type=caller,
                         event_type="tool",
                         name="execute_sql_query",
                         input_params={"sql": sql},
                         duration_ms=duration_ms,
+                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
                         policy_decision="n/a",
                         reason=None,
                         status=status,
                         error=error_msg
-                    )
+                    ))
 
         # Register table list tool with proper metadata
         @self.mcp.tool(
@@ -1272,17 +1292,19 @@ class RAWMCP:
                 if self.audit_logger:
                     # Determine caller type
                     caller = "stdio" if self.transport_mode == "stdio" else "http"
-                    self.audit_logger.log_event(
-                        caller=caller,
+                    import asyncio
+                    asyncio.run(self.audit_logger.log_event(
+                        caller_type=caller,
                         event_type="tool",
                         name="list_tables",
                         input_params={},
                         duration_ms=duration_ms,
+                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
                         policy_decision="n/a",
                         reason=None,
                         status=status,
                         error=error_msg
-                    )
+                    ))
 
         # Register schema tool with proper metadata
         @self.mcp.tool(
@@ -1347,17 +1369,19 @@ class RAWMCP:
                 if self.audit_logger:
                     # Determine caller type
                     caller = "stdio" if self.transport_mode == "stdio" else "http"
-                    self.audit_logger.log_event(
-                        caller=caller,
+                    import asyncio
+                    asyncio.run(self.audit_logger.log_event(
+                        caller_type=caller,
                         event_type="tool",
                         name="get_table_schema",
                         input_params={"table_name": table_name},
                         duration_ms=duration_ms,
+                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
                         policy_decision="n/a",
                         reason=None,
                         status=status,
                         error=error_msg
-                    )
+                    ))
 
         logger.info("Registered built-in DuckDB features")
 

@@ -33,7 +33,7 @@ async def test_audit_logger_creates_records():
             reason=None,
             status="success",
             error=None,
-            schema_name="mxcp.tools"  # Use the default tools schema
+            schema_name="mxcp.endpoints"  # Use the default endpoint schema
         )
         
         # Give background thread time to write
@@ -78,7 +78,8 @@ async def test_audit_logger_disabled():
             event_type="tool",
             name="should_not_appear",
             input_params={"test": "data"},
-            duration_ms=50
+            duration_ms=50,
+            schema_name="test_schema"
         )
         
         # Shutdown

@@ -338,6 +338,7 @@ async def test_noop_backend_streaming():
             name=f"tool_{i}",
             input_params={"index": i},
             duration_ms=50,
+            schema_name="test_schema",
             status="success"
         )
     

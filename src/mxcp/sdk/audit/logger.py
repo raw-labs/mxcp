@@ -16,58 +16,6 @@ from .backends import JSONLAuditWriter
 logger = logging.getLogger(__name__)
 
 
-# Default schemas for backward compatibility
-DEFAULT_SCHEMAS = {
-    "mxcp.legacy": AuditSchema(
-        schema_name="mxcp.legacy",
-        version=1,
-        description="Legacy schema for backward compatibility",
-        retention_days=90,
-        evidence_level=EvidenceLevel.BASIC,
-        fields=[
-            FieldDefinition("operation_type", "string"),
-            FieldDefinition("operation_name", "string"),
-            FieldDefinition("input_data", "object"),
-            FieldDefinition("output_data", "object", required=False),
-            FieldDefinition("error", "string", required=False)
-        ],
-        indexes=["operation_type", "operation_name", "timestamp"]
-    ),
-    "mxcp.tools": AuditSchema(
-        schema_name="mxcp.tools",
-        version=1,
-        description="Tool execution audit events",
-        retention_days=90,
-        evidence_level=EvidenceLevel.DETAILED,
-        fields=[
-            FieldDefinition("tool_name", "string"),
-            FieldDefinition("parameters", "object", sensitive=True),
-            FieldDefinition("result", "object", required=False),
-            FieldDefinition("error", "string", required=False)
-        ],
-        indexes=["tool_name", "timestamp", "user_id"],
-        extract_fields=["tool_name"]
-    ),
-    "mxcp.auth": AuditSchema(
-        schema_name="mxcp.auth",
-        version=1,
-        description="Authentication and authorization events",
-        retention_days=365,  # Keep auth events longer
-        evidence_level=EvidenceLevel.REGULATORY,
-        fields=[
-            FieldDefinition("auth_type", "string"),
-            FieldDefinition("user_id", "string"),
-            FieldDefinition("session_id", "string"),
-            FieldDefinition("ip_address", "string", sensitive=True),
-            FieldDefinition("user_agent", "string")
-        ],
-        indexes=["auth_type", "user_id", "timestamp"],
-        field_redactions=[
-            FieldRedaction("ip_address", RedactionStrategy.FULL)
-        ]
-    )
-}
-
 
 class AuditLogger:
     """High-level audit logger that delegates to a backend.
@@ -85,15 +33,7 @@ class AuditLogger:
         self.backend = backend
             
         logger.info(f"Audit logger initialized with backend: {type(self.backend).__name__}")
-        
-        # Note: Default schemas are registered on first use to avoid async in __init__
-        self._schemas_registered = False
-    
-    async def _ensure_schemas_registered(self):
-        """Ensure default schemas are registered (called on first use)."""
-        if not self._schemas_registered:
-            await self._register_default_schemas()
-            self._schemas_registered = True
+
     
     @classmethod
     async def jsonl(cls, log_path: Path, enabled: bool = True) -> 'AuditLogger':
@@ -108,13 +48,10 @@ class AuditLogger:
         """
         if enabled:
             from .backends.jsonl import JSONLAuditWriter
-            instance = cls(JSONLAuditWriter(log_path=log_path))
+            return cls(JSONLAuditWriter(log_path=log_path))
         else:
             from .backends.noop import NoOpAuditBackend
-            instance = cls(NoOpAuditBackend())
-        
-        await instance._ensure_schemas_registered()
-        return instance
+            return cls(NoOpAuditBackend())
     
     @classmethod 
     async def disabled(cls) -> 'AuditLogger':
@@ -124,21 +61,8 @@ class AuditLogger:
             AuditLogger instance that discards all audit records
         """
         from .backends.noop import NoOpAuditBackend
-        instance = cls(NoOpAuditBackend())
-        await instance._ensure_schemas_registered()
-        return instance
-    
-    async def _register_default_schemas(self):
-        """Register default schemas with the backend."""
-        for schema in DEFAULT_SCHEMAS.values():
-            try:
-                # Check if schema already exists
-                existing = await self.backend.get_schema(schema.schema_name, schema.version)
-                if not existing:
-                    await self.backend.create_schema(schema)
-                    logger.info(f"Registered default schema: {schema.get_schema_id()}")
-            except Exception as e:
-                logger.warning(f"Failed to register schema {schema.get_schema_id()}: {e}")
+        return cls(NoOpAuditBackend())
+
     
     # Schema management methods
     
@@ -161,11 +85,11 @@ class AuditLogger:
         name: str,
         input_params: Dict[str, Any],
         duration_ms: int,
+        schema_name: str,
         policy_decision: PolicyDecision = "n/a",
         reason: Optional[str] = None,
         status: Status = "success",
         error: Optional[str] = None,
-        schema_name: Optional[str] = None,
         output_data: Optional[Any] = None,
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
@@ -179,28 +103,17 @@ class AuditLogger:
             name: Name of the entity executed
             input_params: Input parameters
             duration_ms: Execution time in milliseconds
+            schema_name: Name of the schema to use
             policy_decision: Policy decision (allow, deny, warn, n/a)
             reason: Explanation if denied or warned
             status: Execution status (success, error)
             error: Error message if status is error
-            schema_name: Name of the schema to use (defaults to "mxcp.legacy")
             output_data: Optional output data
             user_id: Optional user identifier
             session_id: Optional session identifier
             trace_id: Optional trace identifier
         """
         try:
-            # Ensure default schemas are registered
-            await self._ensure_schemas_registered()
-            
-            # Determine schema to use
-            if not schema_name:
-                # Map event types to default schemas
-                if event_type == "tool":
-                    schema_name = "mxcp.tools"
-                else:
-                    schema_name = "mxcp.legacy"
-            
             # Create audit record with schema reference
             record = AuditRecord(
                 schema_name=schema_name,

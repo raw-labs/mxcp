@@ -227,6 +227,7 @@ async def test_audit_logger_disabled():
             name="test_tool",
             input_params={"test": "data"},
             duration_ms=100,
+            schema_name="test_schema",
             status="success"
         )
         

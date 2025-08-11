@@ -105,6 +105,7 @@ async def test_exporters_with_noop_backend():
                 name=f"tool_{i}",
                 input_params={"index": i},
                 duration_ms=100,
+                schema_name="test_schema",
                 status="success"
             )
         
