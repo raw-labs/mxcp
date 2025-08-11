@@ -8,14 +8,10 @@ from typing import Optional
 
 from mxcp.cli.utils import output_error, output_result, configure_logging
 from mxcp.config.site_config import load_site_config
-<<<<<<< HEAD
 from mxcp.audit import format_audit_record, parse_time_since
 from mxcp.audit.utils import map_legacy_query_params
 from mxcp.audit.exporters import export_to_duckdb, export_to_csv
 from mxcp.sdk.audit import AuditLogger
-=======
-from mxcp.sdk.audit import AuditQuery
->>>>>>> origin/main
 
 
 @click.command()

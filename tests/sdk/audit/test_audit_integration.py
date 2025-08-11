@@ -15,7 +15,7 @@ from mxcp.sdk.audit import (
     FieldDefinition,
     FieldRedaction,
     EvidenceLevel,
-    RedactionStrategy,
+    RedactionStrategy
 )
 
 

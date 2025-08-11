@@ -9,7 +9,7 @@ from mxcp.sdk.audit import (
     RedactionStrategy,
     CallerType,
     EventType,
-    Status,
+    Status
 )
 
 

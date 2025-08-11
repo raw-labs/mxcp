@@ -14,46 +14,25 @@ logger = logging.getLogger(__name__)
 
 class EndpointType(Enum):
     """Endpoint type enumeration."""
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/main
     TOOL = "tool"
     RESOURCE = "resource"
     PROMPT = "prompt"
 
 
 def get_endpoint_source_code(
-<<<<<<< HEAD
     endpoint_dict: dict, endpoint_type: str, endpoint_file_path: Path, repo_root: Path
 ) -> str:
     """Get the source code for the endpoint, resolving code vs file.
 
-=======
-    endpoint_dict: dict, 
-    endpoint_type: str, 
-    endpoint_file_path: Path, 
-    repo_root: Path
-) -> str:
-    """Get the source code for the endpoint, resolving code vs file.
-    
->>>>>>> origin/main
     Args:
         endpoint_dict: The full endpoint definition dictionary
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
         endpoint_file_path: Path to the endpoint YAML file
         repo_root: Repository root path
-<<<<<<< HEAD
 
     Returns:
         The source code content
 
-=======
-        
-    Returns:
-        The source code content
-        
->>>>>>> origin/main
     Raises:
         ValueError: If no source code found in endpoint definition
     """
@@ -73,7 +52,6 @@ def get_endpoint_source_code(
 
 def extract_source_info(source: Dict[str, Any]) -> Tuple[str, str]:
     """Extract source code and determine if it's inline code or file reference.
-<<<<<<< HEAD
 
     Args:
         source: Source dictionary from endpoint definition
@@ -83,17 +61,6 @@ def extract_source_info(source: Dict[str, Any]) -> Tuple[str, str]:
         - source_type: "code" or "file"
         - source_value: The actual code string or file path
 
-=======
-    
-    Args:
-        source: Source dictionary from endpoint definition
-        
-    Returns:
-        Tuple of (source_type, source_value) where:
-        - source_type: "code" or "file" 
-        - source_value: The actual code string or file path
-        
->>>>>>> origin/main
     Raises:
         ValueError: If no source code or file found
     """
@@ -107,30 +74,17 @@ def extract_source_info(source: Dict[str, Any]) -> Tuple[str, str]:
 
 def detect_language_from_source(source: Dict[str, Any], file_path: Optional[str] = None) -> str:
     """Detect programming language from source definition.
-<<<<<<< HEAD
 
     Args:
         source: Source dictionary from endpoint definition
         file_path: Optional file path to use for extension-based detection
 
-=======
-    
-    Args:
-        source: Source dictionary from endpoint definition
-        file_path: Optional file path to use for extension-based detection
-        
->>>>>>> origin/main
     Returns:
         Language string ("python", "sql", etc.)
     """
     # Check if language is explicitly specified
     if "language" in source:
         return source["language"]
-<<<<<<< HEAD
-
-=======
-    
->>>>>>> origin/main
     # Try to infer from file extension
     path_to_check = file_path or source.get("file")
     if path_to_check:
@@ -138,37 +92,17 @@ def detect_language_from_source(source: Dict[str, Any], file_path: Optional[str]
             return "python"
         elif path_to_check.endswith((".sql", ".SQL")):
             return "sql"
-<<<<<<< HEAD
-
-=======
-    
->>>>>>> origin/main
     # Default to SQL for backward compatibility
     return "sql"
 
 
-<<<<<<< HEAD
 def resolve_file_path(file_path: str, endpoint_file_path: Path, repo_root: Path) -> Path:
     """Resolve a relative file path to an absolute path.
 
-=======
-def resolve_file_path(
-    file_path: str, 
-    endpoint_file_path: Path, 
-    repo_root: Path
-) -> Path:
-    """Resolve a relative file path to an absolute path.
-    
->>>>>>> origin/main
     Args:
         file_path: File path from source definition (may be relative)
         endpoint_file_path: Path to the endpoint YAML file
         repo_root: Repository root path
-<<<<<<< HEAD
-
-=======
-        
->>>>>>> origin/main
     Returns:
         Resolved absolute path
     """
@@ -181,19 +115,11 @@ def resolve_file_path(
 
 def get_endpoint_name_or_uri(endpoint_dict: dict, endpoint_type: str) -> str:
     """Get the name or URI identifier for an endpoint.
-<<<<<<< HEAD
 
     Args:
         endpoint_dict: The full endpoint definition dictionary
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
 
-=======
-    
-    Args:
-        endpoint_dict: The full endpoint definition dictionary
-        endpoint_type: Type of endpoint ("tool", "resource", "prompt")
-        
->>>>>>> origin/main
     Returns:
         The endpoint identifier (name for tools/prompts, uri for resources)
     """
@@ -206,7 +132,6 @@ def get_endpoint_name_or_uri(endpoint_dict: dict, endpoint_type: str) -> str:
 
 def prepare_source_for_execution(
     endpoint_dict: dict,
-<<<<<<< HEAD
     endpoint_type: str,
     endpoint_file_path: Path,
     repo_root: Path,
@@ -217,45 +142,21 @@ def prepare_source_for_execution(
     This is a higher-level function that combines source extraction,
     language detection, and path resolution.
 
-=======
-    endpoint_type: str, 
-    endpoint_file_path: Path,
-    repo_root: Path,
-    include_function_name: bool = False
-) -> Tuple[str, str]:
-    """Prepare source code and language for execution.
-    
-    This is a higher-level function that combines source extraction,
-    language detection, and path resolution.
-    
->>>>>>> origin/main
     Args:
         endpoint_dict: The full endpoint definition dictionary
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
         endpoint_file_path: Path to the endpoint YAML file
         repo_root: Repository root path
         include_function_name: If True, append function name to Python file paths (SDK executor style)
-<<<<<<< HEAD
-
-=======
-        
->>>>>>> origin/main
     Returns:
         Tuple of (language, source_code_or_path) ready for execution
     """
     endpoint_data = endpoint_dict[endpoint_type]
     source = endpoint_data.get("source", {})
-<<<<<<< HEAD
 
     # Detect language - check endpoint_data first, then source
     language = endpoint_data.get("language") or detect_language_from_source(source)
 
-=======
-    
-    # Detect language - check endpoint_data first, then source
-    language = endpoint_data.get("language") or detect_language_from_source(source)
-    
->>>>>>> origin/main
     # Handle source code vs file path
     if "code" in source:
         # Inline code - return as-is
@@ -271,17 +172,11 @@ def prepare_source_for_execution(
             except ValueError:
                 # If outside repo root, use absolute path
                 file_path_for_executor = str(resolved_path)
-<<<<<<< HEAD
-
-=======
-            
->>>>>>> origin/main
             # Optionally append function name for SDK executor
             if include_function_name:
                 function_name = endpoint_data.get("name") if endpoint_type == "tool" else None
                 if function_name:
                     file_path_for_executor = f"{file_path_for_executor}:{function_name}"
-<<<<<<< HEAD
 
             return (language, file_path_for_executor)
         else:
@@ -292,13 +187,3 @@ def prepare_source_for_execution(
             return (language, source_code)
     else:
         raise ValueError("No source code or file specified in endpoint definition")
-=======
-            
-            return (language, file_path_for_executor)
-        else:
-            # For SQL files, read and return content
-            source_code = get_endpoint_source_code(endpoint_dict, endpoint_type, endpoint_file_path, repo_root)
-            return (language, source_code)
-    else:
-        raise ValueError("No source code or file specified in endpoint definition")
->>>>>>> origin/main

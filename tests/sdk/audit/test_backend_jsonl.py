@@ -11,7 +11,7 @@ from mxcp.sdk.audit import (
     FieldDefinition,
     FieldRedaction,
     EvidenceLevel,
-    RedactionStrategy,
+    RedactionStrategy
 )
 from mxcp.sdk.audit.backends import JSONLAuditWriter
 
