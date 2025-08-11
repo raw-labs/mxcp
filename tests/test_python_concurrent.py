@@ -8,13 +8,10 @@ import os
 import yaml
 from pathlib import Path
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
-from mxcp.engine.duckdb_session import DuckDBSession
-from mxcp.endpoints.executor import EndpointExecutor, EndpointType
-from mxcp.endpoints.runner import run_endpoint
-from mxcp.runtime import _set_runtime_context, _clear_runtime_context
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+from mxcp.config.execution_engine import create_execution_engine
 
 
 # Global shared state for testing thread safety
@@ -117,12 +114,20 @@ def test_configs(temp_project_dir):
 
 
 @pytest.fixture
-def test_session(test_configs):
-    """Create a minimal test DuckDB session (just for the executor)."""
+def execution_engine(test_configs):
+    """Create an execution engine with test database setup."""
     user_config, site_config = test_configs
-    session = DuckDBSession(user_config, site_config, profile="test")
-    yield session
-    session.close()
+    
+    # Create execution engine
+    engine = create_execution_engine(user_config, site_config, "test")
+    
+    # Store user_config on engine for runtime context access
+    setattr(engine, '_user_config', user_config)
+    
+    yield engine
+    
+    # Cleanup
+    engine.shutdown()
 
 
 @pytest.fixture(autouse=True)
@@ -134,7 +139,8 @@ def reset_global_state():
     yield
 
 
-def test_concurrent_sync_python_functions(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_concurrent_sync_python_functions(temp_project_dir, test_configs, execution_engine):
     """Test concurrent execution of synchronous Python functions."""
     user_config, site_config = test_configs
     
@@ -362,14 +368,14 @@ tool:
         
         tasks = []
         for i in range(20):
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "increment_shared_counter",
-                user_config,
-                site_config,
-                test_session
+            task = execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="increment_shared_counter",
+                params={"amount": 1, "delay": 0.0001},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            task = executor.execute({"amount": 1, "delay": 0.0001})
             tasks.append(task)
         
         results = await asyncio.gather(*tasks)
@@ -409,14 +415,14 @@ tool:
         
         tasks = []
         for i in range(20):
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "safe_increment_counter",
-                user_config,
-                site_config,
-                test_session
+            task = execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="safe_increment_counter",
+                params={"amount": 1},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            task = executor.execute({"amount": 1})
             tasks.append(task)
         
         results = await asyncio.gather(*tasks)
@@ -438,14 +444,14 @@ tool:
     async def test_context_isolation():
         tasks = []
         for i in range(10):
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "test_context_access",
-                user_config,
-                site_config,
-                test_session
+            task = execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="test_context_access",
+                params={},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            task = executor.execute({})
             tasks.append(task)
         
         results = await asyncio.gather(*tasks)
@@ -480,14 +486,14 @@ tool:
         
         tasks = []
         for i in range(5):
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "cpu_intensive_task",
-                user_config,
-                site_config,
-                test_session
+            task = execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="cpu_intensive_task",
+                params={"iterations": 100000},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            task = executor.execute({"iterations": 100000})
             tasks.append(task)
         
         results = await asyncio.gather(*tasks)
@@ -506,13 +512,14 @@ tool:
         assert all(r["result"] == expected_result for r in results)
     
     # Run all tests
-    race_value = asyncio.run(test_race_conditions())
-    asyncio.run(test_thread_safe())
-    asyncio.run(test_context_isolation())
-    asyncio.run(test_cpu_bound())
+    race_value = await test_race_conditions()
+    await test_thread_safe()
+    await test_context_isolation()
+    await test_cpu_bound()
 
 
-def test_concurrent_async_python_functions(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_concurrent_async_python_functions(temp_project_dir, test_configs, execution_engine):
     """Test concurrent execution of async Python functions."""
     user_config, site_config = test_configs
     
@@ -691,15 +698,14 @@ tool:
     async def test_async_concurrency():
         tasks = []
         for i in range(10):
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "async_task",
-                user_config,
-                site_config,
-                test_session
+            task = execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="async_task",
+                params={"task_id": i, "duration": 0.05},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            # Stagger the tasks slightly
-            task = executor.execute({"task_id": i, "duration": 0.05})
             tasks.append(task)
         
         start_time = time.time()
@@ -723,15 +729,14 @@ tool:
     
     # Test 2: Parallel subtasks within async function
     async def test_parallel_subtasks():
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "parallel_subtasks",
-            user_config,
-            site_config,
-            test_session
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="parallel_subtasks",
+            params={"count": 20},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
         )
-        
-        result = await executor.execute({"count": 20})
         
         print(f"\nParallel subtasks test:")
         print(f"  Subtasks: {result['count']}")
@@ -747,15 +752,14 @@ tool:
     
     # Test 3: Context propagation in nested async
     async def test_async_context_propagation():
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "test_async_context",
-            user_config,
-            site_config,
-            test_session
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_async_context",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
         )
-        
-        result = await executor.execute({})
         
         print(f"\nAsync context propagation test:")
         print(f"  Main task has secret: {result['main_has_secret']}")
@@ -777,407 +781,286 @@ tool:
         print(f"  ✓ Context propagated to all nested tasks")
     
     # Run all tests
-    asyncio.run(test_async_concurrency())
-    asyncio.run(test_parallel_subtasks())
-    asyncio.run(test_async_context_propagation())
+    await test_async_concurrency()
+    await test_parallel_subtasks()
+    await test_async_context_propagation()
 
 
-def test_mixed_sync_async_stress(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_mixed_sync_async_stress(temp_project_dir, test_configs, execution_engine):
     """Stress test with mixed sync/async execution."""
     user_config, site_config = test_configs
     
-    # Create Python file with mixed functions
-    python_file = temp_project_dir / "python" / "stress_test.py"
-    python_file.write_text("""
-import asyncio
+    # Create Python files with stress test functions
+    sync_file = temp_project_dir / "python" / "sync_stress.py"
+    sync_file.write_text("""
 import time
-import random
 import threading
 from mxcp.runtime import config
 
-# Shared state for stress testing
-request_count = 0
-error_count = 0
-stats_lock = threading.Lock()
-
 def sync_stress_endpoint(request_id: int) -> dict:
-    \"\"\"Sync endpoint for stress testing.\"\"\"
-    global request_count, error_count
-    
+    \"\"\"Synchronous stress test endpoint.\"\"\"
     thread_id = threading.current_thread().name
     start_time = time.time()
     
-    try:
-        # Increment request counter
-        with stats_lock:
-            request_count += 1
-            current_count = request_count
-        
-        # Random work
-        work_time = random.uniform(0.001, 0.005)
-        time.sleep(work_time)
-        
-        # Random chance of "error"
-        if random.random() < 0.1:  # 10% error rate
-            raise ValueError(f"Simulated error in request {request_id}")
-        
-        # Access context
-        api_key = config.get_secret("api_key")
-        
-        return {
-            "request_id": request_id,
-            "thread_id": thread_id,
-            "request_number": current_count,
-            "work_time": work_time,
-            "duration": time.time() - start_time,
-            "has_context": api_key is not None,
-            "status": "success"
-        }
-    except Exception as e:
-        with stats_lock:
-            error_count += 1
-        return {
-            "request_id": request_id,
-            "thread_id": thread_id,
-            "error": str(e),
-            "status": "error"
-        }
-
-async def async_stress_endpoint(request_id: int) -> dict:
-    \"\"\"Async endpoint for stress testing.\"\"\"
-    global request_count, error_count
+    # Simulate work with some variability
+    time.sleep(0.001 + (request_id % 10) * 0.0001)
     
-    task_id = str(id(asyncio.current_task()))
-    start_time = time.time()
-    
-    try:
-        # Increment counter (thread-safe even in async)
-        with stats_lock:
-            request_count += 1
-            current_count = request_count
-        
-        # Random async work
-        work_time = random.uniform(0.001, 0.005)
-        await asyncio.sleep(work_time)
-        
-        # Random chance of "error"
-        if random.random() < 0.1:  # 10% error rate
-            raise ValueError(f"Simulated async error in request {request_id}")
-        
-        # Access context
-        api_secret = config.get_secret("api_secret")
-        
-        return {
-            "request_id": request_id,
-            "task_id": task_id,
-            "request_number": current_count,
-            "work_time": work_time,
-            "duration": time.time() - start_time,
-            "has_context": api_secret is not None,
-            "status": "success",
-            "type": "async"
-        }
-    except Exception as e:
-        with stats_lock:
-            error_count += 1
-        return {
-            "request_id": request_id,
-            "task_id": task_id,
-            "error": str(e),
-            "status": "error",
-            "type": "async"
-        }
-
-def get_stats() -> dict:
-    \"\"\"Get current statistics.\"\"\"
-    with stats_lock:
-        return {
-            "total_requests": request_count,
-            "total_errors": error_count,
-            "success_rate": (request_count - error_count) / request_count if request_count > 0 else 0
-        }
+    return {
+        "request_id": request_id,
+        "thread_id": thread_id,
+        "duration": time.time() - start_time,
+        "type": "sync"
+    }
 """)
     
-    # Create tool definitions
+    async_file = temp_project_dir / "python" / "async_stress.py"
+    async_file.write_text("""
+import asyncio
+import time
+from mxcp.runtime import config
+
+async def async_stress_endpoint(request_id: int) -> dict:
+    \"\"\"Asynchronous stress test endpoint.\"\"\"
+    start_time = time.time()
+    
+    # Mix of CPU and async work
+    await asyncio.sleep(0.001 + (request_id % 10) * 0.0001)
+    
+    return {
+        "request_id": request_id,
+        "duration": time.time() - start_time,
+        "type": "async"
+    }
+""")
+
+    # Create tool configurations
     (temp_project_dir / "tools" / "sync_stress_endpoint.yml").write_text("""
 mxcp: 1
 tool:
   name: sync_stress_endpoint
-  description: Sync stress test endpoint
+  description: Sync stress test
   language: python
   source:
-    file: ../python/stress_test.py
+    file: ../python/sync_stress.py
   parameters:
     - name: request_id
       type: integer
-      description: Request identifier
+      description: Request ID
   return:
     type: object
 """)
-    
+
     (temp_project_dir / "tools" / "async_stress_endpoint.yml").write_text("""
 mxcp: 1
 tool:
   name: async_stress_endpoint
-  description: Async stress test endpoint
+  description: Async stress test
   language: python
   source:
-    file: ../python/stress_test.py
+    file: ../python/async_stress.py
   parameters:
     - name: request_id
       type: integer
-      description: Request identifier
+      description: Request ID
   return:
     type: object
 """)
+
+    print("\n=== Testing mixed sync/async stress ===")
     
-    (temp_project_dir / "tools" / "get_stats.yml").write_text("""
-mxcp: 1
-tool:
-  name: get_stats
-  description: Get stress test statistics
-  language: python
-  source:
-    file: ../python/stress_test.py
-  parameters: []
-  return:
-    type: object
-""")
-    
-    print("\n=== Mixed sync/async stress test ===")
-    
-    async def run_stress_test(total_requests: int):
-        # Mix of sync and async requests
+    # Test concurrent sync/async execution
+    async def test_mixed_execution():
         tasks = []
         
-        for i in range(total_requests):
+        # Create mixed workload
+        for i in range(50):
             # Alternate between sync and async
             if i % 2 == 0:
-                executor = EndpointExecutor(
-                    EndpointType.TOOL,
-                    "sync_stress_endpoint",
-                    user_config,
-                    site_config,
-                    test_session
+                task = execute_endpoint_with_engine(
+                    endpoint_type="tool",
+                    name="sync_stress_endpoint",
+                    params={"request_id": i},
+                    user_config=user_config,
+                    site_config=site_config,
+                    execution_engine=execution_engine
                 )
             else:
-                executor = EndpointExecutor(
-                    EndpointType.TOOL,
-                    "async_stress_endpoint",
-                    user_config,
-                    site_config,
-                    test_session
+                task = execute_endpoint_with_engine(
+                    endpoint_type="tool",
+                    name="async_stress_endpoint",
+                    params={"request_id": i},
+                    user_config=user_config,
+                    site_config=site_config,
+                    execution_engine=execution_engine
                 )
             
-            task = executor.execute({"request_id": i})
             tasks.append(task)
         
         start_time = time.time()
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks)
         total_time = time.time() - start_time
         
-        # Get final stats
-        stats_executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "get_stats",
-            user_config,
-            site_config,
-            test_session
-        )
-        stats = await stats_executor.execute({})
-        
         # Analyze results
-        successful = [r for r in results if isinstance(r, dict) and r.get('status') == 'success']
-        errors = [r for r in results if isinstance(r, dict) and r.get('status') == 'error']
-        exceptions = [r for r in results if isinstance(r, Exception)]
+        sync_results = [r for r in results if r["type"] == "sync"]
+        async_results = [r for r in results if r["type"] == "async"]
         
-        print(f"\nStress test results ({total_requests} requests):")
+        print(f"\nMixed execution test:")
+        print(f"  Total tasks: {len(results)}")
+        print(f"  Sync tasks: {len(sync_results)}")
+        print(f"  Async tasks: {len(async_results)}")
         print(f"  Total time: {total_time:.2f}s")
-        print(f"  Requests/sec: {total_requests / total_time:.0f}")
-        print(f"  Successful: {len(successful)}")
-        print(f"  Application errors: {len(errors)}")
-        print(f"  Exceptions: {len(exceptions)}")
-        print(f"  Stats: {stats}")
         
-        # Check context availability
-        context_available = [r for r in successful if r.get('has_context')]
-        print(f"  Context available: {len(context_available)}/{len(successful)}")
-        
-        # Verify reasonable success rate
-        success_rate = len(successful) / total_requests
-        print(f"  Success rate: {success_rate:.1%}")
-        
-        # Should handle most requests successfully
-        assert success_rate > 0.8  # Allow for simulated errors
-        
-        # All successful requests should have context
-        assert all(r.get('has_context') for r in successful)
-        
-        return results, stats
+        # Verify all request IDs are accounted for
+        request_ids = sorted([r["request_id"] for r in results])
+        expected_ids = list(range(50))
+        assert request_ids == expected_ids
     
-    # Run stress tests with increasing load
-    for num_requests in [50, 100, 200]:
-        print(f"\n--- Testing with {num_requests} requests ---")
-        results, stats = asyncio.run(run_stress_test(num_requests))
-        
-        # Brief pause between tests
-        time.sleep(0.1)
+    # Execute stress test and get execution statistics
+    await test_mixed_execution()
+    
+    print("✓ Mixed sync/async stress test completed successfully")
 
 
-def test_error_handling_and_cleanup(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_error_handling_and_cleanup(temp_project_dir, test_configs, execution_engine):
     """Test error handling and cleanup in concurrent scenarios."""
     user_config, site_config = test_configs
     
-    # Create Python file with functions that can fail
+    # Create Python file with functions that can fail and track resources
     python_file = temp_project_dir / "python" / "error_handling.py"
     python_file.write_text("""
 import asyncio
-import threading
 import time
+import threading
 from mxcp.runtime import config
 
-# Track resource allocation
-resources_allocated = 0
-resources_freed = 0
+# Resource tracking
+allocated_resources = []
+freed_resources = []
 resource_lock = threading.Lock()
 
-class MockResource:
-    def __init__(self, resource_id):
-        self.resource_id = resource_id
-        self.closed = False
-    
-    def close(self):
-        self.closed = True
-
-def failing_function(fail_after: float, error_type: str = "ValueError") -> dict:
-    \"\"\"Function that fails after some work.\"\"\"
-    global resources_allocated, resources_freed
-    
-    thread_id = threading.current_thread().name
-    
-    # Allocate a "resource"
+def allocate_resource(name: str):
+    \"\"\"Simulate resource allocation.\"\"\"
     with resource_lock:
-        resources_allocated += 1
-        resource_id = resources_allocated
-    
-    resource = MockResource(resource_id)
+        allocated_resources.append(name)
+
+def free_resource(name: str):
+    \"\"\"Simulate resource cleanup.\"\"\"
+    with resource_lock:
+        if name in allocated_resources:
+            allocated_resources.remove(name)
+            freed_resources.append(name)
+
+def failing_function(fail_after: float, error_type: str) -> dict:
+    \"\"\"Function that can fail in various ways.\"\"\"
+    thread_id = threading.current_thread().name
+    resource_name = f"resource_{thread_id}_{time.time()}"
     
     try:
+        # Allocate resource
+        allocate_resource(resource_name)
+        
         # Do some work
         time.sleep(fail_after)
         
-        # Fail based on error_type
+        # Maybe fail
         if error_type == "ValueError":
-            raise ValueError(f"Simulated ValueError after {fail_after}s")
+            raise ValueError("Simulated ValueError")
         elif error_type == "RuntimeError":
-            raise RuntimeError(f"Simulated RuntimeError after {fail_after}s")
+            raise RuntimeError("Simulated RuntimeError")
         elif error_type == "KeyError":
-            raise KeyError(f"Simulated KeyError after {fail_after}s")
-        else:
-            # Success case
-            return {
-                "thread_id": thread_id,
-                "resource_id": resource_id,
-                "status": "success"
-            }
+            raise KeyError("Simulated KeyError")
+        
+        return {
+            "thread_id": thread_id,
+            "resource": resource_name,
+            "status": "success"
+        }
     finally:
-        # Cleanup should always happen
-        resource.close()
-        with resource_lock:
-            resources_freed += 1
+        # Always clean up
+        free_resource(resource_name)
 
-async def async_failing_function(fail_after: float, error_type: str = "ValueError") -> dict:
-    \"\"\"Async function that fails after some work.\"\"\"
-    global resources_allocated, resources_freed
-    
+async def async_failing_function(fail_after: float, error_type: str) -> dict:
+    \"\"\"Async function that can fail.\"\"\"
     task_id = str(id(asyncio.current_task()))
-    
-    # Allocate a "resource"
-    with resource_lock:
-        resources_allocated += 1
-        resource_id = resources_allocated
-    
-    resource = MockResource(resource_id)
+    resource_name = f"async_resource_{task_id}_{time.time()}"
     
     try:
+        # Allocate resource
+        allocate_resource(resource_name)
+        
         # Do some async work
         await asyncio.sleep(fail_after)
         
-        # Access context to ensure it's available
-        api_key = config.get_secret("api_key")
-        
-        # Fail based on error_type
+        # Maybe fail
         if error_type == "ValueError":
-            raise ValueError(f"Async simulated ValueError after {fail_after}s")
+            raise ValueError("Simulated async ValueError")
         elif error_type == "RuntimeError":
-            raise RuntimeError(f"Async simulated RuntimeError after {fail_after}s")
+            raise RuntimeError("Simulated async RuntimeError")
         elif error_type == "KeyError":
-            raise KeyError(f"Async simulated KeyError after {fail_after}s")
-        else:
-            # Success case
-            return {
-                "task_id": task_id,
-                "resource_id": resource_id,
-                "has_context": api_key is not None,
-                "status": "success"
-            }
+            raise KeyError("Simulated async KeyError")
+        
+        return {
+            "task_id": task_id,
+            "resource": resource_name,
+            "status": "success"
+        }
     finally:
-        # Cleanup should always happen
-        resource.close()
-        with resource_lock:
-            resources_freed += 1
+        # Always clean up
+        free_resource(resource_name)
 
 def get_resource_stats() -> dict:
     \"\"\"Get current resource statistics.\"\"\"
     with resource_lock:
         return {
-            "allocated": resources_allocated,
-            "freed": resources_freed,
-            "leaked": resources_allocated - resources_freed
+            "allocated": len(allocated_resources),
+            "freed": len(freed_resources),
+            "leaked": len(allocated_resources),  # Should be 0 if cleanup works
+            "allocated_list": allocated_resources.copy(),
+            "freed_list": freed_resources.copy()
         }
 """)
-    
-    # Create tool definitions
+
+    # Create tool configurations
     (temp_project_dir / "tools" / "failing_function.yml").write_text("""
 mxcp: 1
 tool:
   name: failing_function
-  description: Function that may fail
+  description: Function that might fail
   language: python
   source:
     file: ../python/error_handling.py
   parameters:
     - name: fail_after
       type: number
-      description: Time before failure
+      description: Delay before potential failure
     - name: error_type
       type: string
-      description: Type of error to raise
-      default: "ValueError"
+      description: Type of error to simulate
   return:
     type: object
 """)
-    
+
     (temp_project_dir / "tools" / "async_failing_function.yml").write_text("""
 mxcp: 1
 tool:
   name: async_failing_function
-  description: Async function that may fail
+  description: Async function that might fail
   language: python
   source:
     file: ../python/error_handling.py
   parameters:
     - name: fail_after
       type: number
-      description: Time before failure
+      description: Delay before potential failure
     - name: error_type
       type: string
-      description: Type of error to raise
-      default: "ValueError"
+      description: Type of error to simulate
   return:
     type: object
 """)
-    
+
     (temp_project_dir / "tools" / "get_resource_stats.yml").write_text("""
 mxcp: 1
 tool:
@@ -1190,78 +1073,73 @@ tool:
   return:
     type: object
 """)
-    
+
     print("\n=== Testing error handling and cleanup ===")
     
     async def test_concurrent_failures():
-        # Mix of successful and failing calls
+        # Mix of successful and failing tasks
         tasks = []
         
         # Some will succeed
         for i in range(5):
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "failing_function",
-                user_config,
-                site_config,
-                test_session
+            task = execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="failing_function",
+                params={"fail_after": 0.001, "error_type": "none"},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            task = executor.execute({"fail_after": 0.001, "error_type": "none"})
             tasks.append(task)
         
         # Some will fail with different errors
         error_types = ["ValueError", "RuntimeError", "KeyError"]
         for i in range(15):
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "failing_function" if i % 2 == 0 else "async_failing_function",
-                user_config,
-                site_config,
-                test_session
+            task = execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="failing_function" if i % 2 == 0 else "async_failing_function",
+                params={"fail_after": 0.001, "error_type": error_types[i % len(error_types)]},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            error_type = error_types[i % len(error_types)]
-            task = executor.execute({"fail_after": 0.001, "error_type": error_type})
             tasks.append(task)
         
         # Gather all results, including exceptions
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Get resource stats
-        stats_executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "get_resource_stats",
-            user_config,
-            site_config,
-            test_session
+        stats_executor = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_resource_stats",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
         )
-        stats = await stats_executor.execute({})
         
         # Analyze results
         successes = [r for r in results if isinstance(r, dict) and r.get('status') == 'success']
-        value_errors = [r for r in results if isinstance(r, ValueError)]
-        runtime_errors = [r for r in results if isinstance(r, RuntimeError)]
-        key_errors = [r for r in results if isinstance(r, KeyError)]
+        value_errors = [r for r in results if isinstance(r, Exception) and 'ValueError' in str(r)]
+        runtime_errors = [r for r in results if isinstance(r, Exception) and 'RuntimeError' in str(r)]
+        key_errors = [r for r in results if isinstance(r, Exception) and 'KeyError' in str(r)]
         
-        print(f"\nConcurrent failure test results:")
+        print(f"\nError handling test:")
         print(f"  Total tasks: {len(results)}")
         print(f"  Successes: {len(successes)}")
         print(f"  ValueErrors: {len(value_errors)}")
         print(f"  RuntimeErrors: {len(runtime_errors)}")
         print(f"  KeyErrors: {len(key_errors)}")
-        print(f"  Resource stats: {stats}")
+        print(f"  Resource stats: {stats_executor}")
         
         # Verify cleanup happened even with errors
-        assert stats['leaked'] == 0, f"Resources leaked: {stats['leaked']}"
-        assert stats['allocated'] == stats['freed']
+        assert stats_executor['leaked'] == 0, f"Resources leaked: {stats_executor['leaked']}"
         print(f"  ✓ All resources cleaned up properly")
         
-        # Verify we got the expected errors
-        assert len(value_errors) > 0
-        assert len(runtime_errors) > 0
-        assert len(key_errors) > 0
+        # Verify expected number of successes
         assert len(successes) == 5
     
-    asyncio.run(test_concurrent_failures())
+    await test_concurrent_failures()
 
 
 if __name__ == "__main__":

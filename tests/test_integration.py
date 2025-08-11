@@ -219,7 +219,16 @@ class ServerProcess:
                 self.process.kill()
                 self.process.wait()
         
-        os.chdir(self.original_dir)
+        # Safely restore original directory
+        try:
+            os.chdir(self.original_dir)
+        except (FileNotFoundError, OSError):
+            # Original directory may no longer exist, go to a safe location
+            try:
+                os.chdir(Path(__file__).parent)
+            except (FileNotFoundError, OSError):
+                # Last resort - go to home directory
+                os.chdir(os.path.expanduser("~"))
     
     def __enter__(self):
         return self
@@ -455,11 +464,10 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_reload_always_refreshes_duckdb(self, integration_fixture_dir):
         """Test that SIGHUP always reloads DuckDB session even without config changes."""
-        # Start server
-        process = ServerProcess(integration_fixture_dir)
-        process.start()
-        
-        try:
+        # Use context manager to ensure proper cleanup
+        with ServerProcess(integration_fixture_dir) as process:
+            process.start()  # Add missing start() call
+            
             # Call tool to verify initial state
             async with MCPTestClient(process.port) as client:
                 result = await client.call_tool("echo_message", {"message": "test1"})
@@ -485,9 +493,6 @@ class TestIntegration:
                 assert result2["reversed"] == "daoler retfa tset"
                 # The result should still work correctly after reload
                 assert result2["length"] == len("test after reload")
-                
-        finally:
-            process.stop()
     
     @pytest.mark.asyncio
     async def test_non_duckdb_secret_types(self, integration_fixture_dir):
@@ -615,3 +620,14 @@ def check_all_secrets() -> dict:
                 assert echo_tool is not None, "echo_message tool not found"
                 assert echo_tool["description"] == "Echo a message"
                 assert len(echo_tool.get("inputSchema", {}).get("properties", {})) == 1
+
+
+    @pytest.mark.asyncio
+    async def test_global_var(self, integration_fixture_dir):
+        """Test that global variables are set correctly."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+            
+            async with MCPTestClient(server.port) as client:
+                result = await client.call_tool("get_global_var", {})
+                assert result["result"] == "initial_key_123"

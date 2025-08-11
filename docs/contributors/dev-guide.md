@@ -41,8 +41,10 @@ Welcome to the MXCP development community! This guide will help you get started 
    ```bash
    pip install -e ".[dev]"
    
-   # For testing optional integrations
-   pip install -e ".[dev,all]"  # Includes vault, onepassword, etc.
+   # For testing optional features
+   pip install -e ".[dev,vault]"  # Test Vault integration
+   pip install -e ".[dev,onepassword]"  # Test 1Password integration
+   pip install -e ".[all]"  # Everything (includes dev tools)
    ```
 
 ## Architecture Patterns

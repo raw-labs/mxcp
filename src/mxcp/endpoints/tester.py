@@ -1,10 +1,10 @@
 from typing import Dict, Any, List, Optional
-from mxcp.endpoints.executor import execute_endpoint, EndpointType, EndpointExecutor
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+from mxcp.config.execution_engine import create_execution_engine
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.config.site_config import SiteConfig, find_repo_root
 from mxcp.config.user_config import UserConfig
-from mxcp.engine.duckdb_session import DuckDBSession
-from mxcp.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext
 import time
 import json
 import logging
@@ -36,8 +36,8 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
         "endpoints": []
     }
     
-    # Create a session for all tests
-    session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
+    # Create execution engine once for all tests
+    execution_engine = create_execution_engine(user_config, site_config, profile, readonly=readonly)
     
     try:
         for file_path, endpoint, error_msg in endpoints:
@@ -80,8 +80,8 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
                     logger.debug(f"Skipping file {file_path}: not a valid endpoint")
                     continue
                     
-                # Run tests for this endpoint with the shared session
-                test_results = await run_tests_with_session(kind, name, user_config, site_config, session, profile, cli_user_context)
+                # Run tests for this endpoint using shared execution engine
+                test_results = await run_tests_with_session(kind, name, user_config, site_config, execution_engine, cli_user_context)
                 
                 # Wrap test results with endpoint context
                 endpoint_result = {
@@ -110,24 +110,22 @@ async def run_all_tests(user_config: UserConfig, site_config: SiteConfig, profil
                 })
                 results["status"] = "error"
     finally:
-        session.close()
+        execution_engine.shutdown()
             
     return results
 
 async def run_tests(endpoint_type: str, name: str, user_config: UserConfig, site_config: SiteConfig, profile: Optional[str], readonly: Optional[bool] = None, cli_user_context: Optional[UserContext] = None) -> Dict[str, Any]:
     """Run tests for a specific endpoint type and name."""
-    # Create a session for this test run
-    session = DuckDBSession(user_config, site_config, profile, readonly=readonly)
-    
+    # Create execution engine for this single test run
+    execution_engine = create_execution_engine(user_config, site_config, profile, readonly=readonly)
     try:
-        return await run_tests_with_session(endpoint_type, name, user_config, site_config, session, profile, cli_user_context)
+        return await run_tests_with_session(endpoint_type, name, user_config, site_config, execution_engine, cli_user_context)
     finally:
-        session.close()
+        execution_engine.shutdown()
 
-async def run_tests_with_session(endpoint_type: str, name: str, user_config: UserConfig, site_config: SiteConfig, session: DuckDBSession, profile: Optional[str], cli_user_context: Optional[UserContext] = None) -> Dict[str, Any]:
+async def run_tests_with_session(endpoint_type: str, name: str, user_config: UserConfig, site_config: SiteConfig, execution_engine, cli_user_context: Optional[UserContext] = None) -> Dict[str, Any]:
     """Run tests for a specific endpoint type and name with an existing session."""
     try:
-        endpoint_type_enum = EndpointType(endpoint_type.lower())
         logger.info(f"Running tests for endpoint: {endpoint_type}/{name}")
         
         # Use EndpointLoader to load the endpoint definition
@@ -204,8 +202,7 @@ async def run_tests_with_session(endpoint_type: str, name: str, user_config: Use
                 logger.info(f"Using CLI-provided user context")
             
             try:
-                # Use the execute_endpoint function with session and profile
-                result = await execute_endpoint(endpoint_type, name, params, user_config, site_config, session, profile, user_context=test_user_context)
+                result = await execute_endpoint_with_engine(endpoint_type, name, params, user_config, site_config, execution_engine, False, test_user_context)
                 logger.info(f"Execution result: {result}")
                 
                 # Normalize result for comparison
@@ -262,20 +259,7 @@ async def run_tests_with_session(endpoint_type: str, name: str, user_config: Use
             "message": str(e)
         }
 
-def get_endpoint_source_code(endpoint_def: dict, endpoint_type: str, endpoint_file_path: Path, repo_root: Path) -> str:
-    """Get the source code for the endpoint, resolving code vs file."""
-    source = endpoint_def[endpoint_type]["source"]
-    if "code" in source:
-        return source["code"]
-    elif "file" in source:
-        source_path = Path(source["file"])
-        if source_path.is_absolute():
-            full_path = repo_root / source_path.relative_to("/")
-        else:
-            full_path = endpoint_file_path.parent / source_path
-        return full_path.read_text()
-    else:
-        raise ValueError("No source code found in endpoint definition")
+
 
 def extract_column_names(endpoint_def: Dict[str, Any], endpoint_type: str) -> List[str]:
     """Extract column names from endpoint definition"""

@@ -3,18 +3,17 @@ import json
 import asyncio
 from typing import Dict, Any, Optional
 from pathlib import Path
-from mxcp.endpoints.runner import run_endpoint as execute_endpoint
-from mxcp.endpoints.executor import EndpointType
+from mxcp.endpoints.sdk_executor import execute_endpoint
 from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config, get_active_profile
+from mxcp.config.site_config import load_site_config
 from mxcp.cli.utils import output_result, output_error, configure_logging, get_env_flag, get_env_profile
 from mxcp.cli.table_renderer import format_result_for_display
 from mxcp.config.analytics import track_command_with_timing
-from mxcp.auth.providers import UserContext
-from mxcp.engine.duckdb_session import DuckDBSession
+from mxcp.sdk.auth.providers import UserContext
+
 
 @click.command(name="run")
-@click.argument("endpoint_type", type=click.Choice([t.value for t in EndpointType]))
+@click.argument("endpoint_type", type=click.Choice(["tool", "resource", "prompt"]))
 @click.argument("name")
 @click.option("--param", "-p", multiple=True, help="Parameter in format name=value or name=@file.json for complex values")
 @click.option("--user-context", "-u", help="User context as JSON string or @file.json")
@@ -134,28 +133,25 @@ def run_endpoint(endpoint_type: str, name: str, param: tuple[str, ...], user_con
             
             params[key] = value
             
-        # Create DuckDB session - connection will be established on-demand
-        session = DuckDBSession(user_config, site_config, profile_name, readonly=readonly)
+        # Execute endpoint using SDK executor system
+        result = asyncio.run(execute_endpoint(
+            endpoint_type, name, params, user_config, site_config, profile_name, 
+            readonly, skip_output_validation, user_context_obj
+        ))
         
-        try:
-            # Execute endpoint with explicit session
-            result = asyncio.run(execute_endpoint(endpoint_type, name, params, user_config, site_config, session, profile_name, validate_output=not skip_output_validation, user_context=user_context_obj))
+        # Output result
+        if json_output:
+            output_result(result, json_output, debug)
+        else:
+            # Add success indicator
+            click.echo(f"{click.style('✅ Success!', fg='green', bold=True)}")
             
-            # Output result
-            if json_output:
-                output_result(result, json_output, debug)
-            else:
-                # Add success indicator
-                click.echo(f"{click.style('✅ Success!', fg='green', bold=True)}")
+            # Use the table renderer for nice formatting
+            format_result_for_display(result)
                 
-                # Use the table renderer for nice formatting
-                format_result_for_display(result)
-                    
-                # Add execution time if available in debug mode
-                if debug:
-                    click.echo(f"\n{click.style('⏱️  Execution completed', fg='cyan')}")
-        finally:
-            session.close()
+            # Add execution time if available in debug mode
+            if debug:
+                click.echo(f"\n{click.style('⏱️  Execution completed', fg='cyan')}")
             
     except Exception as e:
         if json_output:

@@ -15,8 +15,8 @@ from mxcp.endpoints.loader import EndpointLoader
 import logging
 from mxcp.config.types import SiteConfig, UserConfig
 from mxcp.config.site_config import find_repo_root
-from mxcp.engine.duckdb_session import DuckDBSession
-from mxcp.endpoints.schema import validate_endpoint_payload
+from mxcp.config.execution_engine import create_execution_engine
+from mxcp.endpoints.validate import validate_endpoint_payload
 from mxcp.endpoints.tester import run_tests_with_session
 
 logger = logging.getLogger(__name__)
@@ -52,14 +52,32 @@ async def generate_snapshot(
         Tuple of (snapshot data, snapshot file path)
     """
     profile_name = profile or site_config["profile"]
-    drift_path = Path(site_config["profiles"][profile_name]["drift"]["path"])
+    
+    # Get drift path with safe access
+    profiles = site_config.get("profiles", {})
+    profile_config = profiles.get(profile_name, {})
+    drift_config = profile_config.get("drift", {})
+    drift_path_str = drift_config.get("path", f"drift-{profile_name}.json")
+    drift_path = Path(drift_path_str)
     if not drift_path.parent.exists():
         drift_path.parent.mkdir(parents=True)
     if drift_path.exists() and not force and not dry_run:
         raise FileExistsError(f"Drift snapshot already exists at {drift_path}. Use --force to overwrite.")
 
-    session = DuckDBSession(user_config, site_config, profile=profile_name, readonly=True)
-    conn = session.conn
+    # Create execution engine to get access to DuckDB session
+    execution_engine = create_execution_engine(user_config, site_config, profile_name, readonly=True)
+    
+    # Extract DuckDB connection from the SDK executor for direct database access
+    duckdb_executor = execution_engine._executors.get("sql")
+    if not duckdb_executor:
+        raise RuntimeError("DuckDB executor not found in execution engine")
+    
+    # Import here to get the proper type for accessing .session
+    from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
+    if not isinstance(duckdb_executor, DuckDBExecutor):
+        raise RuntimeError("SQL executor is not a DuckDB executor")
+    
+    conn = duckdb_executor.session.conn
     try:
         loader = EndpointLoader(site_config)
         discovered = loader.discover_endpoints()
@@ -96,9 +114,9 @@ async def generate_snapshot(
                     continue
 
                 # Validate endpoint
-                validation_result = validate_endpoint_payload(endpoint, str(path), user_config, site_config, profile_name, session)
-                # Run tests - use run_tests_with_session to reuse our existing session
-                test_result = await run_tests_with_session(endpoint_type, name, user_config, site_config, session, profile_name)
+                validation_result = validate_endpoint_payload(endpoint, str(path), execution_engine)
+                # Run tests
+                test_result = await run_tests_with_session(endpoint_type, name, user_config, site_config, execution_engine, None)
                 # Add to snapshot
                 resource_data = {
                     "validation_results": validation_result,
@@ -123,4 +141,4 @@ async def generate_snapshot(
             logger.info(f"Would write drift snapshot as {snapshot}")
         return snapshot, drift_path
     finally:
-        session.close()
+        execution_engine.shutdown()

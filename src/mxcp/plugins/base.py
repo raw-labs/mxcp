@@ -9,7 +9,7 @@ from mxcp.config.user_config import UserConfig
 from mxcp.config.site_config import SiteConfig
 
 if TYPE_CHECKING:
-    from mxcp.auth.providers import UserContext
+    from mxcp.sdk.auth.providers import UserContext
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

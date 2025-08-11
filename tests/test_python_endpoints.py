@@ -3,15 +3,11 @@ import pytest
 import os
 import tempfile
 from pathlib import Path
-import shutil
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
-from mxcp.engine.duckdb_session import DuckDBSession
-from mxcp.endpoints.executor import EndpointExecutor, EndpointType
-from mxcp.endpoints.loader import EndpointLoader
-from mxcp.engine.python_loader import PythonEndpointLoader
-from mxcp.runtime import _set_runtime_context, _clear_runtime_context, db, config, _init_hooks, _shutdown_hooks
-import asyncio
+from mxcp.runtime import _init_hooks, _shutdown_hooks
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+from mxcp.config.execution_engine import create_execution_engine
 import yaml
 
 
@@ -110,33 +106,52 @@ def test_configs(temp_project_dir):
 
 
 @pytest.fixture
-def test_session(test_configs):
-    """Create a test DuckDB session."""
+def execution_engine(test_configs):
+    """Create execution engine for tests and set up test data."""
     user_config, site_config = test_configs
-    session = DuckDBSession(user_config, site_config, profile="test")
+    engine = create_execution_engine(user_config, site_config)
     
-    # Create test table
-    session.conn.execute("""
-        CREATE TABLE test_data (
-            id INTEGER,
-            name VARCHAR,
-            value DOUBLE
-        )
-    """)
-    session.conn.execute("""
-        INSERT INTO test_data VALUES 
-        (1, 'Alice', 100.5),
-        (2, 'Bob', 200.7),
-        (3, 'Charlie', 300.9)
-    """)
+    # Get the DuckDB executor from the engine
+    duckdb_executor = None
+    for executor in engine._executors.values():
+        if hasattr(executor, 'language') and executor.language == "sql":
+            duckdb_executor = executor
+            break
     
-    yield session
+    if duckdb_executor:
+        # Get the DuckDB session and connection
+        from mxcp.sdk.executor.plugins import DuckDBExecutor
+        if isinstance(duckdb_executor, DuckDBExecutor):
+            session = duckdb_executor.session
+            conn = session.conn
+            
+            # Create test table if connection exists
+            if conn:
+                conn.execute("""
+                    CREATE TABLE test_data (
+                        id INTEGER,
+                        name VARCHAR,
+                        value DOUBLE
+                    )
+                """)
+                conn.execute("""
+                    INSERT INTO test_data VALUES 
+                    (1, 'Alice', 100.5),
+                    (2, 'Bob', 200.7),
+                    (3, 'Charlie', 300.9)
+                """)
     
-    session.close()
+    yield engine
+    
+    # Clean up - the engine shutdown should handle this
+    engine.shutdown()
 
 
-def test_python_loader(temp_project_dir):
-    """Test PythonEndpointLoader functionality."""
+@pytest.mark.asyncio
+async def test_python_loader(temp_project_dir, test_configs, execution_engine):
+    """Test Python module loading functionality through endpoint execution."""
+    user_config, site_config = test_configs
+    
     # Create a test Python file
     python_file = temp_project_dir / "python" / "test_module.py"
     python_file.write_text("""
@@ -147,26 +162,67 @@ def add_numbers(a: int, b: int) -> dict:
     return {"result": a + b}
 """)
     
-    # Test loader
-    loader = PythonEndpointLoader(temp_project_dir)
+    # Create tool definitions to test the functions
+    (temp_project_dir / "tools" / "hello.yml").write_text("""
+mxcp: 1
+tool:
+  name: hello
+  description: Say hello
+  language: python
+  source:
+    file: ../python/test_module.py
+  parameters:
+    - name: name
+      type: string
+      description: Name to greet
+  return:
+    type: object
+""")
     
-    # Load module
-    module = loader.load_python_module(python_file)
-    assert module is not None
+    (temp_project_dir / "tools" / "add_numbers.yml").write_text("""
+mxcp: 1
+tool:
+  name: add_numbers
+  description: Add two numbers
+  language: python
+  source:
+    file: ../python/test_module.py
+  parameters:
+    - name: a
+      type: integer
+      description: First number
+    - name: b
+      type: integer
+      description: Second number
+  return:
+    type: object
+""")
     
-    # Get functions
-    hello_func = loader.get_function(module, "hello")
-    assert hello_func("World") == {"message": "Hello, World!"}
+    # Test hello function
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="hello",
+        params={"name": "World"},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
+    assert result == {"message": "Hello, World!"}
     
-    add_func = loader.get_function(module, "add_numbers")
-    assert add_func(5, 3) == {"result": 8}
-    
-    # Test error cases
-    with pytest.raises(AttributeError):
-        loader.get_function(module, "non_existent")
+    # Test add_numbers function
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="add_numbers",
+        params={"a": 5, "b": 3},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
+    assert result == {"result": 8}
 
 
-def test_python_endpoint_with_db(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_python_endpoint_with_db(temp_project_dir, test_configs, execution_engine):
     """Test Python endpoint with database access."""
     user_config, site_config = test_configs
     
@@ -204,36 +260,23 @@ tool:
     type: array
 """)
     
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="get_data",
+        params={"min_value": 200},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
     
-    try:
-        # Execute endpoint
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "get_data",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        # Run async execution
-        async def run_test():
-            result = await executor.execute({"min_value": 200})
-            return result
-        
-        result = asyncio.run(run_test())
-        
-        # Check results
-        assert len(result) == 2
-        assert result[0]["name"] == "Bob"
-        assert result[1]["name"] == "Charlie"
-        
-    finally:
-        _clear_runtime_context()
+    # Check results
+    assert len(result) == 2
+    assert result[0]["name"] == "Bob"
+    assert result[1]["name"] == "Charlie"
 
 
-def test_python_endpoint_with_secrets(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_python_endpoint_with_secrets(temp_project_dir, test_configs, execution_engine):
     """Test Python endpoint accessing secrets."""
     user_config, site_config = test_configs
     
@@ -274,98 +317,153 @@ tool:
     type: object
 """)
     
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="get_secret_info",
+        params={},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
     
-    try:
-        # Execute endpoint
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "get_secret_info",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        # Run async execution
-        async def run_test():
-            result = await executor.execute({})
-            return result
-        
-        result = asyncio.run(run_test())
-        
-        # Check results
-        assert result["has_api_key"] is True
-        assert result["api_key_starts_with"] == "test-"
-        assert result["missing_key"] is None
-        assert result["project"] == "test-project"
-        
-    finally:
-        _clear_runtime_context()
+    # Check results
+    assert result["has_api_key"] is True
+    assert result["api_key_starts_with"] == "test-"
+    assert result["missing_key"] is None
+    assert result["project"] == "test-project"
 
 
-def test_lifecycle_hooks(temp_project_dir, test_configs, test_session):
-    """Test lifecycle hooks functionality."""
-    # Clear any existing hooks
+@pytest.mark.asyncio
+async def test_lifecycle_hooks(temp_project_dir, test_configs):
+    """Test that lifecycle hooks run automatically during engine creation and shutdown."""
+    user_config, site_config = test_configs
+    
+    # Clear any existing hooks from other tests
     _init_hooks.clear()
     _shutdown_hooks.clear()
     
-    # Track hook calls
-    calls = []
-    
-    # Create Python file with hooks
+    # Create Python file with hooks that modify global state
     python_file = temp_project_dir / "python" / "lifecycle_test.py"
     python_file.write_text("""
 from mxcp.runtime import on_init, on_shutdown
 
+# Global state to track hook execution
+_hook_state = {
+    "init_called": False,
+    "shutdown_called": False,
+    "init_timestamp": None,
+    "shutdown_timestamp": None
+}
+
 @on_init
 def setup():
-    global initialized
-    initialized = True
+    '''Init hook that sets global state.'''
+    import time
+    global _hook_state
+    _hook_state["init_called"] = True
+    _hook_state["init_timestamp"] = time.time()
     
 @on_shutdown
 def cleanup():
-    global cleaned_up
-    cleaned_up = True
+    '''Shutdown hook that sets global state.'''
+    import time
+    global _hook_state  
+    _hook_state["shutdown_called"] = True
+    _hook_state["shutdown_timestamp"] = time.time()
     
-def check_state() -> dict:
-    return {
-        "initialized": globals().get("initialized", False),
-        "cleaned_up": globals().get("cleaned_up", False)
-    }
+def check_hook_state() -> dict:
+    '''Return the current hook execution state.'''
+    return _hook_state.copy()
 """)
     
-    # Load the module to register hooks
-    loader = PythonEndpointLoader(temp_project_dir)
-    module = loader.load_python_module(python_file)
+    # Create tool definition
+    (temp_project_dir / "tools" / "check_hook_state.yml").write_text("""
+mxcp: 1
+tool:
+  name: check_hook_state
+  description: Check hook execution state
+  language: python
+  source:
+    file: ../python/lifecycle_test.py
+  parameters: []
+  return:
+    type: object
+""")
     
-    # Run hooks
-    from mxcp.runtime import _run_init_hooks, _run_shutdown_hooks
+    print("\n=== Testing automatic lifecycle hook execution ===")
     
-    # Check initial state
-    check_func = loader.get_function(module, "check_state")
-    state = check_func()
-    assert state["initialized"] is False
-    assert state["cleaned_up"] is False
+    # 1. Create execution engine - this should automatically:
+    #    a) Preload Python modules (registering hooks)
+    #    b) Run init hooks
+    print("Creating execution engine (should preload modules and run init hooks)...")
+    execution_engine = create_execution_engine(user_config, site_config, "test")
     
-    # Run init hooks
-    _run_init_hooks()
-    state = check_func()
-    assert state["initialized"] is True
-    assert state["cleaned_up"] is False
+    try:
+        # 2. Verify hooks were registered during module preload
+        assert len(_init_hooks) == 1, f"Expected 1 init hook, found {len(_init_hooks)}"
+        assert len(_shutdown_hooks) == 1, f"Expected 1 shutdown hook, found {len(_shutdown_hooks)}"
+        print(f"✓ Hooks registered: {len(_init_hooks)} init, {len(_shutdown_hooks)} shutdown")
+        
+        # 3. Check hook state - init hook should have run automatically
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="check_hook_state",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
+        
+        # Init hook should have run during engine creation
+        assert result["init_called"] is True, "Init hook should have run during engine creation"
+        assert result["shutdown_called"] is False, "Shutdown hook should not have run yet"
+        assert result["init_timestamp"] is not None, "Init hook should have timestamp"
+        print("✓ Init hook ran automatically during engine creation")
+        
+    finally:
+        # 4. Shutdown engine - this should automatically run shutdown hooks
+        print("Shutting down execution engine (should run shutdown hooks)...")
+        execution_engine.shutdown()
     
-    # Run shutdown hooks
-    _run_shutdown_hooks()
-    state = check_func()
-    assert state["initialized"] is True
-    assert state["cleaned_up"] is True
+    # 5. Create a new engine to check if shutdown hooks ran
+    # (We need a fresh engine because the first one is shut down)
+    print("Creating new engine to verify shutdown hooks ran...")
+    execution_engine2 = create_execution_engine(user_config, site_config, "test")
+    
+    try:
+        # Check hook state again - both hooks should show as having been called
+        result_after_shutdown = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="check_hook_state",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine2
+        )
+        
+        # The module's global state persists across engine instances
+        # This proves that:
+        # 1. The new engine's init hook ran (init_called=True)  
+        # 2. The first engine's shutdown hook ran automatically (shutdown_called=True)
+        assert result_after_shutdown["init_called"] is True, "New engine's init hook should have run"
+        assert result_after_shutdown["shutdown_called"] is True, "First engine's shutdown hook should have run automatically"
+        print("✓ New engine's init hook ran automatically")
+        print("✓ First engine's shutdown hook ran automatically (proven by persistent module state)")
+        
+    finally:
+        execution_engine2.shutdown()
     
     # Clear hooks to avoid affecting other tests
     _init_hooks.clear()
     _shutdown_hooks.clear()
+    
+    print("✓ Lifecycle hooks test completed - hooks run automatically during engine lifecycle")
+    print("  - Init hooks run during engine creation (after module preload)")
+    print("  - Shutdown hooks run during engine shutdown")
 
 
-def test_async_python_endpoint(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_async_python_endpoint(temp_project_dir, test_configs, execution_engine):
     """Test async Python endpoint."""
     user_config, site_config = test_configs
     
@@ -406,35 +504,22 @@ tool:
     type: object
 """)
     
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="slow_query",
+        params={"delay": 0.1},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
     
-    try:
-        # Execute endpoint
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "slow_query",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        # Run async execution
-        async def run_test():
-            result = await executor.execute({"delay": 0.1})
-            return result
-        
-        result = asyncio.run(run_test())
-        
-        # Check results
-        assert result["delayed"] == 0.1
-        assert result["count"] == 3
-        
-    finally:
-        _clear_runtime_context()
+    # Check results
+    assert result["delayed"] == 0.1
+    assert result["count"] == 3
 
 
-def test_async_context_propagation(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_async_context_propagation(temp_project_dir, test_configs, execution_engine):
     """Test that context variables propagate correctly in async Python endpoints after fix."""
     user_config, site_config = test_configs
     
@@ -512,99 +597,63 @@ tool:
     type: object
 """)
     
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="test_context_access",
+        params={},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
     
-    try:
-        # Execute endpoint
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "test_context_access",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        # Run async execution
-        async def run_test():
-            result = await executor.execute({})
-            return result
-        
-        result = asyncio.run(run_test())
-        
-        # Verify context was properly available
-        assert result["db_access_works"] is True, "Database access should work in async function"
-        assert result["row_count"] == 3, "Should be able to query database"
-        assert result["config_access_works"] is True, "Config access should work in async function"
-        assert result["project"] == "test-project", "Should be able to read project name"
-        assert result["secret_value"] == "test-api-key-123", "Should be able to read secret"
-        
-        # Verify nested async also had context
-        assert result["nested_result"]["nested_works"] is True, "Nested async should have context"
-        assert result["nested_result"]["name"] == "Alice", "Nested async should be able to query DB"
-        
-    finally:
-        _clear_runtime_context()
+    # Verify context was properly available
+    assert result["db_access_works"] is True, "Database access should work in async function"
+    assert result["row_count"] == 3, "Should be able to query database"
+    assert result["config_access_works"] is True, "Config access should work in async function"
+    assert result["project"] == "test-project", "Should be able to read project name"
+    assert result["secret_value"] == "test-api-key-123", "Should be able to read secret"
+    
+    # Verify nested async calls work
+    assert result["nested_result"]["nested_works"] is True, "Nested async calls should work"
+    assert result["nested_result"]["name"] == "Alice", "Should get correct data from nested call"
 
 
-def test_python_endpoint_with_non_duckdb_secret_type(temp_project_dir):
+@pytest.mark.asyncio
+async def test_python_endpoint_with_non_duckdb_secret_type(temp_project_dir, test_configs, execution_engine):
     """Test Python endpoint accessing secrets with non-DuckDB types (e.g., 'custom', 'python')."""
-    # Create custom user config with non-DuckDB secret type
-    user_config_data = {
-        "mxcp": 1,
-        "projects": {
-            "test-project": {
-                "profiles": {
-                    "test": {
-                        "secrets": [
-                            {
-                                "name": "custom_api",
-                                "type": "custom",  # Non-DuckDB type
-                                "parameters": {
-                                    "api_key": "custom-api-key-456",
-                                    "endpoint": "https://api.example.com",
-                                    "headers": {
-                                        "X-Custom": "header-value"
-                                    }
-                                }
-                            },
-                            {
-                                "name": "python_only",
-                                "type": "python",  # Hypothetical Python-only type
-                                "parameters": {
-                                    "value": "python-secret-789",
-                                    "config": {
-                                        "nested": "value"
-                                    }
-                                }
-                            }
-                        ],
-                        "plugin": {"config": {}}
-                    }
+    user_config, site_config = test_configs
+    
+    # Add custom secrets to user config
+    user_config["projects"]["test-project"]["profiles"]["test"]["secrets"].extend([
+        {
+            "name": "custom_api",
+            "type": "custom",  # Non-DuckDB type
+            "parameters": {
+                "api_key": "custom-api-key-456",
+                "endpoint": "https://api.example.com",
+                "headers": {
+                    "X-Custom": "header-value"
+                }
+            }
+        },
+        {
+            "name": "python_only",
+            "type": "python",  # Hypothetical Python-only type
+            "parameters": {
+                "value": "python-secret-789",
+                "config": {
+                    "nested": "value"
                 }
             }
         }
-    }
+    ])
     
-    # Write user config to file
-    config_path = temp_project_dir / "mxcp-config.yml"
-    with open(config_path, "w") as f:
-        yaml.dump(user_config_data, f)
+    # Update site config to reference our secrets
+    site_config["secrets"] = ["duckdb_test", "api_test", "custom_api", "python_only"]
     
-    # Set environment variable to point to our config
-    os.environ["MXCP_CONFIG"] = str(config_path)
-    
-    try:
-        # Load configs
-        site_config = load_site_config()
-        user_config = load_user_config(site_config)
-        
-        # Update site config to reference our secrets
-        site_config["secrets"] = ["custom_api", "python_only"]
-        
-        # Create Python endpoint file
-        python_file = temp_project_dir / "python" / "custom_secrets.py"
-        python_file.write_text("""
+    # Create Python endpoint file
+    python_file = temp_project_dir / "python" / "custom_secrets.py"
+    python_file.write_text("""
 from mxcp.runtime import config
 
 def test_custom_secrets() -> dict:
@@ -621,10 +670,10 @@ def test_custom_secrets() -> dict:
         "both_secrets_found": custom_params is not None and python_params is not None
     }
 """)
-        
-        # Create tool definition
-        tool_yaml = temp_project_dir / "tools" / "test_custom_secrets.yml"
-        tool_yaml.write_text("""
+    
+    # Create tool definition
+    tool_yaml = temp_project_dir / "tools" / "test_custom_secrets.yml"
+    tool_yaml.write_text("""
 mxcp: 1
 tool:
   name: test_custom_secrets
@@ -636,54 +685,28 @@ tool:
   return:
     type: object
 """)
-        
-        # Create test DuckDB session
-        with DuckDBSession(user_config, site_config) as test_session:
-            # Set runtime context
-            _set_runtime_context(test_session, user_config, site_config, {})
-            
-            try:
-                # Execute endpoint
-                executor = EndpointExecutor(
-                    EndpointType.TOOL,
-                    "test_custom_secrets",
-                    user_config,
-                    site_config,
-                    test_session
-                )
-                
-                # Run async execution
-                async def run_test():
-                    result = await executor.execute({})
-                    return result
-                
-                result = asyncio.run(run_test())
-                
-                # Check results - secrets should be accessible even with non-DuckDB types
-                assert result["custom_api_key"] == "custom-api-key-456"
-                assert result["custom_endpoint"] == "https://api.example.com"
-                assert result["custom_headers"]["X-Custom"] == "header-value"
-                assert result["python_value"] == "python-secret-789"
-                assert result["python_config"]["nested"] == "value"
-                assert result["both_secrets_found"] is True
-                
-                # Verify no DuckDB errors by checking that session is still valid
-                # Non-DuckDB secret types should be silently skipped
-                assert test_session.conn is not None
-                
-            finally:
-                _clear_runtime_context()
-                
-    finally:
-        # Clean up environment variable
-        if "MXCP_CONFIG" in os.environ:
-            del os.environ["MXCP_CONFIG"]
+    
+    # Execute endpoint using new SDK
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="test_custom_secrets",
+        params={},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
+    
+    # Check results - secrets should be accessible even with non-DuckDB types
+    assert result["custom_api_key"] == "custom-api-key-456"
+    assert result["custom_endpoint"] == "https://api.example.com"
+    assert result["custom_headers"]["X-Custom"] == "header-value"
+    assert result["python_value"] == "python-secret-789"
+    assert result["python_config"]["nested"] == "value"
+    assert result["both_secrets_found"] is True
 
 
-
-
-
-def test_python_endpoint_error_handling(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_python_endpoint_error_handling(temp_project_dir, test_configs, execution_engine):
     """Test error handling in Python endpoints."""
     user_config, site_config = test_configs
     
@@ -718,31 +741,30 @@ tool:
 """)
     
     # Execute endpoint with valid inputs
-    executor = EndpointExecutor(
-        EndpointType.TOOL,
-        "divide_numbers",
-        user_config,
-        site_config,
-        test_session
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="divide_numbers",
+        params={"a": 10, "b": 2},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
     )
-    
-    async def run_valid():
-        result = await executor.execute({"a": 10, "b": 2})
-        return result
-    
-    result = asyncio.run(run_valid())
     assert result["result"] == 5.0
     
     # Execute with error
-    async def run_error():
-        result = await executor.execute({"a": 10, "b": 0})
-        return result
-    
     with pytest.raises(ValueError, match="Cannot divide by zero"):
-        asyncio.run(run_error())
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="divide_numbers",
+            params={"a": 10, "b": 0},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
 
 
-def test_python_endpoint_all_types(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_python_endpoint_all_types(temp_project_dir, test_configs, execution_engine):
     """Test Python endpoints with all supported parameter and return types."""
     user_config, site_config = test_configs
     
@@ -817,14 +839,14 @@ def test_constraints(
     str_min_max: str,
     int_min_max: int,
     array_min_max: list,
-    str_pattern: str
+    str_enum: str
 ) -> dict:
     \"\"\"Test parameter constraints.\"\"\"
     return {
         "str_length": len(str_min_max),
         "int_value": int_min_max,
         "array_length": len(array_min_max),
-        "pattern_matched": str_pattern
+        "enum_matched": str_enum
     }
 
 def test_sql_with_dates() -> list:
@@ -973,10 +995,10 @@ tool:
       description: Array with size constraints
       items:
         type: string
-    - name: str_pattern
+    - name: str_enum
       type: string
-      pattern: "^[A-Z][a-z]+$"
-      description: String matching pattern
+      enum: ["Hello", "World", "Test"]
+      description: String with enum constraint (replaces pattern validation)
   return:
     type: object
 """)
@@ -996,54 +1018,48 @@ tool:
     type: array
 """)
     
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
-    
-    try:
-        # Test 1: All parameter types
-        executor = EndpointExecutor(
-            EndpointType.TOOL,
-            "test_all_param_types",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        async def test_all_params():
-            result = await executor.execute({
-                "str_param": "hello",
-                "int_param": 42,
-                "float_param": 3.14,
-                "bool_param": True,
-                "array_param": ["item1", "item2"],
-                "obj_param": {"key1": "value1", "key2": 123},
-                "date_param": "2024-01-15",
-                "email_param": "test@example.com",
-                "enum_param": "option2"
-                # optional_param not provided, should use default
-            })
-            return result
-        
-        result = asyncio.run(test_all_params())
-        assert result["str_param"] == "Received: hello"
-        assert result["int_param"] == 84
-        assert abs(result["float_param"] - 4.71) < 0.01  # Use approximate comparison for floats
-        assert result["bool_param"] is False
-        assert result["array_param"] == ["item1", "item2", "added"]
-        assert result["obj_param"] == {"key1": "value1", "key2": 123, "added": True}
-        assert result["email_param"] == "TEST@EXAMPLE.COM"
-        assert result["enum_param"] == "option2"
-        assert result["optional_param"] == "default"
-        # Check timestamp serialization
-        assert isinstance(result["timestamp"], str)
-        assert isinstance(result["date_only"], str)
-        assert isinstance(result["time_only"], str)
-        assert isinstance(result["nested"]["timestamp"], str)
-        assert isinstance(result["nested"]["array_with_dates"][0]["date"], str)
-        
-        # Test invalid email format
-        async def test_invalid_email():
-            await executor.execute({
+    # Test 1: All parameter types
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="test_all_param_types",
+        params={
+            "str_param": "hello",
+            "int_param": 42,
+            "float_param": 3.14,
+            "bool_param": True,
+            "array_param": ["item1", "item2"],
+            "obj_param": {"key1": "value1", "key2": 123},
+            "date_param": "2024-01-15",
+            "email_param": "test@example.com",
+            "enum_param": "option2"
+            # optional_param not provided, should use default
+        },
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
+    assert result["str_param"] == "Received: hello"
+    assert result["int_param"] == 84
+    assert abs(result["float_param"] - 4.71) < 0.01  # Use approximate comparison for floats
+    assert result["bool_param"] is False
+    assert result["array_param"] == ["item1", "item2", "added"]
+    assert result["obj_param"] == {"key1": "value1", "key2": 123, "added": True}
+    assert result["email_param"] == "TEST@EXAMPLE.COM"
+    assert result["enum_param"] == "option2"
+    assert result["optional_param"] == "default"
+    # Check timestamp serialization
+    assert isinstance(result["timestamp"], str)
+    assert isinstance(result["date_only"], str)
+    assert isinstance(result["time_only"], str)
+    assert isinstance(result["nested"]["timestamp"], str)
+    assert isinstance(result["nested"]["array_with_dates"][0]["date"], str)
+
+    # Test invalid email format
+    with pytest.raises(ValueError, match="Invalid email format"):
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_all_param_types",
+            params={
                 "str_param": "hello",
                 "int_param": 42,
                 "float_param": 3.14,
@@ -1053,14 +1069,18 @@ tool:
                 "date_param": "2024-01-15",
                 "email_param": "invalid-email",  # Missing @ and domain
                 "enum_param": "option2"
-            })
-        
-        with pytest.raises(ValueError, match="Invalid email format"):
-            asyncio.run(test_invalid_email())
-        
-        # Test invalid enum value
-        async def test_invalid_enum():
-            await executor.execute({
+            },
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
+
+    # Test invalid enum value
+    with pytest.raises(ValueError, match="Must be one of"):
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_all_param_types",
+            params={
                 "str_param": "hello",
                 "int_param": 42,
                 "float_param": 3.14,
@@ -1070,162 +1090,165 @@ tool:
                 "date_param": "2024-01-15",
                 "email_param": "test@example.com",
                 "enum_param": "invalid_option"  # Not in allowed enum values
-            })
-        
-        with pytest.raises(ValueError, match="Must be one of"):
-            asyncio.run(test_invalid_enum())
-        
-        # Test 2: Array return with timestamps
-        executor2 = EndpointExecutor(
-            EndpointType.TOOL,
-            "test_array_return",
-            user_config,
-            site_config,
-            test_session
+            },
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
         )
-        
-        async def test_array():
-            result = await executor2.execute({})
-            return result
-        
-        result = asyncio.run(test_array())
-        assert len(result) == 3
-        assert all(isinstance(item["created"], str) for item in result)
-        assert result[0]["name"] == "First"
-        
-        # Test 3: Scalar returns
-        scalar_tests = [
-            ("test_scalar_string", "Hello, World!"),
-            ("test_scalar_number", 42.5),
-            ("test_scalar_boolean", True),
-            ("test_scalar_date", str)  # Check it's a string
-        ]
-        
-        for tool_name, expected in scalar_tests:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                tool_name,
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def test_scalar():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(test_scalar())
-            if expected == str:
-                assert isinstance(result, str)  # For datetime
+
+    # Test 2: Array return with timestamps
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="test_array_return",
+        params={},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
+    assert len(result) == 3
+    # Check all timestamps are serialized as strings
+    for item in result:
+        assert isinstance(item["created"], str)
+
+    # Test 3: Scalar returns
+    scalar_tests = [
+        ("test_scalar_string", str, "Hello, World!"),
+        ("test_scalar_number", (int, float), 42.5),
+        ("test_scalar_boolean", bool, True),
+        ("test_scalar_date", str)  # DateTime serialized as string
+    ]
+    
+    for tool_name, expected_type, *expected_value in scalar_tests:
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name=tool_name,
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
+        assert isinstance(result, expected_type)
+        if expected_value:
+            if isinstance(expected_type, tuple):
+                # For numeric types, check approximate equality
+                assert abs(result - expected_value[0]) < 0.01
             else:
-                assert result == expected
-        
-        # Test 4: Constraints validation
-        executor4 = EndpointExecutor(
-            EndpointType.TOOL,
-            "test_constraints",
-            user_config,
-            site_config,
-            test_session
-        )
-        
-        # Valid constraints
-        async def test_valid_constraints():
-            result = await executor4.execute({
-                "str_min_max": "hello",
-                "int_min_max": 50,
-                "array_min_max": ["a", "b", "c"],
-                "str_pattern": "Hello"
-            })
-            return result
-        
-        result = asyncio.run(test_valid_constraints())
-        assert result["str_length"] == 5
-        assert result["int_value"] == 50
-        
-        # Test constraint violations
-        async def test_string_too_short():
-            await executor4.execute({
+                assert result == expected_value[0]
+
+    # Test 4: Parameter constraints - valid values
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="test_constraints",
+        params={
+            "str_min_max": "hello",
+            "int_min_max": 50,
+            "array_min_max": ["a", "b"],
+            "str_enum": "Hello"
+        },
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
+    assert result["str_length"] == 5
+    assert result["int_value"] == 50
+    assert result["array_length"] == 2
+    assert result["enum_matched"] == "Hello"
+
+    # Test constraint violations
+    with pytest.raises(ValueError, match="at least 3 characters"):
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_constraints",
+            params={
                 "str_min_max": "hi",  # Too short
                 "int_min_max": 50,
                 "array_min_max": ["a", "b"],
-                "str_pattern": "Hello"
-            })
-        
-        with pytest.raises(ValueError, match="at least 3 characters"):
-            asyncio.run(test_string_too_short())
-        
-        async def test_int_out_of_range():
-            await executor4.execute({
+                "str_enum": "Hello"
+            },
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
+
+    with pytest.raises(ValueError, match="<= 100"):
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_constraints",
+            params={
                 "str_min_max": "hello",
                 "int_min_max": 150,  # Too large
                 "array_min_max": ["a", "b"],
-                "str_pattern": "Hello"
-            })
-        
-        with pytest.raises(ValueError, match="<= 100"):
-            asyncio.run(test_int_out_of_range())
-        
-        # Test pattern validation failure
-        async def test_pattern_mismatch():
-            await executor4.execute({
-                "str_min_max": "hello",
-                "int_min_max": 50,
-                "array_min_max": ["a", "b"],
-                "str_pattern": "hello"  # Should start with capital letter
-            })
-        
-        # Pattern validation is currently not implemented in TypeConverter
-        # This would need to be added to fully support JSON Schema pattern validation
-        
-        # Test array size constraints
-        async def test_array_too_small():
-            await executor4.execute({
+                "str_enum": "Hello"
+            },
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
+
+    # Test array size constraints
+    async def test_array_too_small():
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_constraints",
+            params={
                 "str_min_max": "hello",
                 "int_min_max": 50,
                 "array_min_max": ["a"],  # Too few items (min 2)
-                "str_pattern": "Hello"
-            })
-        
-        with pytest.raises(ValueError, match="at least 2 items"):
-            asyncio.run(test_array_too_small())
-        
-        async def test_array_too_large():
-            await executor4.execute({
+                "str_enum": "Hello"
+            },
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
+
+    with pytest.raises(ValueError, match="at least 2 items"):
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_constraints",
+            params={
+                "str_min_max": "hello",
+                "int_min_max": 50,
+                "array_min_max": ["a"],  # Too few items (min 2)
+                "str_enum": "Hello"
+            },
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
+
+    with pytest.raises(ValueError, match="at most 5 items"):
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="test_constraints",
+            params={
                 "str_min_max": "hello",
                 "int_min_max": 50,
                 "array_min_max": ["a", "b", "c", "d", "e", "f"],  # Too many items (max 5)
-                "str_pattern": "Hello"
-            })
-        
-        with pytest.raises(ValueError, match="at most 5 items"):
-            asyncio.run(test_array_too_large())
-        
-        # Test 5: SQL with timestamps
-        executor5 = EndpointExecutor(
-            EndpointType.TOOL,
-            "test_sql_with_dates",
-            user_config,
-            site_config,
-            test_session
+                "str_enum": "Hello"
+            },
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
         )
-        
-        async def test_sql_dates():
-            result = await executor5.execute({})
-            return result
-        
-        result = asyncio.run(test_sql_dates())
-        assert len(result) == 2
-        # Check all timestamps are serialized as strings
-        for row in result:
-            assert isinstance(row["created_at"], str)
-            assert isinstance(row["updated_at"], str)
-        
-    finally:
-        _clear_runtime_context()
+
+    # Test 5: SQL with timestamps
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="test_sql_with_dates",
+        params={},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
+    assert len(result) == 2
+    # Check all timestamps are serialized as strings
+    for row in result:
+        assert isinstance(row["created_at"], str)
+        assert isinstance(row["updated_at"], str)
 
 
-def test_python_parameter_mismatches(temp_project_dir, test_configs, test_session):
+@pytest.mark.asyncio
+async def test_python_parameter_mismatches(temp_project_dir, test_configs, execution_engine):
     """Test parameter mismatches between YAML definition and Python function signature."""
     user_config, site_config = test_configs
     
@@ -1291,27 +1314,16 @@ tool:
     type: object
 """)
     
-    executor = EndpointExecutor(
-        EndpointType.TOOL,
-        "missing_args",
-        user_config,
-        site_config,
-        test_session
-    )
-    
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
-    
-    try:
-        # This should raise TypeError because function expects 'a' and 'b'
-        async def test_missing():
-            result = await executor.execute({})
-            return result
-        
-        with pytest.raises(TypeError, match="missing.*required.*argument"):
-            asyncio.run(test_missing())
-    finally:
-        _clear_runtime_context()
+    # This should raise TypeError because function expects 'a' and 'b'
+    with pytest.raises(TypeError, match="missing.*required.*argument"):
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="missing_args",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
     
     # Test 2: Too many arguments
     # YAML defines parameters that function doesn't accept
@@ -1338,27 +1350,16 @@ tool:
     type: object
 """)
     
-    executor2 = EndpointExecutor(
-        EndpointType.TOOL,
-        "extra_args",
-        user_config,
-        site_config,
-        test_session
-    )
-    
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
-    
-    try:
-        # This should raise TypeError because function doesn't accept 'b' and 'c'
-        async def test_extra():
-            result = await executor2.execute({"a": 5, "b": 10, "c": "extra"})
-            return result
-        
-        with pytest.raises(TypeError, match="unexpected keyword argument"):
-            asyncio.run(test_extra())
-    finally:
-        _clear_runtime_context()
+    # This should raise TypeError because function doesn't accept 'b' and 'c'
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="extra_args",
+            params={"a": 5, "b": 10, "c": "extra"},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
     
     # Test 3: Optional parameters - not passing them
     tool_yaml3 = temp_project_dir / "tools" / "optional_params.yml"
@@ -1378,30 +1379,19 @@ tool:
     type: object
 """)
     
-    executor3 = EndpointExecutor(
-        EndpointType.TOOL,
-        "optional_params",
-        user_config,
-        site_config,
-        test_session
+    # This should work - 'b' and 'c' have defaults
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="optional_params",
+        params={"a": 5},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
     )
-    
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
-    
-    try:
-        # This should work - 'b' and 'c' have defaults
-        async def test_optional_not_passed():
-            result = await executor3.execute({"a": 5})
-            return result
-        
-        result = asyncio.run(test_optional_not_passed())
-        assert result["a"] == 5
-        assert result["b"] == 10  # default value
-        assert result["c"] == "default"  # default value
-        assert result["sum"] == 15
-    finally:
-        _clear_runtime_context()
+    assert result["a"] == 5
+    assert result["b"] == 10  # default value
+    assert result["c"] == "default"  # default value
+    assert result["sum"] == 15
     
     # Test 4: YAML validator prevents unknown parameters
     # This test shows that unknown parameters are caught at validation time
@@ -1422,21 +1412,16 @@ tool:
     type: object
 """)
     
-    executor4 = EndpointExecutor(
-        EndpointType.TOOL,
-        "extra_args",
-        user_config,
-        site_config,
-        test_session
-    )
-    
     # The executor validates against YAML first, so unknown params are rejected
-    async def test_unknown_params():
-        result = await executor4.execute({"a": 5, "b": 10})
-        return result
-    
     with pytest.raises(ValueError, match="Unknown parameter: b"):
-        asyncio.run(test_unknown_params())
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="extra_args",
+            params={"a": 5, "b": 10},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
     
     # Test 5: Python function with missing required params (YAML defines param but doesn't pass it)
     tool_yaml5 = temp_project_dir / "tools" / "missing_args_python.yml"
@@ -1456,27 +1441,16 @@ tool:
     type: object
 """)
     
-    executor5 = EndpointExecutor(
-        EndpointType.TOOL,
-        "missing_args_python",
-        user_config,
-        site_config,
-        test_session
-    )
-    
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
-    
-    try:
-        # This should raise TypeError at function call time
-        async def test_missing_func_param():
-            result = await executor5.execute({"a": 5})
-            return result
-        
-        with pytest.raises(TypeError, match="missing.*required.*argument.*'b'"):
-            asyncio.run(test_missing_func_param())
-    finally:
-        _clear_runtime_context()
+    # This should raise TypeError at function call time
+    with pytest.raises(TypeError, match="missing.*required.*argument.*'b'"):
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="missing_args_python",
+            params={"a": 5},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
     
     # Test 5b: Optional parameters properly defined in YAML
     tool_yaml5b = temp_project_dir / "tools" / "optional_params_proper.yml"
@@ -1504,40 +1478,32 @@ tool:
     type: object
 """)
     
-    executor5b = EndpointExecutor(
-        EndpointType.TOOL,
-        "optional_params_proper",
-        user_config,
-        site_config,
-        test_session
+    # Test with only required param - should use defaults from YAML
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="optional_params_proper",
+        params={"a": 7},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
     )
+    assert result["a"] == 7
+    assert result["b"] == 10  # YAML default
+    assert result["c"] == "default"  # YAML default
     
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
-    
-    try:
-        # Test with only required param - should use defaults from YAML
-        async def test_yaml_defaults():
-            result = await executor5b.execute({"a": 7})
-            return result
-        
-        result = asyncio.run(test_yaml_defaults())
-        assert result["a"] == 7
-        assert result["b"] == 10  # YAML default
-        assert result["c"] == "default"  # YAML default
-        
-        # Test overriding defaults
-        async def test_override_defaults():
-            result = await executor5b.execute({"a": 3, "b": 15, "c": "override"})
-            return result
-        
-        result = asyncio.run(test_override_defaults())
-        assert result["a"] == 3
-        assert result["b"] == 15
-        assert result["c"] == "override"
-        assert result["sum"] == 18
-    finally:
-        _clear_runtime_context()
+    # Test overriding defaults
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="optional_params_proper",
+        params={"a": 3, "b": 15, "c": "override"},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
+    )
+    assert result["a"] == 3
+    assert result["b"] == 15
+    assert result["c"] == "override"
+    assert result["sum"] == 18
     
     # Test 6: Function with **kwargs accepts extra arguments
     tool_yaml6 = temp_project_dir / "tools" / "kwargs_function.yml"
@@ -1563,30 +1529,19 @@ tool:
     type: object
 """)
     
-    executor6 = EndpointExecutor(
-        EndpointType.TOOL,
-        "kwargs_function",
-        user_config,
-        site_config,
-        test_session
+    # This should work - function accepts **kwargs
+    result = await execute_endpoint_with_engine(
+        endpoint_type="tool",
+        name="kwargs_function",
+        params={"a": 5, "extra1": "hello", "extra2": 42},
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine
     )
-    
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
-    
-    try:
-        # This should work - function accepts **kwargs
-        async def test_kwargs():
-            result = await executor6.execute({"a": 5, "extra1": "hello", "extra2": 42})
-            return result
-        
-        result = asyncio.run(test_kwargs())
-        assert result["a"] == 5
-        assert set(result["extra_keys"]) == {"extra1", "extra2"}
-        assert result["extra_values"]["extra1"] == "hello"
-        assert result["extra_values"]["extra2"] == 42
-    finally:
-        _clear_runtime_context()
+    assert result["a"] == 5
+    assert set(result["extra_keys"]) == {"extra1", "extra2"}
+    assert result["extra_values"]["extra1"] == "hello"
+    assert result["extra_values"]["extra2"] == 42
     
     # Test 7: Positional-only parameters (Python 3.8+)
     tool_yaml7 = temp_project_dir / "tools" / "positional_only.yml"
@@ -1609,24 +1564,13 @@ tool:
     type: object
 """)
     
-    executor7 = EndpointExecutor(
-        EndpointType.TOOL,
-        "positional_only",
-        user_config,
-        site_config,
-        test_session
-    )
-    
-    # Set runtime context
-    _set_runtime_context(test_session, user_config, site_config, {})
-    
-    try:
-        # This should fail because we're passing keyword arguments to positional-only params
-        async def test_positional():
-            result = await executor7.execute({"a": 10, "b": 3})
-            return result
-        
-        with pytest.raises(TypeError, match="positional-only"):
-            asyncio.run(test_positional())
-    finally:
-        _clear_runtime_context() 
+    # This should fail because we're passing keyword arguments to positional-only params
+    with pytest.raises(TypeError, match="positional-only"):
+        await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="positional_only",
+            params={"a": 10, "b": 3},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        ) 

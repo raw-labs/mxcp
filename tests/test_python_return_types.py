@@ -8,9 +8,8 @@ import asyncio
 from datetime import datetime, date, time
 from mxcp.config.user_config import load_user_config
 from mxcp.config.site_config import load_site_config
-from mxcp.engine.duckdb_session import DuckDBSession
-from mxcp.endpoints.executor import EndpointExecutor, EndpointType
-from mxcp.runtime import _set_runtime_context, _clear_runtime_context
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+from mxcp.config.execution_engine import create_execution_engine
 
 
 @pytest.fixture
@@ -95,18 +94,17 @@ def test_configs(temp_project_dir):
 
 
 @pytest.fixture
-def test_session(test_configs):
-    """Create a test DuckDB session."""
+def execution_engine(test_configs):
+    """Create execution engine for tests."""
     user_config, site_config = test_configs
-    session = DuckDBSession(user_config, site_config, profile="test")
-    yield session
-    session.close()
+    return create_execution_engine(user_config, site_config)
 
 
 class TestScalarReturnTypes:
     """Test scalar return types (string, number, integer, boolean, datetime)."""
     
-    def test_string_return(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_string_return(self, temp_project_dir, test_configs, execution_engine):
         """Test returning a simple string."""
         user_config, site_config = test_configs
         
@@ -135,29 +133,20 @@ tool:
     type: string
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_greeting",
+            params={"name": "World"},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_greeting",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({"name": "World"})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == "Hello, World!"
-            assert isinstance(result, str)
-            
-        finally:
-            _clear_runtime_context()
+        assert result == "Hello, World!"
+        assert isinstance(result, str)
     
-    def test_number_return(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_number_return(self, temp_project_dir, test_configs, execution_engine):
         """Test returning a number (float)."""
         user_config, site_config = test_configs
         
@@ -183,29 +172,20 @@ tool:
     type: number
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="calculate_pi",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "calculate_pi",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == 3.14159
-            assert isinstance(result, float)
-            
-        finally:
-            _clear_runtime_context()
+        assert result == 3.14159
+        assert isinstance(result, float)
     
-    def test_integer_return(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_integer_return(self, temp_project_dir, test_configs, execution_engine):
         """Test returning an integer."""
         user_config, site_config = test_configs
         
@@ -231,29 +211,20 @@ tool:
     type: integer
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="count_items",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "count_items",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == 42
-            assert isinstance(result, int)
-            
-        finally:
-            _clear_runtime_context()
+        assert result == 42
+        assert isinstance(result, int)
     
-    def test_boolean_return(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_boolean_return(self, temp_project_dir, test_configs, execution_engine):
         """Test returning a boolean."""
         user_config, site_config = test_configs
         
@@ -279,29 +250,20 @@ tool:
     type: boolean
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="is_valid",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "is_valid",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result is True
-            assert isinstance(result, bool)
-            
-        finally:
-            _clear_runtime_context()
+        assert result is True
+        assert isinstance(result, bool)
     
-    def test_datetime_return(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_datetime_return(self, temp_project_dir, test_configs, execution_engine):
         """Test returning datetime values."""
         user_config, site_config = test_configs
         
@@ -336,34 +298,25 @@ tool:
     format: date-time
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_current_datetime",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_current_datetime",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            # Should be serialized to ISO format
-            assert result == "2024-01-15T14:30:45"
-            assert isinstance(result, str)
-            
-        finally:
-            _clear_runtime_context()
+        # Should be serialized to ISO format
+        assert result == "2024-01-15T14:30:45"
+        assert isinstance(result, str)
 
 
 class TestArrayReturnTypes:
     """Test array return types - currently only supports list of dicts."""
     
-    def test_array_of_dicts_works(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_array_of_dicts_works(self, temp_project_dir, test_configs, execution_engine):
         """Test that returning list of dicts works (current behavior)."""
         user_config, site_config = test_configs
         
@@ -399,31 +352,22 @@ tool:
           type: string
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_users",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_users",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == [
-                {"id": 1, "name": "Alice"},
-                {"id": 2, "name": "Bob"}
-            ]
-            
-        finally:
-            _clear_runtime_context()
+        assert result == [
+            {"id": 1, "name": "Alice"},
+            {"id": 2, "name": "Bob"}
+        ]
     
-    def test_array_of_numbers(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_array_of_numbers(self, temp_project_dir, test_configs, execution_engine):
         """Test returning list of numbers."""
         user_config, site_config = test_configs
         
@@ -451,30 +395,21 @@ tool:
       type: integer
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_numbers",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_numbers",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == [1, 2, 3, 4, 5]
-            assert isinstance(result, list)
-            assert all(isinstance(item, int) for item in result)
-            
-        finally:
-            _clear_runtime_context()
+        assert result == [1, 2, 3, 4, 5]
+        assert isinstance(result, list)
+        assert all(isinstance(item, int) for item in result)
     
-    def test_array_of_strings(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_array_of_strings(self, temp_project_dir, test_configs, execution_engine):
         """Test returning list of strings."""
         user_config, site_config = test_configs
         
@@ -502,30 +437,21 @@ tool:
       type: string
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_tags",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_tags",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == ["python", "testing", "mxcp"]
-            assert isinstance(result, list)
-            assert all(isinstance(item, str) for item in result)
-            
-        finally:
-            _clear_runtime_context()
+        assert result == ["python", "testing", "mxcp"]
+        assert isinstance(result, list)
+        assert all(isinstance(item, str) for item in result)
     
-    def test_array_of_booleans(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_array_of_booleans(self, temp_project_dir, test_configs, execution_engine):
         """Test returning list of booleans."""
         user_config, site_config = test_configs
         
@@ -553,30 +479,21 @@ tool:
       type: boolean
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_flags",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_flags",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == [True, False, True, True, False]
-            assert isinstance(result, list)
-            assert all(isinstance(item, bool) for item in result)
-            
-        finally:
-            _clear_runtime_context()
+        assert result == [True, False, True, True, False]
+        assert isinstance(result, list)
+        assert all(isinstance(item, bool) for item in result)
     
-    def test_nested_arrays(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_nested_arrays(self, temp_project_dir, test_configs, execution_engine):
         """Test returning nested arrays."""
         user_config, site_config = test_configs
         
@@ -606,34 +523,25 @@ tool:
         type: integer
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_matrix",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_matrix",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-            assert isinstance(result, list)
-            assert all(isinstance(item, list) for item in result)
-            
-        finally:
-            _clear_runtime_context()
+        assert result == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+        assert isinstance(result, list)
+        assert all(isinstance(item, list) for item in result)
 
 
 class TestObjectReturnTypes:
     """Test object return types."""
     
-    def test_simple_object(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_simple_object(self, temp_project_dir, test_configs, execution_engine):
         """Test returning a simple object/dict."""
         user_config, site_config = test_configs
         
@@ -673,33 +581,24 @@ tool:
         type: number
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_user_info",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_user_info",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == {
-                "id": 123,
-                "name": "Alice",
-                "active": True,
-                "score": 95.5
-            }
-            
-        finally:
-            _clear_runtime_context()
+        assert result == {
+            "id": 123,
+            "name": "Alice",
+            "active": True,
+            "score": 95.5
+        }
     
-    def test_nested_object(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_nested_object(self, temp_project_dir, test_configs, execution_engine):
         """Test returning nested objects."""
         user_config, site_config = test_configs
         
@@ -747,40 +646,31 @@ tool:
         type: integer
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_company_info",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_company_info",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == {
-                "name": "Acme Corp",
-                "address": {
-                    "street": "123 Main St",
-                    "city": "Anytown",
-                    "zip": "12345"
-                },
-                "employees": 100
-            }
-            
-        finally:
-            _clear_runtime_context()
+        assert result == {
+            "name": "Acme Corp",
+            "address": {
+                "street": "123 Main St",
+                "city": "Anytown",
+                "zip": "12345"
+            },
+            "employees": 100
+        }
 
 
 class TestEdgeCases:
     """Test edge cases and error conditions."""
     
-    def test_none_return_scalar(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_none_return_scalar(self, temp_project_dir, test_configs, execution_engine):
         """Test returning None for scalar types."""
         user_config, site_config = test_configs
         
@@ -806,28 +696,19 @@ tool:
     type: string
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_nothing",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_nothing",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result is None
-            
-        finally:
-            _clear_runtime_context()
+        assert result is None
     
-    def test_empty_list_for_array(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_empty_list_for_array(self, temp_project_dir, test_configs, execution_engine):
         """Test returning empty list for array type."""
         user_config, site_config = test_configs
         
@@ -855,28 +736,19 @@ tool:
       type: object
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_empty_list",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_empty_list",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == []
-            
-        finally:
-            _clear_runtime_context()
+        assert result == []
     
-    def test_wrong_type_for_array(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_wrong_type_for_array(self, temp_project_dir, test_configs, execution_engine):
         """Test returning wrong type when array is expected."""
         user_config, site_config = test_configs
         
@@ -902,30 +774,20 @@ tool:
     type: array
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
-        
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_not_a_list",
-                user_config,
-                site_config,
-                test_session
+        with pytest.raises(ValueError) as exc_info:
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="get_not_a_list",
+                params={},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            with pytest.raises(ValueError) as exc_info:
-                asyncio.run(run_test())
-            
-            assert "Expected array, got str" in str(exc_info.value)
-            
-        finally:
-            _clear_runtime_context()
+        
+        assert "Expected array, got str" in str(exc_info.value)
     
-    def test_wrong_type_for_object(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_wrong_type_for_object(self, temp_project_dir, test_configs, execution_engine):
         """Test returning wrong type when object is expected."""
         user_config, site_config = test_configs
         
@@ -951,34 +813,24 @@ tool:
     type: object
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
-        
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_not_an_object",
-                user_config,
-                site_config,
-                test_session
+        with pytest.raises(ValueError) as exc_info:
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="get_not_an_object",
+                params={},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            with pytest.raises(ValueError) as exc_info:
-                asyncio.run(run_test())
-            
-            assert "Expected object, got list" in str(exc_info.value)
-            
-        finally:
-            _clear_runtime_context()
+        
+        assert "Expected object, got list" in str(exc_info.value)
 
 
 class TestMixedContentArrays:
     """Test arrays with mixed content (currently fails)."""
     
-    def test_mixed_primitives_in_array(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_mixed_primitives_in_array(self, temp_project_dir, test_configs, execution_engine):
         """Test array with mixed primitive types."""
         user_config, site_config = test_configs
         
@@ -1004,33 +856,23 @@ tool:
     type: array
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
+        result = await execute_endpoint_with_engine(
+            endpoint_type="tool",
+            name="get_mixed_data",
+            params={},
+            user_config=user_config,
+            site_config=site_config,
+            execution_engine=execution_engine
+        )
         
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_mixed_data",
-                user_config,
-                site_config,
-                test_session
-            )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            result = asyncio.run(run_test())
-            assert result == [1, "two", 3.0, True, None]
-            assert isinstance(result, list)
-            # Check mixed types
-            assert isinstance(result[0], int)
-            assert isinstance(result[1], str)
-            assert isinstance(result[2], float)
-            assert isinstance(result[3], bool)
-            assert result[4] is None
-            
-        finally:
-            _clear_runtime_context()
+        assert result == [1, "two", 3.0, True, None]
+        assert isinstance(result, list)
+        # Check mixed types
+        assert isinstance(result[0], int)
+        assert isinstance(result[1], str)
+        assert isinstance(result[2], float)
+        assert isinstance(result[3], bool)
+        assert result[4] is None
 
 
 class TestValidationFailures:
@@ -1042,7 +884,8 @@ class TestValidationFailures:
     validation rules (like constraints) are violated.
     """
     
-    def test_array_items_wrong_format(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_array_items_wrong_format(self, temp_project_dir, test_configs, execution_engine):
         """Test array items don't match format constraints."""
         user_config, site_config = test_configs
         
@@ -1071,31 +914,21 @@ tool:
       format: email
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
-        
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_invalid_emails",
-                user_config,
-                site_config,
-                test_session
+        # Should fail validation on email format
+        with pytest.raises(Exception) as exc_info:
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="get_invalid_emails",
+                params={},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            # Should fail validation on email format
-            with pytest.raises(Exception) as exc_info:
-                asyncio.run(run_test())
-            
-            assert "Invalid email format" in str(exc_info.value)
-            
-        finally:
-            _clear_runtime_context()
+        
+        assert "Invalid email format" in str(exc_info.value)
     
-    def test_object_missing_required_property(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_object_missing_required_property(self, temp_project_dir, test_configs, execution_engine):
         """Test object missing required properties."""
         user_config, site_config = test_configs
         
@@ -1133,31 +966,21 @@ tool:
     required: ["id", "name", "email"]
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
-        
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_incomplete_user",
-                user_config,
-                site_config,
-                test_session
+        # Should fail validation
+        with pytest.raises(Exception) as exc_info:
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="get_incomplete_user",
+                params={},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            # Should fail validation
-            with pytest.raises(Exception) as exc_info:
-                asyncio.run(run_test())
-            
-            assert "Missing required properties" in str(exc_info.value) or "email" in str(exc_info.value)
-            
-        finally:
-            _clear_runtime_context()
+        
+        assert "Missing required properties" in str(exc_info.value) or "email" in str(exc_info.value)
     
-    def test_object_property_wrong_type(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_object_property_wrong_type(self, temp_project_dir, test_configs, execution_engine):
         """Test object property has wrong type."""
         user_config, site_config = test_configs
         
@@ -1194,31 +1017,21 @@ tool:
         type: number
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
-        
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_user_wrong_age",
-                user_config,
-                site_config,
-                test_session
+        # Should fail validation
+        with pytest.raises(Exception) as exc_info:
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="get_user_wrong_age",
+                params={},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            # Should fail validation
-            with pytest.raises(Exception) as exc_info:
-                asyncio.run(run_test())
-            
-            assert "Expected number" in str(exc_info.value) or "SchemaError" in str(exc_info.typename)
-            
-        finally:
-            _clear_runtime_context()
+        
+        assert "Expected number" in str(exc_info.value) or "SchemaError" in str(exc_info.typename)
     
-    def test_string_too_long(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_string_too_long(self, temp_project_dir, test_configs, execution_engine):
         """Test string exceeds maxLength constraint."""
         user_config, site_config = test_configs
         
@@ -1245,31 +1058,21 @@ tool:
     maxLength: 10
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
-        
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_long_name",
-                user_config,
-                site_config,
-                test_session
+        # Should fail validation
+        with pytest.raises(Exception) as exc_info:
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="get_long_name",
+                params={},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            # Should fail validation
-            with pytest.raises(Exception) as exc_info:
-                asyncio.run(run_test())
-            
-            assert "must be at most 10 characters" in str(exc_info.value) or "maxLength" in str(exc_info.value)
-            
-        finally:
-            _clear_runtime_context()
+        
+        assert "must be at most 10 characters" in str(exc_info.value) or "maxLength" in str(exc_info.value)
     
-    def test_number_out_of_range(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_number_out_of_range(self, temp_project_dir, test_configs, execution_engine):
         """Test number outside min/max constraints."""
         user_config, site_config = test_configs
         
@@ -1297,31 +1100,21 @@ tool:
     maximum: 100
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
-        
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_score",
-                user_config,
-                site_config,
-                test_session
+        # Should fail validation
+        with pytest.raises(Exception) as exc_info:
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="get_score",
+                params={},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            # Should fail validation
-            with pytest.raises(Exception) as exc_info:
-                asyncio.run(run_test())
-            
-            assert "must be <= 100" in str(exc_info.value) or "maximum" in str(exc_info.value)
-            
-        finally:
-            _clear_runtime_context()
+        
+        assert "must be <= 100" in str(exc_info.value) or "maximum" in str(exc_info.value)
     
-    def test_array_too_few_items(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_array_too_few_items(self, temp_project_dir, test_configs, execution_engine):
         """Test array has fewer items than minItems."""
         user_config, site_config = test_configs
         
@@ -1350,31 +1143,21 @@ tool:
       type: integer
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
-        
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_small_list",
-                user_config,
-                site_config,
-                test_session
+        # Should fail validation
+        with pytest.raises(Exception) as exc_info:
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="get_small_list",
+                params={},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            # Should fail validation
-            with pytest.raises(Exception) as exc_info:
-                asyncio.run(run_test())
-            
-            assert "must have at least 5 items" in str(exc_info.value) or "minItems" in str(exc_info.value)
-            
-        finally:
-            _clear_runtime_context()
+        
+        assert "must have at least 5 items" in str(exc_info.value) or "minItems" in str(exc_info.value)
     
-    def test_string_wrong_format(self, temp_project_dir, test_configs, test_session):
+    @pytest.mark.asyncio
+    async def test_string_wrong_format(self, temp_project_dir, test_configs, execution_engine):
         """Test string doesn't match format constraint."""
         user_config, site_config = test_configs
         
@@ -1401,26 +1184,15 @@ tool:
     format: email
 """)
         
-        _set_runtime_context(test_session, user_config, site_config, {})
-        
-        try:
-            executor = EndpointExecutor(
-                EndpointType.TOOL,
-                "get_email",
-                user_config,
-                site_config,
-                test_session
+        # Should fail validation
+        with pytest.raises(Exception) as exc_info:
+            await execute_endpoint_with_engine(
+                endpoint_type="tool",
+                name="get_email",
+                params={},
+                user_config=user_config,
+                site_config=site_config,
+                execution_engine=execution_engine
             )
-            
-            async def run_test():
-                result = await executor.execute({})
-                return result
-            
-            # Should fail validation
-            with pytest.raises(Exception) as exc_info:
-                asyncio.run(run_test())
-            
-            assert "Invalid email format" in str(exc_info.value) or "format" in str(exc_info.value)
-            
-        finally:
-            _clear_runtime_context() 
+        
+        assert "Invalid email format" in str(exc_info.value) or "format" in str(exc_info.value)

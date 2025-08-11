@@ -5,7 +5,6 @@ from pathlib import Path
 from mxcp.endpoints.tester import run_tests, run_all_tests
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
-from mxcp.engine.duckdb_session import DuckDBSession
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
@@ -61,7 +60,7 @@ async def test_run_invalid_tool(tester_repo_path, site_config, user_config):
         # Check error causes for each error test
         error_msgs = [test["error"] for test in result["tests"] if test["status"] == "error"]
         assert any("Required parameter missing: count" in str(msg) for msg in error_msgs)
-        assert any("invalid literal for int()" in str(msg) or "Error converting parameter count" in str(msg) for msg in error_msgs)
+        assert any("Error validating parameter 'count'" in str(msg) and "Expected integer, got str" in str(msg) for msg in error_msgs)
         assert any("Unknown parameter: extra" in str(msg) for msg in error_msgs)
     finally:
         os.chdir(original_dir)

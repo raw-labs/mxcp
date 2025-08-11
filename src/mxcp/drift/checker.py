@@ -326,13 +326,3 @@ async def check_drift(
     )
     
     return report
-
-# Legacy function for backward compatibility
-def check_drift_legacy(config, user, profile):
-    """Legacy drift check function - deprecated, use check_drift instead."""
-    import asyncio
-    try:
-        result = asyncio.run(check_drift(config, user, profile))
-        return {"status": "ok", "drift": result}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}

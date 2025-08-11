@@ -8,29 +8,122 @@ import atexit
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
-from mxcp.endpoints.loader import EndpointLoader
-from mxcp.endpoints.executor import EndpointExecutor, EndpointType, EndpointResult
-from mxcp.config.user_config import UserConfig
-from mxcp.config.site_config import SiteConfig, get_active_profile
-from mxcp.endpoints.schema import validate_endpoint
+from mxcp.endpoints.utils import EndpointType
+from mxcp.config.site_config import get_active_profile
+from mxcp.endpoints.validate import validate_endpoint
 from makefun import create_function
-from mxcp.engine.duckdb_session import DuckDBSession
-from mxcp.auth.providers import create_oauth_handler, GeneralOAuthAuthorizationServer
-from mxcp.auth.middleware import AuthenticationMiddleware
-from mxcp.auth.context import get_user_context
-from mxcp.auth.url_utils import create_url_builder
-from mxcp.audit import AuditLogger
+from mxcp.sdk.auth.providers import GeneralOAuthAuthorizationServer, ExternalOAuthHandler
+from mxcp.sdk.auth.middleware import AuthenticationMiddleware
+from mxcp.sdk.auth.url_utils import URLBuilder
+from mxcp.config.types import UserAuthConfig, UserHttpTransportConfig
+from mxcp.sdk.auth.types import AuthConfig, HttpTransportConfig
+from mxcp.sdk.audit import AuditLogger
 from mcp.types import ToolAnnotations
-from pydantic import Field, BaseModel, create_model
+from pydantic import Field, create_model
 from typing import Annotated
-from starlette.responses import JSONResponse
 import re
-from mxcp.policies import PolicyEnforcementError
 import hashlib
 import signal
 from mxcp.config.external_refs import ExternalRefTracker
+from mxcp.config.execution_engine import create_execution_engine
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+from mxcp.sdk.auth.context import get_user_context
 
 logger = logging.getLogger(__name__)
+
+
+def translate_transport_config(user_transport_config: Optional[UserHttpTransportConfig]) -> Optional[HttpTransportConfig]:
+    """Translate user HTTP transport config to SDK transport config.
+    
+    Args:
+        user_transport_config: User configuration transport section
+        
+    Returns:
+        SDK-compatible HTTP transport configuration
+    """
+    if not user_transport_config:
+        return None
+        
+    return {
+        "port": user_transport_config.get("port"),
+        "host": user_transport_config.get("host"),
+        "scheme": user_transport_config.get("scheme"),
+        "base_url": user_transport_config.get("base_url"),
+        "trust_proxy": user_transport_config.get("trust_proxy"),
+        "stateless": user_transport_config.get("stateless"),
+    }
+
+
+def create_oauth_handler(user_auth_config: UserAuthConfig, host: str = "localhost", port: int = 8000, user_config: Optional[Dict[str, Any]] = None) -> Optional[ExternalOAuthHandler]:
+    """Create an OAuth handler from user configuration.
+    
+    This helper translates user config to SDK types and instantiates the appropriate handler.
+    
+    Args:
+        user_auth_config: User authentication configuration
+        host: The server host to use for callback URLs
+        port: The server port to use for callback URLs
+        user_config: Full user configuration for transport settings (optional)
+        
+    Returns:
+        OAuth handler instance or None if provider is 'none'
+    """
+    provider = user_auth_config.get("provider", "none")
+    
+    if provider == "none":
+        return None
+    
+    # Extract transport config if available
+    transport_config = None
+    if user_config and "transport" in user_config:
+        user_transport = user_config["transport"].get("http")
+        transport_config = translate_transport_config(user_transport)
+    
+    if provider == "github":
+        from mxcp.sdk.auth.github import GitHubOAuthHandler
+        github_config = user_auth_config.get("github")
+        if not github_config:
+            raise ValueError("GitHub provider selected but no GitHub configuration found")
+        return GitHubOAuthHandler(github_config, transport_config, host=host, port=port)
+        
+    elif provider == "atlassian":
+        from mxcp.sdk.auth.atlassian import AtlassianOAuthHandler
+        atlassian_config = user_auth_config.get("atlassian")
+        if not atlassian_config:
+            raise ValueError("Atlassian provider selected but no Atlassian configuration found")
+        return AtlassianOAuthHandler(atlassian_config, transport_config, host=host, port=port)
+        
+    elif provider == "salesforce":
+        from mxcp.sdk.auth.salesforce import SalesforceOAuthHandler
+        salesforce_config = user_auth_config.get("salesforce")
+        if not salesforce_config:
+            raise ValueError("Salesforce provider selected but no Salesforce configuration found")
+        return SalesforceOAuthHandler(salesforce_config, transport_config, host=host, port=port)
+        
+    elif provider == "keycloak":
+        from mxcp.sdk.auth.keycloak import KeycloakOAuthHandler
+        keycloak_config = user_auth_config.get("keycloak")
+        if not keycloak_config:
+            raise ValueError("Keycloak provider selected but no Keycloak configuration found")
+        return KeycloakOAuthHandler(keycloak_config, transport_config, host=host, port=port)
+        
+    else:
+        raise ValueError(f"Unsupported auth provider: {provider}")
+
+
+def create_url_builder(user_config: Dict[str, Any]) -> URLBuilder:
+    """Create a URL builder from user configuration.
+    
+    Args:
+        user_config: User configuration dictionary
+        
+    Returns:
+        Configured URLBuilder instance
+    """
+    user_transport_config = user_config.get("transport", {}).get("http", {})
+    transport_config = translate_transport_config(user_transport_config)
+    return URLBuilder(transport_config)
+
 
 class RAWMCP:
     """MXCP MCP Server implementation that bridges MXCP endpoints with MCP protocol."""
@@ -300,55 +393,36 @@ class RAWMCP:
     def _shutdown_runtime_components(self):
         """
         Gracefully shuts down all reloadable, configuration-dependent components.
-        This includes running shutdown hooks for Python endpoints and plugins,
-        and closing the database session.
+        Uses the new SDK execution engine which handles all shutdown hooks automatically.
         
         This does NOT affect the authentication provider or endpoint registrations.
         """
         logger.info("Shutting down runtime components...")
         
-        # 1. Shut down existing Python runtimes and plugins
-        from mxcp.runtime import _run_shutdown_hooks
-        from mxcp.plugins.base import run_plugin_shutdown_hooks
-        
-        # Run shutdown hooks for Python endpoints
-        _run_shutdown_hooks()
-        
-        # Run shutdown hooks for Python plugins
-        run_plugin_shutdown_hooks()
-        
-        # Clean up the Python loader to ensure modules can be reloaded
-        if hasattr(self, 'python_loader') and self.python_loader:
-            self.python_loader.cleanup()
-            logger.info("Cleaned up Python endpoint loader.")
-
-        # 2. Close the current DuckDB session
-        if self.db_session:
-            logger.info("Closing current DuckDB session...")
-            self.db_session.close()
-            self.db_session = None
+        # Shut down execution engine (handles all executor-specific shutdown including plugins)
+        if hasattr(self, 'execution_engine') and self.execution_engine:
+            logger.info("Shutting down execution engine...")
+            self.execution_engine.shutdown()
+            self.execution_engine = None
+            logger.info("Execution engine shutdown complete.")
         
         logger.info("Runtime components shutdown complete.")
 
     def _initialize_runtime_components(self):
         """
-        Initializes runtime components (DB session and Python runtime).
+        Initializes runtime components using the new SDK execution engine.
         """
         logger.info("Initializing runtime components...")
         
-        # Create DuckDB session
-        logger.info("Creating DuckDB session...")
-        self.db_session = DuckDBSession(
+        # Create execution engine (replaces DuckDB session + Python runtime)
+        logger.info("Creating execution engine...")
+        self.execution_engine = create_execution_engine(
             self.user_config,
             self.site_config,
             self.profile_name,
-            self.readonly
+            readonly=self.readonly
         )
-        logger.info("DuckDB session created.")
-
-        # Initialize Python runtime and plugins
-        logger.info("Initializing Python runtimes...")
-        self._init_python_runtime()
+        logger.info("Execution engine created.")
         
         # Cache for dynamically created models
         self._model_cache = {}
@@ -416,18 +490,14 @@ class RAWMCP:
                 self.active_profile = get_active_profile(self.user_config, self.site_config, self.profile_name)
                 
                 # Recreate runtime components with new values
-                logger.info("Creating new DuckDB session...")
-                self.db_session = DuckDBSession(
+                logger.info("Creating new execution engine...")
+                self.execution_engine = create_execution_engine(
                     self.user_config,
                     self.site_config,
                     self.profile_name,
-                    self.readonly
+                    readonly=self.readonly
                 )
-                logger.info("New DuckDB session created.")
-                
-                # Re-initialize Python runtime
-                logger.info("Initializing Python runtimes...")
-                self._init_python_runtime()
+                logger.info("New execution engine created.")
                 
                 logger.info("Configuration reload completed successfully.")
                 
@@ -437,30 +507,6 @@ class RAWMCP:
                 logger.error("Server state may be inconsistent due to reload failure. Consider restarting.")
                 # Don't auto-shutdown here, let the operator decide
 
-    def _init_python_runtime(self):
-        """Initialize Python runtime and load all Python modules"""
-        from mxcp.engine.python_loader import PythonEndpointLoader
-        from mxcp.runtime import _run_init_hooks
-        from mxcp.config.site_config import find_repo_root
-        
-        logger.info("Initializing Python runtime for endpoints...")
-        
-        # Create loader and pre-load all Python files
-        try:
-            repo_root = find_repo_root()
-            self.python_loader = PythonEndpointLoader(repo_root)
-            
-            # Preload all modules in python/ directory
-            self.python_loader.preload_all_modules()
-            
-            # Run init hooks
-            _run_init_hooks()
-            
-            logger.info("Python runtime initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize Python runtime: {e}")
-            # Don't fail server startup if Python runtime fails
-            # SQL endpoints will still work
 
     def _ensure_async_completes(self, coro, timeout: float = 10.0, operation_name: str = "operation"):
         """Ensure an async operation completes, even when called from sync context with active event loop.
@@ -963,24 +1009,16 @@ class RAWMCP:
                 if user_context:
                     logger.info(f"Authenticated user: {user_context.username} (provider: {user_context.provider})")
 
-                # type-convert each param according to the YAML schema --------
-                converted = {
-                    p["name"]: self._convert_param_type(kwargs[p["name"]], p["type"])
-                    for p in parameters
-                    if p["name"] in kwargs
-                }
-
-                # run through MXCP executor -----------------------------------
-                exec_ = EndpointExecutor(
-                    endpoint_type,
-                    endpoint_def["name"] if endpoint_key != "resource" else endpoint_def["uri"],
-                    self.user_config,
-                    self.site_config,
-                    self.db_session,
-                    self.profile_name,
-                    db_lock=self.db_lock
+                # run through new SDK executor (handles type conversion automatically)
+                result = await execute_endpoint_with_engine(
+                    endpoint_type=endpoint_type.value,
+                    name=endpoint_def["name"] if endpoint_key != "resource" else endpoint_def["uri"],
+                    params=kwargs,  # No manual conversion needed - SDK handles it
+                    user_config=self.user_config,
+                    site_config=self.site_config,
+                    execution_engine=self.execution_engine,
+                    user_context=user_context
                 )
-                result = await exec_.execute(converted, user_context=user_context)
                 logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                 return result
 
@@ -1142,10 +1180,17 @@ class RAWMCP:
                 if user_context:
                     logger.info(f"User {user_context.username} executing SQL query")
                 
-                # Use shared connection with thread-safety
-                with self.db_lock:
-                    result = self.db_session.execute_query_to_dict(sql)
-                    return result
+                # Use SDK execution engine
+                result = await execute_endpoint_with_engine(
+                    endpoint_type="sql",
+                    name="user_sql_query",
+                    params={"sql": sql},
+                    user_config=self.user_config,
+                    site_config=self.site_config,
+                    execution_engine=self.execution_engine,
+                    user_context=user_context
+                )
+                return result
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
@@ -1197,16 +1242,23 @@ class RAWMCP:
                 if user_context:
                     logger.info(f"User {user_context.username} listing tables")
                     
-                # Use shared connection with thread-safety
-                with self.db_lock:
-                    return self.db_session.execute_query_to_dict("""
+                # Use SDK execution engine
+                return await execute_endpoint_with_engine(
+                    endpoint_type="sql",
+                    name="list_tables",
+                    params={"sql": """
                         SELECT 
                             table_name as name,
                             table_type as type
                         FROM information_schema.tables
                         WHERE table_schema = 'main'
                         ORDER BY table_name
-                    """)
+                    """},
+                    user_config=self.user_config,
+                    site_config=self.site_config,
+                    execution_engine=self.execution_engine,
+                    user_context=user_context
+                )
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
@@ -1261,9 +1313,12 @@ class RAWMCP:
                 if user_context:
                     logger.info(f"User {user_context.username} getting schema for table {table_name}")
                     
-                # Use shared connection with thread-safety
-                with self.db_lock:
-                    return self.db_session.execute_query_to_dict("""
+                # Use SDK execution engine
+                return await execute_endpoint_with_engine(
+                    endpoint_type="sql",
+                    name="get_table_schema",
+                    params={
+                        "sql": """
                         SELECT 
                             column_name as name,
                             data_type as type,
@@ -1271,7 +1326,14 @@ class RAWMCP:
                         FROM information_schema.columns
                         WHERE table_name = $table_name
                         ORDER BY ordinal_position
-                    """, {"table_name": table_name})
+                    """,
+                        "table_name": table_name
+                    },
+                    user_config=self.user_config,
+                    site_config=self.site_config,
+                    execution_engine=self.execution_engine,
+                    user_context=user_context
+                )
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
@@ -1302,7 +1364,7 @@ class RAWMCP:
         for path, endpoint_def in self.endpoints:
             try:
                 # Validate endpoint before registration using shared session
-                validation_result = validate_endpoint(str(path), self.user_config, self.site_config, self.active_profile, self.db_session)
+                validation_result = validate_endpoint(str(path), self.site_config, self.execution_engine)
                 
                 if validation_result["status"] != "ok":
                     logger.warning(f"Skipping invalid endpoint {path}: {validation_result.get('message', 'Unknown error')}")
