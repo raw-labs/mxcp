@@ -23,6 +23,7 @@ Welcome to the MXCP development community! This guide will help you get started 
 - Git
 - A GitHub account
 - Basic understanding of SQL and YAML
+- `uv` package manager (install with `pip install uv`)
 
 ### Development Setup
 
@@ -32,20 +33,21 @@ Welcome to the MXCP development community! This guide will help you get started 
    git clone https://github.com/raw-labs/mxcp.git
    cd mxcp
    ```
-3. Create a virtual environment:
+3. Install dependencies using `uv`:
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
-4. Install development dependencies:
-   ```bash
-   pip install -e ".[dev]"
+   # Install uv if you haven't already
+   pip install uv
+   
+   # Install MXCP with development dependencies
+   uv pip install -e ".[dev]"
    
    # For testing optional features
-   pip install -e ".[dev,vault]"  # Test Vault integration
-   pip install -e ".[dev,onepassword]"  # Test 1Password integration
-   pip install -e ".[all]"  # Everything (includes dev tools)
+   uv pip install -e ".[dev,vault]"  # Test Vault integration
+   uv pip install -e ".[dev,onepassword]"  # Test 1Password integration
+   uv pip install -e ".[all]"  # Everything (includes dev tools)
    ```
+
+   Note: `uv` automatically manages the virtual environment for you, so you don't need to create one manually.
 
 ## Architecture Patterns
 
@@ -186,11 +188,12 @@ All commands support `--json-output` with standardized format:
 
 ### 2. Code Style
 
-- Follow PEP 8 guidelines
-- Use type hints for all function parameters and return values
+- Follow PEP 8 guidelines (enforced by `black`)
+- Use type hints for all function parameters and return values (checked by `mypy`)
 - Write docstrings for all public functions and classes
-- Keep lines under 100 characters
+- Keep lines under 100 characters (enforced by `black` with line-length=100)
 - Use meaningful variable and function names
+- Import statements are automatically sorted by `isort`
 
 ### 3. Testing
 
@@ -277,7 +280,7 @@ tests/
 - Write tests for all new features and bugfixes
 - Run the test suite:
   ```bash
-  pytest
+  uv run pytest
   ```
 - Ensure all tests pass before submitting a PR
 - Aim for high test coverage
@@ -392,24 +395,60 @@ mxcp/
 
 ### Code Quality
 
-- Use `black` for code formatting
-- Use `isort` for import sorting
-- Use `mypy` for type checking
-- Use `pylint` for linting
+MXCP uses several tools to maintain code quality. All commands should be run with `uv run` to ensure they use the project's virtual environment:
 
-Run all checks:
+- **Black**: Code formatter
+  ```bash
+  uv run black .
+  # Check without making changes
+  uv run black . --check
+  # Check with diff output
+  uv run black . --check --diff
+  ```
+
+- **isort**: Import statement sorting
+  ```bash
+  uv run isort .
+  # Check without making changes
+  uv run isort . --check-only
+  # Check with diff output
+  uv run isort . --check-only --diff
+  ```
+
+- **mypy**: Static type checking
+  ```bash
+  uv run mypy .
+  ```
+
+Run all checks (same as CI):
 ```bash
-make lint
+# Run all code quality checks
+uv run black --check --diff . && \
+uv run isort --check-only --diff . && \
+uv run mypy .
 ```
 
 ### Testing
 
-- Use `pytest` for testing
+- Use `pytest` for testing (always run with `uv run`)
 - Use `pytest-cov` for coverage reports
 
-Run tests with coverage:
+Run tests:
 ```bash
-pytest --cov=mxcp
+# Run all tests
+uv run pytest
+
+# Run specific test file
+uv run pytest tests/test_cli_lint.py
+
+# Run tests with coverage
+uv run pytest --cov=mxcp
+
+# Run tests with verbose output
+uv run pytest -v
+
+# Run tests matching a pattern
+uv run pytest -k "test_format"
 ```
 
 ## Communication
