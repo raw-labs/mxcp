@@ -1,25 +1,29 @@
-from typing import TypedDict, List, Optional, Union, Literal
+from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
+
 
 class SourceDefinition(TypedDict):
     code: str
     file: str
 
+
 class TestArgument(TypedDict):
     key: str
     value: object
+
 
 class TestDefinition(TypedDict):
     name: str
     description: Optional[str]
     arguments: List[TestArgument]
     result: Optional[object]
-    user_context: Optional[dict]  # User context for policy testing
+    user_context: Optional[Dict[str, Any]]  # User context for policy testing
     result_contains: Optional[object]  # Partial match for objects/arrays
     result_not_contains: Optional[List[str]]  # Fields that should NOT exist
     result_contains_item: Optional[object]  # At least one array item matches
     result_contains_all: Optional[List[object]]  # All items must be present (any order)
     result_length: Optional[int]  # Array must have specific length
     result_contains_text: Optional[str]  # Substring match for strings
+
 
 class TypeDefinition(TypedDict):
     type: str
@@ -35,10 +39,13 @@ class TypeDefinition(TypedDict):
     minItems: Optional[int]
     maxItems: Optional[int]
     uniqueItems: Optional[bool]
-    items: Optional['TypeDefinition']
-    properties: Optional[dict[str, 'TypeDefinition']]
+    items: Optional["TypeDefinition"]
+    properties: Optional[dict[str, "TypeDefinition"]]
     required: Optional[List[str]]
-    additionalProperties: Optional[bool]  # Whether to allow additional properties not defined in the schema
+    additionalProperties: Optional[
+        bool
+    ]  # Whether to allow additional properties not defined in the schema
+
 
 class ParamDefinition(TypedDict):
     name: str
@@ -58,21 +65,24 @@ class ParamDefinition(TypedDict):
     properties: Optional[dict[str, TypeDefinition]]
     required: Optional[List[str]]
 
+
 class PolicyRule(TypedDict):
     condition: str
     action: Literal["deny", "filter_fields", "mask_fields", "filter_sensitive_fields"]
     reason: Optional[str]
     fields: Optional[List[str]]  # For filter_fields and mask_fields actions
 
+
 class PoliciesDefinition(TypedDict):
     input: Optional[List[PolicyRule]]
     output: Optional[List[PolicyRule]]
+
 
 class ToolDefinition(TypedDict):
     name: str
     description: Optional[str]
     tags: Optional[List[str]]
-    annotations: Optional[dict]
+    annotations: Optional[Dict[str, Any]]
     parameters: Optional[List[ParamDefinition]]
     return_: Optional[TypeDefinition]
     language: Optional[Literal["sql"]]
@@ -80,6 +90,7 @@ class ToolDefinition(TypedDict):
     enabled: Optional[bool]
     tests: Optional[List[TestDefinition]]
     policies: Optional[PoliciesDefinition]
+
 
 class ResourceDefinition(TypedDict):
     uri: str
@@ -94,10 +105,12 @@ class ResourceDefinition(TypedDict):
     tests: Optional[List[TestDefinition]]
     policies: Optional[PoliciesDefinition]
 
+
 class PromptMessage(TypedDict):
     prompt: str
     role: Optional[str]
     type: Optional[str]
+
 
 class PromptDefinition(TypedDict):
     name: str
@@ -110,9 +123,10 @@ class PromptDefinition(TypedDict):
     tests: Optional[List[TestDefinition]]
     policies: Optional[PoliciesDefinition]
 
+
 class EndpointDefinition(TypedDict):
     mxcp: str
     tool: Optional[ToolDefinition]
     resource: Optional[ResourceDefinition]
     prompt: Optional[PromptDefinition]
-    metadata: Optional[dict]
+    metadata: Optional[Dict[str, Any]]

@@ -1,1 +1,1 @@
-"""Tests for MXCP executor plugins.""" 
+"""Tests for MXCP executor plugins."""

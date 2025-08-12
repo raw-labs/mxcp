@@ -4,11 +4,13 @@ Jira OAuth Plugin Implementation
 This module provides UDFs for querying Atlassian Jira using JQL with OAuth 2.0 authentication.
 """
 
-from typing import Dict, Any, List, Optional
-import logging
 import json
+import logging
+from typing import Any, Dict, List, Optional
+
 import requests
 from atlassian import Jira
+
 from mxcp.plugins import MXCPBasePlugin, udf
 from mxcp.sdk.auth.context import get_user_context
 
@@ -32,10 +34,10 @@ class MXCPPlugin(MXCPBasePlugin):
 
     def _get_oauth_token(self) -> str:
         """Get OAuth token from user context or fallback configuration.
-        
+
         Returns:
             OAuth Bearer token
-            
+
         Raises:
             ValueError: If no OAuth token is available
         """
@@ -44,74 +46,71 @@ class MXCPPlugin(MXCPBasePlugin):
         if user_context and user_context.external_token:
             logger.debug("Using OAuth token from user context")
             return user_context.external_token
-        
+
         # Fall back to configured token
         if self.fallback_oauth_token:
             logger.debug("Using fallback OAuth token from configuration")
             return self.fallback_oauth_token
-            
+
         raise ValueError("No OAuth token available from user context or configuration")
 
     def _get_cloud_id_and_url(self, oauth_token: str) -> tuple[str, str]:
         """Get the cloud ID and instance URL for the first accessible Jira instance using the OAuth token.
-        
+
         Args:
             oauth_token: OAuth Bearer token
-            
+
         Returns:
             Tuple of (cloud_id, instance_url) for the first accessible Jira instance
-            
+
         Raises:
             ValueError: If cloud ID and URL cannot be retrieved
         """
         try:
             response = requests.get(
                 "https://api.atlassian.com/oauth/token/accessible-resources",
-                headers={
-                    "Authorization": f"Bearer {oauth_token}",
-                    "Accept": "application/json"
-                }
+                headers={"Authorization": f"Bearer {oauth_token}", "Accept": "application/json"},
             )
             response.raise_for_status()
-            
+
             resources = response.json()
             logger.debug(f"Found {len(resources)} accessible resources")
-            
+
             # Use the first accessible resource
             if resources:
                 cloud_id = resources[0].get("id")
                 instance_url = resources[0].get("url")
                 logger.info(f"Using cloud ID: {cloud_id} for instance: {instance_url}")
                 return cloud_id, instance_url
-                
+
             raise ValueError(f"No accessible resources found for OAuth token")
-            
+
         except requests.RequestException as e:
             logger.error(f"Failed to get cloud ID and URL: {e}")
             raise ValueError(f"Failed to retrieve cloud ID and URL: {e}")
 
     def _create_jira_client(self) -> Jira:
         """Create a Jira client with OAuth authentication using the correct API gateway URL.
-        
+
         Returns:
             Configured Jira client instance
         """
         oauth_token = self._get_oauth_token()
-        
+
         # Get the cloud ID and instance URL for the first accessible Jira instance
         cloud_id, instance_url = self._get_cloud_id_and_url(oauth_token)
-        
+
         # Store the instance URL for constructing web UI URLs
         self.instance_url = instance_url
-        
+
         # Construct the API gateway URL for OAuth requests
         api_gateway_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"
         logger.info("API Gateway URL: %s", api_gateway_url)
-        
+
         # Create a requests session with OAuth Bearer token
         session = requests.Session()
-        session.headers['Authorization'] = f'Bearer {oauth_token}'
-        
+        session.headers["Authorization"] = f"Bearer {oauth_token}"
+
         # Create and return Jira client with the OAuth session and API gateway URL
         # Explicitly set cloud=True since we're using Jira Cloud with OAuth
         return Jira(url=api_gateway_url, session=session, cloud=True)
@@ -128,7 +127,9 @@ class MXCPPlugin(MXCPBasePlugin):
         Returns:
             JSON string containing Jira issues matching the query
         """
-        logger.info("Executing JQL query with OAuth: %s with start=%s, limit=%s", query, start, limit)
+        logger.info(
+            "Executing JQL query with OAuth: %s with start=%s, limit=%s", query, start, limit
+        )
 
         # Create Jira client with current user's OAuth token
         jira = self._create_jira_client()
@@ -188,10 +189,10 @@ class MXCPPlugin(MXCPBasePlugin):
             JSON string containing the user details
         """
         logger.info("Getting user details with OAuth for username: %s", username)
-        
+
         # Create Jira client with current user's OAuth token
         jira = self._create_jira_client()
-        
+
         return json.dumps(jira.user_find_by_user_string(query=username))
 
     @udf
@@ -236,10 +237,10 @@ class MXCPPlugin(MXCPBasePlugin):
             JSON string containing the project details
         """
         logger.info("Getting project details with OAuth for key: %s", project_key)
-        
+
         # Create Jira client with current user's OAuth token
         jira = self._create_jira_client()
-        
+
         info = jira.project(project_key)
         # remove the self key if it exists
         if "self" in info:

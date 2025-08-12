@@ -1,13 +1,16 @@
 import os
-import pytest
 from contextlib import contextmanager
 from pathlib import Path
-from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+
+import pytest
+
 from mxcp.config.execution_engine import create_execution_engine
-from mxcp.config.user_config import load_user_config, UserConfig
-from mxcp.config.site_config import load_site_config, SiteConfig
+from mxcp.config.site_config import SiteConfig, load_site_config
+from mxcp.config.user_config import UserConfig, load_user_config
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 
 TEST_REPO_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "return-type-validation")
+
 
 @contextmanager
 def change_working_dir(path):
@@ -19,14 +22,19 @@ def change_working_dir(path):
     finally:
         os.chdir(original_dir)
 
+
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
-    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "return-type-validation" / "mxcp-config.yml")
+    os.environ["MXCP_CONFIG"] = str(
+        Path(__file__).parent / "fixtures" / "return-type-validation" / "mxcp-config.yml"
+    )
+
 
 @pytest.fixture
 def test_repo_path():
     """Path to the test repository."""
     return Path(__file__).parent / "fixtures" / "return-type-validation"
+
 
 @pytest.fixture
 def site_config(test_repo_path):
@@ -37,6 +45,7 @@ def site_config(test_repo_path):
         return load_site_config()
     finally:
         os.chdir(original_dir)
+
 
 @pytest.fixture
 def user_config(test_repo_path):
@@ -49,10 +58,12 @@ def user_config(test_repo_path):
     finally:
         os.chdir(original_dir)
 
+
 @pytest.fixture
 def execution_engine(user_config, site_config):
     """Create execution engine for tests."""
     return create_execution_engine(user_config, site_config)
+
 
 async def test_array_return_type(execution_engine, user_config, site_config, test_repo_path):
     """Test that array return type works with multiple rows."""
@@ -60,7 +71,7 @@ async def test_array_return_type(execution_engine, user_config, site_config, tes
         expected = [
             {"name": "Alice", "age": 30},
             {"name": "Bob", "age": 25},
-            {"name": "test", "age": 25}
+            {"name": "test", "age": 25},
         ]
         result = await execute_endpoint_with_engine(
             endpoint_type="tool",
@@ -68,9 +79,10 @@ async def test_array_return_type(execution_engine, user_config, site_config, tes
             params={"name": "test", "age": 25},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
         assert result == expected
+
 
 async def test_object_return_type(execution_engine, user_config, site_config, test_repo_path):
     """Test that object return type works with single row."""
@@ -82,9 +94,10 @@ async def test_object_return_type(execution_engine, user_config, site_config, te
             params={"name": "test", "age": 25},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
         assert result == expected
+
 
 async def test_scalar_return_type(execution_engine, user_config, site_config, test_repo_path):
     """Test that scalar return type works with single row, single column."""
@@ -96,9 +109,10 @@ async def test_scalar_return_type(execution_engine, user_config, site_config, te
             params={"value": 42},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
         assert result == expected
+
 
 async def test_multiple_rows_error(execution_engine, user_config, site_config, test_repo_path):
     """Test that multiple rows error when return type is not array."""
@@ -110,8 +124,9 @@ async def test_multiple_rows_error(execution_engine, user_config, site_config, t
                 params={"error_type": "multiple_rows"},
                 user_config=user_config,
                 site_config=site_config,
-                execution_engine=execution_engine
+                execution_engine=execution_engine,
             )
+
 
 async def test_multiple_columns_error(execution_engine, user_config, site_config, test_repo_path):
     """Test that multiple columns error when return type is scalar."""
@@ -123,8 +138,9 @@ async def test_multiple_columns_error(execution_engine, user_config, site_config
                 params={"error_type": "multiple_columns"},
                 user_config=user_config,
                 site_config=site_config,
-                execution_engine=execution_engine
+                execution_engine=execution_engine,
             )
+
 
 async def test_no_rows_error(execution_engine, user_config, site_config, test_repo_path):
     """Test that no rows error when return type is not array."""
@@ -136,8 +152,9 @@ async def test_no_rows_error(execution_engine, user_config, site_config, test_re
                 params={"error_type": "no_rows"},
                 user_config=user_config,
                 site_config=site_config,
-                execution_engine=execution_engine
+                execution_engine=execution_engine,
             )
+
 
 async def test_strict_endpoint_success(execution_engine, user_config, site_config, test_repo_path):
     """Test that strict endpoint succeeds when only allowed columns are present."""
@@ -148,11 +165,14 @@ async def test_strict_endpoint_success(execution_engine, user_config, site_confi
             params={},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
         assert result == {"name": "Alice", "age": 30}
 
-async def test_strict_endpoint_extra_failure(execution_engine, user_config, site_config, test_repo_path):
+
+async def test_strict_endpoint_extra_failure(
+    execution_engine, user_config, site_config, test_repo_path
+):
     """Test that strict endpoint fails when extra column is present."""
     with change_working_dir(test_repo_path):
         with pytest.raises(ValueError, match="Unexpected property: extra"):
@@ -162,10 +182,13 @@ async def test_strict_endpoint_extra_failure(execution_engine, user_config, site
                 params={},
                 user_config=user_config,
                 site_config=site_config,
-                execution_engine=execution_engine
+                execution_engine=execution_engine,
             )
 
-async def test_flexible_endpoint_success(execution_engine, user_config, site_config, test_repo_path):
+
+async def test_flexible_endpoint_success(
+    execution_engine, user_config, site_config, test_repo_path
+):
     """Test that flexible endpoint succeeds when extra column is present."""
     with change_working_dir(test_repo_path):
         result = await execute_endpoint_with_engine(
@@ -174,6 +197,6 @@ async def test_flexible_endpoint_success(execution_engine, user_config, site_con
             params={},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
-        assert result == {"name": "Alice", "age": 30, "extra": "extra"} 
+        assert result == {"name": "Alice", "age": 30, "extra": "extra"}

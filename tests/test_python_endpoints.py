@@ -1,14 +1,17 @@
 """Tests for Python endpoint functionality."""
-import pytest
+
 import os
 import tempfile
 from pathlib import Path
-from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config
-from mxcp.runtime import _init_hooks, _shutdown_hooks
-from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
-from mxcp.config.execution_engine import create_execution_engine
+
+import pytest
 import yaml
+
+from mxcp.config.execution_engine import create_execution_engine
+from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+from mxcp.runtime import _init_hooks, _shutdown_hooks
 
 
 @pytest.fixture
@@ -16,44 +19,38 @@ def temp_project_dir():
     """Create a temporary project directory structure."""
     with tempfile.TemporaryDirectory() as tmpdir:
         project_dir = Path(tmpdir)
-        
+
         # Create directory structure
         (project_dir / "tools").mkdir()
         (project_dir / "resources").mkdir()
         (project_dir / "prompts").mkdir()
         (project_dir / "python").mkdir()
         (project_dir / "sql").mkdir()
-        
+
         # Create mxcp-site.yml
         site_config = {
             "mxcp": 1,
             "project": "test-project",
             "profile": "test",
-            "profiles": {
-                "test": {
-                    "duckdb": {
-                        "path": str(project_dir / "test.duckdb")
-                    }
-                }
-            },
+            "profiles": {"test": {"duckdb": {"path": str(project_dir / "test.duckdb")}}},
             "paths": {
                 "tools": "tools",
                 "resources": "resources",
                 "prompts": "prompts",
-                "sql": "sql"
+                "sql": "sql",
             },
-            "extensions": ["json"]
+            "extensions": ["json"],
         }
-        
+
         with open(project_dir / "mxcp-site.yml", "w") as f:
             yaml.dump(site_config, f)
-        
+
         # Change to project directory
         original_dir = os.getcwd()
         os.chdir(project_dir)
-        
+
         yield project_dir
-        
+
         # Restore original directory
         os.chdir(original_dir)
 
@@ -72,34 +69,32 @@ def test_configs(temp_project_dir):
                             {
                                 "name": "api_key",
                                 "type": "value",
-                                "parameters": {
-                                    "value": "test-api-key-123"
-                                }
+                                "parameters": {"value": "test-api-key-123"},
                             }
                         ],
-                        "plugin": {"config": {}}
+                        "plugin": {"config": {}},
                     }
                 }
             }
-        }
+        },
     }
-    
+
     # Write user config to file
     config_path = temp_project_dir / "mxcp-config.yml"
     with open(config_path, "w") as f:
         yaml.dump(user_config_data, f)
-    
+
     # Set environment variable to point to our config
     os.environ["MXCP_CONFIG"] = str(config_path)
-    
+
     # Load site config first
     site_config = load_site_config()
-    
+
     # Load user config
     user_config = load_user_config(site_config)
-    
+
     yield user_config, site_config
-    
+
     # Clean up environment variable
     if "MXCP_CONFIG" in os.environ:
         del os.environ["MXCP_CONFIG"]
@@ -110,39 +105,44 @@ def execution_engine(test_configs):
     """Create execution engine for tests and set up test data."""
     user_config, site_config = test_configs
     engine = create_execution_engine(user_config, site_config)
-    
+
     # Get the DuckDB executor from the engine
     duckdb_executor = None
     for executor in engine._executors.values():
-        if hasattr(executor, 'language') and executor.language == "sql":
+        if hasattr(executor, "language") and executor.language == "sql":
             duckdb_executor = executor
             break
-    
+
     if duckdb_executor:
         # Get the DuckDB session and connection
         from mxcp.sdk.executor.plugins import DuckDBExecutor
+
         if isinstance(duckdb_executor, DuckDBExecutor):
             session = duckdb_executor.session
             conn = session.conn
-            
+
             # Create test table if connection exists
             if conn:
-                conn.execute("""
+                conn.execute(
+                    """
                     CREATE TABLE test_data (
                         id INTEGER,
                         name VARCHAR,
                         value DOUBLE
                     )
-                """)
-                conn.execute("""
+                """
+                )
+                conn.execute(
+                    """
                     INSERT INTO test_data VALUES 
                     (1, 'Alice', 100.5),
                     (2, 'Bob', 200.7),
                     (3, 'Charlie', 300.9)
-                """)
-    
+                """
+                )
+
     yield engine
-    
+
     # Clean up - the engine shutdown should handle this
     engine.shutdown()
 
@@ -151,42 +151,47 @@ def execution_engine(test_configs):
 async def test_python_loader(temp_project_dir, test_configs, execution_engine):
     """Test Python module loading functionality through endpoint execution."""
     user_config, site_config = test_configs
-    
-    # Create a test Python file
-    python_file = temp_project_dir / "python" / "test_module.py"
-    python_file.write_text("""
+
+    # Create a test Python file with unique name to avoid sys.modules conflicts
+    python_file = temp_project_dir / "python" / "endpoints_hello_module.py"
+    python_file.write_text(
+        """
 def hello(name: str) -> dict:
     return {"message": f"Hello, {name}!"}
 
 def add_numbers(a: int, b: int) -> dict:
     return {"result": a + b}
-""")
-    
+"""
+    )
+
     # Create tool definitions to test the functions
-    (temp_project_dir / "tools" / "hello.yml").write_text("""
+    (temp_project_dir / "tools" / "hello.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: hello
   description: Say hello
   language: python
   source:
-    file: ../python/test_module.py
+    file: ../python/endpoints_hello_module.py
   parameters:
     - name: name
       type: string
       description: Name to greet
   return:
     type: object
-""")
-    
-    (temp_project_dir / "tools" / "add_numbers.yml").write_text("""
+"""
+    )
+
+    (temp_project_dir / "tools" / "add_numbers.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: add_numbers
   description: Add two numbers
   language: python
   source:
-    file: ../python/test_module.py
+    file: ../python/endpoints_hello_module.py
   parameters:
     - name: a
       type: integer
@@ -196,8 +201,9 @@ tool:
       description: Second number
   return:
     type: object
-""")
-    
+"""
+    )
+
     # Test hello function
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
@@ -205,10 +211,10 @@ tool:
         params={"name": "World"},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
     assert result == {"message": "Hello, World!"}
-    
+
     # Test add_numbers function
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
@@ -216,7 +222,7 @@ tool:
         params={"a": 5, "b": 3},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
     assert result == {"result": 8}
 
@@ -225,10 +231,11 @@ tool:
 async def test_python_endpoint_with_db(temp_project_dir, test_configs, execution_engine):
     """Test Python endpoint with database access."""
     user_config, site_config = test_configs
-    
+
     # Create Python endpoint file
     python_file = temp_project_dir / "python" / "data_tools.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 from mxcp.runtime import db
 
 def get_data(min_value: float) -> list:
@@ -240,11 +247,13 @@ def get_data(min_value: float) -> list:
 def count_records() -> dict:
     result = db.execute("SELECT COUNT(*) as count FROM test_data")
     return {"count": result[0]["count"]}
-""")
-    
+"""
+    )
+
     # Create tool definition
     tool_yaml = temp_project_dir / "tools" / "get_data.yml"
-    tool_yaml.write_text("""
+    tool_yaml.write_text(
+        """
 mxcp: 1
 tool:
   name: get_data
@@ -258,17 +267,18 @@ tool:
       description: Minimum value threshold
   return:
     type: array
-""")
-    
+"""
+    )
+
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
         name="get_data",
         params={"min_value": 200},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
-    
+
     # Check results
     assert len(result) == 2
     assert result[0]["name"] == "Bob"
@@ -279,10 +289,11 @@ tool:
 async def test_python_endpoint_with_secrets(temp_project_dir, test_configs, execution_engine):
     """Test Python endpoint accessing secrets."""
     user_config, site_config = test_configs
-    
+
     # Create Python endpoint file
     python_file = temp_project_dir / "python" / "secret_test.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 from mxcp.runtime import config
 
 def get_secret_info() -> dict:
@@ -300,11 +311,13 @@ def get_secret_info() -> dict:
         "missing_key": missing,
         "project": setting
     }
-""")
-    
+"""
+    )
+
     # Create tool definition
     tool_yaml = temp_project_dir / "tools" / "get_secret_info.yml"
-    tool_yaml.write_text("""
+    tool_yaml.write_text(
+        """
 mxcp: 1
 tool:
   name: get_secret_info
@@ -315,17 +328,18 @@ tool:
   parameters: []
   return:
     type: object
-""")
-    
+"""
+    )
+
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
         name="get_secret_info",
         params={},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
-    
+
     # Check results
     assert result["has_api_key"] is True
     assert result["api_key_starts_with"] == "test-"
@@ -337,14 +351,15 @@ tool:
 async def test_lifecycle_hooks(temp_project_dir, test_configs):
     """Test that lifecycle hooks run automatically during engine creation and shutdown."""
     user_config, site_config = test_configs
-    
+
     # Clear any existing hooks from other tests
     _init_hooks.clear()
     _shutdown_hooks.clear()
-    
+
     # Create Python file with hooks that modify global state
     python_file = temp_project_dir / "python" / "lifecycle_test.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 from mxcp.runtime import on_init, on_shutdown
 
 # Global state to track hook execution
@@ -374,10 +389,12 @@ def cleanup():
 def check_hook_state() -> dict:
     '''Return the current hook execution state.'''
     return _hook_state.copy()
-""")
-    
+"""
+    )
+
     # Create tool definition
-    (temp_project_dir / "tools" / "check_hook_state.yml").write_text("""
+    (temp_project_dir / "tools" / "check_hook_state.yml").write_text(
+        """
 mxcp: 1
 tool:
   name: check_hook_state
@@ -388,22 +405,23 @@ tool:
   parameters: []
   return:
     type: object
-""")
-    
+"""
+    )
+
     print("\n=== Testing automatic lifecycle hook execution ===")
-    
+
     # 1. Create execution engine - this should automatically:
     #    a) Preload Python modules (registering hooks)
     #    b) Run init hooks
     print("Creating execution engine (should preload modules and run init hooks)...")
     execution_engine = create_execution_engine(user_config, site_config, "test")
-    
+
     try:
         # 2. Verify hooks were registered during module preload
         assert len(_init_hooks) == 1, f"Expected 1 init hook, found {len(_init_hooks)}"
         assert len(_shutdown_hooks) == 1, f"Expected 1 shutdown hook, found {len(_shutdown_hooks)}"
         print(f"✓ Hooks registered: {len(_init_hooks)} init, {len(_shutdown_hooks)} shutdown")
-        
+
         # 3. Check hook state - init hook should have run automatically
         result = await execute_endpoint_with_engine(
             endpoint_type="tool",
@@ -411,25 +429,25 @@ tool:
             params={},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
-        
+
         # Init hook should have run during engine creation
         assert result["init_called"] is True, "Init hook should have run during engine creation"
         assert result["shutdown_called"] is False, "Shutdown hook should not have run yet"
         assert result["init_timestamp"] is not None, "Init hook should have timestamp"
         print("✓ Init hook ran automatically during engine creation")
-        
+
     finally:
         # 4. Shutdown engine - this should automatically run shutdown hooks
         print("Shutting down execution engine (should run shutdown hooks)...")
         execution_engine.shutdown()
-    
+
     # 5. Create a new engine to check if shutdown hooks ran
     # (We need a fresh engine because the first one is shut down)
     print("Creating new engine to verify shutdown hooks ran...")
     execution_engine2 = create_execution_engine(user_config, site_config, "test")
-    
+
     try:
         # Check hook state again - both hooks should show as having been called
         result_after_shutdown = await execute_endpoint_with_engine(
@@ -438,25 +456,31 @@ tool:
             params={},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine2
+            execution_engine=execution_engine2,
         )
-        
+
         # The module's global state persists across engine instances
         # This proves that:
-        # 1. The new engine's init hook ran (init_called=True)  
+        # 1. The new engine's init hook ran (init_called=True)
         # 2. The first engine's shutdown hook ran automatically (shutdown_called=True)
-        assert result_after_shutdown["init_called"] is True, "New engine's init hook should have run"
-        assert result_after_shutdown["shutdown_called"] is True, "First engine's shutdown hook should have run automatically"
+        assert (
+            result_after_shutdown["init_called"] is True
+        ), "New engine's init hook should have run"
+        assert (
+            result_after_shutdown["shutdown_called"] is True
+        ), "First engine's shutdown hook should have run automatically"
         print("✓ New engine's init hook ran automatically")
-        print("✓ First engine's shutdown hook ran automatically (proven by persistent module state)")
-        
+        print(
+            "✓ First engine's shutdown hook ran automatically (proven by persistent module state)"
+        )
+
     finally:
         execution_engine2.shutdown()
-    
+
     # Clear hooks to avoid affecting other tests
     _init_hooks.clear()
     _shutdown_hooks.clear()
-    
+
     print("✓ Lifecycle hooks test completed - hooks run automatically during engine lifecycle")
     print("  - Init hooks run during engine creation (after module preload)")
     print("  - Shutdown hooks run during engine shutdown")
@@ -466,10 +490,11 @@ tool:
 async def test_async_python_endpoint(temp_project_dir, test_configs, execution_engine):
     """Test async Python endpoint."""
     user_config, site_config = test_configs
-    
+
     # Create async Python endpoint
     python_file = temp_project_dir / "python" / "async_tools.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 import asyncio
 from mxcp.runtime import db
 
@@ -484,11 +509,13 @@ async def slow_query(delay: float) -> dict:
         "delayed": delay,
         "count": result[0]["count"]
     }
-""")
-    
+"""
+    )
+
     # Create tool definition
     tool_yaml = temp_project_dir / "tools" / "slow_query.yml"
-    tool_yaml.write_text("""
+    tool_yaml.write_text(
+        """
 mxcp: 1
 tool:
   name: slow_query
@@ -502,17 +529,18 @@ tool:
       description: Delay in seconds
   return:
     type: object
-""")
-    
+"""
+    )
+
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
         name="slow_query",
         params={"delay": 0.1},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
-    
+
     # Check results
     assert result["delayed"] == 0.1
     assert result["count"] == 3
@@ -522,10 +550,11 @@ tool:
 async def test_async_context_propagation(temp_project_dir, test_configs, execution_engine):
     """Test that context variables propagate correctly in async Python endpoints after fix."""
     user_config, site_config = test_configs
-    
+
     # Create async Python endpoint that uses context variables
     python_file = temp_project_dir / "python" / "async_context_test.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 import asyncio
 from mxcp.runtime import db, config
 
@@ -580,11 +609,13 @@ async def _nested_async() -> dict:
             "nested_works": False,
             "error": str(e)
         }
-""")
-    
+"""
+    )
+
     # Create tool definition
     tool_yaml = temp_project_dir / "tools" / "test_context_access.yml"
-    tool_yaml.write_text("""
+    tool_yaml.write_text(
+        """
 mxcp: 1
 tool:
   name: test_context_access
@@ -595,65 +626,64 @@ tool:
   parameters: []
   return:
     type: object
-""")
-    
+"""
+    )
+
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
         name="test_context_access",
         params={},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
-    
+
     # Verify context was properly available
     assert result["db_access_works"] is True, "Database access should work in async function"
     assert result["row_count"] == 3, "Should be able to query database"
     assert result["config_access_works"] is True, "Config access should work in async function"
     assert result["project"] == "test-project", "Should be able to read project name"
     assert result["secret_value"] == "test-api-key-123", "Should be able to read secret"
-    
+
     # Verify nested async calls work
     assert result["nested_result"]["nested_works"] is True, "Nested async calls should work"
     assert result["nested_result"]["name"] == "Alice", "Should get correct data from nested call"
 
 
 @pytest.mark.asyncio
-async def test_python_endpoint_with_non_duckdb_secret_type(temp_project_dir, test_configs, execution_engine):
+async def test_python_endpoint_with_non_duckdb_secret_type(
+    temp_project_dir, test_configs, execution_engine
+):
     """Test Python endpoint accessing secrets with non-DuckDB types (e.g., 'custom', 'python')."""
     user_config, site_config = test_configs
-    
+
     # Add custom secrets to user config
-    user_config["projects"]["test-project"]["profiles"]["test"]["secrets"].extend([
-        {
-            "name": "custom_api",
-            "type": "custom",  # Non-DuckDB type
-            "parameters": {
-                "api_key": "custom-api-key-456",
-                "endpoint": "https://api.example.com",
-                "headers": {
-                    "X-Custom": "header-value"
-                }
-            }
-        },
-        {
-            "name": "python_only",
-            "type": "python",  # Hypothetical Python-only type
-            "parameters": {
-                "value": "python-secret-789",
-                "config": {
-                    "nested": "value"
-                }
-            }
-        }
-    ])
-    
+    user_config["projects"]["test-project"]["profiles"]["test"]["secrets"].extend(
+        [
+            {
+                "name": "custom_api",
+                "type": "custom",  # Non-DuckDB type
+                "parameters": {
+                    "api_key": "custom-api-key-456",
+                    "endpoint": "https://api.example.com",
+                    "headers": {"X-Custom": "header-value"},
+                },
+            },
+            {
+                "name": "python_only",
+                "type": "python",  # Hypothetical Python-only type
+                "parameters": {"value": "python-secret-789", "config": {"nested": "value"}},
+            },
+        ]
+    )
+
     # Update site config to reference our secrets
     site_config["secrets"] = ["duckdb_test", "api_test", "custom_api", "python_only"]
-    
+
     # Create Python endpoint file
     python_file = temp_project_dir / "python" / "custom_secrets.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 from mxcp.runtime import config
 
 def test_custom_secrets() -> dict:
@@ -669,11 +699,13 @@ def test_custom_secrets() -> dict:
         "python_config": python_params.get("config") if python_params else None,
         "both_secrets_found": custom_params is not None and python_params is not None
     }
-""")
-    
+"""
+    )
+
     # Create tool definition
     tool_yaml = temp_project_dir / "tools" / "test_custom_secrets.yml"
-    tool_yaml.write_text("""
+    tool_yaml.write_text(
+        """
 mxcp: 1
 tool:
   name: test_custom_secrets
@@ -684,8 +716,9 @@ tool:
   parameters: []
   return:
     type: object
-""")
-    
+"""
+    )
+
     # Execute endpoint using new SDK
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
@@ -693,9 +726,9 @@ tool:
         params={},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
-    
+
     # Check results - secrets should be accessible even with non-DuckDB types
     assert result["custom_api_key"] == "custom-api-key-456"
     assert result["custom_endpoint"] == "https://api.example.com"
@@ -709,19 +742,22 @@ tool:
 async def test_python_endpoint_error_handling(temp_project_dir, test_configs, execution_engine):
     """Test error handling in Python endpoints."""
     user_config, site_config = test_configs
-    
+
     # Create Python endpoint with error
     python_file = temp_project_dir / "python" / "error_test.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 def divide_numbers(a: int, b: int) -> dict:
     if b == 0:
         raise ValueError("Cannot divide by zero")
     return {"result": a / b}
-""")
-    
+"""
+    )
+
     # Create tool definition
     tool_yaml = temp_project_dir / "tools" / "divide_numbers.yml"
-    tool_yaml.write_text("""
+    tool_yaml.write_text(
+        """
 mxcp: 1
 tool:
   name: divide_numbers
@@ -738,8 +774,9 @@ tool:
       description: The divisor
   return:
     type: object
-""")
-    
+"""
+    )
+
     # Execute endpoint with valid inputs
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
@@ -747,10 +784,10 @@ tool:
         params={"a": 10, "b": 2},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
     assert result["result"] == 5.0
-    
+
     # Execute with error
     with pytest.raises(ValueError, match="Cannot divide by zero"):
         await execute_endpoint_with_engine(
@@ -759,7 +796,7 @@ tool:
             params={"a": 10, "b": 0},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
 
 
@@ -767,10 +804,11 @@ tool:
 async def test_python_endpoint_all_types(temp_project_dir, test_configs, execution_engine):
     """Test Python endpoints with all supported parameter and return types."""
     user_config, site_config = test_configs
-    
+
     # Create Python endpoint file with all types
     python_file = temp_project_dir / "python" / "type_test.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 from datetime import datetime, date, time, timedelta
 from mxcp.runtime import db
 import json
@@ -869,11 +907,13 @@ def test_sql_with_dates() -> list:
     
     # Query and return results
     return db.execute("SELECT * FROM test_dates ORDER BY id")
-""")
-    
+"""
+    )
+
     # Create tool definition for all parameter types
     tool_yaml = temp_project_dir / "tools" / "test_all_param_types.yml"
-    tool_yaml.write_text("""
+    tool_yaml.write_text(
+        """
 mxcp: 1
 tool:
   name: test_all_param_types
@@ -925,11 +965,13 @@ tool:
       default: "default"
   return:
     type: object
-""")
-    
+"""
+    )
+
     # Create tool for array return
     array_yaml = temp_project_dir / "tools" / "test_array_return.yml"
-    array_yaml.write_text("""
+    array_yaml.write_text(
+        """
 mxcp: 1
 tool:
   name: test_array_return
@@ -940,16 +982,17 @@ tool:
   parameters: []
   return:
     type: array
-""")
-    
+"""
+    )
+
     # Create tools for scalar returns
     scalar_tools = [
         ("test_scalar_string", "string"),
         ("test_scalar_number", "number"),
         ("test_scalar_boolean", "boolean"),
-        ("test_scalar_date", "string", "date-time")
+        ("test_scalar_date", "string", "date-time"),
     ]
-    
+
     for tool_name, return_type, *format_args in scalar_tools:
         scalar_yaml = temp_project_dir / "tools" / f"{tool_name}.yml"
         yaml_content = f"""
@@ -966,10 +1009,11 @@ tool:
         if format_args:
             yaml_content += f"\n    format: {format_args[0]}"
         scalar_yaml.write_text(yaml_content)
-    
+
     # Create tool for constraints
     constraints_yaml = temp_project_dir / "tools" / "test_constraints.yml"
-    constraints_yaml.write_text("""
+    constraints_yaml.write_text(
+        """
 mxcp: 1
 tool:
   name: test_constraints
@@ -1001,11 +1045,13 @@ tool:
       description: String with enum constraint (replaces pattern validation)
   return:
     type: object
-""")
-    
+"""
+    )
+
     # Create tool for SQL with dates
     sql_dates_yaml = temp_project_dir / "tools" / "test_sql_with_dates.yml"
-    sql_dates_yaml.write_text("""
+    sql_dates_yaml.write_text(
+        """
 mxcp: 1
 tool:
   name: test_sql_with_dates
@@ -1016,8 +1062,9 @@ tool:
   parameters: []
   return:
     type: array
-""")
-    
+"""
+    )
+
     # Test 1: All parameter types
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
@@ -1031,12 +1078,12 @@ tool:
             "obj_param": {"key1": "value1", "key2": 123},
             "date_param": "2024-01-15",
             "email_param": "test@example.com",
-            "enum_param": "option2"
+            "enum_param": "option2",
             # optional_param not provided, should use default
         },
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
     assert result["str_param"] == "Received: hello"
     assert result["int_param"] == 84
@@ -1068,11 +1115,11 @@ tool:
                 "obj_param": {"key1": "value1", "key2": 123},
                 "date_param": "2024-01-15",
                 "email_param": "invalid-email",  # Missing @ and domain
-                "enum_param": "option2"
+                "enum_param": "option2",
             },
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
 
     # Test invalid enum value
@@ -1089,11 +1136,11 @@ tool:
                 "obj_param": {"key1": "value1", "key2": 123},
                 "date_param": "2024-01-15",
                 "email_param": "test@example.com",
-                "enum_param": "invalid_option"  # Not in allowed enum values
+                "enum_param": "invalid_option",  # Not in allowed enum values
             },
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
 
     # Test 2: Array return with timestamps
@@ -1103,7 +1150,7 @@ tool:
         params={},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
     assert len(result) == 3
     # Check all timestamps are serialized as strings
@@ -1115,9 +1162,9 @@ tool:
         ("test_scalar_string", str, "Hello, World!"),
         ("test_scalar_number", (int, float), 42.5),
         ("test_scalar_boolean", bool, True),
-        ("test_scalar_date", str)  # DateTime serialized as string
+        ("test_scalar_date", str),  # DateTime serialized as string
     ]
-    
+
     for tool_name, expected_type, *expected_value in scalar_tests:
         result = await execute_endpoint_with_engine(
             endpoint_type="tool",
@@ -1125,7 +1172,7 @@ tool:
             params={},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
         assert isinstance(result, expected_type)
         if expected_value:
@@ -1143,11 +1190,11 @@ tool:
             "str_min_max": "hello",
             "int_min_max": 50,
             "array_min_max": ["a", "b"],
-            "str_enum": "Hello"
+            "str_enum": "Hello",
         },
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
     assert result["str_length"] == 5
     assert result["int_value"] == 50
@@ -1163,11 +1210,11 @@ tool:
                 "str_min_max": "hi",  # Too short
                 "int_min_max": 50,
                 "array_min_max": ["a", "b"],
-                "str_enum": "Hello"
+                "str_enum": "Hello",
             },
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
 
     with pytest.raises(ValueError, match="<= 100"):
@@ -1178,11 +1225,11 @@ tool:
                 "str_min_max": "hello",
                 "int_min_max": 150,  # Too large
                 "array_min_max": ["a", "b"],
-                "str_enum": "Hello"
+                "str_enum": "Hello",
             },
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
 
     # Test array size constraints
@@ -1194,11 +1241,11 @@ tool:
                 "str_min_max": "hello",
                 "int_min_max": 50,
                 "array_min_max": ["a"],  # Too few items (min 2)
-                "str_enum": "Hello"
+                "str_enum": "Hello",
             },
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
 
     with pytest.raises(ValueError, match="at least 2 items"):
@@ -1209,11 +1256,11 @@ tool:
                 "str_min_max": "hello",
                 "int_min_max": 50,
                 "array_min_max": ["a"],  # Too few items (min 2)
-                "str_enum": "Hello"
+                "str_enum": "Hello",
             },
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
 
     with pytest.raises(ValueError, match="at most 5 items"):
@@ -1224,11 +1271,11 @@ tool:
                 "str_min_max": "hello",
                 "int_min_max": 50,
                 "array_min_max": ["a", "b", "c", "d", "e", "f"],  # Too many items (max 5)
-                "str_enum": "Hello"
+                "str_enum": "Hello",
             },
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
 
     # Test 5: SQL with timestamps
@@ -1238,7 +1285,7 @@ tool:
         params={},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
     assert len(result) == 2
     # Check all timestamps are serialized as strings
@@ -1251,10 +1298,11 @@ tool:
 async def test_python_parameter_mismatches(temp_project_dir, test_configs, execution_engine):
     """Test parameter mismatches between YAML definition and Python function signature."""
     user_config, site_config = test_configs
-    
+
     # Create Python file with various function signatures
     python_file = temp_project_dir / "python" / "param_mismatch_test.py"
-    python_file.write_text("""
+    python_file.write_text(
+        """
 def missing_args(a: int, b: int) -> dict:
     \"\"\"Function that expects two arguments\"\"\"
     return {"result": a + b}
@@ -1296,12 +1344,14 @@ def kwargs_function(a: int, **kwargs) -> dict:
 def positional_only(a: int, b: int, /) -> dict:
     \"\"\"Function with positional-only parameters\"\"\"
     return {"result": a - b}
-""")
-    
+"""
+    )
+
     # Test 1: Missing required arguments
     # YAML defines no parameters, but function expects 2
     tool_yaml = temp_project_dir / "tools" / "missing_args.yml"
-    tool_yaml.write_text("""
+    tool_yaml.write_text(
+        """
 mxcp: 1
 tool:
   name: missing_args
@@ -1312,8 +1362,9 @@ tool:
   parameters: []
   return:
     type: object
-""")
-    
+"""
+    )
+
     # This should raise TypeError because function expects 'a' and 'b'
     with pytest.raises(TypeError, match="missing.*required.*argument"):
         await execute_endpoint_with_engine(
@@ -1322,13 +1373,14 @@ tool:
             params={},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
-    
+
     # Test 2: Too many arguments
     # YAML defines parameters that function doesn't accept
     tool_yaml2 = temp_project_dir / "tools" / "extra_args.yml"
-    tool_yaml2.write_text("""
+    tool_yaml2.write_text(
+        """
 mxcp: 1
 tool:
   name: extra_args
@@ -1348,8 +1400,9 @@ tool:
       description: Extra parameter
   return:
     type: object
-""")
-    
+"""
+    )
+
     # This should raise TypeError because function doesn't accept 'b' and 'c'
     with pytest.raises(TypeError, match="unexpected keyword argument"):
         await execute_endpoint_with_engine(
@@ -1358,12 +1411,13 @@ tool:
             params={"a": 5, "b": 10, "c": "extra"},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
-    
+
     # Test 3: Optional parameters - not passing them
     tool_yaml3 = temp_project_dir / "tools" / "optional_params.yml"
-    tool_yaml3.write_text("""
+    tool_yaml3.write_text(
+        """
 mxcp: 1
 tool:
   name: optional_params
@@ -1377,8 +1431,9 @@ tool:
       description: Required parameter
   return:
     type: object
-""")
-    
+"""
+    )
+
     # This should work - 'b' and 'c' have defaults
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
@@ -1386,17 +1441,18 @@ tool:
         params={"a": 5},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
     assert result["a"] == 5
     assert result["b"] == 10  # default value
     assert result["c"] == "default"  # default value
     assert result["sum"] == 15
-    
+
     # Test 4: YAML validator prevents unknown parameters
     # This test shows that unknown parameters are caught at validation time
     tool_yaml4 = temp_project_dir / "tools" / "validate_params.yml"
-    tool_yaml4.write_text("""
+    tool_yaml4.write_text(
+        """
 mxcp: 1
 tool:
   name: extra_args
@@ -1410,8 +1466,9 @@ tool:
       description: Only parameter defined in YAML
   return:
     type: object
-""")
-    
+"""
+    )
+
     # The executor validates against YAML first, so unknown params are rejected
     with pytest.raises(ValueError, match="Unknown parameter: b"):
         await execute_endpoint_with_engine(
@@ -1420,12 +1477,13 @@ tool:
             params={"a": 5, "b": 10},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
-    
+
     # Test 5: Python function with missing required params (YAML defines param but doesn't pass it)
     tool_yaml5 = temp_project_dir / "tools" / "missing_args_python.yml"
-    tool_yaml5.write_text("""
+    tool_yaml5.write_text(
+        """
 mxcp: 1
 tool:
   name: missing_args_python
@@ -1439,8 +1497,9 @@ tool:
       description: Only one param defined, but function needs two
   return:
     type: object
-""")
-    
+"""
+    )
+
     # This should raise TypeError at function call time
     with pytest.raises(TypeError, match="missing.*required.*argument.*'b'"):
         await execute_endpoint_with_engine(
@@ -1449,12 +1508,13 @@ tool:
             params={"a": 5},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
-    
+
     # Test 5b: Optional parameters properly defined in YAML
     tool_yaml5b = temp_project_dir / "tools" / "optional_params_proper.yml"
-    tool_yaml5b.write_text("""
+    tool_yaml5b.write_text(
+        """
 mxcp: 1
 tool:
   name: optional_params_proper
@@ -1476,8 +1536,9 @@ tool:
       default: "default"
   return:
     type: object
-""")
-    
+"""
+    )
+
     # Test with only required param - should use defaults from YAML
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
@@ -1485,12 +1546,12 @@ tool:
         params={"a": 7},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
     assert result["a"] == 7
     assert result["b"] == 10  # YAML default
     assert result["c"] == "default"  # YAML default
-    
+
     # Test overriding defaults
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
@@ -1498,16 +1559,17 @@ tool:
         params={"a": 3, "b": 15, "c": "override"},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
     assert result["a"] == 3
     assert result["b"] == 15
     assert result["c"] == "override"
     assert result["sum"] == 18
-    
+
     # Test 6: Function with **kwargs accepts extra arguments
     tool_yaml6 = temp_project_dir / "tools" / "kwargs_function.yml"
-    tool_yaml6.write_text("""
+    tool_yaml6.write_text(
+        """
 mxcp: 1
 tool:
   name: kwargs_function
@@ -1527,8 +1589,9 @@ tool:
       description: Extra parameter 2
   return:
     type: object
-""")
-    
+"""
+    )
+
     # This should work - function accepts **kwargs
     result = await execute_endpoint_with_engine(
         endpoint_type="tool",
@@ -1536,16 +1599,17 @@ tool:
         params={"a": 5, "extra1": "hello", "extra2": 42},
         user_config=user_config,
         site_config=site_config,
-        execution_engine=execution_engine
+        execution_engine=execution_engine,
     )
     assert result["a"] == 5
     assert set(result["extra_keys"]) == {"extra1", "extra2"}
     assert result["extra_values"]["extra1"] == "hello"
     assert result["extra_values"]["extra2"] == 42
-    
+
     # Test 7: Positional-only parameters (Python 3.8+)
     tool_yaml7 = temp_project_dir / "tools" / "positional_only.yml"
-    tool_yaml7.write_text("""
+    tool_yaml7.write_text(
+        """
 mxcp: 1
 tool:
   name: positional_only
@@ -1562,8 +1626,9 @@ tool:
       description: Second number
   return:
     type: object
-""")
-    
+"""
+    )
+
     # This should fail because we're passing keyword arguments to positional-only params
     with pytest.raises(TypeError, match="positional-only"):
         await execute_endpoint_with_engine(
@@ -1572,5 +1637,5 @@ tool:
             params={"a": 10, "b": 3},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
-        ) 
+            execution_engine=execution_engine,
+        )

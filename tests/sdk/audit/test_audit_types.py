@@ -1,15 +1,17 @@
 """Test core audit types, schemas, and data structures."""
+
 from datetime import datetime, timezone
+
 from mxcp.sdk.audit import (
     AuditRecord,
     AuditSchema,
-    FieldDefinition,
-    FieldRedaction,
-    EvidenceLevel,
-    RedactionStrategy,
     CallerType,
     EventType,
-    Status
+    EvidenceLevel,
+    FieldDefinition,
+    FieldRedaction,
+    RedactionStrategy,
+    Status,
 )
 
 
@@ -24,9 +26,9 @@ def test_audit_record_creation():
         input_data={"param": "value"},
         duration_ms=100,
         user_id="user123",
-        operation_status="success"
+        operation_status="success",
     )
-    
+
     assert record.schema_name == "test_schema"
     assert record.schema_version == 1
     assert record.operation_type == "tool"
@@ -50,9 +52,9 @@ def test_audit_record_with_output_data():
         input_data={"param": "value"},
         output_data={"result": "success"},
         duration_ms=100,
-        operation_status="success"
+        operation_status="success",
     )
-    
+
     assert record.output_data == {"result": "success"}
 
 
@@ -65,9 +67,9 @@ def test_audit_record_minimal():
         caller_type="cli",
         input_data={},
         duration_ms=0,
-        operation_status="success"
+        operation_status="success",
     )
-    
+
     assert record.schema_name == "test_schema"
     assert record.operation_type == "tool"
     assert record.operation_name == "test_tool"
@@ -76,13 +78,9 @@ def test_audit_record_minimal():
 def test_field_definition():
     """Test FieldDefinition creation."""
     field = FieldDefinition(
-        name="email",
-        type="string",
-        required=True,
-        description="User email address",
-        sensitive=True
+        name="email", type="string", required=True, description="User email address", sensitive=True
     )
-    
+
     assert field.name == "email"
     assert field.type == "string"
     assert field.required is True
@@ -93,7 +91,7 @@ def test_field_definition():
 def test_field_definition_defaults():
     """Test FieldDefinition with default values."""
     field = FieldDefinition(name="id", type="string")
-    
+
     assert field.name == "id"
     assert field.type == "string"
     assert field.required is True  # Default
@@ -104,11 +102,9 @@ def test_field_definition_defaults():
 def test_field_redaction():
     """Test FieldRedaction creation."""
     redaction = FieldRedaction(
-        field_path="user.email",
-        strategy=RedactionStrategy.EMAIL,
-        options={"preserve_domain": True}
+        field_path="user.email", strategy=RedactionStrategy.EMAIL, options={"preserve_domain": True}
     )
-    
+
     assert redaction.field_path == "user.email"
     assert redaction.strategy == RedactionStrategy.EMAIL
     assert redaction.options == {"preserve_domain": True}
@@ -116,11 +112,8 @@ def test_field_redaction():
 
 def test_field_redaction_no_options():
     """Test FieldRedaction without options."""
-    redaction = FieldRedaction(
-        field_path="password",
-        strategy=RedactionStrategy.FULL
-    )
-    
+    redaction = FieldRedaction(field_path="password", strategy=RedactionStrategy.FULL)
+
     assert redaction.field_path == "password"
     assert redaction.strategy == RedactionStrategy.FULL
     assert redaction.options is None
@@ -137,15 +130,13 @@ def test_audit_schema_creation():
         fields=[
             FieldDefinition("event_type", "string"),
             FieldDefinition("user_id", "string"),
-            FieldDefinition("ip_address", "string", sensitive=True)
+            FieldDefinition("ip_address", "string", sensitive=True),
         ],
-        field_redactions=[
-            FieldRedaction("ip_address", RedactionStrategy.PARTIAL)
-        ],
+        field_redactions=[FieldRedaction("ip_address", RedactionStrategy.PARTIAL)],
         extract_fields=["event_type", "user_id"],
-        indexes=["event_type", "timestamp", "user_id"]
+        indexes=["event_type", "timestamp", "user_id"],
     )
-    
+
     assert schema.schema_name == "user_events"
     assert schema.version == 1
     assert schema.description == "User authentication events"
@@ -161,12 +152,8 @@ def test_audit_schema_creation():
 
 def test_audit_schema_minimal():
     """Test AuditSchema with minimal required fields."""
-    schema = AuditSchema(
-        schema_name="simple_events",
-        version=1,
-        description="Simple event schema"
-    )
-    
+    schema = AuditSchema(schema_name="simple_events", version=1, description="Simple event schema")
+
     assert schema.schema_name == "simple_events"
     assert schema.version == 1
     assert schema.description == "Simple event schema"
@@ -180,12 +167,8 @@ def test_audit_schema_minimal():
 
 def test_audit_schema_get_schema_id():
     """Test AuditSchema.get_schema_id() method."""
-    schema = AuditSchema(
-        schema_name="test_schema",
-        version=2,
-        description="Test schema"
-    )
-    
+    schema = AuditSchema(schema_name="test_schema", version=2, description="Test schema")
+
     assert schema.get_schema_id() == "test_schema:v2"
 
 
@@ -239,40 +222,32 @@ def test_schema_field_validation():
         description="Test field validation",
         fields=[
             FieldDefinition("email", "string", sensitive=True),
-            FieldDefinition("name", "string", sensitive=False)
+            FieldDefinition("name", "string", sensitive=False),
         ],
         field_redactions=[
             FieldRedaction("email", RedactionStrategy.EMAIL),
             # Note: redaction for "name" is optional since it's not sensitive
-        ]
+        ],
     )
-    
+
     # Should be able to create the schema without issues
     assert len(schema.fields) == 2
     assert len(schema.field_redactions) == 1
-    
+
     # Check that sensitive field is properly marked
     email_field = next(f for f in schema.fields if f.name == "email")
     name_field = next(f for f in schema.fields if f.name == "name")
-    
+
     assert email_field.sensitive is True
     assert name_field.sensitive is False
 
 
 def test_schema_versioning():
     """Test schema versioning behavior."""
-    schema_v1 = AuditSchema(
-        schema_name="versioned_schema",
-        version=1,
-        description="Version 1"
-    )
-    
-    schema_v2 = AuditSchema(
-        schema_name="versioned_schema",
-        version=2,
-        description="Version 2"
-    )
-    
+    schema_v1 = AuditSchema(schema_name="versioned_schema", version=1, description="Version 1")
+
+    schema_v2 = AuditSchema(schema_name="versioned_schema", version=2, description="Version 2")
+
     assert schema_v1.get_schema_id() == "versioned_schema:v1"
     assert schema_v2.get_schema_id() == "versioned_schema:v2"
     assert schema_v1.get_schema_id() != schema_v2.get_schema_id()

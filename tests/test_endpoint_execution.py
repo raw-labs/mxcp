@@ -1,22 +1,29 @@
-import pytest
 import asyncio
-from pathlib import Path
-from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
-from mxcp.config.execution_engine import create_execution_engine
-from mxcp.endpoints.loader import EndpointLoader
-from mxcp.config.user_config import load_user_config
-from mxcp.config.site_config import load_site_config
-import duckdb
 import os
+from pathlib import Path
+
+import duckdb
+import pytest
+
+from mxcp.config.execution_engine import create_execution_engine
+from mxcp.config.site_config import load_site_config
+from mxcp.config.user_config import load_user_config
+from mxcp.endpoints.loader import EndpointLoader
+from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
-    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "endpoint-execution" / "mxcp-config.yml")
+    os.environ["MXCP_CONFIG"] = str(
+        Path(__file__).parent / "fixtures" / "endpoint-execution" / "mxcp-config.yml"
+    )
+
 
 @pytest.fixture
 def test_repo_path():
     """Path to the test repository."""
     return Path(__file__).parent / "fixtures" / "endpoint-execution"
+
 
 @pytest.fixture
 def user_config(test_repo_path):
@@ -29,6 +36,7 @@ def user_config(test_repo_path):
     finally:
         os.chdir(original_dir)
 
+
 @pytest.fixture
 def site_config(test_repo_path):
     """Load test site configuration."""
@@ -39,10 +47,12 @@ def site_config(test_repo_path):
     finally:
         os.chdir(original_dir)
 
+
 @pytest.fixture
 def execution_engine(user_config, site_config):
     """Create execution engine for tests."""
     return create_execution_engine(user_config, site_config)
+
 
 def test_endpoint_loading(site_config, test_repo_path):
     """Test that endpoint definition is loaded correctly"""
@@ -63,9 +73,10 @@ def test_endpoint_loading(site_config, test_repo_path):
     finally:
         os.chdir(original_dir)
 
+
 def test_parameter_validation(site_config, test_repo_path):
     """Test parameter validation against schema"""
-    # Change to test repo directory for relative path resolution  
+    # Change to test repo directory for relative path resolution
     original_dir = os.getcwd()
     os.chdir(test_repo_path)
     try:
@@ -75,12 +86,9 @@ def test_parameter_validation(site_config, test_repo_path):
             "age": 25,
             "is_active": True,
             "tags": ["tag1", "tag2"],
-            "preferences": {
-                "notifications": True,
-                "theme": "dark"
-            }
+            "preferences": {"notifications": True, "theme": "dark"},
         }
-        
+
         # Load endpoint to check schema structure
         loader = EndpointLoader(site_config)
         result = loader.load_endpoint("tool", "example")
@@ -90,7 +98,7 @@ def test_parameter_validation(site_config, test_repo_path):
         assert "tool" in endpoint_definition
         tool_def = endpoint_definition["tool"]
         assert tool_def is not None
-        
+
         # Verify the schema has the expected parameter definitions
         parameters = tool_def["parameters"]
         assert parameters is not None
@@ -100,9 +108,10 @@ def test_parameter_validation(site_config, test_repo_path):
         assert "is_active" in param_names
         assert "tags" in param_names
         assert "preferences" in param_names
-        
+
     finally:
         os.chdir(original_dir)
+
 
 @pytest.mark.asyncio
 async def test_sql_execution(execution_engine, user_config, site_config, test_repo_path):
@@ -117,21 +126,18 @@ async def test_sql_execution(execution_engine, user_config, site_config, test_re
             "age": 25,
             "is_active": True,
             "tags": ["tag1", "tag2"],
-            "preferences": {
-                "notifications": True,
-                "theme": "dark"
-            }
+            "preferences": {"notifications": True, "theme": "dark"},
         }
-        
+
         result = await execute_endpoint_with_engine(
             endpoint_type="tool",
             name="example",
             params=params,
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine
+            execution_engine=execution_engine,
         )
-        
+
         # Verify result structure based on the endpoint's return type
         assert result is not None
         if isinstance(result, list):
@@ -139,7 +145,7 @@ async def test_sql_execution(execution_engine, user_config, site_config, test_re
             # Check first row has expected columns
             row = result[0]
             assert "name" in row
-            assert "age" in row  
+            assert "age" in row
             assert "is_active" in row
         elif isinstance(result, dict):
             # Single object return
@@ -147,6 +153,6 @@ async def test_sql_execution(execution_engine, user_config, site_config, test_re
             assert "age" in result
             assert "is_active" in result
         # Could also be scalar depending on the endpoint's return type
-            
+
     finally:
-        os.chdir(original_dir) 
+        os.chdir(original_dir)

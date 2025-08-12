@@ -4,10 +4,12 @@ Jira Plugin Implementation
 This module provides UDFs for querying Atlassian Jira using JQL.
 """
 
-from typing import Dict, Any, List, Optional
-import logging
 import json
+import logging
+from typing import Any, Dict, List, Optional
+
 from atlassian import Jira
+
 from mxcp.plugins import MXCPBasePlugin, udf
 
 logger = logging.getLogger(__name__)

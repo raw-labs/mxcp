@@ -4,10 +4,12 @@ Confluence Plugin Implementation
 This module provides UDFs for interacting with Atlassian Confluence.
 """
 
-from typing import Dict, Any, List, Optional
-import logging
 import json
+import logging
+from typing import Any, Dict, List, Optional
+
 from atlassian import Confluence
+
 from mxcp.plugins import MXCPBasePlugin, udf
 
 logger = logging.getLogger(__name__)
@@ -56,8 +58,7 @@ class MXCPPlugin(MXCPBasePlugin):
             JSON string containing matching pages
         """
         logger.info(
-            "Executing CQL query: %s in space=%s with max_results=%s",
-            query, space_key, max_results
+            "Executing CQL query: %s in space=%s with max_results=%s", query, space_key, max_results
         )
 
         # Build the CQL query

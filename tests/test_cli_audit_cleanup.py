@@ -1,12 +1,14 @@
 """Test the log cleanup CLI command."""
-import json
-import pytest
-import tempfile
+
 import asyncio
+import json
 import os
-from pathlib import Path
-from click.testing import CliRunner
+import tempfile
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+from click.testing import CliRunner
 
 from mxcp.cli.log_cleanup import log_cleanup
 from mxcp.sdk.audit import AuditLogger, AuditSchema
@@ -31,7 +33,8 @@ def test_audit_cleanup_json_output():
     runner = CliRunner()
     with runner.isolated_filesystem():
         # Create minimal config - use mxcp-site.yml
-        Path("mxcp-site.yml").write_text("""
+        Path("mxcp-site.yml").write_text(
+            """
 mxcp: 1
 project: test-project
 profile: default
@@ -40,24 +43,25 @@ profiles:
     audit:
       enabled: true
       path: audit/test.jsonl
-""")
+"""
+        )
         Path("audit").mkdir(parents=True)
         Path("audit/test.jsonl").touch()
-        
-        result = runner.invoke(log_cleanup, ['--json', '--dry-run'])
+
+        result = runner.invoke(log_cleanup, ["--json", "--dry-run"])
         if result.exit_code != 0:
             print(f"Error output: {result.output}")
             print(f"Exception: {result.exception}")
         assert result.exit_code == 0
-        
+
         # Parse JSON output
         output = json.loads(result.output)
         # The output_result function wraps the result
-        assert output['status'] == 'ok'
-        assert 'result' in output
-        actual_result = output['result']
-        assert actual_result['status'] == 'dry_run'
-        assert 'deleted_per_schema' in actual_result
+        assert output["status"] == "ok"
+        assert "result" in output
+        actual_result = output["result"]
+        assert actual_result["status"] == "dry_run"
+        assert "deleted_per_schema" in actual_result
 
 
 def test_audit_cleanup_disabled():
@@ -65,7 +69,8 @@ def test_audit_cleanup_disabled():
     runner = CliRunner()
     with runner.isolated_filesystem():
         # Create config with auditing disabled
-        Path("mxcp-site.yml").write_text("""
+        Path("mxcp-site.yml").write_text(
+            """
 mxcp: 1
 project: test-project
 profile: default
@@ -73,8 +78,9 @@ profiles:
   default:
     audit:
       enabled: false
-""")
-        
+"""
+        )
+
         result = runner.invoke(log_cleanup, [])
         assert result.exit_code == 0
         assert "Audit logging is not enabled" in result.output

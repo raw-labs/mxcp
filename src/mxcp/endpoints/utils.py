@@ -4,23 +4,24 @@ This module consolidates common functionality used across endpoint loading,
 execution, and validation to avoid code duplication.
 """
 
+import logging
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional
-import logging
+from typing import Any, Dict, Optional, Tuple, cast
 
 logger = logging.getLogger(__name__)
 
 
 class EndpointType(Enum):
     """Endpoint type enumeration."""
+
     TOOL = "tool"
     RESOURCE = "resource"
     PROMPT = "prompt"
 
 
 def get_endpoint_source_code(
-    endpoint_dict: dict, endpoint_type: str, endpoint_file_path: Path, repo_root: Path
+    endpoint_dict: Dict[str, Any], endpoint_type: str, endpoint_file_path: Path, repo_root: Path
 ) -> str:
     """Get the source code for the endpoint, resolving code vs file.
 
@@ -38,7 +39,7 @@ def get_endpoint_source_code(
     """
     source = endpoint_dict[endpoint_type]["source"]
     if "code" in source:
-        return source["code"]
+        return cast(str, source["code"])
     elif "file" in source:
         source_path = Path(source["file"])
         if source_path.is_absolute():
@@ -84,7 +85,7 @@ def detect_language_from_source(source: Dict[str, Any], file_path: Optional[str]
     """
     # Check if language is explicitly specified
     if "language" in source:
-        return source["language"]
+        return cast(str, source["language"])
     # Try to infer from file extension
     path_to_check = file_path or source.get("file")
     if path_to_check:
@@ -113,7 +114,7 @@ def resolve_file_path(file_path: str, endpoint_file_path: Path, repo_root: Path)
         return endpoint_file_path.parent / source_path
 
 
-def get_endpoint_name_or_uri(endpoint_dict: dict, endpoint_type: str) -> str:
+def get_endpoint_name_or_uri(endpoint_dict: Dict[str, Any], endpoint_type: str) -> str:
     """Get the name or URI identifier for an endpoint.
 
     Args:
@@ -125,13 +126,13 @@ def get_endpoint_name_or_uri(endpoint_dict: dict, endpoint_type: str) -> str:
     """
     endpoint_data = endpoint_dict[endpoint_type]
     if endpoint_type == "resource":
-        return endpoint_data["uri"]
+        return cast(str, endpoint_data["uri"])
     else:
-        return endpoint_data["name"]
+        return cast(str, endpoint_data["name"])
 
 
 def prepare_source_for_execution(
-    endpoint_dict: dict,
+    endpoint_dict: Dict[str, Any],
     endpoint_type: str,
     endpoint_file_path: Path,
     repo_root: Path,

@@ -7,4 +7,4 @@ Unlike the API token version, this plugin uses OAuth tokens from authenticated u
 
 from .plugin import MXCPPlugin
 
-__all__ = ["MXCPPlugin"] 
+__all__ = ["MXCPPlugin"]

@@ -13,7 +13,7 @@ Key components:
 Example usage:
     >>> from mxcp.sdk.policy import PolicyEnforcer, PolicySet, PolicyDefinition, PolicyAction
     >>> from mxcp.sdk.auth import UserContext
-    >>> 
+    >>>
     >>> # Define policies
     >>> policy_set = PolicySet(
     ...     input_policies=[
@@ -31,21 +31,16 @@ Example usage:
     ...         )
     ...     ]
     ... )
-    >>> 
+    >>>
     >>> # Create enforcer
     >>> enforcer = PolicyEnforcer(policy_set)
-    >>> 
+    >>>
     >>> # Use with user context
     >>> user = UserContext(username="john", role="guest")
     >>> enforcer.enforce_input_policies(user, {"param": "value"})
 """
 
-from .types import (
-    PolicyAction,
-    PolicyDefinition,
-    PolicySet,
-    PolicyEnforcementError
-)
+from ._types import PolicyAction, PolicyDefinition, PolicyEnforcementError, PolicySet
 from .enforcer import PolicyEnforcer
 
 __all__ = [
@@ -54,7 +49,6 @@ __all__ = [
     "PolicyDefinition",
     "PolicySet",
     "PolicyEnforcementError",
-    
     # Enforcer
     "PolicyEnforcer",
-] 
+]

@@ -6,12 +6,18 @@ This is a cloned version of the extension loader for the executor plugin system.
 """
 
 import logging
-from typing import List, Union, Optional
-from .types import ExtensionDefinition
+from typing import List, Optional, Union
 
-def load_extensions(con, extensions: Optional[List[ExtensionDefinition]] = None):
+import duckdb
+
+from ._types import ExtensionDefinition
+
+
+def load_extensions(
+    con: duckdb.DuckDBPyConnection, extensions: Optional[List[ExtensionDefinition]] = None
+) -> None:
     """Load DuckDB extensions based on configuration.
-    
+
     Args:
         con: DuckDB connection
         extensions: List of extensions to load. Can be strings for core extensions
@@ -29,9 +35,10 @@ def load_extensions(con, extensions: Optional[List[ExtensionDefinition]] = None)
         else:
             _load_extension(con, ext.name)
 
-def _load_extension(con, name: str, repo: Optional[str] = None):
+
+def _load_extension(con: duckdb.DuckDBPyConnection, name: str, repo: Optional[str] = None) -> None:
     """Load a single DuckDB extension.
-    
+
     Args:
         con: DuckDB connection
         name: Extension name
@@ -45,4 +52,4 @@ def _load_extension(con, name: str, repo: Optional[str] = None):
             con.sql(f"INSTALL {name}; LOAD {name};")
             logging.info(f"DuckDB extension '{name}' loaded.")
     except Exception as e:
-        logging.warning(f"Failed to load DuckDB extension '{name}': {e}") 
+        logging.warning(f"Failed to load DuckDB extension '{name}': {e}")

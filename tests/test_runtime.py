@@ -9,19 +9,24 @@ This test suite verifies that all runtime APIs work correctly:
 - plugins.get() and plugins.list() for plugin access
 - Lifecycle hooks (on_init, on_shutdown)
 """
-import os
-import pytest
+
 import asyncio
+import os
 from pathlib import Path
-from mxcp.endpoints.tester import run_tests
+
+import pytest
+
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
+from mxcp.endpoints.tester import run_tests
 
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env():
     """Set the MXCP_CONFIG environment variable for the test."""
-    os.environ["MXCP_CONFIG"] = str(Path(__file__).parent / "fixtures" / "runtime" / "mxcp-config.yml")
+    os.environ["MXCP_CONFIG"] = str(
+        Path(__file__).parent / "fixtures" / "runtime" / "mxcp-config.yml"
+    )
 
 
 @pytest.fixture
@@ -150,4 +155,4 @@ async def test_runtime_error_handling(runtime_repo_path, site_config, user_confi
         assert result["tests_run"] == 1
         assert result["tests"][0]["status"] == "passed"
     finally:
-        os.chdir(original_dir) 
+        os.chdir(original_dir)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """MXCP SDK Audit - Schema-based audit logging system for enterprise compliance.
 
-This module provides a comprehensive, schema-based audit logging system designed for 
+This module provides a comprehensive, schema-based audit logging system designed for
 enterprise compliance and performance at scale.
 
 ## Key Features
@@ -193,32 +193,30 @@ Schemas provide several advantages over per-request policies:
 - **Operations**: Bulk retention and querying by schema
 """
 
-from .types import (
-    # Core types
-    CallerType,
-    EventType, 
-    PolicyDecision,
-    Status,
+from ._types import (  # Core types; Protocols
+    AuditBackend,
     AuditRecord,
     AuditSchema,
-    FieldDefinition,
+    CallerType,
+    EventType,
     EvidenceLevel,
+    FieldDefinition,
     FieldRedaction,
-    RedactionStrategy,
     IntegrityResult,
-    # Protocols
-    AuditBackend,
+    PolicyDecision,
+    RedactionStrategy,
+    Status,
 )
-from .logger import AuditLogger
-from .writer import BaseAuditWriter, AuditRedactor
-from .redaction import apply_redaction
 from .backends.noop import NoOpAuditBackend
+from .logger import AuditLogger
+from .redaction import apply_redaction
+from .writer import AuditRedactor, BaseAuditWriter
 
 __all__ = [
     # Core types
     "CallerType",
     "EventType",
-    "PolicyDecision", 
+    "PolicyDecision",
     "Status",
     "AuditRecord",
     "AuditSchema",
@@ -236,5 +234,5 @@ __all__ = [
     # Protocols
     "AuditBackend",
     # Redaction function
-    "apply_redaction"
-] 
+    "apply_redaction",
+]

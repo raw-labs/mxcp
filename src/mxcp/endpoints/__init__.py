@@ -1,0 +1,1 @@
+"""MXCP endpoints module."""

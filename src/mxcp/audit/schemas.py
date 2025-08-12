@@ -3,8 +3,8 @@
 This module defines the audit schemas used by the MXCP CLI and server.
 These are application-specific schemas, not part of the SDK.
 """
-from mxcp.sdk.audit import AuditSchema, FieldDefinition, EvidenceLevel
 
+from mxcp.sdk.audit import AuditSchema, EvidenceLevel, FieldDefinition
 
 # Single schema for all endpoint executions
 ENDPOINT_EXECUTION_SCHEMA = AuditSchema(
@@ -19,8 +19,10 @@ ENDPOINT_EXECUTION_SCHEMA = AuditSchema(
         FieldDefinition("input_data", "object", sensitive=True),
         FieldDefinition("output_data", "object", required=False),
         FieldDefinition("error", "string", required=False),
-        FieldDefinition("policy_decision", "string", required=False),  # "allow", "deny", "warn", "n/a"
-        FieldDefinition("policy_reason", "string", required=False)
+        FieldDefinition(
+            "policy_decision", "string", required=False
+        ),  # "allow", "deny", "warn", "n/a"
+        FieldDefinition("policy_reason", "string", required=False),
     ],
-    indexes=["operation_type", "operation_name", "timestamp", "user_id"]
+    indexes=["operation_type", "operation_name", "timestamp", "user_id"],
 )

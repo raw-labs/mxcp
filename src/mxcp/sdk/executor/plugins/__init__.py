@@ -14,4 +14,4 @@ from .python import PythonExecutor
 __all__ = [
     "DuckDBExecutor",
     "PythonExecutor",
-] 
+]
