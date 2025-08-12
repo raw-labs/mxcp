@@ -133,15 +133,11 @@ def lint_return_type(
     if return_def.get("type") == "array" and "items" in return_def:
         items = return_def.get("items")
         if items is not None:
-            lint_nested_type(
-                items, f"{endpoint_type}.return.items", issues, path
-            )
+            lint_nested_type(items, f"{endpoint_type}.return.items", issues, path)
     elif return_def.get("type") == "object" and "properties" in return_def:
         properties = return_def.get("properties")
         if properties is not None:
-            lint_object_properties(
-                properties, f"{endpoint_type}.return.properties", issues, path
-            )
+            lint_object_properties(properties, f"{endpoint_type}.return.properties", issues, path)
 
 
 def lint_nested_type(

@@ -6,12 +6,18 @@ replacing the legacy DuckDBSession-based execution. This is used by CLI commands
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
-from mxcp.endpoints._types import EndpointDefinition, TypeDefinition
+from mxcp.endpoints._types import (
+    EndpointDefinition,
+    PromptDefinition,
+    ResourceDefinition,
+    ToolDefinition,
+    TypeDefinition,
+)
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.utils import prepare_source_for_execution
 from mxcp.policies import parse_policies_from_config
@@ -123,27 +129,44 @@ async def execute_endpoint_with_engine(
     endpoint_file_path, endpoint_definition = endpoint_result
 
     # endpoint_definition is the raw dict containing the full endpoint structure
-    # Extract the type-specific data
-    endpoint_dict: Optional[Dict[str, Any]] = None
+    # Extract the type-specific data with proper typing
+    policy_enforcer = None
+
     if endpoint_type == "tool":
-        endpoint_dict = cast(Optional[Dict[str, Any]], endpoint_definition.get("tool"))
+        tool_def = endpoint_definition.get("tool")
+        if not tool_def:
+            raise ValueError(f"No tool definition found in endpoint")
+
+        policies_config = tool_def.get("policies")
+        if policies_config:
+            policy_set = parse_policies_from_config(cast(Dict[str, Any], policies_config))
+            if policy_set:
+                policy_enforcer = PolicyEnforcer(policy_set)
+
     elif endpoint_type == "resource":
-        endpoint_dict = cast(Optional[Dict[str, Any]], endpoint_definition.get("resource"))
+        resource_def = endpoint_definition.get("resource")
+        if not resource_def:
+            raise ValueError(f"No resource definition found in endpoint")
+
+        policies_config = resource_def.get("policies")
+        if policies_config:
+            policy_set = parse_policies_from_config(cast(Dict[str, Any], policies_config))
+            if policy_set:
+                policy_enforcer = PolicyEnforcer(policy_set)
+
     elif endpoint_type == "prompt":
-        endpoint_dict = cast(Optional[Dict[str, Any]], endpoint_definition.get("prompt"))
+        prompt_def = endpoint_definition.get("prompt")
+        if not prompt_def:
+            raise ValueError(f"No prompt definition found in endpoint")
+
+        policies_config = prompt_def.get("policies")
+        if policies_config:
+            policy_set = parse_policies_from_config(cast(Dict[str, Any], policies_config))
+            if policy_set:
+                policy_enforcer = PolicyEnforcer(policy_set)
+
     else:
         raise ValueError(f"Unknown endpoint type: {endpoint_type}")
-
-    if endpoint_dict is None:
-        raise ValueError(f"No {endpoint_type} definition found in endpoint")
-
-    # Initialize policy enforcer if policies are defined
-    policy_enforcer = None
-    policies_config = endpoint_dict.get("policies")
-    if policies_config:
-        policy_set = parse_policies_from_config(policies_config)
-        if policy_set:
-            policy_enforcer = PolicyEnforcer(policy_set)
 
     # Enforce input policies if policy enforcer exists
     if policy_enforcer:
@@ -154,13 +177,13 @@ async def execute_endpoint_with_engine(
 
     # Dispatch to appropriate execution method based on endpoint type
     if endpoint_type == "prompt":
-        result = await _execute_prompt_with_validation(
-            endpoint_dict, params, skip_output_validation
-        )
+        # We already verified prompt_def exists above
+        prompt_def = cast(PromptDefinition, endpoint_definition.get("prompt"))
+        result = await _execute_prompt_with_validation(prompt_def, params, skip_output_validation)
     else:
         result = await _execute_code_with_engine(
-            endpoint_dict,
-            dict(endpoint_definition),
+            endpoint_definition,
+            endpoint_type,
             endpoint_file_path,
             repo_root,
             params,
@@ -173,8 +196,16 @@ async def execute_endpoint_with_engine(
     # Enforce output policies (symmetry with input policy enforcement above)
     if policy_enforcer:
         try:
+            # Get the appropriate definition for policy enforcement
+            if endpoint_type == "tool":
+                endpoint_def = cast(Dict[str, Any], endpoint_definition.get("tool"))
+            elif endpoint_type == "resource":
+                endpoint_def = cast(Dict[str, Any], endpoint_definition.get("resource"))
+            else:  # prompt
+                endpoint_def = cast(Dict[str, Any], endpoint_definition.get("prompt"))
+
             result, action = policy_enforcer.enforce_output_policies(
-                user_context, result, endpoint_dict
+                user_context, result, endpoint_def
             )
         except PolicyEnforcementError as e:
             raise ValueError(f"Output policy enforcement failed: {e.reason}")
@@ -183,7 +214,7 @@ async def execute_endpoint_with_engine(
 
 
 async def _execute_prompt_with_validation(
-    endpoint_dict: Dict[str, Any], params: Dict[str, Any], skip_output_validation: bool
+    prompt_def: PromptDefinition, params: Dict[str, Any], skip_output_validation: bool
 ) -> Any:
     """Execute prompt endpoint with proper validation and template rendering.
 
@@ -196,7 +227,7 @@ async def _execute_prompt_with_validation(
 
     validated_params = params
     if not skip_output_validation:
-        input_schema = endpoint_dict.get("parameters")
+        input_schema = prompt_def.get("parameters")
         if input_schema:
             # Use correct validator and schema structure (same as SDK executor)
             schema_dict = {"input": {"parameters": input_schema}}
@@ -204,7 +235,7 @@ async def _execute_prompt_with_validation(
             validated_params = validator.validate_input(params)
     else:
         # Apply defaults even when skipping validation (for template rendering)
-        param_defs = endpoint_dict.get("parameters", [])
+        param_defs = prompt_def.get("parameters") or []
         validated_params = params.copy()
         for param_def in param_defs:
             name = param_def["name"]
@@ -212,7 +243,7 @@ async def _execute_prompt_with_validation(
                 validated_params[name] = param_def["default"]
 
     # Template rendering with validated parameters
-    messages = endpoint_dict.get("messages", [])
+    messages = prompt_def.get("messages", [])
     processed_messages = []
 
     for msg in messages:
@@ -229,44 +260,9 @@ async def _execute_prompt_with_validation(
     return processed_messages
 
 
-async def _prepare_source_code(
-    endpoint_dict: Dict[str, Any],
-    endpoint_definition: Dict[str, Any],
-    endpoint_file_path: Path,
-    repo_root: Path,
-) -> tuple[str, str]:
-    """Prepare source code and determine language for SDK executor.
-
-    Args:
-        endpoint_dict: The endpoint-specific dictionary (tool/resource/prompt data)
-        endpoint_definition: The full endpoint definition dictionary
-        endpoint_file_path: Path to the endpoint YAML file
-        repo_root: Repository root path
-
-    Returns:
-        Tuple of (language, source_code) where:
-        - language: "python", "sql", etc.
-        - source_code: Either inline code, file path, or file_path:function_name
-
-    Raises:
-        ValueError: If no source code or file specified in endpoint definition
-    """
-    # Determine endpoint type
-    endpoint_type = "tool" if "tool" in endpoint_definition else "resource"
-
-    # Use consolidated utility with SDK executor-specific function name handling
-    return prepare_source_for_execution(
-        endpoint_definition,
-        endpoint_type,
-        endpoint_file_path,
-        repo_root,
-        include_function_name=True,
-    )
-
-
 async def _execute_code_with_engine(
-    endpoint_dict: Dict[str, Any],
-    endpoint_definition: Dict[str, Any],
+    endpoint_definition: EndpointDefinition,
+    endpoint_type: str,
     endpoint_file_path: Path,
     repo_root: Path,
     params: Dict[str, Any],
@@ -282,8 +278,12 @@ async def _execute_code_with_engine(
     We only need to handle output policy enforcement here.
     """
     # Prepare source code and language
-    language, source_code = await _prepare_source_code(
-        endpoint_dict, endpoint_definition, endpoint_file_path, repo_root
+    language, source_code = prepare_source_for_execution(
+        endpoint_definition,
+        endpoint_type,
+        endpoint_file_path,
+        repo_root,
+        include_function_name=True,
     )
 
     # Create execution context and populate with runtime data for the runtime module
@@ -307,12 +307,37 @@ async def _execute_code_with_engine(
         logger.error("Could not find SQL executor anywhere")
 
     # Get validation schemas - SDK executor handles input validation internally
-    input_schema = None
-    output_schema = None
-    if not skip_output_validation:
-        params_raw = endpoint_dict.get("parameters")
-        input_schema = params_raw if isinstance(params_raw, list) else None
-        output_schema = endpoint_dict.get("return")
+    input_schema: Optional[List[Dict[str, Any]]] = None
+    output_schema: Optional[TypeDefinition] = None
+    return_def: Optional[TypeDefinition] = None
+
+    if endpoint_type == "tool":
+        tool_def = endpoint_definition.get("tool")
+        if not tool_def:
+            raise ValueError(f"No tool definition found")
+        params_raw = tool_def.get("parameters")
+        # Cast to List[Dict[str, Any]] for SDK executor compatibility
+        input_schema = (
+            cast(Optional[List[Dict[str, Any]]], params_raw)
+            if isinstance(params_raw, list)
+            else None
+        )
+        # Tools use "return" not "return_" in the YAML
+        return_def = cast(Optional[TypeDefinition], tool_def.get("return"))
+        output_schema = return_def if not skip_output_validation else None
+    else:  # resource
+        resource_def = endpoint_definition.get("resource")
+        if not resource_def:
+            raise ValueError(f"No resource definition found")
+        params_raw = resource_def.get("parameters")
+        # Cast to List[Dict[str, Any]] for SDK executor compatibility
+        input_schema = (
+            cast(Optional[List[Dict[str, Any]]], params_raw)
+            if isinstance(params_raw, list)
+            else None
+        )
+        return_def = cast(Optional[TypeDefinition], resource_def.get("return"))
+        output_schema = return_def if not skip_output_validation else None
 
     # Execute using the provided SDK engine
     # NOTE: We don't pass output_schema here because we need to transform the result first
@@ -345,10 +370,11 @@ async def _execute_code_with_engine(
     # e.g. the SDK executor returning a list of dicts instead of a single dict.
     # ====================================================================
 
-    if language == "sql" and endpoint_dict.get("return"):
-        result = _transform_sql_result_for_return_type(
-            result, cast(TypeDefinition, endpoint_dict["return"])
-        )
+    # Apply result transformation for both SQL and Python endpoints
+    # The SDK executor tends to return lists for consistency, but we need
+    # to transform based on the declared return type for backward compatibility
+    if return_def and isinstance(result, list):
+        result = _transform_result_for_return_type(result, return_def)
 
     # Now validate the transformed result
     if output_schema and not skip_output_validation:
@@ -361,14 +387,14 @@ async def _execute_code_with_engine(
     return result
 
 
-def _transform_sql_result_for_return_type(result: Any, return_def: TypeDefinition) -> Any:
-    """Transform SQL result based on return type definition.
+def _transform_result_for_return_type(result: Any, return_def: TypeDefinition) -> Any:
+    """Transform result based on return type definition.
 
-    This replicates the exact logic from the old EndpointExecutor._execute_sql method
-    to maintain backward compatibility during the migration to SDK execution engine.
+    This replicates the exact logic from the old EndpointExecutor to maintain
+    backward compatibility during the migration to SDK execution engine.
 
     Args:
-        result: SQL result from SDK executor (always a list of dicts)
+        result: Result from SDK executor (typically a list of dicts)
         return_def: Return type definition from endpoint YAML
 
     Returns:
@@ -391,10 +417,10 @@ def _transform_sql_result_for_return_type(result: Any, return_def: TypeDefinitio
         return result  # Not a list, return as-is
 
     if len(result) == 0:
-        raise ValueError("SQL query returned no rows")
+        raise ValueError("No results returned")
     if len(result) > 1:
         raise ValueError(
-            f"SQL query returned multiple rows ({len(result)}), but return type is '{return_type}'"
+            f"Expected single result for return type '{return_type}', but got {len(result)} results"
         )
 
     # We have exactly one row
@@ -410,7 +436,7 @@ def _transform_sql_result_for_return_type(result: Any, return_def: TypeDefinitio
 
         if len(row) != 1:
             raise ValueError(
-                f"SQL query returned multiple columns ({len(row)}), but return type is '{return_type}'"
+                f"Expected single value for return type '{return_type}', but got {len(row)} values"
             )
 
         # Return the single column value

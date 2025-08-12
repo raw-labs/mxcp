@@ -58,7 +58,7 @@ class EndpointLoader:
         self._endpoints = {}
         self._repo_root = find_repo_root()
 
-    def _is_endpoint_enabled(self, endpoint_data: Dict[str, Any]) -> bool:
+    def _is_endpoint_enabled(self, endpoint_data: EndpointDefinition) -> bool:
         """Check if an endpoint is enabled.
 
         Args:
@@ -68,9 +68,18 @@ class EndpointLoader:
             True if the endpoint is enabled (default), False otherwise
         """
         # Check each endpoint type for the enabled field
-        for endpoint_type in ["tool", "resource", "prompt"]:
-            if endpoint_type in endpoint_data:
-                return cast(bool, endpoint_data[endpoint_type].get("enabled", True))
+        if "tool" in endpoint_data:
+            tool_def = endpoint_data.get("tool")
+            if tool_def:
+                return bool(tool_def.get("enabled", True))
+        elif "resource" in endpoint_data:
+            resource_def = endpoint_data.get("resource")
+            if resource_def:
+                return bool(resource_def.get("enabled", True))
+        elif "prompt" in endpoint_data:
+            prompt_def = endpoint_data.get("prompt")
+            if prompt_def:
+                return bool(prompt_def.get("enabled", True))
         return True
 
     def _load_schema(self, schema_name: str) -> Tuple[Dict[str, Any], Registry]:

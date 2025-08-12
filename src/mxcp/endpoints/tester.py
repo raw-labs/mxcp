@@ -14,7 +14,12 @@ from jsonschema import validate
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
-from mxcp.endpoints._types import EndpointDefinition, TestDefinition
+from mxcp.endpoints._types import (
+    AllEndpointsTestResults,
+    EndpointDefinition,
+    EndpointTestsResult,
+    TestDefinition,
+)
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 from mxcp.sdk.auth import UserContext

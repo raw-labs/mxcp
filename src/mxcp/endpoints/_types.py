@@ -1,5 +1,7 @@
 from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
 
+from mxcp.cli._types import TestResults
+
 
 class SourceDefinition(TypedDict, total=False):
     code: str
@@ -131,3 +133,25 @@ class EndpointDefinition(TypedDict):
     resource: Optional[ResourceDefinition]
     prompt: Optional[PromptDefinition]
     metadata: Optional[Dict[str, Any]]
+
+
+class EndpointTestsResultRequired(TypedDict):
+    """Required fields for endpoint test result."""
+
+    endpoint: str
+    path: str
+
+
+class EndpointTestsResult(EndpointTestsResultRequired, total=False):
+    """Result from testing a single endpoint."""
+
+    test_results: TestResults
+    error: str
+
+
+class AllEndpointsTestResults(TypedDict):
+    """Results from testing all endpoints."""
+
+    status: str  # "ok", "error", "failed"
+    tests_run: int
+    endpoints: List[EndpointTestsResult]

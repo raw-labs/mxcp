@@ -234,9 +234,7 @@ def validate_endpoint_payload(
         if endpoint_type == "resource":
             resource_def = endpoint.get("resource")
             if resource_def:
-                err = _validate_resource_uri_vs_params(
-                    resource_def, Path(relative_path)
-                )
+                err = _validate_resource_uri_vs_params(resource_def, Path(relative_path))
                 if err:
                     return err
 
@@ -279,9 +277,7 @@ def validate_endpoint_payload(
 
         # For SQL tools and resources, validate SQL
         try:
-            sql_query = get_endpoint_source_code(
-                cast(Dict[str, Any], endpoint), endpoint_type, path_obj, repo_root
-            )
+            sql_query = get_endpoint_source_code(endpoint, endpoint_type, path_obj, repo_root)
         except Exception as e:
             return {
                 "status": "error",
