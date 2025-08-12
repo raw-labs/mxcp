@@ -213,26 +213,29 @@ def lint_endpoint(path: Path, endpoint: Dict[str, Any]) -> List[LintIssue]:
     return issues
 
 
-def format_lint_results(
-    all_issues: List[Tuple[Path, List[LintIssue]]], json_output: bool = False
-) -> Union[str, List[Dict[str, Any]]]:
-    """Format lint results for display."""
-    if json_output:
-        # Convert to JSON-serializable format
-        results = []
-        for path, issues in all_issues:
-            for issue in issues:
-                results.append(
-                    {
-                        "severity": issue.severity,
-                        "path": str(path),
-                        "location": issue.location,
-                        "message": issue.message,
-                        "suggestion": issue.suggestion,
-                    }
-                )
-        return results
+def format_lint_results_as_json(
+    all_issues: List[Tuple[Path, List[LintIssue]]]
+) -> List[Dict[str, Any]]:
+    """Format lint results as JSON-serializable data structure."""
+    results = []
+    for path, issues in all_issues:
+        for issue in issues:
+            results.append(
+                {
+                    "severity": issue.severity,
+                    "path": str(path),
+                    "location": issue.location,
+                    "message": issue.message,
+                    "suggestion": issue.suggestion,
+                }
+            )
+    return results
 
+
+def format_lint_results_as_text(
+    all_issues: List[Tuple[Path, List[LintIssue]]]
+) -> str:
+    """Format lint results as human-readable text with colors and formatting."""
     # Human-readable format
     output = []
 
@@ -360,10 +363,10 @@ def lint(profile: str, json_output: bool, debug: bool, severity: str) -> None:
 
         # Format and output results
         if json_output:
-            results = format_lint_results(all_issues, json_output=True)
+            results = format_lint_results_as_json(all_issues)
             output_result(results, json_output, debug)
         else:
-            output = format_lint_results(all_issues, json_output=False)
+            output = format_lint_results_as_text(all_issues)
             click.echo(output)
 
     except Exception as e:
