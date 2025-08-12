@@ -8,8 +8,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
-from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config._types import SiteConfig, UserConfig
+from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.utils import prepare_source_for_execution

@@ -226,7 +226,7 @@ def compare_resources(
 
 def _extract_endpoint_identifier(definition: Optional[Any]) -> Optional[str]:
     """Extract endpoint identifier from definition.
-    
+
     The definition has the structure:
     {
         "mxcp": 1,

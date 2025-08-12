@@ -13,13 +13,13 @@ from mxcp.config.site_config import find_repo_root
 from mxcp.drift._types import (
     Column,
     DriftSnapshot,
+    Prompt,
+    Resource,
     ResourceDefinition,
     Table,
-    ValidationResults,
     TestResults,
     Tool,
-    Resource,
-    Prompt,
+    ValidationResults,
 )
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.tester import run_tests_with_session
@@ -157,7 +157,9 @@ async def generate_snapshot(
                 resource_data: ResourceDefinition = {
                     "validation_results": cast(ValidationResults, validation_result),
                     "test_results": cast(TestResults, test_result),
-                    "definition": cast(Optional[Union[Tool, Resource, Prompt]], endpoint),  # Store the full endpoint structure
+                    "definition": cast(
+                        Optional[Union[Tool, Resource, Prompt]], endpoint
+                    ),  # Store the full endpoint structure
                     "metadata": endpoint.get("metadata") if endpoint else None,
                 }
                 resources.append(resource_data)

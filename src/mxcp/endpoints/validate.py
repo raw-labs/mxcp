@@ -232,7 +232,9 @@ def validate_endpoint_payload(
         if endpoint_type == "resource":
             resource_def = endpoint.get("resource")
             if resource_def:
-                err = _validate_resource_uri_vs_params(cast(Dict[str, Any], resource_def), Path(relative_path))
+                err = _validate_resource_uri_vs_params(
+                    cast(Dict[str, Any], resource_def), Path(relative_path)
+                )
                 if err:
                     return err
 
@@ -245,7 +247,7 @@ def validate_endpoint_payload(
             endpoint_def = endpoint.get("prompt")
         else:
             endpoint_def = None
-        
+
         language = endpoint_def.get("language", "sql") if endpoint_def else "sql"
 
         if language == "python":
@@ -275,7 +277,9 @@ def validate_endpoint_payload(
 
         # For SQL tools and resources, validate SQL
         try:
-            sql_query = get_endpoint_source_code(cast(Dict[str, Any], endpoint), endpoint_type, path_obj, repo_root)
+            sql_query = get_endpoint_source_code(
+                cast(Dict[str, Any], endpoint), endpoint_type, path_obj, repo_root
+            )
         except Exception as e:
             return {
                 "status": "error",
@@ -314,7 +318,9 @@ def validate_endpoint_payload(
         # Extract parameters from YAML
         if endpoint_def:
             yaml_params = endpoint_def.get("parameters") or []
-            yaml_param_names = [p["name"] for p in yaml_params if isinstance(p, dict) and "name" in p]
+            yaml_param_names = [
+                p["name"] for p in yaml_params if isinstance(p, dict) and "name" in p
+            ]
         else:
             yaml_params = []
             yaml_param_names = []

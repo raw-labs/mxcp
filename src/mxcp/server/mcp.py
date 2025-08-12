@@ -23,10 +23,10 @@ from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.external_refs import ExternalRefTracker
 from mxcp.config.site_config import get_active_profile
 from mxcp.endpoints._types import (
-    ToolDefinition,
-    ResourceDefinition,
-    PromptDefinition,
     ParamDefinition,
+    PromptDefinition,
+    ResourceDefinition,
+    ToolDefinition,
     TypeDefinition,
 )
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
@@ -989,7 +989,9 @@ class RAWMCP:
             Pydantic type annotation (class or Annotated type)
         """
         param_name = param_def.get("name", "param")
-        return self._create_pydantic_model_from_schema(cast(Dict[str, Any], param_def), param_name, endpoint_type)
+        return self._create_pydantic_model_from_schema(
+            cast(Dict[str, Any], param_def), param_name, endpoint_type
+        )
 
     def _json_schema_to_python_type(
         self, param_def: ParamDefinition, endpoint_type: Optional[EndpointType] = None

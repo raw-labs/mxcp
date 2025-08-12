@@ -88,7 +88,7 @@ def _load_endpoints(site_config: SiteConfig) -> List[EndpointType]:
                     # Convert parameters to List[Dict[str, Any]]
                     params = tool.get("parameters") or []
                     param_list = [cast(Dict[str, Any], p) for p in params] if params else []
-                    
+
                     endpoints.append(
                         ToolEndpoint(
                             name=tool["name"],

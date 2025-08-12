@@ -35,7 +35,7 @@ from .persistence import (
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "ExternalOAuthHandler", 
+    "ExternalOAuthHandler",
     "GeneralOAuthAuthorizationServer",
     "AuthorizationParams",
     "ExternalUserInfo",

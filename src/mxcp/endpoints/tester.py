@@ -332,7 +332,11 @@ def extract_column_names(endpoint_def: EndpointDefinition, endpoint_type: str) -
             return_def = tool_def["return_"]
             if return_def and return_def.get("type") == "array" and "items" in return_def:
                 items = return_def["items"]
-                if isinstance(items, dict) and items.get("type") == "object" and "properties" in items:
+                if (
+                    isinstance(items, dict)
+                    and items.get("type") == "object"
+                    and "properties" in items
+                ):
                     properties = items.get("properties", {})
                     if isinstance(properties, dict):
                         columns = list(properties.keys())
@@ -343,7 +347,11 @@ def extract_column_names(endpoint_def: EndpointDefinition, endpoint_type: str) -
             return_def = resource_def["return_"]
             if return_def and return_def.get("type") == "array" and "items" in return_def:
                 items = return_def["items"]
-                if isinstance(items, dict) and items.get("type") == "object" and "properties" in items:
+                if (
+                    isinstance(items, dict)
+                    and items.get("type") == "object"
+                    and "properties" in items
+                ):
                     properties = items.get("properties", {})
                     if isinstance(properties, dict):
                         columns = list(properties.keys())

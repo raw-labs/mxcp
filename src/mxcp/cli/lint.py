@@ -7,14 +7,15 @@ from mxcp.cli.utils import configure_logging, output_error, output_result
 from mxcp.config.analytics import track_command_with_timing
 from mxcp.config.site_config import load_site_config
 from mxcp.endpoints._types import (
-    EndpointDefinition, 
+    EndpointDefinition,
     ParamDefinition,
     PromptDefinition,
-    ResourceDefinition, 
-    ToolDefinition, 
-    TypeDefinition
+    ResourceDefinition,
+    ToolDefinition,
+    TypeDefinition,
 )
 from mxcp.endpoints.loader import EndpointLoader
+
 
 class LintIssue:
     """Represents a single lint issue found in an endpoint."""
@@ -34,9 +35,11 @@ class LintIssue:
         self.suggestion = suggestion
 
 
-def lint_parameter(param: ParamDefinition, index: int, endpoint_type: str, issues: List[LintIssue], path: str) -> None:
+def lint_parameter(
+    param: ParamDefinition, index: int, endpoint_type: str, issues: List[LintIssue], path: str
+) -> None:
     """Lint a parameter definition for missing metadata.
-    
+
     Args:
         param: The parameter definition to lint
         index: The parameter index in the parameters array
@@ -45,7 +48,7 @@ def lint_parameter(param: ParamDefinition, index: int, endpoint_type: str, issue
         path: File path for error reporting
     """
     param_name = param.get("name", f"parameter[{index}]")
-    
+
     # Check for description (parameters must have descriptions)
     if "description" not in param:
         issues.append(
@@ -57,7 +60,7 @@ def lint_parameter(param: ParamDefinition, index: int, endpoint_type: str, issue
                 "Add a 'description' field to explain what this parameter does",
             )
         )
-    
+
     # Check for examples
     if "examples" not in param:
         issues.append(
@@ -69,7 +72,7 @@ def lint_parameter(param: ParamDefinition, index: int, endpoint_type: str, issue
                 "Consider adding an 'examples' array to help LLMs understand valid inputs",
             )
         )
-    
+
     # Check for default value on optional parameters
     if "default" not in param:
         issues.append(
@@ -81,21 +84,33 @@ def lint_parameter(param: ParamDefinition, index: int, endpoint_type: str, issue
                 "Consider adding a 'default' value for optional parameters",
             )
         )
-    
+
     # Lint nested type structures within the parameter
     if param.get("type") == "array" and "items" in param:
         items = param.get("items")
         if items is not None:
-            lint_nested_type(cast(Dict[str, Any], items), f"{endpoint_type}.parameters[{index}].items", issues, path)
+            lint_nested_type(
+                cast(Dict[str, Any], items),
+                f"{endpoint_type}.parameters[{index}].items",
+                issues,
+                path,
+            )
     elif param.get("type") == "object" and "properties" in param:
         properties = param.get("properties")
         if properties is not None:
-            lint_object_properties(cast(Dict[str, Any], properties), f"{endpoint_type}.parameters[{index}].properties", issues, path)
+            lint_object_properties(
+                cast(Dict[str, Any], properties),
+                f"{endpoint_type}.parameters[{index}].properties",
+                issues,
+                path,
+            )
 
 
-def lint_return_type(return_def: TypeDefinition, endpoint_type: str, issues: List[LintIssue], path: str) -> None:
+def lint_return_type(
+    return_def: TypeDefinition, endpoint_type: str, issues: List[LintIssue], path: str
+) -> None:
     """Lint a return type definition for missing description.
-    
+
     Args:
         return_def: The return type definition to lint
         endpoint_type: The type of endpoint (tool, resource, prompt)
@@ -113,21 +128,27 @@ def lint_return_type(return_def: TypeDefinition, endpoint_type: str, issues: Lis
                 "Add a 'description' field to help LLMs understand the output format",
             )
         )
-    
+
     # Lint nested structures
     if return_def.get("type") == "array" and "items" in return_def:
         items = return_def.get("items")
         if items is not None:
-            lint_nested_type(cast(Dict[str, Any], items), f"{endpoint_type}.return.items", issues, path)
+            lint_nested_type(
+                cast(Dict[str, Any], items), f"{endpoint_type}.return.items", issues, path
+            )
     elif return_def.get("type") == "object" and "properties" in return_def:
         properties = return_def.get("properties")
         if properties is not None:
-            lint_object_properties(cast(Dict[str, Any], properties), f"{endpoint_type}.return.properties", issues, path)
+            lint_object_properties(
+                cast(Dict[str, Any], properties), f"{endpoint_type}.return.properties", issues, path
+            )
 
 
-def lint_nested_type(type_def: Dict[str, Any], location: str, issues: List[LintIssue], path: str) -> None:
+def lint_nested_type(
+    type_def: Dict[str, Any], location: str, issues: List[LintIssue], path: str
+) -> None:
     """Lint nested type definitions (used within parameters or return types).
-    
+
     Args:
         type_def: A nested type definition (e.g., array items, object properties)
         location: The path to this definition in the endpoint
@@ -136,9 +157,9 @@ def lint_nested_type(type_def: Dict[str, Any], location: str, issues: List[LintI
     """
     if not isinstance(type_def, dict):
         return
-    
+
     type_name = type_def.get("type", "unknown")
-    
+
     # Nested types should have descriptions
     if "description" not in type_def:
         issues.append(
@@ -150,7 +171,7 @@ def lint_nested_type(type_def: Dict[str, Any], location: str, issues: List[LintI
                 "Add a 'description' field to help LLMs understand this type",
             )
         )
-    
+
     # Recursively check nested structures
     if type_name == "array" and "items" in type_def:
         lint_nested_type(type_def["items"], f"{location}.items", issues, path)
@@ -158,9 +179,11 @@ def lint_nested_type(type_def: Dict[str, Any], location: str, issues: List[LintI
         lint_object_properties(type_def["properties"], f"{location}.properties", issues, path)
 
 
-def lint_object_properties(properties: Dict[str, Any], location: str, issues: List[LintIssue], path: str) -> None:
+def lint_object_properties(
+    properties: Dict[str, Any], location: str, issues: List[LintIssue], path: str
+) -> None:
     """Lint object properties for missing descriptions.
-    
+
     Args:
         properties: The properties dictionary of an object type
         location: The path to this properties section in the endpoint
@@ -178,7 +201,7 @@ def lint_object_properties(properties: Dict[str, Any], location: str, issues: Li
                     "Add a 'description' field to help LLMs understand this property",
                 )
             )
-        
+
         # Recursively lint nested structures within properties
         if isinstance(prop_def, dict):
             lint_nested_type(prop_def, f"{location}.{prop_name}", issues, path)
@@ -295,7 +318,7 @@ def lint_endpoint(path: Path, endpoint: EndpointDefinition) -> List[LintIssue]:
 
 
 def format_lint_results_as_json(
-    all_issues: List[Tuple[Path, List[LintIssue]]]
+    all_issues: List[Tuple[Path, List[LintIssue]]],
 ) -> List[Dict[str, Any]]:
     """Format lint results as JSON-serializable data structure."""
     results = []
@@ -313,9 +336,7 @@ def format_lint_results_as_json(
     return results
 
 
-def format_lint_results_as_text(
-    all_issues: List[Tuple[Path, List[LintIssue]]]
-) -> str:
+def format_lint_results_as_text(all_issues: List[Tuple[Path, List[LintIssue]]]) -> str:
     """Format lint results as human-readable text with colors and formatting."""
     # Human-readable format
     output = []
