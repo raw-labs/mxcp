@@ -4,9 +4,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
+from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine, find_repo_root
-from mxcp.config.site_config import SiteConfig
-from mxcp.config.user_config import UserConfig
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.evals._types import EndpointType, ResourceEndpoint, ToolEndpoint
 from mxcp.evals.loader import discover_eval_files, load_eval_suite

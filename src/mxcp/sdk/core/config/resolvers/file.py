@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .base import ResolverPlugin
+from ..plugins import ResolverPlugin
 
 logger = logging.getLogger(__name__)
 

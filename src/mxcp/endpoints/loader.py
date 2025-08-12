@@ -10,7 +10,7 @@ from jsonschema import validate
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT7
 
-from mxcp.config.site_config import SiteConfig
+from mxcp.config._types import SiteConfig
 from mxcp.endpoints._types import EndpointDefinition
 
 # Configure logging

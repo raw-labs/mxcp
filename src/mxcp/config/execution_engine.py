@@ -48,8 +48,7 @@ from typing import Any, Dict, Generator, Optional, cast
 
 import duckdb
 
-from mxcp.config.site_config import SiteConfig
-from mxcp.config.user_config import UserConfig
+from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.sdk.executor import (
     ExecutionContext,
     ExecutionEngine,

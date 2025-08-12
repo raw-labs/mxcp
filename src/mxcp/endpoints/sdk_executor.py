@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
 from mxcp.config.execution_engine import create_execution_engine
-from mxcp.config.site_config import SiteConfig, find_repo_root
-from mxcp.config.user_config import UserConfig
+from mxcp.config._types import SiteConfig, UserConfig
+from mxcp.config.site_config import find_repo_root
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.utils import prepare_source_for_execution
 from mxcp.policies import parse_policies_from_config
-from mxcp.sdk.auth.providers import UserContext
+from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
 from mxcp.sdk.policy import PolicyEnforcementError, PolicyEnforcer

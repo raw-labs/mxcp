@@ -12,7 +12,7 @@ from mxcp.config.migration import check_and_migrate_legacy_version
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["SiteConfig", "load_site_config", "find_repo_root", "get_active_profile"]
+__all__ = ["load_site_config", "find_repo_root", "get_active_profile"]
 
 
 def find_repo_root() -> Path:

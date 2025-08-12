@@ -10,7 +10,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
-from .base import ResolverPlugin
+from ..plugins import ResolverPlugin
 
 logger = logging.getLogger(__name__)
 
