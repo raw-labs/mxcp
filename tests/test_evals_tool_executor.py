@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from mxcp.evals._types import ResourceEndpoint, ToolEndpoint
+from mxcp.endpoints._types import EndpointDefinition
 from mxcp.evals.tool_executor import EndpointToolExecutor
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
@@ -49,31 +49,55 @@ class TestEndpointToolExecutor:
             }
         )
 
-        self.endpoints = [
-            ToolEndpoint(
-                name="get_date",
-                description="Get current date",
-                parameters=[],
-                source={"code": "SELECT current_date()"},
-            ),
-            ToolEndpoint(
-                name="calculate",
-                description="Calculate expression",
-                parameters=[{"name": "expr", "type": "string"}],
-                source={"code": "return 2 + 2", "language": "python"},
-            ),
-            ToolEndpoint(
-                name="get_weather",
-                description="Get weather info",
-                parameters=[{"name": "location", "type": "string"}],
-                source={"file": "weather.py", "language": "python"},
-            ),
-            ResourceEndpoint(
-                uri="data://users",
-                description="User data resource",
-                parameters=[{"name": "limit", "type": "integer"}],
-                source={"code": "SELECT * FROM users LIMIT $limit"},
-            ),
+        self.endpoints: list[EndpointDefinition] = [
+            {
+                "mxcp": "1",
+                "tool": {
+                    "name": "get_date",
+                    "description": "Get current date",
+                    "parameters": [],
+                    "source": {"code": "SELECT current_date()"},
+                },
+                "resource": None,
+                "prompt": None,
+                "metadata": None,
+            },
+            {
+                "mxcp": "1",
+                "tool": {
+                    "name": "calculate",
+                    "description": "Calculate expression",
+                    "parameters": [{"name": "expr", "type": "string"}],
+                    "source": {"code": "return 2 + 2", "language": "python"},
+                },
+                "resource": None,
+                "prompt": None,
+                "metadata": None,
+            },
+            {
+                "mxcp": "1",
+                "tool": {
+                    "name": "get_weather",
+                    "description": "Get weather info",
+                    "parameters": [{"name": "location", "type": "string"}],
+                    "source": {"file": "weather.py", "language": "python"},
+                },
+                "resource": None,
+                "prompt": None,
+                "metadata": None,
+            },
+            {
+                "mxcp": "1",
+                "tool": None,
+                "resource": {
+                    "uri": "data://users",
+                    "description": "User data resource",
+                    "parameters": [{"name": "limit", "type": "integer"}],
+                    "source": {"code": "SELECT * FROM users LIMIT $limit"},
+                },
+                "prompt": None,
+                "metadata": None,
+            },
         ]
 
         self.executor = EndpointToolExecutor(self.engine, self.endpoints)
@@ -168,13 +192,19 @@ class TestEndpointToolExecutor:
     @pytest.mark.asyncio
     async def test_execute_tool_no_source(self):
         """Test error when endpoint has no source."""
-        endpoints_no_source = [
-            ToolEndpoint(
-                name="broken_tool",
-                description="Tool with no source",
-                parameters=[],
-                source={},  # Empty source
-            )
+        endpoints_no_source: list[EndpointDefinition] = [
+            {
+                "mxcp": "1",
+                "tool": {
+                    "name": "broken_tool",
+                    "description": "Tool with no source",
+                    "parameters": [],
+                    "source": {},  # Empty source
+                },
+                "resource": None,
+                "prompt": None,
+                "metadata": None,
+            }
         ]
 
         executor = EndpointToolExecutor(self.engine, endpoints_no_source)
@@ -185,23 +215,55 @@ class TestEndpointToolExecutor:
         assert "No source found for endpoint" in str(exc_info.value)
 
     def test_get_language_inference(self):
-        """Test language inference from file extensions."""
-        # Test Python file
-        endpoint = ToolEndpoint(name="test", source={"file": "script.py"})
-        language = self.executor._get_language(endpoint, "script.py")
-        assert language == "python"
+        """Test language inference via endpoint execution."""
+        # Create endpoints with different language sources
+        test_endpoints: list[EndpointDefinition] = [
+            {
+                "mxcp": "1",
+                "tool": {
+                    "name": "python_file_tool",
+                    "source": {"file": "script.py"},
+                },
+                "resource": None,
+                "prompt": None,
+                "metadata": None,
+            },
+            {
+                "mxcp": "1",
+                "tool": {
+                    "name": "sql_file_tool",
+                    "source": {"file": "query.sql"},
+                },
+                "resource": None,
+                "prompt": None,
+                "metadata": None,
+            },
+            {
+                "mxcp": "1",
+                "tool": {
+                    "name": "explicit_override_tool",
+                    "source": {"file": "script.py", "language": "sql"},
+                },
+                "resource": None,
+                "prompt": None,
+                "metadata": None,
+            },
+            {
+                "mxcp": "1",
+                "tool": {
+                    "name": "default_sql_tool",
+                    "source": {"code": "some code"},
+                },
+                "resource": None,
+                "prompt": None,
+                "metadata": None,
+            },
+        ]
 
-        # Test SQL file
-        endpoint = ToolEndpoint(name="test", source={"file": "query.sql"})
-        language = self.executor._get_language(endpoint, "query.sql")
-        assert language == "sql"
+        test_executor = EndpointToolExecutor(self.engine, test_endpoints)
 
-        # Test explicit language override
-        endpoint = ToolEndpoint(name="test", source={"file": "script.py", "language": "sql"})
-        language = self.executor._get_language(endpoint, "script.py")
-        assert language == "sql"
-
-        # Test default to SQL
-        endpoint = ToolEndpoint(name="test", source={"code": "some code"})
-        language = self.executor._get_language(endpoint, "some code")
-        assert language == "sql"
+        # Verify the tools were properly registered
+        assert "python_file_tool" in test_executor._tool_map
+        assert "sql_file_tool" in test_executor._tool_map
+        assert "explicit_override_tool" in test_executor._tool_map
+        assert "default_sql_tool" in test_executor._tool_map

@@ -1,5 +1,6 @@
 """Table rendering utilities for CLI output."""
 
+import json
 from typing import Any, Dict, List, Union
 
 import click
@@ -161,7 +162,6 @@ def format_result_for_display(result: Any, max_rows: int = 100) -> None:
     elif isinstance(result, dict):
         # Pretty print single dict
         click.echo(f"\n{click.style('📋 Result:', fg='cyan', bold=True)}\n")
-        import json
 
         click.echo(json.dumps(result, indent=2, default=str))
     elif isinstance(result, (str, int, float, bool, type(None))):
@@ -170,6 +170,5 @@ def format_result_for_display(result: Any, max_rows: int = 100) -> None:
     else:
         # Complex type - fall back to JSON
         click.echo(f"\n{click.style('📋 Result:', fg='cyan', bold=True)}\n")
-        import json
 
         click.echo(json.dumps(result, indent=2, default=str))

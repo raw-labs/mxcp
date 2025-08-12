@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Utility functions for audit operations."""
 
+import json
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -58,7 +59,6 @@ def format_audit_record(record: AuditRecord, json_format: bool = False) -> str:
     """
     if json_format:
         # Convert to dict and return JSON
-        import json
 
         record_dict = {
             "record_id": record.record_id,

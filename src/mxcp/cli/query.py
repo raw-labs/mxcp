@@ -1,5 +1,6 @@
 import asyncio
 import json
+import traceback
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -205,7 +206,6 @@ async def _query_async(
         else:
             click.echo(f"\n{click.style('❌ Query failed:', fg='red', bold=True)} {str(e)}")
             if debug:
-                import traceback
 
                 click.echo(f"\n{click.style('🔍 Stack trace:', fg='yellow')}")
                 click.echo(traceback.format_exc())

@@ -22,8 +22,11 @@ from .._types import (
     AuditRecord,
     AuditSchema,
     EvidenceLevel,
+    FieldDefinition,
+    FieldRedaction,
     IntegrityResult,
     PolicyDecision,
+    RedactionStrategy,
     Status,
 )
 from ..writer import BaseAuditWriter
@@ -70,7 +73,6 @@ class JSONLAuditWriter(BaseAuditWriter):
 
     def _dict_to_schema(self, d: Dict[str, Any]) -> AuditSchema:
         """Convert a dictionary to an AuditSchema."""
-        from .._types import FieldDefinition, FieldRedaction
 
         # Convert created_at if it's a string
         if isinstance(d.get("created_at"), str):
@@ -89,7 +91,6 @@ class JSONLAuditWriter(BaseAuditWriter):
             redactions = []
             for r in d["field_redactions"]:
                 # Convert strategy string to enum
-                from .._types import RedactionStrategy
 
                 strategy = RedactionStrategy(r.get("strategy", "full"))
                 redactions.append(
@@ -232,7 +233,6 @@ class JSONLAuditWriter(BaseAuditWriter):
                 )
 
                 # Give thread a moment to start
-                import time
 
                 time.sleep(0.05)  # Longer delay for reliability
 
@@ -251,7 +251,6 @@ class JSONLAuditWriter(BaseAuditWriter):
 
             # If not the last attempt, wait and try again
             if attempt < max_attempts - 1:
-                import time
 
                 time.sleep(0.1)
 

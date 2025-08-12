@@ -1,3 +1,4 @@
+import importlib
 import inspect
 import logging
 from datetime import date, datetime, time, timedelta
@@ -22,11 +23,10 @@ from typing import (
 
 from duckdb import DuckDBPyConnection
 
-from mxcp.config.site_config import SiteConfig  # type: ignore[attr-defined]
-from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
+from mxcp.config._types import SiteConfig, UserConfig
 
 if TYPE_CHECKING:
-    from mxcp.sdk.auth.providers import UserContext  # type: ignore[attr-defined]
+    from mxcp.sdk.auth import UserContext
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -338,8 +338,6 @@ class MXCPBasePlugin:
         Returns:
             List of plugin classes
         """
-        import importlib
-        import inspect
 
         mod = importlib.import_module(module)
         return [

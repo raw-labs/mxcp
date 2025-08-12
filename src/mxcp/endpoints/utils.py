@@ -9,6 +9,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, cast
 
+from ._types import EndpointDefinition, ResourceDefinition, SourceDefinition, ToolDefinition
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,12 +23,15 @@ class EndpointType(Enum):
 
 
 def get_endpoint_source_code(
-    endpoint_dict: Dict[str, Any], endpoint_type: str, endpoint_file_path: Path, repo_root: Path
+    endpoint_definition: EndpointDefinition,
+    endpoint_type: str,
+    endpoint_file_path: Path,
+    repo_root: Path,
 ) -> str:
     """Get the source code for the endpoint, resolving code vs file.
 
     Args:
-        endpoint_dict: The full endpoint definition dictionary
+        endpoint_definition: The full endpoint definition
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
         endpoint_file_path: Path to the endpoint YAML file
         repo_root: Repository root path
@@ -37,9 +42,26 @@ def get_endpoint_source_code(
     Raises:
         ValueError: If no source code found in endpoint definition
     """
-    source = endpoint_dict[endpoint_type]["source"]
+    # Get source based on endpoint type
+    source: Optional[SourceDefinition] = None
+
+    if endpoint_type == "tool":
+        tool_def = endpoint_definition.get("tool")
+        if not tool_def:
+            raise ValueError("No tool definition found")
+        source = tool_def.get("source")
+    elif endpoint_type == "resource":
+        resource_def = endpoint_definition.get("resource")
+        if not resource_def:
+            raise ValueError("No resource definition found")
+        source = resource_def.get("source")
+    else:
+        raise ValueError(f"Prompts don't have source code")
+
+    if not source:
+        raise ValueError(f"No source definition found in {endpoint_type}")
     if "code" in source:
-        return cast(str, source["code"])
+        return source["code"]
     elif "file" in source:
         source_path = Path(source["file"])
         if source_path.is_absolute():
@@ -51,7 +73,7 @@ def get_endpoint_source_code(
         raise ValueError("No source code found in endpoint definition")
 
 
-def extract_source_info(source: Dict[str, Any]) -> Tuple[str, str]:
+def extract_source_info(source: SourceDefinition) -> Tuple[str, str]:
     """Extract source code and determine if it's inline code or file reference.
 
     Args:
@@ -73,7 +95,7 @@ def extract_source_info(source: Dict[str, Any]) -> Tuple[str, str]:
         raise ValueError("No source code or file found in source definition")
 
 
-def detect_language_from_source(source: Dict[str, Any], file_path: Optional[str] = None) -> str:
+def detect_language_from_source(source: SourceDefinition, file_path: Optional[str] = None) -> str:
     """Detect programming language from source definition.
 
     Args:
@@ -85,7 +107,7 @@ def detect_language_from_source(source: Dict[str, Any], file_path: Optional[str]
     """
     # Check if language is explicitly specified
     if "language" in source:
-        return cast(str, source["language"])
+        return source["language"]
     # Try to infer from file extension
     path_to_check = file_path or source.get("file")
     if path_to_check:
@@ -114,25 +136,43 @@ def resolve_file_path(file_path: str, endpoint_file_path: Path, repo_root: Path)
         return endpoint_file_path.parent / source_path
 
 
-def get_endpoint_name_or_uri(endpoint_dict: Dict[str, Any], endpoint_type: str) -> str:
+def get_endpoint_name_or_uri(endpoint_definition: EndpointDefinition, endpoint_type: str) -> str:
     """Get the name or URI identifier for an endpoint.
 
     Args:
-        endpoint_dict: The full endpoint definition dictionary
+        endpoint_definition: The full endpoint definition
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
 
     Returns:
         The endpoint identifier (name for tools/prompts, uri for resources)
+
+    Raises:
+        ValueError: If endpoint type not found in definition
     """
-    endpoint_data = endpoint_dict[endpoint_type]
-    if endpoint_type == "resource":
-        return cast(str, endpoint_data["uri"])
+    if endpoint_type == "tool":
+        tool_def = endpoint_definition.get("tool")
+        if not tool_def:
+            raise ValueError("No tool definition found")
+        name = tool_def.get("name", "unnamed")
+        return name
+    elif endpoint_type == "resource":
+        resource_def = endpoint_definition.get("resource")
+        if not resource_def:
+            raise ValueError("No resource definition found")
+        uri = resource_def.get("uri", "unknown")
+        return uri
+    elif endpoint_type == "prompt":
+        prompt_def = endpoint_definition.get("prompt")
+        if not prompt_def:
+            raise ValueError("No prompt definition found")
+        name = prompt_def.get("name", "unnamed")
+        return name
     else:
-        return cast(str, endpoint_data["name"])
+        raise ValueError(f"Unknown endpoint type: {endpoint_type}")
 
 
 def prepare_source_for_execution(
-    endpoint_dict: Dict[str, Any],
+    endpoint_definition: EndpointDefinition,
     endpoint_type: str,
     endpoint_file_path: Path,
     repo_root: Path,
@@ -144,7 +184,7 @@ def prepare_source_for_execution(
     language detection, and path resolution.
 
     Args:
-        endpoint_dict: The full endpoint definition dictionary
+        endpoint_definition: The full endpoint definition
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
         endpoint_file_path: Path to the endpoint YAML file
         repo_root: Repository root path
@@ -152,11 +192,33 @@ def prepare_source_for_execution(
     Returns:
         Tuple of (language, source_code_or_path) ready for execution
     """
-    endpoint_data = endpoint_dict[endpoint_type]
-    source = endpoint_data.get("source", {})
+    # Get source and language based on endpoint type
+    source: Optional[SourceDefinition] = None
+    language: Optional[str] = None
+    function_name: Optional[str] = None
 
-    # Detect language - check endpoint_data first, then source
-    language = endpoint_data.get("language") or detect_language_from_source(source)
+    if endpoint_type == "tool":
+        tool_def = endpoint_definition.get("tool")
+        if not tool_def:
+            raise ValueError("No tool definition found")
+        source = tool_def.get("source")
+        language = tool_def.get("language")
+        function_name = tool_def.get("name")
+    elif endpoint_type == "resource":
+        resource_def = endpoint_definition.get("resource")
+        if not resource_def:
+            raise ValueError("No resource definition found")
+        source = resource_def.get("source")
+        language = resource_def.get("language")
+    else:
+        raise ValueError(f"Prompts don't have source code")
+
+    if not source:
+        raise ValueError(f"No source definition found in {endpoint_type}")
+
+    # Detect language if not explicitly set
+    if not language:
+        language = detect_language_from_source(source)
 
     # Handle source code vs file path
     if "code" in source:
@@ -174,16 +236,14 @@ def prepare_source_for_execution(
                 # If outside repo root, use absolute path
                 file_path_for_executor = str(resolved_path)
             # Optionally append function name for SDK executor
-            if include_function_name:
-                function_name = endpoint_data.get("name") if endpoint_type == "tool" else None
-                if function_name:
-                    file_path_for_executor = f"{file_path_for_executor}:{function_name}"
+            if include_function_name and function_name:
+                file_path_for_executor = f"{file_path_for_executor}:{function_name}"
 
             return (language, file_path_for_executor)
         else:
             # For SQL files, read and return content
             source_code = get_endpoint_source_code(
-                endpoint_dict, endpoint_type, endpoint_file_path, repo_root
+                endpoint_definition, endpoint_type, endpoint_file_path, repo_root
             )
             return (language, source_code)
     else:

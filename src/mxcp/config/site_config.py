@@ -12,6 +12,8 @@ from mxcp.config.migration import check_and_migrate_legacy_version
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["load_site_config", "find_repo_root", "get_active_profile"]
+
 
 def find_repo_root() -> Path:
     """Find the repository root by looking for mxcp-site.yml.
@@ -29,7 +31,7 @@ def find_repo_root() -> Path:
     raise FileNotFoundError("mxcp-site.yml not found in current directory or any parent directory")
 
 
-def _apply_defaults(config: Dict[str, Any], repo_root: Path) -> Dict[str, Any]:
+def _apply_defaults(config: Dict[str, Any], repo_root: Path) -> SiteConfig:
     """Apply default values to the config"""
     # Create a copy to avoid modifying the input
     config = config.copy()
@@ -157,7 +159,7 @@ def _apply_defaults(config: Dict[str, Any], repo_root: Path) -> Dict[str, Any]:
             repo_root / paths_config["audit"] / f"logs-{profile}.jsonl"
         )
 
-    return config
+    return cast(SiteConfig, config)
 
 
 def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
@@ -196,8 +198,7 @@ def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
         raise ValueError(f"Site config validation error: {e.message}")
 
     # Apply defaults (e.g., duckdb.path)
-    config = _apply_defaults(config, repo_path)
-    return cast(SiteConfig, config)
+    return _apply_defaults(config, repo_path)
 
 
 def get_active_profile(

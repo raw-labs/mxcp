@@ -860,7 +860,8 @@ tool:
                 execution_engine=execution_engine,
             )
 
-        assert "Expected object, got list" in str(exc_info.value)
+        # The error message changed to be more generic
+        assert "Expected single result for return type 'object'" in str(exc_info.value)
 
 
 class TestMixedContentArrays:

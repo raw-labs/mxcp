@@ -1,4 +1,6 @@
+import asyncio
 import atexit
+import concurrent.futures
 import hashlib
 import json
 import logging
@@ -15,23 +17,40 @@ from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
-from pydantic import AnyHttpUrl, Field, create_model
+from pydantic import AnyHttpUrl, ConfigDict, Field, create_model
+from starlette.responses import JSONResponse
 
 from mxcp.audit.schemas import ENDPOINT_EXECUTION_SCHEMA
 from mxcp.config._types import SiteConfig, UserAuthConfig, UserConfig, UserHttpTransportConfig
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.external_refs import ExternalRefTracker
-from mxcp.config.site_config import get_active_profile
+from mxcp.config.site_config import get_active_profile, load_site_config
+from mxcp.config.user_config import load_user_config
+from mxcp.endpoints._types import (
+    EndpointDefinition,
+    ParamDefinition,
+    PromptDefinition,
+    ResourceDefinition,
+    ToolDefinition,
+    TypeDefinition,
+)
+from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 from mxcp.endpoints.utils import EndpointType
 from mxcp.endpoints.validate import validate_endpoint
 from mxcp.sdk.audit import AuditLogger
 from mxcp.sdk.auth._types import AuthConfig, HttpTransportConfig
+from mxcp.sdk.auth.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.context import get_user_context
+from mxcp.sdk.auth.github import GitHubOAuthHandler
+from mxcp.sdk.auth.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.auth.providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from mxcp.sdk.auth.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.executor import ExecutionEngine
+
+from ._types import ConfigInfo
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +83,7 @@ def create_oauth_handler(
     user_auth_config: UserAuthConfig,
     host: str = "localhost",
     port: int = 8000,
-    user_config: Optional[Dict[str, Any]] = None,
+    user_config: Optional[UserConfig] = None,
 ) -> Optional[ExternalOAuthHandler]:
     """Create an OAuth handler from user configuration.
 
@@ -87,11 +106,11 @@ def create_oauth_handler(
     # Extract transport config if available
     transport_config = None
     if user_config and "transport" in user_config:
-        user_transport = user_config["transport"].get("http")
+        transport = user_config["transport"]
+        user_transport = transport.get("http") if transport else None
         transport_config = translate_transport_config(user_transport)
 
     if provider == "github":
-        from mxcp.sdk.auth.github import GitHubOAuthHandler
 
         github_config = user_auth_config.get("github")
         if not github_config:
@@ -99,7 +118,6 @@ def create_oauth_handler(
         return GitHubOAuthHandler(github_config, transport_config, host=host, port=port)
 
     elif provider == "atlassian":
-        from mxcp.sdk.auth.atlassian import AtlassianOAuthHandler
 
         atlassian_config = user_auth_config.get("atlassian")
         if not atlassian_config:
@@ -107,7 +125,6 @@ def create_oauth_handler(
         return AtlassianOAuthHandler(atlassian_config, transport_config, host=host, port=port)
 
     elif provider == "salesforce":
-        from mxcp.sdk.auth.salesforce import SalesforceOAuthHandler
 
         salesforce_config = user_auth_config.get("salesforce")
         if not salesforce_config:
@@ -115,7 +132,6 @@ def create_oauth_handler(
         return SalesforceOAuthHandler(salesforce_config, transport_config, host=host, port=port)
 
     elif provider == "keycloak":
-        from mxcp.sdk.auth.keycloak import KeycloakOAuthHandler
 
         keycloak_config = user_auth_config.get("keycloak")
         if not keycloak_config:
@@ -126,7 +142,7 @@ def create_oauth_handler(
         raise ValueError(f"Unsupported auth provider: {provider}")
 
 
-def create_url_builder(user_config: Dict[str, Any]) -> URLBuilder:
+def create_url_builder(user_config: UserConfig) -> URLBuilder:
     """Create a URL builder from user configuration.
 
     Args:
@@ -135,7 +151,8 @@ def create_url_builder(user_config: Dict[str, Any]) -> URLBuilder:
     Returns:
         Configured URLBuilder instance
     """
-    user_transport_config = user_config.get("transport", {}).get("http", {})
+    transport = user_config.get("transport", {})
+    user_transport_config = transport.get("http", {}) if transport else {}
     transport_config = translate_transport_config(user_transport_config)
     return URLBuilder(transport_config)
 
@@ -193,8 +210,6 @@ class RAWMCP:
 
         # Load configurations
         logger.info("Loading configurations...")
-        from mxcp.config.site_config import load_site_config
-        from mxcp.config.user_config import load_user_config
 
         self._site_config_template = load_site_config(self.site_config_path)
         self._user_config_template = load_user_config(self._site_config_template)
@@ -249,7 +264,6 @@ class RAWMCP:
     def _resolve_and_apply_configs(self) -> None:
         """Resolve external references and apply CLI overrides."""
         # Check if configs contain unresolved references
-        import json
 
         config_str = json.dumps(self._site_config_template) + json.dumps(self._user_config_template)
         needs_resolution = any(pattern in config_str for pattern in ["${", "vault://", "file://"])
@@ -317,18 +331,18 @@ class RAWMCP:
             else site_sql_tools
         )
 
-    def get_config_info(self) -> Dict[str, Any]:
+    def get_config_info(self) -> ConfigInfo:
         """Get configuration information for display."""
-        return {
-            "project": self.site_config["project"],
-            "profile": self.profile_name,
-            "transport": self.transport,
-            "host": self.host,
-            "port": self.port,
-            "readonly": self.readonly,
-            "stateless": self.stateless_http,
-            "sql_tools_enabled": self.enable_sql_tools,
-        }
+        return ConfigInfo(
+            project=self.site_config["project"],
+            profile=self.profile_name,
+            transport=self.transport,
+            host=self.host,
+            port=self.port,
+            readonly=self.readonly,
+            stateless=bool(self.stateless_http),
+            sql_tools_enabled=bool(self.enable_sql_tools),
+        )
 
     def get_endpoint_counts(self) -> Dict[str, int]:
         """Get counts of valid endpoints by type."""
@@ -357,7 +371,6 @@ class RAWMCP:
 
     def _load_endpoints(self) -> None:
         """Load and categorize endpoints."""
-        from mxcp.endpoints.loader import EndpointLoader
 
         self.loader = EndpointLoader(self.site_config)
 
@@ -389,7 +402,7 @@ class RAWMCP:
             auth_config,
             host=self.host,
             port=self.port,
-            user_config=cast(Dict[str, Any], self.user_config),
+            user_config=self.user_config,
         )
         self.oauth_server = None
         self.auth_settings = None
@@ -400,7 +413,7 @@ class RAWMCP:
             )
 
             # Use URL builder for OAuth endpoints
-            url_builder = create_url_builder(cast(Dict[str, Any], self.user_config))
+            url_builder = create_url_builder(self.user_config)
             base_url = url_builder.get_base_url(host=self.host, port=self.port)
 
             # Get authorization configuration
@@ -454,7 +467,6 @@ class RAWMCP:
 
     def _initialize_audit_logger(self) -> None:
         """Initialize audit logger if enabled."""
-        import asyncio
 
         profile_config = self.site_config["profiles"][self.profile_name]
         audit_config = profile_config.get("audit") or {}
@@ -562,8 +574,6 @@ class RAWMCP:
                     logger.info("Loading raw configuration templates for hot reload...")
 
                     # Load raw configs without resolving references
-                    from mxcp.config.site_config import load_site_config
-                    from mxcp.config.user_config import load_user_config
 
                     # Determine site config path
                     site_path = self.site_config_path or Path.cwd()
@@ -641,8 +651,6 @@ class RAWMCP:
             TimeoutError: If the operation times out
             Exception: If the operation fails
         """
-        import asyncio
-        import concurrent.futures
 
         async def with_timeout() -> Any:
             """Wrap the coroutine with a timeout."""
@@ -904,7 +912,6 @@ class RAWMCP:
                         model_fields[prop_name] = (Optional[prop_type], None)
 
             # Create the model with proper configuration
-            from pydantic import ConfigDict
 
             model_config = ConfigDict(extra="allow" if additional_properties else "forbid")
 
@@ -968,7 +975,7 @@ class RAWMCP:
         return field_kwargs
 
     def _create_pydantic_field_annotation(
-        self, param_def: Dict[str, Any], endpoint_type: Optional[EndpointType] = None
+        self, param_def: ParamDefinition, endpoint_type: Optional[EndpointType] = None
     ) -> Any:
         """Create a Pydantic type annotation from parameter definition.
 
@@ -980,10 +987,12 @@ class RAWMCP:
             Pydantic type annotation (class or Annotated type)
         """
         param_name = param_def.get("name", "param")
-        return self._create_pydantic_model_from_schema(param_def, param_name, endpoint_type)
+        return self._create_pydantic_model_from_schema(
+            cast(Dict[str, Any], param_def), param_name, endpoint_type
+        )
 
     def _json_schema_to_python_type(
-        self, param_def: Dict[str, Any], endpoint_type: Optional[EndpointType] = None
+        self, param_def: ParamDefinition, endpoint_type: Optional[EndpointType] = None
     ) -> Any:
         """Convert JSON Schema type to Python type annotation.
 
@@ -996,7 +1005,7 @@ class RAWMCP:
         """
         return self._create_pydantic_field_annotation(param_def, endpoint_type)
 
-    def _create_tool_annotations(self, tool_def: Dict[str, Any]) -> Optional[ToolAnnotations]:
+    def _create_tool_annotations(self, tool_def: ToolDefinition) -> Optional[ToolAnnotations]:
         """Create ToolAnnotations from tool definition.
 
         Args:
@@ -1114,12 +1123,12 @@ class RAWMCP:
         self,
         endpoint_type: EndpointType,
         endpoint_key: str,  # "tool" | "resource" | "prompt"
-        endpoint_def: Dict[str, Any],
+        endpoint_def: Union[ToolDefinition, ResourceDefinition, PromptDefinition],
         decorator: Any,  # self.mcp.tool() | self.mcp.resource(uri) | self.mcp.prompt()
         log_name: str,  # for nice logging
     ) -> None:
         # Get parameter definitions
-        parameters = endpoint_def.get("parameters", [])
+        parameters = endpoint_def.get("parameters") or []
 
         # Create function signature with proper Pydantic type annotations
         param_annotations = {}
@@ -1157,11 +1166,13 @@ class RAWMCP:
                 # run through new SDK executor (handles type conversion automatically)
                 if self.execution_engine is None:
                     raise RuntimeError("Execution engine not initialized")
+                if endpoint_key == "resource":
+                    name = cast(str, endpoint_def.get("uri", "unknown"))
+                else:
+                    name = cast(str, endpoint_def.get("name", "unnamed"))
                 result = await execute_endpoint_with_engine(
                     endpoint_type=endpoint_type.value,
-                    name=(
-                        endpoint_def["name"] if endpoint_key != "resource" else endpoint_def["uri"]
-                    ),
+                    name=name,
                     params=kwargs,  # No manual conversion needed - SDK handles it
                     user_config=self.user_config,
                     site_config=self.site_config,
@@ -1210,7 +1221,7 @@ class RAWMCP:
                         event_type=cast(
                             Literal["tool", "resource", "prompt"], endpoint_key
                         ),  # "tool", "resource", or "prompt"
-                        name=endpoint_def.get("name", endpoint_def.get("uri", "unknown")),
+                        name=name,
                         input_params=kwargs,
                         duration_ms=duration_ms,
                         schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
@@ -1231,7 +1242,10 @@ class RAWMCP:
         # -------------------------------------------------------------------
         # Create function with proper signature and annotations using makefun
         # -------------------------------------------------------------------
-        original_name = endpoint_def.get("name", endpoint_def.get("uri", "handler"))
+        if endpoint_key == "resource":
+            original_name = cast(str, endpoint_def.get("uri", "unknown"))
+        else:
+            original_name = cast(str, endpoint_def.get("name", "unnamed"))
         func_name = self.mcp_name_to_py(original_name)
 
         # Create the function with proper signature
@@ -1245,7 +1259,7 @@ class RAWMCP:
         decorator(handler)
         logger.info(f"Registered {log_name}: {original_name} (function: {func_name})")
 
-    def _register_tool(self, tool_def: Dict[str, Any]) -> None:
+    def _register_tool(self, tool_def: ToolDefinition) -> None:
         """Register a tool endpoint with MCP.
 
         Args:
@@ -1266,7 +1280,7 @@ class RAWMCP:
             log_name="tool",
         )
 
-    def _register_resource(self, resource_def: Dict[str, Any]) -> None:
+    def _register_resource(self, resource_def: ResourceDefinition) -> None:
         """Register a resource endpoint with MCP.
 
         Args:
@@ -1278,14 +1292,14 @@ class RAWMCP:
             resource_def,
             decorator=self.mcp.resource(
                 resource_def["uri"],
-                name=resource_def.get("name"),
+                name=cast(Optional[str], resource_def.get("name")),
                 description=resource_def.get("description"),
                 mime_type=resource_def.get("mime_type"),
             ),
             log_name="resource",
         )
 
-    def _register_prompt(self, prompt_def: Dict[str, Any]) -> None:
+    def _register_prompt(self, prompt_def: PromptDefinition) -> None:
         """Register a prompt endpoint with MCP.
 
         Args:
@@ -1361,7 +1375,6 @@ class RAWMCP:
                 if self.audit_logger:
                     # Determine caller type
                     caller = "stdio" if self.transport_mode == "stdio" else "http"
-                    import asyncio
 
                     asyncio.run(
                         self.audit_logger.log_event(
@@ -1441,7 +1454,6 @@ class RAWMCP:
                 if self.audit_logger:
                     # Determine caller type
                     caller = "stdio" if self.transport_mode == "stdio" else "http"
-                    import asyncio
 
                     asyncio.run(
                         self.audit_logger.log_event(
@@ -1528,7 +1540,6 @@ class RAWMCP:
                 if self.audit_logger:
                     # Determine caller type
                     caller = "stdio" if self.transport_mode == "stdio" else "http"
-                    import asyncio
 
                     asyncio.run(
                         self.audit_logger.log_event(
@@ -1577,20 +1588,26 @@ class RAWMCP:
                     continue
 
                 if "tool" in endpoint_def:
-                    self._register_tool(endpoint_def["tool"])
-                    logger.info(
-                        f"Registered tool endpoint from {path}: {endpoint_def['tool']['name']}"
-                    )
+                    tool_def = endpoint_def.get("tool")
+                    if tool_def:
+                        self._register_tool(tool_def)
+                        logger.info(
+                            f"Registered tool endpoint from {path}: {tool_def.get('name', 'unnamed')}"
+                        )
                 elif "resource" in endpoint_def:
-                    self._register_resource(endpoint_def["resource"])
-                    logger.info(
-                        f"Registered resource endpoint from {path}: {endpoint_def['resource']['uri']}"
-                    )
+                    resource_def = endpoint_def.get("resource")
+                    if resource_def:
+                        self._register_resource(resource_def)
+                        logger.info(
+                            f"Registered resource endpoint from {path}: {resource_def.get('uri', 'unknown')}"
+                        )
                 elif "prompt" in endpoint_def:
-                    self._register_prompt(endpoint_def["prompt"])
-                    logger.info(
-                        f"Registered prompt endpoint from {path}: {endpoint_def['prompt']['name']}"
-                    )
+                    prompt_def = endpoint_def.get("prompt")
+                    if prompt_def:
+                        self._register_prompt(prompt_def)
+                        logger.info(
+                            f"Registered prompt endpoint from {path}: {prompt_def.get('name', 'unnamed')}"
+                        )
                 else:
                     logger.warning(f"Unknown endpoint type in {path}: {endpoint_def}")
             except Exception as e:
@@ -1680,10 +1697,9 @@ class RAWMCP:
         @self.mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])  # type: ignore[misc]
         async def oauth_protected_resource_metadata(request: Any) -> Any:
             """Handle OAuth Protected Resource metadata requests (RFC 8693)"""
-            from starlette.responses import JSONResponse
 
             # Use URL builder with request context for proper scheme detection
-            url_builder = create_url_builder(cast(Dict[str, Any], self.user_config))
+            url_builder = create_url_builder(self.user_config)
             base_url = url_builder.get_base_url(request)
 
             # Get supported scopes from configuration

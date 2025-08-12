@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Policy enforcement module for MXCP endpoints - backward compatibility and config parsing.
+"""Policy enforcement for MXCP endpoints.
 
-This module re-exports the core policy types from mxcp.sdk.policy and provides
-configuration parsing functionality.
+This module provides MXCP-specific policy configuration parsing
+that converts YAML/JSON configuration into SDK policy types.
 """
 
 from typing import Any, Dict, Optional
 
 from mxcp.sdk.policy import PolicyAction, PolicyDefinition, PolicySet
 
-__all__ = ["PolicyAction", "PolicyDefinition", "PolicySet", "parse_policies_from_config"]
+__all__ = ["parse_policies_from_config"]
 
 
 def parse_policies_from_config(policies_config: Optional[Dict[str, Any]]) -> Optional[PolicySet]:
@@ -55,6 +55,7 @@ def parse_policies_from_config(policies_config: Optional[Dict[str, Any]]) -> Opt
         ...     }]
         ... }
         >>> policy_set = parse_policies_from_config(config)
+        >>> from mxcp.sdk.policy import PolicyEnforcer
         >>> enforcer = PolicyEnforcer(policy_set)
     """
     if policies_config is None:

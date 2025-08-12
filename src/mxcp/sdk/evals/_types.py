@@ -8,6 +8,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
+from mxcp.endpoints._types import TypeDefinition
+
 
 # LLM Model configuration types
 @dataclass
@@ -71,7 +73,7 @@ class ToolDefinition:
     name: str
     description: str = ""
     parameters: List[ParameterDefinition] = field(default_factory=list)
-    return_type: Optional[Dict[str, Any]] = None
+    return_type: Optional[TypeDefinition] = None
     annotations: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
 

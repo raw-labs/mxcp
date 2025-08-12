@@ -7,13 +7,8 @@ configuration parsing or loading functionality.
 import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
-try:
-    import celpy
-    from celpy.adapter import json_to_cel
-except ImportError:
-    raise ImportError(
-        "celpy is required for policy enforcement. Install with: pip install cel-python"
-    )
+import celpy
+from celpy.adapter import json_to_cel
 
 from ._types import PolicyAction, PolicyDefinition, PolicyEnforcementError, PolicySet
 

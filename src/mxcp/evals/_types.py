@@ -1,38 +1,4 @@
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
-
-
-# Endpoint types specific to evals context (contain source info, etc.)
-@dataclass
-class ToolEndpoint:
-    """Represents a loaded tool endpoint."""
-
-    name: str
-    type: Literal["tool"] = "tool"
-    description: str = ""
-    parameters: List[Dict[str, Any]] = field(default_factory=list)
-    return_type: Optional[Dict[str, Any]] = None
-    annotations: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
-    source: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class ResourceEndpoint:
-    """Represents a loaded resource endpoint."""
-
-    uri: str
-    type: Literal["resource"] = "resource"
-    description: str = ""
-    parameters: List[Dict[str, Any]] = field(default_factory=list)
-    return_type: Optional[Dict[str, Any]] = None
-    mime_type: Optional[str] = None
-    tags: List[str] = field(default_factory=list)
-    source: Dict[str, Any] = field(default_factory=dict)
-
-
-# Union type for all endpoint types
-EndpointType = Union[ToolEndpoint, ResourceEndpoint]
+from typing import Any, Dict, List, Optional, TypedDict
 
 
 # Eval assertion types

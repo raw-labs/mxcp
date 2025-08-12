@@ -6,9 +6,6 @@ built on top of mxcp.sdk.audit. It includes utilities for CLI commands,
 configuration parsing, and common audit operations.
 """
 
-# Re-export core SDK types for convenience
-from mxcp.sdk.audit import AuditLogger, AuditRecord, AuditSchema, EvidenceLevel, RedactionStrategy
-
 from .exporters import ExportFormat, export_to_csv, export_to_duckdb
 from .manager import TimeRange
 from .utils import format_audit_record, parse_time_since
@@ -23,10 +20,4 @@ __all__ = [
     # Utility functions
     "parse_time_since",
     "format_audit_record",
-    # Re-exported SDK types
-    "AuditRecord",
-    "AuditSchema",
-    "AuditLogger",
-    "RedactionStrategy",
-    "EvidenceLevel",
 ]

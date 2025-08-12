@@ -71,4 +71,4 @@ tool:
     # Check for missing tests warning
     messages = [issue["message"] for issue in issues]
     assert any("no tests defined" in msg for msg in messages)
-    assert any("missing examples" in msg for msg in messages)
+    assert any("has no examples" in msg for msg in messages)

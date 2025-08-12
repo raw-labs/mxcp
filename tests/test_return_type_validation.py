@@ -117,7 +117,7 @@ async def test_scalar_return_type(execution_engine, user_config, site_config, te
 async def test_multiple_rows_error(execution_engine, user_config, site_config, test_repo_path):
     """Test that multiple rows error when return type is not array."""
     with change_working_dir(test_repo_path):
-        with pytest.raises(ValueError, match="SQL query returned multiple rows"):
+        with pytest.raises(ValueError, match="Expected single result for return type"):
             await execute_endpoint_with_engine(
                 endpoint_type="tool",
                 name="error_endpoint",
@@ -145,7 +145,7 @@ async def test_multiple_columns_error(execution_engine, user_config, site_config
 async def test_no_rows_error(execution_engine, user_config, site_config, test_repo_path):
     """Test that no rows error when return type is not array."""
     with change_working_dir(test_repo_path):
-        with pytest.raises(ValueError, match="SQL query returned no rows"):
+        with pytest.raises(ValueError, match="No results returned"):
             await execute_endpoint_with_engine(
                 endpoint_type="tool",
                 name="error_endpoint",

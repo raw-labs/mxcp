@@ -46,8 +46,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional, cast
 
-from mxcp.config.site_config import SiteConfig  # type: ignore[attr-defined]
-from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
+import duckdb
+
+from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.sdk.executor import (
     ExecutionContext,
     ExecutionEngine,
@@ -55,6 +56,14 @@ from mxcp.sdk.executor import (
     set_execution_context,
 )
 from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
+from mxcp.sdk.executor.plugins.duckdb_plugin._types import (
+    DatabaseConfig,
+    ExtensionDefinition,
+    PluginConfig,
+    PluginDefinition,
+    SecretDefinition,
+)
+from mxcp.sdk.executor.plugins.duckdb_plugin.session import DuckDBSession
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +72,7 @@ logger = logging.getLogger(__name__)
 def execution_context_for_init_hooks(
     user_config: Optional[UserConfig] = None,
     site_config: Optional[SiteConfig] = None,
-    duckdb_session: Any = None,
+    duckdb_session: Optional[DuckDBSession] = None,
     plugins: Optional[Dict[str, Any]] = None,
 ) -> Generator[Optional[ExecutionContext], None, None]:
     """
@@ -153,13 +162,6 @@ def create_execution_engine(
         >>> # Call engine.shutdown() when done to run shutdown hooks automatically
     """
     try:
-        from mxcp.sdk.executor.plugins.duckdb_plugin._types import (
-            DatabaseConfig,
-            ExtensionDefinition,
-            PluginConfig,
-            PluginDefinition,
-            SecretDefinition,
-        )
 
         # Create ExecutionEngine
         engine = ExecutionEngine(strict=False)

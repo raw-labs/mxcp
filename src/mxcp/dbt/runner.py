@@ -7,7 +7,13 @@ from typing import Any, Dict, List, Optional, cast
 import click
 import yaml
 
-from ..config._types import SiteConfig, UserConfig
+from ..config._types import (
+    SiteConfig,
+    UserConfig,
+    UserProfileConfig,
+    UserProjectConfig,
+    UserSecretDefinition,
+)
 from ..config.site_config import find_repo_root
 
 
@@ -356,17 +362,19 @@ def configure_dbt(
 
     # 5. Get secrets from user config
     projects = user_config.get("projects", {})
-    project_config: Optional[Dict[str, Any]] = cast(
-        Optional[Dict[str, Any]], projects.get(project) if projects else None
-    )
+    project_config: Optional[UserProjectConfig] = projects.get(project) if projects else None
     if not project_config:
         click.echo(
             f"Warning: Project '{project}' not found in user config, assuming empty configuration",
             err=True,
         )
-        project_config = {}
+        project_config = None
 
-    user_profile_config = project_config.get("profiles", {}).get(profile_name)
+    profiles = project_config.get("profiles", {}) if project_config else {}
+    user_profile_config: Optional[UserProfileConfig] = (
+        profiles.get(profile_name) if profiles else None
+    )
+
     if not user_profile_config:
         click.echo(
             f"Warning: Profile '{profile_name}' not found in project '{project}', assuming empty configuration",
@@ -374,18 +382,24 @@ def configure_dbt(
         )
         user_profile_config = {}
 
-    secrets = cast(List[Dict[str, Any]], user_profile_config.get("secrets", []))
+    secrets: Optional[List[UserSecretDefinition]] = (
+        user_profile_config.get("secrets") if user_profile_config else None
+    )
 
     # 6. Load existing profiles and project config
     profiles = _load_profiles()
     dbt_project = _load_dbt_project()
 
     # 7. Build new profile block
+    # Cast secrets to Dict[str, Any] for _build_profile_block
+    secrets_dict: Optional[List[Dict[str, Any]]] = (
+        cast(Optional[List[Dict[str, Any]]], secrets) if secrets else None
+    )
     new_profile_block = _build_profile_block(
         project=project,
         profile=profile_name,
         duckdb_path=duckdb_path,
-        secrets=secrets,
+        secrets=secrets_dict,
         embed_secrets=embed_secrets,
     )
 

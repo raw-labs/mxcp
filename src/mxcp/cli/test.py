@@ -1,10 +1,11 @@
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import click
 
+from mxcp.cli._types import MultiEndpointTestResults, TestResults
 from mxcp.cli.utils import (
     configure_logging,
     get_env_flag,
@@ -17,10 +18,10 @@ from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
 from mxcp.endpoints.tester import run_all_tests, run_tests
 from mxcp.endpoints.utils import EndpointType
-from mxcp.sdk.auth.providers import UserContext  # type: ignore[attr-defined]
+from mxcp.sdk.auth import UserContext
 
 
-def format_test_results(results: Any, debug: bool = False) -> str:
+def format_test_results(results: Union[Dict[str, Any], str], debug: bool = False) -> str:
     """Format test results for human-readable output"""
     if isinstance(results, str):
         return results

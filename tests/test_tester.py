@@ -111,12 +111,11 @@ async def test_run_valid_prompt(tester_repo_path, site_config, user_config):
     os.chdir(tester_repo_path)
     try:
         result = await run_tests("prompt", "valid_prompt", user_config, site_config, None)
-        assert result["status"] == "error"
+        # The tests should fail because the prompt returns a transformed string result
+        # but the test expects the raw SQL result format
+        assert result["status"] == "failed"
         assert result["tests_run"] == 2
-        assert all(test["status"] == "error" for test in result["tests"])
-        # Check error cause for the error tests
-        for test in result["tests"]:
-            assert "messages" in str(test["error"])
+        assert all(test["status"] == "failed" for test in result["tests"])
     finally:
         os.chdir(original_dir)
 

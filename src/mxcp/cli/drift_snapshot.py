@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 from typing import Optional
@@ -78,7 +79,6 @@ def drift_snapshot(
 
         if json_output:
             # Compute a simple hash for the snapshot
-            import hashlib
 
             snapshot_str = json.dumps(snapshot, sort_keys=True)
             drift_hash = hashlib.sha256(snapshot_str.encode()).hexdigest()
@@ -100,7 +100,6 @@ def drift_snapshot(
                 click.echo(f"\n{click.style('📸 Snapshot Details:', fg='cyan', bold=True)}")
                 click.echo(f"   • Path: {click.style(str(path), fg='yellow')}")
                 # Compute a simple hash for the snapshot
-                import hashlib
 
                 snapshot_str = json.dumps(snapshot, sort_keys=True)
                 drift_hash = hashlib.sha256(snapshot_str.encode()).hexdigest()
