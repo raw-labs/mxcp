@@ -48,6 +48,8 @@ dev = [
     "black",  # For code formatting
     "isort",  # For import sorting
     "mypy",  # For type checking
+    "types-jsonschema",  # Type stubs for jsonschema
+    "pandas-stubs",  # Type stubs for pandas
     "build",  # For building the package
     "twine",  # For publishing to PyPI
 ]
@@ -75,13 +77,15 @@ all = [
     "black",
     "isort",
     "mypy",
+    "types-jsonschema",
+    "pandas-stubs",
     "build",
     "twine",
 ]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["mxcp", "mxcp.cli", "mxcp.config", "mxcp.config.config_schemas", "mxcp.dbt", "mxcp.drift.drift_schemas", "mxcp.endpoints.endpoint_schemas", "mxcp.evals", "mxcp.evals.eval_schemas", "mxcp.plugins", "mxcp.policies", "mxcp.runtime", "mxcp.sdk", "mxcp.sdk.audit", "mxcp.sdk.auth", "mxcp.sdk.core", "mxcp.sdk.core.analytics", "mxcp.sdk.core.config", "mxcp.sdk.core.config.resolvers", "mxcp.sdk.evals", "mxcp.sdk.executor", "mxcp.sdk.executor.plugins", "mxcp.sdk.executor.plugins.duckdb_plugin", "mxcp.sdk.executor.plugins.python_plugin", "mxcp.sdk.policy", "mxcp.sdk.validator", "mxcp.validator"]
+packages = ["mxcp", "mxcp.cli", "mxcp.config", "mxcp.config.config_schemas", "mxcp.dbt", "mxcp.drift", "mxcp.drift.drift_schemas", "mxcp.endpoints", "mxcp.endpoints.endpoint_schemas", "mxcp.evals", "mxcp.evals.eval_schemas", "mxcp.plugins", "mxcp.policies", "mxcp.runtime", "mxcp.sdk", "mxcp.sdk.audit", "mxcp.sdk.auth", "mxcp.sdk.core", "mxcp.sdk.core.analytics", "mxcp.sdk.core.config", "mxcp.sdk.core.config.resolvers", "mxcp.sdk.evals", "mxcp.sdk.executor", "mxcp.sdk.executor.plugins", "mxcp.sdk.executor.plugins.duckdb_plugin", "mxcp.sdk.executor.plugins.python_plugin", "mxcp.sdk.policy", "mxcp.sdk.validator", "mxcp.validator"]
 include-package-data = true
 
 [tool.setuptools.package-data]
