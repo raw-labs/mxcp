@@ -22,7 +22,13 @@ from mxcp.config._types import SiteConfig, UserAuthConfig, UserConfig, UserHttpT
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.external_refs import ExternalRefTracker
 from mxcp.config.site_config import get_active_profile
-from mxcp.endpoints._types import ToolDefinition, ResourceDefinition, PromptDefinition
+from mxcp.endpoints._types import (
+    ToolDefinition,
+    ResourceDefinition,
+    PromptDefinition,
+    ParamDefinition,
+    TypeDefinition,
+)
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 from mxcp.endpoints.utils import EndpointType
 from mxcp.endpoints.validate import validate_endpoint
@@ -971,7 +977,7 @@ class RAWMCP:
         return field_kwargs
 
     def _create_pydantic_field_annotation(
-        self, param_def: Dict[str, Any], endpoint_type: Optional[EndpointType] = None
+        self, param_def: ParamDefinition, endpoint_type: Optional[EndpointType] = None
     ) -> Any:
         """Create a Pydantic type annotation from parameter definition.
 
@@ -983,10 +989,10 @@ class RAWMCP:
             Pydantic type annotation (class or Annotated type)
         """
         param_name = param_def.get("name", "param")
-        return self._create_pydantic_model_from_schema(param_def, param_name, endpoint_type)
+        return self._create_pydantic_model_from_schema(cast(Dict[str, Any], param_def), param_name, endpoint_type)
 
     def _json_schema_to_python_type(
-        self, param_def: Dict[str, Any], endpoint_type: Optional[EndpointType] = None
+        self, param_def: ParamDefinition, endpoint_type: Optional[EndpointType] = None
     ) -> Any:
         """Convert JSON Schema type to Python type annotation.
 
@@ -1129,7 +1135,7 @@ class RAWMCP:
         param_signatures = []
         for param in parameters:
             param_name = param["name"]
-            param_type = self._json_schema_to_python_type(cast(Dict[str, Any], param), endpoint_type)
+            param_type = self._json_schema_to_python_type(param, endpoint_type)
             param_annotations[param_name] = param_type
             # Create string representation for makefun
             param_signatures.append(f"{param_name}")
