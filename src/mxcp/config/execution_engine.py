@@ -46,6 +46,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional, cast
 
+import duckdb
+
 from mxcp.config.site_config import SiteConfig  # type: ignore[attr-defined]
 from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
 from mxcp.sdk.executor import (
@@ -55,6 +57,7 @@ from mxcp.sdk.executor import (
     set_execution_context,
 )
 from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
+from mxcp.sdk.executor.plugins.duckdb_plugin.session import DuckDBSession
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +66,7 @@ logger = logging.getLogger(__name__)
 def execution_context_for_init_hooks(
     user_config: Optional[UserConfig] = None,
     site_config: Optional[SiteConfig] = None,
-    duckdb_session: Any = None,
+    duckdb_session: Optional[DuckDBSession] = None,
     plugins: Optional[Dict[str, Any]] = None,
 ) -> Generator[Optional[ExecutionContext], None, None]:
     """

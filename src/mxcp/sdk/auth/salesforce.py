@@ -17,7 +17,7 @@ from ._types import (
     StateMeta,
     UserContext,
 )
-from .providers import ExternalOAuthHandler
+from .providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from .url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
@@ -161,7 +161,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
     def callback_path(self) -> str:  # noqa: D401
         return self._callback_path
 
-    async def on_callback(self, request: Request, provider: Any) -> Response:  # noqa: E501
+    async def on_callback(self, request: Request, provider: GeneralOAuthAuthorizationServer) -> Response:  # noqa: E501
         code = request.query_params.get("code")
         state = request.query_params.get("state")
         if not code or not state:

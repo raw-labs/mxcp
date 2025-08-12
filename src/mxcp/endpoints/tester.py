@@ -17,6 +17,7 @@ from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 from mxcp.sdk.auth.providers import UserContext  # type: ignore[attr-defined]
+from mxcp.sdk.executor import ExecutionEngine
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -163,7 +164,7 @@ async def run_tests_with_session(
     name: str,
     user_config: UserConfig,
     site_config: SiteConfig,
-    execution_engine: Any,
+    execution_engine: ExecutionEngine,
     cli_user_context: Optional[UserContext] = None,
 ) -> Dict[str, Any]:
     """Run tests for a specific endpoint type and name with an existing session."""
