@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Optional, cast
 import click
 import yaml
 
-from ..config.site_config import find_repo_root
 from ..config._types import SiteConfig, UserConfig
+from ..config.site_config import find_repo_root
 
 
 def _get_dbt_profiles_dir() -> Path:
@@ -72,7 +72,9 @@ def _save_dbt_project(project_config: Dict[str, Any]) -> None:
     temp_path.rename(project_path)
 
 
-def _map_secret_to_dbt_format(secret: Dict[str, Any], embed_secrets: bool) -> Optional[Dict[str, Any]]:
+def _map_secret_to_dbt_format(
+    secret: Dict[str, Any], embed_secrets: bool
+) -> Optional[Dict[str, Any]]:
     """Map a MXCP secret to dbt's expected format based on its type.
 
     Args:
@@ -354,7 +356,9 @@ def configure_dbt(
 
     # 5. Get secrets from user config
     projects = user_config.get("projects", {})
-    project_config: Optional[Dict[str, Any]] = cast(Optional[Dict[str, Any]], projects.get(project) if projects else None)
+    project_config: Optional[Dict[str, Any]] = cast(
+        Optional[Dict[str, Any]], projects.get(project) if projects else None
+    )
     if not project_config:
         click.echo(
             f"Warning: Project '{project}' not found in user config, assuming empty configuration",

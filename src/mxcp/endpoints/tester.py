@@ -74,20 +74,30 @@ async def run_all_tests(
                 if endpoint is None:
                     logger.debug(f"Skipping file {file_path}: endpoint is None")
                     continue
-                    
+
                 # Determine endpoint type and name
                 if "tool" in endpoint:
                     kind = "tool"
                     tool_def = endpoint.get("tool", {})
-                    name = tool_def.get("name", "unknown") if isinstance(tool_def, dict) else "unknown"
+                    name = (
+                        tool_def.get("name", "unknown") if isinstance(tool_def, dict) else "unknown"
+                    )
                 elif "resource" in endpoint:
                     kind = "resource"
                     resource_def = endpoint.get("resource", {})
-                    name = resource_def.get("uri", "unknown") if isinstance(resource_def, dict) else "unknown"
+                    name = (
+                        resource_def.get("uri", "unknown")
+                        if isinstance(resource_def, dict)
+                        else "unknown"
+                    )
                 elif "prompt" in endpoint:
                     kind = "prompt"
                     prompt_def = endpoint.get("prompt", {})
-                    name = prompt_def.get("name", "unknown") if isinstance(prompt_def, dict) else "unknown"
+                    name = (
+                        prompt_def.get("name", "unknown")
+                        if isinstance(prompt_def, dict)
+                        else "unknown"
+                    )
                 else:
                     logger.debug(f"Skipping file {file_path}: not a valid endpoint")
                     continue
@@ -175,7 +185,7 @@ async def run_tests_with_session(
         if endpoint_def is None:
             logger.error(f"Endpoint definition is None for {endpoint_type}/{name}")
             return {"status": "error", "message": f"Invalid endpoint definition"}
-            
+
         if endpoint_type == "tool":
             tool_def = endpoint_def.get("tool") if isinstance(endpoint_def, dict) else None
             if tool_def is not None and isinstance(tool_def, dict) and "tests" in tool_def:
@@ -184,7 +194,11 @@ async def run_tests_with_session(
                     tests = test_list
         elif endpoint_type == "resource":
             resource_def = endpoint_def.get("resource") if isinstance(endpoint_def, dict) else None
-            if resource_def is not None and isinstance(resource_def, dict) and "tests" in resource_def:
+            if (
+                resource_def is not None
+                and isinstance(resource_def, dict)
+                and "tests" in resource_def
+            ):
                 test_list = resource_def.get("tests")
                 if test_list is not None:
                     tests = test_list

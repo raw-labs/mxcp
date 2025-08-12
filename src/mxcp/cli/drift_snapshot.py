@@ -79,9 +79,10 @@ def drift_snapshot(
         if json_output:
             # Compute a simple hash for the snapshot
             import hashlib
+
             snapshot_str = json.dumps(snapshot, sort_keys=True)
             drift_hash = hashlib.sha256(snapshot_str.encode()).hexdigest()
-            
+
             output_result(
                 {
                     "path": str(path),
@@ -100,11 +101,10 @@ def drift_snapshot(
                 click.echo(f"   • Path: {click.style(str(path), fg='yellow')}")
                 # Compute a simple hash for the snapshot
                 import hashlib
+
                 snapshot_str = json.dumps(snapshot, sort_keys=True)
                 drift_hash = hashlib.sha256(snapshot_str.encode()).hexdigest()
-                click.echo(
-                    f"   • Hash: {click.style(drift_hash[:12] + '...', fg='yellow')}"
-                )
+                click.echo(f"   • Hash: {click.style(drift_hash[:12] + '...', fg='yellow')}")
                 click.echo(f"   • Generated: {click.style(snapshot['generated_at'], fg='yellow')}")
 
                 # Show what was captured

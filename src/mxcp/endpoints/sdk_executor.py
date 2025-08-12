@@ -132,7 +132,7 @@ async def execute_endpoint_with_engine(
         endpoint_dict = cast(Optional[Dict[str, Any]], endpoint_definition.get("prompt"))
     else:
         raise ValueError(f"Unknown endpoint type: {endpoint_type}")
-    
+
     if endpoint_dict is None:
         raise ValueError(f"No {endpoint_type} definition found in endpoint")
 
@@ -229,7 +229,10 @@ async def _execute_prompt_with_validation(
 
 
 async def _prepare_source_code(
-    endpoint_dict: Dict[str, Any], endpoint_definition: Dict[str, Any], endpoint_file_path: Path, repo_root: Path
+    endpoint_dict: Dict[str, Any],
+    endpoint_definition: Dict[str, Any],
+    endpoint_file_path: Path,
+    repo_root: Path,
 ) -> tuple[str, str]:
     """Prepare source code and determine language for SDK executor.
 

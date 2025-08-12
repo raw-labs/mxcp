@@ -289,7 +289,9 @@ async def run_eval_suite(
                                 if call["tool"] == expected_tool:
                                     # Check arguments match
                                     actual_args = call.get("arguments", {})
-                                    if all(actual_args.get(k) == v for k, v in expected_args.items()):
+                                    if all(
+                                        actual_args.get(k) == v for k, v in expected_args.items()
+                                    ):
                                         found = True
                                         break
 
@@ -324,7 +326,9 @@ async def run_eval_suite(
                     if not_contains:
                         for forbidden_text in not_contains:
                             if forbidden_text.lower() in response.lower():
-                                failures.append(f"Forbidden text '{forbidden_text}' found in response")
+                                failures.append(
+                                    f"Forbidden text '{forbidden_text}' found in response"
+                                )
 
                 test_time = time.time() - test_start
 

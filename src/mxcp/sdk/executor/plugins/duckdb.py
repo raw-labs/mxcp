@@ -44,13 +44,13 @@ from ..context import ExecutionContext
 from ..interfaces import ExecutorPlugin
 
 if TYPE_CHECKING:
-    from .duckdb_plugin.session import DuckDBSession
     from .duckdb_plugin._types import (
         DatabaseConfig,
         PluginConfig,
         PluginDefinition,
         SecretDefinition,
     )
+    from .duckdb_plugin.session import DuckDBSession
 
 logger = logging.getLogger(__name__)
 

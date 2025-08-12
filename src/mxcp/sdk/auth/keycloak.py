@@ -88,7 +88,11 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         auth_params = {
             "client_id": self.client_id,
             "response_type": "code",
-            "redirect_uri": str(params.redirect_uri) if params.redirect_uri else self.url_builder.build_callback_url(self._callback_path),
+            "redirect_uri": (
+                str(params.redirect_uri)
+                if params.redirect_uri
+                else self.url_builder.build_callback_url(self._callback_path)
+            ),
             "scope": self.scope,
             "state": state,
         }

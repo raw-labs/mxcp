@@ -201,10 +201,13 @@ def compare_resources(
                 if test_results_changed:
                     baseline_test = baseline_res.get("test_results") if baseline_res else None
                     current_test = current_res.get("test_results") if current_res else None
-                    details["test_changes"] = cast(Dict[str, Any], {
-                        "old_status": baseline_test.get("status") if baseline_test else None,
-                        "new_status": current_test.get("status") if current_test else None,
-                    })
+                    details["test_changes"] = cast(
+                        Dict[str, Any],
+                        {
+                            "old_status": baseline_test.get("status") if baseline_test else None,
+                            "new_status": current_test.get("status") if current_test else None,
+                        },
+                    )
 
                 changes.append(
                     ResourceChange(
@@ -248,9 +251,7 @@ def _compare_validation_results(baseline: Any, current: Any) -> bool:
     return cast(bool, baseline_copy != current_copy)
 
 
-def _compare_test_results(
-    baseline: Optional[Any], current: Optional[Any]
-) -> bool:
+def _compare_test_results(baseline: Optional[Any], current: Optional[Any]) -> bool:
     """Compare test results."""
     if baseline is None and current is None:
         return False
@@ -278,9 +279,7 @@ def _compare_test_results(
     return baseline_test_summary != current_test_summary
 
 
-def _compare_definitions(
-    baseline: Optional[Any], current: Optional[Any]
-) -> bool:
+def _compare_definitions(baseline: Optional[Any], current: Optional[Any]) -> bool:
     """Compare endpoint definitions."""
     if baseline is None and current is None:
         return False

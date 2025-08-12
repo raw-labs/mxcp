@@ -219,7 +219,9 @@ class EndpointLoader:
                 search_dir = self._repo_root / str(tools_path)
                 schema_name = "tool-schema-1.json"
             elif endpoint_type == "resource":
-                resources_path = paths_config.get("resources", "resources") if paths_config else "resources"
+                resources_path = (
+                    paths_config.get("resources", "resources") if paths_config else "resources"
+                )
                 search_dir = self._repo_root / str(resources_path)
                 schema_name = "resource-schema-1.json"
             elif endpoint_type == "prompt":

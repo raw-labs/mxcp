@@ -142,7 +142,7 @@ def create_url_builder(user_config: Dict[str, Any]) -> URLBuilder:
 
 class RAWMCP:
     """MXCP MCP Server implementation that bridges MXCP endpoints with MCP protocol."""
-    
+
     # Type annotations for instance attributes
     site_config: SiteConfig
     user_config: UserConfig
@@ -213,7 +213,7 @@ class RAWMCP:
 
         # Initialize external reference tracker for hot reload
         self.ref_tracker = ExternalRefTracker()
-        
+
         # Initialize execution engine (will be created in _initialize_runtime_components)
         self.execution_engine = None
         self._model_cache = {}
@@ -258,8 +258,8 @@ class RAWMCP:
             # Set templates and resolve
             logger.info("Resolving external configuration references...")
             self.ref_tracker.set_template(
-                cast(Dict[str, Any], self._site_config_template), 
-                cast(Dict[str, Any], self._user_config_template)
+                cast(Dict[str, Any], self._site_config_template),
+                cast(Dict[str, Any], self._user_config_template),
             )
             self._config_templates_loaded = True
             resolved_site, resolved_user = self.ref_tracker.resolve_all()
@@ -279,13 +279,23 @@ class RAWMCP:
 
         # Extract transport config with overrides
         transport_config = self.user_config.get("transport") or {}
-        self.transport = str(self._cli_overrides["transport"] or (
-            transport_config.get("provider") if transport_config else "streamable-http"
-        ) or "streamable-http")
+        self.transport = str(
+            self._cli_overrides["transport"]
+            or (transport_config.get("provider") if transport_config else "streamable-http")
+            or "streamable-http"
+        )
 
         http_config = transport_config.get("http") if transport_config else {}
-        self.host = str(self._cli_overrides["host"] or (http_config.get("host") if http_config else "localhost") or "localhost")
-        port_value = self._cli_overrides["port"] or (http_config.get("port") if http_config else 8000) or 8000
+        self.host = str(
+            self._cli_overrides["host"]
+            or (http_config.get("host") if http_config else "localhost")
+            or "localhost"
+        )
+        port_value = (
+            self._cli_overrides["port"]
+            or (http_config.get("port") if http_config else 8000)
+            or 8000
+        )
         self.port = int(port_value)
 
         config_stateless = http_config.get("stateless", False) if http_config else False
@@ -323,7 +333,8 @@ class RAWMCP:
     def get_endpoint_counts(self) -> Dict[str, int]:
         """Get counts of valid endpoints by type."""
         tool_count = sum(
-            1 for _, endpoint, error in self._all_endpoints 
+            1
+            for _, endpoint, error in self._all_endpoints
             if error is None and endpoint is not None and "tool" in endpoint
         )
         resource_count = sum(
@@ -375,7 +386,10 @@ class RAWMCP:
         """Initialize OAuth authentication using profile-specific auth config."""
         auth_config = self.active_profile.get("auth", {})
         self.oauth_handler = create_oauth_handler(
-            auth_config, host=self.host, port=self.port, user_config=cast(Dict[str, Any], self.user_config)
+            auth_config,
+            host=self.host,
+            port=self.port,
+            user_config=cast(Dict[str, Any], self.user_config),
         )
         self.oauth_server = None
         self.auth_settings = None
@@ -559,7 +573,9 @@ class RAWMCP:
                     user_template = load_user_config(site_template, resolve_refs=False)
 
                     # Set templates in tracker
-                    self.ref_tracker.set_template(cast(Dict[str, Any], site_template), cast(Dict[str, Any], user_template))
+                    self.ref_tracker.set_template(
+                        cast(Dict[str, Any], site_template), cast(Dict[str, Any], user_template)
+                    )
                     self._config_templates_loaded = True
                     logger.info("Raw configuration templates loaded.")
 
@@ -647,7 +663,9 @@ class RAWMCP:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(run_in_new_loop)
                 try:
-                    final_type = future.result(timeout=timeout + 1)  # Add buffer for thread overhead
+                    final_type = future.result(
+                        timeout=timeout + 1
+                    )  # Add buffer for thread overhead
                     logger.info(f"{operation_name} completed successfully")
                     return final_type
                 except concurrent.futures.TimeoutError:
@@ -746,7 +764,7 @@ class RAWMCP:
             return self._model_cache[cache_key]
 
         json_type = schema_def.get("type", "string")
-        
+
         # Declare variable with explicit type annotation
         final_type: Any
 
@@ -894,8 +912,7 @@ class RAWMCP:
             # Note: In Pydantic v2, __config__ is not supported in create_model
             # Instead, we create the model and then set the config
             final_type = create_model(  # type: ignore[call-overload]
-                self._sanitize_model_name(model_name), 
-                **model_fields
+                self._sanitize_model_name(model_name), **model_fields
             )
 
             self._model_cache[cache_key] = final_type
@@ -1187,15 +1204,21 @@ class RAWMCP:
                 # Log the audit event
                 if self.audit_logger:
                     await self.audit_logger.log_event(
-                        caller_type=cast(Literal['cli', 'http', 'stdio', 'api', 'system', 'unknown'], caller),
-                        event_type=cast(Literal['tool', 'resource', 'prompt'], endpoint_key),  # "tool", "resource", or "prompt"
+                        caller_type=cast(
+                            Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
+                        ),
+                        event_type=cast(
+                            Literal["tool", "resource", "prompt"], endpoint_key
+                        ),  # "tool", "resource", or "prompt"
                         name=endpoint_def.get("name", endpoint_def.get("uri", "unknown")),
                         input_params=kwargs,
                         duration_ms=duration_ms,
                         schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                        policy_decision=cast(Literal['allow', 'deny', 'warn', 'n/a'], policy_decision),
+                        policy_decision=cast(
+                            Literal["allow", "deny", "warn", "n/a"], policy_decision
+                        ),
                         reason=policy_reason,
-                        status=cast(Literal['success', 'error'], status),
+                        status=cast(Literal["success", "error"], status),
                         error=error_msg,
                         output_data=result,  # Return the result as output_data
                     )
@@ -1342,7 +1365,9 @@ class RAWMCP:
 
                     asyncio.run(
                         self.audit_logger.log_event(
-                            caller_type=cast(Literal['cli', 'http', 'stdio', 'api', 'system', 'unknown'], caller),
+                            caller_type=cast(
+                                Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
+                            ),
                             event_type="tool",
                             name="execute_sql_query",
                             input_params={"sql": sql},
@@ -1350,7 +1375,7 @@ class RAWMCP:
                             schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
                             policy_decision="n/a",
                             reason=None,
-                            status=cast(Literal['success', 'error'], status),
+                            status=cast(Literal["success", "error"], status),
                             error=error_msg,
                         )
                     )
@@ -1420,7 +1445,9 @@ class RAWMCP:
 
                     asyncio.run(
                         self.audit_logger.log_event(
-                            caller_type=cast(Literal['cli', 'http', 'stdio', 'api', 'system', 'unknown'], caller),
+                            caller_type=cast(
+                                Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
+                            ),
                             event_type="tool",
                             name="list_tables",
                             input_params={},
@@ -1428,7 +1455,7 @@ class RAWMCP:
                             schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
                             policy_decision="n/a",
                             reason=None,
-                            status=cast(Literal['success', 'error'], status),
+                            status=cast(Literal["success", "error"], status),
                             error=error_msg,
                         )
                     )
@@ -1505,7 +1532,9 @@ class RAWMCP:
 
                     asyncio.run(
                         self.audit_logger.log_event(
-                            caller_type=cast(Literal['cli', 'http', 'stdio', 'api', 'system', 'unknown'], caller),
+                            caller_type=cast(
+                                Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
+                            ),
                             event_type="tool",
                             name="get_table_schema",
                             input_params={"table_name": table_name},
@@ -1513,7 +1542,7 @@ class RAWMCP:
                             schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
                             policy_decision="n/a",
                             reason=None,
-                            status=cast(Literal['success', 'error'], status),
+                            status=cast(Literal["success", "error"], status),
                             error=error_msg,
                         )
                     )
@@ -1546,7 +1575,7 @@ class RAWMCP:
                 if endpoint_def is None:
                     logger.warning(f"Endpoint definition is None for {path}")
                     continue
-                    
+
                 if "tool" in endpoint_def:
                     self._register_tool(endpoint_def["tool"])
                     logger.info(
@@ -1625,7 +1654,7 @@ class RAWMCP:
                     raise RuntimeError(f"OAuth server initialization failed: {e}")
 
             # Start server using MCP's built-in run method
-            self.mcp.run(transport=cast(Literal['stdio', 'sse', 'streamable-http'], transport))
+            self.mcp.run(transport=cast(Literal["stdio", "sse", "streamable-http"], transport))
             logger.info("MCP server started successfully.")
         except Exception as e:
             logger.error(f"Error running MCP server: {e}")
@@ -1636,7 +1665,7 @@ class RAWMCP:
         if self.oauth_handler is None:
             logger.warning("OAuth handler not configured, skipping OAuth routes")
             return
-            
+
         callback_path = self.oauth_handler.callback_path
         logger.info(f"Registering OAuth callback route: {callback_path}")
 

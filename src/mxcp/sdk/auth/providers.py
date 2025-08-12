@@ -112,7 +112,9 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
         # Initialize persistence backend
         persistence_config = auth_config.get("persistence") if auth_config else None
-        self.persistence = create_persistence_backend(cast(Dict[str, Any], persistence_config) if persistence_config else None)
+        self.persistence = create_persistence_backend(
+            cast(Dict[str, Any], persistence_config) if persistence_config else None
+        )
 
         # In-memory caches for performance (fallback when persistence is disabled)
         self._clients: dict[str, OAuthClientInformationFull] = {}
@@ -184,9 +186,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     client = OAuthClientInformationFull(
                         client_id=client_data.client_id,
                         client_secret=client_data.client_secret,
-                        redirect_uris=cast(List[AnyUrl], redirect_uris_pydantic),  # Use validated URIs
-                        grant_types=cast(List[Literal['authorization_code', 'refresh_token']], client_data.grant_types),
-                        response_types=cast(List[Literal['code']], client_data.response_types),
+                        redirect_uris=cast(
+                            List[AnyUrl], redirect_uris_pydantic
+                        ),  # Use validated URIs
+                        grant_types=cast(
+                            List[Literal["authorization_code", "refresh_token"]],
+                            client_data.grant_types,
+                        ),
+                        response_types=cast(List[Literal["code"]], client_data.response_types),
                         scope=client_data.scope,
                         client_name=client_data.client_name,
                     )
@@ -209,13 +216,18 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 client_id = client_config["client_id"]
                 redirect_uris_str = client_config.get("redirect_uris", [])
                 redirect_uris_any = [cast(AnyUrl, uri) for uri in (redirect_uris_str or [])]
-                
+
                 client = OAuthClientInformationFull(
                     client_id=client_id,
                     client_secret=client_config.get("client_secret"),  # None for public clients
                     redirect_uris=redirect_uris_any,
-                    grant_types=cast(List[Literal['authorization_code', 'refresh_token']], client_config.get("grant_types", ["authorization_code"])),
-                    response_types=cast(List[Literal['code']], client_config.get("response_types", ["code"])),
+                    grant_types=cast(
+                        List[Literal["authorization_code", "refresh_token"]],
+                        client_config.get("grant_types", ["authorization_code"]),
+                    ),
+                    response_types=cast(
+                        List[Literal["code"]], client_config.get("response_types", ["code"])
+                    ),
                     scope=" ".join(client_config.get("scopes") or []),  # No default scopes
                     client_name=client_config["name"],
                 )
@@ -265,9 +277,16 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                         client = OAuthClientInformationFull(
                             client_id=persisted_client.client_id,
                             client_secret=persisted_client.client_secret,
-                            redirect_uris=cast(List[AnyUrl], redirect_uris_pydantic),  # Use validated URIs
-                            grant_types=cast(List[Literal['authorization_code', 'refresh_token']], persisted_client.grant_types),
-                            response_types=cast(List[Literal['code']], persisted_client.response_types),
+                            redirect_uris=cast(
+                                List[AnyUrl], redirect_uris_pydantic
+                            ),  # Use validated URIs
+                            grant_types=cast(
+                                List[Literal["authorization_code", "refresh_token"]],
+                                persisted_client.grant_types,
+                            ),
+                            response_types=cast(
+                                List[Literal["code"]], persisted_client.response_types
+                            ),
                             scope=persisted_client.scope,
                             client_name=persisted_client.client_name,
                         )
@@ -650,7 +669,9 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
     async def load_refresh_token(self, client: Any, refresh_token: str) -> Optional[Any]:
         return None
 
-    async def exchange_refresh_token(self, client: Any, refresh_token: str, scopes: List[str]) -> Any:
+    async def exchange_refresh_token(
+        self, client: Any, refresh_token: str, scopes: List[str]
+    ) -> Any:
         raise NotImplementedError
 
     async def revoke_token(self, token: str, token_type_hint: str | None = None) -> None:

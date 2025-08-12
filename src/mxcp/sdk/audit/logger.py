@@ -81,7 +81,9 @@ class AuditLogger:
         """Create or update a schema."""
         await self.backend.create_schema(schema)
 
-    async def get_schema(self, schema_name: str, version: Optional[int] = None) -> Optional[AuditSchema]:
+    async def get_schema(
+        self, schema_name: str, version: Optional[int] = None
+    ) -> Optional[AuditSchema]:
         """Get a schema definition."""
         return cast(Optional[AuditSchema], await self.backend.get_schema(schema_name, version))
 
@@ -167,7 +169,9 @@ class AuditLogger:
 
     async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResult:
         """Verify integrity between two records."""
-        return cast(IntegrityResult, await self.backend.verify_integrity(start_record_id, end_record_id))
+        return cast(
+            IntegrityResult, await self.backend.verify_integrity(start_record_id, end_record_id)
+        )
 
     async def apply_retention_policies(self) -> Dict[str, int]:
         """Apply retention policies to remove old records."""

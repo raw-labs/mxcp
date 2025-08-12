@@ -201,7 +201,9 @@ class validate:
             validate_signature=validate_signature,
         )
 
-    def _map_args_to_params(self, func: Callable[..., Any], args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _map_args_to_params(
+        self, func: Callable[..., Any], args: Tuple[Any, ...], kwargs: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Map positional and keyword arguments to parameter names.
 
         Args:
@@ -227,7 +229,9 @@ class validate:
 
 
 # Convenience functions for common validation patterns
-def validate_input(schema: Union[Dict[str, Any], List[Any]], strict: bool = False) -> Callable[..., Any]:
+def validate_input(
+    schema: Union[Dict[str, Any], List[Any]], strict: bool = False
+) -> Callable[..., Any]:
     """Validate only input parameters.
 
     Args:

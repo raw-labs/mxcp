@@ -54,7 +54,7 @@ class AuthenticationMiddleware:
             if not self.oauth_server:
                 logger.warning("OAuth server not configured")
                 return None
-            
+
             token_info = await self.oauth_server.load_access_token(access_token.token)
             if not token_info:
                 logger.warning("Invalid or expired access token")
@@ -66,7 +66,7 @@ class AuthenticationMiddleware:
             if not self.oauth_server:
                 logger.warning("OAuth server not configured")
                 return None
-                
+
             external_token = self.oauth_server._token_mapping.get(access_token.token)
             if not external_token:
                 logger.warning("No external token mapping found")
@@ -79,7 +79,7 @@ class AuthenticationMiddleware:
                 if not self.oauth_handler:
                     logger.warning("OAuth handler not configured")
                     return None
-                    
+
                 user_context = await self.oauth_handler.get_user_context(external_token)
                 # Add external token to the user context for use in DuckDB functions
                 user_context.external_token = external_token

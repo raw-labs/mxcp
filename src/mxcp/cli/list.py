@@ -59,11 +59,18 @@ def list_endpoints(profile: str, json_output: bool, debug: bool) -> None:
         for path, endpoint, error_msg in endpoints:
             if error_msg is not None or endpoint is None:
                 results.append(
-                    {"path": str(path), "kind": "unknown", "name": "unknown", "error": error_msg or "Unknown error"}
+                    {
+                        "path": str(path),
+                        "kind": "unknown",
+                        "name": "unknown",
+                        "error": error_msg or "Unknown error",
+                    }
                 )
             else:
                 kind, name, error = parse_endpoint(path, endpoint)
-                results.append({"path": str(path), "kind": kind, "name": name, "error": error or ""})
+                results.append(
+                    {"path": str(path), "kind": kind, "name": name, "error": error or ""}
+                )
 
         if json_output:
             output_result(

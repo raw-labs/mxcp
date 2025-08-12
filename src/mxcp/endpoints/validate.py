@@ -16,7 +16,9 @@ from mxcp.sdk.executor import ExecutionEngine
 RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
 
 
-def _validate_resource_uri_vs_params(res_def: Dict[str, Any], path: Path) -> Optional[Dict[str, Any]]:
+def _validate_resource_uri_vs_params(
+    res_def: Dict[str, Any], path: Path
+) -> Optional[Dict[str, Any]]:
     uri_params = set(RESOURCE_VAR_RE.findall(res_def["uri"]))
     yaml_params = {p["name"] for p in res_def.get("parameters", [])}
 

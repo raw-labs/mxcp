@@ -13,7 +13,9 @@ import duckdb
 from ._types import ExtensionDefinition
 
 
-def load_extensions(con: duckdb.DuckDBPyConnection, extensions: Optional[List[ExtensionDefinition]] = None) -> None:
+def load_extensions(
+    con: duckdb.DuckDBPyConnection, extensions: Optional[List[ExtensionDefinition]] = None
+) -> None:
     """Load DuckDB extensions based on configuration.
 
     Args:

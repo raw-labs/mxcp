@@ -13,7 +13,12 @@ class LintIssue:
     """Represents a single lint issue found in an endpoint."""
 
     def __init__(
-        self, severity: str, path: str, location: str, message: str, suggestion: Optional[str] = None
+        self,
+        severity: str,
+        path: str,
+        location: str,
+        message: str,
+        suggestion: Optional[str] = None,
     ):
         self.severity = severity  # "warning" or "error"
         self.path = path
@@ -22,7 +27,9 @@ class LintIssue:
         self.suggestion = suggestion
 
 
-def lint_type_definition(type_def: Dict[str, Any], location: str, issues: List[LintIssue], path: str) -> None:
+def lint_type_definition(
+    type_def: Dict[str, Any], location: str, issues: List[LintIssue], path: str
+) -> None:
     """Recursively lint type definitions for missing descriptions."""
     if not isinstance(type_def, dict):
         return

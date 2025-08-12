@@ -118,7 +118,7 @@ async def generate_snapshot(
                 if not endpoint:
                     logger.warning(f"Skipping file {path}: endpoint is None")
                     continue
-                    
+
                 if "tool" in endpoint:
                     endpoint_type = "tool"
                     name = endpoint["tool"]["name"]

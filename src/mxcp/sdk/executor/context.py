@@ -154,7 +154,9 @@ def get_execution_context() -> Optional[ExecutionContext]:
     return execution_context_var.get()
 
 
-def set_execution_context(context: Optional[ExecutionContext]) -> "contextvars.Token[Optional[ExecutionContext]]":
+def set_execution_context(
+    context: Optional[ExecutionContext],
+) -> "contextvars.Token[Optional[ExecutionContext]]":
     """
     Set the execution context in the current context.
 
