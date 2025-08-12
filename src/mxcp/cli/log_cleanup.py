@@ -1,6 +1,7 @@
 """CLI command for audit log cleanup operations."""
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -103,7 +104,6 @@ async def _cleanup_async(
             for schema in schemas:
                 if schema.retention_days is not None:
                     # Query records for this schema that would be deleted
-                    from datetime import datetime, timedelta, timezone
 
                     cutoff_date = datetime.now(timezone.utc) - timedelta(days=schema.retention_days)
 

@@ -56,6 +56,13 @@ from mxcp.sdk.executor import (
     set_execution_context,
 )
 from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
+from mxcp.sdk.executor.plugins.duckdb_plugin._types import (
+    DatabaseConfig,
+    ExtensionDefinition,
+    PluginConfig,
+    PluginDefinition,
+    SecretDefinition,
+)
 from mxcp.sdk.executor.plugins.duckdb_plugin.session import DuckDBSession
 
 logger = logging.getLogger(__name__)
@@ -155,13 +162,6 @@ def create_execution_engine(
         >>> # Call engine.shutdown() when done to run shutdown hooks automatically
     """
     try:
-        from mxcp.sdk.executor.plugins.duckdb_plugin._types import (
-            DatabaseConfig,
-            ExtensionDefinition,
-            PluginConfig,
-            PluginDefinition,
-            SecretDefinition,
-        )
 
         # Create ExecutionEngine
         engine = ExecutionEngine(strict=False)

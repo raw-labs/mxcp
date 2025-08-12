@@ -1,3 +1,4 @@
+import importlib
 import inspect
 import logging
 from datetime import date, datetime, time, timedelta
@@ -337,8 +338,6 @@ class MXCPBasePlugin:
         Returns:
             List of plugin classes
         """
-        import importlib
-        import inspect
 
         mod = importlib.import_module(module)
         return [

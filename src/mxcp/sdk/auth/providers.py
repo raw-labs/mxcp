@@ -18,7 +18,7 @@ from mcp.server.auth.provider import (  # type: ignore[attr-defined]
     construct_redirect_uri,
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
-from pydantic import AnyHttpUrl, AnyUrl
+from pydantic import AnyHttpUrl, AnyUrl, ValidationError
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import Response
@@ -170,7 +170,6 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             for client_data in persisted_clients:
                 try:
                     # Convert string URLs back to AnyHttpUrl objects for OAuthClientInformationFull
-                    from pydantic import AnyHttpUrl, ValidationError
 
                     redirect_uris_pydantic = []
 
@@ -263,7 +262,6 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     if persisted_client:
                         # Load into memory cache
                         # Convert string URLs back to AnyHttpUrl objects for OAuthClientInformationFull
-                        from pydantic import AnyHttpUrl, ValidationError
 
                         redirect_uris_pydantic = []
 
@@ -340,8 +338,6 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
         This implements RFC 7591 - OAuth 2.0 Dynamic Client Registration Protocol
         """
-        import secrets
-        import time
 
         try:
             # Generate client credentials
@@ -455,7 +451,6 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
         # Validate redirect URI
         try:
-            from pydantic import ValidationError
 
             redirect_uri = AnyHttpUrl(meta.redirect_uri)
         except ValidationError as ve:
@@ -524,7 +519,6 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
                         # Load into memory cache
                         try:
-                            from pydantic import ValidationError
 
                             redirect_uri = AnyHttpUrl(persisted_code.redirect_uri)
                         except ValidationError as ve:

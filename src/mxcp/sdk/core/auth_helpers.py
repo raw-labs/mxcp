@@ -9,7 +9,11 @@ from typing import Any, Dict, Optional
 
 from mxcp.config._types import UserAuthConfig, UserConfig, UserHttpTransportConfig
 from mxcp.sdk.auth._types import AuthConfig, HttpTransportConfig
+from mxcp.sdk.auth.atlassian import AtlassianOAuthHandler
+from mxcp.sdk.auth.github import GitHubOAuthHandler
+from mxcp.sdk.auth.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.providers import ExternalOAuthHandler
+from mxcp.sdk.auth.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 
 
@@ -89,7 +93,6 @@ def create_oauth_handler(
         transport_config = translate_transport_config(user_transport)
 
     if provider == "github":
-        from mxcp.sdk.auth.github import GitHubOAuthHandler
 
         github_config = user_auth_config.get("github")
         if not github_config:
@@ -97,7 +100,6 @@ def create_oauth_handler(
         return GitHubOAuthHandler(github_config, transport_config, host=host, port=port)
 
     elif provider == "atlassian":
-        from mxcp.sdk.auth.atlassian import AtlassianOAuthHandler
 
         atlassian_config = user_auth_config.get("atlassian")
         if not atlassian_config:
@@ -105,7 +107,6 @@ def create_oauth_handler(
         return AtlassianOAuthHandler(atlassian_config, transport_config, host=host, port=port)
 
     elif provider == "salesforce":
-        from mxcp.sdk.auth.salesforce import SalesforceOAuthHandler
 
         salesforce_config = user_auth_config.get("salesforce")
         if not salesforce_config:
@@ -113,7 +114,6 @@ def create_oauth_handler(
         return SalesforceOAuthHandler(salesforce_config, transport_config, host=host, port=port)
 
     elif provider == "keycloak":
-        from mxcp.sdk.auth.keycloak import KeycloakOAuthHandler
 
         keycloak_config = user_auth_config.get("keycloak")
         if not keycloak_config:

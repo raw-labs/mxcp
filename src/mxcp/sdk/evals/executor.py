@@ -6,7 +6,10 @@ and tool calling, with tool execution delegated to external implementations.
 
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional, Protocol, Tuple, cast
+
+import httpx
 
 from mxcp.sdk.auth import UserContext
 
@@ -266,7 +269,6 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
             pass
 
         # If not pure JSON, look for JSON in the response
-        import re
 
         json_pattern = r'\{[^}]*"tool"[^}]*\}'
         matches = re.findall(json_pattern, response)
@@ -301,7 +303,6 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
 
     async def _call_claude(self, prompt: str) -> str:
         """Call Claude API"""
-        import httpx
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -331,7 +332,6 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
 
     async def _call_openai(self, prompt: str) -> str:
         """Call OpenAI API"""
-        import httpx
 
         async with httpx.AsyncClient() as client:
             response = await client.post(

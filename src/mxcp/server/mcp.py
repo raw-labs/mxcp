@@ -1,4 +1,6 @@
+import asyncio
 import atexit
+import concurrent.futures
 import hashlib
 import json
 import logging
@@ -15,13 +17,15 @@ from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
-from pydantic import AnyHttpUrl, Field, create_model
+from pydantic import AnyHttpUrl, ConfigDict, Field, create_model
+from starlette.responses import JSONResponse
 
 from mxcp.audit.schemas import ENDPOINT_EXECUTION_SCHEMA
 from mxcp.config._types import SiteConfig, UserAuthConfig, UserConfig, UserHttpTransportConfig
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.external_refs import ExternalRefTracker
-from mxcp.config.site_config import get_active_profile
+from mxcp.config.site_config import get_active_profile, load_site_config
+from mxcp.config.user_config import load_user_config
 from mxcp.endpoints._types import (
     EndpointDefinition,
     ParamDefinition,
@@ -30,14 +34,19 @@ from mxcp.endpoints._types import (
     ToolDefinition,
     TypeDefinition,
 )
+from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 from mxcp.endpoints.utils import EndpointType
 from mxcp.endpoints.validate import validate_endpoint
 from mxcp.sdk.audit import AuditLogger
 from mxcp.sdk.auth._types import AuthConfig, HttpTransportConfig
+from mxcp.sdk.auth.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.context import get_user_context
+from mxcp.sdk.auth.github import GitHubOAuthHandler
+from mxcp.sdk.auth.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.auth.providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from mxcp.sdk.auth.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.executor import ExecutionEngine
 
@@ -102,7 +111,6 @@ def create_oauth_handler(
         transport_config = translate_transport_config(user_transport)
 
     if provider == "github":
-        from mxcp.sdk.auth.github import GitHubOAuthHandler
 
         github_config = user_auth_config.get("github")
         if not github_config:
@@ -110,7 +118,6 @@ def create_oauth_handler(
         return GitHubOAuthHandler(github_config, transport_config, host=host, port=port)
 
     elif provider == "atlassian":
-        from mxcp.sdk.auth.atlassian import AtlassianOAuthHandler
 
         atlassian_config = user_auth_config.get("atlassian")
         if not atlassian_config:
@@ -118,7 +125,6 @@ def create_oauth_handler(
         return AtlassianOAuthHandler(atlassian_config, transport_config, host=host, port=port)
 
     elif provider == "salesforce":
-        from mxcp.sdk.auth.salesforce import SalesforceOAuthHandler
 
         salesforce_config = user_auth_config.get("salesforce")
         if not salesforce_config:
@@ -126,7 +132,6 @@ def create_oauth_handler(
         return SalesforceOAuthHandler(salesforce_config, transport_config, host=host, port=port)
 
     elif provider == "keycloak":
-        from mxcp.sdk.auth.keycloak import KeycloakOAuthHandler
 
         keycloak_config = user_auth_config.get("keycloak")
         if not keycloak_config:
@@ -205,8 +210,6 @@ class RAWMCP:
 
         # Load configurations
         logger.info("Loading configurations...")
-        from mxcp.config.site_config import load_site_config
-        from mxcp.config.user_config import load_user_config
 
         self._site_config_template = load_site_config(self.site_config_path)
         self._user_config_template = load_user_config(self._site_config_template)
@@ -261,7 +264,6 @@ class RAWMCP:
     def _resolve_and_apply_configs(self) -> None:
         """Resolve external references and apply CLI overrides."""
         # Check if configs contain unresolved references
-        import json
 
         config_str = json.dumps(self._site_config_template) + json.dumps(self._user_config_template)
         needs_resolution = any(pattern in config_str for pattern in ["${", "vault://", "file://"])
@@ -369,7 +371,6 @@ class RAWMCP:
 
     def _load_endpoints(self) -> None:
         """Load and categorize endpoints."""
-        from mxcp.endpoints.loader import EndpointLoader
 
         self.loader = EndpointLoader(self.site_config)
 
@@ -466,7 +467,6 @@ class RAWMCP:
 
     def _initialize_audit_logger(self) -> None:
         """Initialize audit logger if enabled."""
-        import asyncio
 
         profile_config = self.site_config["profiles"][self.profile_name]
         audit_config = profile_config.get("audit") or {}
@@ -574,8 +574,6 @@ class RAWMCP:
                     logger.info("Loading raw configuration templates for hot reload...")
 
                     # Load raw configs without resolving references
-                    from mxcp.config.site_config import load_site_config
-                    from mxcp.config.user_config import load_user_config
 
                     # Determine site config path
                     site_path = self.site_config_path or Path.cwd()
@@ -653,8 +651,6 @@ class RAWMCP:
             TimeoutError: If the operation times out
             Exception: If the operation fails
         """
-        import asyncio
-        import concurrent.futures
 
         async def with_timeout() -> Any:
             """Wrap the coroutine with a timeout."""
@@ -916,7 +912,6 @@ class RAWMCP:
                         model_fields[prop_name] = (Optional[prop_type], None)
 
             # Create the model with proper configuration
-            from pydantic import ConfigDict
 
             model_config = ConfigDict(extra="allow" if additional_properties else "forbid")
 
@@ -1380,7 +1375,6 @@ class RAWMCP:
                 if self.audit_logger:
                     # Determine caller type
                     caller = "stdio" if self.transport_mode == "stdio" else "http"
-                    import asyncio
 
                     asyncio.run(
                         self.audit_logger.log_event(
@@ -1460,7 +1454,6 @@ class RAWMCP:
                 if self.audit_logger:
                     # Determine caller type
                     caller = "stdio" if self.transport_mode == "stdio" else "http"
-                    import asyncio
 
                     asyncio.run(
                         self.audit_logger.log_event(
@@ -1547,7 +1540,6 @@ class RAWMCP:
                 if self.audit_logger:
                     # Determine caller type
                     caller = "stdio" if self.transport_mode == "stdio" else "http"
-                    import asyncio
 
                     asyncio.run(
                         self.audit_logger.log_event(
@@ -1705,7 +1697,6 @@ class RAWMCP:
         @self.mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])  # type: ignore[misc]
         async def oauth_protected_resource_metadata(request: Any) -> Any:
             """Handle OAuth Protected Resource metadata requests (RFC 8693)"""
-            from starlette.responses import JSONResponse
 
             # Use URL builder with request context for proper scheme detection
             url_builder = create_url_builder(self.user_config)

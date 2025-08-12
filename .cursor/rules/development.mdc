@@ -9,3 +9,8 @@ alwaysApply: true
 - Do not create "backward compatibility" support in the code unless explicitly asked; this is a new s/w stack being used and it has no users yet, so backward compat is not a concern
 - Do not create re-export modules or wrapper functions just to maintain old import paths - update imports directly to use the new locations
 - When consolidating or refactoring modules, always update all imports to use the new structure rather than preserving old import paths
+
+## Import Organization
+- ALL imports must be at the top of the file, not in the middle of functions or methods
+- The ONLY exception is when the import is for a truly optional dependency (defined as optional in pyproject.toml)
+- Never put imports inside functions unless it's absolutely necessary for optional dependencies

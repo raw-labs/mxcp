@@ -8,6 +8,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
+from jinja2 import Template
+
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
@@ -24,7 +26,9 @@ from mxcp.policies import parse_policies_from_config
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
+from mxcp.sdk.executor.plugins import DuckDBExecutor
 from mxcp.sdk.policy import PolicyEnforcementError, PolicyEnforcer
+from mxcp.sdk.validator import TypeValidator
 
 logger = logging.getLogger(__name__)
 
@@ -221,9 +225,6 @@ async def _execute_prompt_with_validation(
     Uses the SAME validator as SDK executor (mxcp.validator) for full consistency.
     Handles defaults, constraints, template rendering - everything the SDK does.
     """
-    from jinja2 import Template
-
-    from mxcp.sdk.validator import TypeValidator
 
     validated_params = params
     if not skip_output_validation:
@@ -294,7 +295,6 @@ async def _execute_code_with_engine(
     execution_context.set("site_config", site_config)
     if hasattr(execution_engine, "_executors") and "sql" in execution_engine._executors:
         sql_executor = execution_engine._executors["sql"]
-        from mxcp.sdk.executor.plugins import DuckDBExecutor
 
         if isinstance(sql_executor, DuckDBExecutor):
             logger.info("Found DuckDB executor via direct access, setting session in context")
@@ -378,7 +378,6 @@ async def _execute_code_with_engine(
 
     # Now validate the transformed result
     if output_schema and not skip_output_validation:
-        from mxcp.sdk.validator import TypeValidator
 
         schema_dict = {"output": output_schema}
         validator = TypeValidator.from_dict(schema_dict)

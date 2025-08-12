@@ -24,6 +24,7 @@ from mxcp.drift._types import (
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.tester import run_tests_with_session
 from mxcp.endpoints.validate import validate_endpoint_payload
+from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +91,7 @@ async def generate_snapshot(
     if not duckdb_executor:
         raise RuntimeError("DuckDB executor not found in execution engine")
 
-    # Import here to get the proper type for accessing .session
-    from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
+    # Check the type for accessing .session
 
     if not isinstance(duckdb_executor, DuckDBExecutor):
         raise RuntimeError("SQL executor is not a DuckDB executor")
