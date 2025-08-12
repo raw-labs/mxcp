@@ -9,7 +9,8 @@ from referencing import Registry, Resource
 
 from mxcp.config._types import SiteConfig
 from mxcp.config.site_config import find_repo_root
-from mxcp.endpoints._types import EndpointDefinition
+from mxcp.drift._types import ValidationResults
+from mxcp.endpoints._types import EndpointDefinition, ResourceDefinition
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.utils import get_endpoint_source_code
 from mxcp.sdk.executor import ExecutionEngine
@@ -18,10 +19,11 @@ RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
 
 
 def _validate_resource_uri_vs_params(
-    res_def: Dict[str, Any], path: Path
+    res_def: ResourceDefinition, path: Path
 ) -> Optional[Dict[str, Any]]:
     uri_params = set(RESOURCE_VAR_RE.findall(res_def["uri"]))
-    yaml_params = {p["name"] for p in res_def.get("parameters", [])}
+    params = res_def.get("parameters") or []
+    yaml_params = {p["name"] for p in params}
 
     extra_in_yaml = yaml_params - uri_params
     if extra_in_yaml:
@@ -233,7 +235,7 @@ def validate_endpoint_payload(
             resource_def = endpoint.get("resource")
             if resource_def:
                 err = _validate_resource_uri_vs_params(
-                    cast(Dict[str, Any], resource_def), Path(relative_path)
+                    resource_def, Path(relative_path)
                 )
                 if err:
                     return err

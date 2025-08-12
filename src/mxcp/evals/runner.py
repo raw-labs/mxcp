@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional, cast
 
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine, find_repo_root
+from mxcp.endpoints._types import EndpointDefinition
 from mxcp.endpoints.loader import EndpointLoader
-from mxcp.evals._types import EndpointType, ResourceEndpoint, ToolEndpoint
 from mxcp.evals.loader import discover_eval_files, load_eval_suite
 from mxcp.evals.tool_executor import EndpointToolExecutor
 from mxcp.sdk.auth import UserContext
@@ -66,109 +66,97 @@ def _create_model_config(model: str, user_config: UserConfig) -> ModelConfigType
         raise ValueError(f"Unknown model type: {model_type}")
 
 
-def _load_endpoints(site_config: SiteConfig) -> List[EndpointType]:
-    """Load all available endpoints and convert them to typed objects.
+def _load_endpoints(site_config: SiteConfig) -> List[EndpointDefinition]:
+    """Load all available endpoints.
 
     Args:
         site_config: Site configuration for endpoint discovery
 
     Returns:
-        List of typed endpoint objects
+        List of endpoint definitions
     """
     loader = EndpointLoader(site_config)
-    endpoints: List[EndpointType] = []
+    endpoints: List[EndpointDefinition] = []
     discovered = loader.discover_endpoints()
 
     for path, endpoint_def, error in discovered:
         if error is None and endpoint_def:
-            # Extract endpoint info with ALL metadata
-            if "tool" in endpoint_def:
-                tool = endpoint_def.get("tool")
-                if tool and "name" in tool:
-                    # Convert parameters to List[Dict[str, Any]]
-                    params = tool.get("parameters") or []
-                    param_list = [cast(Dict[str, Any], p) for p in params] if params else []
-
-                    endpoints.append(
-                        ToolEndpoint(
-                            name=tool["name"],
-                            description=tool.get("description") or "",
-                            parameters=param_list,
-                            return_type=cast(Optional[Dict[str, Any]], tool.get("return_")),
-                            annotations=tool.get("annotations") or {},
-                            tags=tool.get("tags") or [],
-                            source=cast(Dict[str, Any], tool.get("source") or {}),
-                        )
-                    )
-            elif "resource" in endpoint_def:
-                resource = endpoint_def.get("resource", {})
-                if isinstance(resource, dict) and "uri" in resource:
-                    endpoints.append(
-                        ResourceEndpoint(
-                            uri=resource["uri"],
-                            description=resource.get("description", ""),
-                            parameters=resource.get("parameters", []),
-                            return_type=resource.get("return"),
-                            mime_type=resource.get("mime_type"),
-                            tags=resource.get("tags", []),
-                            source=resource.get("source", {}),
-                        )
-                    )
+            # Only include endpoints that have a tool or resource definition
+            if endpoint_def.get("tool") or endpoint_def.get("resource"):
+                endpoints.append(endpoint_def)
 
     return endpoints
 
 
-def _convert_endpoints_to_tool_definitions(endpoints: List[EndpointType]) -> List[ToolDefinition]:
-    """Convert endpoint objects to ToolDefinition objects for the LLM.
+def _convert_endpoints_to_tool_definitions(
+    endpoints: List[EndpointDefinition],
+) -> List[ToolDefinition]:
+    """Convert endpoint definitions to ToolDefinition objects for the LLM.
 
     Args:
-        endpoints: List of endpoint objects
+        endpoints: List of endpoint definitions
 
     Returns:
         List of ToolDefinition objects containing metadata for the LLM
     """
     tool_definitions = []
 
-    for endpoint in endpoints:
-        # Convert parameters
-        parameters = []
-        if hasattr(endpoint, "parameters") and endpoint.parameters:
-            for param_dict in endpoint.parameters:
-                if isinstance(param_dict, dict):
+    for endpoint_def in endpoints:
+        if "tool" in endpoint_def:
+            tool = endpoint_def["tool"]
+            if tool:
+                # Convert parameters
+                parameters = []
+                tool_params = tool.get("parameters") or []
+                for param in tool_params:
                     parameters.append(
                         ParameterDefinition(
-                            name=param_dict.get("name", ""),
-                            type=param_dict.get("type", "string"),
-                            description=param_dict.get("description", ""),
-                            default=param_dict.get("default"),
-                            required="default" not in param_dict,
+                            name=param.get("name", ""),
+                            type=param.get("type", "string"),
+                            description=param.get("description", ""),
+                            default=param.get("default"),
+                            required="default" not in param,
                         )
                     )
 
-        # Create tool definition
-        if isinstance(endpoint, ToolEndpoint):
-            tool_definitions.append(
-                ToolDefinition(
-                    name=endpoint.name,
-                    description=endpoint.description,
-                    parameters=parameters,
-                    return_type=endpoint.return_type,
-                    annotations=endpoint.annotations,
-                    tags=endpoint.tags,
+                tool_definitions.append(
+                    ToolDefinition(
+                        name=tool["name"],
+                        description=tool.get("description") or "",
+                        parameters=parameters,
+                        return_type=tool.get("return_"),
+                        annotations=tool.get("annotations") or {},
+                        tags=tool.get("tags") or [],
+                    )
                 )
-            )
-        elif isinstance(endpoint, ResourceEndpoint):
-            # Resources are also treated as tools with their URI as the name
-            tool_definitions.append(
-                ToolDefinition(
-                    name=endpoint.uri,
-                    description=endpoint.description,
-                    parameters=parameters,
-                    return_type=endpoint.return_type,
-                    annotations={},
-                    tags=endpoint.tags,
+
+        elif "resource" in endpoint_def:
+            resource = endpoint_def["resource"]
+            if resource:
+                # Convert parameters
+                parameters = []
+                resource_params = resource.get("parameters") or []
+                for param in resource_params:
+                    parameters.append(
+                        ParameterDefinition(
+                            name=param.get("name", ""),
+                            type=param.get("type", "string"),
+                            description=param.get("description", ""),
+                            default=param.get("default"),
+                            required="default" not in param,
+                        )
+                    )
+
+                tool_definitions.append(
+                    ToolDefinition(
+                        name=resource["uri"],
+                        description=resource.get("description") or "",
+                        parameters=parameters,
+                        return_type=resource.get("return"),
+                        annotations={},
+                        tags=resource.get("tags") or [],
+                    )
                 )
-            )
 
     return tool_definitions
 

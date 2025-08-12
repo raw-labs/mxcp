@@ -13,6 +13,8 @@ from mxcp.config.user_config import load_user_config
 from mxcp.evals.runner import run_all_evals, run_eval_suite
 from mxcp.sdk.auth import UserContext
 
+from ._types import EvalResults
+
 
 def format_eval_results(results: Dict[str, Any], debug: bool = False) -> str:
     """Format eval results for human-readable output"""

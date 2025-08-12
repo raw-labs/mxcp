@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 from jsonschema import ValidationError, validate
 
@@ -11,10 +11,15 @@ from mxcp.drift._types import (
     Column,
     DriftReport,
     DriftSnapshot,
+    Prompt,
+    Resource,
     ResourceChange,
     ResourceDefinition,
     Table,
     TableChange,
+    TestResults,
+    Tool,
+    ValidationResults,
 )
 from mxcp.drift.snapshot import generate_snapshot
 
@@ -247,19 +252,20 @@ def _extract_endpoint_identifier(definition: Optional[Any]) -> Optional[str]:
     return None
 
 
-def _compare_validation_results(baseline: Any, current: Any) -> bool:
+def _compare_validation_results(baseline: ValidationResults, current: ValidationResults) -> bool:
     """Compare validation results, ignoring path since it should be the same."""
-    baseline_copy = baseline.copy()
-    current_copy = current.copy()
+    # Create dict copies to allow modification
+    baseline_copy = dict(baseline)
+    current_copy = dict(current)
 
     # Remove path from comparison since it's the key we're using
     baseline_copy.pop("path", None)
     current_copy.pop("path", None)
 
-    return cast(bool, baseline_copy != current_copy)
+    return baseline_copy != current_copy
 
 
-def _compare_test_results(baseline: Optional[Any], current: Optional[Any]) -> bool:
+def _compare_test_results(baseline: Optional[TestResults], current: Optional[TestResults]) -> bool:
     """Compare test results."""
     if baseline is None and current is None:
         return False
@@ -274,15 +280,15 @@ def _compare_test_results(baseline: Optional[Any], current: Optional[Any]) -> bo
 
     # For detailed test comparison, we could compare individual test results
     # but for now, we'll just compare the overall structure
-    baseline_tests = baseline.get("tests", [])
-    current_tests = current.get("tests", [])
+    baseline_tests = baseline.get("tests") or []
+    current_tests = current.get("tests") or []
 
     if len(baseline_tests) != len(current_tests):
         return True
 
     # Compare test names and statuses (simplified comparison)
-    baseline_test_summary = [(t.get("name"), t.get("status")) for t in baseline_tests]
-    current_test_summary = [(t.get("name"), t.get("status")) for t in current_tests]
+    baseline_test_summary = [(t.get("name"), t.get("status")) for t in baseline_tests if t]
+    current_test_summary = [(t.get("name"), t.get("status")) for t in current_tests if t]
 
     return baseline_test_summary != current_test_summary
 
@@ -297,7 +303,7 @@ def _compare_definitions(baseline: Optional[Any], current: Optional[Any]) -> boo
     # For now, do a simple JSON comparison
     # In the future, we could implement more sophisticated comparison
     # that ignores certain fields or provides more detailed change information
-    return cast(bool, baseline != current)
+    return bool(baseline != current)
 
 
 async def check_drift(

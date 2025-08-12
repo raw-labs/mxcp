@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 __all__ = ["load_user_config", "generate_user_config_from_site"]
 
 
-def _apply_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
+def _apply_defaults(config: Dict[str, Any]) -> UserConfig:
     """Apply default values to the user config"""
     # Create a copy to avoid modifying the input
     config = config.copy()
@@ -73,10 +73,10 @@ def _apply_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
                         if "path" not in persistence:
                             persistence["path"] = str(Path.home() / ".mxcp" / "oauth.db")
 
-    return config
+    return cast(UserConfig, config)
 
 
-def _generate_default_config(site_config: SiteConfig) -> Dict[str, Any]:
+def _generate_default_config(site_config: SiteConfig) -> UserConfig:
     """Generate a default user config based on site config"""
     project_name = site_config["project"]
     profile_name = site_config["profile"]
@@ -91,7 +91,7 @@ def _generate_default_config(site_config: SiteConfig) -> Dict[str, Any]:
         },
     }
     logger.debug(f"Generated default config: {config}")
-    return config
+    return cast(UserConfig, config)
 
 
 def load_user_config(
@@ -179,8 +179,8 @@ def load_user_config(
             }
 
     # Apply defaults before validation
-    config = _apply_defaults(config)
-    logger.debug(f"Config after applying defaults: {config}")
+    validated_config = _apply_defaults(cast(Dict[str, Any], config))
+    logger.debug(f"Config after applying defaults: {validated_config}")
 
     # Load and apply JSON Schema validation
     schema_path = Path(__file__).parent / "config_schemas" / "mxcp-config-schema-1.json"
@@ -188,8 +188,8 @@ def load_user_config(
         schema = json.load(schema_file)
 
     try:
-        validate(instance=config, schema=schema)
+        validate(instance=validated_config, schema=schema)
     except ValidationError as e:
         raise ValueError(f"Invalid user config: {e.message}")
 
-    return cast(UserConfig, config)
+    return validated_config

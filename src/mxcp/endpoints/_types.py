@@ -1,9 +1,10 @@
 from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
 
 
-class SourceDefinition(TypedDict):
+class SourceDefinition(TypedDict, total=False):
     code: str
     file: str
+    language: str  # Optional, rarely used
 
 
 class TestArgument(TypedDict):

@@ -90,7 +90,7 @@ def lint_parameter(
         items = param.get("items")
         if items is not None:
             lint_nested_type(
-                cast(Dict[str, Any], items),
+                items,
                 f"{endpoint_type}.parameters[{index}].items",
                 issues,
                 path,
@@ -99,7 +99,7 @@ def lint_parameter(
         properties = param.get("properties")
         if properties is not None:
             lint_object_properties(
-                cast(Dict[str, Any], properties),
+                properties,
                 f"{endpoint_type}.parameters[{index}].properties",
                 issues,
                 path,
@@ -134,18 +134,18 @@ def lint_return_type(
         items = return_def.get("items")
         if items is not None:
             lint_nested_type(
-                cast(Dict[str, Any], items), f"{endpoint_type}.return.items", issues, path
+                items, f"{endpoint_type}.return.items", issues, path
             )
     elif return_def.get("type") == "object" and "properties" in return_def:
         properties = return_def.get("properties")
         if properties is not None:
             lint_object_properties(
-                cast(Dict[str, Any], properties), f"{endpoint_type}.return.properties", issues, path
+                properties, f"{endpoint_type}.return.properties", issues, path
             )
 
 
 def lint_nested_type(
-    type_def: Dict[str, Any], location: str, issues: List[LintIssue], path: str
+    type_def: TypeDefinition, location: str, issues: List[LintIssue], path: str
 ) -> None:
     """Lint nested type definitions (used within parameters or return types).
 
@@ -174,13 +174,17 @@ def lint_nested_type(
 
     # Recursively check nested structures
     if type_name == "array" and "items" in type_def:
-        lint_nested_type(type_def["items"], f"{location}.items", issues, path)
+        items = type_def.get("items")
+        if items is not None:
+            lint_nested_type(items, f"{location}.items", issues, path)
     elif type_name == "object" and "properties" in type_def:
-        lint_object_properties(type_def["properties"], f"{location}.properties", issues, path)
+        properties = type_def.get("properties")
+        if properties is not None:
+            lint_object_properties(properties, f"{location}.properties", issues, path)
 
 
 def lint_object_properties(
-    properties: Dict[str, Any], location: str, issues: List[LintIssue], path: str
+    properties: dict[str, TypeDefinition], location: str, issues: List[LintIssue], path: str
 ) -> None:
     """Lint object properties for missing descriptions.
 

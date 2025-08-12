@@ -9,6 +9,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, cast
 
+from ._types import SourceDefinition
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,7 +53,7 @@ def get_endpoint_source_code(
         raise ValueError("No source code found in endpoint definition")
 
 
-def extract_source_info(source: Dict[str, Any]) -> Tuple[str, str]:
+def extract_source_info(source: SourceDefinition) -> Tuple[str, str]:
     """Extract source code and determine if it's inline code or file reference.
 
     Args:
@@ -73,7 +75,7 @@ def extract_source_info(source: Dict[str, Any]) -> Tuple[str, str]:
         raise ValueError("No source code or file found in source definition")
 
 
-def detect_language_from_source(source: Dict[str, Any], file_path: Optional[str] = None) -> str:
+def detect_language_from_source(source: SourceDefinition, file_path: Optional[str] = None) -> str:
     """Detect programming language from source definition.
 
     Args:
@@ -85,7 +87,7 @@ def detect_language_from_source(source: Dict[str, Any], file_path: Optional[str]
     """
     # Check if language is explicitly specified
     if "language" in source:
-        return cast(str, source["language"])
+        return source["language"]
     # Try to infer from file extension
     path_to_check = file_path or source.get("file")
     if path_to_check:

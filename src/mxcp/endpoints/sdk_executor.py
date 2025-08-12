@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional, cast
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
+from mxcp.endpoints._types import EndpointDefinition, TypeDefinition
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.utils import prepare_source_for_execution
 from mxcp.policies import parse_policies_from_config
@@ -140,7 +141,7 @@ async def execute_endpoint_with_engine(
     policy_enforcer = None
     policies_config = endpoint_dict.get("policies")
     if policies_config:
-        policy_set = parse_policies_from_config(cast(Dict[str, Any], policies_config))
+        policy_set = parse_policies_from_config(policies_config)
         if policy_set:
             policy_enforcer = PolicyEnforcer(policy_set)
 
@@ -211,7 +212,7 @@ async def _execute_prompt_with_validation(
                 validated_params[name] = param_def["default"]
 
     # Template rendering with validated parameters
-    messages = endpoint_dict["messages"]
+    messages = endpoint_dict.get("messages", [])
     processed_messages = []
 
     for msg in messages:
@@ -309,7 +310,8 @@ async def _execute_code_with_engine(
     input_schema = None
     output_schema = None
     if not skip_output_validation:
-        input_schema = endpoint_dict.get("parameters")
+        params_raw = endpoint_dict.get("parameters")
+        input_schema = params_raw if isinstance(params_raw, list) else None
         output_schema = endpoint_dict.get("return")
 
     # Execute using the provided SDK engine
@@ -344,7 +346,9 @@ async def _execute_code_with_engine(
     # ====================================================================
 
     if language == "sql" and endpoint_dict.get("return"):
-        result = _transform_sql_result_for_return_type(result, endpoint_dict["return"])
+        result = _transform_sql_result_for_return_type(
+            result, cast(TypeDefinition, endpoint_dict["return"])
+        )
 
     # Now validate the transformed result
     if output_schema and not skip_output_validation:
@@ -357,7 +361,7 @@ async def _execute_code_with_engine(
     return result
 
 
-def _transform_sql_result_for_return_type(result: Any, return_def: Dict[str, Any]) -> Any:
+def _transform_sql_result_for_return_type(result: Any, return_def: TypeDefinition) -> Any:
     """Transform SQL result based on return type definition.
 
     This replicates the exact logic from the old EndpointExecutor._execute_sql method

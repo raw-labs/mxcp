@@ -23,6 +23,7 @@ from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.external_refs import ExternalRefTracker
 from mxcp.config.site_config import get_active_profile
 from mxcp.endpoints._types import (
+    EndpointDefinition,
     ParamDefinition,
     PromptDefinition,
     ResourceDefinition,
@@ -39,6 +40,8 @@ from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.auth.providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.executor import ExecutionEngine
+
+from ._types import ConfigInfo
 
 logger = logging.getLogger(__name__)
 
@@ -326,18 +329,18 @@ class RAWMCP:
             else site_sql_tools
         )
 
-    def get_config_info(self) -> Dict[str, Any]:
+    def get_config_info(self) -> ConfigInfo:
         """Get configuration information for display."""
-        return {
-            "project": self.site_config["project"],
-            "profile": self.profile_name,
-            "transport": self.transport,
-            "host": self.host,
-            "port": self.port,
-            "readonly": self.readonly,
-            "stateless": self.stateless_http,
-            "sql_tools_enabled": self.enable_sql_tools,
-        }
+        return ConfigInfo(
+            project=self.site_config["project"],
+            profile=self.profile_name,
+            transport=self.transport,
+            host=self.host,
+            port=self.port,
+            readonly=self.readonly,
+            stateless=bool(self.stateless_http),
+            sql_tools_enabled=bool(self.enable_sql_tools),
+        )
 
     def get_endpoint_counts(self) -> Dict[str, int]:
         """Get counts of valid endpoints by type."""

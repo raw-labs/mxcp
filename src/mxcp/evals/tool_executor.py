@@ -5,13 +5,12 @@ corresponding endpoints and executing them through the SDK ExecutionEngine.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
+from mxcp.endpoints._types import EndpointDefinition
 from mxcp.endpoints.utils import detect_language_from_source, extract_source_info
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
-
-from ._types import EndpointType, ResourceEndpoint, ToolEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -41,23 +40,25 @@ class EndpointToolExecutor:
         >>> llm_executor = LLMExecutor(model_config, tool_definitions, tool_executor)
     """
 
-    def __init__(self, engine: ExecutionEngine, endpoints: List[EndpointType]):
+    def __init__(self, engine: ExecutionEngine, endpoints: List[EndpointDefinition]):
         """Initialize the endpoint tool executor.
 
         Args:
             engine: ExecutionEngine configured with appropriate executors
-            endpoints: List of available endpoints (tools and resources)
+            endpoints: List of endpoint definitions
         """
         self.engine = engine
         self.endpoints = endpoints
 
         # Create lookup map for faster tool resolution
-        self._tool_map: Dict[str, EndpointType] = {}
-        for endpoint in endpoints:
-            if isinstance(endpoint, ToolEndpoint):
-                self._tool_map[endpoint.name] = endpoint
-            elif isinstance(endpoint, ResourceEndpoint):
-                self._tool_map[endpoint.uri] = endpoint
+        self._tool_map: Dict[str, EndpointDefinition] = {}
+        for endpoint_def in endpoints:
+            if "tool" in endpoint_def and endpoint_def["tool"]:
+                tool = endpoint_def["tool"]
+                self._tool_map[tool["name"]] = endpoint_def
+            elif "resource" in endpoint_def and endpoint_def["resource"]:
+                resource = endpoint_def["resource"]
+                self._tool_map[resource["uri"]] = endpoint_def
 
         logger.info(f"EndpointToolExecutor initialized with {len(endpoints)} endpoints")
 
@@ -79,8 +80,8 @@ class EndpointToolExecutor:
             Exception: If execution fails
         """
         # Find the endpoint
-        endpoint = self._tool_map.get(tool_name)
-        if not endpoint:
+        endpoint_def = self._tool_map.get(tool_name)
+        if not endpoint_def:
             available_tools = list(self._tool_map.keys())
             raise ValueError(f"Tool '{tool_name}' not found. Available tools: {available_tools}")
 
@@ -88,8 +89,8 @@ class EndpointToolExecutor:
         context = ExecutionContext(user_context=user_context)
 
         # Determine the source code and language
-        source_info = self._get_source_code(endpoint)
-        language = self._get_language(endpoint, source_info)
+        source_info = self._get_source_code(endpoint_def, tool_name)
+        language = self._get_language(endpoint_def, tool_name, source_info)
 
         logger.debug(f"Executing tool '{tool_name}' with language '{language}'")
 
@@ -106,23 +107,33 @@ class EndpointToolExecutor:
             logger.error(f"Tool '{tool_name}' execution failed: {e}")
             raise
 
-    def _get_source_code(self, endpoint: EndpointType) -> str:
-        """Extract source code from endpoint."""
-        if not endpoint.source:
-            raise ValueError(f"No source found for endpoint {self._get_endpoint_name(endpoint)}")
+    def _get_source_code(self, endpoint_def: EndpointDefinition, tool_name: str) -> str:
+        """Extract source code from endpoint definition."""
+        # Get the tool or resource definition
+        source = None
+        if "tool" in endpoint_def and endpoint_def["tool"]:
+            source = endpoint_def["tool"].get("source", {})
+        elif "resource" in endpoint_def and endpoint_def["resource"]:
+            source = endpoint_def["resource"].get("source", {})
 
-        source_type, source_value = extract_source_info(endpoint.source)
+        if not source:
+            raise ValueError(f"No source found for endpoint '{tool_name}'")
+
+        source_type, source_value = extract_source_info(source)
         return source_value
 
-    def _get_language(self, endpoint: EndpointType, source_info: str) -> str:
+    def _get_language(
+        self, endpoint_def: EndpointDefinition, tool_name: str, source_info: str
+    ) -> str:
         """Determine the programming language for the endpoint."""
-        return detect_language_from_source(endpoint.source, source_info)
+        # Get the tool or resource definition
+        source = None
+        if "tool" in endpoint_def and endpoint_def["tool"]:
+            source = endpoint_def["tool"].get("source", {})
+        elif "resource" in endpoint_def and endpoint_def["resource"]:
+            source = endpoint_def["resource"].get("source", {})
 
-    def _get_endpoint_name(self, endpoint: EndpointType) -> str:
-        """Get a descriptive name for the endpoint."""
-        if isinstance(endpoint, ToolEndpoint):
-            return f"tool:{endpoint.name}"
-        elif isinstance(endpoint, ResourceEndpoint):
-            return f"resource:{endpoint.uri}"
-        else:
-            return f"unknown:{type(endpoint).__name__}"
+        if not source:
+            raise ValueError(f"No source found for endpoint '{tool_name}'")
+
+        return detect_language_from_source(source, source_info)

@@ -14,7 +14,7 @@ from jsonschema import validate
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
-from mxcp.endpoints._types import EndpointDefinition
+from mxcp.endpoints._types import EndpointDefinition, TestDefinition
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 from mxcp.sdk.auth import UserContext
@@ -434,7 +434,7 @@ def normalize_result(result: Any, column_names: List[str], endpoint_type: str) -
     return result
 
 
-def compare_results(result: Any, test_def: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+def compare_results(result: Any, test_def: TestDefinition) -> tuple[bool, Optional[str]]:
     """Compare result with various assertion types in test definition.
 
     Returns: (passed: bool, error_message: str or None)
@@ -526,7 +526,7 @@ def compare_results(result: Any, test_def: Dict[str, Any]) -> tuple[bool, Option
     # Field exclusion with 'result_not_contains'
     if "result_not_contains" in test_def:
         excluded_fields = test_def["result_not_contains"]
-        if isinstance(result, dict):
+        if isinstance(result, dict) and excluded_fields:
             for field in excluded_fields:
                 if field in result:
                     return False, f"Field '{field}' should not be present in result but was found"
