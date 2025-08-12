@@ -1,7 +1,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from jinja2 import Environment, meta
 from jsonschema import validate as jsonschema_validate
@@ -9,6 +9,7 @@ from referencing import Registry, Resource
 
 from mxcp.config._types import SiteConfig
 from mxcp.config.site_config import find_repo_root
+from mxcp.endpoints._types import EndpointDefinition
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.utils import get_endpoint_source_code
 from mxcp.sdk.executor import ExecutionEngine
@@ -96,7 +97,7 @@ def _extract_template_variables(template: str) -> set[str]:
 
 
 def validate_endpoint_payload(
-    endpoint: Dict[str, Any], path: str, execution_engine: ExecutionEngine
+    endpoint: EndpointDefinition, path: str, execution_engine: ExecutionEngine
 ) -> Dict[str, Any]:
     """Validate a single endpoint payload.
 
@@ -125,14 +126,15 @@ def validate_endpoint_payload(
         endpoint_type = None
         name = None
         for t in ("tool", "resource", "prompt"):
-            if t in endpoint:
+            if endpoint.get(t) is not None:
                 endpoint_type = t
-                if t == "tool":
-                    name = endpoint[t]["name"]
-                elif t == "resource":
-                    name = endpoint[t]["uri"]
-                elif t == "prompt":
-                    name = endpoint[t]["name"]
+                endpoint_def = endpoint[t]
+                if t == "tool" and endpoint_def:
+                    name = endpoint_def.get("name", "unnamed")
+                elif t == "resource" and endpoint_def:
+                    name = endpoint_def.get("uri", "unknown")
+                elif t == "prompt" and endpoint_def:
+                    name = endpoint_def.get("name", "unnamed")
                 break
 
         if not endpoint_type or not name:
@@ -173,15 +175,15 @@ def validate_endpoint_payload(
 
         # For prompts, validate messages structure and template variables
         if endpoint_type == "prompt":
-            prompt_def = endpoint["prompt"]
-            if "messages" not in prompt_def:
+            prompt_def = endpoint.get("prompt")
+            if not prompt_def or not prompt_def.get("messages"):
                 return {
                     "status": "error",
                     "path": relative_path,
                     "message": "No messages found in prompt definition",
                 }
 
-            messages = prompt_def["messages"]
+            messages = prompt_def.get("messages", [])
             if not isinstance(messages, list) or not messages:
                 return {
                     "status": "error",
@@ -190,7 +192,8 @@ def validate_endpoint_payload(
                 }
 
             # Get defined parameters
-            defined_params = {p["name"] for p in prompt_def.get("parameters", [])}
+            parameters = prompt_def.get("parameters") or []
+            defined_params = {p["name"] for p in parameters if isinstance(p, dict) and "name" in p}
 
             # Check each message
             for i, msg in enumerate(messages):
@@ -227,18 +230,28 @@ def validate_endpoint_payload(
 
         # For resources, validate URI vs parameters
         if endpoint_type == "resource":
-            err = _validate_resource_uri_vs_params(endpoint["resource"], Path(relative_path))
-            if err:
-                return err
+            resource_def = endpoint.get("resource")
+            if resource_def:
+                err = _validate_resource_uri_vs_params(cast(Dict[str, Any], resource_def), Path(relative_path))
+                if err:
+                    return err
 
         # Check if this is a Python endpoint - skip SQL validation if so
-        endpoint_def = endpoint.get(endpoint_type, {})
-        language = endpoint_def.get("language", "sql")
+        if endpoint_type == "tool":
+            endpoint_def = endpoint.get("tool")
+        elif endpoint_type == "resource":
+            endpoint_def = endpoint.get("resource")
+        elif endpoint_type == "prompt":
+            endpoint_def = endpoint.get("prompt")
+        else:
+            endpoint_def = None
+        
+        language = endpoint_def.get("language", "sql") if endpoint_def else "sql"
 
         if language == "python":
             # For Python endpoints, just validate that the source file exists
-            source = endpoint_def.get("source", {})
-            if "file" not in source:
+            source = endpoint_def.get("source", {}) if endpoint_def else {}
+            if not isinstance(source, dict) or "file" not in source:
                 return {
                     "status": "error",
                     "path": relative_path,
@@ -262,7 +275,7 @@ def validate_endpoint_payload(
 
         # For SQL tools and resources, validate SQL
         try:
-            sql_query = get_endpoint_source_code(endpoint, endpoint_type, path_obj, repo_root)
+            sql_query = get_endpoint_source_code(cast(Dict[str, Any], endpoint), endpoint_type, path_obj, repo_root)
         except Exception as e:
             return {
                 "status": "error",
@@ -299,8 +312,12 @@ def validate_endpoint_payload(
             sql_param_names = list(sql_param_names)
 
         # Extract parameters from YAML
-        yaml_params = endpoint[endpoint_type].get("parameters", [])
-        yaml_param_names = [p["name"] for p in yaml_params]
+        if endpoint_def:
+            yaml_params = endpoint_def.get("parameters") or []
+            yaml_param_names = [p["name"] for p in yaml_params if isinstance(p, dict) and "name" in p]
+        else:
+            yaml_params = []
+            yaml_param_names = []
 
         # Check parameter mapping
         missing_params = set(sql_param_names) - set(yaml_param_names)
@@ -314,12 +331,13 @@ def validate_endpoint_payload(
 
         # Type inference and compatibility check
         type_mismatches: List[str] = []
-        for yaml_param in yaml_params:
-            name = yaml_param["name"]
-            yaml_type = yaml_param["type"]
-            # Skip type checking for now since we can't easily get SQL parameter types
-            # TODO: Implement proper type inference when DuckDB supports it
-            pass
+        if isinstance(yaml_params, list):
+            for yaml_param in yaml_params:
+                name = yaml_param["name"]
+                yaml_type = yaml_param["type"]
+                # Skip type checking for now since we can't easily get SQL parameter types
+                # TODO: Implement proper type inference when DuckDB supports it
+                pass
 
         if type_mismatches:
             return {

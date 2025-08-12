@@ -13,6 +13,8 @@ from mxcp.config.references import interpolate_all
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["UserConfig", "load_user_config", "generate_user_config_from_site"]
+
 
 def _apply_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
     """Apply default values to the user config"""

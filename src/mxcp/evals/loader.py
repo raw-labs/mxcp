@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 import yaml
 from jsonschema import validate
 
-from mxcp.config.site_config import SiteConfig, find_repo_root  # type: ignore[attr-defined]
+from mxcp.config.site_config import SiteConfig, find_repo_root
 from mxcp.evals._types import EvalSuite
 
 logger = logging.getLogger(__name__)

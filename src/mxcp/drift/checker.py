@@ -225,16 +225,24 @@ def compare_resources(
 
 
 def _extract_endpoint_identifier(definition: Optional[Any]) -> Optional[str]:
-    """Extract endpoint identifier from definition."""
-    if not definition:
+    """Extract endpoint identifier from definition.
+    
+    The definition has the structure:
+    {
+        "mxcp": 1,
+        "tool": {"name": "...", ...}  # or "resource": {"uri": "...", ...} or "prompt": {"name": "...", ...}
+    }
+    """
+    if not definition or not isinstance(definition, dict):
         return None
 
-    if "tool" in definition:
-        return f"tool/{definition['tool']['name']}"
-    elif "resource" in definition:
-        return f"resource/{definition['resource']['uri']}"
-    elif "prompt" in definition:
-        return f"prompt/{definition['prompt']['name']}"
+    # Check for nested tool/resource/prompt
+    if "tool" in definition and isinstance(definition["tool"], dict):
+        return f"tool/{definition['tool'].get('name', 'unnamed')}"
+    elif "resource" in definition and isinstance(definition["resource"], dict):
+        return f"resource/{definition['resource'].get('uri', 'unknown')}"
+    elif "prompt" in definition and isinstance(definition["prompt"], dict):
+        return f"prompt/{definition['prompt'].get('name', 'unnamed')}"
 
     return None
 

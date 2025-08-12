@@ -48,8 +48,8 @@ from typing import Any, Dict, Generator, Optional, cast
 
 import duckdb
 
-from mxcp.config.site_config import SiteConfig  # type: ignore[attr-defined]
-from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
+from mxcp.config.site_config import SiteConfig
+from mxcp.config.user_config import UserConfig
 from mxcp.sdk.executor import (
     ExecutionContext,
     ExecutionEngine,

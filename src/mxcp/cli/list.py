@@ -6,21 +6,31 @@ import click
 from mxcp.cli.utils import configure_logging, output_error, output_result
 from mxcp.config.analytics import track_command_with_timing
 from mxcp.config.site_config import load_site_config
+from mxcp.endpoints._types import EndpointDefinition
 from mxcp.endpoints.loader import EndpointLoader
 
 
-def parse_endpoint(path: Path, endpoint: Dict[str, Any]) -> Tuple[str, str, Optional[str]]:
-    """Parse an endpoint dictionary to determine its type, name, and any error.
+def parse_endpoint(path: Path, endpoint: EndpointDefinition) -> Tuple[str, str, Optional[str]]:
+    """Parse an endpoint definition to determine its type, name, and any error.
 
     Returns:
         Tuple of (kind, name, error_message)
     """
-    if "tool" in endpoint:
-        return "tool", endpoint["tool"]["name"], None
-    elif "resource" in endpoint:
-        return "resource", endpoint["resource"]["uri"], None
-    elif "prompt" in endpoint:
-        return "prompt", endpoint["prompt"]["name"], None
+    if endpoint.get("tool") is not None:
+        tool = endpoint["tool"]
+        if tool:
+            return "tool", tool.get("name", "unnamed"), None
+        return "tool", "unnamed", None
+    elif endpoint.get("resource") is not None:
+        resource = endpoint["resource"]
+        if resource:
+            return "resource", resource.get("uri", "unknown"), None
+        return "resource", "unknown", None
+    elif endpoint.get("prompt") is not None:
+        prompt = endpoint["prompt"]
+        if prompt:
+            return "prompt", prompt.get("name", "unnamed"), None
+        return "prompt", "unnamed", None
     else:
         return (
             "unknown",

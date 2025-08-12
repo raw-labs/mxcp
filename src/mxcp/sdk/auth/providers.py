@@ -34,6 +34,15 @@ from .persistence import (
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "UserContext",
+    "ExternalOAuthHandler", 
+    "GeneralOAuthAuthorizationServer",
+    "AuthorizationParams",
+    "ExternalUserInfo",
+    "StateMeta",
+]
+
 # ────────────────────────────────────────────────────────────────────────────
 # OAuth Client implementation
 # ────────────────────────────────────────────────────────────────────────────

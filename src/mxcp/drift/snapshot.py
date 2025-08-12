@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import duckdb
 from pydantic import BaseModel
@@ -119,15 +119,18 @@ async def generate_snapshot(
                     logger.warning(f"Skipping file {path}: endpoint is None")
                     continue
 
-                if "tool" in endpoint:
+                if endpoint.get("tool") is not None:
                     endpoint_type = "tool"
-                    name = endpoint["tool"]["name"]
-                elif "resource" in endpoint:
+                    tool = endpoint["tool"]
+                    name = tool.get("name", "unnamed") if tool else "unnamed"
+                elif endpoint.get("resource") is not None:
                     endpoint_type = "resource"
-                    name = endpoint["resource"]["uri"]
-                elif "prompt" in endpoint:
+                    resource = endpoint["resource"]
+                    name = resource.get("uri", "unknown") if resource else "unknown"
+                elif endpoint.get("prompt") is not None:
                     endpoint_type = "prompt"
-                    name = endpoint["prompt"]["name"]
+                    prompt = endpoint["prompt"]
+                    name = prompt.get("name", "unnamed") if prompt else "unnamed"
                 else:
                     logger.warning(f"Skipping file {path}: not a valid endpoint")
                     continue
@@ -139,12 +142,12 @@ async def generate_snapshot(
                     endpoint_type, name, user_config, site_config, execution_engine, None
                 )
                 # Add to snapshot
-                resource_data = {
+                resource_data: Dict[str, Any] = {
                     "validation_results": validation_result,
                     "test_results": test_result,
-                    "definition": endpoint,
+                    "definition": endpoint,  # Store the full endpoint structure
                 }
-                if "metadata" in endpoint:
+                if endpoint.get("metadata"):
                     resource_data["metadata"] = endpoint["metadata"]
                 resources.append(resource_data)
         if conn is None:

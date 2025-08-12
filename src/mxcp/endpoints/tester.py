@@ -12,11 +12,12 @@ import yaml
 from jsonschema import validate
 
 from mxcp.config.execution_engine import create_execution_engine
-from mxcp.config.site_config import SiteConfig, find_repo_root  # type: ignore[attr-defined]
-from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
+from mxcp.config.site_config import SiteConfig, find_repo_root
+from mxcp.config.user_config import UserConfig
+from mxcp.endpoints._types import EndpointDefinition
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
-from mxcp.sdk.auth.providers import UserContext  # type: ignore[attr-defined]
+from mxcp.sdk.auth.providers import UserContext
 from mxcp.sdk.executor import ExecutionEngine
 
 # Configure logging
@@ -79,7 +80,7 @@ async def run_all_tests(
                 # Determine endpoint type and name
                 if "tool" in endpoint:
                     kind = "tool"
-                    tool_def = endpoint.get("tool", {})
+                    tool_def: Any = endpoint.get("tool", {})
                     name = (
                         tool_def.get("name", "unknown") if isinstance(tool_def, dict) else "unknown"
                     )
@@ -215,7 +216,7 @@ async def run_tests_with_session(
             return {"status": "ok", "tests_run": 0, "no_tests": True, "tests": []}
 
         # Extract column names from return schema
-        column_names = extract_column_names(cast(Dict[str, Any], endpoint_def), endpoint_type)
+        column_names = extract_column_names(endpoint_def, endpoint_type)
         logger.info(f"Column names for results: {column_names}")
 
         # Run each test
@@ -321,23 +322,31 @@ async def run_tests_with_session(
         return {"status": "error", "message": str(e)}
 
 
-def extract_column_names(endpoint_def: Dict[str, Any], endpoint_type: str) -> List[str]:
+def extract_column_names(endpoint_def: EndpointDefinition, endpoint_type: str) -> List[str]:
     """Extract column names from endpoint definition"""
     columns = []
 
-    if endpoint_type == "tool" and "return" in endpoint_def["tool"]:
-        return_def = endpoint_def["tool"]["return"]
-        if return_def.get("type") == "array" and "items" in return_def:
-            items = return_def["items"]
-            if items.get("type") == "object" and "properties" in items:
-                columns = list(items["properties"].keys())
+    if endpoint_type == "tool":
+        tool_def = endpoint_def.get("tool")
+        if tool_def and tool_def.get("return_"):
+            return_def = tool_def["return_"]
+            if return_def and return_def.get("type") == "array" and "items" in return_def:
+                items = return_def["items"]
+                if isinstance(items, dict) and items.get("type") == "object" and "properties" in items:
+                    properties = items.get("properties", {})
+                    if isinstance(properties, dict):
+                        columns = list(properties.keys())
 
-    elif endpoint_type == "resource" and "return" in endpoint_def["resource"]:
-        return_def = endpoint_def["resource"]["return"]
-        if return_def.get("type") == "array" and "items" in return_def:
-            items = return_def["items"]
-            if items.get("type") == "object" and "properties" in items:
-                columns = list(items["properties"].keys())
+    elif endpoint_type == "resource":
+        resource_def = endpoint_def.get("resource")
+        if resource_def and resource_def.get("return_"):
+            return_def = resource_def["return_"]
+            if return_def and return_def.get("type") == "array" and "items" in return_def:
+                items = return_def["items"]
+                if isinstance(items, dict) and items.get("type") == "object" and "properties" in items:
+                    properties = items.get("properties", {})
+                    if isinstance(properties, dict):
+                        columns = list(properties.keys())
 
     return columns
 

@@ -22,11 +22,11 @@ from typing import (
 
 from duckdb import DuckDBPyConnection
 
-from mxcp.config.site_config import SiteConfig  # type: ignore[attr-defined]
-from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
+from mxcp.config.site_config import SiteConfig
+from mxcp.config.user_config import UserConfig
 
 if TYPE_CHECKING:
-    from mxcp.sdk.auth.providers import UserContext  # type: ignore[attr-defined]
+    from mxcp.sdk.auth.providers import UserContext
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

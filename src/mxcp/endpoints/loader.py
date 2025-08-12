@@ -10,7 +10,7 @@ from jsonschema import validate
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT7
 
-from mxcp.config.site_config import SiteConfig  # type: ignore[attr-defined]
+from mxcp.config.site_config import SiteConfig
 from mxcp.endpoints._types import EndpointDefinition
 
 # Configure logging
@@ -96,7 +96,7 @@ class EndpointLoader:
 
     def _discover_in_directory(
         self, directory: Path, schema_name: str, endpoint_type: str
-    ) -> List[Tuple[Path, Optional[Dict[str, Any]], Optional[str]]]:
+    ) -> List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]]:
         """Discover endpoint files in a specific directory.
 
         Args:
@@ -110,7 +110,7 @@ class EndpointLoader:
             - endpoint_dict: The loaded endpoint dictionary if successful, None if failed
             - error_message: Error message if loading failed, None if successful
         """
-        endpoints: List[Tuple[Path, Optional[Dict[str, Any]], Optional[str]]] = []
+        endpoints: List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]] = []
 
         # Skip if directory doesn't exist
         if not directory.exists():
@@ -146,42 +146,42 @@ class EndpointLoader:
                         logger.info(f"Skipping disabled endpoint: {f}")
                         continue
 
-                    endpoints.append((f, data, None))
-                    self._endpoints[str(f)] = data
+                    endpoints.append((f, cast(EndpointDefinition, data), None))
+                    self._endpoints[str(f)] = cast(EndpointDefinition, data)
             except Exception as e:
                 error_msg = extract_validation_error(str(e))
                 endpoints.append((f, None, error_msg))
 
         return endpoints
 
-    def discover_tools(self) -> List[Tuple[Path, Optional[Dict[str, Any]], Optional[str]]]:
+    def discover_tools(self) -> List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]]:
         """Discover all tool definition files"""
         paths_config = self._site_config.get("paths", {})
         tools_path = paths_config.get("tools", "tools") if paths_config else "tools"
         tools_dir = self._repo_root / str(tools_path)
         return self._discover_in_directory(tools_dir, "tool-schema-1.json", "tool")
 
-    def discover_resources(self) -> List[Tuple[Path, Optional[Dict[str, Any]], Optional[str]]]:
+    def discover_resources(self) -> List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]]:
         """Discover all resource definition files"""
         paths_config = self._site_config.get("paths", {})
         resources_path = paths_config.get("resources", "resources") if paths_config else "resources"
         resources_dir = self._repo_root / str(resources_path)
         return self._discover_in_directory(resources_dir, "resource-schema-1.json", "resource")
 
-    def discover_prompts(self) -> List[Tuple[Path, Optional[Dict[str, Any]], Optional[str]]]:
+    def discover_prompts(self) -> List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]]:
         """Discover all prompt definition files"""
         paths_config = self._site_config.get("paths", {})
         prompts_path = paths_config.get("prompts", "prompts") if paths_config else "prompts"
         prompts_dir = self._repo_root / str(prompts_path)
         return self._discover_in_directory(prompts_dir, "prompt-schema-1.json", "prompt")
 
-    def discover_endpoints(self) -> List[Tuple[Path, Optional[Dict[str, Any]], Optional[str]]]:
+    def discover_endpoints(self) -> List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]]:
         """Discover all endpoint files from their respective directories.
 
         Returns:
             List of tuples where each tuple contains:
             - file_path: Path to the endpoint file
-            - endpoint_dict: The loaded endpoint dictionary if successful, None if failed
+            - endpoint_dict: The loaded endpoint definition if successful, None if failed
             - error_message: Error message if loading failed, None if successful
         """
         all_endpoints = []

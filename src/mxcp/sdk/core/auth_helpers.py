@@ -7,7 +7,7 @@ specific to MXCP's config structure.
 """
 from typing import Any, Dict, Optional
 
-from mxcp.config._types import UserAuthConfig, UserHttpTransportConfig
+from mxcp.config._types import UserAuthConfig, UserConfig, UserHttpTransportConfig
 from mxcp.sdk.auth._types import AuthConfig, HttpTransportConfig
 from mxcp.sdk.auth.providers import ExternalOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
@@ -61,7 +61,7 @@ def create_oauth_handler(
     user_auth_config: UserAuthConfig,
     host: str = "localhost",
     port: int = 8000,
-    user_config: Optional[Dict[str, Any]] = None,
+    user_config: Optional[UserConfig] = None,
 ) -> Optional[ExternalOAuthHandler]:
     """Create an OAuth handler from user configuration.
 
@@ -84,7 +84,8 @@ def create_oauth_handler(
     # Extract transport config if available
     transport_config = None
     if user_config and "transport" in user_config:
-        user_transport = user_config["transport"].get("http")
+        transport = user_config["transport"]
+        user_transport = transport.get("http") if transport else None
         transport_config = translate_transport_config(user_transport)
 
     if provider == "github":
@@ -123,7 +124,7 @@ def create_oauth_handler(
         raise ValueError(f"Unsupported auth provider: {provider}")
 
 
-def create_url_builder(user_config: Dict[str, Any]) -> URLBuilder:
+def create_url_builder(user_config: UserConfig) -> URLBuilder:
     """Create a URL builder from user configuration.
 
     Args:
@@ -132,6 +133,7 @@ def create_url_builder(user_config: Dict[str, Any]) -> URLBuilder:
     Returns:
         Configured URLBuilder instance
     """
-    user_transport_config = user_config.get("transport", {}).get("http", {})
+    transport = user_config.get("transport", {})
+    user_transport_config = transport.get("http", {}) if transport else {}
     transport_config = translate_transport_config(user_transport_config)
     return URLBuilder(transport_config)

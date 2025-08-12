@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
 from mxcp.config.execution_engine import create_execution_engine, find_repo_root
-from mxcp.config.site_config import SiteConfig  # type: ignore[attr-defined]
-from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
+from mxcp.config.site_config import SiteConfig
+from mxcp.config.user_config import UserConfig
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.evals._types import EndpointType, ResourceEndpoint, ToolEndpoint
 from mxcp.evals.loader import discover_eval_files, load_eval_suite
@@ -84,17 +84,21 @@ def _load_endpoints(site_config: SiteConfig) -> List[EndpointType]:
         if error is None and endpoint_def:
             # Extract endpoint info with ALL metadata
             if "tool" in endpoint_def:
-                tool = endpoint_def.get("tool", {})
-                if isinstance(tool, dict) and "name" in tool:
+                tool = endpoint_def.get("tool")
+                if tool and "name" in tool:
+                    # Convert parameters to List[Dict[str, Any]]
+                    params = tool.get("parameters") or []
+                    param_list = [cast(Dict[str, Any], p) for p in params] if params else []
+                    
                     endpoints.append(
                         ToolEndpoint(
                             name=tool["name"],
-                            description=tool.get("description", ""),
-                            parameters=tool.get("parameters", []),
-                            return_type=tool.get("return"),
-                            annotations=tool.get("annotations", {}),
-                            tags=tool.get("tags", []),
-                            source=tool.get("source", {}),
+                            description=tool.get("description") or "",
+                            parameters=param_list,
+                            return_type=cast(Optional[Dict[str, Any]], tool.get("return_")),
+                            annotations=tool.get("annotations") or {},
+                            tags=tool.get("tags") or [],
+                            source=cast(Dict[str, Any], tool.get("source") or {}),
                         )
                     )
             elif "resource" in endpoint_def:
