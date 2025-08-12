@@ -1,1 +1,1 @@
-# Eval functionality for MXCP
+"""MXCP evaluations module."""
