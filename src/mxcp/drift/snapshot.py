@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import duckdb
 from pydantic import BaseModel
@@ -10,7 +10,17 @@ from pydantic import BaseModel
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
-from mxcp.drift._types import Column, DriftSnapshot, ResourceDefinition, Table
+from mxcp.drift._types import (
+    Column,
+    DriftSnapshot,
+    ResourceDefinition,
+    Table,
+    ValidationResults,
+    TestResults,
+    Tool,
+    Resource,
+    Prompt,
+)
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.tester import run_tests_with_session
 from mxcp.endpoints.validate import validate_endpoint_payload
@@ -94,7 +104,7 @@ async def generate_snapshot(
         # Get repository root for relative path calculation
         repo_root = find_repo_root()
 
-        resources = []
+        resources: List[ResourceDefinition] = []
         for path, endpoint, error in discovered:
             # Convert to relative path from repository root
             try:
@@ -104,15 +114,17 @@ async def generate_snapshot(
                 relative_path = path.name
 
             if error:
-                resources.append(
-                    {
-                        "validation_results": {
-                            "status": "error",
-                            "path": relative_path,
-                            "message": error,
-                        }
-                    }
-                )
+                error_resource: ResourceDefinition = {
+                    "validation_results": {
+                        "status": "error",
+                        "path": relative_path,
+                        "message": error,
+                    },
+                    "test_results": None,
+                    "definition": None,
+                    "metadata": None,
+                }
+                resources.append(error_resource)
             else:
                 # Determine endpoint type and name
                 if not endpoint:
@@ -142,13 +154,12 @@ async def generate_snapshot(
                     endpoint_type, name, user_config, site_config, execution_engine, None
                 )
                 # Add to snapshot
-                resource_data: Dict[str, Any] = {
-                    "validation_results": validation_result,
-                    "test_results": test_result,
-                    "definition": endpoint,  # Store the full endpoint structure
+                resource_data: ResourceDefinition = {
+                    "validation_results": cast(ValidationResults, validation_result),
+                    "test_results": cast(TestResults, test_result),
+                    "definition": cast(Optional[Union[Tool, Resource, Prompt]], endpoint),  # Store the full endpoint structure
+                    "metadata": endpoint.get("metadata") if endpoint else None,
                 }
-                if endpoint.get("metadata"):
-                    resource_data["metadata"] = endpoint["metadata"]
                 resources.append(resource_data)
         if conn is None:
             raise RuntimeError("DuckDB connection is not available")
@@ -157,7 +168,7 @@ async def generate_snapshot(
             version=1,
             generated_at=datetime.now(timezone.utc).isoformat(),
             tables=tables,
-            resources=cast(List[ResourceDefinition], resources),
+            resources=resources,
         )
         if not dry_run:
             with open(drift_path, "w") as f:
