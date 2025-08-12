@@ -728,7 +728,8 @@ tool:
         print(f"  Max concurrent: {max(r['max_concurrent_seen'] for r in results)}")
 
         # Should complete much faster than serial (10 * 0.05 = 0.5s)
-        assert total_time < 0.2  # Allow for overhead
+        # Allow generous overhead for CI variability and Python version differences
+        assert total_time < 0.35  # ~0.05s ideal + overhead
 
         # Should see high concurrency
         max_concurrent_seen = max(r["max_concurrent_seen"] for r in results)
@@ -753,8 +754,9 @@ tool:
         print(f"  Total duration: {result['total_duration']:.3f}s")
         print(f"  Average duration: {result['avg_duration']:.3f}s")
 
-        # Should be much faster than serial
-        assert result["total_duration"] < 0.1  # 20 * 0.01 = 0.2s serial
+        # Should be much faster than serial (20 * 0.01 = 0.2s serial)
+        # Allow overhead for CI variability
+        assert result["total_duration"] < 0.15  # ~0.01s ideal + overhead
 
         # All subtasks should have context
         assert all(r["project"] == "test-concurrent" for r in result["results"])

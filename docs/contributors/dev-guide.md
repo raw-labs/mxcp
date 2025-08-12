@@ -381,7 +381,7 @@ mxcp/
 │       ├── auth/    # Authentication and authorization
 │       ├── audit/   # Audit logging
 │       ├── drift/   # Schema drift detection
-│       ├── policies/ # Policy enforcement
+│       ├── policy/   # Policy enforcement
 │       ├── plugins/ # Plugin system
 │       └── server/  # MCP server implementation
 ├── tests/           # Test suite

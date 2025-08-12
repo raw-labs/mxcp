@@ -22,7 +22,7 @@ from mxcp.endpoints._types import (
 )
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.utils import prepare_source_for_execution
-from mxcp.policies import parse_policies_from_config
+from mxcp.policy import parse_policies_from_config
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
