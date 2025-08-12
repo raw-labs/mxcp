@@ -14,7 +14,7 @@ class NoOpAuditBackend:
     that return appropriate empty/default values.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the no-op backend."""
         pass
 
@@ -63,7 +63,7 @@ class NoOpAuditBackend:
         """No-op record querying - yields nothing."""
         return
         # This is a generator that yields nothing
-        yield  # type: ignore[unreachable]
+        yield
 
     async def get_record(self, record_id: str) -> Optional[AuditRecord]:
         """No-op record retrieval."""

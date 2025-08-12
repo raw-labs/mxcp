@@ -11,7 +11,7 @@ import importlib.util
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Set
+from typing import Any, Callable, Dict, Optional, Set, cast
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class PythonEndpointLoader:
         self._module_paths: Set[str] = set()  # Track added paths
         self._ensure_python_path()
 
-    def _ensure_python_path(self):
+    def _ensure_python_path(self) -> None:
         """Add python/ directory and repo root to sys.path if not already there"""
         # Add python/ directory
         python_path = str(self.python_dir.resolve())
@@ -147,7 +147,7 @@ class PythonEndpointLoader:
         module_name = f"_mxcp_endpoint_{abs_path.stem}_{path_hash}"
         return module_name
 
-    def get_function(self, module: Any, function_name: str) -> Callable:
+    def get_function(self, module: Any, function_name: str) -> Callable[..., Any]:
         """
         Get a function from a loaded module.
 
@@ -177,9 +177,9 @@ class PythonEndpointLoader:
         if not callable(func):
             raise AttributeError(f"'{function_name}' is not a callable function")
 
-        return func
+        return cast(Callable[..., Any], func)
 
-    def preload_all_modules(self):
+    def preload_all_modules(self) -> None:
         """
         Preload all Python files in the python/ directory.
 
@@ -216,7 +216,7 @@ class PythonEndpointLoader:
 
         logger.info(f"Preloaded {loaded_count} Python modules ({error_count} errors)")
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """
         Clean up loaded modules and restore sys.path.
 

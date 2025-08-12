@@ -129,21 +129,20 @@ class PolicyEnforcer:
             }
 
         # Extract basic fields
-        user_dict = {
+        user_dict: Dict[str, Any] = {
             "user_id": user_context.user_id,
             "username": user_context.username,
             "email": user_context.email,
             "provider": user_context.provider,
             "name": user_context.name,
+            "role": "user",  # Default role
+            "permissions": [],  # Default permissions
         }
 
         # Extract role and permissions from raw_profile if available
         if user_context.raw_profile:
             user_dict["role"] = user_context.raw_profile.get("role", "user")
             user_dict["permissions"] = user_context.raw_profile.get("permissions", [])
-        else:
-            user_dict["role"] = "user"
-            user_dict["permissions"] = []
 
         return user_dict
 
@@ -335,14 +334,14 @@ class PolicyEnforcer:
         elif type_name == "array" and isinstance(data, list):
             # Handle array types
             items_def = type_def.get("items", {})
-            result = []
+            array_result = []
 
             for item in data:
                 filtered = self._filter_sensitive_fields(item, items_def)
                 if filtered is not None:
-                    result.append(filtered)
+                    array_result.append(filtered)
 
-            return result
+            return array_result
 
         else:
             # For scalar types, they should have been filtered at the property level

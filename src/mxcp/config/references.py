@@ -11,7 +11,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def resolve_vault_url(vault_url: str, vault_config: Optional[Dict[str, Any]]) ->
         )
 
     try:
-        import hvac
+        import hvac  # type: ignore[import-untyped]
     except ImportError:
         raise ImportError(
             "hvac library is required for Vault integration. Install with: pip install hvac"
@@ -145,7 +145,7 @@ def resolve_vault_url(vault_url: str, vault_config: Optional[Dict[str, Any]]) ->
                 f"Key '{secret_key}' not found in Vault secret at path '{secret_path}'"
             )
 
-        return secret_data[secret_key]
+        return cast(str, secret_data[secret_key])
 
     except Exception as e:
         if isinstance(e, ValueError):
@@ -269,14 +269,14 @@ def resolve_onepassword_url(op_url: str, op_config: Optional[Dict[str, Any]]) ->
         client = onepassword.Client()
         secret_value = client.secrets.resolve(secret_ref)
 
-        return secret_value
+        return cast(str, secret_value)
 
     except Exception as e:
         raise ValueError(f"Failed to resolve 1Password URL '{op_url}': {e}") from e
     finally:
         # Restore the original state to avoid global side effects
         if original_token != op_token:
-            if token_was_set:
+            if token_was_set and original_token is not None:
                 os.environ["OP_SERVICE_ACCOUNT_TOKEN"] = original_token
             else:
                 # Remove the variable if it wasn't originally set

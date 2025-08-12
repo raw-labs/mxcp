@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import yaml
 from jsonschema import ValidationError, validate
@@ -29,7 +29,7 @@ def find_repo_root() -> Path:
     raise FileNotFoundError("mxcp-site.yml not found in current directory or any parent directory")
 
 
-def _apply_defaults(config: dict, repo_root: Path) -> dict:
+def _apply_defaults(config: Dict[str, Any], repo_root: Path) -> Dict[str, Any]:
     """Apply default values to the config"""
     # Create a copy to avoid modifying the input
     config = config.copy()
@@ -197,7 +197,7 @@ def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
 
     # Apply defaults (e.g., duckdb.path)
     config = _apply_defaults(config, repo_path)
-    return config
+    return cast(SiteConfig, config)
 
 
 def get_active_profile(
@@ -223,4 +223,4 @@ def get_active_profile(
     if profile_name not in project["profiles"]:
         raise ValueError(f"Profile '{profile_name}' not found in project '{project_name}'")
 
-    return project["profiles"][profile_name]
+    return cast(Dict[str, Any], project["profiles"][profile_name])

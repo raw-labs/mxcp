@@ -100,39 +100,39 @@ class TypeConverter:
 
         elif param_type == "number":
             try:
-                result = float(value)
+                num_result = float(value)
             except (ValueError, TypeError):
                 raise ValidationError(f"Expected number, got {type(value).__name__}")
             # Validate numeric constraints
-            if schema.multiple_of is not None and result % schema.multiple_of != 0:
+            if schema.multiple_of is not None and num_result % schema.multiple_of != 0:
                 raise ValidationError(f"Value must be multiple of {schema.multiple_of}")
-            if schema.minimum is not None and result < schema.minimum:
+            if schema.minimum is not None and num_result < schema.minimum:
                 raise ValidationError(f"Value must be >= {schema.minimum}")
-            if schema.maximum is not None and result > schema.maximum:
+            if schema.maximum is not None and num_result > schema.maximum:
                 raise ValidationError(f"Value must be <= {schema.maximum}")
-            if schema.exclusive_minimum is not None and result <= schema.exclusive_minimum:
+            if schema.exclusive_minimum is not None and num_result <= schema.exclusive_minimum:
                 raise ValidationError(f"Value must be > {schema.exclusive_minimum}")
-            if schema.exclusive_maximum is not None and result >= schema.exclusive_maximum:
+            if schema.exclusive_maximum is not None and num_result >= schema.exclusive_maximum:
                 raise ValidationError(f"Value must be < {schema.exclusive_maximum}")
-            return result
+            return num_result
 
         elif param_type == "integer":
             try:
-                result = int(value)
+                int_result = int(value)
             except (ValueError, TypeError):
                 raise ValidationError(f"Expected integer, got {type(value).__name__}")
             # Validate integer constraints
-            if schema.multiple_of is not None and result % schema.multiple_of != 0:
+            if schema.multiple_of is not None and int_result % schema.multiple_of != 0:
                 raise ValidationError(f"Value must be multiple of {schema.multiple_of}")
-            if schema.minimum is not None and result < schema.minimum:
+            if schema.minimum is not None and int_result < schema.minimum:
                 raise ValidationError(f"Value must be >= {schema.minimum}")
-            if schema.maximum is not None and result > schema.maximum:
+            if schema.maximum is not None and int_result > schema.maximum:
                 raise ValidationError(f"Value must be <= {schema.maximum}")
-            if schema.exclusive_minimum is not None and result <= schema.exclusive_minimum:
+            if schema.exclusive_minimum is not None and int_result <= schema.exclusive_minimum:
                 raise ValidationError(f"Value must be > {schema.exclusive_minimum}")
-            if schema.exclusive_maximum is not None and result >= schema.exclusive_maximum:
+            if schema.exclusive_maximum is not None and int_result >= schema.exclusive_maximum:
                 raise ValidationError(f"Value must be < {schema.exclusive_maximum}")
-            return result
+            return int_result
 
         elif param_type == "boolean":
             if isinstance(value, str):

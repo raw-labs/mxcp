@@ -17,10 +17,10 @@ from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
 from mxcp.endpoints.tester import run_all_tests, run_tests
 from mxcp.endpoints.utils import EndpointType
-from mxcp.sdk.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext  # type: ignore[attr-defined]
 
 
-def format_test_results(results, debug: bool = False):
+def format_test_results(results: Any, debug: bool = False) -> str:
     """Format test results for human-readable output"""
     if isinstance(results, str):
         return results
@@ -200,7 +200,7 @@ def format_test_results(results, debug: bool = False):
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
-@track_command_with_timing("test")
+@track_command_with_timing("test")  # type: ignore[misc]
 def test(
     endpoint_type: Optional[str],
     name: Optional[str],
@@ -209,7 +209,7 @@ def test(
     json_output: bool,
     debug: bool,
     readonly: bool,
-):
+) -> None:
     """Run tests for endpoints.
 
     This command executes the test cases defined in endpoint configurations.

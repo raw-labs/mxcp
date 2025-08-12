@@ -2,13 +2,13 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import click
 import yaml
 
 from ..config.site_config import find_repo_root
-from ..config.types import SiteConfig, UserConfig
+from ..config._types import SiteConfig, UserConfig
 
 
 def _get_dbt_profiles_dir() -> Path:
@@ -72,7 +72,7 @@ def _save_dbt_project(project_config: Dict[str, Any]) -> None:
     temp_path.rename(project_path)
 
 
-def _map_secret_to_dbt_format(secret: Dict[str, Any], embed_secrets: bool) -> Dict[str, Any]:
+def _map_secret_to_dbt_format(secret: Dict[str, Any], embed_secrets: bool) -> Optional[Dict[str, Any]]:
     """Map a MXCP secret to dbt's expected format based on its type.
 
     Args:
@@ -138,7 +138,7 @@ def _build_profile_block(
     project: str,
     profile: str,
     duckdb_path: str,
-    secrets: Optional[Dict[str, Any]] = None,
+    secrets: Optional[List[Dict[str, Any]]] = None,
     embed_secrets: bool = False,
 ) -> Dict[str, Any]:
     """Build a dbt profile block with DuckDB configuration.
@@ -176,7 +176,10 @@ def _build_profile_block(
 
     if secrets:
         # Initialize secrets array in the output
-        block[dbt_profile]["outputs"][sanitized_profile]["secrets"] = []
+        # The block structure is already created above, so we can directly access it
+        outputs = block[dbt_profile]["outputs"]
+        output = outputs[sanitized_profile]  # type: ignore[index]
+        output["secrets"] = []
 
         for secret in secrets:
             if (
@@ -191,7 +194,7 @@ def _build_profile_block(
                 # Map the secret to dbt's expected format
                 dbt_secret = _map_secret_to_dbt_format(secret, embed_secrets)
                 if dbt_secret:  # Only add if mapping was successful
-                    block[dbt_profile]["outputs"][sanitized_profile]["secrets"].append(dbt_secret)
+                    block[dbt_profile]["outputs"][sanitized_profile]["secrets"].append(dbt_secret)  # type: ignore[index]
             except Exception as e:
                 click.echo(
                     f"Warning: Failed to process secret '{secret.get('name', 'unknown')}': {e}",
@@ -221,7 +224,7 @@ def _build_dbt_project(project: str, profile: str, site_config: SiteConfig) -> D
     dbt_profile = f"{sanitized_project}_{sanitized_profile}"
 
     # Get dbt configuration from site config (defaults already applied)
-    dbt_config = site_config.get("dbt", {})
+    dbt_config = site_config.get("dbt") or {}
 
     # Build the configuration using values from site config
     return {
@@ -314,7 +317,8 @@ def configure_dbt(
         embed_secrets: If True, embed secrets directly in profiles.yml
     """
     # 1. Check dbt is enabled
-    if not site_config.get("dbt", {}).get("enabled", True):
+    dbt_config = site_config.get("dbt") or {}
+    if not dbt_config.get("enabled", True):
         raise click.ClickException("dbt integration is disabled in mxcp-site.yml")
 
     # 2. Handle embed_secrets requirement
@@ -339,13 +343,18 @@ def configure_dbt(
 
     # 4. Get DuckDB path using the same convention as the rest of the codebase
     repo_root = find_repo_root()
-    duckdb_path = site_config["profiles"][profile_name]["duckdb"]["path"]
+    profile_config = site_config.get("profiles", {}).get(profile_name, {})
+    duckdb_config = profile_config.get("duckdb")
+    duckdb_path = duckdb_config.get("path") if duckdb_config else None
+    if not duckdb_path:
+        raise click.ClickException(f"No DuckDB path configured for profile '{profile_name}'")
     if not os.path.isabs(duckdb_path):
         # If path is not absolute, it should be relative to repo root
         duckdb_path = str(repo_root / duckdb_path)
 
     # 5. Get secrets from user config
-    project_config = user_config.get("projects", {}).get(project)
+    projects = user_config.get("projects", {})
+    project_config: Optional[Dict[str, Any]] = cast(Optional[Dict[str, Any]], projects.get(project) if projects else None)
     if not project_config:
         click.echo(
             f"Warning: Project '{project}' not found in user config, assuming empty configuration",
@@ -353,15 +362,15 @@ def configure_dbt(
         )
         project_config = {}
 
-    profile_config = project_config.get("profiles", {}).get(profile_name)
-    if not profile_config:
+    user_profile_config = project_config.get("profiles", {}).get(profile_name)
+    if not user_profile_config:
         click.echo(
             f"Warning: Profile '{profile_name}' not found in project '{project}', assuming empty configuration",
             err=True,
         )
-        profile_config = {}
+        user_profile_config = {}
 
-    secrets = profile_config.get("secrets", [])
+    secrets = cast(List[Dict[str, Any]], user_profile_config.get("secrets", []))
 
     # 6. Load existing profiles and project config
     profiles = _load_profiles()
@@ -409,6 +418,6 @@ def configure_dbt(
     click.echo(f"profiles.yml and dbt_project.yml updated ({mode})")
 
 
-def run_stale_models(self):
+def run_stale_models(self: Any) -> None:
     """Run stale dbt models"""
     logging.debug("Stub: run stale dbt models")

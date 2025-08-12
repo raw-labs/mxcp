@@ -70,8 +70,8 @@ def format_audit_record(record: AuditRecord, json_format: bool = False) -> str:
             "user_id": record.user_id,
             "session_id": record.session_id,
             "trace_id": record.trace_id,
-            "status": record.status,
-            "error_message": record.error_message,
+            "operation_status": record.operation_status,
+            "error": record.error,
             "business_context": record.business_context,
             "schema_name": record.schema_name,
             "schema_version": record.schema_version,
@@ -79,7 +79,7 @@ def format_audit_record(record: AuditRecord, json_format: bool = False) -> str:
         return json.dumps(record_dict, indent=2)
     else:
         # Human-readable format
-        status_emoji = "✅" if record.status == "success" else "❌"
+        status_emoji = "✅" if record.operation_status == "success" else "❌"
         duration = f"{record.duration_ms}ms" if record.duration_ms else "N/A"
 
         return (
@@ -89,7 +89,7 @@ def format_audit_record(record: AuditRecord, json_format: bool = False) -> str:
         )
 
 
-def map_legacy_query_params(**kwargs) -> Dict[str, Any]:
+def map_legacy_query_params(**kwargs: Any) -> Dict[str, Any]:
     """Map legacy CLI parameters to new AuditLogger query parameters.
 
     This function provides backward compatibility for the old CLI interface.

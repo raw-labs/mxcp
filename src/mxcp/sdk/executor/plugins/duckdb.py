@@ -45,7 +45,7 @@ from ..interfaces import ExecutorPlugin
 
 if TYPE_CHECKING:
     from .duckdb_plugin.session import DuckDBSession
-    from .duckdb_plugin.types import (
+    from .duckdb_plugin._types import (
         DatabaseConfig,
         PluginConfig,
         PluginDefinition,
@@ -90,6 +90,8 @@ class DuckDBExecutor(ExecutorPlugin):
         ...     context
         ... )
     """
+
+    _session: Optional["DuckDBSession"] = None
 
     def __init__(
         self,

@@ -1,6 +1,6 @@
 import signal
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import click
 
@@ -31,7 +31,7 @@ from mxcp.server.mcp import RAWMCP
 @click.option(
     "--stateless", is_flag=True, help="Enable stateless HTTP mode (for serverless deployments)"
 )
-@track_command_with_timing("serve")
+@track_command_with_timing("serve")  # type: ignore[misc]
 def serve(
     profile: Optional[str],
     transport: Optional[str],
@@ -40,7 +40,7 @@ def serve(
     sql_tools: Optional[str],
     readonly: bool,
     stateless: bool,
-):
+) -> None:
     """Start the MXCP MCP server to expose endpoints via HTTP or stdio.
 
     This command starts a server that exposes your MXCP endpoints as an MCP-compatible
@@ -150,7 +150,7 @@ def serve(
                 click.echo(f"\n{click.style('✅ Server starting...', fg='green', bold=True)}\n")
 
         # Set up signal handler for graceful shutdown
-        def signal_handler(signum, frame):
+        def signal_handler(signum: int, frame: Any) -> None:
             if config["transport"] != "stdio":
                 click.echo(f"\n{click.style('🛑 Shutting down gracefully...', fg='yellow')}")
             raise KeyboardInterrupt()

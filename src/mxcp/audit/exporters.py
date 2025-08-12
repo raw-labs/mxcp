@@ -171,7 +171,7 @@ def _build_query_params(filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if filters is None:
         filters = {}
 
-    params = {}
+    params: Dict[str, Any] = {}
 
     # Map filters to query_records parameters
     if "tool" in filters:
@@ -228,7 +228,7 @@ def _record_to_dict(record: AuditRecord) -> Dict[str, Any]:
     }
 
 
-def _create_duckdb_table(conn: duckdb.DuckDBPyConnection, sample_record: Dict[str, Any]):
+def _create_duckdb_table(conn: duckdb.DuckDBPyConnection, sample_record: Dict[str, Any]) -> None:
     """Create DuckDB table based on a sample record."""
     # Infer column types from sample data
     columns = []

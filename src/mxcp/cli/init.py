@@ -3,6 +3,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from typing import Any, Dict, Optional, Sequence
 
 import click
 import yaml
@@ -51,7 +52,7 @@ def check_project_exists_in_user_config(project_name: str) -> bool:
         return False
 
 
-def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str):
+def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str) -> None:
     """Create the mxcp-site.yml file with the given project and profile names."""
     config = {"mxcp": 1, "project": project_name, "profile": profile_name}
 
@@ -59,7 +60,7 @@ def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str)
         yaml.dump(config, f, default_flow_style=False)
 
 
-def create_hello_world_files(target_dir: Path):
+def create_hello_world_files(target_dir: Path) -> None:
     """Create example hello world endpoint files and directory structure."""
     # Create all directories for the new structure
     directories = [
@@ -124,7 +125,7 @@ def create_hello_world_files(target_dir: Path):
         yaml.dump(hello_world_yml, f, default_flow_style=False, sort_keys=False)
 
 
-def detect_python_environment():
+def detect_python_environment() -> Dict[str, Any]:
     """Detect the current Python environment type and relevant paths."""
     # Check if we're in a virtual environment
     in_venv = hasattr(sys, "real_prefix") or (
@@ -155,12 +156,12 @@ def detect_python_environment():
     }
 
 
-def generate_claude_config(project_dir: Path, project_name: str):
+def generate_claude_config(project_dir: Path, project_name: str) -> Dict[str, Any]:
     """Generate Claude Desktop configuration."""
     env_info = detect_python_environment()
 
     # Create the command based on environment
-    if env_info["in_venv"]:
+    if env_info["in_venv"] and env_info["venv_path"]:
         # Use the venv's Python to ensure mxcp is available
         if os.name == "nt":  # Windows
             activate_path = Path(env_info["venv_path"]) / "Scripts" / "activate.bat"
@@ -178,7 +179,7 @@ def generate_claude_config(project_dir: Path, project_name: str):
         command = "mxcp"
         args = ["serve", "--transport", "stdio"]
 
-    config = {
+    config: Dict[str, Any] = {
         "mcpServers": {
             project_name: {
                 "command": command,
@@ -192,7 +193,7 @@ def generate_claude_config(project_dir: Path, project_name: str):
         config["mcpServers"][project_name]["cwd"] = str(project_dir)
 
     # Add environment variables if needed
-    if env_info["in_venv"]:
+    if env_info["in_venv"] and env_info["venv_path"]:
         config["mcpServers"][project_name]["env"] = {
             "PATH": f"{Path(env_info['venv_path']) / 'bin'}:{os.environ.get('PATH', '')}",
             "HOME": str(Path.home()),
@@ -203,7 +204,7 @@ def generate_claude_config(project_dir: Path, project_name: str):
 
 def show_next_steps(
     project_dir: Path, project_name: str, bootstrap: bool, config_generated: bool = True
-):
+) -> None:
     """Show helpful next steps after initialization."""
     click.echo("\n" + "=" * 60)
     click.echo(click.style("✨ MXCP project initialized successfully!", fg="green", bold=True))
@@ -294,8 +295,8 @@ def show_next_steps(
 @click.option("--profile", help="Profile name (defaults to 'default')")
 @click.option("--bootstrap", is_flag=True, help="Create example hello world endpoint")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-@track_command_with_timing("init")
-def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
+@track_command_with_timing("init")  # type: ignore[misc]
+def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool) -> None:
     """Initialize a new MXCP repository.
 
     \b
@@ -313,7 +314,7 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool):
     """
     # Get values from environment variables if not set by flags
     if not profile:
-        profile = get_env_profile()
+        profile = get_env_profile() or "default"
 
     # Configure logging
     configure_logging(debug)

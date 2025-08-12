@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import yaml
 from jsonschema import ValidationError, validate
@@ -14,7 +14,7 @@ from mxcp.config.references import interpolate_all
 logger = logging.getLogger(__name__)
 
 
-def _apply_defaults(config: dict) -> dict:
+def _apply_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
     """Apply default values to the user config"""
     # Create a copy to avoid modifying the input
     config = config.copy()
@@ -74,7 +74,7 @@ def _apply_defaults(config: dict) -> dict:
     return config
 
 
-def _generate_default_config(site_config: SiteConfig) -> dict:
+def _generate_default_config(site_config: SiteConfig) -> Dict[str, Any]:
     """Generate a default user config based on site config"""
     project_name = site_config["project"]
     profile_name = site_config["profile"]
@@ -190,4 +190,4 @@ def load_user_config(
     except ValidationError as e:
         raise ValueError(f"Invalid user config: {e.message}")
 
-    return config
+    return cast(UserConfig, config)

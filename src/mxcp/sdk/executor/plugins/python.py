@@ -46,7 +46,7 @@ import inspect
 import logging
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
 from ..context import ExecutionContext
 from ..interfaces import ExecutorPlugin
@@ -275,11 +275,11 @@ class PythonExecutor(ExecutorPlugin):
             if source_code.strip().startswith("return "):
                 # For simple return expressions, analyze what variables are referenced
                 return_expr = source_code.strip()[7:]  # Remove 'return '
-                tree = ast.parse(return_expr, mode="eval")
+                expr_tree = ast.parse(return_expr, mode="eval")
 
                 # Find all variable names used in the expression
                 params = []
-                for node in ast.walk(tree):
+                for node in ast.walk(expr_tree):
                     if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
                         if node.id not in ["pd", "np", "pandas", "numpy"] and node.id not in params:
                             params.append(node.id)
@@ -473,7 +473,7 @@ class PythonExecutor(ExecutorPlugin):
             raise
 
     async def _execute_function(
-        self, func: Callable, params: Dict[str, Any], context: ExecutionContext
+        self, func: Callable[..., Any], params: Dict[str, Any], context: ExecutionContext
     ) -> Any:
         """Execute a function with parameters."""
 
@@ -490,7 +490,7 @@ class PythonExecutor(ExecutorPlugin):
                     reset_execution_context(context_token)
             else:
                 # For sync functions, use copy_context to propagate all context variables to thread
-                def sync_function_wrapper():
+                def sync_function_wrapper() -> Any:
                     from ..context import reset_execution_context, set_execution_context
 
                     thread_token = set_execution_context(context)

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import click
 
@@ -9,7 +9,7 @@ from mxcp.config.site_config import load_site_config
 from mxcp.endpoints.loader import EndpointLoader
 
 
-def parse_endpoint(path: Path, endpoint: dict) -> Tuple[str, str, Optional[str]]:
+def parse_endpoint(path: Path, endpoint: Dict[str, Any]) -> Tuple[str, str, Optional[str]]:
     """Parse an endpoint dictionary to determine its type, name, and any error.
 
     Returns:
@@ -33,8 +33,8 @@ def parse_endpoint(path: Path, endpoint: dict) -> Tuple[str, str, Optional[str]]
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-@track_command_with_timing("list")
-def list_endpoints(profile: str, json_output: bool, debug: bool):
+@track_command_with_timing("list")  # type: ignore[misc]
+def list_endpoints(profile: str, json_output: bool, debug: bool) -> None:
     """List all available endpoints.
 
     This command discovers and lists all endpoints in the current repository.
@@ -57,18 +57,18 @@ def list_endpoints(profile: str, json_output: bool, debug: bool):
         # Process endpoints into structured data
         results = []
         for path, endpoint, error_msg in endpoints:
-            if error_msg is not None:
+            if error_msg is not None or endpoint is None:
                 results.append(
-                    {"path": str(path), "kind": "unknown", "name": "unknown", "error": error_msg}
+                    {"path": str(path), "kind": "unknown", "name": "unknown", "error": error_msg or "Unknown error"}
                 )
             else:
                 kind, name, error = parse_endpoint(path, endpoint)
-                results.append({"path": str(path), "kind": kind, "name": name, "error": error})
+                results.append({"path": str(path), "kind": kind, "name": name, "error": error or ""})
 
         if json_output:
             output_result(
                 {
-                    "status": "ok" if all(r["error"] is None for r in results) else "error",
+                    "status": "ok" if all(not r["error"] for r in results) else "error",
                     "endpoints": results,
                 },
                 json_output,
@@ -83,7 +83,7 @@ def list_endpoints(profile: str, json_output: bool, debug: bool):
                 return
 
             # Count valid and failed endpoints
-            valid_count = sum(1 for r in results if r["error"] is None)
+            valid_count = sum(1 for r in results if not r["error"])
             failed_count = len(results) - valid_count
 
             # Header with emoji and color
@@ -96,11 +96,11 @@ def list_endpoints(profile: str, json_output: bool, debug: bool):
                 click.echo(f"   • {click.style(f'{failed_count} failed', fg='red')}")
 
             # Group by status
-            valid_endpoints = []
-            failed_endpoints = []
+            valid_endpoints: List[Dict[str, Any]] = []
+            failed_endpoints: List[Dict[str, Any]] = []
 
             for result in results:
-                if result["error"] is None:
+                if not result["error"]:
                     valid_endpoints.append(result)
                 else:
                     failed_endpoints.append(result)

@@ -124,9 +124,9 @@
           },
           "definition": {
             "oneOf": [
-              { "$ref": "../../endpoints/schemas/tool-schema-1.json#/definitions/toolDefinition" },
-              { "$ref": "../../endpoints/schemas/resource-schema-1.json#/definitions/resourceDefinition" },
-              { "$ref": "../../endpoints/schemas/prompt-schema-1.json#/definitions/promptDefinition" }
+              { "$ref": "../../endpoints/endpoint_schemas/tool-schema-1.json#/definitions/toolDefinition" },
+              { "$ref": "../../endpoints/endpoint_schemas/resource-schema-1.json#/definitions/resourceDefinition" },
+              { "$ref": "../../endpoints/endpoint_schemas/prompt-schema-1.json#/definitions/promptDefinition" }
             ],
             "description": "Endpoint definition"
           },

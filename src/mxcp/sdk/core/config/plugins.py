@@ -8,7 +8,7 @@ different types of configuration resolvers (vault, 1password, custom, etc.)
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Pattern, Type, Union
 
 logger = logging.getLogger(__name__)
 
@@ -203,11 +203,11 @@ class ResolverPlugin(ABC):
         """
         pass
 
-    def __enter__(self):
+    def __enter__(self) -> "ResolverPlugin":
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit - calls cleanup."""
         self.cleanup()
 
@@ -215,9 +215,9 @@ class ResolverPlugin(ABC):
 class ResolverRegistry:
     """Registry for managing resolver plugins."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._resolvers: Dict[str, ResolverPlugin] = {}
-        self._patterns: List[tuple[re.Pattern, str]] = []
+        self._patterns: List[tuple[Pattern[str], str]] = []
 
     def register(self, resolver: ResolverPlugin) -> None:
         """Register a resolver plugin."""
@@ -280,11 +280,11 @@ class ResolverRegistry:
             except Exception as e:
                 logger.warning(f"Error cleaning up resolver {resolver.name}: {e}")
 
-    def __enter__(self):
+    def __enter__(self) -> "ResolverRegistry":
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit - calls cleanup on all resolvers."""
         self.cleanup_all()
 

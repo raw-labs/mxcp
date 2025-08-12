@@ -9,6 +9,8 @@ from typing import Any, Dict, Optional
 
 from mxcp.sdk.policy import PolicyAction, PolicyDefinition, PolicySet
 
+__all__ = ["PolicyAction", "PolicyDefinition", "PolicySet", "parse_policies_from_config"]
+
 
 def parse_policies_from_config(policies_config: Optional[Dict[str, Any]]) -> Optional[PolicySet]:
     """Parse policy configuration into PolicySet.

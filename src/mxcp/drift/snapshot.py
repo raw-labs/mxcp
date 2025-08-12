@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, cast
 
 import duckdb
 from pydantic import BaseModel
@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
-from mxcp.drift._types import Column, DriftSnapshot, Table
+from mxcp.drift._types import Column, DriftSnapshot, ResourceDefinition, Table
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.tester import run_tests_with_session
 from mxcp.endpoints.validate import validate_endpoint_payload
@@ -58,8 +58,10 @@ async def generate_snapshot(
     # Get drift path with safe access
     profiles = site_config.get("profiles", {})
     profile_config = profiles.get(profile_name, {})
-    drift_config = profile_config.get("drift", {})
+    drift_config = profile_config.get("drift") or {}
     drift_path_str = drift_config.get("path", f"drift-{profile_name}.json")
+    if not drift_path_str:
+        drift_path_str = f"drift-{profile_name}.json"
     drift_path = Path(drift_path_str)
     if not drift_path.parent.exists():
         drift_path.parent.mkdir(parents=True)
@@ -113,6 +115,10 @@ async def generate_snapshot(
                 )
             else:
                 # Determine endpoint type and name
+                if not endpoint:
+                    logger.warning(f"Skipping file {path}: endpoint is None")
+                    continue
+                    
                 if "tool" in endpoint:
                     endpoint_type = "tool"
                     name = endpoint["tool"]["name"]
@@ -141,12 +147,14 @@ async def generate_snapshot(
                 if "metadata" in endpoint:
                     resource_data["metadata"] = endpoint["metadata"]
                 resources.append(resource_data)
+        if conn is None:
+            raise RuntimeError("DuckDB connection is not available")
         tables = get_duckdb_tables(conn)
         snapshot = DriftSnapshot(
             version=1,
             generated_at=datetime.now(timezone.utc).isoformat(),
             tables=tables,
-            resources=resources,
+            resources=cast(List[ResourceDefinition], resources),
         )
         if not dry_run:
             with open(drift_path, "w") as f:

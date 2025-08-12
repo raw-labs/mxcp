@@ -33,7 +33,7 @@ from mxcp.sdk.executor import ExecutionContext
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
-@track_command_with_timing("query")
+@track_command_with_timing("query")  # type: ignore[misc]
 def query(
     sql: Optional[str],
     file: Optional[str],
@@ -42,7 +42,7 @@ def query(
     json_output: bool,
     debug: bool,
     readonly: bool,
-):
+) -> None:
     """Execute a SQL query directly against the database.
 
     \b
@@ -70,7 +70,7 @@ async def _query_async(
     json_output: bool,
     debug: bool,
     readonly: bool,
-):
+) -> None:
     """Async implementation of the query command."""
     # Get values from environment variables if not set by flags
     if not profile:

@@ -18,7 +18,7 @@ from mxcp.config.analytics import initialize_analytics, track_base_command
 
 
 @click.group()
-def cli():
+def cli() -> None:
     """MXCP CLI"""
     initialize_analytics()
     # Track when user runs just 'mxcp' without any command

@@ -6,15 +6,15 @@ replacing the legacy DuckDBSession-based execution. This is used by CLI commands
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from mxcp.config.execution_engine import create_execution_engine
-from mxcp.config.site_config import SiteConfig, find_repo_root
-from mxcp.config.user_config import UserConfig
+from mxcp.config.site_config import SiteConfig, find_repo_root  # type: ignore[attr-defined]
+from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.utils import prepare_source_for_execution
 from mxcp.policies import parse_policies_from_config
-from mxcp.sdk.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext  # type: ignore[attr-defined]
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
 from mxcp.sdk.policy import PolicyEnforcementError, PolicyEnforcer
@@ -123,16 +123,24 @@ async def execute_endpoint_with_engine(
 
     # endpoint_definition is the raw dict containing the full endpoint structure
     # Extract the type-specific data
-    if endpoint_type not in endpoint_definition:
+    endpoint_dict: Optional[Dict[str, Any]] = None
+    if endpoint_type == "tool":
+        endpoint_dict = cast(Optional[Dict[str, Any]], endpoint_definition.get("tool"))
+    elif endpoint_type == "resource":
+        endpoint_dict = cast(Optional[Dict[str, Any]], endpoint_definition.get("resource"))
+    elif endpoint_type == "prompt":
+        endpoint_dict = cast(Optional[Dict[str, Any]], endpoint_definition.get("prompt"))
+    else:
+        raise ValueError(f"Unknown endpoint type: {endpoint_type}")
+    
+    if endpoint_dict is None:
         raise ValueError(f"No {endpoint_type} definition found in endpoint")
-
-    endpoint_dict = endpoint_definition[endpoint_type]
 
     # Initialize policy enforcer if policies are defined
     policy_enforcer = None
     policies_config = endpoint_dict.get("policies")
     if policies_config:
-        policy_set = parse_policies_from_config(policies_config)
+        policy_set = parse_policies_from_config(cast(Dict[str, Any], policies_config))
         if policy_set:
             policy_enforcer = PolicyEnforcer(policy_set)
 
@@ -174,7 +182,7 @@ async def execute_endpoint_with_engine(
 
 
 async def _execute_prompt_with_validation(
-    endpoint_dict: dict, params: Dict[str, Any], skip_output_validation: bool
+    endpoint_dict: Dict[str, Any], params: Dict[str, Any], skip_output_validation: bool
 ) -> Any:
     """Execute prompt endpoint with proper validation and template rendering.
 
@@ -221,7 +229,7 @@ async def _execute_prompt_with_validation(
 
 
 async def _prepare_source_code(
-    endpoint_dict: dict, endpoint_definition: dict, endpoint_file_path: Path, repo_root: Path
+    endpoint_dict: Dict[str, Any], endpoint_definition: Dict[str, Any], endpoint_file_path: Path, repo_root: Path
 ) -> tuple[str, str]:
     """Prepare source code and determine language for SDK executor.
 
@@ -253,8 +261,8 @@ async def _prepare_source_code(
 
 
 async def _execute_code_with_engine(
-    endpoint_dict: dict,
-    endpoint_definition: dict,
+    endpoint_dict: Dict[str, Any],
+    endpoint_definition: Dict[str, Any],
     endpoint_file_path: Path,
     repo_root: Path,
     params: Dict[str, Any],
@@ -346,7 +354,7 @@ async def _execute_code_with_engine(
     return result
 
 
-def _transform_sql_result_for_return_type(result: Any, return_def: dict) -> Any:
+def _transform_sql_result_for_return_type(result: Any, return_def: Dict[str, Any]) -> Any:
     """Transform SQL result based on return type definition.
 
     This replicates the exact logic from the old EndpointExecutor._execute_sql method

@@ -16,7 +16,7 @@ from mxcp.sdk.executor import ExecutionEngine
 RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
 
 
-def _validate_resource_uri_vs_params(res_def, path):
+def _validate_resource_uri_vs_params(res_def: Dict[str, Any], path: Path) -> Optional[Dict[str, Any]]:
     uri_params = set(RESOURCE_VAR_RE.findall(res_def["uri"]))
     yaml_params = {p["name"] for p in res_def.get("parameters", [])}
 
@@ -225,7 +225,7 @@ def validate_endpoint_payload(
 
         # For resources, validate URI vs parameters
         if endpoint_type == "resource":
-            err = _validate_resource_uri_vs_params(endpoint["resource"], relative_path)
+            err = _validate_resource_uri_vs_params(endpoint["resource"], Path(relative_path))
             if err:
                 return err
 
@@ -311,7 +311,7 @@ def validate_endpoint_payload(
             }
 
         # Type inference and compatibility check
-        type_mismatches = []
+        type_mismatches: List[str] = []
         for yaml_param in yaml_params:
             name = yaml_param["name"]
             yaml_type = yaml_param["type"]

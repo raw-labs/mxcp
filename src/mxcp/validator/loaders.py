@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, cast
 
 import jsonschema
 import yaml
@@ -23,12 +23,12 @@ def load_schema(content: str, format: str = "yaml") -> Dict[str, Any]:
     """
     if format == "yaml":
         try:
-            return yaml.safe_load(content)
+            return cast(Dict[str, Any], yaml.safe_load(content))
         except yaml.YAMLError as e:
             raise ValueError(f"Failed to parse YAML: {e}")
     elif format == "json":
         try:
-            return json.loads(content)
+            return cast(Dict[str, Any], json.loads(content))
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse JSON: {e}")
     else:

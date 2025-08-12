@@ -2,7 +2,7 @@
 """Salesforce OAuth provider implementation for MXCP authentication."""
 import logging
 import secrets
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
@@ -103,10 +103,10 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         except KeyError:
             raise HTTPException(400, "Invalid state parameter")
 
-    def _pop_state(self, state: str):
+    def _pop_state(self, state: str) -> None:
         self._state_store.pop(state, None)
 
-    def cleanup_state(self, state: str):
+    def cleanup_state(self, state: str) -> None:
         """Clean up state after OAuth flow completion."""
         self._pop_state(state)
 
@@ -161,7 +161,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
     def callback_path(self) -> str:  # noqa: D401
         return self._callback_path
 
-    async def on_callback(self, request: Request, provider) -> Response:  # noqa: E501
+    async def on_callback(self, request: Request, provider: Any) -> Response:  # noqa: E501
         code = request.query_params.get("code")
         state = request.query_params.get("state")
         if not code or not state:
@@ -239,7 +239,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
                 )
             raise ValueError(f"Salesforce API error: {resp.status_code} - {error_body}")
 
-        user_data = resp.json()
+        user_data = cast(Dict[str, Any], resp.json())
         logger.info(
             f"Successfully fetched Salesforce user profile for user_id: {user_data.get('user_id', 'unknown')}"
         )

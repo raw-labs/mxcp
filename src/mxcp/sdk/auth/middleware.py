@@ -2,7 +2,7 @@
 """Authentication middleware for MXCP endpoints."""
 import logging
 from functools import wraps
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, TypeVar
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 
@@ -51,6 +51,10 @@ class AuthenticationMiddleware:
             logger.info(f"Found access token: {access_token.token[:10]}...")
 
             # Validate the token with the OAuth server
+            if not self.oauth_server:
+                logger.warning("OAuth server not configured")
+                return None
+            
             token_info = await self.oauth_server.load_access_token(access_token.token)
             if not token_info:
                 logger.warning("Invalid or expired access token")
@@ -59,6 +63,10 @@ class AuthenticationMiddleware:
             logger.info(f"Token validated successfully for client: {token_info.client_id}")
 
             # Get the external token to fetch user context
+            if not self.oauth_server:
+                logger.warning("OAuth server not configured")
+                return None
+                
             external_token = self.oauth_server._token_mapping.get(access_token.token)
             if not external_token:
                 logger.warning("No external token mapping found")
@@ -68,6 +76,10 @@ class AuthenticationMiddleware:
 
             # Get standardized user context from the provider
             try:
+                if not self.oauth_handler:
+                    logger.warning("OAuth handler not configured")
+                    return None
+                    
                 user_context = await self.oauth_handler.get_user_context(external_token)
                 # Add external token to the user context for use in DuckDB functions
                 user_context.external_token = external_token
@@ -83,7 +95,7 @@ class AuthenticationMiddleware:
             logger.error(f"Authentication check failed: {e}")
             return None
 
-    def require_auth(self, func: Callable) -> Callable:
+    def require_auth(self, func: Callable[..., Any]) -> Callable[..., Any]:
         """Decorator to require authentication for a function.
 
         Args:
@@ -94,7 +106,7 @@ class AuthenticationMiddleware:
         """
 
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             user_context = None
             context_token = None
 

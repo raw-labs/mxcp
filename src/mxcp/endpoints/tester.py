@@ -4,7 +4,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import duckdb
 import numpy as np
@@ -12,11 +12,11 @@ import yaml
 from jsonschema import validate
 
 from mxcp.config.execution_engine import create_execution_engine
-from mxcp.config.site_config import SiteConfig, find_repo_root
-from mxcp.config.user_config import UserConfig
+from mxcp.config.site_config import SiteConfig, find_repo_root  # type: ignore[attr-defined]
+from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
-from mxcp.sdk.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext  # type: ignore[attr-defined]
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -39,7 +39,7 @@ async def run_all_tests(
     endpoints = loader.discover_endpoints()
     logger.debug(f"Found {len(endpoints)} YAML files")
 
-    results = {"status": "ok", "tests_run": 0, "endpoints": []}
+    results: Dict[str, Any] = {"status": "ok", "tests_run": 0, "endpoints": []}
 
     # Create execution engine once for all tests
     execution_engine = create_execution_engine(user_config, site_config, profile, readonly=readonly)
@@ -70,16 +70,24 @@ async def run_all_tests(
                 continue
 
             try:
+                # Skip if endpoint is None or invalid
+                if endpoint is None:
+                    logger.debug(f"Skipping file {file_path}: endpoint is None")
+                    continue
+                    
                 # Determine endpoint type and name
                 if "tool" in endpoint:
                     kind = "tool"
-                    name = endpoint["tool"]["name"]
+                    tool_def = endpoint.get("tool", {})
+                    name = tool_def.get("name", "unknown") if isinstance(tool_def, dict) else "unknown"
                 elif "resource" in endpoint:
                     kind = "resource"
-                    name = endpoint["resource"]["uri"]
+                    resource_def = endpoint.get("resource", {})
+                    name = resource_def.get("uri", "unknown") if isinstance(resource_def, dict) else "unknown"
                 elif "prompt" in endpoint:
                     kind = "prompt"
-                    name = endpoint["prompt"]["name"]
+                    prompt_def = endpoint.get("prompt", {})
+                    name = prompt_def.get("name", "unknown") if isinstance(prompt_def, dict) else "unknown"
                 else:
                     logger.debug(f"Skipping file {file_path}: not a valid endpoint")
                     continue
@@ -145,7 +153,7 @@ async def run_tests_with_session(
     name: str,
     user_config: UserConfig,
     site_config: SiteConfig,
-    execution_engine,
+    execution_engine: Any,
     cli_user_context: Optional[UserContext] = None,
 ) -> Dict[str, Any]:
     """Run tests for a specific endpoint type and name with an existing session."""
@@ -163,20 +171,36 @@ async def run_tests_with_session(
         endpoint_file_path, endpoint_def = result
 
         # Get test definitions
-        tests = []
-        if endpoint_type == "tool" and "tests" in endpoint_def["tool"]:
-            tests = endpoint_def["tool"]["tests"]
-        elif endpoint_type == "resource" and "tests" in endpoint_def["resource"]:
-            tests = endpoint_def["resource"]["tests"]
-        elif endpoint_type == "prompt" and "tests" in endpoint_def["prompt"]:
-            tests = endpoint_def["prompt"]["tests"]
+        tests: List[Any] = []
+        if endpoint_def is None:
+            logger.error(f"Endpoint definition is None for {endpoint_type}/{name}")
+            return {"status": "error", "message": f"Invalid endpoint definition"}
+            
+        if endpoint_type == "tool":
+            tool_def = endpoint_def.get("tool") if isinstance(endpoint_def, dict) else None
+            if tool_def is not None and isinstance(tool_def, dict) and "tests" in tool_def:
+                test_list = tool_def.get("tests")
+                if test_list is not None:
+                    tests = test_list
+        elif endpoint_type == "resource":
+            resource_def = endpoint_def.get("resource") if isinstance(endpoint_def, dict) else None
+            if resource_def is not None and isinstance(resource_def, dict) and "tests" in resource_def:
+                test_list = resource_def.get("tests")
+                if test_list is not None:
+                    tests = test_list
+        elif endpoint_type == "prompt":
+            prompt_def = endpoint_def.get("prompt") if isinstance(endpoint_def, dict) else None
+            if prompt_def is not None and isinstance(prompt_def, dict) and "tests" in prompt_def:
+                test_list = prompt_def.get("tests")
+                if test_list is not None:
+                    tests = test_list
         logger.info(f"Found {len(tests)} tests")
 
         if not tests:
             return {"status": "ok", "tests_run": 0, "no_tests": True, "tests": []}
 
         # Extract column names from return schema
-        column_names = extract_column_names(endpoint_def, endpoint_type)
+        column_names = extract_column_names(cast(Dict[str, Any], endpoint_def), endpoint_type)
         logger.info(f"Column names for results: {column_names}")
 
         # Run each test
@@ -303,7 +327,7 @@ def extract_column_names(endpoint_def: Dict[str, Any], endpoint_type: str) -> Li
     return columns
 
 
-def normalize_result(result, column_names, endpoint_type):
+def normalize_result(result: Any, column_names: List[str], endpoint_type: str) -> Any:
     """Normalize DuckDB result for comparison with expected result"""
     # Handle empty results
     if not result:
@@ -378,7 +402,7 @@ def normalize_result(result, column_names, endpoint_type):
     return result
 
 
-def compare_results(result, test_def):
+def compare_results(result: Any, test_def: Dict[str, Any]) -> tuple[bool, Optional[str]]:
     """Compare result with various assertion types in test definition.
 
     Returns: (passed: bool, error_message: str or None)
@@ -389,7 +413,7 @@ def compare_results(result, test_def):
         if expected is not None:
             # For complex objects that can't be JSON serialized (like ndarray),
             # convert to a more basic representation for comparison
-            def make_serializable(obj):
+            def make_serializable(obj: Any) -> Any:
                 """Convert complex objects to serializable form for comparison"""
                 if isinstance(obj, np.ndarray):
                     return obj.tolist()

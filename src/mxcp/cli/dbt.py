@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+from typing import Any, Optional
 
 import click
 
@@ -16,7 +17,7 @@ from .utils import check_command_available, configure_logging
 @click.option("--force", is_flag=True, help="Overwrite existing profile without confirmation")
 @click.option("--embed-secrets", is_flag=True, help="Embed secrets directly in profiles.yml")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-def dbt_config(profile: str, dry_run: bool, force: bool, embed_secrets: bool, debug: bool):
+def dbt_config(profile: str, dry_run: bool, force: bool, embed_secrets: bool, debug: bool) -> None:
     """Generate / patch the dbt side-car files (dbt_project.yml + profiles.yml).
 
     Default mode writes env_var() templates, so secrets stay out of YAML.
@@ -90,7 +91,7 @@ def dbt_config(profile: str, dry_run: bool, force: bool, embed_secrets: bool, de
 )
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.pass_context
-def dbt_wrapper(ctx, debug: bool):
+def dbt_wrapper(ctx: click.Context, debug: bool) -> None:
     """Wrapper that injects secrets as env vars, then delegates to the real dbt CLI.
 
     \b
@@ -113,7 +114,8 @@ def dbt_wrapper(ctx, debug: bool):
     user_config = load_user_config(site_config)
 
     # Check dbt is enabled
-    if not site_config.get("dbt", {}).get("enabled", True):
+    dbt_config = site_config.get("dbt", {})
+    if not dbt_config or not dbt_config.get("enabled", True):
         click.echo(
             f"\n{click.style('❌ Error:', fg='red', bold=True)} dbt integration is disabled in mxcp-site.yml"
         )
@@ -143,13 +145,13 @@ def dbt_wrapper(ctx, debug: bool):
     click.echo(f"   • Command: {click.style(f'dbt {dbt_command}', fg='green')}")
 
     # Get secrets from user config
-    project_config = user_config.get("projects", {}).get(project, {})
+    project_config: Any = user_config.get("projects", {}).get(project, {})
     profile_config = project_config.get("profiles", {}).get(profile, {})
     secrets = profile_config.get("secrets", [])
 
     # Prepare environment
     env = os.environ.copy()
-    for secret in secrets:
+    for secret in secrets or []:
         if not isinstance(secret, dict) or "name" not in secret or "parameters" not in secret:
             continue
 

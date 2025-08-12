@@ -4,7 +4,7 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, cast
 
 import duckdb
 
@@ -72,7 +72,7 @@ class AuditQuery:
         status: Optional[str] = None,
         since: Optional[str] = None,
         limit: int = 100,
-    ) -> List[Dict]:
+    ) -> List[Dict[str, Any]]:
         """Query audit logs with optional filters."""
         conn = None
         try:
@@ -122,6 +122,8 @@ class AuditQuery:
             result = conn.execute(query).fetchall()
 
             # Get column names
+            if conn.description is None:
+                return []
             columns = [desc[0] for desc in conn.description]
 
             # Convert to list of dicts
@@ -199,7 +201,10 @@ class AuditQuery:
 
             # Get row count
             count_query = f"SELECT COUNT(*) FROM ({query}) AS subquery"
-            row_count = conn.execute(count_query).fetchone()[0]
+            result = conn.execute(count_query).fetchone()
+            if result is None:
+                return 0
+            row_count = cast(int, result[0])
 
             return row_count
 
@@ -234,7 +239,10 @@ class AuditQuery:
             )
 
             # Get row count
-            row_count = conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
+            result = conn.execute("SELECT COUNT(*) FROM logs").fetchone()
+            if result is None:
+                return 0
+            row_count = cast(int, result[0])
 
             # Create indexes for better query performance
             conn.execute("CREATE INDEX idx_timestamp ON logs(timestamp)")
@@ -272,7 +280,8 @@ class AuditQuery:
             stats = {}
 
             # Total count
-            stats["total_events"] = conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
+            result = conn.execute("SELECT COUNT(*) FROM logs").fetchone()
+            stats["total_events"] = result[0] if result else 0
 
             # Count by type
             type_counts = conn.execute(
@@ -312,7 +321,7 @@ class AuditQuery:
             """
             ).fetchone()
 
-            if time_range[0] and time_range[1]:
+            if time_range is not None and time_range[0] and time_range[1]:
                 stats["earliest_event"] = time_range[0]
                 stats["latest_event"] = time_range[1]
 

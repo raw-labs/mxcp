@@ -18,7 +18,7 @@ from mxcp.sdk.audit import AuditLogger
 )
 @click.option("--json", "json_output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-def log_cleanup(profile: Optional[str], dry_run: bool, json_output: bool, debug: bool):
+def log_cleanup(profile: Optional[str], dry_run: bool, json_output: bool, debug: bool) -> None:
     """Apply retention policies to remove old audit records.
 
     This command deletes audit records older than their schema's retention policy.
@@ -41,7 +41,7 @@ def log_cleanup(profile: Optional[str], dry_run: bool, json_output: bool, debug:
     asyncio.run(_cleanup_async(profile, dry_run, json_output, debug))
 
 
-async def _cleanup_async(profile: Optional[str], dry_run: bool, json_output: bool, debug: bool):
+async def _cleanup_async(profile: Optional[str], dry_run: bool, json_output: bool, debug: bool) -> None:
     """Async implementation of cleanup command."""
     configure_logging(debug)
 
@@ -58,7 +58,7 @@ async def _cleanup_async(profile: Optional[str], dry_run: bool, json_output: boo
             profile_config = site_config["profiles"][profile_name]
             audit_config = profile_config.get("audit", {})
 
-            if not audit_config.get("enabled", False):
+            if not audit_config or not audit_config.get("enabled", False):
                 message = f"Audit logging is not enabled for profile '{profile_name}'"
                 if json_output:
                     output_result(
@@ -70,10 +70,13 @@ async def _cleanup_async(profile: Optional[str], dry_run: bool, json_output: boo
                     click.echo(message)
                 return
 
-            if "path" not in audit_config:
+            if audit_config and "path" not in audit_config:
                 raise ValueError("Audit configuration missing required 'path' field")
 
-            log_path = Path(audit_config["path"])
+            log_path_str = audit_config.get("path") if audit_config else None
+            if not log_path_str:
+                raise ValueError("Audit configuration missing required 'path' field")
+            log_path = Path(log_path_str)
 
         except ValueError as e:
             output_error(e, json_output, debug)

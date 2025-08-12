@@ -52,12 +52,12 @@ class ExternalRef:
 class ExternalRefTracker:
     """Tracks and manages external configuration references."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.refs: List[ExternalRef] = []
         self._template_config: Optional[Dict[str, Any]] = None
         self._resolved_config: Optional[Dict[str, Any]] = None
 
-    def set_template(self, site_config: Dict[str, Any], user_config: Dict[str, Any]):
+    def set_template(self, site_config: Dict[str, Any], user_config: Dict[str, Any]) -> None:
         """Set the template configuration and scan for references."""
         self._template_config = {
             "site": copy.deepcopy(site_config),
@@ -130,16 +130,27 @@ class ExternalRefTracker:
         self._resolved_config = resolved
         return resolved["site"], resolved["user"]
 
-    def _apply_value(self, config: Dict[str, Any], path: List[Union[str, int]], value: Any):
+    def _apply_value(self, config: Dict[str, Any], path: List[Union[str, int]], value: Any) -> None:
         """Apply a resolved value at the specified path in the config."""
-        current = config
+        current: Any = config
 
         # Navigate to the parent of the target
         for key in path[:-1]:
-            current = current[key]
+            if isinstance(current, dict) and isinstance(key, str):
+                current = current[key]
+            elif isinstance(current, list) and isinstance(key, int):
+                current = current[key]
+            else:
+                raise TypeError(f"Invalid path segment {key} for type {type(current)}")
 
         # Set the value
-        current[path[-1]] = value
+        final_key = path[-1]
+        if isinstance(current, dict) and isinstance(final_key, str):
+            current[final_key] = value
+        elif isinstance(current, list) and isinstance(final_key, int):
+            current[final_key] = value
+        else:
+            raise TypeError(f"Invalid final key {final_key} for type {type(current)}")
 
     def check_for_changes(self) -> List[ExternalRef]:
         """Check if any file-based references have changed."""

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import click
 
@@ -13,7 +13,7 @@ class LintIssue:
     """Represents a single lint issue found in an endpoint."""
 
     def __init__(
-        self, severity: str, path: str, location: str, message: str, suggestion: str = None
+        self, severity: str, path: str, location: str, message: str, suggestion: Optional[str] = None
     ):
         self.severity = severity  # "warning" or "error"
         self.path = path
@@ -22,7 +22,7 @@ class LintIssue:
         self.suggestion = suggestion
 
 
-def lint_type_definition(type_def: dict, location: str, issues: List[LintIssue], path: str):
+def lint_type_definition(type_def: Dict[str, Any], location: str, issues: List[LintIssue], path: str) -> None:
     """Recursively lint type definitions for missing descriptions."""
     if not isinstance(type_def, dict):
         return
@@ -62,9 +62,9 @@ def lint_type_definition(type_def: dict, location: str, issues: List[LintIssue],
             lint_type_definition(prop_def, f"{location}.properties.{prop_name}", issues, path)
 
 
-def lint_endpoint(path: Path, endpoint: dict) -> List[LintIssue]:
+def lint_endpoint(path: Path, endpoint: Dict[str, Any]) -> List[LintIssue]:
     """Lint a single endpoint for missing metadata."""
-    issues = []
+    issues: List[LintIssue] = []
 
     # Determine endpoint type
     endpoint_type = None
@@ -208,7 +208,7 @@ def lint_endpoint(path: Path, endpoint: dict) -> List[LintIssue]:
 
 def format_lint_results(
     all_issues: List[Tuple[Path, List[LintIssue]]], json_output: bool = False
-) -> str:
+) -> Union[str, List[Dict[str, Any]]]:
     """Format lint results for display."""
     if json_output:
         # Convert to JSON-serializable format
@@ -304,8 +304,8 @@ def format_lint_results(
     default="all",
     help="Minimum severity level to report",
 )
-@track_command_with_timing("lint")
-def lint(profile: str, json_output: bool, debug: bool, severity: str):
+@track_command_with_timing("lint")  # type: ignore[misc]
+def lint(profile: str, json_output: bool, debug: bool, severity: str) -> None:
     """Check endpoints for missing but recommended metadata.
 
     This command analyzes your endpoints and suggests improvements to make them
@@ -336,7 +336,7 @@ def lint(profile: str, json_output: bool, debug: bool, severity: str):
 
         # Lint each endpoint
         for path, endpoint, error_msg in endpoints:
-            if error_msg is not None:
+            if error_msg is not None or endpoint is None:
                 # Skip files with parsing errors
                 continue
 

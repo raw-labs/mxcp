@@ -2,7 +2,7 @@
 """GitHub OAuth provider implementation for MXCP authentication."""
 import logging
 import secrets
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
@@ -11,7 +11,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
 from ._types import ExternalUserInfo, GitHubAuthConfig, HttpTransportConfig, StateMeta, UserContext
-from .providers import ExternalOAuthHandler
+from .providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from .url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
 
         # State storage for OAuth flow
         self._state_store: Dict[str, StateMeta] = {}
+        self._callback_store: Dict[str, str] = {}  # Store callback URLs separately
 
     # ----- authorize -----
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
@@ -70,7 +71,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
             client_id=client_id,
         )
         # Store the callback URL separately for consistency
-        self._state_store[state + "_callback"] = full_callback_url
+        self._callback_store[state] = full_callback_url
 
         logger.info(
             f"GitHub OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
@@ -89,20 +90,20 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
         except KeyError:
             raise HTTPException(400, "Invalid state parameter")
 
-    def _pop_state(self, state: str):
+    def _pop_state(self, state: str) -> None:
         self._state_store.pop(state, None)
 
-    def cleanup_state(self, state: str):
+    def cleanup_state(self, state: str) -> None:
         """Clean up state and associated callback URL after OAuth flow completion."""
         self._pop_state(state)
-        self._state_store.pop(state + "_callback", None)
+        self._callback_store.pop(state, None)
 
     # ----- code exchange -----
     async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
         meta = self.get_state_metadata(state)
 
         # Use the stored callback URL for consistency
-        full_callback_url = self._state_store.get(state + "_callback")
+        full_callback_url = self._callback_store.get(state)
         if not full_callback_url:
             # Fallback to constructing it using URL builder
             full_callback_url = self.url_builder.build_callback_url(
@@ -203,4 +204,4 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
             )
         if resp.status_code != 200:
             raise ValueError(f"GitHub API error: {resp.status_code}")
-        return resp.json()
+        return cast(Dict[str, Any], resp.json())

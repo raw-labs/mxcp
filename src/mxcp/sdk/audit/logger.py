@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Union, cast
 
 from ._types import (
     AuditBackend,
@@ -21,6 +21,8 @@ from ._types import (
     Status,
 )
 from .backends import JSONLAuditWriter
+from .backends.noop import NoOpAuditBackend
+from .writer import BaseAuditWriter
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ class AuditLogger:
     while allowing different backend implementations (JSONL, PostgreSQL, etc.).
     """
 
-    def __init__(self, backend: AuditBackend):
+    def __init__(self, backend: Any) -> None:
         """Initialize the audit logger with a specific backend.
 
         Args:
@@ -75,17 +77,17 @@ class AuditLogger:
 
     # Schema management methods
 
-    async def create_schema(self, schema: AuditSchema):
+    async def create_schema(self, schema: AuditSchema) -> None:
         """Create or update a schema."""
-        return await self.backend.create_schema(schema)
+        await self.backend.create_schema(schema)
 
-    async def get_schema(self, schema_name: str, version: Optional[int] = None):
+    async def get_schema(self, schema_name: str, version: Optional[int] = None) -> Optional[AuditSchema]:
         """Get a schema definition."""
-        return await self.backend.get_schema(schema_name, version)
+        return cast(Optional[AuditSchema], await self.backend.get_schema(schema_name, version))
 
-    async def list_schemas(self, active_only: bool = True):
+    async def list_schemas(self, active_only: bool = True) -> List[AuditSchema]:
         """List all schemas."""
-        return await self.backend.list_schemas(active_only)
+        return cast(List[AuditSchema], await self.backend.list_schemas(active_only))
 
     async def log_event(
         self,
@@ -103,7 +105,7 @@ class AuditLogger:
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
         trace_id: Optional[str] = None,
-    ):
+    ) -> None:
         """Log an audit event.
 
         Args:
@@ -151,7 +153,7 @@ class AuditLogger:
 
     # Query methods - delegate to backend
 
-    async def query_records(self, **kwargs) -> AsyncIterator[AuditRecord]:
+    async def query_records(self, **kwargs: Any) -> AsyncIterator[AuditRecord]:
         """Query audit records. See backend.query_records for parameters.
 
         Yields records one at a time for memory-efficient processing.
@@ -159,19 +161,19 @@ class AuditLogger:
         async for record in self.backend.query_records(**kwargs):
             yield record
 
-    async def get_record(self, record_id: str):
+    async def get_record(self, record_id: str) -> Optional[AuditRecord]:
         """Get a specific record by ID."""
-        return await self.backend.get_record(record_id)
+        return cast(Optional[AuditRecord], await self.backend.get_record(record_id))
 
-    async def verify_integrity(self, start_record_id: str, end_record_id: str):
+    async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResult:
         """Verify integrity between two records."""
-        return await self.backend.verify_integrity(start_record_id, end_record_id)
+        return cast(IntegrityResult, await self.backend.verify_integrity(start_record_id, end_record_id))
 
-    async def apply_retention_policies(self):
+    async def apply_retention_policies(self) -> Dict[str, int]:
         """Apply retention policies to remove old records."""
-        return await self.backend.apply_retention_policies()
+        return cast(Dict[str, int], await self.backend.apply_retention_policies())
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shutdown the logger and its backend."""
         logger.info("Shutting down audit logger...")
 

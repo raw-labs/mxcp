@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 import click
 
@@ -16,7 +16,7 @@ from mxcp.config.user_config import load_user_config
 from mxcp.endpoints.validate import validate_all_endpoints, validate_endpoint
 
 
-def format_validation_results(results):
+def format_validation_results(results: Any) -> str:
     """Format validation results for human-readable output"""
     if isinstance(results, str):
         return results
@@ -108,10 +108,10 @@ def format_validation_results(results):
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
-@track_command_with_timing("validate")
+@track_command_with_timing("validate")  # type: ignore[misc]
 def validate(
     endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool, readonly: bool
-):
+) -> None:
     """Validate one or all endpoints.
 
     This command validates the schema and configuration of endpoints.

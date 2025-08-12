@@ -8,12 +8,14 @@ This is a cloned version of the secret injection for the executor plugin system.
 import logging
 from typing import Any, Dict, List
 
+import duckdb
+
 from ._types import SecretDefinition
 
 logger = logging.getLogger(__name__)
 
 
-def inject_secrets(con, secrets: List[SecretDefinition]):
+def inject_secrets(con: duckdb.DuckDBPyConnection, secrets: List[SecretDefinition]) -> None:
     """Inject secrets into DuckDB session"""
     logger.debug(f"Injecting {len(secrets)} secrets")
     logger.debug(f"Found secrets: {[s.name for s in secrets]}")

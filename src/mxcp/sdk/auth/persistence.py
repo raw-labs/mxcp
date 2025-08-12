@@ -193,6 +193,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
 
     def _create_tables_sync(self) -> None:
         """Create the necessary database tables (synchronous)."""
+        assert self.conn is not None, "Connection must be initialized"
         cursor = self.conn.cursor()
 
         # Access tokens table
@@ -269,6 +270,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
     def _sync_store_token(self, token_data: PersistedAccessToken) -> None:
         """Synchronous token storage."""
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute(
                 """
@@ -296,6 +298,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
     def _sync_load_token(self, token: str) -> Optional[PersistedAccessToken]:
         """Synchronous token loading."""
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute(
                 """
@@ -327,6 +330,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
     def _sync_delete_token(self, token: str) -> None:
         """Synchronous token deletion."""
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute("DELETE FROM access_tokens WHERE token = ?", (token,))
             self.conn.commit()
@@ -341,6 +345,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         """Synchronous expired token cleanup."""
         current_time = time.time()
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute(
                 """
@@ -363,6 +368,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
     def _sync_store_auth_code(self, code_data: PersistedAuthCode) -> None:
         """Synchronous auth code storage."""
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute(
                 """
@@ -393,6 +399,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
     def _sync_load_auth_code(self, code: str) -> Optional[PersistedAuthCode]:
         """Synchronous auth code loading."""
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute(
                 """
@@ -427,6 +434,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
     def _sync_delete_auth_code(self, code: str) -> None:
         """Synchronous auth code deletion."""
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute("DELETE FROM auth_codes WHERE code = ?", (code,))
             self.conn.commit()
@@ -441,6 +449,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         """Synchronous expired auth code cleanup."""
         current_time = time.time()
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute(
                 """
@@ -462,6 +471,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
     def _sync_store_client(self, client_data: PersistedClient) -> None:
         """Synchronous client storage."""
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute(
                 """
@@ -492,6 +502,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
     def _sync_load_client(self, client_id: str) -> Optional[PersistedClient]:
         """Synchronous client loading."""
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute(
                 """
@@ -526,6 +537,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
     def _sync_delete_client(self, client_id: str) -> None:
         """Synchronous client deletion."""
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute("DELETE FROM oauth_clients WHERE client_id = ?", (client_id,))
             self.conn.commit()
@@ -539,6 +551,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
     def _sync_list_clients(self) -> List[PersistedClient]:
         """Synchronous client listing."""
         with self._lock:
+            assert self.conn is not None, "Connection must be initialized"
             cursor = self.conn.cursor()
             cursor.execute(
                 """

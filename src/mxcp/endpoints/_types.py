@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional, TypedDict, Union
+from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
 
 
 class SourceDefinition(TypedDict):
@@ -16,7 +16,7 @@ class TestDefinition(TypedDict):
     description: Optional[str]
     arguments: List[TestArgument]
     result: Optional[object]
-    user_context: Optional[dict]  # User context for policy testing
+    user_context: Optional[Dict[str, Any]]  # User context for policy testing
     result_contains: Optional[object]  # Partial match for objects/arrays
     result_not_contains: Optional[List[str]]  # Fields that should NOT exist
     result_contains_item: Optional[object]  # At least one array item matches
@@ -82,7 +82,7 @@ class ToolDefinition(TypedDict):
     name: str
     description: Optional[str]
     tags: Optional[List[str]]
-    annotations: Optional[dict]
+    annotations: Optional[Dict[str, Any]]
     parameters: Optional[List[ParamDefinition]]
     return_: Optional[TypeDefinition]
     language: Optional[Literal["sql"]]
@@ -129,4 +129,4 @@ class EndpointDefinition(TypedDict):
     tool: Optional[ToolDefinition]
     resource: Optional[ResourceDefinition]
     prompt: Optional[PromptDefinition]
-    metadata: Optional[dict]
+    metadata: Optional[Dict[str, Any]]

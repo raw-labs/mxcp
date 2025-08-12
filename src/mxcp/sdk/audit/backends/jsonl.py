@@ -38,7 +38,7 @@ class JSONLAuditWriter(BaseAuditWriter):
     asynchronously, and DuckDB for efficient querying of JSONL files.
     """
 
-    def __init__(self, log_path: Path, **kwargs):
+    def __init__(self, log_path: Path, **kwargs: Any) -> None:
         """Initialize the JSONL writer.
 
         Args:
@@ -47,8 +47,8 @@ class JSONLAuditWriter(BaseAuditWriter):
         """
         super().__init__(**kwargs)
         self.log_path = log_path
-        self._queue = queue.Queue()
-        self._writer_thread = None
+        self._queue: queue.Queue[AuditRecord] = queue.Queue()
+        self._writer_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._file_lock = threading.Lock()
         self._shutdown_called = False
@@ -215,7 +215,7 @@ class JSONLAuditWriter(BaseAuditWriter):
             schema.active = False
             await self.create_schema(schema)  # Update the schema file
 
-    def _start_writer_thread(self):
+    def _start_writer_thread(self) -> None:
         """Start the background writer thread."""
         max_attempts = 3
         for attempt in range(max_attempts):
@@ -260,7 +260,7 @@ class JSONLAuditWriter(BaseAuditWriter):
             f"Failed to start background writer thread after {max_attempts} attempts"
         )
 
-    def _writer_loop(self):
+    def _writer_loop(self) -> None:
         """Main loop for the background writer thread."""
         logger.debug(f"Writer thread ENTERED main loop for {self.log_path}")
         batch = []
@@ -295,7 +295,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         logger.debug("Writer thread stopped")
 
-    def _write_events_batch(self, events: List[AuditRecord]):
+    def _write_events_batch(self, events: List[AuditRecord]) -> None:
         """Write a batch of events to the JSONL file."""
         try:
             with self._file_lock:
@@ -311,7 +311,7 @@ class JSONLAuditWriter(BaseAuditWriter):
         except Exception as e:
             logger.error(f"Failed to write event batch: {e}")
 
-    def _drain_queue_final(self):
+    def _drain_queue_final(self) -> None:
         """Drain all remaining events from the queue."""
         events = []
         max_drain_attempts = 100  # Prevent infinite loops
@@ -338,10 +338,10 @@ class JSONLAuditWriter(BaseAuditWriter):
             # No more tasks to mark as done
             pass
 
-    def _register_shutdown_handlers(self):
+    def _register_shutdown_handlers(self) -> None:
         """Register shutdown handlers to ensure clean shutdown."""
 
-        def shutdown_handler(*args):
+        def shutdown_handler(*args: Any) -> None:
             if not self._shutdown_called:
                 self.shutdown()
 
@@ -376,7 +376,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         return record.record_id
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shutdown the writer gracefully."""
         if self._shutdown_called:
             return
@@ -575,6 +575,8 @@ class JSONLAuditWriter(BaseAuditWriter):
                     break
 
                 # Get column names
+                if conn.description is None:
+                    continue
                 columns = [desc[0] for desc in conn.description]
 
                 # Yield records one by one
@@ -667,6 +669,8 @@ class JSONLAuditWriter(BaseAuditWriter):
                 return None
 
             # Get column names and convert
+            if conn.description is None:
+                return None
             columns = [desc[0] for desc in conn.description]
             row_dict = dict(zip(columns, result[0]))
 
@@ -722,7 +726,7 @@ class JSONLAuditWriter(BaseAuditWriter):
         if not self.log_path.exists():
             return {}
 
-        counts = {}
+        counts: Dict[str, int] = {}
         temp_path = self.log_path.with_suffix(".tmp")
 
         try:

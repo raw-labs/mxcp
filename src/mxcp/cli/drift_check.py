@@ -1,7 +1,7 @@
 import asyncio
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import click
 
@@ -18,7 +18,7 @@ from mxcp.config.user_config import load_user_config
 from mxcp.drift.checker import check_drift
 
 
-def format_drift_report(report, debug: bool = False):
+def format_drift_report(report: Any, debug: bool = False) -> str:
     """Format drift report for human-readable output"""
     if isinstance(report, str):
         return report
@@ -137,10 +137,10 @@ def format_drift_report(report, debug: bool = False):
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
-@track_command_with_timing("drift-check")
+@track_command_with_timing("drift-check")  # type: ignore[misc]
 def drift_check(
     profile: Optional[str], baseline: Optional[str], json_output: bool, debug: bool, readonly: bool
-):
+) -> None:
     """Check for drift between current state and baseline snapshot.
 
     This command compares the current state of your database and endpoints

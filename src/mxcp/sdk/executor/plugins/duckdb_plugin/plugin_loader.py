@@ -10,7 +10,7 @@ import inspect
 import logging
 import os
 import sys
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
 import duckdb
 
@@ -55,7 +55,7 @@ def _load_plugin(module_path: str, config: Dict[str, str], plugins_path: str) ->
 
         # Instantiate plugin with configuration only (simplified interface)
         logger.debug(f"Loading plugin {module_path} with configuration")
-        return plugin_class(config)
+        return cast(MXCPBasePlugin, plugin_class(config))
 
     except ImportError as e:
         raise ImportError(f"Failed to import plugin module {module_path}: {e}")

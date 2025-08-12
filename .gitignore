@@ -9,3 +9,4 @@ dist/
 *.egg-info/
 db-*.duckdb
 *server_config*.json
+.coverage

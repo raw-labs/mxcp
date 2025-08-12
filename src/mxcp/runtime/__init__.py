@@ -7,7 +7,7 @@ Uses the SDK executor context system for proper context access.
 
 import contextvars
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 from mxcp.sdk.executor.context import (
     ExecutionContext,
@@ -40,10 +40,10 @@ class DatabaseProxy:
             result = session.conn.execute(query).fetchdf()
 
         # Convert DataFrame to list of dicts
-        return result.to_dict("records")
+        return cast(List[Dict[str, Any]], result.to_dict("records"))
 
     @property
-    def connection(self):
+    def connection(self) -> Any:
         """Get the raw DuckDB connection (use with caution)."""
         context = get_execution_context()
         if not context:
@@ -91,7 +91,7 @@ class ConfigProxy:
             # Find secret by name and return its parameters
             for secret in secrets:
                 if secret.get("name") == name:
-                    return secret.get("parameters", {})
+                    return cast(Dict[str, Any], secret.get("parameters", {}))
 
             return None
         except (KeyError, TypeError):
@@ -129,7 +129,7 @@ class ConfigProxy:
         if not context:
             return None
 
-        return context.get("user_config")
+        return cast(Optional[Dict[str, Any]], context.get("user_config"))
 
     @property
     def site_config(self) -> Optional[Dict[str, Any]]:
@@ -138,13 +138,13 @@ class ConfigProxy:
         if not context:
             return None
 
-        return context.get("site_config")
+        return cast(Optional[Dict[str, Any]], context.get("site_config"))
 
 
 class PluginsProxy:
     """Proxy for plugin access using the current execution context."""
 
-    def get(self, name: str):
+    def get(self, name: str) -> Any:
         """Get plugin by name."""
         context = get_execution_context()
         if not context:
@@ -179,11 +179,11 @@ config = ConfigProxy()
 plugins = PluginsProxy()
 
 # Lifecycle hooks
-_init_hooks: List[Callable] = []
-_shutdown_hooks: List[Callable] = []
+_init_hooks: List[Callable[[], None]] = []
+_shutdown_hooks: List[Callable[[], None]] = []
 
 
-def on_init(func: Callable) -> Callable:
+def on_init(func: Callable[[], None]) -> Callable[[], None]:
     """
     Register a function to be called on initialization.
 
@@ -196,7 +196,7 @@ def on_init(func: Callable) -> Callable:
     return func
 
 
-def on_shutdown(func: Callable) -> Callable:
+def on_shutdown(func: Callable[[], None]) -> Callable[[], None]:
     """
     Register a function to be called on shutdown.
 
@@ -209,7 +209,7 @@ def on_shutdown(func: Callable) -> Callable:
     return func
 
 
-def run_init_hooks():
+def run_init_hooks() -> None:
     """Run all registered init hooks."""
     for hook in _init_hooks:
         try:
@@ -219,7 +219,7 @@ def run_init_hooks():
             logger.error(f"Error in init hook {hook.__name__}: {e}")
 
 
-def run_shutdown_hooks():
+def run_shutdown_hooks() -> None:
     """Run all registered shutdown hooks."""
     for hook in _shutdown_hooks:
         try:

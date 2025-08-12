@@ -28,7 +28,7 @@ class TypeValidator:
         """
         self.schema = schema
         self.strict = strict
-        self._custom_handlers = {}
+        self._custom_handlers: Dict[type, Dict[str, Any]] = {}
 
     @classmethod
     def from_dict(cls, schema_dict: Dict[str, Any], strict: bool = False) -> "TypeValidator":
@@ -139,7 +139,7 @@ class TypeValidator:
         # Then mask sensitive fields
         return TypeConverter.mask_sensitive_fields(serialized, self.schema.output_schema)
 
-    def validate_function_signature(self, func: Callable) -> None:
+    def validate_function_signature(self, func: Callable[..., Any]) -> None:
         """Validate that a function signature matches the schema parameters.
 
         Args:
@@ -199,8 +199,8 @@ class TypeValidator:
         self,
         python_type: type,
         schema_type: str,
-        converter: Callable,
-        validator: Optional[Callable] = None,
+        converter: Callable[[Any], Any],
+        validator: Optional[Callable[[Any], bool]] = None,
     ) -> None:
         """Register a custom type handler for non-standard Python types.
 
@@ -249,7 +249,7 @@ class TypeValidator:
 
     def _type_schema_to_dict(self, schema: Union[TypeSchema, ParameterSchema]) -> Dict[str, Any]:
         """Convert a TypeSchema or ParameterSchema to a dictionary representation."""
-        result = {
+        result: Dict[str, Any] = {
             "type": schema.type,
             "description": schema.description,
             "format": schema.format,

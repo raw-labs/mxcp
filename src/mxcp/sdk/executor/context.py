@@ -111,7 +111,7 @@ class ExecutionContext:
         """
         return self.user_context is not None and self.user_context.username is not None
 
-    def copy(self, **kwargs) -> "ExecutionContext":
+    def copy(self, **kwargs: Any) -> "ExecutionContext":
         """Create a copy of this context with optional field updates.
 
         Args:
@@ -154,7 +154,7 @@ def get_execution_context() -> Optional[ExecutionContext]:
     return execution_context_var.get()
 
 
-def set_execution_context(context: Optional[ExecutionContext]) -> contextvars.Token:
+def set_execution_context(context: Optional[ExecutionContext]) -> "contextvars.Token[Optional[ExecutionContext]]":
     """
     Set the execution context in the current context.
 
@@ -167,7 +167,7 @@ def set_execution_context(context: Optional[ExecutionContext]) -> contextvars.To
     return execution_context_var.set(context)
 
 
-def reset_execution_context(token: contextvars.Token) -> None:
+def reset_execution_context(token: "contextvars.Token[Optional[ExecutionContext]]") -> None:
     """
     Reset the execution context using a token.
 

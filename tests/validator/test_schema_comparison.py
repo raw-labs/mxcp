@@ -25,7 +25,7 @@ class TestSchemaComparison:
             / "src"
             / "mxcp"
             / "endpoints"
-            / "schemas"
+            / "endpoint_schemas"
             / "common-types-schema-1.json"
         )
 
@@ -184,7 +184,7 @@ class TestSchemaComparison:
             / "src"
             / "mxcp"
             / "endpoints"
-            / "schemas"
+            / "endpoint_schemas"
             / "common-types-schema-1.json"
         )
 

@@ -5,9 +5,11 @@ Handles backward compatibility and provides helpful migration guidance
 for users upgrading from pre-production versions.
 """
 
+from typing import Any, Dict, Optional
+
 
 def check_and_migrate_legacy_version(
-    config_data: dict, config_type: str, config_path: str = None
+    config_data: Dict[str, Any], config_type: str, config_path: Optional[str] = None
 ) -> None:
     """
     Check for legacy version format and provide migration guidance.

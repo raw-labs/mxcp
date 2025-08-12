@@ -61,7 +61,7 @@ def log(
     export_duckdb_path: Optional[str],
     json_output: bool,
     debug: bool,
-):
+) -> None:
     """Query MXCP audit logs.
 
     Show execution history for tools, resources, and prompts with various filters.
@@ -121,7 +121,7 @@ async def _log_async(
     export_duckdb_path: Optional[str],
     json_output: bool,
     debug: bool,
-):
+) -> None:
     """Async implementation of log command."""
     # Configure logging
     configure_logging(debug)
@@ -139,15 +139,18 @@ async def _log_async(
             profile_config = site_config["profiles"][profile_name]
             audit_config = profile_config.get("audit", {})
 
-            if not audit_config.get("enabled", False):
+            if not audit_config or not audit_config.get("enabled", False):
                 raise ValueError(
                     f"Audit logging is not enabled for profile '{profile_name}'. Enable it in mxcp-site.yml under profiles.{profile_name}.audit.enabled"
                 )
 
-            if "path" not in audit_config:
+            if audit_config and "path" not in audit_config:
                 raise ValueError("Audit configuration missing required 'path' field")
 
-            log_path = Path(audit_config["path"])
+            log_path_str = audit_config.get("path") if audit_config else None
+            if not log_path_str:
+                raise ValueError("Audit configuration missing required 'path' field")
+            log_path = Path(log_path_str)
 
         except ValueError as e:
             output_error(e, json_output, debug)

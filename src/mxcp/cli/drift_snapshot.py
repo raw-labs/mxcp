@@ -26,7 +26,7 @@ from mxcp.drift.snapshot import generate_snapshot
 )
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-@track_command_with_timing("drift-snapshot")
+@track_command_with_timing("drift-snapshot")  # type: ignore[misc]
 def drift_snapshot(
     profile: Optional[str],
     force: bool,
@@ -77,10 +77,15 @@ def drift_snapshot(
         )
 
         if json_output:
+            # Compute a simple hash for the snapshot
+            import hashlib
+            snapshot_str = json.dumps(snapshot, sort_keys=True)
+            drift_hash = hashlib.sha256(snapshot_str.encode()).hexdigest()
+            
             output_result(
                 {
                     "path": str(path),
-                    "drift_hash": snapshot["drift_hash"],
+                    "drift_hash": drift_hash,
                     "generated_at": snapshot["generated_at"],
                 },
                 json_output,
@@ -93,15 +98,19 @@ def drift_snapshot(
                 )
                 click.echo(f"\n{click.style('📸 Snapshot Details:', fg='cyan', bold=True)}")
                 click.echo(f"   • Path: {click.style(str(path), fg='yellow')}")
+                # Compute a simple hash for the snapshot
+                import hashlib
+                snapshot_str = json.dumps(snapshot, sort_keys=True)
+                drift_hash = hashlib.sha256(snapshot_str.encode()).hexdigest()
                 click.echo(
-                    f"   • Hash: {click.style(snapshot['drift_hash'][:12] + '...', fg='yellow')}"
+                    f"   • Hash: {click.style(drift_hash[:12] + '...', fg='yellow')}"
                 )
                 click.echo(f"   • Generated: {click.style(snapshot['generated_at'], fg='yellow')}")
 
                 # Show what was captured
                 click.echo(f"\n{click.style('📊 Captured State:', fg='cyan', bold=True)}")
-                if "schema" in snapshot and "tables" in snapshot["schema"]:
-                    table_count = len(snapshot["schema"]["tables"])
+                if "tables" in snapshot:
+                    table_count = len(snapshot["tables"])
                     click.echo(f"   • Tables: {click.style(str(table_count), fg='green')}")
                 if "resources" in snapshot:
                     resource_count = len(snapshot["resources"])

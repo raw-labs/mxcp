@@ -7,7 +7,7 @@ This is a cloned version of the session for the executor plugin system.
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, Hashable, List, Optional
 
 import duckdb
 from pandas import NaT
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def execute_query_to_dict(
     conn: duckdb.DuckDBPyConnection, query: str, params: Optional[Dict[str, Any]] = None
-) -> List[Dict[str, Any]]:
+) -> List[Dict[Hashable, Any]]:
     """
     Execute a query with parameters and return the result as a list of dictionaries.
     Replaces NaT values with None for JSON serialization.
@@ -49,7 +49,7 @@ class DuckDBSession:
         plugin_config: PluginConfig,
         secrets: List[SecretDefinition],
     ):
-        self.conn = None
+        self.conn: Optional[duckdb.DuckDBPyConnection] = None
         self.database_config = database_config
         self.plugins_definitions = plugins
         self.plugin_config = plugin_config
@@ -60,15 +60,15 @@ class DuckDBSession:
         # Connect automatically on construction
         self._connect()
 
-    def __enter__(self):
+    def __enter__(self) -> "DuckDBSession":
         """Context manager entry"""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit - ensure connection is closed"""
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Destructor - ensure connection is closed if object is garbage collected"""
         try:
             self.close()
@@ -78,7 +78,7 @@ class DuckDBSession:
 
     # Remove _get_project_profile method as project/profile are no longer concerns of the session
 
-    def _connect(self):
+    def _connect(self) -> None:
         """Connect to DuckDB database"""
         db_path = self.database_config.path
 
@@ -126,7 +126,7 @@ class DuckDBSession:
         # Mark as initialized to prevent re-initialization
         self._initialized = True
 
-    def _create_user_token_udfs(self):
+    def _create_user_token_udfs(self) -> None:
         """Create UDFs for accessing user tokens that dynamically read from context."""
         logger.info("Creating user token UDFs")
 
@@ -172,15 +172,15 @@ class DuckDBSession:
 
         # Register the UDFs with DuckDB (created once, called dynamically)
         if self.conn:
-            self.conn.create_function("get_user_external_token", get_user_external_token, [], "VARCHAR")  # type: ignore
-            self.conn.create_function("get_username", get_username, [], "VARCHAR")  # type: ignore
-            self.conn.create_function("get_user_provider", get_user_provider, [], "VARCHAR")  # type: ignore
-            self.conn.create_function("get_user_email", get_user_email, [], "VARCHAR")  # type: ignore
+            self.conn.create_function("get_user_external_token", get_user_external_token, [], None)
+            self.conn.create_function("get_username", get_username, [], None)
+            self.conn.create_function("get_user_provider", get_user_provider, [], None)
+            self.conn.create_function("get_user_email", get_user_email, [], None)
             logger.info(
                 "Created user token UDFs: get_user_external_token(), get_username(), get_user_provider(), get_user_email()"
             )
 
-    def close(self):
+    def close(self) -> None:
         """Close the DuckDB connection"""
         if self.conn:
             try:
@@ -193,7 +193,7 @@ class DuckDBSession:
 
     def execute_query_to_dict(
         self, query: str, params: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Dict[Hashable, Any]]:
         """Execute a query and return results as a list of dictionaries.
 
         Args:

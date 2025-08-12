@@ -13,7 +13,7 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import yaml
 from jsonschema import ValidationError, validate
@@ -395,7 +395,7 @@ class ResolverEngine:
         if schema_file or schema_dict:
             self._validate_config(resolved_config, schema_file, schema_dict)
 
-        return resolved_config
+        return cast(Dict[str, Any], resolved_config)
 
     def _validate_config(
         self,
@@ -420,19 +420,19 @@ class ResolverEngine:
     def _resolve_references(self, config: Any, track_references: bool = True) -> Any:
         """Recursively resolve references in configuration."""
         if isinstance(config, dict):
-            resolved = {}
+            resolved_dict = {}
             for key, value in config.items():
                 self._current_config_path.append(key)
-                resolved[key] = self._resolve_references(value, track_references)
+                resolved_dict[key] = self._resolve_references(value, track_references)
                 self._current_config_path.pop()
-            return resolved
+            return resolved_dict
         elif isinstance(config, list):
-            resolved = []
+            resolved_list = []
             for i, item in enumerate(config):
                 self._current_config_path.append(i)
-                resolved.append(self._resolve_references(item, track_references))
+                resolved_list.append(self._resolve_references(item, track_references))
                 self._current_config_path.pop()
-            return resolved
+            return resolved_list
         elif isinstance(config, str):
             return self._resolve_string_references(config, track_references)
         else:
@@ -496,11 +496,11 @@ class ResolverEngine:
         """Clean up all resolver resources."""
         self.registry.cleanup_all()
 
-    def __enter__(self):
+    def __enter__(self) -> "ResolverEngine":
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit - calls cleanup."""
         self.cleanup()
 

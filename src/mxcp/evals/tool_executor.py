@@ -52,7 +52,7 @@ class EndpointToolExecutor:
         self.endpoints = endpoints
 
         # Create lookup map for faster tool resolution
-        self._tool_map = {}
+        self._tool_map: Dict[str, EndpointType] = {}
         for endpoint in endpoints:
             if isinstance(endpoint, ToolEndpoint):
                 self._tool_map[endpoint.name] = endpoint

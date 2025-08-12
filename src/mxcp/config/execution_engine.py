@@ -44,10 +44,10 @@ Example usage:
 import logging
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Generator, Optional, cast
 
-from mxcp.config.site_config import SiteConfig
-from mxcp.config.user_config import UserConfig
+from mxcp.config.site_config import SiteConfig  # type: ignore[attr-defined]
+from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
 from mxcp.sdk.executor import (
     ExecutionContext,
     ExecutionEngine,
@@ -63,9 +63,9 @@ logger = logging.getLogger(__name__)
 def execution_context_for_init_hooks(
     user_config: Optional[UserConfig] = None,
     site_config: Optional[SiteConfig] = None,
-    duckdb_session=None,
-    plugins: Optional[Dict] = None,
-):
+    duckdb_session: Any = None,
+    plugins: Optional[Dict[str, Any]] = None,
+) -> Generator[Optional[ExecutionContext], None, None]:
     """
     Context manager for setting up ExecutionContext for init hooks.
 
@@ -214,7 +214,7 @@ def create_execution_engine(
 
         # Get plugin configuration from user config
         user_projects = user_config.get("projects") or {}
-        user_project = user_projects.get(project_name) or {}
+        user_project = cast(Dict[str, Any], user_projects.get(project_name) or {})
         user_profiles = user_project.get("profiles") or {}
         user_profile = user_profiles.get(profile_name) or {}
         user_plugin_section = user_profile.get("plugin") or {}

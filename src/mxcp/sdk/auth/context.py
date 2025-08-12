@@ -35,7 +35,7 @@ def get_user_context() -> Optional[UserContext]:
     return user_context_var.get()
 
 
-def set_user_context(context: Optional[UserContext]) -> contextvars.Token:
+def set_user_context(context: Optional[UserContext]) -> "contextvars.Token[Optional[UserContext]]":
     """
     Set the user context in the current authentication context.
 
@@ -58,7 +58,7 @@ def set_user_context(context: Optional[UserContext]) -> contextvars.Token:
     return user_context_var.set(context)
 
 
-def reset_user_context(token: contextvars.Token) -> None:
+def reset_user_context(token: "contextvars.Token[Optional[UserContext]]") -> None:
     """
     Reset the user context using a token.
 

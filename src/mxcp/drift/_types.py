@@ -122,7 +122,7 @@ class ResourceDefinition(TypedDict):
 
 
 class DriftSnapshot(TypedDict):
-    version: str
+    version: int
     generated_at: str
     tables: List[Table]
     resources: List[ResourceDefinition]
@@ -148,7 +148,7 @@ class ResourceChange(TypedDict):
 
 
 class DriftReport(TypedDict):
-    version: str
+    version: int
     generated_at: str
     baseline_snapshot_path: str
     current_snapshot_generated_at: str

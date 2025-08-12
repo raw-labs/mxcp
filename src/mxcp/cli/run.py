@@ -17,7 +17,7 @@ from mxcp.config.analytics import track_command_with_timing
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
 from mxcp.endpoints.sdk_executor import execute_endpoint
-from mxcp.sdk.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext  # type: ignore[attr-defined]
 
 
 @click.command(name="run")
@@ -39,7 +39,7 @@ from mxcp.sdk.auth.providers import UserContext
     help="Skip output validation against the return type definition",
 )
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
-@track_command_with_timing("run")
+@track_command_with_timing("run")  # type: ignore[misc]
 def run_endpoint(
     endpoint_type: str,
     name: str,
@@ -50,7 +50,7 @@ def run_endpoint(
     debug: bool,
     skip_output_validation: bool,
     readonly: bool,
-):
+) -> None:
     """Run an endpoint (tool, resource, or prompt).
 
     \b

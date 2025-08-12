@@ -11,7 +11,7 @@ from mxcp.config.analytics import track_command_with_timing
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
 from mxcp.evals.runner import run_all_evals, run_eval_suite
-from mxcp.sdk.auth.providers import UserContext
+from mxcp.sdk.auth.providers import UserContext  # type: ignore[attr-defined]
 
 
 def format_eval_results(results: Dict[str, Any], debug: bool = False) -> str:
@@ -213,7 +213,7 @@ def format_eval_results(results: Dict[str, Any], debug: bool = False) -> str:
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-@track_command_with_timing("evals")
+@track_command_with_timing("evals")  # type: ignore[misc]
 def evals(
     suite_name: Optional[str],
     user_context: Optional[str],
@@ -221,7 +221,7 @@ def evals(
     profile: Optional[str],
     json_output: bool,
     debug: bool,
-):
+) -> None:
     """Run LLM evaluation tests.
 
     This command executes eval tests that verify LLM behavior with your endpoints.

@@ -7,17 +7,18 @@ import signal
 import threading
 import time
 import traceback
+from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union, cast
 
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
-from pydantic import Field, create_model
+from pydantic import AnyHttpUrl, Field, create_model
 
 from mxcp.audit.schemas import ENDPOINT_EXECUTION_SCHEMA
-from mxcp.config._types import UserAuthConfig, UserHttpTransportConfig
+from mxcp.config._types import SiteConfig, UserAuthConfig, UserConfig, UserHttpTransportConfig
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.external_refs import ExternalRefTracker
 from mxcp.config.site_config import get_active_profile
@@ -30,6 +31,7 @@ from mxcp.sdk.auth.context import get_user_context
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.auth.providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth.url_utils import URLBuilder
+from mxcp.sdk.executor import ExecutionEngine
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +142,20 @@ def create_url_builder(user_config: Dict[str, Any]) -> URLBuilder:
 
 class RAWMCP:
     """MXCP MCP Server implementation that bridges MXCP endpoints with MCP protocol."""
+    
+    # Type annotations for instance attributes
+    site_config: SiteConfig
+    user_config: UserConfig
+    _site_config_template: SiteConfig
+    _user_config_template: UserConfig
+    host: str
+    port: int
+    profile_name: str
+    transport: str
+    readonly: bool
+    execution_engine: Optional[ExecutionEngine]
+    _model_cache: Dict[str, Any]
+    transport_mode: Optional[str]
 
     def __init__(
         self,
@@ -197,6 +213,10 @@ class RAWMCP:
 
         # Initialize external reference tracker for hot reload
         self.ref_tracker = ExternalRefTracker()
+        
+        # Initialize execution engine (will be created in _initialize_runtime_components)
+        self.execution_engine = None
+        self._model_cache = {}
 
         # Resolve configurations
         self._resolve_and_apply_configs()
@@ -226,7 +246,7 @@ class RAWMCP:
         # Register signal handlers
         self._register_signal_handlers()
 
-    def _resolve_and_apply_configs(self):
+    def _resolve_and_apply_configs(self) -> None:
         """Resolve external references and apply CLI overrides."""
         # Check if configs contain unresolved references
         import json
@@ -237,9 +257,14 @@ class RAWMCP:
         if needs_resolution:
             # Set templates and resolve
             logger.info("Resolving external configuration references...")
-            self.ref_tracker.set_template(self._site_config_template, self._user_config_template)
+            self.ref_tracker.set_template(
+                cast(Dict[str, Any], self._site_config_template), 
+                cast(Dict[str, Any], self._user_config_template)
+            )
             self._config_templates_loaded = True
-            self.site_config, self.user_config = self.ref_tracker.resolve_all()
+            resolved_site, resolved_user = self.ref_tracker.resolve_all()
+            self.site_config = cast(SiteConfig, resolved_site)
+            self.user_config = cast(UserConfig, resolved_user)
         else:
             # Already resolved
             self.site_config = self._site_config_template
@@ -247,22 +272,23 @@ class RAWMCP:
             self._config_templates_loaded = False
 
         # Apply profile override
-        self.profile_name = self._cli_overrides["profile"] or self.site_config["profile"]
+        self.profile_name = str(self._cli_overrides["profile"] or self.site_config["profile"])
         self.active_profile = get_active_profile(
             self.user_config, self.site_config, self.profile_name
         )
 
         # Extract transport config with overrides
-        transport_config = self.user_config.get("transport", {})
-        self.transport = self._cli_overrides["transport"] or transport_config.get(
-            "provider", "streamable-http"
-        )
+        transport_config = self.user_config.get("transport") or {}
+        self.transport = str(self._cli_overrides["transport"] or (
+            transport_config.get("provider") if transport_config else "streamable-http"
+        ) or "streamable-http")
 
-        http_config = transport_config.get("http", {})
-        self.host = self._cli_overrides["host"] or http_config.get("host", "localhost")
-        self.port = self._cli_overrides["port"] or http_config.get("port", 8000)
+        http_config = transport_config.get("http") if transport_config else {}
+        self.host = str(self._cli_overrides["host"] or (http_config.get("host") if http_config else "localhost") or "localhost")
+        port_value = self._cli_overrides["port"] or (http_config.get("port") if http_config else 8000) or 8000
+        self.port = int(port_value)
 
-        config_stateless = http_config.get("stateless", False)
+        config_stateless = http_config.get("stateless", False) if http_config else False
         self.stateless_http = (
             self._cli_overrides["stateless_http"]
             if self._cli_overrides["stateless_http"] is not None
@@ -270,10 +296,11 @@ class RAWMCP:
         )
 
         self.json_response = self._cli_overrides["json_response"]
-        self.readonly = self._cli_overrides["readonly"]
+        self.readonly = bool(self._cli_overrides["readonly"])
 
         # SQL tools setting
-        site_sql_tools = self.site_config.get("sql_tools", {}).get("enabled", False)
+        sql_tools_config = self.site_config.get("sql_tools") or {}
+        site_sql_tools = sql_tools_config.get("enabled", False) if sql_tools_config else False
         self.enable_sql_tools = (
             self._cli_overrides["enable_sql_tools"]
             if self._cli_overrides["enable_sql_tools"] is not None
@@ -296,17 +323,18 @@ class RAWMCP:
     def get_endpoint_counts(self) -> Dict[str, int]:
         """Get counts of valid endpoints by type."""
         tool_count = sum(
-            1 for _, endpoint, error in self._all_endpoints if error is None and "tool" in endpoint
+            1 for _, endpoint, error in self._all_endpoints 
+            if error is None and endpoint is not None and "tool" in endpoint
         )
         resource_count = sum(
             1
             for _, endpoint, error in self._all_endpoints
-            if error is None and "resource" in endpoint
+            if error is None and endpoint is not None and "resource" in endpoint
         )
         prompt_count = sum(
             1
             for _, endpoint, error in self._all_endpoints
-            if error is None and "prompt" in endpoint
+            if error is None and endpoint is not None and "prompt" in endpoint
         )
 
         return {
@@ -316,7 +344,7 @@ class RAWMCP:
             "total": tool_count + resource_count + prompt_count,
         }
 
-    def _load_endpoints(self):
+    def _load_endpoints(self) -> None:
         """Load and categorize endpoints."""
         from mxcp.endpoints.loader import EndpointLoader
 
@@ -343,22 +371,22 @@ class RAWMCP:
             for skipped in self.skipped_endpoints:
                 logger.warning(f"Failed to load endpoint {skipped['path']}: {skipped['error']}")
 
-    def _initialize_oauth(self):
+    def _initialize_oauth(self) -> None:
         """Initialize OAuth authentication using profile-specific auth config."""
         auth_config = self.active_profile.get("auth", {})
         self.oauth_handler = create_oauth_handler(
-            auth_config, host=self.host, port=self.port, user_config=self.user_config
+            auth_config, host=self.host, port=self.port, user_config=cast(Dict[str, Any], self.user_config)
         )
         self.oauth_server = None
         self.auth_settings = None
 
         if self.oauth_handler:
             self.oauth_server = GeneralOAuthAuthorizationServer(
-                self.oauth_handler, auth_config, self.user_config
+                self.oauth_handler, auth_config, cast(Dict[str, Any], self.user_config)
             )
 
             # Use URL builder for OAuth endpoints
-            url_builder = create_url_builder(self.user_config)
+            url_builder = create_url_builder(cast(Dict[str, Any], self.user_config))
             base_url = url_builder.get_base_url(host=self.host, port=self.port)
 
             # Get authorization configuration
@@ -370,7 +398,7 @@ class RAWMCP:
             )
 
             self.auth_settings = AuthSettings(
-                issuer_url=base_url,
+                issuer_url=cast(AnyHttpUrl, base_url),
                 resource_server_url=None,
                 client_registration_options=ClientRegistrationOptions(
                     enabled=True,
@@ -385,9 +413,9 @@ class RAWMCP:
         else:
             logger.info("OAuth authentication disabled")
 
-    def _initialize_fastmcp(self):
+    def _initialize_fastmcp(self) -> None:
         """Initialize the FastMCP server."""
-        fastmcp_kwargs = {
+        fastmcp_kwargs: Dict[str, Any] = {
             "name": "MXCP Server",
             "stateless_http": self.stateless_http,
             "json_response": self.json_response,
@@ -410,14 +438,15 @@ class RAWMCP:
         if self.oauth_handler and self.oauth_server:
             self._register_oauth_routes()
 
-    def _initialize_audit_logger(self):
+    def _initialize_audit_logger(self) -> None:
         """Initialize audit logger if enabled."""
         import asyncio
 
         profile_config = self.site_config["profiles"][self.profile_name]
-        audit_config = profile_config.get("audit", {})
-        if audit_config.get("enabled", False):
-            log_path = Path(audit_config["path"])
+        audit_config = profile_config.get("audit") or {}
+        if audit_config and audit_config.get("enabled", False):
+            log_path_str = audit_config.get("path", "")
+            log_path = Path(log_path_str) if log_path_str else Path("audit.log")
             # Ensure parent directory exists
             log_path.parent.mkdir(parents=True, exist_ok=True)
             self.audit_logger = asyncio.run(AuditLogger.jsonl(log_path))
@@ -426,7 +455,7 @@ class RAWMCP:
         else:
             self.audit_logger = asyncio.run(AuditLogger.disabled())
 
-    async def _register_audit_schema(self):
+    async def _register_audit_schema(self) -> None:
         """Register the application's audit schema."""
         try:
             # Check if schema already exists
@@ -439,7 +468,7 @@ class RAWMCP:
         except Exception as e:
             logger.warning(f"Failed to register audit schema: {e}")
 
-    def _register_signal_handlers(self):
+    def _register_signal_handlers(self) -> None:
         """Register signal handlers for graceful shutdown and reload."""
         if hasattr(signal, "SIGHUP"):
             signal.signal(signal.SIGHUP, self._handle_reload_signal)
@@ -449,12 +478,12 @@ class RAWMCP:
         signal.signal(signal.SIGTERM, self._handle_exit_signal)
         signal.signal(signal.SIGINT, self._handle_exit_signal)
 
-    def _handle_exit_signal(self, signum, frame):
+    def _handle_exit_signal(self, signum: int, frame: Any) -> None:
         """Handle termination signals to ensure graceful shutdown."""
         logger.info(f"Received signal {signum}, initiating graceful shutdown...")
         self.shutdown()
 
-    def _handle_reload_signal(self, signum, frame):
+    def _handle_reload_signal(self, signum: int, frame: Any) -> None:
         """Handle SIGHUP signal to reload the configuration."""
         logger.info("Received SIGHUP signal, initiating configuration reload...")
 
@@ -462,7 +491,7 @@ class RAWMCP:
         reload_thread = threading.Thread(target=self.reload_configuration)
         reload_thread.start()
 
-    def _shutdown_runtime_components(self):
+    def _shutdown_runtime_components(self) -> None:
         """
         Gracefully shuts down all reloadable, configuration-dependent components.
         Uses the new SDK execution engine which handles all shutdown hooks automatically.
@@ -480,7 +509,7 @@ class RAWMCP:
 
         logger.info("Runtime components shutdown complete.")
 
-    def _initialize_runtime_components(self):
+    def _initialize_runtime_components(self) -> None:
         """
         Initializes runtime components using the new SDK execution engine.
         """
@@ -498,7 +527,7 @@ class RAWMCP:
 
         logger.info("Runtime components initialization complete.")
 
-    def reload_configuration(self):
+    def reload_configuration(self) -> None:
         """
         Reloads external configuration values (vault://, file://, env vars) only.
 
@@ -530,7 +559,7 @@ class RAWMCP:
                     user_template = load_user_config(site_template, resolve_refs=False)
 
                     # Set templates in tracker
-                    self.ref_tracker.set_template(site_template, user_template)
+                    self.ref_tracker.set_template(cast(Dict[str, Any], site_template), cast(Dict[str, Any], user_template))
                     self._config_templates_loaded = True
                     logger.info("Raw configuration templates loaded.")
 
@@ -555,8 +584,8 @@ class RAWMCP:
                 self._shutdown_runtime_components()
 
                 # Apply the new configurations
-                self.site_config = new_site_config
-                self.user_config = new_user_config
+                self.site_config = cast(SiteConfig, new_site_config)
+                self.user_config = cast(UserConfig, new_user_config)
                 self.active_profile = get_active_profile(
                     self.user_config, self.site_config, self.profile_name
                 )
@@ -579,8 +608,8 @@ class RAWMCP:
                 # Don't auto-shutdown here, let the operator decide
 
     def _ensure_async_completes(
-        self, coro, timeout: float = 10.0, operation_name: str = "operation"
-    ):
+        self, coro: Any, timeout: float = 10.0, operation_name: str = "operation"
+    ) -> Any:
         """Ensure an async operation completes, even when called from sync context with active event loop.
 
         This method safely runs an async operation from a synchronous context, handling the case
@@ -599,7 +628,7 @@ class RAWMCP:
         import asyncio
         import concurrent.futures
 
-        async def with_timeout():
+        async def with_timeout() -> Any:
             """Wrap the coroutine with a timeout."""
             return await asyncio.wait_for(coro, timeout=timeout)
 
@@ -609,7 +638,7 @@ class RAWMCP:
             # There is an active loop - we must run in a separate thread to avoid deadlock
             logger.info(f"Running {operation_name} with active event loop - using separate thread")
 
-            def run_in_new_loop():
+            def run_in_new_loop() -> Any:
                 """Run the coroutine in a new event loop in this thread."""
                 # asyncio.run() creates a new event loop, runs the coroutine, and cleans up
                 return asyncio.run(with_timeout())
@@ -618,9 +647,9 @@ class RAWMCP:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(run_in_new_loop)
                 try:
-                    result = future.result(timeout=timeout + 1)  # Add buffer for thread overhead
+                    final_type = future.result(timeout=timeout + 1)  # Add buffer for thread overhead
                     logger.info(f"{operation_name} completed successfully")
-                    return result
+                    return final_type
                 except concurrent.futures.TimeoutError:
                     # The thread itself timed out - this is a fatal error
                     raise TimeoutError(
@@ -646,7 +675,7 @@ class RAWMCP:
                 logger.error(f"{operation_name} failed: {e}")
                 raise
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shutdown the server gracefully."""
         # Prevent double shutdown
         if self._shutdown_called:
@@ -717,6 +746,9 @@ class RAWMCP:
             return self._model_cache[cache_key]
 
         json_type = schema_def.get("type", "string")
+        
+        # Declare variable with explicit type annotation
+        final_type: Any
 
         # Determine if parameters should be Optional (tools/prompts) or required (resources)
         make_optional = endpoint_type in (EndpointType.TOOL, EndpointType.PROMPT)
@@ -727,72 +759,74 @@ class RAWMCP:
             if "enum" in schema_def:
                 enum_values = schema_def["enum"]
                 if all(isinstance(v, str) for v in enum_values):
+                    # For enums, we'll use a simple str type with validation
+                    # Since we can't dynamically create Literal unions in a type-safe way
                     if make_optional:
-                        result = Optional[Literal[tuple(enum_values)]]
+                        final_type = Optional[str]
                     else:
-                        result = Literal[tuple(enum_values)]
-                    self._model_cache[cache_key] = result
-                    return result
+                        final_type = str
+                    self._model_cache[cache_key] = final_type
+                    return final_type
 
             # Create Field with constraints
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 if make_optional:
-                    result = Annotated[Optional[str], Field(**field_kwargs)]
+                    final_type = Annotated[Optional[str], Field(**field_kwargs)]
                 else:
-                    result = Annotated[str, Field(**field_kwargs)]
+                    final_type = Annotated[str, Field(**field_kwargs)]
             else:
                 if make_optional:
-                    result = Optional[str]
+                    final_type = Optional[str]
                 else:
-                    result = str
-            self._model_cache[cache_key] = result
-            return result
+                    final_type = str
+            self._model_cache[cache_key] = final_type
+            return final_type
 
         elif json_type == "integer":
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 if make_optional:
-                    result = Annotated[Optional[int], Field(**field_kwargs)]
+                    final_type = Annotated[Optional[int], Field(**field_kwargs)]
                 else:
-                    result = Annotated[int, Field(**field_kwargs)]
+                    final_type = Annotated[int, Field(**field_kwargs)]
             else:
                 if make_optional:
-                    result = Optional[int]
+                    final_type = Optional[int]
                 else:
-                    result = int
-            self._model_cache[cache_key] = result
-            return result
+                    final_type = int
+            self._model_cache[cache_key] = final_type
+            return final_type
 
         elif json_type == "number":
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 if make_optional:
-                    result = Annotated[Optional[float], Field(**field_kwargs)]
+                    final_type = Annotated[Optional[float], Field(**field_kwargs)]
                 else:
-                    result = Annotated[float, Field(**field_kwargs)]
+                    final_type = Annotated[float, Field(**field_kwargs)]
             else:
                 if make_optional:
-                    result = Optional[float]
+                    final_type = Optional[float]
                 else:
-                    result = float
-            self._model_cache[cache_key] = result
-            return result
+                    final_type = float
+            self._model_cache[cache_key] = final_type
+            return final_type
 
         elif json_type == "boolean":
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 if make_optional:
-                    result = Annotated[Optional[bool], Field(**field_kwargs)]
+                    final_type = Annotated[Optional[bool], Field(**field_kwargs)]
                 else:
-                    result = Annotated[bool, Field(**field_kwargs)]
+                    final_type = Annotated[bool, Field(**field_kwargs)]
             else:
                 if make_optional:
-                    result = Optional[bool]
+                    final_type = Optional[bool]
                 else:
-                    result = bool
-            self._model_cache[cache_key] = result
-            return result
+                    final_type = bool
+            self._model_cache[cache_key] = final_type
+            return final_type
 
         elif json_type == "array":
             items_schema = schema_def.get("items", {"type": "string"})
@@ -802,11 +836,13 @@ class RAWMCP:
 
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
-                result = Annotated[List[item_type], Field(**field_kwargs)]
+                # Use List with item_type as a generic parameter
+                final_type = Annotated[List[Any], Field(**field_kwargs)]
             else:
-                result = List[item_type]
-            self._model_cache[cache_key] = result
-            return result
+                # Arrays without constraints
+                final_type = List[Any]
+            self._model_cache[cache_key] = final_type
+            return final_type
 
         elif json_type == "object":
             # Handle complex objects with properties
@@ -818,11 +854,11 @@ class RAWMCP:
                 # Generic object
                 field_kwargs = self._extract_field_constraints(schema_def)
                 if field_kwargs:
-                    result = Annotated[Dict[str, Any], Field(**field_kwargs)]
+                    final_type = Annotated[Dict[str, Any], Field(**field_kwargs)]
                 else:
-                    result = Dict[str, Any]
-                self._model_cache[cache_key] = result
-                return result
+                    final_type = Dict[str, Any]
+                self._model_cache[cache_key] = final_type
+                return final_type
 
             # Create fields for the model
             model_fields = {}
@@ -854,17 +890,21 @@ class RAWMCP:
 
             model_config = ConfigDict(extra="allow" if additional_properties else "forbid")
 
-            result = create_model(
-                self._sanitize_model_name(model_name), **model_fields, __config__=model_config
+            # Create model with fields and config
+            # Note: In Pydantic v2, __config__ is not supported in create_model
+            # Instead, we create the model and then set the config
+            final_type = create_model(  # type: ignore[call-overload]
+                self._sanitize_model_name(model_name), 
+                **model_fields
             )
 
-            self._model_cache[cache_key] = result
-            return result
+            self._model_cache[cache_key] = final_type
+            return final_type
 
         # Fallback to Any for unknown types
-        result = Any
-        self._model_cache[cache_key] = result
-        return result
+        final_type = Any
+        self._model_cache[cache_key] = final_type
+        return final_type
 
     def _extract_field_constraints(self, schema_def: Dict[str, Any]) -> Dict[str, Any]:
         """Extract Pydantic Field constraints from JSON Schema definition."""
@@ -1058,9 +1098,9 @@ class RAWMCP:
         endpoint_type: EndpointType,
         endpoint_key: str,  # "tool" | "resource" | "prompt"
         endpoint_def: Dict[str, Any],
-        decorator,  # self.mcp.tool() | self.mcp.resource(uri) | self.mcp.prompt()
+        decorator: Any,  # self.mcp.tool() | self.mcp.resource(uri) | self.mcp.prompt()
         log_name: str,  # for nice logging
-    ):
+    ) -> None:
         # Get parameter definitions
         parameters = endpoint_def.get("parameters", [])
 
@@ -1079,7 +1119,7 @@ class RAWMCP:
         # -------------------------------------------------------------------
         # Body of the handler: receives **kwargs with those exact names
         # -------------------------------------------------------------------
-        async def _body(**kwargs):
+        async def _body(**kwargs: Any) -> Any:
             start_time = time.time()
             status = "success"
             error_msg = None
@@ -1098,6 +1138,8 @@ class RAWMCP:
                     )
 
                 # run through new SDK executor (handles type conversion automatically)
+                if self.execution_engine is None:
+                    raise RuntimeError("Execution engine not initialized")
                 result = await execute_endpoint_with_engine(
                     endpoint_type=endpoint_type.value,
                     name=(
@@ -1145,15 +1187,15 @@ class RAWMCP:
                 # Log the audit event
                 if self.audit_logger:
                     await self.audit_logger.log_event(
-                        caller_type=caller,
-                        event_type=endpoint_key,  # "tool", "resource", or "prompt"
+                        caller_type=cast(Literal['cli', 'http', 'stdio', 'api', 'system', 'unknown'], caller),
+                        event_type=cast(Literal['tool', 'resource', 'prompt'], endpoint_key),  # "tool", "resource", or "prompt"
                         name=endpoint_def.get("name", endpoint_def.get("uri", "unknown")),
                         input_params=kwargs,
                         duration_ms=duration_ms,
                         schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                        policy_decision=policy_decision,
+                        policy_decision=cast(Literal['allow', 'deny', 'warn', 'n/a'], policy_decision),
                         reason=policy_reason,
-                        status=status,
+                        status=cast(Literal['success', 'error'], status),
                         error=error_msg,
                         output_data=result,  # Return the result as output_data
                     )
@@ -1180,7 +1222,7 @@ class RAWMCP:
         decorator(handler)
         logger.info(f"Registered {log_name}: {original_name} (function: {func_name})")
 
-    def _register_tool(self, tool_def: Dict[str, Any]):
+    def _register_tool(self, tool_def: Dict[str, Any]) -> None:
         """Register a tool endpoint with MCP.
 
         Args:
@@ -1201,7 +1243,7 @@ class RAWMCP:
             log_name="tool",
         )
 
-    def _register_resource(self, resource_def: Dict[str, Any]):
+    def _register_resource(self, resource_def: Dict[str, Any]) -> None:
         """Register a resource endpoint with MCP.
 
         Args:
@@ -1220,7 +1262,7 @@ class RAWMCP:
             log_name="resource",
         )
 
-    def _register_prompt(self, prompt_def: Dict[str, Any]):
+    def _register_prompt(self, prompt_def: Dict[str, Any]) -> None:
         """Register a prompt endpoint with MCP.
 
         Args:
@@ -1236,7 +1278,7 @@ class RAWMCP:
             log_name="prompt",
         )
 
-    def _register_duckdb_features(self):
+    def _register_duckdb_features(self) -> None:
         """Register built-in SQL querying and schema exploration tools if enabled."""
         if not self.enable_sql_tools:
             return
@@ -1273,6 +1315,8 @@ class RAWMCP:
                     logger.info(f"User {user_context.username} executing SQL query")
 
                 # Use SDK execution engine
+                if self.execution_engine is None:
+                    raise RuntimeError("Execution engine not initialized")
                 result = await execute_endpoint_with_engine(
                     endpoint_type="sql",
                     name="user_sql_query",
@@ -1282,7 +1326,7 @@ class RAWMCP:
                     execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
-                return result
+                return cast(List[Dict[str, Any]], result)
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
@@ -1298,7 +1342,7 @@ class RAWMCP:
 
                     asyncio.run(
                         self.audit_logger.log_event(
-                            caller_type=caller,
+                            caller_type=cast(Literal['cli', 'http', 'stdio', 'api', 'system', 'unknown'], caller),
                             event_type="tool",
                             name="execute_sql_query",
                             input_params={"sql": sql},
@@ -1306,7 +1350,7 @@ class RAWMCP:
                             schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
                             policy_decision="n/a",
                             reason=None,
-                            status=status,
+                            status=cast(Literal['success', 'error'], status),
                             error=error_msg,
                         )
                     )
@@ -1340,7 +1384,9 @@ class RAWMCP:
                     logger.info(f"User {user_context.username} listing tables")
 
                 # Use SDK execution engine
-                return await execute_endpoint_with_engine(
+                if self.execution_engine is None:
+                    raise RuntimeError("Execution engine not initialized")
+                result = await execute_endpoint_with_engine(
                     endpoint_type="sql",
                     name="list_tables",
                     params={
@@ -1358,6 +1404,7 @@ class RAWMCP:
                     execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
+                return cast(List[Dict[str, str]], result)
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
@@ -1373,7 +1420,7 @@ class RAWMCP:
 
                     asyncio.run(
                         self.audit_logger.log_event(
-                            caller_type=caller,
+                            caller_type=cast(Literal['cli', 'http', 'stdio', 'api', 'system', 'unknown'], caller),
                             event_type="tool",
                             name="list_tables",
                             input_params={},
@@ -1381,7 +1428,7 @@ class RAWMCP:
                             schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
                             policy_decision="n/a",
                             reason=None,
-                            status=status,
+                            status=cast(Literal['success', 'error'], status),
                             error=error_msg,
                         )
                     )
@@ -1420,7 +1467,9 @@ class RAWMCP:
                     )
 
                 # Use SDK execution engine
-                return await execute_endpoint_with_engine(
+                if self.execution_engine is None:
+                    raise RuntimeError("Execution engine not initialized")
+                result = await execute_endpoint_with_engine(
                     endpoint_type="sql",
                     name="get_table_schema",
                     params={
@@ -1440,6 +1489,7 @@ class RAWMCP:
                     execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
+                return cast(List[Dict[str, Any]], result)
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
@@ -1455,7 +1505,7 @@ class RAWMCP:
 
                     asyncio.run(
                         self.audit_logger.log_event(
-                            caller_type=caller,
+                            caller_type=cast(Literal['cli', 'http', 'stdio', 'api', 'system', 'unknown'], caller),
                             event_type="tool",
                             name="get_table_schema",
                             input_params={"table_name": table_name},
@@ -1463,18 +1513,20 @@ class RAWMCP:
                             schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
                             policy_decision="n/a",
                             reason=None,
-                            status=status,
+                            status=cast(Literal['success', 'error'], status),
                             error=error_msg,
                         )
                     )
 
         logger.info("Registered built-in DuckDB features")
 
-    def register_endpoints(self):
+    def register_endpoints(self) -> None:
         """Register all discovered endpoints with MCP."""
         for path, endpoint_def in self.endpoints:
             try:
                 # Validate endpoint before registration using shared session
+                if self.execution_engine is None:
+                    raise RuntimeError("Execution engine not initialized")
                 validation_result = validate_endpoint(
                     str(path), self.site_config, self.execution_engine
                 )
@@ -1491,6 +1543,10 @@ class RAWMCP:
                     )
                     continue
 
+                if endpoint_def is None:
+                    logger.warning(f"Endpoint definition is None for {path}")
+                    continue
+                    
                 if "tool" in endpoint_def:
                     self._register_tool(endpoint_def["tool"])
                     logger.info(
@@ -1523,7 +1579,7 @@ class RAWMCP:
             for skipped in self.skipped_endpoints:
                 logger.warning(f"  - {skipped['path']}: {skipped['error']}")
 
-    async def _initialize_oauth_server(self):
+    async def _initialize_oauth_server(self) -> None:
         """Initialize OAuth server persistence if enabled."""
         if self.oauth_server:
             try:
@@ -1533,7 +1589,7 @@ class RAWMCP:
                 logger.error(f"Failed to initialize OAuth server: {e}")
                 raise
 
-    def run(self, transport: str = "streamable-http"):
+    def run(self, transport: str = "streamable-http") -> None:
         """Run the MCP server.
 
         Args:
@@ -1569,30 +1625,36 @@ class RAWMCP:
                     raise RuntimeError(f"OAuth server initialization failed: {e}")
 
             # Start server using MCP's built-in run method
-            self.mcp.run(transport=transport)
+            self.mcp.run(transport=cast(Literal['stdio', 'sse', 'streamable-http'], transport))
             logger.info("MCP server started successfully.")
         except Exception as e:
             logger.error(f"Error running MCP server: {e}")
             raise
 
-    def _register_oauth_routes(self):
+    def _register_oauth_routes(self) -> None:
         """Register OAuth callback routes."""
+        if self.oauth_handler is None:
+            logger.warning("OAuth handler not configured, skipping OAuth routes")
+            return
+            
         callback_path = self.oauth_handler.callback_path
         logger.info(f"Registering OAuth callback route: {callback_path}")
 
         # Use custom_route to register the callback
-        @self.mcp.custom_route(callback_path, methods=["GET"])
-        async def oauth_callback(request):
+        @self.mcp.custom_route(callback_path, methods=["GET"])  # type: ignore[misc]
+        async def oauth_callback(request: Any) -> Any:
+            if self.oauth_handler is None or self.oauth_server is None:
+                raise RuntimeError("OAuth not configured")
             return await self.oauth_handler.on_callback(request, self.oauth_server)
 
         # Register OAuth Protected Resource metadata endpoint
-        @self.mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
-        async def oauth_protected_resource_metadata(request):
+        @self.mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])  # type: ignore[misc]
+        async def oauth_protected_resource_metadata(request: Any) -> Any:
             """Handle OAuth Protected Resource metadata requests (RFC 8693)"""
             from starlette.responses import JSONResponse
 
             # Use URL builder with request context for proper scheme detection
-            url_builder = create_url_builder(self.user_config)
+            url_builder = create_url_builder(cast(Dict[str, Any], self.user_config))
             base_url = url_builder.get_base_url(request)
 
             # Get supported scopes from configuration

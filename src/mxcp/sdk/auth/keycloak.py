@@ -2,7 +2,7 @@
 """Keycloak OAuth provider implementation for MXCP authentication."""
 import logging
 import secrets
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 from urllib.parse import urlencode
 
 from mcp.server.auth.provider import AuthorizationParams
@@ -18,7 +18,7 @@ from ._types import (
     StateMeta,
     UserContext,
 )
-from .providers import ExternalOAuthHandler
+from .providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from .url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
@@ -88,7 +88,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         auth_params = {
             "client_id": self.client_id,
             "response_type": "code",
-            "redirect_uri": self.url_builder.build_url(self._callback_path),
+            "redirect_uri": str(params.redirect_uri) if params.redirect_uri else self.url_builder.build_callback_url(self._callback_path),
             "scope": self.scope,
             "state": state,
         }
@@ -96,13 +96,10 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         # Add optional parameters
         if params.code_challenge:
             auth_params["code_challenge"] = params.code_challenge
-            auth_params["code_challenge_method"] = params.code_challenge_method or "S256"
+            auth_params["code_challenge_method"] = "S256"  # Always use S256 for PKCE
 
-        if params.prompt:
-            auth_params["prompt"] = params.prompt
-
-        if params.login_hint:
-            auth_params["login_hint"] = params.login_hint
+        # Note: prompt and login_hint are not standard AuthorizationParams attributes
+        # They would need to be passed through a different mechanism if needed
 
         # Construct the full authorization URL
         auth_url = f"{self.auth_url}?{urlencode(auth_params)}"
@@ -123,7 +120,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
             "code": code,
             "client_id": self.client_id,
             "client_secret": self.client_secret,
-            "redirect_uri": self.url_builder.build_url(self._callback_path),
+            "redirect_uri": state_meta.redirect_uri,
         }
 
         # Exchange code for tokens
@@ -170,7 +167,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
                 logger.error(f"Failed to get user info: {response.status_code}")
                 raise HTTPException(400, "Failed to get user information")
 
-            return response.json()
+            return cast(Dict[str, Any], response.json())
 
     def get_state_metadata(self, state: str) -> StateMeta:
         """Return metadata stored for a given state."""

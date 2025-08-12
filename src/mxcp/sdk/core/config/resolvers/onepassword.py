@@ -23,7 +23,7 @@ class OnePasswordResolver(ResolverPlugin):
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
         self._client = None
-        self._original_token = None
+        self._original_token: Optional[str] = None
         self._token_was_set = False
 
     @property
@@ -48,7 +48,7 @@ class OnePasswordResolver(ResolverPlugin):
 
         # Check if SDK is available
         try:
-            import onepassword  # type: ignore
+            import onepassword  # type: ignore[import-untyped]
         except ImportError:
             logger.error(
                 "onepassword-sdk library is not available. Install with: pip install 'mxcp[onepassword]'"
@@ -108,10 +108,10 @@ class OnePasswordResolver(ResolverPlugin):
         self._client = None
         self._restore_sdk_token()
 
-    def _init_client(self):
+    def _init_client(self) -> None:
         """Initialize the 1Password client."""
         try:
-            import onepassword  # type: ignore
+            import onepassword
         except ImportError:
             raise ImportError(
                 "onepassword-sdk library is required for 1Password integration. Install with: pip install 'mxcp[onepassword]'"

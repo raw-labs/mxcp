@@ -1,12 +1,12 @@
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import yaml
 from jsonschema import validate
 
-from mxcp.config.site_config import SiteConfig, find_repo_root
+from mxcp.config.site_config import SiteConfig, find_repo_root  # type: ignore[attr-defined]
 from mxcp.evals._types import EvalSuite
 
 logger = logging.getLogger(__name__)
@@ -27,11 +27,19 @@ def discover_eval_files(
         - error_message: Error message if loading failed, None if successful
     """
     base_path = find_repo_root()
-    results = []
+    results: List[Tuple[Path, Optional[EvalSuite], Optional[str]]] = []
 
     # Determine the evals directory
-    if site_config and "paths" in site_config and "evals" in site_config["paths"]:
-        evals_dir = base_path / site_config["paths"]["evals"]
+    if site_config and "paths" in site_config:
+        paths_config = site_config.get("paths", {})
+        if paths_config and "evals" in paths_config:
+            evals_path = paths_config.get("evals")
+            if evals_path:
+                evals_dir = base_path / evals_path
+            else:
+                evals_dir = base_path / "evals"
+        else:
+            evals_dir = base_path / "evals"
     else:
         # Fallback to default
         evals_dir = base_path / "evals"
@@ -41,29 +49,29 @@ def discover_eval_files(
         logger.info(f"Evals directory {evals_dir} does not exist, skipping eval discovery")
         return results
 
-    schema_path = Path(__file__).parent / "schemas" / "eval-schema-1.json"
+    schema_path = Path(__file__).parent / "eval_schemas" / "eval-schema-1.json"
     with open(schema_path) as f:
         schema = json.load(f)
 
     # Find all YAML files in the evals directory
-    for f in evals_dir.rglob("*.yml"):
+    for file_path in evals_dir.rglob("*.yml"):
         try:
-            with open(f) as file:
-                data = yaml.safe_load(file)
+            with open(file_path) as f:
+                data = yaml.safe_load(f)
 
             # Check if this is a mxcp eval file
             if "mxcp" not in data:
-                logger.warning(f"Skipping {f}: Not a mxcp eval file (missing 'mxcp' field)")
+                logger.warning(f"Skipping {file_path}: Not a mxcp eval file (missing 'mxcp' field)")
                 continue
 
             # Validate against schema
             validate(instance=data, schema=schema)
 
-            results.append((f, data, None))
-            logger.debug(f"Loaded eval file: {f}")
+            results.append((file_path, cast(EvalSuite, data), None))
+            logger.debug(f"Loaded eval file: {file_path}")
         except Exception as e:
-            error_msg = f"Failed to load eval file {f}: {str(e)}"
-            results.append((f, None, error_msg))
+            error_msg = f"Failed to load eval file {file_path}: {str(e)}"
+            results.append((file_path, None, error_msg))
             logger.error(error_msg)
 
     return results

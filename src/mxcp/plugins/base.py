@@ -22,11 +22,11 @@ from typing import (
 
 from duckdb import DuckDBPyConnection
 
-from mxcp.config.site_config import SiteConfig
-from mxcp.config.user_config import UserConfig
+from mxcp.config.site_config import SiteConfig  # type: ignore[attr-defined]
+from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
 
 if TYPE_CHECKING:
-    from mxcp.sdk.auth.providers import UserContext
+    from mxcp.sdk.auth.providers import UserContext  # type: ignore[attr-defined]
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,7 +36,7 @@ T = TypeVar("T")
 
 # Global registry for active plugin instances and shutdown hooks
 _active_plugins: List["MXCPBasePlugin"] = []
-_plugin_shutdown_hooks: List[Callable] = []
+_plugin_shutdown_hooks: List[Callable[[], None]] = []
 
 
 def get_active_plugins() -> List["MXCPBasePlugin"]:
@@ -44,20 +44,20 @@ def get_active_plugins() -> List["MXCPBasePlugin"]:
     return _active_plugins
 
 
-def register_plugin(plugin: "MXCPBasePlugin"):
+def register_plugin(plugin: "MXCPBasePlugin") -> None:
     """Adds a plugin instance to the global registry."""
     logger.debug(f"Registering active plugin: {plugin.__class__.__name__}")
     _active_plugins.append(plugin)
 
 
-def clear_plugin_registry():
+def clear_plugin_registry() -> None:
     """Clears all active plugins and shutdown hooks from the registry."""
     logger.debug("Clearing plugin registry.")
     _active_plugins.clear()
     _plugin_shutdown_hooks.clear()
 
 
-def on_shutdown(func: Callable) -> Callable:
+def on_shutdown(func: Callable[[], None]) -> Callable[[], None]:
     """
     Decorator to register a function to be called on plugin shutdown.
 
@@ -79,7 +79,7 @@ def on_shutdown(func: Callable) -> Callable:
     return func
 
 
-def run_plugin_shutdown_hooks():
+def run_plugin_shutdown_hooks() -> None:
     """
     Executes all registered plugin shutdown hooks and calls the shutdown() method on all active plugins.
 
@@ -126,10 +126,10 @@ def udf(func: Callable[..., T]) -> Callable[..., T]:
     """
 
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> T:
         return func(*args, **kwargs)
 
-    wrapper._is_udf = True
+    wrapper._is_udf = True  # type: ignore[attr-defined]
     wrapper.__doc__ = func.__doc__ or f"UDF: {func.__name__}"
     return wrapper
 
@@ -212,7 +212,7 @@ class MXCPBasePlugin:
         """
         return self._user_context is not None
 
-    def _get_duckdb_type(self, python_type) -> str:
+    def _get_duckdb_type(self, python_type: Any) -> str:
         """Map a Python type to a DuckDB type string.
 
         Supports:
@@ -277,7 +277,7 @@ class MXCPBasePlugin:
         # Unknown types are not supported
         raise ValueError(f"Type '{python_type}' is not supported in UDF type annotations")
 
-    def udfs(self):
+    def udfs(self) -> List[Dict[str, Any]]:
         """Generate UDF definitions from type annotations.
 
         Only methods decorated with @udf will be included.
@@ -348,7 +348,7 @@ class MXCPBasePlugin:
             if inspect.isclass(obj) and issubclass(obj, cls) and obj != cls
         ]
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """
         Clean up plugin resources. Overwrite this method in your plugin
         for custom shutdown logic. This is called automatically during a reload or

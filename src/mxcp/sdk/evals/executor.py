@@ -6,7 +6,7 @@ and tool calling, with tool execution delegated to external implementations.
 
 import json
 import logging
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from typing import Any, Dict, List, Optional, Protocol, Tuple, cast
 
 from mxcp.sdk.auth import UserContext
 
@@ -203,8 +203,8 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
         Returns:
             Tuple of (final_response, list_of_tool_calls_made)
         """
-        conversation_history = []
-        tool_calls_made = []
+        conversation_history: List[Dict[str, Any]] = []
+        tool_calls_made: List[Dict[str, Any]] = []
         max_iterations = 10  # Prevent infinite loops
 
         for iteration in range(max_iterations):
@@ -327,7 +327,7 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
             logger.debug(f"Response: {data['content'][0]['text'][:500]}...")  # First 500 chars
             logger.debug("=== End of response ===")
 
-            return data["content"][0]["text"]
+            return cast(str, data["content"][0]["text"])
 
     async def _call_openai(self, prompt: str) -> str:
         """Call OpenAI API"""
@@ -361,4 +361,4 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
             )  # First 500 chars
             logger.debug("=== End of response ===")
 
-            return data["choices"][0]["message"]["content"]
+            return cast(str, data["choices"][0]["message"]["content"])

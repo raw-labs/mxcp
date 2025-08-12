@@ -3,13 +3,13 @@
 import inspect
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, TypeVar, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union, cast
 
 from mxcp.sdk.validator import TypeValidator
 
 from .loaders import load_schema_from_file
 
-T = TypeVar("T")
+T = TypeVar("T", bound=Callable[..., Any])
 
 
 class validate:
@@ -33,7 +33,7 @@ class validate:
 
     def __init__(
         self,
-        input_schema: Optional[Union[Dict[str, Any], list]] = None,
+        input_schema: Optional[Union[Dict[str, Any], List[Any]]] = None,
         output_schema: Optional[Dict[str, Any]] = None,
         strict: bool = False,
         validate_signature: bool = True,
@@ -79,7 +79,7 @@ class validate:
         if inspect.iscoroutinefunction(func):
 
             @wraps(func)
-            async def async_wrapper(*args, **kwargs):
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 # Map positional args to parameter names
                 params = self._map_args_to_params(func, args, kwargs)
 
@@ -113,11 +113,11 @@ class validate:
                 # Validate and serialize output
                 return self.validator.validate_output(result)
 
-            return async_wrapper
+            return cast(T, async_wrapper)
         else:
 
             @wraps(func)
-            def sync_wrapper(*args, **kwargs):
+            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                 # Map positional args to parameter names
                 params = self._map_args_to_params(func, args, kwargs)
 
@@ -151,7 +151,7 @@ class validate:
                 # Validate and serialize output
                 return self.validator.validate_output(result)
 
-            return sync_wrapper
+            return cast(T, sync_wrapper)
 
     @classmethod
     def from_file(
@@ -201,7 +201,7 @@ class validate:
             validate_signature=validate_signature,
         )
 
-    def _map_args_to_params(self, func: Callable, args: tuple, kwargs: dict) -> Dict[str, Any]:
+    def _map_args_to_params(self, func: Callable[..., Any], args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Map positional and keyword arguments to parameter names.
 
         Args:
@@ -227,7 +227,7 @@ class validate:
 
 
 # Convenience functions for common validation patterns
-def validate_input(schema: Union[Dict[str, Any], list], strict: bool = False) -> Callable:
+def validate_input(schema: Union[Dict[str, Any], List[Any]], strict: bool = False) -> Callable[..., Any]:
     """Validate only input parameters.
 
     Args:
@@ -240,7 +240,7 @@ def validate_input(schema: Union[Dict[str, Any], list], strict: bool = False) ->
     return validate(input_schema=schema, strict=strict)
 
 
-def validate_output(schema: Dict[str, Any], strict: bool = False) -> Callable:
+def validate_output(schema: Dict[str, Any], strict: bool = False) -> Callable[..., Any]:
     """Validate only output.
 
     Args:
@@ -254,9 +254,9 @@ def validate_output(schema: Dict[str, Any], strict: bool = False) -> Callable:
 
 
 def validate_strict(
-    input_schema: Optional[Union[Dict[str, Any], list]] = None,
+    input_schema: Optional[Union[Dict[str, Any], List[Any]]] = None,
     output_schema: Optional[Dict[str, Any]] = None,
-) -> Callable:
+) -> Callable[..., Any]:
     """Strict validation with no type coercion.
 
     Args:

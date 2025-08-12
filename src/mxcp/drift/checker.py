@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from jsonschema import ValidationError, validate
 
@@ -36,7 +36,7 @@ def load_and_validate_snapshot(snapshot_path: Path) -> DriftSnapshot:
     # Note: We skip detailed schema validation for now to avoid complex reference resolution
     # The snapshot was already validated when created, so basic structure checks are sufficient
 
-    return snapshot_data
+    return cast(DriftSnapshot, snapshot_data)
 
 
 def compare_tables(baseline_tables: List[Table], current_tables: List[Table]) -> List[TableChange]:
@@ -199,10 +199,12 @@ def compare_resources(
                         "new_status": current_res["validation_results"]["status"],
                     }
                 if test_results_changed:
-                    details["test_changes"] = {
-                        "old_status": baseline_res.get("test_results", {}).get("status"),
-                        "new_status": current_res.get("test_results", {}).get("status"),
-                    }
+                    baseline_test = baseline_res.get("test_results") if baseline_res else None
+                    current_test = current_res.get("test_results") if current_res else None
+                    details["test_changes"] = cast(Dict[str, Any], {
+                        "old_status": baseline_test.get("status") if baseline_test else None,
+                        "new_status": current_test.get("status") if current_test else None,
+                    })
 
                 changes.append(
                     ResourceChange(
@@ -219,7 +221,7 @@ def compare_resources(
     return changes
 
 
-def _extract_endpoint_identifier(definition: Optional[Dict[str, Any]]) -> Optional[str]:
+def _extract_endpoint_identifier(definition: Optional[Any]) -> Optional[str]:
     """Extract endpoint identifier from definition."""
     if not definition:
         return None
@@ -234,7 +236,7 @@ def _extract_endpoint_identifier(definition: Optional[Dict[str, Any]]) -> Option
     return None
 
 
-def _compare_validation_results(baseline: Dict[str, Any], current: Dict[str, Any]) -> bool:
+def _compare_validation_results(baseline: Any, current: Any) -> bool:
     """Compare validation results, ignoring path since it should be the same."""
     baseline_copy = baseline.copy()
     current_copy = current.copy()
@@ -243,11 +245,11 @@ def _compare_validation_results(baseline: Dict[str, Any], current: Dict[str, Any
     baseline_copy.pop("path", None)
     current_copy.pop("path", None)
 
-    return baseline_copy != current_copy
+    return cast(bool, baseline_copy != current_copy)
 
 
 def _compare_test_results(
-    baseline: Optional[Dict[str, Any]], current: Optional[Dict[str, Any]]
+    baseline: Optional[Any], current: Optional[Any]
 ) -> bool:
     """Compare test results."""
     if baseline is None and current is None:
@@ -277,7 +279,7 @@ def _compare_test_results(
 
 
 def _compare_definitions(
-    baseline: Optional[Dict[str, Any]], current: Optional[Dict[str, Any]]
+    baseline: Optional[Any], current: Optional[Any]
 ) -> bool:
     """Compare endpoint definitions."""
     if baseline is None and current is None:
@@ -288,7 +290,7 @@ def _compare_definitions(
     # For now, do a simple JSON comparison
     # In the future, we could implement more sophisticated comparison
     # that ignores certain fields or provides more detailed change information
-    return baseline != current
+    return cast(bool, baseline != current)
 
 
 async def check_drift(
@@ -314,7 +316,13 @@ async def check_drift(
     if baseline_path:
         baseline_snapshot_path = Path(baseline_path)
     else:
-        baseline_snapshot_path = Path(site_config["profiles"][profile_name]["drift"]["path"])
+        drift_config = site_config["profiles"][profile_name].get("drift")
+        if not drift_config or "path" not in drift_config:
+            raise ValueError(f"No drift configuration found for profile '{profile_name}'")
+        drift_path = drift_config.get("path")
+        if not drift_path:
+            raise ValueError(f"No drift path configured for profile '{profile_name}'")
+        baseline_snapshot_path = Path(drift_path)
 
     # Load baseline snapshot
     try:

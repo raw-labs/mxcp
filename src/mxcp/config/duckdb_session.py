@@ -6,7 +6,7 @@ SDK DuckDB sessions across the codebase.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.sdk.executor.plugins.duckdb_plugin._types import (
@@ -78,7 +78,7 @@ def _create_duckdb_session_config(
 
     # Get plugin configuration from user config
     user_projects = user_config.get("projects") or {}
-    user_project = user_projects.get(project_name) or {}
+    user_project = cast(Dict[str, Any], user_projects.get(project_name) or {})
     user_profiles = user_project.get("profiles") or {}
     user_profile = user_profiles.get(profile_name) or {}
     user_plugin_section = user_profile.get("plugin") or {}

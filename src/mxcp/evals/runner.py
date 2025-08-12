@@ -2,11 +2,11 @@ import asyncio
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from mxcp.config.execution_engine import create_execution_engine, find_repo_root
-from mxcp.config.site_config import SiteConfig
-from mxcp.config.user_config import UserConfig
+from mxcp.config.site_config import SiteConfig  # type: ignore[attr-defined]
+from mxcp.config.user_config import UserConfig  # type: ignore[attr-defined]
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.evals._types import EndpointType, ResourceEndpoint, ToolEndpoint
 from mxcp.evals.loader import discover_eval_files, load_eval_suite
@@ -45,7 +45,7 @@ def _create_model_config(model: str, user_config: UserConfig) -> ModelConfigType
     if not models_dict:
         raise ValueError("No models defined in models configuration")
 
-    model_config = models_dict.get(model, {})
+    model_config: Dict[str, Any] = cast(Dict[str, Any], models_dict.get(model, {}))
     if not model_config:
         raise ValueError(f"Model '{model}' not configured in user config")
 
@@ -77,38 +77,40 @@ def _load_endpoints(site_config: SiteConfig) -> List[EndpointType]:
         List of typed endpoint objects
     """
     loader = EndpointLoader(site_config)
-    endpoints = []
+    endpoints: List[EndpointType] = []
     discovered = loader.discover_endpoints()
 
     for path, endpoint_def, error in discovered:
         if error is None and endpoint_def:
             # Extract endpoint info with ALL metadata
             if "tool" in endpoint_def:
-                tool = endpoint_def["tool"]
-                endpoints.append(
-                    ToolEndpoint(
-                        name=tool["name"],
-                        description=tool.get("description", ""),
-                        parameters=tool.get("parameters", []),
-                        return_type=tool.get("return"),
-                        annotations=tool.get("annotations", {}),
-                        tags=tool.get("tags", []),
-                        source=tool.get("source", {}),
+                tool = endpoint_def.get("tool", {})
+                if isinstance(tool, dict) and "name" in tool:
+                    endpoints.append(
+                        ToolEndpoint(
+                            name=tool["name"],
+                            description=tool.get("description", ""),
+                            parameters=tool.get("parameters", []),
+                            return_type=tool.get("return"),
+                            annotations=tool.get("annotations", {}),
+                            tags=tool.get("tags", []),
+                            source=tool.get("source", {}),
+                        )
                     )
-                )
             elif "resource" in endpoint_def:
-                resource = endpoint_def["resource"]
-                endpoints.append(
-                    ResourceEndpoint(
-                        uri=resource["uri"],
-                        description=resource.get("description", ""),
-                        parameters=resource.get("parameters", []),
-                        return_type=resource.get("return"),
-                        mime_type=resource.get("mime_type"),
-                        tags=resource.get("tags", []),
-                        source=resource.get("source", {}),
+                resource = endpoint_def.get("resource", {})
+                if isinstance(resource, dict) and "uri" in resource:
+                    endpoints.append(
+                        ResourceEndpoint(
+                            uri=resource["uri"],
+                            description=resource.get("description", ""),
+                            parameters=resource.get("parameters", []),
+                            return_type=resource.get("return"),
+                            mime_type=resource.get("mime_type"),
+                            tags=resource.get("tags", []),
+                            source=resource.get("source", {}),
+                        )
                     )
-                )
 
     return endpoints
 
@@ -200,8 +202,8 @@ async def run_eval_suite(
     model = override_model or eval_suite.get("model")
     if not model:
         # Try to get default model from user config
-        models_config = user_config.get("models", {})
-        model = models_config.get("default")
+        models_config = user_config.get("models") or {}
+        model = models_config.get("default") if models_config else None
 
     if not model:
         return {
@@ -275,46 +277,54 @@ async def run_eval_suite(
 
                 # Check must_call assertions
                 if assertions and "must_call" in assertions:
-                    for expected_call in assertions["must_call"]:
-                        expected_tool = expected_call["tool"]
-                        expected_args = expected_call.get("args", {})
+                    must_calls = assertions.get("must_call")
+                    if must_calls:
+                        for expected_call in must_calls:
+                            expected_tool = expected_call["tool"]
+                            expected_args = expected_call.get("args", {})
 
-                        # Check if tool was called with expected args
-                        found = False
-                        for call in tool_calls:
-                            if call["tool"] == expected_tool:
-                                # Check arguments match
-                                actual_args = call.get("arguments", {})
-                                if all(actual_args.get(k) == v for k, v in expected_args.items()):
-                                    found = True
-                                    break
+                            # Check if tool was called with expected args
+                            found = False
+                            for call in tool_calls:
+                                if call["tool"] == expected_tool:
+                                    # Check arguments match
+                                    actual_args = call.get("arguments", {})
+                                    if all(actual_args.get(k) == v for k, v in expected_args.items()):
+                                        found = True
+                                        break
 
-                        if not found:
-                            failures.append(
-                                f"Expected call to '{expected_tool}' with args {expected_args} not found"
-                            )
+                            if not found:
+                                failures.append(
+                                    f"Expected call to '{expected_tool}' with args {expected_args} not found"
+                                )
 
                 # Check must_not_call assertions
                 if assertions and "must_not_call" in assertions:
-                    for forbidden_tool in assertions["must_not_call"]:
-                        if any(call["tool"] == forbidden_tool for call in tool_calls):
-                            failures.append(
-                                f"Tool '{forbidden_tool}' was called but should not have been"
-                            )
+                    must_not_calls = assertions.get("must_not_call")
+                    if must_not_calls:
+                        for forbidden_tool in must_not_calls:
+                            if any(call["tool"] == forbidden_tool for call in tool_calls):
+                                failures.append(
+                                    f"Tool '{forbidden_tool}' was called but should not have been"
+                                )
 
                 # Check answer_contains assertions
                 if assertions and "answer_contains" in assertions:
-                    for expected_text in assertions["answer_contains"]:
-                        if expected_text.lower() not in response.lower():
-                            failures.append(
-                                f"Expected text '{expected_text}' not found in response"
-                            )
+                    contains = assertions.get("answer_contains")
+                    if contains:
+                        for expected_text in contains:
+                            if expected_text.lower() not in response.lower():
+                                failures.append(
+                                    f"Expected text '{expected_text}' not found in response"
+                                )
 
                 # Check answer_not_contains assertions
                 if assertions and "answer_not_contains" in assertions:
-                    for forbidden_text in assertions["answer_not_contains"]:
-                        if forbidden_text.lower() in response.lower():
-                            failures.append(f"Forbidden text '{forbidden_text}' found in response")
+                    not_contains = assertions.get("answer_not_contains")
+                    if not_contains:
+                        for forbidden_text in not_contains:
+                            if forbidden_text.lower() in response.lower():
+                                failures.append(f"Forbidden text '{forbidden_text}' found in response")
 
                 test_time = time.time() - test_start
 
@@ -395,6 +405,8 @@ async def run_all_evals(
                 }
             )
         else:
+            if eval_suite is None:
+                continue
             suite_name = eval_suite.get("suite", "unnamed")
             # Run the suite
             result = await run_eval_suite(
@@ -416,7 +428,7 @@ async def run_all_evals(
                     "path": relative_path,
                     "status": "passed" if all_passed else "failed",
                     "tests": result.get("tests", []),
-                    "error": result.get("error"),
+                    "error": result.get("error") or "",
                 }
             )
 
@@ -436,6 +448,8 @@ def get_model_config(
         Model configuration if found, None otherwise
     """
     models_config = user_config.get("models", {})
+    if not models_config:
+        return None
 
     # If no model name provided, try to get default
     if not model_name:
@@ -445,4 +459,6 @@ def get_model_config(
 
     # Get specific model config
     model_configs = models_config.get("models", {})
-    return model_configs.get(model_name)
+    if not model_configs:
+        return None
+    return cast(Optional[Dict[str, Any]], model_configs.get(model_name))

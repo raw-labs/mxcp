@@ -5,7 +5,7 @@ This module provides well-defined redaction strategies for reliable
 serialization and consistent behavior.
 """
 import hashlib
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from ._types import RedactionStrategy
 
@@ -111,7 +111,7 @@ def _redact_hash(value: Any, options: Optional[Dict[str, Any]] = None) -> str:
         # Default to sha256 for unknown algorithms
         hash_obj = hashlib.sha256(str(value).encode())
 
-    return prefix + hash_obj.hexdigest()
+    return cast(str, prefix + hash_obj.hexdigest())
 
 
 def _redact_truncate(value: Any, options: Optional[Dict[str, Any]] = None) -> str:
@@ -136,7 +136,7 @@ def _redact_truncate(value: Any, options: Optional[Dict[str, Any]] = None) -> st
     if len(str_value) <= length:
         return str_value
 
-    return str_value[:length] + suffix
+    return cast(str, str_value[:length] + suffix)
 
 
 def _redact_email(value: Any, options: Optional[Dict[str, Any]] = None) -> str:

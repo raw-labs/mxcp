@@ -85,10 +85,10 @@ class VaultResolver(ResolverPlugin):
             # hvac Client doesn't have an explicit close method, but we can clean up our reference
             self._vault_client = None
 
-    def _init_vault_client(self):
+    def _init_vault_client(self) -> None:
         """Initialize the Vault client."""
         try:
-            import hvac
+            import hvac  # type: ignore[import-untyped]
         except ImportError:
             raise ImportError(
                 "hvac package is required for Vault support. Install with: pip install hvac"
@@ -100,5 +100,5 @@ class VaultResolver(ResolverPlugin):
 
         self._vault_client = hvac.Client(url=address, token=token)
 
-        if not self._vault_client.is_authenticated():
+        if self._vault_client is None or not self._vault_client.is_authenticated():
             raise ValueError("Failed to authenticate with Vault")

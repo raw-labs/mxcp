@@ -4,7 +4,7 @@ import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Optional
+from typing import Any, Callable, Dict, Optional
 
 from posthog import Posthog
 
@@ -15,7 +15,7 @@ try:
 except ImportError:
     # Fallback for Python < 3.8
     try:
-        import pkg_resources
+        import pkg_resources  # type: ignore[import-not-found]
 
         PACKAGE_VERSION = pkg_resources.get_distribution("mxcp").version
     except Exception:
@@ -54,7 +54,7 @@ def is_analytics_opted_out() -> bool:
     return os.getenv("MXCP_DISABLE_ANALYTICS", "").lower() in ("1", "true", "yes")
 
 
-def track_event(event_name: str, properties: Optional[dict] = None) -> None:
+def track_event(event_name: str, properties: Optional[Dict[str, Any]] = None) -> None:
     """
     Track an event in PostHog if analytics is enabled.
     This is completely non-blocking and will silently fail if there are any issues.
@@ -68,7 +68,7 @@ def track_event(event_name: str, properties: Optional[dict] = None) -> None:
         logging.getLogger("posthog").setLevel(logging.ERROR)
         logging.getLogger("urllib3").setLevel(logging.ERROR)
 
-        def _track():
+        def _track() -> None:
             try:
                 # Add default properties
                 event_properties = {
@@ -132,9 +132,9 @@ def track_command_with_timing(command_name: str) -> Any:
         command_name: Name of the command to track
     """
 
-    def decorator(func):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)  # This preserves the function's metadata
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time.time()
             try:
                 result = func(*args, **kwargs)
