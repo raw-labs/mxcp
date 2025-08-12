@@ -1,9 +1,11 @@
 """
 Example Python endpoints for data analysis.
 """
-from mxcp.runtime import db, config
+
 import statistics
 from datetime import datetime, timedelta
+
+from mxcp.runtime import config, db
 
 
 def analyze_numbers(numbers: list, operation: str = "mean") -> dict:
@@ -12,7 +14,7 @@ def analyze_numbers(numbers: list, operation: str = "mean") -> dict:
     """
     if not numbers:
         return {"error": "No numbers provided"}
-    
+
     operations = {
         "mean": statistics.mean,
         "median": statistics.median,
@@ -20,19 +22,15 @@ def analyze_numbers(numbers: list, operation: str = "mean") -> dict:
         "stdev": statistics.stdev if len(numbers) > 1 else lambda x: 0,
         "sum": sum,
         "min": min,
-        "max": max
+        "max": max,
     }
-    
+
     if operation not in operations:
         return {"error": f"Unknown operation: {operation}"}
-    
+
     try:
         result = operations[operation](numbers)
-        return {
-            "operation": operation,
-            "result": result,
-            "count": len(numbers)
-        }
+        return {"operation": operation, "result": result, "count": len(numbers)}
     except Exception as e:
         return {"error": str(e)}
 
@@ -44,9 +42,10 @@ def create_sample_data(table_name: str, row_count: int) -> dict:
     try:
         # Drop table if exists
         db.execute(f"DROP TABLE IF EXISTS {table_name}")
-        
+
         # Create table
-        db.execute(f"""
+        db.execute(
+            f"""
             CREATE TABLE {table_name} (
                 id INTEGER PRIMARY KEY,
                 name VARCHAR,
@@ -54,11 +53,13 @@ def create_sample_data(table_name: str, row_count: int) -> dict:
                 category VARCHAR,
                 created_at TIMESTAMP
             )
-        """)
-        
+        """
+        )
+
         # Insert sample data
         for i in range(row_count):
-            db.execute(f"""
+            db.execute(
+                f"""
                 INSERT INTO {table_name} (id, name, value, category, created_at)
                 VALUES (
                     $id,
@@ -71,18 +72,13 @@ def create_sample_data(table_name: str, row_count: int) -> dict:
                     END,
                     CURRENT_TIMESTAMP - INTERVAL ($days || ' days')
                 )
-            """, {"id": i + 1, "item_num": i + 1, "days": i % 30})
-        
-        return {
-            "status": "success",
-            "table": table_name,
-            "rows_created": row_count
-        }
+            """,
+                {"id": i + 1, "item_num": i + 1, "days": i % 30},
+            )
+
+        return {"status": "success", "table": table_name, "rows_created": row_count}
     except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e)
-        }
+        return {"status": "error", "error": str(e)}
 
 
 def aggregate_by_category(table_name: str) -> list:
@@ -90,7 +86,8 @@ def aggregate_by_category(table_name: str) -> list:
     Aggregate data by category from a table.
     """
     try:
-        results = db.execute(f"""
+        results = db.execute(
+            f"""
             SELECT 
                 category,
                 COUNT(*) as count,
@@ -101,8 +98,9 @@ def aggregate_by_category(table_name: str) -> list:
             FROM {table_name}
             GROUP BY category
             ORDER BY category
-        """)
-        
+        """
+        )
+
         return results
     except Exception as e:
         return [{"error": str(e)}]
@@ -113,11 +111,12 @@ async def process_time_series(table_name: str, window_days: int = 7) -> list:
     Async function to process time series data with rolling windows.
     """
     import asyncio
-    
+
     # Simulate some async processing
     await asyncio.sleep(0.1)
-    
-    results = db.execute(f"""
+
+    results = db.execute(
+        f"""
         WITH daily_data AS (
             SELECT 
                 DATE_TRUNC('day', created_at) as date,
@@ -140,6 +139,7 @@ async def process_time_series(table_name: str, window_days: int = 7) -> list:
         FROM daily_data
         ORDER BY date DESC, category
         LIMIT 50
-    """)
-    
-    return results 
+    """
+    )
+
+    return results
