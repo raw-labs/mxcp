@@ -160,8 +160,7 @@ def add_numbers(a, b):
         # Create Python file
         python_file = temp_repo_dir / "python" / "test_module.py"
         python_file.write_text(
-            """
-def multiply(a, b):
+            """def multiply(a, b):
     return {"result": a * b}
 
 def divide(a, b):
@@ -323,8 +322,7 @@ class TestPythonModuleLoader:
         # Create Python module
         python_file = temp_repo_dir / "python" / "cacheable.py"
         python_file.write_text(
-            """
-import time
+            """import time
 load_time = time.time()
 
 def get_load_time():
@@ -352,8 +350,7 @@ def get_load_time():
         # Create Python module with multiple functions
         python_file = temp_repo_dir / "python" / "functions.py"
         python_file.write_text(
-            """
-def public_function():
+            """def public_function():
     return "public"
 
 def _private_function():
@@ -398,8 +395,7 @@ non_callable = "not a function"
         # Create module in subdirectory
         python_file = temp_repo_dir / "python" / "subpackage" / "nested.py"
         python_file.write_text(
-            """
-def nested_function():
+            """def nested_function():
     return "nested"
 """
         )

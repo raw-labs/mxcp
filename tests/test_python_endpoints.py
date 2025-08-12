@@ -155,8 +155,7 @@ async def test_python_loader(temp_project_dir, test_configs, execution_engine):
     # Create a test Python file
     python_file = temp_project_dir / "python" / "test_module.py"
     python_file.write_text(
-        """
-def hello(name: str) -> dict:
+        """def hello(name: str) -> dict:
     return {"message": f"Hello, {name}!"}
 
 def add_numbers(a: int, b: int) -> dict:
