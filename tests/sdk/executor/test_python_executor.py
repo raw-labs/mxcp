@@ -87,7 +87,7 @@ class TestPythonExecutorBasics:
         assert loader1 is not None
 
         # Create a test module to verify different instances have separate state
-        python_file = temp_repo_dir / "python" / "test_module.py"
+        python_file = temp_repo_dir / "python" / "instance_test_module.py"
         python_file.write_text("def test_func(): return 'test'")
         loader1.load_python_module(python_file)
         modules_count_after_manual_load = len(loader1._loaded_modules)
@@ -106,7 +106,7 @@ class TestPythonExecutorBasics:
         assert len(loader2._loaded_modules) == modules_count_after_manual_load
 
         # Verify they have separate state by loading an additional module on loader1
-        python_file2 = temp_repo_dir / "python" / "test_module2.py"
+        python_file2 = temp_repo_dir / "python" / "instance_test_module2.py"
         python_file2.write_text("def test_func2(): return 'test2'")
         loader1.load_python_module(python_file2)
 
@@ -157,10 +157,11 @@ def add_numbers(a, b):
         executor = PythonExecutor(repo_root=temp_repo_dir)
         # Executor is ready immediately after construction
 
-        # Create Python file
-        python_file = temp_repo_dir / "python" / "test_module.py"
+        # Create Python file with unique name to avoid sys.modules conflicts
+        python_file = temp_repo_dir / "python" / "executor_test_multiply.py"
         python_file.write_text(
-            """def multiply(a, b):
+            """
+def multiply(a, b):
     return {"result": a * b}
 
 def divide(a, b):
@@ -172,7 +173,7 @@ def divide(a, b):
 
         # Execute specific function from file
         result = await executor.execute(
-            "python/test_module.py:multiply", {"a": 4, "b": 5}, mock_context
+            "python/executor_test_multiply.py:multiply", {"a": 4, "b": 5}, mock_context
         )
         assert result == {"result": 20}
 
@@ -322,7 +323,8 @@ class TestPythonModuleLoader:
         # Create Python module
         python_file = temp_repo_dir / "python" / "cacheable.py"
         python_file.write_text(
-            """import time
+            """
+import time
 load_time = time.time()
 
 def get_load_time():
@@ -350,7 +352,8 @@ def get_load_time():
         # Create Python module with multiple functions
         python_file = temp_repo_dir / "python" / "functions.py"
         python_file.write_text(
-            """def public_function():
+            """
+def public_function():
     return "public"
 
 def _private_function():
@@ -395,7 +398,8 @@ non_callable = "not a function"
         # Create module in subdirectory
         python_file = temp_repo_dir / "python" / "subpackage" / "nested.py"
         python_file.write_text(
-            """def nested_function():
+            """
+def nested_function():
     return "nested"
 """
         )

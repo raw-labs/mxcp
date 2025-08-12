@@ -152,10 +152,11 @@ async def test_python_loader(temp_project_dir, test_configs, execution_engine):
     """Test Python module loading functionality through endpoint execution."""
     user_config, site_config = test_configs
 
-    # Create a test Python file
-    python_file = temp_project_dir / "python" / "test_module.py"
+    # Create a test Python file with unique name to avoid sys.modules conflicts
+    python_file = temp_project_dir / "python" / "endpoints_hello_module.py"
     python_file.write_text(
-        """def hello(name: str) -> dict:
+        """
+def hello(name: str) -> dict:
     return {"message": f"Hello, {name}!"}
 
 def add_numbers(a: int, b: int) -> dict:
@@ -172,7 +173,7 @@ tool:
   description: Say hello
   language: python
   source:
-    file: ../python/test_module.py
+    file: ../python/endpoints_hello_module.py
   parameters:
     - name: name
       type: string
@@ -190,7 +191,7 @@ tool:
   description: Add two numbers
   language: python
   source:
-    file: ../python/test_module.py
+    file: ../python/endpoints_hello_module.py
   parameters:
     - name: a
       type: integer
