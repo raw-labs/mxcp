@@ -59,7 +59,8 @@ jobs:
       run: uv python install 3.11
     
     - name: Install dependencies
-      run: uv sync --dev
+      run: |
+        uv sync --all-extras --dev
     
     - name: Check for security vulnerabilities
       run: |
@@ -80,11 +81,12 @@ jobs:
       run: uv python install 3.11
     
     - name: Install build dependencies
-      run: uv sync --dev
+      run: |
+        uv sync --all-extras --dev
     
     - name: Build package
       run: |
-        uv run python -m build
+        uv run --module build
     
     - name: Check package metadata
       run: |
