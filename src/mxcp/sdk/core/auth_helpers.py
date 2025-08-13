@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 """Authentication helper functions for translating between user config and SDK auth types.
 
 These functions help bridge the gap between MXCP's configuration format and the
 standalone SDK auth types. They don't belong in the SDK itself since they're
 specific to MXCP's config structure.
 """
-from typing import Any, Dict, Optional
 
 from mxcp.config._types import UserAuthConfig, UserConfig, UserHttpTransportConfig
 from mxcp.sdk.auth._types import AuthConfig, HttpTransportConfig
@@ -38,8 +36,8 @@ def translate_auth_config(user_auth_config: UserAuthConfig) -> AuthConfig:
 
 
 def translate_transport_config(
-    user_transport_config: Optional[UserHttpTransportConfig],
-) -> Optional[HttpTransportConfig]:
+    user_transport_config: UserHttpTransportConfig | None,
+) -> HttpTransportConfig | None:
     """Translate user HTTP transport config to SDK transport config.
 
     Args:
@@ -65,8 +63,8 @@ def create_oauth_handler(
     user_auth_config: UserAuthConfig,
     host: str = "localhost",
     port: int = 8000,
-    user_config: Optional[UserConfig] = None,
-) -> Optional[ExternalOAuthHandler]:
+    user_config: UserConfig | None = None,
+) -> ExternalOAuthHandler | None:
     """Create an OAuth handler from user configuration.
 
     This helper translates user config to SDK types and instantiates the appropriate handler.

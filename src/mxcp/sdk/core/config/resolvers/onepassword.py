@@ -8,7 +8,7 @@ references like op://vault/item/field using the OnePassword SDK.
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..plugins import ResolverPlugin
 
@@ -20,10 +20,10 @@ class OnePasswordResolver(ResolverPlugin):
 
     OP_URL_PATTERN = re.compile(r"op://([^/]+)/([^/]+)/([^/?]+)(?:\?attribute=(otp))?$")
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         super().__init__(config)
         self._client = None
-        self._original_token: Optional[str] = None
+        self._original_token: str | None = None
         self._token_was_set = False
 
     @property
@@ -31,7 +31,7 @@ class OnePasswordResolver(ResolverPlugin):
         return "onepassword"
 
     @property
-    def url_patterns(self) -> List[str]:
+    def url_patterns(self) -> list[str]:
         return [r"op://([^/]+)/([^/]+)/([^/?]+)(?:\?attribute=(otp))?$"]
 
     def can_resolve(self, reference: str) -> bool:
@@ -48,7 +48,7 @@ class OnePasswordResolver(ResolverPlugin):
 
         # Check if SDK is available
         try:
-            import onepassword  # type: ignore[import-untyped]
+            import onepassword  # type: ignore[import-untyped]  # noqa: F401
         except ImportError:
             logger.error(
                 "onepassword-sdk library is not available. Install with: pip install 'mxcp[onepassword]'"
@@ -115,7 +115,7 @@ class OnePasswordResolver(ResolverPlugin):
         except ImportError:
             raise ImportError(
                 "onepassword-sdk library is required for 1Password integration. Install with: pip install 'mxcp[onepassword]'"
-            )
+            ) from None
 
         self._client = onepassword.Client()
 

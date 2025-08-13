@@ -1,6 +1,6 @@
 """Type definitions for MXCP plugins module."""
 
-from typing import Any, Dict, TypedDict
+from typing import TypedDict
 
 
 class PluginConfig(TypedDict, total=False):

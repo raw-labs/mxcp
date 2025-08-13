@@ -38,13 +38,14 @@ Thread Safety:
     This module is fully thread-safe and uses a dedicated thread pool for analytics operations.
 """
 
+import contextlib
 import functools
 import logging
 import os
-import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 from posthog import Posthog
 
@@ -146,7 +147,7 @@ def is_analytics_opted_out() -> bool:
     return os.getenv("MXCP_DISABLE_ANALYTICS", "").lower() in ("1", "true", "yes")
 
 
-def track_event(event_name: str, properties: Optional[Dict[str, Any]] = None) -> None:
+def track_event(event_name: str, properties: dict[str, Any] | None = None) -> None:
     """
     Track an event in PostHog if analytics is enabled.
 
@@ -215,18 +216,15 @@ def track_event(event_name: str, properties: Optional[Dict[str, Any]] = None) ->
                 pass
 
         # Submit to thread pool and don't wait for result
-        try:
+        with contextlib.suppress(Exception):
             analytics_executor.submit(_track)
-        except Exception:
-            # Silently handle thread pool errors
-            pass
 
 
 def track_command(
     command_name: str,
     success: bool,
-    error: Optional[str] = None,
-    duration_ms: Optional[float] = None,
+    error: str | None = None,
+    duration_ms: float | None = None,
 ) -> None:
     """
     Track CLI command execution with success/failure and timing information.
@@ -364,27 +362,21 @@ def track_command_with_timing(command_name: str) -> Any:
             start_time = time.time()
             try:
                 result = func(*args, **kwargs)
-                try:
+                with contextlib.suppress(Exception):
                     track_command(
                         command_name=command_name,
                         success=True,
                         duration_ms=(time.time() - start_time) * 1000,
                     )
-                except Exception:
-                    # Silently handle analytics errors
-                    pass
                 return result
             except Exception as e:
-                try:
+                with contextlib.suppress(Exception):
                     track_command(
                         command_name=command_name,
                         success=False,
                         error=str(e),
                         duration_ms=(time.time() - start_time) * 1000,
                     )
-                except Exception:
-                    # Silently handle analytics errors
-                    pass
                 raise
 
         return wrapper

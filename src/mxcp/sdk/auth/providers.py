@@ -1,13 +1,11 @@
-# -*- coding: utf-8 -*-
 """OAuth provider implementations for MXCP authentication."""
+
 import asyncio
 import logging
 import secrets
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, cast
+from typing import Any, Literal, cast
 
 from mcp.server.auth.provider import (  # type: ignore[attr-defined]
     AccessToken,
@@ -17,7 +15,7 @@ from mcp.server.auth.provider import (  # type: ignore[attr-defined]
     OAuthToken,
     construct_redirect_uri,
 )
-from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
+from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyHttpUrl, AnyUrl, ValidationError
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
@@ -25,7 +23,6 @@ from starlette.responses import Response
 
 from ._types import AuthConfig, ExternalUserInfo, StateMeta, UserContext
 from .persistence import (
-    AuthPersistenceBackend,
     PersistedAccessToken,
     PersistedAuthCode,
     PersistedClient,
@@ -111,8 +108,8 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
     def __init__(
         self,
         handler: ExternalOAuthHandler,
-        auth_config: Optional[AuthConfig] = None,
-        user_config: Optional[Dict[str, Any]] = None,
+        auth_config: AuthConfig | None = None,
+        user_config: dict[str, Any] | None = None,
     ):
         self.handler = handler
         self.auth_config = auth_config
@@ -121,7 +118,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         # Initialize persistence backend
         persistence_config = auth_config.get("persistence") if auth_config else None
         self.persistence = create_persistence_backend(
-            cast(Dict[str, Any], persistence_config) if persistence_config else None
+            cast(dict[str, Any], persistence_config) if persistence_config else None
         )
 
         # In-memory caches for performance (fallback when persistence is disabled)
@@ -194,13 +191,13 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                         client_id=client_data.client_id,
                         client_secret=client_data.client_secret,
                         redirect_uris=cast(
-                            List[AnyUrl], redirect_uris_pydantic
+                            list[AnyUrl], redirect_uris_pydantic
                         ),  # Use validated URIs
                         grant_types=cast(
-                            List[Literal["authorization_code", "refresh_token"]],
+                            list[Literal["authorization_code", "refresh_token"]],
                             client_data.grant_types,
                         ),
-                        response_types=cast(List[Literal["code"]], client_data.response_types),
+                        response_types=cast(list[Literal["code"]], client_data.response_types),
                         scope=client_data.scope,
                         client_name=client_data.client_name,
                     )
@@ -229,11 +226,11 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     client_secret=client_config.get("client_secret"),  # None for public clients
                     redirect_uris=redirect_uris_any,
                     grant_types=cast(
-                        List[Literal["authorization_code", "refresh_token"]],
+                        list[Literal["authorization_code", "refresh_token"]],
                         client_config.get("grant_types", ["authorization_code"]),
                     ),
                     response_types=cast(
-                        List[Literal["code"]], client_config.get("response_types", ["code"])
+                        list[Literal["code"]], client_config.get("response_types", ["code"])
                     ),
                     scope=" ".join(client_config.get("scopes") or []),  # No default scopes
                     client_name=client_config["name"],
@@ -247,7 +244,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             # Pre-configured clients should be loaded from config each time, not persisted
 
     # ----- client registry -----
-    async def get_client(self, client_id: str) -> Optional[OAuthClientInformationFull]:
+    async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         async with self._lock:
             # First check memory cache
             client = self._clients.get(client_id)
@@ -284,14 +281,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                             client_id=persisted_client.client_id,
                             client_secret=persisted_client.client_secret,
                             redirect_uris=cast(
-                                List[AnyUrl], redirect_uris_pydantic
+                                list[AnyUrl], redirect_uris_pydantic
                             ),  # Use validated URIs
                             grant_types=cast(
-                                List[Literal["authorization_code", "refresh_token"]],
+                                list[Literal["authorization_code", "refresh_token"]],
                                 persisted_client.grant_types,
                             ),
                             response_types=cast(
-                                List[Literal["code"]], persisted_client.response_types
+                                list[Literal["code"]], persisted_client.response_types
                             ),
                             scope=persisted_client.scope,
                             client_name=persisted_client.client_name,
@@ -322,8 +319,8 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                         client_id=client_info.client_id,
                         client_secret=client_info.client_secret,
                         redirect_uris=redirect_uris_str,  # Convert AnyHttpUrl to strings
-                        grant_types=cast(List[str], client_info.grant_types),
-                        response_types=cast(List[str], client_info.response_types),
+                        grant_types=cast(list[str], client_info.grant_types),
+                        response_types=cast(list[str], client_info.response_types),
                         scope=client_info.scope or "",
                         client_name=client_info.client_name or "",
                         created_at=time.time(),
@@ -333,7 +330,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 except Exception as e:
                     logger.error(f"Error persisting client: {e}")
 
-    async def register_client_dynamically(self, client_metadata: Dict[str, Any]) -> Dict[str, Any]:
+    async def register_client_dynamically(self, client_metadata: dict[str, Any]) -> dict[str, Any]:
         """Handle Dynamic Client Registration requests.
 
         This implements RFC 7591 - OAuth 2.0 Dynamic Client Registration Protocol
@@ -402,8 +399,8 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         token: str,
         client_id: str,
         scopes: list[str],
-        expires_in: Optional[int],
-        external_token: Optional[str] = None,
+        expires_in: int | None,
+        external_token: str | None = None,
     ) -> None:
         expires_at = (time.time() + expires_in) if expires_in else None
         access_token = AccessToken(
@@ -455,7 +452,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             redirect_uri = AnyHttpUrl(meta.redirect_uri)
         except ValidationError as ve:
             logger.error(f"Invalid redirect URI in callback: {meta.redirect_uri} - {ve}")
-            raise HTTPException(400, f"Invalid redirect URI: {meta.redirect_uri}")
+            raise HTTPException(400, f"Invalid redirect URI: {meta.redirect_uri}") from ve
 
         auth_code = AuthorizationCode(
             code=mcp_code,
@@ -500,7 +497,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
     # ----- auth code → MCP token -----
     async def load_authorization_code(
         self, client: OAuthClientInformationFull, code: str
-    ) -> Optional[AuthorizationCode]:
+    ) -> AuthorizationCode | None:
         async with self._lock:
             # First check memory cache
             auth_code = self._auth_codes.get(code)
@@ -617,7 +614,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             raise
 
     # ----- token validation / revocation -----
-    async def load_access_token(self, token: str) -> Optional[AccessToken]:
+    async def load_access_token(self, token: str) -> AccessToken | None:
         async with self._lock:
             # First check memory cache
             tkn = self._tokens.get(token)
@@ -668,11 +665,11 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
             return tkn
 
-    async def load_refresh_token(self, client: Any, refresh_token: str) -> Optional[Any]:
+    async def load_refresh_token(self, client: Any, refresh_token: str) -> Any | None:
         return None
 
     async def exchange_refresh_token(
-        self, client: Any, refresh_token: str, scopes: List[str]
+        self, client: Any, refresh_token: str, scopes: list[str]
     ) -> Any:
         raise NotImplementedError
 

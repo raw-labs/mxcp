@@ -1,7 +1,7 @@
 import os
 import subprocess
 import sys
-from typing import Any, Optional
+from typing import Any
 
 import click
 
@@ -31,11 +31,11 @@ def dbt_config(profile: str, dry_run: bool, force: bool, embed_secrets: bool, de
     # Load configs
     try:
         repo_root = find_repo_root()
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         click.echo(
             f"\n{click.style('❌ Error:', fg='red', bold=True)} No mxcp-site.yml found in current directory or parents"
         )
-        raise click.ClickException("No mxcp-site.yml found in current directory or parents")
+        raise click.ClickException("No mxcp-site.yml found in current directory or parents") from e
 
     site_config = load_site_config(repo_root)
     user_config = load_user_config(site_config)
@@ -76,8 +76,8 @@ def dbt_config(profile: str, dry_run: bool, force: bool, embed_secrets: bool, de
     if not dry_run:
         click.echo(f"\n{click.style('✅ dbt configuration complete!', fg='green', bold=True)}")
         click.echo(f"\n{click.style('📚 Files created/updated:', fg='cyan', bold=True)}")
-        click.echo(f"   • dbt_project.yml - dbt project configuration")
-        click.echo(f"   • profiles.yml - Connection profile for DuckDB")
+        click.echo("   • dbt_project.yml - dbt project configuration")
+        click.echo("   • profiles.yml - Connection profile for DuckDB")
 
         click.echo(f"\n{click.style('🚀 Next steps:', fg='yellow', bold=True)}")
         click.echo(f"   1. Run {click.style('dbt deps', fg='cyan')} to install dependencies")
@@ -87,7 +87,7 @@ def dbt_config(profile: str, dry_run: bool, force: bool, embed_secrets: bool, de
 
 
 @click.command(
-    name="dbt", context_settings=dict(ignore_unknown_options=True, allow_extra_args=True)
+    name="dbt", context_settings={"ignore_unknown_options": True, "allow_extra_args": True}
 )
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @click.pass_context
@@ -104,11 +104,11 @@ def dbt_wrapper(ctx: click.Context, debug: bool) -> None:
     # Load configs
     try:
         repo_root = find_repo_root()
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         click.echo(
             f"\n{click.style('❌ Error:', fg='red', bold=True)} No mxcp-site.yml found in current directory or parents"
         )
-        raise click.ClickException("No mxcp-site.yml found in current directory or parents")
+        raise click.ClickException("No mxcp-site.yml found in current directory or parents") from e
 
     site_config = load_site_config(repo_root)
     user_config = load_user_config(site_config)
@@ -174,7 +174,7 @@ def dbt_wrapper(ctx: click.Context, debug: bool) -> None:
     cmd = ["dbt"] + ctx.args
 
     # Count secrets injected
-    secret_count = len([k for k in env.keys() if k.startswith("MXCP_SECRET_")])
+    secret_count = len([k for k in env if k.startswith("MXCP_SECRET_")])
     if secret_count > 0:
         click.echo(
             f"   • Secrets: {click.style(f'{secret_count} environment variables injected', fg='green')}"
@@ -186,12 +186,12 @@ def dbt_wrapper(ctx: click.Context, debug: bool) -> None:
     # Run dbt
     try:
         subprocess.run(cmd, env=env, check=True)
-        click.echo(f"\n" + "-" * 60)
+        click.echo("\n" + "-" * 60)
         click.echo(
             f"{click.style('✅ dbt command completed successfully!', fg='green', bold=True)}\n"
         )
     except subprocess.CalledProcessError as e:
-        click.echo(f"\n" + "-" * 60)
+        click.echo("\n" + "-" * 60)
         click.echo(
             f"{click.style('❌ dbt command failed with exit code:', fg='red', bold=True)} {e.returncode}\n"
         )

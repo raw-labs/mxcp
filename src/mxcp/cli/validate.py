@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 import click
 
@@ -110,7 +110,7 @@ def format_validation_results(results: Any) -> str:
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("validate")  # type: ignore[misc]
 def validate(
-    endpoint: Optional[str], profile: Optional[str], json_output: bool, debug: bool, readonly: bool
+    endpoint: str | None, profile: str | None, json_output: bool, debug: bool, readonly: bool
 ) -> None:
     """Validate one or all endpoints.
 

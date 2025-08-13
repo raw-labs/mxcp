@@ -6,11 +6,10 @@ This is a cloned version of the plugin loader for the executor plugin system.
 """
 
 import importlib
-import inspect
 import logging
 import os
 import sys
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, cast
 
 import duckdb
 
@@ -19,12 +18,12 @@ from mxcp.plugins import MXCPBasePlugin
 from ._types import PluginConfig, PluginDefinition
 
 if TYPE_CHECKING:
-    from ...context import ExecutionContext
+    pass
 
 logger = logging.getLogger(__name__)
 
 
-def _load_plugin(module_path: str, config: Dict[str, str], plugins_path: str) -> MXCPBasePlugin:
+def _load_plugin(module_path: str, config: dict[str, str], plugins_path: str) -> MXCPBasePlugin:
     """Load and instantiate a plugin.
 
     Args:
@@ -49,7 +48,7 @@ def _load_plugin(module_path: str, config: Dict[str, str], plugins_path: str) ->
             logger.debug(f"Added {plugins_dir} to Python path for plugins")
 
         module = importlib.import_module(module_path)
-        plugin_class = getattr(module, "MXCPPlugin")
+        plugin_class = module.MXCPPlugin
         if not issubclass(plugin_class, MXCPBasePlugin):
             raise AttributeError(f"Plugin class in {module_path} must inherit from MXCPBasePlugin")
 
@@ -58,16 +57,16 @@ def _load_plugin(module_path: str, config: Dict[str, str], plugins_path: str) ->
         return cast(MXCPBasePlugin, plugin_class(config))
 
     except ImportError as e:
-        raise ImportError(f"Failed to import plugin module {module_path}: {e}")
+        raise ImportError(f"Failed to import plugin module {module_path}: {e}") from e
     except AttributeError as e:
-        raise AttributeError(f"Module {module_path} must contain an MXCPPlugin class: {e}")
+        raise AttributeError(f"Module {module_path} must contain an MXCPPlugin class: {e}") from e
 
 
 def load_plugins(
-    plugins_list: List[PluginDefinition],
+    plugins_list: list[PluginDefinition],
     plugin_config: PluginConfig,
     conn: duckdb.DuckDBPyConnection,
-) -> Dict[str, MXCPBasePlugin]:
+) -> dict[str, MXCPBasePlugin]:
     """Load all plugins specified in the plugin definitions.
 
     Args:
@@ -81,7 +80,7 @@ def load_plugins(
     Raises:
         ValueError: If a plugin configuration is not found
     """
-    plugins: Dict[str, MXCPBasePlugin] = {}
+    plugins: dict[str, MXCPBasePlugin] = {}
 
     for plugin_def in plugins_list:
         name = plugin_def.name

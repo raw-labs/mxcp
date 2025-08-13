@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
 """Authentication middleware for MXCP endpoints."""
+
 import logging
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Dict, Optional, TypeVar
+from typing import Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 
@@ -18,8 +19,8 @@ class AuthenticationMiddleware:
 
     def __init__(
         self,
-        oauth_handler: Optional[ExternalOAuthHandler],
-        oauth_server: Optional[GeneralOAuthAuthorizationServer],
+        oauth_handler: ExternalOAuthHandler | None,
+        oauth_server: GeneralOAuthAuthorizationServer | None,
     ):
         """Initialize authentication middleware.
 
@@ -31,7 +32,7 @@ class AuthenticationMiddleware:
         self.oauth_server = oauth_server
         self.auth_enabled = oauth_handler is not None and oauth_server is not None
 
-    async def check_authentication(self) -> Optional[UserContext]:
+    async def check_authentication(self) -> UserContext | None:
         """Check if the current request is authenticated.
 
         Returns:

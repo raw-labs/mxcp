@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import click
 
@@ -13,10 +13,8 @@ from mxcp.config.user_config import load_user_config
 from mxcp.evals.runner import run_all_evals, run_eval_suite
 from mxcp.sdk.auth import UserContext
 
-from ._types import EvalResults
 
-
-def format_eval_results(results: Dict[str, Any], debug: bool = False) -> str:
+def format_eval_results(results: dict[str, Any], debug: bool = False) -> str:
     """Format eval results for human-readable output"""
     output = []
 
@@ -109,7 +107,7 @@ def format_eval_results(results: Dict[str, Any], debug: bool = False) -> str:
         # Handle case with no eval files
         if results.get("no_evals", False):
             output.append(click.style("\nℹ️  No eval files found", fg="blue"))
-            output.append(f"   Create eval files ending with '-evals.yml' or '.evals.yml'")
+            output.append("   Create eval files ending with '-evals.yml' or '.evals.yml'")
             return "\n".join(output)
 
         total_suites = len(suites)
@@ -217,10 +215,10 @@ def format_eval_results(results: Dict[str, Any], debug: bool = False) -> str:
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @track_command_with_timing("evals")  # type: ignore[misc]
 def evals(
-    suite_name: Optional[str],
-    user_context: Optional[str],
-    model: Optional[str],
-    profile: Optional[str],
+    suite_name: str | None,
+    user_context: str | None,
+    model: str | None,
+    profile: str | None,
     json_output: bool,
     debug: bool,
 ) -> None:
@@ -264,7 +262,7 @@ def evals(
         # Handle graceful shutdown
         if not json_output:
             click.echo("\nOperation cancelled by user", err=True)
-        raise click.Abort()
+        raise click.Abort() from None
     except Exception as e:
         # Only catch non-Click exceptions
         output_error(e, json_output, debug)
@@ -272,10 +270,10 @@ def evals(
 
 async def _evals_impl(
     *,
-    suite_name: Optional[str],
-    user_context: Optional[str],
-    model: Optional[str],
-    profile: Optional[str],
+    suite_name: str | None,
+    user_context: str | None,
+    model: str | None,
+    profile: str | None,
     json_output: bool,
     debug: bool,
 ) -> None:
@@ -295,13 +293,15 @@ async def _evals_impl(
                 with open(file_path) as f:
                     context_data = json.load(f)
             except json.JSONDecodeError as e:
-                raise click.BadParameter(f"Invalid JSON in user context file {file_path}: {e}")
+                raise click.BadParameter(
+                    f"Invalid JSON in user context file {file_path}: {e}"
+                ) from e
         else:
             # Parse as JSON string
             try:
                 context_data = json.loads(user_context)
             except json.JSONDecodeError as e:
-                raise click.BadParameter(f"Invalid JSON in user context: {e}")
+                raise click.BadParameter(f"Invalid JSON in user context: {e}") from e
 
         # Create UserContext object from the data
         cli_user_context = UserContext(
@@ -342,8 +342,9 @@ async def _evals_impl(
         click.echo(format_eval_results(results, debug))
 
     # Exit with error code if any tests failed
-    if suite_name and not results.get("all_passed", True):
+    if (suite_name and not results.get("all_passed", True)) or (
+        not suite_name
+        and results.get("suites")
+        and any(s.get("status") != "passed" for s in results["suites"])
+    ):
         raise SystemExit(1)
-    elif not suite_name and results.get("suites"):
-        if any(s.get("status") != "passed" for s in results["suites"]):
-            raise SystemExit(1)

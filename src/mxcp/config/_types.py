@@ -1,130 +1,130 @@
-from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
+from typing import Any, Literal, TypedDict
 
 
 # Site Config Types (mxcp-site.yml)
 class SiteExtensionDefinition(TypedDict, total=False):
     name: str
-    repo: Optional[str]  # Optional repo name for community/nightly extensions
+    repo: str | None  # Optional repo name for community/nightly extensions
 
 
 class SitePluginDefinition(TypedDict):
     name: str
     module: str
-    config: Optional[str]
+    config: str | None
 
 
 class SiteDbtConfig(TypedDict, total=False):
-    enabled: Optional[bool]
+    enabled: bool | None
     # dbt project configuration paths
-    model_paths: Optional[List[str]]
-    analysis_paths: Optional[List[str]]
-    test_paths: Optional[List[str]]
-    seed_paths: Optional[List[str]]
-    macro_paths: Optional[List[str]]
-    snapshot_paths: Optional[List[str]]
-    target_path: Optional[str]
-    clean_targets: Optional[List[str]]
+    model_paths: list[str] | None
+    analysis_paths: list[str] | None
+    test_paths: list[str] | None
+    seed_paths: list[str] | None
+    macro_paths: list[str] | None
+    snapshot_paths: list[str] | None
+    target_path: str | None
+    clean_targets: list[str] | None
 
 
 class SiteSqlToolsConfig(TypedDict, total=False):
-    enabled: Optional[bool]
+    enabled: bool | None
 
 
 class SiteDuckDBConfig(TypedDict, total=False):
-    path: Optional[str]
-    readonly: Optional[bool]
+    path: str | None
+    readonly: bool | None
 
 
 class SiteDriftConfig(TypedDict, total=False):
-    path: Optional[str]
+    path: str | None
 
 
 class SiteAuditConfig(TypedDict, total=False):
-    enabled: Optional[bool]
-    path: Optional[str]
+    enabled: bool | None
+    path: str | None
 
 
 class SiteProfileConfig(TypedDict, total=False):
-    duckdb: Optional[SiteDuckDBConfig]
-    drift: Optional[SiteDriftConfig]
-    audit: Optional[SiteAuditConfig]
+    duckdb: SiteDuckDBConfig | None
+    drift: SiteDriftConfig | None
+    audit: SiteAuditConfig | None
 
 
 class SitePathsConfig(TypedDict, total=False):
-    tools: Optional[str]
-    resources: Optional[str]
-    prompts: Optional[str]
-    evals: Optional[str]
-    python: Optional[str]
-    plugins: Optional[str]
-    sql: Optional[str]
-    drift: Optional[str]
-    audit: Optional[str]
-    data: Optional[str]
+    tools: str | None
+    resources: str | None
+    prompts: str | None
+    evals: str | None
+    python: str | None
+    plugins: str | None
+    sql: str | None
+    drift: str | None
+    audit: str | None
+    data: str | None
 
 
 class SiteConfig(TypedDict):
     mxcp: str
     project: str
     profile: str
-    secrets: Optional[List[str]]  # List of secret names (not definitions)
-    plugin: Optional[List[SitePluginDefinition]]
-    extensions: Optional[List[Union[str, SiteExtensionDefinition]]]
-    dbt: Optional[SiteDbtConfig]
-    sql_tools: Optional[SiteSqlToolsConfig]
-    paths: Optional[SitePathsConfig]
-    profiles: Dict[str, SiteProfileConfig]
+    secrets: list[str] | None  # List of secret names (not definitions)
+    plugin: list[SitePluginDefinition] | None
+    extensions: list[str | SiteExtensionDefinition] | None
+    dbt: SiteDbtConfig | None
+    sql_tools: SiteSqlToolsConfig | None
+    paths: SitePathsConfig | None
+    profiles: dict[str, SiteProfileConfig]
 
 
 # User Config Types (~/.mxcp/config.yml)
 class UserSecretDefinition(TypedDict):
     name: str
     type: str
-    parameters: Dict[str, Any]  # Can contain strings or nested objects
+    parameters: dict[str, Any]  # Can contain strings or nested objects
 
 
 class UserPluginConfig(TypedDict, total=False):
-    config: Dict[str, Dict[str, str]]
+    config: dict[str, dict[str, str]]
 
 
 class UserVaultConfig(TypedDict):
     enabled: bool
-    address: Optional[str]
-    token_env: Optional[str]
+    address: str | None
+    token_env: str | None
 
 
 class UserOnePasswordConfig(TypedDict):
     enabled: bool
-    token_env: Optional[str]
+    token_env: str | None
 
 
 class UserHttpTransportConfig(TypedDict, total=False):
-    port: Optional[int]
-    host: Optional[str]
-    scheme: Optional[Literal["http", "https"]]
-    base_url: Optional[str]
-    trust_proxy: Optional[bool]
-    stateless: Optional[bool]
+    port: int | None
+    host: str | None
+    scheme: Literal["http", "https"] | None
+    base_url: str | None
+    trust_proxy: bool | None
+    stateless: bool | None
 
 
 class UserTransportConfig(TypedDict, total=False):
-    provider: Optional[Literal["streamable-http", "sse", "stdio"]]
-    http: Optional[UserHttpTransportConfig]
+    provider: Literal["streamable-http", "sse", "stdio"] | None
+    http: UserHttpTransportConfig | None
 
 
 class UserOAuthClientConfig(TypedDict):
     client_id: str
     name: str
-    client_secret: Optional[str]
-    redirect_uris: Optional[List[str]]
-    grant_types: Optional[List[Literal["authorization_code", "refresh_token"]]]
-    scopes: Optional[List[str]]
+    client_secret: str | None
+    redirect_uris: list[str] | None
+    grant_types: list[Literal["authorization_code", "refresh_token"]] | None
+    scopes: list[str] | None
 
 
 class UserGitHubAuthConfig(TypedDict):
     client_id: str
     client_secret: str
-    scope: Optional[str]
+    scope: str | None
     callback_path: str
     auth_url: str
     token_url: str
@@ -133,7 +133,7 @@ class UserGitHubAuthConfig(TypedDict):
 class UserAtlassianAuthConfig(TypedDict):
     client_id: str
     client_secret: str
-    scope: Optional[str]
+    scope: str | None
     callback_path: str
     auth_url: str
     token_url: str
@@ -142,7 +142,7 @@ class UserAtlassianAuthConfig(TypedDict):
 class UserSalesforceAuthConfig(TypedDict):
     client_id: str
     client_secret: str
-    scope: Optional[str]
+    scope: str | None
     callback_path: str
     auth_url: str
     token_url: str
@@ -153,57 +153,57 @@ class UserKeycloakAuthConfig(TypedDict):
     client_secret: str
     realm: str
     server_url: str
-    scope: Optional[str]
+    scope: str | None
     callback_path: str
 
 
 class UserAuthPersistenceConfig(TypedDict, total=False):
-    type: Optional[Literal["sqlite"]]
-    path: Optional[str]
+    type: Literal["sqlite"] | None
+    path: str | None
 
 
 class UserAuthorizationConfig(TypedDict, total=False):
-    required_scopes: Optional[List[str]]
+    required_scopes: list[str] | None
 
 
 class UserAuthConfig(TypedDict, total=False):
-    provider: Optional[Literal["none", "github", "atlassian", "salesforce", "keycloak"]]
-    clients: Optional[List[UserOAuthClientConfig]]
-    github: Optional[UserGitHubAuthConfig]
-    atlassian: Optional[UserAtlassianAuthConfig]
-    salesforce: Optional[UserSalesforceAuthConfig]
-    keycloak: Optional[UserKeycloakAuthConfig]
-    authorization: Optional[UserAuthorizationConfig]
-    persistence: Optional[UserAuthPersistenceConfig]
+    provider: Literal["none", "github", "atlassian", "salesforce", "keycloak"] | None
+    clients: list[UserOAuthClientConfig] | None
+    github: UserGitHubAuthConfig | None
+    atlassian: UserAtlassianAuthConfig | None
+    salesforce: UserSalesforceAuthConfig | None
+    keycloak: UserKeycloakAuthConfig | None
+    authorization: UserAuthorizationConfig | None
+    persistence: UserAuthPersistenceConfig | None
 
 
 class UserModelConfig(TypedDict):
     type: Literal["claude", "openai"]
-    api_key: Optional[str]
-    base_url: Optional[str]  # For custom endpoints
-    timeout: Optional[int]  # Request timeout in seconds
-    max_retries: Optional[int]
+    api_key: str | None
+    base_url: str | None  # For custom endpoints
+    timeout: int | None  # Request timeout in seconds
+    max_retries: int | None
 
 
 class UserModelsConfig(TypedDict, total=False):
-    default: Optional[str]  # Default model to use
-    models: Optional[Dict[str, UserModelConfig]]  # Model configurations
+    default: str | None  # Default model to use
+    models: dict[str, UserModelConfig] | None  # Model configurations
 
 
 class UserProfileConfig(TypedDict, total=False):
-    secrets: Optional[List[UserSecretDefinition]]
-    plugin: Optional[UserPluginConfig]
-    auth: Optional[UserAuthConfig]
+    secrets: list[UserSecretDefinition] | None
+    plugin: UserPluginConfig | None
+    auth: UserAuthConfig | None
 
 
 class UserProjectConfig(TypedDict):
-    profiles: Dict[str, UserProfileConfig]
+    profiles: dict[str, UserProfileConfig]
 
 
 class UserConfig(TypedDict):
     mxcp: str
-    projects: Dict[str, UserProjectConfig]
-    vault: Optional[UserVaultConfig]
-    onepassword: Optional[UserOnePasswordConfig]
-    transport: Optional[UserTransportConfig]
-    models: Optional[UserModelsConfig]
+    projects: dict[str, UserProjectConfig]
+    vault: UserVaultConfig | None
+    onepassword: UserOnePasswordConfig | None
+    transport: UserTransportConfig | None
+    models: UserModelsConfig | None

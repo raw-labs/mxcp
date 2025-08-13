@@ -8,7 +8,6 @@ references like ${VAR_NAME}.
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
 
 from ..plugins import ResolverPlugin
 
@@ -25,7 +24,7 @@ class EnvResolver(ResolverPlugin):
         return "env"
 
     @property
-    def url_patterns(self) -> List[str]:
+    def url_patterns(self) -> list[str]:
         return [r"\${[A-Za-z0-9_]+}"]
 
     def can_resolve(self, reference: str) -> bool:

@@ -1,19 +1,17 @@
-# -*- coding: utf-8 -*-
 """Utility classes for audit operations."""
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, Optional
 
 
 @dataclass
 class TimeRange:
     """Represents a time range for audit queries."""
 
-    start: Optional[datetime] = None
-    end: Optional[datetime] = None
+    start: datetime | None = None
+    end: datetime | None = None
 
-    def to_dict(self) -> Dict[str, Optional[str]]:
+    def to_dict(self) -> dict[str, str | None]:
         """Convert to dictionary with ISO timestamps."""
         return {
             "start_time": self.start.isoformat() if self.start else None,

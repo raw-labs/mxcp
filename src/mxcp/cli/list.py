@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import click
 
@@ -10,7 +10,7 @@ from mxcp.endpoints._types import EndpointDefinition
 from mxcp.endpoints.loader import EndpointLoader
 
 
-def parse_endpoint(path: Path, endpoint: EndpointDefinition) -> Tuple[str, str, Optional[str]]:
+def parse_endpoint(path: Path, endpoint: EndpointDefinition) -> tuple[str, str, str | None]:
     """Parse an endpoint definition to determine its type, name, and any error.
 
     Returns:
@@ -113,8 +113,8 @@ def list_endpoints(profile: str, json_output: bool, debug: bool) -> None:
                 click.echo(f"   • {click.style(f'{failed_count} failed', fg='red')}")
 
             # Group by status
-            valid_endpoints: List[Dict[str, Any]] = []
-            failed_endpoints: List[Dict[str, Any]] = []
+            valid_endpoints: list[dict[str, Any]] = []
+            failed_endpoints: list[dict[str, Any]] = []
 
             for result in results:
                 if not result["error"]:

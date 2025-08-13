@@ -1,20 +1,21 @@
-# -*- coding: utf-8 -*-
 """JSONL backend implementation for audit logging.
 
 This module provides a JSONL file-based audit writer with background
 writing for performance.
 """
-import asyncio
+
 import atexit
+import contextlib
 import json
 import logging
 import queue
 import re
 import threading
 import time
+from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
 
 import duckdb
 
@@ -51,7 +52,7 @@ class JSONLAuditWriter(BaseAuditWriter):
         super().__init__(**kwargs)
         self.log_path = log_path
         self._queue: queue.Queue[AuditRecord] = queue.Queue()
-        self._writer_thread: Optional[threading.Thread] = None
+        self._writer_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._file_lock = threading.Lock()
         self._shutdown_called = False
@@ -71,7 +72,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         logger.info(f"JSONL audit writer initialized with file: {self.log_path}")
 
-    def _dict_to_schema(self, d: Dict[str, Any]) -> AuditSchema:
+    def _dict_to_schema(self, d: dict[str, Any]) -> AuditSchema:
         """Convert a dictionary to an AuditSchema."""
 
         # Convert created_at if it's a string
@@ -102,7 +103,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         return AuditSchema(**d)
 
-    def _schema_to_dict(self, schema: AuditSchema) -> Dict[str, Any]:
+    def _schema_to_dict(self, schema: AuditSchema) -> dict[str, Any]:
         """Convert an AuditSchema to a dictionary for JSON serialization."""
         result = {
             "schema_name": schema.schema_name,
@@ -153,16 +154,16 @@ class JSONLAuditWriter(BaseAuditWriter):
             logger.error(f"Failed to save schema {key}: {e}")
             raise
 
-    def _read_schemas_from_disk(self) -> List[AuditSchema]:
+    def _read_schemas_from_disk(self) -> list[AuditSchema]:
         """Read all schemas from the schema file, returning only the latest version of each."""
         if not self.schema_path.exists():
             return []
 
         # Use a dict to store the latest version of each schema
-        schema_map: Dict[str, AuditSchema] = {}
+        schema_map: dict[str, AuditSchema] = {}
 
         try:
-            with open(self.schema_path, "r", encoding="utf-8") as f:
+            with open(self.schema_path, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line:
@@ -180,9 +181,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         return list(schema_map.values())
 
-    async def get_schema(
-        self, schema_name: str, version: Optional[int] = None
-    ) -> Optional[AuditSchema]:
+    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchema | None:
         """Get a schema definition by reading from disk."""
         schemas = self._read_schemas_from_disk()
 
@@ -202,14 +201,14 @@ class JSONLAuditWriter(BaseAuditWriter):
             matching_schemas.sort(key=lambda x: x.version, reverse=True)
             return matching_schemas[0]
 
-    async def list_schemas(self, active_only: bool = True) -> List[AuditSchema]:
+    async def list_schemas(self, active_only: bool = True) -> list[AuditSchema]:
         """List all schemas by reading from disk."""
         schemas = self._read_schemas_from_disk()
         if active_only:
             schemas = [s for s in schemas if s.active]
         return schemas
 
-    async def deactivate_schema(self, schema_name: str, version: Optional[int] = None) -> None:
+    async def deactivate_schema(self, schema_name: str, version: int | None = None) -> None:
         """Deactivate a schema (soft delete)."""
         schema = await self.get_schema(schema_name, version)
         if schema:
@@ -294,16 +293,15 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         logger.debug("Writer thread stopped")
 
-    def _write_events_batch(self, events: List[AuditRecord]) -> None:
+    def _write_events_batch(self, events: list[AuditRecord]) -> None:
         """Write a batch of events to the JSONL file."""
         try:
-            with self._file_lock:
-                with open(self.log_path, "a", encoding="utf-8") as f:
-                    for event in events:
-                        # Write the full audit record
-                        json.dump(event.to_dict(), f, ensure_ascii=False)
-                        f.write("\n")
-                    f.flush()
+            with self._file_lock, open(self.log_path, "a", encoding="utf-8") as f:
+                for event in events:
+                    # Write the full audit record
+                    json.dump(event.to_dict(), f, ensure_ascii=False)
+                    f.write("\n")
+                f.flush()
 
             logger.debug(f"Wrote batch of {len(events)} audit events")
 
@@ -403,11 +401,9 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         # Unregister atexit handler to prevent test contamination
         if hasattr(self, "_shutdown_handler"):
-            try:
-                atexit.unregister(self._shutdown_handler)
-            except (ValueError, AttributeError):
+            with contextlib.suppress(ValueError, AttributeError):
                 # Handler wasn't registered or already removed
-                pass
+                atexit.unregister(self._shutdown_handler)
 
         logger.info("JSONL audit writer shutdown complete")
 
@@ -451,18 +447,18 @@ class JSONLAuditWriter(BaseAuditWriter):
 
     async def query_records(
         self,
-        schema_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        operation_types: Optional[List[str]] = None,
-        operation_names: Optional[List[str]] = None,
-        operation_status: Optional[List[Status]] = None,
-        policy_decisions: Optional[List[PolicyDecision]] = None,
-        user_ids: Optional[List[str]] = None,
-        session_ids: Optional[List[str]] = None,
-        trace_ids: Optional[List[str]] = None,
-        business_context_filters: Optional[Dict[str, Any]] = None,
-        limit: Optional[int] = None,
+        schema_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        operation_types: list[str] | None = None,
+        operation_names: list[str] | None = None,
+        operation_status: list[Status] | None = None,
+        policy_decisions: list[PolicyDecision] | None = None,
+        user_ids: list[str] | None = None,
+        session_ids: list[str] | None = None,
+        trace_ids: list[str] | None = None,
+        business_context_filters: dict[str, Any] | None = None,
+        limit: int | None = None,
         offset: int = 0,
     ) -> AsyncIterator[AuditRecord]:
         """Query audit records with filters.
@@ -580,7 +576,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
                 # Yield records one by one
                 for row in result:
-                    row_dict = dict(zip(columns, row))
+                    row_dict = dict(zip(columns, row, strict=False))
                     # Convert string timestamp to datetime
                     row_dict["timestamp"] = datetime.fromisoformat(row_dict["timestamp"])
 
@@ -597,11 +593,9 @@ class JSONLAuditWriter(BaseAuditWriter):
                             and isinstance(row_dict[field], str)
                             and row_dict[field]
                         ):
-                            try:
-                                row_dict[field] = json.loads(row_dict[field])
-                            except (json.JSONDecodeError, TypeError):
+                            with contextlib.suppress(json.JSONDecodeError, TypeError):
                                 # Keep as string if parsing fails
-                                pass
+                                row_dict[field] = json.loads(row_dict[field])
 
                     # Create AuditRecord (ignoring fields that don't exist in the type)
                     record_fields = {
@@ -627,7 +621,7 @@ class JSONLAuditWriter(BaseAuditWriter):
                 if conn:
                     conn.close()
 
-    async def get_record(self, record_id: str) -> Optional[AuditRecord]:
+    async def get_record(self, record_id: str) -> AuditRecord | None:
         """Get a specific record by ID."""
         conn = None
         try:
@@ -671,7 +665,7 @@ class JSONLAuditWriter(BaseAuditWriter):
             if conn.description is None:
                 return None
             columns = [desc[0] for desc in conn.description]
-            row_dict = dict(zip(columns, result[0]))
+            row_dict = dict(zip(columns, result[0], strict=False))
 
             # Convert timestamp
             row_dict["timestamp"] = datetime.fromisoformat(row_dict["timestamp"])
@@ -680,11 +674,9 @@ class JSONLAuditWriter(BaseAuditWriter):
             json_fields = ["input_data", "output_data", "business_context", "policies_evaluated"]
             for field in json_fields:
                 if field in row_dict and isinstance(row_dict[field], str) and row_dict[field]:
-                    try:
-                        row_dict[field] = json.loads(row_dict[field])
-                    except (json.JSONDecodeError, TypeError):
+                    with contextlib.suppress(json.JSONDecodeError, TypeError):
                         # Keep as string if parsing fails
-                        pass
+                        row_dict[field] = json.loads(row_dict[field])
 
             # Create AuditRecord
             record_fields = {
@@ -717,7 +709,7 @@ class JSONLAuditWriter(BaseAuditWriter):
         # Just return that records exist
         return IntegrityResult(valid=True, records_checked=2, chain_breaks=[])
 
-    async def apply_retention_policies(self) -> Dict[str, int]:
+    async def apply_retention_policies(self) -> dict[str, int]:
         """Apply retention policies to remove old records.
 
         For JSONL backend, this creates a new file with only retained records.
@@ -725,7 +717,7 @@ class JSONLAuditWriter(BaseAuditWriter):
         if not self.log_path.exists():
             return {}
 
-        counts: Dict[str, int] = {}
+        counts: dict[str, int] = {}
         temp_path = self.log_path.with_suffix(".tmp")
 
         try:
@@ -737,44 +729,46 @@ class JSONLAuditWriter(BaseAuditWriter):
             now = datetime.now(timezone.utc)
 
             with self._file_lock:
-                with open(self.log_path, "r", encoding="utf-8") as infile:
-                    with open(temp_path, "w", encoding="utf-8") as outfile:
-                        for line in infile:
-                            line = line.strip()
-                            if not line:
-                                continue
+                with (
+                    open(self.log_path, encoding="utf-8") as infile,
+                    open(temp_path, "w", encoding="utf-8") as outfile,
+                ):
+                    for line in infile:
+                        line = line.strip()
+                        if not line:
+                            continue
 
-                            try:
-                                record_dict = json.loads(line)
-                                schema_name = record_dict.get("schema_name", "unknown")
-                                schema_version = record_dict.get("schema_version", 1)
+                        try:
+                            record_dict = json.loads(line)
+                            schema_name = record_dict.get("schema_name", "unknown")
+                            schema_version = record_dict.get("schema_version", 1)
 
-                                # Get the schema
-                                schema = await self.get_schema(schema_name, schema_version)
-                                if not schema or schema.retention_days is None:
-                                    # No retention policy, keep the record
-                                    outfile.write(line + "\n")
-                                    retained_count += 1
-                                    continue
-
-                                # Check if record should be retained
-                                timestamp = datetime.fromisoformat(record_dict["timestamp"])
-                                age_days = (now - timestamp).days
-
-                                if age_days <= schema.retention_days:
-                                    # Keep the record
-                                    outfile.write(line + "\n")
-                                    retained_count += 1
-                                else:
-                                    # Delete the record
-                                    schema_key = f"{schema_name}:v{schema_version}"
-                                    counts[schema_key] = counts.get(schema_key, 0) + 1
-
-                            except Exception as e:
-                                logger.warning(f"Error processing record for retention: {e}")
-                                # Keep records we can't process
+                            # Get the schema
+                            schema = await self.get_schema(schema_name, schema_version)
+                            if not schema or schema.retention_days is None:
+                                # No retention policy, keep the record
                                 outfile.write(line + "\n")
                                 retained_count += 1
+                                continue
+
+                            # Check if record should be retained
+                            timestamp = datetime.fromisoformat(record_dict["timestamp"])
+                            age_days = (now - timestamp).days
+
+                            if age_days <= schema.retention_days:
+                                # Keep the record
+                                outfile.write(line + "\n")
+                                retained_count += 1
+                            else:
+                                # Delete the record
+                                schema_key = f"{schema_name}:v{schema_version}"
+                                counts[schema_key] = counts.get(schema_key, 0) + 1
+
+                        except Exception as e:
+                            logger.warning(f"Error processing record for retention: {e}")
+                            # Keep records we can't process
+                            outfile.write(line + "\n")
+                            retained_count += 1
 
                 # Replace the original file
                 temp_path.replace(self.log_path)

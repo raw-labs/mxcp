@@ -1,14 +1,11 @@
 import asyncio
 import hashlib
 import json
-from pathlib import Path
-from typing import Any, Dict, Optional
 
 import click
 
 from mxcp.cli.utils import (
     configure_logging,
-    get_env_flag,
     get_env_profile,
     output_error,
     output_result,
@@ -44,7 +41,7 @@ def _compute_snapshot_hash(snapshot: DriftSnapshot) -> tuple[str, str]:
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @track_command_with_timing("drift-snapshot")  # type: ignore[misc]
 def drift_snapshot(
-    profile: Optional[str],
+    profile: str | None,
     force: bool,
     dry_run: bool,
     json_output: bool,
@@ -90,7 +87,7 @@ def drift_snapshot(
         # Handle graceful shutdown
         if not json_output:
             click.echo("\nOperation cancelled by user", err=True)
-        raise click.Abort()
+        raise click.Abort() from None
     except Exception as e:
         # Only catch non-Click exceptions
         output_error(e, json_output, debug)
@@ -98,7 +95,7 @@ def drift_snapshot(
 
 async def _drift_snapshot_impl(
     *,
-    profile: Optional[str],
+    profile: str | None,
     force: bool,
     dry_run: bool,
     json_output: bool,
@@ -161,7 +158,7 @@ async def _drift_snapshot_impl(
                 click.echo(
                     f"   • Use {click.style('mxcp drift-check', fg='cyan')} to compare against this baseline"
                 )
-                click.echo(f"   • Commit the snapshot file to version control for team sharing\n")
+                click.echo("   • Commit the snapshot file to version control for team sharing\n")
             else:
                 click.echo(
                     f"\n{click.style('🔍 Dry Run - Snapshot Preview:', fg='yellow', bold=True)}\n"
@@ -183,4 +180,4 @@ async def _drift_snapshot_impl(
             click.echo(
                 f"\n{click.style('💡 Tip:', fg='yellow')} Use {click.style('--force', fg='cyan')} to overwrite the existing snapshot\n"
             )
-            raise click.Abort()
+            raise click.Abort() from None

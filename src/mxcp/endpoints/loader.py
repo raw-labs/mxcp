@@ -1,14 +1,12 @@
 import json
 import logging
-import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, cast
 
 import yaml
 from jsonschema import validate
 from referencing import Registry, Resource
-from referencing.jsonschema import DRAFT7
 
 from mxcp.config._types import SiteConfig
 from mxcp.endpoints._types import EndpointDefinition
@@ -49,7 +47,7 @@ def extract_validation_error(error_msg: str) -> str:
 
 @dataclass
 class EndpointLoader:
-    _endpoints: Dict[str, EndpointDefinition]
+    _endpoints: dict[str, EndpointDefinition]
     _site_config: SiteConfig
     _repo_root: Path
 
@@ -82,7 +80,7 @@ class EndpointLoader:
                 return bool(prompt_def.get("enabled", True))
         return True
 
-    def _load_schema(self, schema_name: str) -> Tuple[Dict[str, Any], Registry]:
+    def _load_schema(self, schema_name: str) -> tuple[dict[str, Any], Registry]:
         """Load a schema file by name and create a registry for cross-file references"""
         schemas_dir = (Path(__file__).parent / "endpoint_schemas").resolve()
         schema_path = schemas_dir / schema_name
@@ -105,7 +103,7 @@ class EndpointLoader:
 
     def _discover_in_directory(
         self, directory: Path, schema_name: str, endpoint_type: str
-    ) -> List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]]:
+    ) -> list[tuple[Path, EndpointDefinition | None, str | None]]:
         """Discover endpoint files in a specific directory.
 
         Args:
@@ -119,7 +117,7 @@ class EndpointLoader:
             - endpoint_dict: The loaded endpoint dictionary if successful, None if failed
             - error_message: Error message if loading failed, None if successful
         """
-        endpoints: List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]] = []
+        endpoints: list[tuple[Path, EndpointDefinition | None, str | None]] = []
 
         # Skip if directory doesn't exist
         if not directory.exists():
@@ -163,28 +161,28 @@ class EndpointLoader:
 
         return endpoints
 
-    def discover_tools(self) -> List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]]:
+    def discover_tools(self) -> list[tuple[Path, EndpointDefinition | None, str | None]]:
         """Discover all tool definition files"""
         paths_config = self._site_config.get("paths", {})
         tools_path = paths_config.get("tools", "tools") if paths_config else "tools"
         tools_dir = self._repo_root / str(tools_path)
         return self._discover_in_directory(tools_dir, "tool-schema-1.json", "tool")
 
-    def discover_resources(self) -> List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]]:
+    def discover_resources(self) -> list[tuple[Path, EndpointDefinition | None, str | None]]:
         """Discover all resource definition files"""
         paths_config = self._site_config.get("paths", {})
         resources_path = paths_config.get("resources", "resources") if paths_config else "resources"
         resources_dir = self._repo_root / str(resources_path)
         return self._discover_in_directory(resources_dir, "resource-schema-1.json", "resource")
 
-    def discover_prompts(self) -> List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]]:
+    def discover_prompts(self) -> list[tuple[Path, EndpointDefinition | None, str | None]]:
         """Discover all prompt definition files"""
         paths_config = self._site_config.get("paths", {})
         prompts_path = paths_config.get("prompts", "prompts") if paths_config else "prompts"
         prompts_dir = self._repo_root / str(prompts_path)
         return self._discover_in_directory(prompts_dir, "prompt-schema-1.json", "prompt")
 
-    def discover_endpoints(self) -> List[Tuple[Path, Optional[EndpointDefinition], Optional[str]]]:
+    def discover_endpoints(self) -> list[tuple[Path, EndpointDefinition | None, str | None]]:
         """Discover all endpoint files from their respective directories.
 
         Returns:
@@ -202,13 +200,13 @@ class EndpointLoader:
 
         return all_endpoints
 
-    def get_endpoint(self, path: str) -> Optional[EndpointDefinition]:
+    def get_endpoint(self, path: str) -> EndpointDefinition | None:
         """Get a specific endpoint by its path"""
         return self._endpoints.get(path)
 
     def load_endpoint(
         self, endpoint_type: str, name: str
-    ) -> Optional[Tuple[Path, EndpointDefinition]]:
+    ) -> tuple[Path, EndpointDefinition] | None:
         """Load a specific endpoint by type and name
 
         Args:
@@ -271,11 +269,14 @@ class EndpointLoader:
 
                         # Check if this is the endpoint we're looking for
                         endpoint_data = data[endpoint_type]
-                        if endpoint_type == "tool" and endpoint_data.get("name") == name:
-                            found = True
-                        elif endpoint_type == "resource" and endpoint_data.get("uri") == name:
-                            found = True
-                        elif endpoint_type == "prompt" and endpoint_data.get("name") == name:
+                        if (
+                            endpoint_type == "tool"
+                            and endpoint_data.get("name") == name
+                            or endpoint_type == "resource"
+                            and endpoint_data.get("uri") == name
+                            or endpoint_type == "prompt"
+                            and endpoint_data.get("name") == name
+                        ):
                             found = True
                         else:
                             found = False
@@ -304,6 +305,6 @@ class EndpointLoader:
             logger.error(f"Warning: Failed to load endpoint {endpoint_type}/{name}: {e}")
             return None
 
-    def list_endpoints(self) -> List[EndpointDefinition]:
+    def list_endpoints(self) -> list[EndpointDefinition]:
         """List all discovered endpoints"""
         return list(self._endpoints.values())

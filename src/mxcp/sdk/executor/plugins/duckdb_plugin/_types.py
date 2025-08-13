@@ -5,7 +5,7 @@ keeping them separate from the core executor interfaces.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -18,7 +18,7 @@ class ExtensionDefinition:
     """
 
     name: str
-    repo: Optional[str] = None
+    repo: str | None = None
 
 
 @dataclass
@@ -33,7 +33,7 @@ class PluginDefinition:
 
     name: str
     module: str
-    config: Optional[str] = None
+    config: str | None = None
 
 
 @dataclass
@@ -46,7 +46,7 @@ class PluginConfig:
     """
 
     plugins_path: str
-    config: Dict[str, Dict[str, str]]
+    config: dict[str, dict[str, str]]
 
 
 @dataclass
@@ -61,7 +61,7 @@ class SecretDefinition:
 
     name: str
     type: str
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
 
 
 @dataclass
@@ -76,4 +76,4 @@ class DatabaseConfig:
 
     path: str
     readonly: bool = False
-    extensions: List[ExtensionDefinition] = field(default_factory=list)
+    extensions: list[ExtensionDefinition] = field(default_factory=list)

@@ -6,7 +6,7 @@ replacing the legacy DuckDBSession-based execution. This is used by CLI commands
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
 
 from jinja2 import Template
 
@@ -16,8 +16,6 @@ from mxcp.config.site_config import find_repo_root
 from mxcp.endpoints._types import (
     EndpointDefinition,
     PromptDefinition,
-    ResourceDefinition,
-    ToolDefinition,
     TypeDefinition,
 )
 from mxcp.endpoints.loader import EndpointLoader
@@ -36,13 +34,13 @@ logger = logging.getLogger(__name__)
 async def execute_endpoint(
     endpoint_type: str,
     name: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     user_config: UserConfig,
     site_config: SiteConfig,
     profile_name: str,
     readonly: bool = False,
     skip_output_validation: bool = False,
-    user_context: Optional[UserContext] = None,
+    user_context: UserContext | None = None,
 ) -> Any:
     """Execute endpoint using SDK executor system.
 
@@ -89,12 +87,12 @@ async def execute_endpoint(
 async def execute_endpoint_with_engine(
     endpoint_type: str,
     name: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     user_config: UserConfig,
     site_config: SiteConfig,
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
-    user_context: Optional[UserContext] = None,
+    user_context: UserContext | None = None,
 ) -> Any:
     """Execute endpoint using an existing SDK execution engine.
 
@@ -139,33 +137,33 @@ async def execute_endpoint_with_engine(
     if endpoint_type == "tool":
         tool_def = endpoint_definition.get("tool")
         if not tool_def:
-            raise ValueError(f"No tool definition found in endpoint")
+            raise ValueError("No tool definition found in endpoint")
 
         policies_config = tool_def.get("policies")
         if policies_config:
-            policy_set = parse_policies_from_config(cast(Dict[str, Any], policies_config))
+            policy_set = parse_policies_from_config(cast(dict[str, Any], policies_config))
             if policy_set:
                 policy_enforcer = PolicyEnforcer(policy_set)
 
     elif endpoint_type == "resource":
         resource_def = endpoint_definition.get("resource")
         if not resource_def:
-            raise ValueError(f"No resource definition found in endpoint")
+            raise ValueError("No resource definition found in endpoint")
 
         policies_config = resource_def.get("policies")
         if policies_config:
-            policy_set = parse_policies_from_config(cast(Dict[str, Any], policies_config))
+            policy_set = parse_policies_from_config(cast(dict[str, Any], policies_config))
             if policy_set:
                 policy_enforcer = PolicyEnforcer(policy_set)
 
     elif endpoint_type == "prompt":
         prompt_def = endpoint_definition.get("prompt")
         if not prompt_def:
-            raise ValueError(f"No prompt definition found in endpoint")
+            raise ValueError("No prompt definition found in endpoint")
 
         policies_config = prompt_def.get("policies")
         if policies_config:
-            policy_set = parse_policies_from_config(cast(Dict[str, Any], policies_config))
+            policy_set = parse_policies_from_config(cast(dict[str, Any], policies_config))
             if policy_set:
                 policy_enforcer = PolicyEnforcer(policy_set)
 
@@ -177,7 +175,7 @@ async def execute_endpoint_with_engine(
         try:
             policy_enforcer.enforce_input_policies(user_context, params)
         except PolicyEnforcementError as e:
-            raise ValueError(f"Policy enforcement failed: {e.reason}")
+            raise ValueError(f"Policy enforcement failed: {e.reason}") from e
 
     # Dispatch to appropriate execution method based on endpoint type
     if endpoint_type == "prompt":
@@ -202,23 +200,23 @@ async def execute_endpoint_with_engine(
         try:
             # Get the appropriate definition for policy enforcement
             if endpoint_type == "tool":
-                endpoint_def = cast(Dict[str, Any], endpoint_definition.get("tool"))
+                endpoint_def = cast(dict[str, Any], endpoint_definition.get("tool"))
             elif endpoint_type == "resource":
-                endpoint_def = cast(Dict[str, Any], endpoint_definition.get("resource"))
+                endpoint_def = cast(dict[str, Any], endpoint_definition.get("resource"))
             else:  # prompt
-                endpoint_def = cast(Dict[str, Any], endpoint_definition.get("prompt"))
+                endpoint_def = cast(dict[str, Any], endpoint_definition.get("prompt"))
 
             result, action = policy_enforcer.enforce_output_policies(
                 user_context, result, endpoint_def
             )
         except PolicyEnforcementError as e:
-            raise ValueError(f"Output policy enforcement failed: {e.reason}")
+            raise ValueError(f"Output policy enforcement failed: {e.reason}") from e
 
     return result
 
 
 async def _execute_prompt_with_validation(
-    prompt_def: PromptDefinition, params: Dict[str, Any], skip_output_validation: bool
+    prompt_def: PromptDefinition, params: dict[str, Any], skip_output_validation: bool
 ) -> Any:
     """Execute prompt endpoint with proper validation and template rendering.
 
@@ -266,12 +264,12 @@ async def _execute_code_with_engine(
     endpoint_type: str,
     endpoint_file_path: Path,
     repo_root: Path,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     execution_engine: ExecutionEngine,
     skip_output_validation: bool,
     user_config: UserConfig,
     site_config: SiteConfig,
-    user_context: Optional[UserContext] = None,
+    user_context: UserContext | None = None,
 ) -> Any:
     """Execute tool/resource endpoint using SDK execution engine.
 
@@ -307,36 +305,32 @@ async def _execute_code_with_engine(
         logger.error("Could not find SQL executor anywhere")
 
     # Get validation schemas - SDK executor handles input validation internally
-    input_schema: Optional[List[Dict[str, Any]]] = None
-    output_schema: Optional[TypeDefinition] = None
-    return_def: Optional[TypeDefinition] = None
+    input_schema: list[dict[str, Any]] | None = None
+    output_schema: TypeDefinition | None = None
+    return_def: TypeDefinition | None = None
 
     if endpoint_type == "tool":
         tool_def = endpoint_definition.get("tool")
         if not tool_def:
-            raise ValueError(f"No tool definition found")
+            raise ValueError("No tool definition found")
         params_raw = tool_def.get("parameters")
         # Cast to List[Dict[str, Any]] for SDK executor compatibility
         input_schema = (
-            cast(Optional[List[Dict[str, Any]]], params_raw)
-            if isinstance(params_raw, list)
-            else None
+            cast(list[dict[str, Any]] | None, params_raw) if isinstance(params_raw, list) else None
         )
         # Tools use "return" not "return_" in the YAML
-        return_def = cast(Optional[TypeDefinition], tool_def.get("return"))
+        return_def = cast(TypeDefinition | None, tool_def.get("return"))
         output_schema = return_def if not skip_output_validation else None
     else:  # resource
         resource_def = endpoint_definition.get("resource")
         if not resource_def:
-            raise ValueError(f"No resource definition found")
+            raise ValueError("No resource definition found")
         params_raw = resource_def.get("parameters")
         # Cast to List[Dict[str, Any]] for SDK executor compatibility
         input_schema = (
-            cast(Optional[List[Dict[str, Any]]], params_raw)
-            if isinstance(params_raw, list)
-            else None
+            cast(list[dict[str, Any]] | None, params_raw) if isinstance(params_raw, list) else None
         )
-        return_def = cast(Optional[TypeDefinition], resource_def.get("return"))
+        return_def = cast(TypeDefinition | None, resource_def.get("return"))
         output_schema = return_def if not skip_output_validation else None
 
     # Execute using the provided SDK engine

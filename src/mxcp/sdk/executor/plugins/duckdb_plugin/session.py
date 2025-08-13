@@ -6,15 +6,15 @@ This is a cloned version of the session for the executor plugin system.
 """
 
 import logging
+from collections.abc import Hashable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Hashable, List, Optional
+from typing import Any
 
 import duckdb
 from pandas import NaT
 
 from mxcp.plugins import MXCPBasePlugin
 
-from ...context import ExecutionContext
 from ._types import DatabaseConfig, PluginConfig, PluginDefinition, SecretDefinition
 from .extension_loader import load_extensions
 from .plugin_loader import load_plugins
@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 def execute_query_to_dict(
-    conn: duckdb.DuckDBPyConnection, query: str, params: Optional[Dict[str, Any]] = None
-) -> List[Dict[Hashable, Any]]:
+    conn: duckdb.DuckDBPyConnection, query: str, params: dict[str, Any] | None = None
+) -> list[dict[Hashable, Any]]:
     """
     Execute a query with parameters and return the result as a list of dictionaries.
     Replaces NaT values with None for JSON serialization.
@@ -45,16 +45,16 @@ class DuckDBSession:
     def __init__(
         self,
         database_config: DatabaseConfig,
-        plugins: List[PluginDefinition],
+        plugins: list[PluginDefinition],
         plugin_config: PluginConfig,
-        secrets: List[SecretDefinition],
+        secrets: list[SecretDefinition],
     ):
-        self.conn: Optional[duckdb.DuckDBPyConnection] = None
+        self.conn: duckdb.DuckDBPyConnection | None = None
         self.database_config = database_config
         self.plugins_definitions = plugins
         self.plugin_config = plugin_config
         self.secrets = secrets
-        self.plugins: Dict[str, MXCPBasePlugin] = {}
+        self.plugins: dict[str, MXCPBasePlugin] = {}
         self._initialized = False  # Track whether session has been fully initialized
 
         # Connect automatically on construction
@@ -70,11 +70,10 @@ class DuckDBSession:
 
     def __del__(self) -> None:
         """Destructor - ensure connection is closed if object is garbage collected"""
-        try:
+        import contextlib
+
+        with contextlib.suppress(Exception):
             self.close()
-        except Exception:
-            # Ignore errors during cleanup in destructor
-            pass
 
     # Remove _get_project_profile method as project/profile are no longer concerns of the session
 
@@ -116,7 +115,7 @@ class DuckDBSession:
         inject_secrets(self.conn, self.secrets)
 
         # Load plugins
-        context_for_plugins = None  # No longer passed to constructor
+        # context_for_plugins = None  # No longer passed to constructor
 
         self.plugins = load_plugins(self.plugins_definitions, self.plugin_config, self.conn)
 
@@ -192,8 +191,8 @@ class DuckDBSession:
                 self.conn = None
 
     def execute_query_to_dict(
-        self, query: str, params: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[Hashable, Any]]:
+        self, query: str, params: dict[str, Any] | None = None
+    ) -> list[dict[Hashable, Any]]:
         """Execute a query and return results as a list of dictionaries.
 
         Args:

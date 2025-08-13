@@ -45,8 +45,9 @@ import asyncio
 import inspect
 import logging
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 from ..context import ExecutionContext
 from ..interfaces import ExecutorPlugin
@@ -93,7 +94,7 @@ class PythonExecutor(ExecutorPlugin):
         >>> executor.shutdown()
     """
 
-    def __init__(self, repo_root: Optional[Path] = None):
+    def __init__(self, repo_root: Path | None = None):
         """Initialize Python executor.
 
         Creates Python loader, preloads all modules to register hooks,
@@ -195,7 +196,7 @@ class PythonExecutor(ExecutorPlugin):
             logger.debug(f"Python validation failed: {e}")
             return False
 
-    def extract_parameters(self, source_code: str) -> List[str]:
+    def extract_parameters(self, source_code: str) -> list[str]:
         """Extract parameter names from Python source code.
 
         Args:
@@ -214,7 +215,7 @@ class PythonExecutor(ExecutorPlugin):
             logger.debug(f"Python parameter extraction failed: {e}")
             return []
 
-    def _extract_parameters_from_file(self, file_path: str) -> List[str]:
+    def _extract_parameters_from_file(self, file_path: str) -> list[str]:
         """Extract parameters from a Python file."""
         try:
             # Parse file path and function name
@@ -239,7 +240,7 @@ class PythonExecutor(ExecutorPlugin):
                 func = None
 
                 if hasattr(module, "main"):
-                    func = getattr(module, "main")
+                    func = module.main
                 elif hasattr(module, file_name):
                     func = getattr(module, file_name)
                 else:
@@ -266,7 +267,7 @@ class PythonExecutor(ExecutorPlugin):
             logger.debug(f"Failed to extract parameters from file {file_path}: {e}")
             return []
 
-    def _extract_parameters_from_inline(self, source_code: str) -> List[str]:
+    def _extract_parameters_from_inline(self, source_code: str) -> list[str]:
         """Extract parameters from inline Python code."""
         try:
             import ast
@@ -280,9 +281,13 @@ class PythonExecutor(ExecutorPlugin):
                 # Find all variable names used in the expression
                 params = []
                 for node in ast.walk(expr_tree):
-                    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
-                        if node.id not in ["pd", "np", "pandas", "numpy"] and node.id not in params:
-                            params.append(node.id)
+                    if (
+                        isinstance(node, ast.Name)
+                        and isinstance(node.ctx, ast.Load)
+                        and node.id not in ["pd", "np", "pandas", "numpy"]
+                        and node.id not in params
+                    ):
+                        params.append(node.id)
                 return params
             else:
                 # For more complex code, try to find function definitions
@@ -297,9 +302,13 @@ class PythonExecutor(ExecutorPlugin):
                 # If no function found, analyze variable references
                 params = []
                 for node in ast.walk(tree):
-                    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
-                        if node.id not in ["pd", "np", "pandas", "numpy"] and node.id not in params:
-                            params.append(node.id)
+                    if (
+                        isinstance(node, ast.Name)
+                        and isinstance(node.ctx, ast.Load)
+                        and node.id not in ["pd", "np", "pandas", "numpy"]
+                        and node.id not in params
+                    ):
+                        params.append(node.id)
                 return params
 
         except Exception as e:
@@ -307,7 +316,7 @@ class PythonExecutor(ExecutorPlugin):
             return []
 
     async def execute(
-        self, source_code: str, params: Dict[str, Any], context: ExecutionContext
+        self, source_code: str, params: dict[str, Any], context: ExecutionContext
     ) -> Any:
         """Execute Python source code with parameters.
 
@@ -323,15 +332,15 @@ class PythonExecutor(ExecutorPlugin):
             # Check if it's a file path or inline code
             logger.info(f"Executing Python source: {repr(source_code[:100])}...")
             if self._is_file_path(source_code):
-                logger.info(f"Detected as file path, using _execute_from_file")
+                logger.info("Detected as file path, using _execute_from_file")
                 return await self._execute_from_file(source_code, params, context)
             else:
-                logger.info(f"Detected as inline code, using _execute_inline")
+                logger.info("Detected as inline code, using _execute_inline")
                 return await self._execute_inline(source_code, params, context)
         except (ImportError, SyntaxError) as e:
             # These are executor-level errors that should be wrapped
             logger.error(f"Python execution failed: {e}")
-            raise RuntimeError(f"Failed to execute Python code: {e}")
+            raise RuntimeError(f"Failed to execute Python code: {e}") from e
         except Exception:
             # Let other exceptions (FileNotFoundError, AttributeError, runtime errors) propagate
             raise
@@ -347,7 +356,7 @@ class PythonExecutor(ExecutorPlugin):
         )
 
     async def _execute_from_file(
-        self, file_path: str, params: Dict[str, Any], context: ExecutionContext
+        self, file_path: str, params: dict[str, Any], context: ExecutionContext
     ) -> Any:
         """Execute Python code from a file."""
         try:
@@ -400,7 +409,7 @@ class PythonExecutor(ExecutorPlugin):
             raise
 
     async def _execute_inline(
-        self, source_code: str, params: Dict[str, Any], context: ExecutionContext
+        self, source_code: str, params: dict[str, Any], context: ExecutionContext
     ) -> Any:
         """Execute inline Python code."""
         try:
@@ -448,12 +457,12 @@ class PythonExecutor(ExecutorPlugin):
                 for name, obj in namespace.items()
                 if callable(obj)
                 and not name.startswith("_")
-                and not name in {"pd", "np", "pandas", "numpy"}
+                and name not in {"pd", "np", "pandas", "numpy"}
             }
 
             if callables:
                 # Try to find a function whose signature matches the parameters
-                for func_name, func in callables.items():
+                for _func_name, func in callables.items():
                     try:
                         sig = inspect.signature(func)
                         # Check if the function parameters match our input parameters
@@ -461,7 +470,7 @@ class PythonExecutor(ExecutorPlugin):
                         if set(params.keys()).issubset(set(func_params)) or len(func_params) == 0:
                             # Call the function
                             return await self._execute_function(func, params, context)
-                    except (ValueError, TypeError, AttributeError) as e:
+                    except (ValueError, TypeError, AttributeError):
                         # Only catch errors related to introspection, not runtime errors
                         continue
 
@@ -473,7 +482,7 @@ class PythonExecutor(ExecutorPlugin):
             raise
 
     async def _execute_function(
-        self, func: Callable[..., Any], params: Dict[str, Any], context: ExecutionContext
+        self, func: Callable[..., Any], params: dict[str, Any], context: ExecutionContext
     ) -> Any:
         """Execute a function with parameters."""
 

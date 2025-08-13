@@ -1,10 +1,10 @@
 import functools
 import logging
 import os
-import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 from posthog import Posthog
 
@@ -54,7 +54,7 @@ def is_analytics_opted_out() -> bool:
     return os.getenv("MXCP_DISABLE_ANALYTICS", "").lower() in ("1", "true", "yes")
 
 
-def track_event(event_name: str, properties: Optional[Dict[str, Any]] = None) -> None:
+def track_event(event_name: str, properties: dict[str, Any] | None = None) -> None:
     """
     Track an event in PostHog if analytics is enabled.
     This is completely non-blocking and will silently fail if there are any issues.
@@ -93,8 +93,8 @@ def track_event(event_name: str, properties: Optional[Dict[str, Any]] = None) ->
 def track_command(
     command_name: str,
     success: bool,
-    error: Optional[str] = None,
-    duration_ms: Optional[float] = None,
+    error: str | None = None,
+    duration_ms: float | None = None,
 ) -> None:
     """
     Track CLI command execution.

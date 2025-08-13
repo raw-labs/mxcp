@@ -5,8 +5,7 @@ into SDK-compatible session objects, centralizing the logic for creating
 SDK DuckDB sessions across the codebase.
 """
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, cast
 
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.sdk.executor.plugins.duckdb_plugin._types import (
@@ -21,7 +20,7 @@ from mxcp.sdk.executor.plugins.duckdb_plugin.session import DuckDBSession
 
 def _create_duckdb_session_config(
     site_config: SiteConfig, user_config: UserConfig, profile_name: str, readonly: bool = False
-) -> Tuple[DatabaseConfig, List[PluginDefinition], PluginConfig, List[SecretDefinition]]:
+) -> tuple[DatabaseConfig, list[PluginDefinition], PluginConfig, list[SecretDefinition]]:
     """Convert MXCP configs to SDK session configuration objects.
 
     Args:
@@ -78,7 +77,7 @@ def _create_duckdb_session_config(
 
     # Get plugin configuration from user config
     user_projects = user_config.get("projects") or {}
-    user_project = cast(Dict[str, Any], user_projects.get(project_name) or {})
+    user_project = cast(dict[str, Any], user_projects.get(project_name) or {})
     user_profiles = user_project.get("profiles") or {}
     user_profile = user_profiles.get(profile_name) or {}
     user_plugin_section = user_profile.get("plugin") or {}
@@ -108,7 +107,7 @@ def _create_duckdb_session_config(
 def create_duckdb_session(
     site_config: SiteConfig,
     user_config: UserConfig,
-    profile: Optional[str] = None,
+    profile: str | None = None,
     readonly: bool = False,
 ) -> DuckDBSession:
     """Create an SDK DuckDB session from MXCP configurations.

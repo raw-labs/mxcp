@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
 
 import click
 import yaml
@@ -32,7 +32,7 @@ def _get_dbt_project_path() -> Path:
     return Path.cwd() / "dbt_project.yml"
 
 
-def _load_profiles() -> Dict[str, Any]:
+def _load_profiles() -> dict[str, Any]:
     """Load existing dbt profiles or return empty dict."""
     profiles_path = _get_dbt_profiles_path()
     if profiles_path.exists():
@@ -41,7 +41,7 @@ def _load_profiles() -> Dict[str, Any]:
     return {}
 
 
-def _load_dbt_project() -> Dict[str, Any]:
+def _load_dbt_project() -> dict[str, Any]:
     """Load existing dbt_project.yml or return empty dict."""
     project_path = _get_dbt_project_path()
     if project_path.exists():
@@ -50,7 +50,7 @@ def _load_dbt_project() -> Dict[str, Any]:
     return {}
 
 
-def _save_profiles(profiles: Dict[str, Any]) -> None:
+def _save_profiles(profiles: dict[str, Any]) -> None:
     """Save dbt profiles atomically."""
     profiles_path = _get_dbt_profiles_path()
     profiles_dir = profiles_path.parent
@@ -65,7 +65,7 @@ def _save_profiles(profiles: Dict[str, Any]) -> None:
     temp_path.rename(profiles_path)
 
 
-def _save_dbt_project(project_config: Dict[str, Any]) -> None:
+def _save_dbt_project(project_config: dict[str, Any]) -> None:
     """Save dbt_project.yml atomically."""
     project_path = _get_dbt_project_path()
 
@@ -78,9 +78,7 @@ def _save_dbt_project(project_config: Dict[str, Any]) -> None:
     temp_path.rename(project_path)
 
 
-def _map_secret_to_dbt_format(
-    secret: Dict[str, Any], embed_secrets: bool
-) -> Optional[Dict[str, Any]]:
+def _map_secret_to_dbt_format(secret: dict[str, Any], embed_secrets: bool) -> dict[str, Any] | None:
     """Map a MXCP secret to dbt's expected format based on its type.
 
     Args:
@@ -146,9 +144,9 @@ def _build_profile_block(
     project: str,
     profile: str,
     duckdb_path: str,
-    secrets: Optional[List[Dict[str, Any]]] = None,
+    secrets: list[dict[str, Any]] | None = None,
     embed_secrets: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build a dbt profile block with DuckDB configuration.
 
     Args:
@@ -213,7 +211,7 @@ def _build_profile_block(
     return block
 
 
-def _build_dbt_project(project: str, profile: str, site_config: SiteConfig) -> Dict[str, Any]:
+def _build_dbt_project(project: str, profile: str, site_config: SiteConfig) -> dict[str, Any]:
     """Build dbt_project.yml configuration.
 
     Args:
@@ -250,7 +248,7 @@ def _build_dbt_project(project: str, profile: str, site_config: SiteConfig) -> D
     }
 
 
-def _merge_profile_blocks(existing: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_profile_blocks(existing: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     """Merge new profile block into existing one, preserving user configuration.
 
     Args:
@@ -287,7 +285,7 @@ def _merge_profile_blocks(existing: Dict[str, Any], new: Dict[str, Any]) -> Dict
     return result
 
 
-def _merge_dbt_project(existing: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_dbt_project(existing: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     """Merge new dbt project config into existing one, preserving user configuration.
 
     Args:
@@ -309,7 +307,7 @@ def _merge_dbt_project(existing: Dict[str, Any], new: Dict[str, Any]) -> Dict[st
 def configure_dbt(
     site_config: SiteConfig,
     user_config: UserConfig,
-    profile: Optional[str] = None,
+    profile: str | None = None,
     dry_run: bool = False,
     force: bool = False,
     embed_secrets: bool = False,
@@ -362,7 +360,7 @@ def configure_dbt(
 
     # 5. Get secrets from user config
     projects = user_config.get("projects", {})
-    project_config: Optional[UserProjectConfig] = projects.get(project) if projects else None
+    project_config: UserProjectConfig | None = projects.get(project) if projects else None
     if not project_config:
         click.echo(
             f"Warning: Project '{project}' not found in user config, assuming empty configuration",
@@ -371,9 +369,7 @@ def configure_dbt(
         project_config = None
 
     profiles = project_config.get("profiles", {}) if project_config else {}
-    user_profile_config: Optional[UserProfileConfig] = (
-        profiles.get(profile_name) if profiles else None
-    )
+    user_profile_config: UserProfileConfig | None = profiles.get(profile_name) if profiles else None
 
     if not user_profile_config:
         click.echo(
@@ -382,7 +378,7 @@ def configure_dbt(
         )
         user_profile_config = {}
 
-    secrets: Optional[List[UserSecretDefinition]] = (
+    secrets: list[UserSecretDefinition] | None = (
         user_profile_config.get("secrets") if user_profile_config else None
     )
 
@@ -392,8 +388,8 @@ def configure_dbt(
 
     # 7. Build new profile block
     # Cast secrets to Dict[str, Any] for _build_profile_block
-    secrets_dict: Optional[List[Dict[str, Any]]] = (
-        cast(Optional[List[Dict[str, Any]]], secrets) if secrets else None
+    secrets_dict: list[dict[str, Any]] | None = (
+        cast(list[dict[str, Any]] | None, secrets) if secrets else None
     )
     new_profile_block = _build_profile_block(
         project=project,
@@ -409,11 +405,10 @@ def configure_dbt(
     )
 
     # 9. Check for existing profile
-    if dbt_profile in profiles:
-        if not force:
-            raise click.ClickException(
-                f"Profile '{dbt_profile}' already exists. Use --force to update configuration."
-            )
+    if dbt_profile in profiles and not force:
+        raise click.ClickException(
+            f"Profile '{dbt_profile}' already exists. Use --force to update configuration."
+        )
 
     # 10. Merge configurations
     merged_profiles = _merge_profile_blocks(profiles, new_profile_block)

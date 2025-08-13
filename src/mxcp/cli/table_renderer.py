@@ -1,13 +1,13 @@
 """Table rendering utilities for CLI output."""
 
 import json
-from typing import Any, Dict, List, Union
+from typing import Any
 
 import click
 
 
 def render_table(
-    data: Union[List[Dict[str, Any]], List[Any]],
+    data: list[dict[str, Any]] | list[Any],
     title: str = "Results",
     max_rows: int = 100,
     max_col_width: int = 50,
@@ -72,7 +72,7 @@ def render_table(
         _render_primitive_list(data, title, max_rows, max_col_width)
 
 
-def _render_primitive_list(data: List[Any], title: str, max_rows: int, max_col_width: int) -> None:
+def _render_primitive_list(data: list[Any], title: str, max_rows: int, max_col_width: int) -> None:
     """Render a list of primitive values."""
     click.echo(f"\n{click.style(f'📊 {title} ({len(data)} items):', fg='cyan', bold=True)}\n")
 
@@ -99,7 +99,7 @@ def _render_primitive_list(data: List[Any], title: str, max_rows: int, max_col_w
 
 
 def _render_dict_table(
-    data: List[Dict[str, Any]], title: str, max_rows: int, max_col_width: int
+    data: list[dict[str, Any]], title: str, max_rows: int, max_col_width: int
 ) -> None:
     """Render a list of dictionaries as a table."""
     click.echo(f"\n{click.style(f'📊 {title} ({len(data)} rows):', fg='cyan', bold=True)}\n")
@@ -164,7 +164,7 @@ def format_result_for_display(result: Any, max_rows: int = 100) -> None:
         click.echo(f"\n{click.style('📋 Result:', fg='cyan', bold=True)}\n")
 
         click.echo(json.dumps(result, indent=2, default=str))
-    elif isinstance(result, (str, int, float, bool, type(None))):
+    elif isinstance(result, str | int | float | bool | type(None)):
         # Simple scalar value
         click.echo(f"\n{click.style('📋 Result:', fg='cyan', bold=True)} {result}")
     else:

@@ -5,7 +5,6 @@ that can be set by auth middleware and retrieved by endpoint execution code.
 """
 
 import contextvars
-from typing import Optional
 
 from ._types import UserContext
 
@@ -15,10 +14,10 @@ from ._types import UserContext
 
 # Create a contextvar to store the current user context
 # The default is None, indicating no authenticated user
-user_context_var = contextvars.ContextVar[Optional[UserContext]]("user_context", default=None)
+user_context_var = contextvars.ContextVar[UserContext | None]("user_context", default=None)
 
 
-def get_user_context() -> Optional[UserContext]:
+def get_user_context() -> UserContext | None:
     """
     Get the current user context from the authentication context.
 
@@ -35,7 +34,7 @@ def get_user_context() -> Optional[UserContext]:
     return user_context_var.get()
 
 
-def set_user_context(context: Optional[UserContext]) -> "contextvars.Token[Optional[UserContext]]":
+def set_user_context(context: UserContext | None) -> "contextvars.Token[UserContext | None]":
     """
     Set the user context in the current authentication context.
 
@@ -58,7 +57,7 @@ def set_user_context(context: Optional[UserContext]) -> "contextvars.Token[Optio
     return user_context_var.set(context)
 
 
-def reset_user_context(token: "contextvars.Token[Optional[UserContext]]") -> None:
+def reset_user_context(token: "contextvars.Token[UserContext | None]") -> None:
     """
     Reset the user context using a token.
 

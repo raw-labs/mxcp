@@ -6,7 +6,7 @@ and extensible state between MXCP components.
 
 import contextvars
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 from mxcp.sdk.auth import UserContext
 
@@ -41,10 +41,10 @@ class ExecutionContext:
     """
 
     # User information
-    user_context: Optional[UserContext] = None
+    user_context: UserContext | None = None
 
     # Simple key-value storage
-    _data: Dict[str, Any] = field(default_factory=dict)
+    _data: dict[str, Any] = field(default_factory=dict)
 
     # Simple key-value operations (new interface)
     def get(self, key: str, default: Any = None) -> Any:
@@ -79,27 +79,27 @@ class ExecutionContext:
 
     # Convenience properties for user context
     @property
-    def user_id(self) -> Optional[str]:
+    def user_id(self) -> str | None:
         """Get user ID from user context."""
         return self.user_context.user_id if self.user_context else None
 
     @property
-    def username(self) -> Optional[str]:
+    def username(self) -> str | None:
         """Get username from user context."""
         return self.user_context.username if self.user_context else None
 
     @property
-    def provider(self) -> Optional[str]:
+    def provider(self) -> str | None:
         """Get provider from user context."""
         return self.user_context.provider if self.user_context else None
 
     @property
-    def external_token(self) -> Optional[str]:
+    def external_token(self) -> str | None:
         """Get external token from user context."""
         return self.user_context.external_token if self.user_context else None
 
     @property
-    def email(self) -> Optional[str]:
+    def email(self) -> str | None:
         """Get email from user context."""
         return self.user_context.email if self.user_context else None
 
@@ -139,12 +139,12 @@ class ExecutionContext:
 
 # Create a contextvar to store the execution context
 # The default is None, indicating no context is currently set
-execution_context_var = contextvars.ContextVar[Optional[ExecutionContext]](
+execution_context_var = contextvars.ContextVar[ExecutionContext | None](
     "execution_context", default=None
 )
 
 
-def get_execution_context() -> Optional[ExecutionContext]:
+def get_execution_context() -> ExecutionContext | None:
     """
     Get the execution context from the current context.
 
@@ -155,8 +155,8 @@ def get_execution_context() -> Optional[ExecutionContext]:
 
 
 def set_execution_context(
-    context: Optional[ExecutionContext],
-) -> "contextvars.Token[Optional[ExecutionContext]]":
+    context: ExecutionContext | None,
+) -> "contextvars.Token[ExecutionContext | None]":
     """
     Set the execution context in the current context.
 
@@ -169,7 +169,7 @@ def set_execution_context(
     return execution_context_var.set(context)
 
 
-def reset_execution_context(token: "contextvars.Token[Optional[ExecutionContext]]") -> None:
+def reset_execution_context(token: "contextvars.Token[ExecutionContext | None]") -> None:
     """
     Reset the execution context using a token.
 

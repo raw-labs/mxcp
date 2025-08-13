@@ -2,10 +2,9 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import cast
 
 import duckdb
-from pydantic import BaseModel
 
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine
@@ -29,7 +28,7 @@ from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
 logger = logging.getLogger(__name__)
 
 
-def get_duckdb_tables(conn: duckdb.DuckDBPyConnection) -> List[Table]:
+def get_duckdb_tables(conn: duckdb.DuckDBPyConnection) -> list[Table]:
     """Get list of tables and their columns from DuckDB catalog."""
     tables = []
     for table in conn.execute(
@@ -48,10 +47,10 @@ def get_duckdb_tables(conn: duckdb.DuckDBPyConnection) -> List[Table]:
 async def generate_snapshot(
     site_config: SiteConfig,
     user_config: UserConfig,
-    profile: Optional[str] = None,
+    profile: str | None = None,
     force: bool = False,
     dry_run: bool = False,
-) -> Tuple[DriftSnapshot, Path]:
+) -> tuple[DriftSnapshot, Path]:
     """Generate a drift snapshot for the current state.
 
     Args:
@@ -104,7 +103,7 @@ async def generate_snapshot(
         # Get repository root for relative path calculation
         repo_root = find_repo_root()
 
-        resources: List[ResourceDefinition] = []
+        resources: list[ResourceDefinition] = []
         for path, endpoint, error in discovered:
             # Convert to relative path from repository root
             try:
@@ -158,7 +157,7 @@ async def generate_snapshot(
                     "validation_results": cast(ValidationResults, validation_result),
                     "test_results": cast(TestResults, test_result),
                     "definition": cast(
-                        Optional[Union[Tool, Resource, Prompt]], endpoint
+                        Tool | Resource | Prompt | None, endpoint
                     ),  # Store the full endpoint structure
                     "metadata": endpoint.get("metadata") if endpoint else None,
                 }

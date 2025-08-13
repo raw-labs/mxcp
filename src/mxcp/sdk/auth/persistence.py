@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """OAuth persistence backends for MXCP authentication."""
+
 import asyncio
 import json
 import logging
@@ -8,13 +8,9 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-from mcp.server.auth.provider import AccessToken, AuthorizationCode
-from mcp.shared.auth import OAuthClientInformationFull
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +21,9 @@ class PersistedAccessToken:
 
     token: str
     client_id: str
-    external_token: Optional[str]
-    scopes: List[str]
-    expires_at: Optional[float]
+    external_token: str | None
+    scopes: list[str]
+    expires_at: float | None
     created_at: float
 
 
@@ -40,8 +36,8 @@ class PersistedAuthCode:
     redirect_uri: str
     redirect_uri_provided_explicitly: bool
     expires_at: float
-    scopes: List[str]
-    code_challenge: Optional[str]
+    scopes: list[str]
+    code_challenge: str | None
     created_at: float
 
 
@@ -50,10 +46,10 @@ class PersistedClient:
     """Persisted OAuth client data."""
 
     client_id: str
-    client_secret: Optional[str]
-    redirect_uris: List[str]
-    grant_types: List[str]
-    response_types: List[str]
+    client_secret: str | None
+    redirect_uris: list[str]
+    grant_types: list[str]
+    response_types: list[str]
     scope: str
     client_name: str
     created_at: float
@@ -79,7 +75,7 @@ class AuthPersistenceBackend(ABC):
         pass
 
     @abstractmethod
-    async def load_token(self, token: str) -> Optional[PersistedAccessToken]:
+    async def load_token(self, token: str) -> PersistedAccessToken | None:
         """Load an access token by token string."""
         pass
 
@@ -100,7 +96,7 @@ class AuthPersistenceBackend(ABC):
         pass
 
     @abstractmethod
-    async def load_auth_code(self, code: str) -> Optional[PersistedAuthCode]:
+    async def load_auth_code(self, code: str) -> PersistedAuthCode | None:
         """Load an authorization code by code string."""
         pass
 
@@ -121,7 +117,7 @@ class AuthPersistenceBackend(ABC):
         pass
 
     @abstractmethod
-    async def load_client(self, client_id: str) -> Optional[PersistedClient]:
+    async def load_client(self, client_id: str) -> PersistedClient | None:
         """Load an OAuth client by client ID."""
         pass
 
@@ -131,7 +127,7 @@ class AuthPersistenceBackend(ABC):
         pass
 
     @abstractmethod
-    async def list_clients(self) -> List[PersistedClient]:
+    async def list_clients(self) -> list[PersistedClient]:
         """List all stored OAuth clients."""
         pass
 
@@ -146,7 +142,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             db_path: Path to the SQLite database file
         """
         self.db_path = db_path
-        self.conn: Optional[sqlite3.Connection] = None
+        self.conn: sqlite3.Connection | None = None
         self._lock = threading.RLock()  # Reentrant lock for nested calls
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="oauth-db")
         self._initialized = False
@@ -213,7 +209,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         # Create index separately for better compatibility
         cursor.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_access_tokens_expires_at 
+            CREATE INDEX IF NOT EXISTS idx_access_tokens_expires_at
             ON access_tokens(expires_at)
         """
         )
@@ -237,7 +233,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         # Create index separately
         cursor.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_auth_codes_expires_at 
+            CREATE INDEX IF NOT EXISTS idx_auth_codes_expires_at
             ON auth_codes(expires_at)
         """
         )
@@ -274,7 +270,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             cursor = self.conn.cursor()
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO access_tokens 
+                INSERT OR REPLACE INTO access_tokens
                 (token, client_id, external_token, scopes, expires_at, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)
             """,
@@ -289,13 +285,13 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             )
             self.conn.commit()
 
-    async def load_token(self, token: str) -> Optional[PersistedAccessToken]:
+    async def load_token(self, token: str) -> PersistedAccessToken | None:
         """Load an access token by token string."""
         return await asyncio.get_event_loop().run_in_executor(
             self._executor, self._sync_load_token, token
         )
 
-    def _sync_load_token(self, token: str) -> Optional[PersistedAccessToken]:
+    def _sync_load_token(self, token: str) -> PersistedAccessToken | None:
         """Synchronous token loading."""
         with self._lock:
             assert self.conn is not None, "Connection must be initialized"
@@ -349,7 +345,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             cursor = self.conn.cursor()
             cursor.execute(
                 """
-                DELETE FROM access_tokens 
+                DELETE FROM access_tokens
                 WHERE expires_at IS NOT NULL AND expires_at < ?
             """,
                 (current_time,),
@@ -372,8 +368,8 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             cursor = self.conn.cursor()
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO auth_codes 
-                (code, client_id, redirect_uri, redirect_uri_provided_explicitly, 
+                INSERT OR REPLACE INTO auth_codes
+                (code, client_id, redirect_uri, redirect_uri_provided_explicitly,
                  expires_at, scopes, code_challenge, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -390,13 +386,13 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             )
             self.conn.commit()
 
-    async def load_auth_code(self, code: str) -> Optional[PersistedAuthCode]:
+    async def load_auth_code(self, code: str) -> PersistedAuthCode | None:
         """Load an authorization code by code string."""
         return await asyncio.get_event_loop().run_in_executor(
             self._executor, self._sync_load_auth_code, code
         )
 
-    def _sync_load_auth_code(self, code: str) -> Optional[PersistedAuthCode]:
+    def _sync_load_auth_code(self, code: str) -> PersistedAuthCode | None:
         """Synchronous auth code loading."""
         with self._lock:
             assert self.conn is not None, "Connection must be initialized"
@@ -475,8 +471,8 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             cursor = self.conn.cursor()
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO oauth_clients 
-                (client_id, client_secret, redirect_uris, grant_types, 
+                INSERT OR REPLACE INTO oauth_clients
+                (client_id, client_secret, redirect_uris, grant_types,
                  response_types, scope, client_name, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -493,13 +489,13 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             )
             self.conn.commit()
 
-    async def load_client(self, client_id: str) -> Optional[PersistedClient]:
+    async def load_client(self, client_id: str) -> PersistedClient | None:
         """Load an OAuth client by client ID."""
         return await asyncio.get_event_loop().run_in_executor(
             self._executor, self._sync_load_client, client_id
         )
 
-    def _sync_load_client(self, client_id: str) -> Optional[PersistedClient]:
+    def _sync_load_client(self, client_id: str) -> PersistedClient | None:
         """Synchronous client loading."""
         with self._lock:
             assert self.conn is not None, "Connection must be initialized"
@@ -542,13 +538,13 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             cursor.execute("DELETE FROM oauth_clients WHERE client_id = ?", (client_id,))
             self.conn.commit()
 
-    async def list_clients(self) -> List[PersistedClient]:
+    async def list_clients(self) -> list[PersistedClient]:
         """List all stored OAuth clients."""
         return await asyncio.get_event_loop().run_in_executor(
             self._executor, self._sync_list_clients
         )
 
-    def _sync_list_clients(self) -> List[PersistedClient]:
+    def _sync_list_clients(self) -> list[PersistedClient]:
         """Synchronous client listing."""
         with self._lock:
             assert self.conn is not None, "Connection must be initialized"
@@ -579,8 +575,8 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
 
 
 def create_persistence_backend(
-    persistence_config: Optional[Dict[str, Any]],
-) -> Optional[AuthPersistenceBackend]:
+    persistence_config: dict[str, Any] | None,
+) -> AuthPersistenceBackend | None:
     """Create a persistence backend based on configuration.
 
     Args:

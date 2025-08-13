@@ -30,12 +30,10 @@ Example usage:
 
 import threading
 from abc import ABC, abstractmethod
-from contextvars import ContextVar
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mxcp.sdk.validator import TypeValidator
+    pass
 
 from .context import ExecutionContext
 
@@ -82,7 +80,7 @@ class ExecutorPlugin(ABC):
 
     @abstractmethod
     async def execute(
-        self, source_code: str, params: Dict[str, Any], context: ExecutionContext
+        self, source_code: str, params: dict[str, Any], context: ExecutionContext
     ) -> Any:
         """Execute source code with the given parameters.
 
@@ -118,7 +116,7 @@ class ExecutorPlugin(ABC):
         pass
 
     @abstractmethod
-    def extract_parameters(self, source_code: str) -> List[str]:
+    def extract_parameters(self, source_code: str) -> list[str]:
         """Extract parameter names from source code.
 
         Args:
@@ -173,7 +171,7 @@ class ExecutionEngine:
         Args:
             strict: If True, validation errors will raise exceptions
         """
-        self._executors: Dict[str, ExecutorPlugin] = {}
+        self._executors: dict[str, ExecutorPlugin] = {}
         self._strict = strict
         self._lock = threading.Lock()
 
@@ -206,10 +204,10 @@ class ExecutionEngine:
         self,
         language: str,
         source_code: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         context: ExecutionContext,
-        input_schema: Optional[List[Dict[str, Any]]] = None,
-        output_schema: Optional[Dict[str, Any]] = None,
+        input_schema: list[dict[str, Any]] | None = None,
+        output_schema: dict[str, Any] | None = None,
     ) -> Any:
         """Execute source code in the specified language.
 
@@ -273,7 +271,7 @@ class ExecutionEngine:
         executor = self._executors[language]
         return executor.validate_source(source_code)
 
-    def extract_parameters(self, language: str, source_code: str) -> List[str]:
+    def extract_parameters(self, language: str, source_code: str) -> list[str]:
         """Extract parameter names from source code.
 
         Args:

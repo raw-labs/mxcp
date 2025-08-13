@@ -1,8 +1,7 @@
 import asyncio
 import json
-import traceback
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import click
 
@@ -45,8 +44,8 @@ def run_endpoint(
     endpoint_type: str,
     name: str,
     param: tuple[str, ...],
-    user_context: Optional[str],
-    profile: Optional[str],
+    user_context: str | None,
+    profile: str | None,
     json_output: bool,
     debug: bool,
     skip_output_validation: bool,
@@ -96,7 +95,7 @@ def run_endpoint(
         # Handle graceful shutdown
         if not json_output:
             click.echo("\nOperation cancelled by user", err=True)
-        raise click.Abort()
+        raise click.Abort() from None
     except Exception as e:
         # Only catch non-Click exceptions
         output_error(e, json_output, debug)
@@ -107,8 +106,8 @@ async def _run_endpoint_impl(
     endpoint_type: str,
     name: str,
     param: tuple[str, ...],
-    user_context: Optional[str],
-    profile: Optional[str],
+    user_context: str | None,
+    profile: str | None,
     json_output: bool,
     debug: bool,
     skip_output_validation: bool,
@@ -159,13 +158,15 @@ async def _run_endpoint_impl(
                 with open(file_path) as f:
                     context_data = json.load(f)
             except json.JSONDecodeError as e:
-                raise click.BadParameter(f"Invalid JSON in user context file {file_path}: {e}")
+                raise click.BadParameter(
+                    f"Invalid JSON in user context file {file_path}: {e}"
+                ) from e
         else:
             # Parse as JSON string
             try:
                 context_data = json.loads(user_context)
             except json.JSONDecodeError as e:
-                raise click.BadParameter(f"Invalid JSON in user context: {e}")
+                raise click.BadParameter(f"Invalid JSON in user context: {e}") from e
 
         # Create UserContext object from the data
         user_context_obj = UserContext(
@@ -179,7 +180,7 @@ async def _run_endpoint_impl(
         )
 
     # Parse parameters
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
     for p in param:
         if "=" not in p:
             raise click.BadParameter(
@@ -197,7 +198,7 @@ async def _run_endpoint_impl(
                 with open(file_path) as f:
                     value = json.load(f)
             except json.JSONDecodeError as e:
-                raise click.BadParameter(f"Invalid JSON in file {file_path}: {e}")
+                raise click.BadParameter(f"Invalid JSON in file {file_path}: {e}") from e
 
         params[key] = value
 

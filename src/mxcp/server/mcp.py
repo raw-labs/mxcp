@@ -1,5 +1,4 @@
 import asyncio
-import atexit
 import concurrent.futures
 import hashlib
 import json
@@ -9,15 +8,14 @@ import signal
 import threading
 import time
 import traceback
-from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Optional, Union, cast
+from typing import Annotated, Any, Literal, cast
 
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
-from pydantic import AnyHttpUrl, ConfigDict, Field, create_model
+from pydantic import AnyHttpUrl, Field, create_model
 from starlette.responses import JSONResponse
 
 from mxcp.audit.schemas import ENDPOINT_EXECUTION_SCHEMA
@@ -27,19 +25,17 @@ from mxcp.config.external_refs import ExternalRefTracker
 from mxcp.config.site_config import get_active_profile, load_site_config
 from mxcp.config.user_config import load_user_config
 from mxcp.endpoints._types import (
-    EndpointDefinition,
     ParamDefinition,
     PromptDefinition,
     ResourceDefinition,
     ToolDefinition,
-    TypeDefinition,
 )
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
 from mxcp.endpoints.utils import EndpointType
 from mxcp.endpoints.validate import validate_endpoint
 from mxcp.sdk.audit import AuditLogger
-from mxcp.sdk.auth._types import AuthConfig, HttpTransportConfig
+from mxcp.sdk.auth._types import HttpTransportConfig
 from mxcp.sdk.auth.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.context import get_user_context
 from mxcp.sdk.auth.github import GitHubOAuthHandler
@@ -56,8 +52,8 @@ logger = logging.getLogger(__name__)
 
 
 def translate_transport_config(
-    user_transport_config: Optional[UserHttpTransportConfig],
-) -> Optional[HttpTransportConfig]:
+    user_transport_config: UserHttpTransportConfig | None,
+) -> HttpTransportConfig | None:
     """Translate user HTTP transport config to SDK transport config.
 
     Args:
@@ -83,8 +79,8 @@ def create_oauth_handler(
     user_auth_config: UserAuthConfig,
     host: str = "localhost",
     port: int = 8000,
-    user_config: Optional[UserConfig] = None,
-) -> Optional[ExternalOAuthHandler]:
+    user_config: UserConfig | None = None,
+) -> ExternalOAuthHandler | None:
     """Create an OAuth handler from user configuration.
 
     This helper translates user config to SDK types and instantiates the appropriate handler.
@@ -170,20 +166,20 @@ class RAWMCP:
     profile_name: str
     transport: str
     readonly: bool
-    execution_engine: Optional[ExecutionEngine]
-    _model_cache: Dict[str, Any]
-    transport_mode: Optional[str]
+    execution_engine: ExecutionEngine | None
+    _model_cache: dict[str, Any]
+    transport_mode: str | None
 
     def __init__(
         self,
-        site_config_path: Optional[Path] = None,
-        profile: Optional[str] = None,
-        transport: Optional[str] = None,
-        host: Optional[str] = None,
-        port: Optional[int] = None,
-        stateless_http: Optional[bool] = None,
+        site_config_path: Path | None = None,
+        profile: str | None = None,
+        transport: str | None = None,
+        host: str | None = None,
+        port: int | None = None,
+        stateless_http: bool | None = None,
         json_response: bool = False,
-        enable_sql_tools: Optional[bool] = None,
+        enable_sql_tools: bool | None = None,
         readonly: bool = False,
         debug: bool = False,
     ):
@@ -272,8 +268,8 @@ class RAWMCP:
             # Set templates and resolve
             logger.info("Resolving external configuration references...")
             self.ref_tracker.set_template(
-                cast(Dict[str, Any], self._site_config_template),
-                cast(Dict[str, Any], self._user_config_template),
+                cast(dict[str, Any], self._site_config_template),
+                cast(dict[str, Any], self._user_config_template),
             )
             self._config_templates_loaded = True
             resolved_site, resolved_user = self.ref_tracker.resolve_all()
@@ -344,7 +340,7 @@ class RAWMCP:
             sql_tools_enabled=bool(self.enable_sql_tools),
         )
 
-    def get_endpoint_counts(self) -> Dict[str, int]:
+    def get_endpoint_counts(self) -> dict[str, int]:
         """Get counts of valid endpoints by type."""
         tool_count = sum(
             1
@@ -409,7 +405,7 @@ class RAWMCP:
 
         if self.oauth_handler:
             self.oauth_server = GeneralOAuthAuthorizationServer(
-                self.oauth_handler, auth_config, cast(Dict[str, Any], self.user_config)
+                self.oauth_handler, auth_config, cast(dict[str, Any], self.user_config)
             )
 
             # Use URL builder for OAuth endpoints
@@ -442,7 +438,7 @@ class RAWMCP:
 
     def _initialize_fastmcp(self) -> None:
         """Initialize the FastMCP server."""
-        fastmcp_kwargs: Dict[str, Any] = {
+        fastmcp_kwargs: dict[str, Any] = {
             "name": "MXCP Server",
             "stateless_http": self.stateless_http,
             "json_response": self.json_response,
@@ -584,7 +580,7 @@ class RAWMCP:
 
                     # Set templates in tracker
                     self.ref_tracker.set_template(
-                        cast(Dict[str, Any], site_template), cast(Dict[str, Any], user_template)
+                        cast(dict[str, Any], site_template), cast(dict[str, Any], user_template)
                     )
                     self._config_templates_loaded = True
                     logger.info("Raw configuration templates loaded.")
@@ -680,10 +676,12 @@ class RAWMCP:
                     # The thread itself timed out - this is a fatal error
                     raise TimeoutError(
                         f"{operation_name} thread timed out after {timeout + 1} seconds"
-                    )
+                    ) from None
                 except asyncio.TimeoutError:
                     # The asyncio.wait_for timed out (this gets wrapped in the future)
-                    raise TimeoutError(f"{operation_name} timed out after {timeout} seconds")
+                    raise TimeoutError(
+                        f"{operation_name} timed out after {timeout} seconds"
+                    ) from None
                 except Exception as e:
                     logger.error(f"{operation_name} failed: {e}")
                     raise
@@ -696,7 +694,7 @@ class RAWMCP:
                 logger.info(f"{operation_name} completed successfully")
                 return result
             except asyncio.TimeoutError:
-                raise TimeoutError(f"{operation_name} timed out after {timeout} seconds")
+                raise TimeoutError(f"{operation_name} timed out after {timeout} seconds") from None
             except Exception as e:
                 logger.error(f"{operation_name} failed: {e}")
                 raise
@@ -752,9 +750,9 @@ class RAWMCP:
 
     def _create_pydantic_model_from_schema(
         self,
-        schema_def: Dict[str, Any],
+        schema_def: dict[str, Any],
         model_name: str,
-        endpoint_type: Optional[EndpointType] = None,
+        endpoint_type: EndpointType | None = None,
     ) -> Any:
         """Create a Pydantic model from a JSON Schema definition.
 
@@ -788,7 +786,7 @@ class RAWMCP:
                     # For enums, we'll use a simple str type with validation
                     # Since we can't dynamically create Literal unions in a type-safe way
                     if make_optional:
-                        final_type = Optional[str]
+                        final_type = str | None
                     else:
                         final_type = str
                     self._model_cache[cache_key] = final_type
@@ -798,12 +796,12 @@ class RAWMCP:
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 if make_optional:
-                    final_type = Annotated[Optional[str], Field(**field_kwargs)]
+                    final_type = Annotated[str | None, Field(**field_kwargs)]
                 else:
                     final_type = Annotated[str, Field(**field_kwargs)]
             else:
                 if make_optional:
-                    final_type = Optional[str]
+                    final_type = str | None
                 else:
                     final_type = str
             self._model_cache[cache_key] = final_type
@@ -813,12 +811,12 @@ class RAWMCP:
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 if make_optional:
-                    final_type = Annotated[Optional[int], Field(**field_kwargs)]
+                    final_type = Annotated[int | None, Field(**field_kwargs)]
                 else:
                     final_type = Annotated[int, Field(**field_kwargs)]
             else:
                 if make_optional:
-                    final_type = Optional[int]
+                    final_type = int | None
                 else:
                     final_type = int
             self._model_cache[cache_key] = final_type
@@ -828,12 +826,12 @@ class RAWMCP:
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 if make_optional:
-                    final_type = Annotated[Optional[float], Field(**field_kwargs)]
+                    final_type = Annotated[float | None, Field(**field_kwargs)]
                 else:
                     final_type = Annotated[float, Field(**field_kwargs)]
             else:
                 if make_optional:
-                    final_type = Optional[float]
+                    final_type = float | None
                 else:
                     final_type = float
             self._model_cache[cache_key] = final_type
@@ -843,30 +841,31 @@ class RAWMCP:
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 if make_optional:
-                    final_type = Annotated[Optional[bool], Field(**field_kwargs)]
+                    final_type = Annotated[bool | None, Field(**field_kwargs)]
                 else:
                     final_type = Annotated[bool, Field(**field_kwargs)]
             else:
                 if make_optional:
-                    final_type = Optional[bool]
+                    final_type = bool | None
                 else:
                     final_type = bool
             self._model_cache[cache_key] = final_type
             return final_type
 
         elif json_type == "array":
-            items_schema = schema_def.get("items", {"type": "string"})
-            item_type = self._create_pydantic_model_from_schema(
-                items_schema, f"{model_name}Item", endpoint_type
-            )
+            # items_schema = schema_def.get("items", {"type": "string"})
+            # item_type would be used for array validation, but pydantic handles this
+            # self._create_pydantic_model_from_schema(
+            #     items_schema, f"{model_name}Item", endpoint_type
+            # )
 
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 # Use List with item_type as a generic parameter
-                final_type = Annotated[List[Any], Field(**field_kwargs)]
+                final_type = Annotated[list[Any], Field(**field_kwargs)]
             else:
                 # Arrays without constraints
-                final_type = List[Any]
+                final_type = list[Any]
             self._model_cache[cache_key] = final_type
             return final_type
 
@@ -874,15 +873,15 @@ class RAWMCP:
             # Handle complex objects with properties
             properties = schema_def.get("properties", {})
             required_fields = set(schema_def.get("required", []))
-            additional_properties = schema_def.get("additionalProperties", True)
+            # additional_properties = schema_def.get("additionalProperties", True)
 
             if not properties:
                 # Generic object
                 field_kwargs = self._extract_field_constraints(schema_def)
                 if field_kwargs:
-                    final_type = Annotated[Dict[str, Any], Field(**field_kwargs)]
+                    final_type = Annotated[dict[str, Any], Field(**field_kwargs)]
                 else:
-                    final_type = Dict[str, Any]
+                    final_type = dict[str, Any]
                 self._model_cache[cache_key] = final_type
                 return final_type
 
@@ -907,13 +906,13 @@ class RAWMCP:
                 else:
                     # Optional field
                     if field_kwargs:
-                        model_fields[prop_name] = (Optional[prop_type], Field(None, **field_kwargs))
+                        model_fields[prop_name] = (prop_type | None, Field(None, **field_kwargs))
                     else:
-                        model_fields[prop_name] = (Optional[prop_type], None)
+                        model_fields[prop_name] = (prop_type | None, None)
 
             # Create the model with proper configuration
 
-            model_config = ConfigDict(extra="allow" if additional_properties else "forbid")
+            # model_config = ConfigDict(extra="allow" if additional_properties else "forbid")
 
             # Create model with fields and config
             # Note: In Pydantic v2, __config__ is not supported in create_model
@@ -930,7 +929,7 @@ class RAWMCP:
         self._model_cache[cache_key] = final_type
         return final_type
 
-    def _extract_field_constraints(self, schema_def: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_field_constraints(self, schema_def: dict[str, Any]) -> dict[str, Any]:
         """Extract Pydantic Field constraints from JSON Schema definition."""
         field_kwargs = {}
 
@@ -975,7 +974,7 @@ class RAWMCP:
         return field_kwargs
 
     def _create_pydantic_field_annotation(
-        self, param_def: ParamDefinition, endpoint_type: Optional[EndpointType] = None
+        self, param_def: ParamDefinition, endpoint_type: EndpointType | None = None
     ) -> Any:
         """Create a Pydantic type annotation from parameter definition.
 
@@ -988,11 +987,11 @@ class RAWMCP:
         """
         param_name = param_def.get("name", "param")
         return self._create_pydantic_model_from_schema(
-            cast(Dict[str, Any], param_def), param_name, endpoint_type
+            cast(dict[str, Any], param_def), param_name, endpoint_type
         )
 
     def _json_schema_to_python_type(
-        self, param_def: ParamDefinition, endpoint_type: Optional[EndpointType] = None
+        self, param_def: ParamDefinition, endpoint_type: EndpointType | None = None
     ) -> Any:
         """Convert JSON Schema type to Python type annotation.
 
@@ -1005,7 +1004,7 @@ class RAWMCP:
         """
         return self._create_pydantic_field_annotation(param_def, endpoint_type)
 
-    def _create_tool_annotations(self, tool_def: ToolDefinition) -> Optional[ToolAnnotations]:
+    def _create_tool_annotations(self, tool_def: ToolDefinition) -> ToolAnnotations | None:
         """Create ToolAnnotations from tool definition.
 
         Args:
@@ -1049,18 +1048,14 @@ class RAWMCP:
                 if isinstance(value, str):
                     return value.lower() == "true"
                 return bool(value)
-            elif param_type == "array":
-                if isinstance(value, str):
-                    return json.loads(value)
-                return value
-            elif param_type == "object":
+            elif param_type == "array" or param_type == "object":
                 if isinstance(value, str):
                     return json.loads(value)
                 return value
             return value
         except (ValueError, json.JSONDecodeError) as e:
             logger.error(f"Error converting parameter value {value} to type {param_type}: {e}")
-            raise ValueError(f"Invalid parameter value for type {param_type}: {value}")
+            raise ValueError(f"Invalid parameter value for type {param_type}: {value}") from e
 
     def _clean_uri_for_func_name(self, uri: str) -> str:
         """Clean a URI to be used as a function name.
@@ -1123,7 +1118,7 @@ class RAWMCP:
         self,
         endpoint_type: EndpointType,
         endpoint_key: str,  # "tool" | "resource" | "prompt"
-        endpoint_def: Union[ToolDefinition, ResourceDefinition, PromptDefinition],
+        endpoint_def: ToolDefinition | ResourceDefinition | PromptDefinition,
         decorator: Any,  # self.mcp.tool() | self.mcp.resource(uri) | self.mcp.prompt()
         log_name: str,  # for nice logging
     ) -> None:
@@ -1292,7 +1287,7 @@ class RAWMCP:
             resource_def,
             decorator=self.mcp.resource(
                 resource_def["uri"],
-                name=cast(Optional[str], resource_def.get("name")),
+                name=cast(str | None, resource_def.get("name")),
                 description=resource_def.get("description"),
                 mime_type=resource_def.get("mime_type"),
             ),
@@ -1333,7 +1328,7 @@ class RAWMCP:
             ),
         )
         @self.auth_middleware.require_auth
-        async def execute_sql_query(sql: str) -> List[Dict[str, Any]]:
+        async def execute_sql_query(sql: str) -> list[dict[str, Any]]:
             """Execute a SQL query against the DuckDB database.
 
             Args:
@@ -1363,7 +1358,7 @@ class RAWMCP:
                     execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
-                return cast(List[Dict[str, Any]], result)
+                return cast(list[dict[str, Any]], result)
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
@@ -1406,7 +1401,7 @@ class RAWMCP:
             ),
         )
         @self.auth_middleware.require_auth
-        async def list_tables() -> List[Dict[str, str]]:
+        async def list_tables() -> list[dict[str, str]]:
             """List all tables in the DuckDB database.
 
             Returns:
@@ -1429,7 +1424,7 @@ class RAWMCP:
                     name="list_tables",
                     params={
                         "sql": """
-                        SELECT 
+                        SELECT
                             table_name as name,
                             table_type as type
                         FROM information_schema.tables
@@ -1442,7 +1437,7 @@ class RAWMCP:
                     execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
-                return cast(List[Dict[str, str]], result)
+                return cast(list[dict[str, str]], result)
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
@@ -1485,7 +1480,7 @@ class RAWMCP:
             ),
         )
         @self.auth_middleware.require_auth
-        async def get_table_schema(table_name: str) -> List[Dict[str, Any]]:
+        async def get_table_schema(table_name: str) -> list[dict[str, Any]]:
             """Get the schema for a specific table.
 
             Args:
@@ -1513,7 +1508,7 @@ class RAWMCP:
                     name="get_table_schema",
                     params={
                         "sql": """
-                        SELECT 
+                        SELECT
                             column_name as name,
                             data_type as type,
                             is_nullable as nullable
@@ -1528,7 +1523,7 @@ class RAWMCP:
                     execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
-                return cast(List[Dict[str, Any]], result)
+                return cast(list[dict[str, Any]], result)
             except Exception as e:
                 status = "error"
                 error_msg = str(e)
@@ -1665,10 +1660,10 @@ class RAWMCP:
                         operation_name="OAuth server initialization",
                     )
                 except TimeoutError:
-                    raise RuntimeError("OAuth server initialization timed out")
+                    raise RuntimeError("OAuth server initialization timed out") from None
                 except Exception as e:
                     # Don't continue if OAuth is enabled but initialization failed
-                    raise RuntimeError(f"OAuth server initialization failed: {e}")
+                    raise RuntimeError(f"OAuth server initialization failed: {e}") from e
 
             # Start server using MCP's built-in run method
             self.mcp.run(transport=cast(Literal["stdio", "sse", "streamable-http"], transport))

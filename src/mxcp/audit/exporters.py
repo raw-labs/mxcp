@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Backend-agnostic export utilities for audit data.
 
 This module provides export functionality that works through the
@@ -10,7 +9,7 @@ import json
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
 
 import duckdb
 
@@ -27,7 +26,7 @@ class ExportFormat(Enum):
 
 
 async def export_to_duckdb(
-    audit_logger: AuditLogger, export_path: Path, filters: Optional[Dict[str, Any]] = None
+    audit_logger: AuditLogger, export_path: Path, filters: dict[str, Any] | None = None
 ) -> int:
     """Export audit logs to a DuckDB database using the AuditLogger API.
 
@@ -73,7 +72,7 @@ async def export_to_duckdb(
 
 
 async def export_to_csv(
-    audit_logger: AuditLogger, export_path: Path, filters: Optional[Dict[str, Any]] = None
+    audit_logger: AuditLogger, export_path: Path, filters: dict[str, Any] | None = None
 ) -> int:
     """Export audit logs to CSV using the AuditLogger API.
 
@@ -109,7 +108,7 @@ async def export_to_csv(
 
 
 async def export_to_jsonl(
-    audit_logger: AuditLogger, export_path: Path, filters: Optional[Dict[str, Any]] = None
+    audit_logger: AuditLogger, export_path: Path, filters: dict[str, Any] | None = None
 ) -> int:
     """Export audit logs to JSONL format using the AuditLogger API.
 
@@ -136,7 +135,7 @@ async def export_to_jsonl(
 
 
 async def export_to_json(
-    audit_logger: AuditLogger, export_path: Path, filters: Optional[Dict[str, Any]] = None
+    audit_logger: AuditLogger, export_path: Path, filters: dict[str, Any] | None = None
 ) -> int:
     """Export audit logs to JSON format using the AuditLogger API.
 
@@ -163,7 +162,7 @@ async def export_to_json(
     return len(records_data)
 
 
-def _build_query_params(filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _build_query_params(filters: dict[str, Any] | None) -> dict[str, Any]:
     """Build query parameters from filter dict.
 
     Maps legacy filter names to new API parameters.
@@ -171,7 +170,7 @@ def _build_query_params(filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if filters is None:
         filters = {}
 
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
 
     # Map filters to query_records parameters
     if "tool" in filters:
@@ -200,7 +199,7 @@ def _build_query_params(filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return params
 
 
-def _record_to_dict(record: AuditRecord) -> Dict[str, Any]:
+def _record_to_dict(record: AuditRecord) -> dict[str, Any]:
     """Convert an AuditRecord to a dictionary for export."""
     return {
         "record_id": record.record_id,
@@ -228,7 +227,7 @@ def _record_to_dict(record: AuditRecord) -> Dict[str, Any]:
     }
 
 
-def _create_duckdb_table(conn: duckdb.DuckDBPyConnection, sample_record: Dict[str, Any]) -> None:
+def _create_duckdb_table(conn: duckdb.DuckDBPyConnection, sample_record: dict[str, Any]) -> None:
     """Create DuckDB table based on a sample record."""
     # Infer column types from sample data
     columns = []
@@ -241,7 +240,7 @@ def _create_duckdb_table(conn: duckdb.DuckDBPyConnection, sample_record: Dict[st
             col_type = "DOUBLE"
         elif isinstance(value, bool):
             col_type = "BOOLEAN"
-        elif isinstance(value, dict) or isinstance(value, list):
+        elif isinstance(value, dict | list):
             col_type = "JSON"
         else:
             col_type = "VARCHAR"  # Default fallback

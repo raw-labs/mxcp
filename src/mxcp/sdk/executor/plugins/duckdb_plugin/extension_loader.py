@@ -6,7 +6,6 @@ This is a cloned version of the extension loader for the executor plugin system.
 """
 
 import logging
-from typing import List, Optional, Union
 
 import duckdb
 
@@ -14,7 +13,7 @@ from ._types import ExtensionDefinition
 
 
 def load_extensions(
-    con: duckdb.DuckDBPyConnection, extensions: Optional[List[ExtensionDefinition]] = None
+    con: duckdb.DuckDBPyConnection, extensions: list[ExtensionDefinition] | None = None
 ) -> None:
     """Load DuckDB extensions based on configuration.
 
@@ -36,7 +35,7 @@ def load_extensions(
             _load_extension(con, ext.name)
 
 
-def _load_extension(con: duckdb.DuckDBPyConnection, name: str, repo: Optional[str] = None) -> None:
+def _load_extension(con: duckdb.DuckDBPyConnection, name: str, repo: str | None = None) -> None:
     """Load a single DuckDB extension.
 
     Args:

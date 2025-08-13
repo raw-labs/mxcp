@@ -7,9 +7,8 @@ execution, and validation to avoid code duplication.
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, cast
 
-from ._types import EndpointDefinition, ResourceDefinition, SourceDefinition, ToolDefinition
+from ._types import EndpointDefinition, SourceDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,7 @@ def get_endpoint_source_code(
         ValueError: If no source code found in endpoint definition
     """
     # Get source based on endpoint type
-    source: Optional[SourceDefinition] = None
+    source: SourceDefinition | None = None
 
     if endpoint_type == "tool":
         tool_def = endpoint_definition.get("tool")
@@ -56,7 +55,7 @@ def get_endpoint_source_code(
             raise ValueError("No resource definition found")
         source = resource_def.get("source")
     else:
-        raise ValueError(f"Prompts don't have source code")
+        raise ValueError("Prompts don't have source code")
 
     if not source:
         raise ValueError(f"No source definition found in {endpoint_type}")
@@ -73,7 +72,7 @@ def get_endpoint_source_code(
         raise ValueError("No source code found in endpoint definition")
 
 
-def extract_source_info(source: SourceDefinition) -> Tuple[str, str]:
+def extract_source_info(source: SourceDefinition) -> tuple[str, str]:
     """Extract source code and determine if it's inline code or file reference.
 
     Args:
@@ -95,7 +94,7 @@ def extract_source_info(source: SourceDefinition) -> Tuple[str, str]:
         raise ValueError("No source code or file found in source definition")
 
 
-def detect_language_from_source(source: SourceDefinition, file_path: Optional[str] = None) -> str:
+def detect_language_from_source(source: SourceDefinition, file_path: str | None = None) -> str:
     """Detect programming language from source definition.
 
     Args:
@@ -177,7 +176,7 @@ def prepare_source_for_execution(
     endpoint_file_path: Path,
     repo_root: Path,
     include_function_name: bool = False,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """Prepare source code and language for execution.
 
     This is a higher-level function that combines source extraction,
@@ -193,9 +192,9 @@ def prepare_source_for_execution(
         Tuple of (language, source_code_or_path) ready for execution
     """
     # Get source and language based on endpoint type
-    source: Optional[SourceDefinition] = None
-    language: Optional[str] = None
-    function_name: Optional[str] = None
+    source: SourceDefinition | None = None
+    language: str | None = None
+    function_name: str | None = None
 
     if endpoint_type == "tool":
         tool_def = endpoint_definition.get("tool")
@@ -211,7 +210,7 @@ def prepare_source_for_execution(
         source = resource_def.get("source")
         language = resource_def.get("language")
     else:
-        raise ValueError(f"Prompts don't have source code")
+        raise ValueError("Prompts don't have source code")
 
     if not source:
         raise ValueError(f"No source definition found in {endpoint_type}")

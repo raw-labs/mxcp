@@ -42,11 +42,10 @@ Example usage:
 """
 
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Generator, Optional, cast
-
-import duckdb
+from typing import Any, cast
 
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.sdk.executor import (
@@ -70,11 +69,11 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def execution_context_for_init_hooks(
-    user_config: Optional[UserConfig] = None,
-    site_config: Optional[SiteConfig] = None,
-    duckdb_session: Optional[DuckDBSession] = None,
-    plugins: Optional[Dict[str, Any]] = None,
-) -> Generator[Optional[ExecutionContext], None, None]:
+    user_config: UserConfig | None = None,
+    site_config: SiteConfig | None = None,
+    duckdb_session: DuckDBSession | None = None,
+    plugins: dict[str, Any] | None = None,
+) -> Generator[ExecutionContext | None, None, None]:
     """
     Context manager for setting up ExecutionContext for init hooks.
 
@@ -120,9 +119,9 @@ def execution_context_for_init_hooks(
 def create_execution_engine(
     user_config: UserConfig,
     site_config: SiteConfig,
-    profile: Optional[str] = None,
-    repo_root: Optional[Path] = None,
-    readonly: Optional[bool] = None,
+    profile: str | None = None,
+    repo_root: Path | None = None,
+    readonly: bool | None = None,
 ) -> ExecutionEngine:
     """Create an ExecutionEngine with DuckDB and Python executors.
 
@@ -216,7 +215,7 @@ def create_execution_engine(
 
         # Get plugin configuration from user config
         user_projects = user_config.get("projects") or {}
-        user_project = cast(Dict[str, Any], user_projects.get(project_name) or {})
+        user_project = cast(dict[str, Any], user_projects.get(project_name) or {})
         user_profiles = user_project.get("profiles") or {}
         user_profile = user_profiles.get(profile_name) or {}
         user_plugin_section = user_profile.get("plugin") or {}
@@ -271,7 +270,7 @@ def create_execution_engine(
 
     except Exception as e:
         logger.error(f"Failed to create ExecutionEngine: {e}")
-        raise RuntimeError(f"Failed to create ExecutionEngine: {e}")
+        raise RuntimeError(f"Failed to create ExecutionEngine: {e}") from e
 
 
 def find_repo_root() -> Path:

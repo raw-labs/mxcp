@@ -5,16 +5,11 @@ This module provides access to runtime services for Python endpoints.
 Uses the SDK executor context system for proper context access.
 """
 
-import contextvars
 import logging
-from typing import Any, Callable, Dict, List, Optional, cast
+from collections.abc import Callable
+from typing import Any, cast
 
-from mxcp.sdk.executor.context import (
-    ExecutionContext,
-    get_execution_context,
-    reset_execution_context,
-    set_execution_context,
-)
+from mxcp.sdk.executor.context import get_execution_context
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +17,7 @@ logger = logging.getLogger(__name__)
 class DatabaseProxy:
     """Proxy for database operations using the current execution context."""
 
-    def execute(self, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def execute(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Execute a SQL query using the current execution context."""
         context = get_execution_context()
         if not context:
@@ -40,7 +35,7 @@ class DatabaseProxy:
             result = session.conn.execute(query).fetchdf()
 
         # Convert DataFrame to list of dicts
-        return cast(List[Dict[str, Any]], result.to_dict("records"))
+        return cast(list[dict[str, Any]], result.to_dict("records"))
 
     @property
     def connection(self) -> Any:
@@ -61,7 +56,7 @@ class DatabaseProxy:
 class ConfigProxy:
     """Proxy for configuration access using the current execution context."""
 
-    def get_secret(self, name: str) -> Optional[Dict[str, Any]]:
+    def get_secret(self, name: str) -> dict[str, Any] | None:
         """Get secret parameters by name."""
         context = get_execution_context()
         if not context:
@@ -91,7 +86,7 @@ class ConfigProxy:
             # Find secret by name and return its parameters
             for secret in secrets:
                 if secret.get("name") == name:
-                    return cast(Dict[str, Any], secret.get("parameters", {}))
+                    return cast(dict[str, Any], secret.get("parameters", {}))
 
             return None
         except (KeyError, TypeError):
@@ -123,22 +118,22 @@ class ConfigProxy:
             return site_config.get(key, default)
 
     @property
-    def user_config(self) -> Optional[Dict[str, Any]]:
+    def user_config(self) -> dict[str, Any] | None:
         """Access full user configuration."""
         context = get_execution_context()
         if not context:
             return None
 
-        return cast(Optional[Dict[str, Any]], context.get("user_config"))
+        return cast(dict[str, Any] | None, context.get("user_config"))
 
     @property
-    def site_config(self) -> Optional[Dict[str, Any]]:
+    def site_config(self) -> dict[str, Any] | None:
         """Access full site configuration."""
         context = get_execution_context()
         if not context:
             return None
 
-        return cast(Optional[Dict[str, Any]], context.get("site_config"))
+        return cast(dict[str, Any] | None, context.get("site_config"))
 
 
 class PluginsProxy:
@@ -158,7 +153,7 @@ class PluginsProxy:
 
         return plugins.get(name)
 
-    def list(self) -> List[str]:
+    def list(self) -> list[str]:
         """Get list of available plugin names."""
         context = get_execution_context()
         if not context:
@@ -179,8 +174,8 @@ config = ConfigProxy()
 plugins = PluginsProxy()
 
 # Lifecycle hooks
-_init_hooks: List[Callable[[], None]] = []
-_shutdown_hooks: List[Callable[[], None]] = []
+_init_hooks: list[Callable[[], None]] = []
+_shutdown_hooks: list[Callable[[], None]] = []
 
 
 def on_init(func: Callable[[], None]) -> Callable[[], None]:

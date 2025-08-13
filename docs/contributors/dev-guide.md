@@ -188,12 +188,12 @@ All commands support `--json-output` with standardized format:
 
 ### 2. Code Style
 
-- Follow PEP 8 guidelines (enforced by `black`)
+- Follow PEP 8 guidelines (enforced by `black` and `ruff`)
 - Use type hints for all function parameters and return values (checked by `mypy`)
 - Write docstrings for all public functions and classes
 - Keep lines under 100 characters (enforced by `black` with line-length=100)
 - Use meaningful variable and function names
-- Import statements are automatically sorted by `isort`
+- Import statements are automatically sorted by `ruff`
 
 ### 3. Testing
 
@@ -397,6 +397,16 @@ mxcp/
 
 MXCP uses several tools to maintain code quality. All commands should be run with `uv run` to ensure they use the project's virtual environment:
 
+- **Ruff**: Fast Python linter (replaces isort and adds additional checks)
+  ```bash
+  # Check for linting issues
+  uv run ruff check .
+  # Fix auto-fixable issues (including import sorting)
+  uv run ruff check . --fix
+  # Show what would be fixed without making changes
+  uv run ruff check . --diff
+  ```
+
 - **Black**: Code formatter
   ```bash
   uv run black .
@@ -404,15 +414,6 @@ MXCP uses several tools to maintain code quality. All commands should be run wit
   uv run black . --check
   # Check with diff output
   uv run black . --check --diff
-  ```
-
-- **isort**: Import statement sorting
-  ```bash
-  uv run isort .
-  # Check without making changes
-  uv run isort . --check-only
-  # Check with diff output
-  uv run isort . --check-only --diff
   ```
 
 - **mypy**: Static type checking
@@ -423,8 +424,8 @@ MXCP uses several tools to maintain code quality. All commands should be run wit
 Run all checks (same as CI):
 ```bash
 # Run all code quality checks
+uv run ruff check . && \
 uv run black --check --diff . && \
-uv run isort --check-only --diff . && \
 uv run mypy .
 ```
 

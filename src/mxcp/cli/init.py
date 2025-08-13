@@ -3,7 +3,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence
+from typing import Any
 
 import click
 import yaml
@@ -125,7 +125,7 @@ def create_hello_world_files(target_dir: Path) -> None:
         yaml.dump(hello_world_yml, f, default_flow_style=False, sort_keys=False)
 
 
-def detect_python_environment() -> Dict[str, Any]:
+def detect_python_environment() -> dict[str, Any]:
     """Detect the current Python environment type and relevant paths."""
     # Check if we're in a virtual environment
     in_venv = hasattr(sys, "real_prefix") or (
@@ -156,7 +156,7 @@ def detect_python_environment() -> Dict[str, Any]:
     }
 
 
-def generate_claude_config(project_dir: Path, project_name: str) -> Dict[str, Any]:
+def generate_claude_config(project_dir: Path, project_name: str) -> dict[str, Any]:
     """Generate Claude Desktop configuration."""
     env_info = detect_python_environment()
 
@@ -179,7 +179,7 @@ def generate_claude_config(project_dir: Path, project_name: str) -> Dict[str, An
         command = "mxcp"
         args = ["serve", "--transport", "stdio"]
 
-    config: Dict[str, Any] = {
+    config: dict[str, Any] = {
         "mcpServers": {
             project_name: {
                 "command": command,
@@ -212,31 +212,31 @@ def show_next_steps(
 
     click.echo(click.style("📁 Project Structure:", fg="cyan", bold=True))
     click.echo(f"   {project_dir}/")
-    click.echo(f"   ├── mxcp-site.yml       # Project configuration")
+    click.echo("   ├── mxcp-site.yml       # Project configuration")
     if bootstrap:
-        click.echo(f"   ├── tools/              # Tool definitions")
-        click.echo(f"   │   └── hello-world.yml # Example tool definition")
-        click.echo(f"   ├── sql/                # SQL implementations")
-        click.echo(f"   │   └── hello-world.sql # SQL implementation")
-        click.echo(f"   ├── resources/          # Resource definitions")
-        click.echo(f"   ├── prompts/            # Prompt definitions")
-        click.echo(f"   ├── evals/              # Evaluation definitions")
-        click.echo(f"   ├── python/             # Python extensions")
-        click.echo(f"   ├── plugins/            # Plugin definitions")
-        click.echo(f"   ├── drift/              # Drift snapshots")
-        click.echo(f"   ├── audit/              # Audit logs")
-        click.echo(f"   └── data/               # Database files")
+        click.echo("   ├── tools/              # Tool definitions")
+        click.echo("   │   └── hello-world.yml # Example tool definition")
+        click.echo("   ├── sql/                # SQL implementations")
+        click.echo("   │   └── hello-world.sql # SQL implementation")
+        click.echo("   ├── resources/          # Resource definitions")
+        click.echo("   ├── prompts/            # Prompt definitions")
+        click.echo("   ├── evals/              # Evaluation definitions")
+        click.echo("   ├── python/             # Python extensions")
+        click.echo("   ├── plugins/            # Plugin definitions")
+        click.echo("   ├── drift/              # Drift snapshots")
+        click.echo("   ├── audit/              # Audit logs")
+        click.echo("   └── data/               # Database files")
     else:
-        click.echo(f"   ├── tools/              # Create your tool definitions here")
-        click.echo(f"   ├── resources/          # Create your resource definitions here")
-        click.echo(f"   ├── prompts/            # Create your prompt definitions here")
-        click.echo(f"   ├── evals/              # Create your evaluation definitions here")
-        click.echo(f"   ├── python/             # Create your Python extensions here")
-        click.echo(f"   ├── plugins/            # Create your plugin definitions here")
-        click.echo(f"   ├── sql/                # Create your SQL implementations here")
-        click.echo(f"   ├── drift/              # Drift snapshots will be stored here")
-        click.echo(f"   ├── audit/              # Audit logs will be stored here")
-        click.echo(f"   └── data/               # Database files will be stored here")
+        click.echo("   ├── tools/              # Create your tool definitions here")
+        click.echo("   ├── resources/          # Create your resource definitions here")
+        click.echo("   ├── prompts/            # Create your prompt definitions here")
+        click.echo("   ├── evals/              # Create your evaluation definitions here")
+        click.echo("   ├── python/             # Create your Python extensions here")
+        click.echo("   ├── plugins/            # Create your plugin definitions here")
+        click.echo("   ├── sql/                # Create your SQL implementations here")
+        click.echo("   ├── drift/              # Drift snapshots will be stored here")
+        click.echo("   ├── audit/              # Audit logs will be stored here")
+        click.echo("   └── data/               # Database files will be stored here")
 
     click.echo(f"\n{click.style('🚀 Next Steps:', fg='cyan', bold=True)}\n")
 
@@ -244,46 +244,46 @@ def show_next_steps(
     click.echo(f"{click.style('1. Test your setup locally:', fg='yellow')}")
     click.echo(f"   cd {project_dir}")
     if bootstrap:
-        click.echo(f"   mxcp run tool hello_world --param name=World")
+        click.echo("   mxcp run tool hello_world --param name=World")
     else:
-        click.echo(f"   # Create your first tool in tools/")
-        click.echo(f"   # Then run: mxcp run tool <tool_name>")
+        click.echo("   # Create your first tool in tools/")
+        click.echo("   # Then run: mxcp run tool <tool_name>")
 
     # Step 2: Start the server
     click.echo(f"\n{click.style('2. Start the MCP server:', fg='yellow')}")
-    click.echo(f"   mxcp serve")
+    click.echo("   mxcp serve")
 
     # Step 3: Connect to Claude
     click.echo(f"\n{click.style('3. Connect to Claude Desktop:', fg='yellow')}")
     if config_generated:
-        click.echo(f"   Add the generated server_config.json to your Claude Desktop config")
+        click.echo("   Add the generated server_config.json to your Claude Desktop config")
     else:
-        click.echo(f"   Create a server configuration for Claude Desktop")
-        click.echo(f"   Run 'mxcp init .' again to generate server_config.json")
-    click.echo(f"   Config location:")
+        click.echo("   Create a server configuration for Claude Desktop")
+        click.echo("   Run 'mxcp init .' again to generate server_config.json")
+    click.echo("   Config location:")
     if sys.platform == "darwin":
-        click.echo(f"   ~/Library/Application Support/Claude/claude_desktop_config.json")
+        click.echo("   ~/Library/Application Support/Claude/claude_desktop_config.json")
     elif sys.platform == "win32":
-        click.echo(f"   %APPDATA%\\Claude\\claude_desktop_config.json")
+        click.echo("   %APPDATA%\\Claude\\claude_desktop_config.json")
     else:
-        click.echo(f"   ~/.config/Claude/claude_desktop_config.json")
+        click.echo("   ~/.config/Claude/claude_desktop_config.json")
 
     # Step 4: Explore more
     click.echo(f"\n{click.style('4. Learn more:', fg='yellow')}")
-    click.echo(f"   • List all endpoints:     mxcp list")
-    click.echo(f"   • Validate endpoints:     mxcp validate")
-    click.echo(f"   • Enable SQL tools:       Edit mxcp-site.yml (sql_tools: enabled: true)")
-    click.echo(f"   • Add dbt integration:    Create dbt_project.yml and run dbt models")
-    click.echo(f"   • View documentation:     https://mxcp.dev")
+    click.echo("   • List all endpoints:     mxcp list")
+    click.echo("   • Validate endpoints:     mxcp validate")
+    click.echo("   • Enable SQL tools:       Edit mxcp-site.yml (sql_tools: enabled: true)")
+    click.echo("   • Add dbt integration:    Create dbt_project.yml and run dbt models")
+    click.echo("   • View documentation:     https://mxcp.dev")
 
     if bootstrap:
         click.echo(f"\n{click.style('💡 Try it now:', fg='green')}")
-        click.echo(f'   In Claude Desktop, ask: "Use the hello_world tool to greet Alice"')
+        click.echo('   In Claude Desktop, ask: "Use the hello_world tool to greet Alice"')
 
     click.echo(f"\n{click.style('📚 Resources:', fg='cyan', bold=True)}")
-    click.echo(f"   • Documentation: https://mxcp.dev")
-    click.echo(f"   • Examples: https://github.com/raw-labs/mxcp/tree/main/examples")
-    click.echo(f"   • Discord: https://discord.gg/XeqRp5Ud")
+    click.echo("   • Documentation: https://mxcp.dev")
+    click.echo("   • Examples: https://github.com/raw-labs/mxcp/tree/main/examples")
+    click.echo("   • Discord: https://discord.gg/XeqRp5Ud")
     click.echo("")
 
 
@@ -344,13 +344,14 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool) 
             profile = "default"
 
         # Check if project exists in user config
-        if check_project_exists_in_user_config(project):
-            if not click.confirm(f"Project '{project}' already exists in your config. Continue?"):
-                return
+        if check_project_exists_in_user_config(project) and not click.confirm(
+            f"Project '{project}' already exists in your config. Continue?"
+        ):
+            return
 
         # Create mxcp-site.yml
         create_mxcp_site_yml(target_dir, project, profile)
-        click.echo(f"✓ Created mxcp-site.yml")
+        click.echo("✓ Created mxcp-site.yml")
 
         # Create example files if requested
         if bootstrap:
@@ -379,7 +380,7 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool) 
                 with open(config_path, "w") as f:
                     json.dump(claude_config, f, indent=2)
 
-                click.echo(f"✓ Generated server_config.json for Claude Desktop")
+                click.echo("✓ Generated server_config.json for Claude Desktop")
 
                 # Show the config content
                 click.echo("\nGenerated configuration:")

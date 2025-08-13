@@ -1,21 +1,16 @@
-# -*- coding: utf-8 -*-
 """Type definitions for the MXCP SDK audit module.
 
 This module contains all type definitions and dataclasses used by the audit system.
 """
+
+from collections.abc import AsyncIterator, Callable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import (
     Any,
-    AsyncIterator,
-    Callable,
-    Dict,
-    List,
     Literal,
-    Optional,
     Protocol,
-    Tuple,
     runtime_checkable,
 )
 from uuid import uuid4
@@ -27,7 +22,7 @@ PolicyDecision = Literal["allow", "deny", "warn", "n/a"]
 Status = Literal["success", "error"]
 
 # New type aliases
-RedactionFunc = Callable[[Any, Optional[Dict[str, Any]]], Any]
+RedactionFunc = Callable[[Any, dict[str, Any] | None], Any]
 
 
 @dataclass
@@ -37,7 +32,7 @@ class FieldDefinition:
     name: str
     type: str  # "string", "number", "boolean", "object", "array"
     required: bool = True
-    description: Optional[str] = None
+    description: str | None = None
     sensitive: bool = False  # If true, field may be redacted
 
 
@@ -67,7 +62,7 @@ class FieldRedaction:
 
     field_path: str  # Dot notation: "user.email", "config.password"
     strategy: RedactionStrategy  # Redaction strategy to apply
-    options: Optional[Dict[str, Any]] = None  # Strategy-specific options
+    options: dict[str, Any] | None = None  # Strategy-specific options
 
 
 @dataclass
@@ -85,14 +80,14 @@ class AuditSchema:
     description: str = ""
 
     # Structure
-    fields: List[FieldDefinition] = field(default_factory=list)
-    indexes: List[str] = field(default_factory=list)  # Fields to index for querying
+    fields: list[FieldDefinition] = field(default_factory=list)
+    indexes: list[str] = field(default_factory=list)  # Fields to index for querying
 
     # Policies (defined at schema level)
-    retention_days: Optional[int] = None
+    retention_days: int | None = None
     evidence_level: EvidenceLevel = EvidenceLevel.BASIC
-    field_redactions: List[FieldRedaction] = field(default_factory=list)
-    extract_fields: List[str] = field(default_factory=list)  # For business context
+    field_redactions: list[FieldRedaction] = field(default_factory=list)
+    extract_fields: list[str] = field(default_factory=list)  # For business context
     require_signature: bool = False
 
     # Metadata
@@ -111,8 +106,8 @@ class IntegrityResult:
 
     valid: bool
     records_checked: int
-    chain_breaks: List[str] = field(default_factory=list)  # Record IDs where chain breaks
-    error: Optional[str] = None
+    chain_breaks: list[str] = field(default_factory=list)  # Record IDs where chain breaks
+    error: str | None = None
 
 
 @dataclass
@@ -140,33 +135,33 @@ class AuditRecord:
 
     # Context
     caller_type: CallerType = "unknown"
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
-    trace_id: Optional[str] = None
+    user_id: str | None = None
+    session_id: str | None = None
+    trace_id: str | None = None
 
     # Data (before redaction - schema defines what gets redacted)
-    input_data: Dict[str, Any] = field(default_factory=dict)
-    output_data: Optional[Any] = None
-    error: Optional[str] = None
+    input_data: dict[str, Any] = field(default_factory=dict)
+    output_data: Any | None = None
+    error: str | None = None
 
     # Policy evaluation results (but not the policies themselves)
-    policies_evaluated: List[str] = field(default_factory=list)
-    policy_decision: Optional[PolicyDecision] = None
-    policy_reason: Optional[str] = None
+    policies_evaluated: list[str] = field(default_factory=list)
+    policy_decision: PolicyDecision | None = None
+    policy_reason: str | None = None
 
     # Business context (extracted based on schema's extract_fields)
-    business_context: Dict[str, Any] = field(default_factory=dict)
+    business_context: dict[str, Any] = field(default_factory=dict)
 
     # Backend-specific (populated by backend)
-    prev_hash: Optional[str] = None
-    record_hash: Optional[str] = None
-    signature: Optional[str] = None
+    prev_hash: str | None = None
+    record_hash: str | None = None
+    signature: str | None = None
 
     def get_schema_id(self) -> str:
         """Get the schema identifier for this record."""
         return f"{self.schema_name}:v{self.schema_version}"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         result = asdict(self)
         # Convert datetime to ISO format
@@ -184,17 +179,15 @@ class AuditBackend(Protocol):
         """Create or update a schema definition."""
         ...
 
-    async def get_schema(
-        self, schema_name: str, version: Optional[int] = None
-    ) -> Optional[AuditSchema]:
+    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchema | None:
         """Get a schema definition. If version is None, get latest active version."""
         ...
 
-    async def list_schemas(self, active_only: bool = True) -> List[AuditSchema]:
+    async def list_schemas(self, active_only: bool = True) -> list[AuditSchema]:
         """List all schemas."""
         ...
 
-    async def deactivate_schema(self, schema_name: str, version: Optional[int] = None) -> None:
+    async def deactivate_schema(self, schema_name: str, version: int | None = None) -> None:
         """Deactivate a schema (soft delete)."""
         ...
 
@@ -206,18 +199,18 @@ class AuditBackend(Protocol):
     # Query methods
     async def query_records(
         self,
-        schema_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        operation_types: Optional[List[str]] = None,
-        operation_names: Optional[List[str]] = None,
-        operation_status: Optional[List[Status]] = None,
-        policy_decisions: Optional[List[PolicyDecision]] = None,
-        user_ids: Optional[List[str]] = None,
-        session_ids: Optional[List[str]] = None,
-        trace_ids: Optional[List[str]] = None,
-        business_context_filters: Optional[Dict[str, Any]] = None,
-        limit: Optional[int] = None,
+        schema_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        operation_types: list[str] | None = None,
+        operation_names: list[str] | None = None,
+        operation_status: list[Status] | None = None,
+        policy_decisions: list[PolicyDecision] | None = None,
+        user_ids: list[str] | None = None,
+        session_ids: list[str] | None = None,
+        trace_ids: list[str] | None = None,
+        business_context_filters: dict[str, Any] | None = None,
+        limit: int | None = None,
         offset: int = 0,
     ) -> AsyncIterator[AuditRecord]:
         """Query audit records with filters.
@@ -227,7 +220,7 @@ class AuditBackend(Protocol):
         """
         ...
 
-    async def get_record(self, record_id: str) -> Optional[AuditRecord]:
+    async def get_record(self, record_id: str) -> AuditRecord | None:
         """Get a specific record by ID."""
         ...
 
@@ -236,7 +229,7 @@ class AuditBackend(Protocol):
         ...
 
     # Retention management
-    async def apply_retention_policies(self) -> Dict[str, int]:
+    async def apply_retention_policies(self) -> dict[str, int]:
         """Apply retention policies. Returns count of records deleted per schema."""
         ...
 

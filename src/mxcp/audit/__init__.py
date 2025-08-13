@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """High-level audit interface for MXCP.
 
 This package provides a simplified interface for audit operations,

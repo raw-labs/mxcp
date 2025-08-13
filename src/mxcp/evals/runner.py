@@ -1,8 +1,6 @@
-import asyncio
 import logging
 import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
 
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine, find_repo_root
@@ -44,7 +42,7 @@ def _create_model_config(model: str, user_config: UserConfig) -> ModelConfigType
     if not models_dict:
         raise ValueError("No models defined in models configuration")
 
-    model_config: Dict[str, Any] = cast(Dict[str, Any], models_dict.get(model, {}))
+    model_config: dict[str, Any] = cast(dict[str, Any], models_dict.get(model, {}))
     if not model_config:
         raise ValueError(f"Model '{model}' not configured in user config")
 
@@ -66,7 +64,7 @@ def _create_model_config(model: str, user_config: UserConfig) -> ModelConfigType
         raise ValueError(f"Unknown model type: {model_type}")
 
 
-def _load_endpoints(site_config: SiteConfig) -> List[EndpointDefinition]:
+def _load_endpoints(site_config: SiteConfig) -> list[EndpointDefinition]:
     """Load all available endpoints.
 
     Args:
@@ -76,21 +74,24 @@ def _load_endpoints(site_config: SiteConfig) -> List[EndpointDefinition]:
         List of endpoint definitions
     """
     loader = EndpointLoader(site_config)
-    endpoints: List[EndpointDefinition] = []
+    endpoints: list[EndpointDefinition] = []
     discovered = loader.discover_endpoints()
 
-    for path, endpoint_def, error in discovered:
-        if error is None and endpoint_def:
+    for _path, endpoint_def, error in discovered:
+        if (
+            error is None
+            and endpoint_def
+            and (endpoint_def.get("tool") or endpoint_def.get("resource"))
+        ):
             # Only include endpoints that have a tool or resource definition
-            if endpoint_def.get("tool") or endpoint_def.get("resource"):
-                endpoints.append(endpoint_def)
+            endpoints.append(endpoint_def)
 
     return endpoints
 
 
 def _convert_endpoints_to_tool_definitions(
-    endpoints: List[EndpointDefinition],
-) -> List[ToolDefinition]:
+    endpoints: list[EndpointDefinition],
+) -> list[ToolDefinition]:
     """Convert endpoint definitions to ToolDefinition objects for the LLM.
 
     Args:
@@ -165,10 +166,10 @@ async def run_eval_suite(
     suite_name: str,
     user_config: UserConfig,
     site_config: SiteConfig,
-    profile: Optional[str],
-    cli_user_context: Optional[UserContext] = None,
-    override_model: Optional[str] = None,
-) -> Dict[str, Any]:
+    profile: str | None,
+    cli_user_context: UserContext | None = None,
+    override_model: str | None = None,
+) -> dict[str, Any]:
     """Run a specific eval suite by name.
 
     Args:
@@ -364,10 +365,10 @@ async def run_eval_suite(
 async def run_all_evals(
     user_config: UserConfig,
     site_config: SiteConfig,
-    profile: Optional[str],
-    cli_user_context: Optional[UserContext] = None,
-    override_model: Optional[str] = None,
-) -> Dict[str, Any]:
+    profile: str | None,
+    cli_user_context: UserContext | None = None,
+    override_model: str | None = None,
+) -> dict[str, Any]:
     """Run all eval suites found in the repository.
 
     Args:
@@ -411,7 +412,7 @@ async def run_all_evals(
             # Get relative path
             try:
                 relative_path = str(file_path.relative_to(find_repo_root()))
-            except:
+            except Exception:
                 relative_path = str(file_path)
 
             # Map new result structure to old structure for backward compatibility
@@ -431,8 +432,8 @@ async def run_all_evals(
 
 
 def get_model_config(
-    user_config: UserConfig, model_name: Optional[str] = None
-) -> Optional[Dict[str, Any]]:
+    user_config: UserConfig, model_name: str | None = None
+) -> dict[str, Any] | None:
     """Get model configuration from user config.
 
     Args:
@@ -456,4 +457,4 @@ def get_model_config(
     model_configs = models_config.get("models", {})
     if not model_configs:
         return None
-    return cast(Optional[Dict[str, Any]], model_configs.get(model_name))
+    return cast(dict[str, Any] | None, model_configs.get(model_name))

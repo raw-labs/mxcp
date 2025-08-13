@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """GitHub OAuth provider implementation for MXCP authentication."""
+
 import logging
 import secrets
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
@@ -23,7 +23,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
     def __init__(
         self,
         github_config: GitHubAuthConfig,
-        transport_config: Optional[HttpTransportConfig] = None,
+        transport_config: HttpTransportConfig | None = None,
         host: str = "localhost",
         port: int = 8000,
     ):
@@ -51,8 +51,8 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
         self.url_builder = URLBuilder(transport_config)
 
         # State storage for OAuth flow
-        self._state_store: Dict[str, StateMeta] = {}
-        self._callback_store: Dict[str, str] = {}  # Store callback URLs separately
+        self._state_store: dict[str, StateMeta] = {}
+        self._callback_store: dict[str, str] = {}  # Store callback URLs separately
 
     # ----- authorize -----
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
@@ -88,7 +88,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
         try:
             return self._state_store[state]
         except KeyError:
-            raise HTTPException(400, "Invalid state parameter")
+            raise HTTPException(400, "Invalid state parameter") from None
 
     def _pop_state(self, state: str) -> None:
         self._state_store.pop(state, None)
@@ -192,7 +192,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
             )
         except Exception as e:
             logger.error(f"Failed to get GitHub user context: {e}")
-            raise HTTPException(500, f"Failed to retrieve user information: {e}")
+            raise HTTPException(500, f"Failed to retrieve user information: {e}") from e
 
     # ----- private helper -----
     async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
@@ -204,4 +204,4 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
             )
         if resp.status_code != 200:
             raise ValueError(f"GitHub API error: {resp.status_code}")
-        return cast(Dict[str, Any], resp.json())
+        return cast(dict[str, Any], resp.json())
