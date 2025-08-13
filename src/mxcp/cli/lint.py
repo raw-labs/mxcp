@@ -4,9 +4,9 @@ from typing import Any
 import click
 
 from mxcp.cli.utils import configure_logging, output_error, output_result
-from mxcp.config.analytics import track_command_with_timing
+from mxcp.core.config.analytics import track_command_with_timing
 from mxcp.config.site_config import load_site_config
-from mxcp.endpoints._types import (
+from mxcp.definitions.endpoints._types import (
     EndpointDefinition,
     ParamDefinition,
     PromptDefinition,
@@ -14,7 +14,7 @@ from mxcp.endpoints._types import (
     ToolDefinition,
     TypeDefinition,
 )
-from mxcp.endpoints.loader import EndpointLoader
+from mxcp.definitions.endpoints.loader import EndpointLoader
 
 
 class LintIssue:

@@ -9,7 +9,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
 
-from mxcp.config._types import SiteConfig, UserConfig
+from mxcp.core.config._types import SiteConfig, UserConfig
 from mxcp.sdk.executor import (
     ExecutionContext,
     reset_execution_context,

@@ -25,8 +25,7 @@ class TestSchemaComparison:
             Path(__file__).parent.parent.parent
             / "src"
             / "mxcp"
-            / "endpoints"
-            / "endpoint_schemas"
+            / "schemas"
             / "common-types-schema-1.json"
         )
 
@@ -185,8 +184,7 @@ class TestSchemaComparison:
             Path(__file__).parent.parent.parent
             / "src"
             / "mxcp"
-            / "endpoints"
-            / "endpoint_schemas"
+            / "schemas"
             / "common-types-schema-1.json"
         )
 

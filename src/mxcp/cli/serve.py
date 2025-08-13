@@ -5,7 +5,7 @@ from typing import Any
 import click
 
 from mxcp.cli.utils import configure_logging, get_env_flag, get_env_profile, output_error
-from mxcp.config.analytics import track_command_with_timing
+from mxcp.core.config.analytics import track_command_with_timing
 from mxcp.server.mcp import RAWMCP
 
 

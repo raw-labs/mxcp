@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.config.external_refs import ExternalRef, ExternalRefTracker
+from mxcp.core.refs.external import ExternalRef, ExternalRefTracker
 
 
 class TestExternalRef:

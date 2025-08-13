@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.config.references import (
+from mxcp.core.refs.resolver import (
     detect_reference_type,
     find_references,
     interpolate_all,

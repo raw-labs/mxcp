@@ -11,9 +11,9 @@ from typing import Any, cast
 
 from jinja2 import Template
 
-from mxcp.config._types import SiteConfig, UserConfig
-from mxcp.endpoints._types import EndpointDefinition, PromptDefinition, TypeDefinition
-from mxcp.endpoints.utils import prepare_source_for_execution
+from mxcp.core.config._types import SiteConfig, UserConfig
+from mxcp.definitions.endpoints._types import EndpointDefinition, PromptDefinition, TypeDefinition
+from mxcp.definitions.endpoints.utils import prepare_source_for_execution
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine

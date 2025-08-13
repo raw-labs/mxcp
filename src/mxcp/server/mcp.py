@@ -18,21 +18,21 @@ from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, Field, create_model
 from starlette.responses import JSONResponse
 
-from mxcp.audit.schemas import ENDPOINT_EXECUTION_SCHEMA
-from mxcp.config._types import SiteConfig, UserAuthConfig, UserConfig, UserHttpTransportConfig
+from mxcp.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
+from mxcp.core.config._types import SiteConfig, UserAuthConfig, UserConfig, UserHttpTransportConfig
 from mxcp.executor.engine import create_execution_engine
-from mxcp.config.external_refs import ExternalRefTracker
+from mxcp.core.refs.external import ExternalRefTracker
 from mxcp.config.site_config import get_active_profile, load_site_config
 from mxcp.config.user_config import load_user_config
-from mxcp.endpoints._types import (
+from mxcp.definitions.endpoints._types import (
     ParamDefinition,
     PromptDefinition,
     ResourceDefinition,
     ToolDefinition,
 )
-from mxcp.endpoints.loader import EndpointLoader
-from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
-from mxcp.endpoints.utils import EndpointType
+from mxcp.definitions.endpoints.loader import EndpointLoader
+from mxcp.services.endpoint_service import execute_endpoint_with_engine
+from mxcp.definitions.endpoints.utils import EndpointType
 from mxcp.endpoints.validate import validate_endpoint
 from mxcp.sdk.audit import AuditLogger
 from mxcp.sdk.auth._types import HttpTransportConfig

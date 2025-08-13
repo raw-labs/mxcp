@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mxcp.config._types import SiteConfig
+from mxcp.core.config._types import SiteConfig
 from mxcp.config.user_config import load_user_config
 
 

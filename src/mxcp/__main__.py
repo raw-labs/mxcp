@@ -14,7 +14,7 @@ from mxcp.cli.run import run_endpoint
 from mxcp.cli.serve import serve
 from mxcp.cli.test import test
 from mxcp.cli.validate import validate
-from mxcp.config.analytics import initialize_analytics, track_base_command
+from mxcp.core.config.analytics import initialize_analytics, track_base_command
 
 
 @click.group()

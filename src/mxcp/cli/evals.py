@@ -7,10 +7,10 @@ from typing import Any
 import click
 
 from mxcp.cli.utils import configure_logging, output_error, output_result
-from mxcp.config.analytics import track_command_with_timing
+from mxcp.core.config.analytics import track_command_with_timing
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
-from mxcp.evals.runner import run_all_evals, run_eval_suite
+from mxcp.services.eval_service import run_all_evals, run_eval_suite
 from mxcp.sdk.auth import UserContext
 
 

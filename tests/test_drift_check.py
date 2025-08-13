@@ -6,7 +6,7 @@ import pytest
 
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
-from mxcp.drift.checker import check_drift, load_and_validate_snapshot
+from mxcp.services.drift.checker import check_drift, load_and_validate_snapshot
 
 
 @pytest.fixture

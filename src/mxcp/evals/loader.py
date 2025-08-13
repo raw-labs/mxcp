@@ -6,7 +6,7 @@ from typing import cast
 import yaml
 from jsonschema import validate
 
-from mxcp.config._types import SiteConfig
+from mxcp.core.config._types import SiteConfig
 from mxcp.config.site_config import find_repo_root
 from mxcp.evals._types import EvalSuite
 
@@ -50,7 +50,7 @@ def discover_eval_files(
         logger.info(f"Evals directory {evals_dir} does not exist, skipping eval discovery")
         return results
 
-    schema_path = Path(__file__).parent / "eval_schemas" / "eval-schema-1.json"
+    schema_path = Path(__file__).parent.parent / "schemas" / "eval-schema-1.json"
     with open(schema_path) as f:
         schema = json.load(f)
 

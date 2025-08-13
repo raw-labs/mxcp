@@ -7,7 +7,7 @@ from typing import Any, cast
 import click
 import yaml
 
-from ..config._types import (
+from ..core.config._types import (
     SiteConfig,
     UserConfig,
     UserProfileConfig,

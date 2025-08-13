@@ -13,7 +13,7 @@ from mxcp.cli.utils import (
     output_error,
     output_result,
 )
-from mxcp.config.analytics import track_command_with_timing
+from mxcp.core.config.analytics import track_command_with_timing
 from mxcp.executor.engine import create_execution_engine
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config

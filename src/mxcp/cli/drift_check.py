@@ -10,10 +10,10 @@ from mxcp.cli.utils import (
     output_error,
     output_result,
 )
-from mxcp.config.analytics import track_command_with_timing
+from mxcp.core.config.analytics import track_command_with_timing
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
-from mxcp.drift.checker import check_drift
+from mxcp.services.drift.checker import check_drift
 
 
 def format_drift_report(report: Any, debug: bool = False) -> str:

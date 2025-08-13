@@ -7,8 +7,8 @@ from typing import Any, cast
 import yaml
 from jsonschema import ValidationError, validate
 
-from mxcp.config._types import SiteConfig, UserConfig
-from mxcp.config.migration import check_and_migrate_legacy_version
+from mxcp.core.config._types import SiteConfig, UserConfig
+from mxcp.core.refs.migration import check_and_migrate_legacy_version
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +188,7 @@ def load_site_config(repo_path: Path | None = None) -> SiteConfig:
     check_and_migrate_legacy_version(config, "site", str(config_path))
 
     # Load and apply JSON Schema validation
-    schema_path = Path(__file__).parent / "config_schemas" / "mxcp-site-schema-1.json"
+    schema_path = Path(__file__).parent.parent / "schemas" / "mxcp-site-schema-1.json"
     with open(schema_path) as schema_file:
         schema = json.load(schema_file)
 

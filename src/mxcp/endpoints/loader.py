@@ -8,7 +8,7 @@ import yaml
 from jsonschema import validate
 from referencing import Registry, Resource
 
-from mxcp.config._types import SiteConfig
+from mxcp.core.config._types import SiteConfig
 from mxcp.endpoints._types import EndpointDefinition
 
 # Configure logging
@@ -82,7 +82,7 @@ class EndpointLoader:
 
     def _load_schema(self, schema_name: str) -> tuple[dict[str, Any], Registry]:
         """Load a schema file by name and create a registry for cross-file references"""
-        schemas_dir = (Path(__file__).parent / "endpoint_schemas").resolve()
+        schemas_dir = (Path(__file__).parent.parent / "schemas").resolve()
         schema_path = schemas_dir / schema_name
 
         with open(schema_path) as f:

@@ -6,7 +6,7 @@ from typing import cast
 
 import duckdb
 
-from mxcp.config._types import SiteConfig, UserConfig
+from mxcp.core.config._types import SiteConfig, UserConfig
 from mxcp.executor.engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
 from mxcp.drift._types import (
@@ -20,7 +20,7 @@ from mxcp.drift._types import (
     Tool,
     ValidationResults,
 )
-from mxcp.endpoints.loader import EndpointLoader
+from mxcp.definitions.endpoints.loader import EndpointLoader
 from mxcp.executor.runners.test import TestRunner
 from mxcp.endpoints.validate import validate_endpoint_payload
 from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor

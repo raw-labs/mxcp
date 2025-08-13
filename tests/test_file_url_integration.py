@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.config.external_refs import ExternalRefTracker
-from mxcp.config.references import interpolate_all, resolve_file_url
+from mxcp.core.refs.external import ExternalRefTracker
+from mxcp.core.refs.resolver import interpolate_all, resolve_file_url
 
 
 class TestFileURLIntegration:

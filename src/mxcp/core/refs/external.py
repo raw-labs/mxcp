@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from mxcp.config.references import (
+from mxcp.core.refs.resolver import (
     FILE_URL_PATTERN,
     find_references,
     resolve_value,

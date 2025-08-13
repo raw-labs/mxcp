@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
-from mxcp.config._types import SiteConfig, UserConfig
+from mxcp.core.config._types import SiteConfig, UserConfig
 from mxcp.drift._types import (
     DriftReport,
     DriftSnapshot,

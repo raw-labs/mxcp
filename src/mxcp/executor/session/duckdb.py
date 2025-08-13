@@ -5,7 +5,7 @@ into SDK-compatible session objects, centralizing the logic for creating
 SDK DuckDB sessions across the codebase.
 """
 
-from mxcp.config._types import SiteConfig, UserConfig
+from mxcp.core.config._types import SiteConfig, UserConfig
 from mxcp.config.duckdb_config import create_duckdb_session_config
 from mxcp.sdk.executor.plugins.duckdb_plugin.session import DuckDBSession
 

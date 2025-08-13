@@ -6,7 +6,7 @@ into SDK-compatible DuckDB configuration objects.
 
 from typing import Any, cast
 
-from mxcp.config._types import SiteConfig, UserConfig
+from mxcp.core.config._types import SiteConfig, UserConfig
 from mxcp.sdk.executor.plugins.duckdb_plugin._types import (
     DatabaseConfig,
     ExtensionDefinition,

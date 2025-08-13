@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from mxcp.endpoints._types import TypeDefinition
+from mxcp.definitions.endpoints._types import TypeDefinition
 
 
 # LLM Model configuration types

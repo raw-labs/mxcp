@@ -7,11 +7,11 @@ from jinja2 import Environment, meta
 from jsonschema import validate as jsonschema_validate
 from referencing import Registry, Resource
 
-from mxcp.config._types import SiteConfig
+from mxcp.core.config._types import SiteConfig
 from mxcp.config.site_config import find_repo_root
-from mxcp.endpoints._types import EndpointDefinition, ResourceDefinition
-from mxcp.endpoints.loader import EndpointLoader
-from mxcp.endpoints.utils import get_endpoint_source_code
+from mxcp.definitions.endpoints._types import EndpointDefinition, ResourceDefinition
+from mxcp.definitions.endpoints.loader import EndpointLoader
+from mxcp.definitions.endpoints.utils import get_endpoint_source_code
 from mxcp.sdk.executor import ExecutionEngine
 
 RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
@@ -147,12 +147,12 @@ def validate_endpoint_payload(
 
         # Use the appropriate schema based on endpoint type
         schema_filename = f"{endpoint_type}-schema-1.json"
-        schema_path = Path(__file__).parent / "endpoint_schemas" / schema_filename
+        schema_path = Path(__file__).parent.parent / "schemas" / schema_filename
         with open(schema_path) as schema_file:
             schema = json.load(schema_file)
 
         # Set up registry for cross-file references
-        schemas_dir = (Path(__file__).parent / "endpoint_schemas").resolve()
+        schemas_dir = (Path(__file__).parent.parent / "schemas").resolve()
 
         # Load common schema for registry
         common_schema_path = schemas_dir / "common-types-schema-1.json"

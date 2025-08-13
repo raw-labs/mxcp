@@ -1,0 +1,1 @@
+"""Configuration schema definitions for MXCP."""

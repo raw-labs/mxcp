@@ -12,10 +12,10 @@ from typing import Any
 
 import numpy as np
 
-from mxcp.config._types import SiteConfig, UserConfig
-from mxcp.endpoints._types import EndpointDefinition, TestDefinition
-from mxcp.endpoints.loader import EndpointLoader
-from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine
+from mxcp.core.config._types import SiteConfig, UserConfig
+from mxcp.definitions.endpoints._types import EndpointDefinition, TestDefinition
+from mxcp.definitions.endpoints.loader import EndpointLoader
+from mxcp.services.endpoint_service import execute_endpoint_with_engine
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionEngine
 

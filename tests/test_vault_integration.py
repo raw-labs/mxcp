@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mxcp.config.references import interpolate_all, resolve_vault_url
+from mxcp.core.refs.resolver import interpolate_all, resolve_vault_url
 
 
 class TestVaultIntegration:

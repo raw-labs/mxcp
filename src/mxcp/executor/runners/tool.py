@@ -8,8 +8,8 @@ This is primarily used by the evaluation system for LLM tool execution.
 import logging
 from typing import Any
 
-from mxcp.endpoints._types import EndpointDefinition
-from mxcp.endpoints.utils import detect_language_from_source, extract_source_info
+from mxcp.definitions.endpoints._types import EndpointDefinition
+from mxcp.definitions.endpoints.utils import detect_language_from_source, extract_source_info
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
 

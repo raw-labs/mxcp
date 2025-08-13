@@ -44,7 +44,7 @@ Example usage:
 import logging
 from pathlib import Path
 
-from mxcp.config._types import SiteConfig, UserConfig
+from mxcp.core.config._types import SiteConfig, UserConfig
 from mxcp.config.duckdb_config import create_duckdb_session_config
 from mxcp.config.execution_context import execution_context_for_init_hooks
 from mxcp.config.site_config import find_repo_root

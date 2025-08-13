@@ -10,11 +10,11 @@ from mxcp.cli.utils import (
     output_error,
     output_result,
 )
-from mxcp.config.analytics import track_command_with_timing
+from mxcp.core.config.analytics import track_command_with_timing
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
-from mxcp.drift._types import DriftSnapshot
-from mxcp.drift.snapshot import generate_snapshot
+from mxcp.services.drift._types import DriftSnapshot
+from mxcp.services.drift.snapshot import generate_snapshot
 
 
 def _compute_snapshot_hash(snapshot: DriftSnapshot) -> tuple[str, str]:
