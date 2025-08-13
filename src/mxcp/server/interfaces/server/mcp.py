@@ -1252,6 +1252,14 @@ class RAWMCP:
         # Set the annotations for Pydantic introspection
         handler.__annotations__ = param_annotations
 
+        # Add return type annotation if return schema is defined
+        return_schema = endpoint_def.get("return")
+        if return_schema:
+            return_type = self._create_pydantic_model_from_schema(
+                return_schema, f"{original_name}Return", endpoint_type
+            )
+            handler.__annotations__["return"] = return_type
+
         # Finally register the function with FastMCP -------------------------
         # Use original name for FastMCP registration
         decorator(handler)
