@@ -6,7 +6,6 @@ dependencies on configuration parsing or other MXCP modules.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
 
 
 class PolicyAction(Enum):
@@ -31,8 +30,8 @@ class PolicyDefinition:
 
     condition: str
     action: PolicyAction
-    reason: Optional[str] = None
-    fields: Optional[List[str]] = None
+    reason: str | None = None
+    fields: list[str] | None = None
 
 
 @dataclass
@@ -44,8 +43,8 @@ class PolicySet:
         output_policies: Policies applied to output data after execution
     """
 
-    input_policies: List[PolicyDefinition]
-    output_policies: List[PolicyDefinition]
+    input_policies: list[PolicyDefinition]
+    output_policies: list[PolicyDefinition]
 
 
 class PolicyEnforcementError(Exception):

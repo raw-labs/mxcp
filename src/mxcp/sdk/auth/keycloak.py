@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """Keycloak OAuth provider implementation for MXCP authentication."""
+
 import logging
 import secrets
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 from urllib.parse import urlencode
 
 from mcp.server.auth.provider import AuthorizationParams
@@ -30,7 +30,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
     def __init__(
         self,
         keycloak_config: KeycloakAuthConfig,
-        transport_config: Optional[HttpTransportConfig] = None,
+        transport_config: HttpTransportConfig | None = None,
         host: str = "localhost",
         port: int = 8000,
     ):
@@ -65,7 +65,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         self.url_builder = URLBuilder(transport_config)
 
         # Internal state management
-        self._state_store: Dict[str, StateMeta] = {}
+        self._state_store: dict[str, StateMeta] = {}
 
     @property
     def callback_path(self) -> str:
@@ -160,7 +160,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
             id=user_id, scopes=scopes, raw_token=access_token, provider="keycloak"
         )
 
-    async def _get_user_info(self, access_token: str) -> Dict[str, Any]:
+    async def _get_user_info(self, access_token: str) -> dict[str, Any]:
         """Get user information from Keycloak userinfo endpoint."""
         async with create_mcp_http_client() as client:
             response = await client.get(
@@ -171,7 +171,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
                 logger.error(f"Failed to get user info: {response.status_code}")
                 raise HTTPException(400, "Failed to get user information")
 
-            return cast(Dict[str, Any], response.json())
+            return cast(dict[str, Any], response.json())
 
     def get_state_metadata(self, state: str) -> StateMeta:
         """Return metadata stored for a given state."""
@@ -254,4 +254,4 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
             )
         except Exception as e:
             logger.error(f"Failed to get user context: {e}")
-            raise HTTPException(401, "Failed to get user information")
+            raise HTTPException(401, "Failed to get user information") from e

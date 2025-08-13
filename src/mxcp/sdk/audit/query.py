@@ -4,7 +4,7 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, cast
+from typing import Any, Literal, cast
 
 import duckdb
 
@@ -64,15 +64,15 @@ class AuditQuery:
 
     def query_logs(
         self,
-        tool: Optional[str] = None,
-        resource: Optional[str] = None,
-        prompt: Optional[str] = None,
-        event_type: Optional[str] = None,
-        policy: Optional[str] = None,
-        status: Optional[str] = None,
-        since: Optional[str] = None,
+        tool: str | None = None,
+        resource: str | None = None,
+        prompt: str | None = None,
+        event_type: str | None = None,
+        policy: str | None = None,
+        status: str | None = None,
+        since: str | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Query audit logs with optional filters."""
         conn = None
         try:
@@ -129,7 +129,7 @@ class AuditQuery:
             # Convert to list of dicts
             logs = []
             for row in result:
-                log_entry = dict(zip(columns, row))
+                log_entry = dict(zip(columns, row, strict=False))
                 logs.append(log_entry)
 
             return logs
@@ -144,13 +144,13 @@ class AuditQuery:
     def export_to_csv(
         self,
         output_path: Path,
-        tool: Optional[str] = None,
-        resource: Optional[str] = None,
-        prompt: Optional[str] = None,
-        event_type: Optional[str] = None,
-        policy: Optional[str] = None,
-        status: Optional[str] = None,
-        since: Optional[str] = None,
+        tool: str | None = None,
+        resource: str | None = None,
+        prompt: str | None = None,
+        event_type: str | None = None,
+        policy: str | None = None,
+        status: str | None = None,
+        since: str | None = None,
     ) -> int:
         """Export audit logs to CSV file."""
         conn = None
@@ -232,7 +232,7 @@ class AuditQuery:
             # Create table and import all data
             conn.execute(
                 f"""
-                CREATE TABLE logs AS 
+                CREATE TABLE logs AS
                 SELECT * FROM read_json_auto('{self.log_path}')
                 ORDER BY timestamp DESC
             """
@@ -259,7 +259,7 @@ class AuditQuery:
             if conn:
                 conn.close()
 
-    def get_summary_stats(self) -> Dict[str, Any]:
+    def get_summary_stats(self) -> dict[str, Any]:
         """Get summary statistics about the audit logs.
 
         Returns:
@@ -272,7 +272,7 @@ class AuditQuery:
             # Create a view for the JSONL data
             conn.execute(
                 f"""
-                CREATE VIEW logs AS 
+                CREATE VIEW logs AS
                 SELECT * FROM read_json_auto('{self.log_path}')
             """
             )
@@ -286,8 +286,8 @@ class AuditQuery:
             # Count by type
             type_counts = conn.execute(
                 """
-                SELECT type, COUNT(*) as count 
-                FROM logs 
+                SELECT type, COUNT(*) as count
+                FROM logs
                 GROUP BY type
             """
             ).fetchall()
@@ -296,8 +296,8 @@ class AuditQuery:
             # Count by status
             status_counts = conn.execute(
                 """
-                SELECT status, COUNT(*) as count 
-                FROM logs 
+                SELECT status, COUNT(*) as count
+                FROM logs
                 GROUP BY status
             """
             ).fetchall()
@@ -306,8 +306,8 @@ class AuditQuery:
             # Count by policy decision
             policy_counts = conn.execute(
                 """
-                SELECT policy_decision, COUNT(*) as count 
-                FROM logs 
+                SELECT policy_decision, COUNT(*) as count
+                FROM logs
                 GROUP BY policy_decision
             """
             ).fetchall()
@@ -316,7 +316,7 @@ class AuditQuery:
             # Time range
             time_range = conn.execute(
                 """
-                SELECT MIN(timestamp) as earliest, MAX(timestamp) as latest 
+                SELECT MIN(timestamp) as earliest, MAX(timestamp) as latest
                 FROM logs
             """
             ).fetchone()

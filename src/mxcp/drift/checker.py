@@ -2,23 +2,17 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
-
-from jsonschema import ValidationError, validate
+from typing import Any, cast
 
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.drift._types import (
-    Column,
     DriftReport,
     DriftSnapshot,
-    Prompt,
-    Resource,
     ResourceChange,
     ResourceDefinition,
     Table,
     TableChange,
     TestResults,
-    Tool,
     ValidationResults,
 )
 from mxcp.drift.snapshot import generate_snapshot
@@ -31,7 +25,7 @@ def load_and_validate_snapshot(snapshot_path: Path) -> DriftSnapshot:
     if not snapshot_path.exists():
         raise FileNotFoundError(f"Snapshot file not found: {snapshot_path}")
 
-    with open(snapshot_path, "r") as f:
+    with open(snapshot_path) as f:
         snapshot_data = json.load(f)
 
     # Validate version
@@ -44,7 +38,7 @@ def load_and_validate_snapshot(snapshot_path: Path) -> DriftSnapshot:
     return cast(DriftSnapshot, snapshot_data)
 
 
-def compare_tables(baseline_tables: List[Table], current_tables: List[Table]) -> List[TableChange]:
+def compare_tables(baseline_tables: list[Table], current_tables: list[Table]) -> list[TableChange]:
     """Compare table structures between baseline and current snapshots."""
     changes = []
 
@@ -132,8 +126,8 @@ def compare_tables(baseline_tables: List[Table], current_tables: List[Table]) ->
 
 
 def compare_resources(
-    baseline_resources: List[ResourceDefinition], current_resources: List[ResourceDefinition]
-) -> List[ResourceChange]:
+    baseline_resources: list[ResourceDefinition], current_resources: list[ResourceDefinition]
+) -> list[ResourceChange]:
     """Compare resources between baseline and current snapshots."""
     changes = []
 
@@ -207,7 +201,7 @@ def compare_resources(
                     baseline_test = baseline_res.get("test_results") if baseline_res else None
                     current_test = current_res.get("test_results") if current_res else None
                     details["test_changes"] = cast(
-                        Dict[str, Any],
+                        dict[str, Any],
                         {
                             "old_status": baseline_test.get("status") if baseline_test else None,
                             "new_status": current_test.get("status") if current_test else None,
@@ -229,7 +223,7 @@ def compare_resources(
     return changes
 
 
-def _extract_endpoint_identifier(definition: Optional[Any]) -> Optional[str]:
+def _extract_endpoint_identifier(definition: Any | None) -> str | None:
     """Extract endpoint identifier from definition.
 
     The definition has the structure:
@@ -265,7 +259,7 @@ def _compare_validation_results(baseline: ValidationResults, current: Validation
     return baseline_copy != current_copy
 
 
-def _compare_test_results(baseline: Optional[TestResults], current: Optional[TestResults]) -> bool:
+def _compare_test_results(baseline: TestResults | None, current: TestResults | None) -> bool:
     """Compare test results."""
     if baseline is None and current is None:
         return False
@@ -293,7 +287,7 @@ def _compare_test_results(baseline: Optional[TestResults], current: Optional[Tes
     return baseline_test_summary != current_test_summary
 
 
-def _compare_definitions(baseline: Optional[Any], current: Optional[Any]) -> bool:
+def _compare_definitions(baseline: Any | None, current: Any | None) -> bool:
     """Compare endpoint definitions."""
     if baseline is None and current is None:
         return False
@@ -309,8 +303,8 @@ def _compare_definitions(baseline: Optional[Any], current: Optional[Any]) -> boo
 async def check_drift(
     site_config: SiteConfig,
     user_config: UserConfig,
-    profile: Optional[str] = None,
-    baseline_path: Optional[str] = None,
+    profile: str | None = None,
+    baseline_path: str | None = None,
 ) -> DriftReport:
     """Check for drift between current state and baseline snapshot.
 
@@ -341,7 +335,7 @@ async def check_drift(
     try:
         baseline_snapshot = load_and_validate_snapshot(baseline_snapshot_path)
     except (FileNotFoundError, ValueError) as e:
-        raise ValueError(f"Failed to load baseline snapshot: {e}")
+        raise ValueError(f"Failed to load baseline snapshot: {e}") from e
 
     # Generate current snapshot
     current_snapshot, _ = await generate_snapshot(

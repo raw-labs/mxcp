@@ -1,6 +1,7 @@
 import importlib
 import inspect
 import logging
+from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from functools import wraps
@@ -8,22 +9,13 @@ from typing import (
     TYPE_CHECKING,
     Annotated,
     Any,
-    Callable,
-    Dict,
-    List,
     Optional,
-    Type,
     TypeVar,
     Union,
-    cast,
     get_args,
     get_origin,
     get_type_hints,
 )
-
-from duckdb import DuckDBPyConnection
-
-from mxcp.config._types import SiteConfig, UserConfig
 
 if TYPE_CHECKING:
     from mxcp.sdk.auth import UserContext
@@ -35,11 +27,11 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 # Global registry for active plugin instances and shutdown hooks
-_active_plugins: List["MXCPBasePlugin"] = []
-_plugin_shutdown_hooks: List[Callable[[], None]] = []
+_active_plugins: list["MXCPBasePlugin"] = []
+_plugin_shutdown_hooks: list[Callable[[], None]] = []
 
 
-def get_active_plugins() -> List["MXCPBasePlugin"]:
+def get_active_plugins() -> list["MXCPBasePlugin"]:
     """Returns a list of all active plugin instances."""
     return _active_plugins
 
@@ -151,7 +143,7 @@ class MXCPBasePlugin:
                 return a + b
     """
 
-    def __init__(self, config: Dict[str, Any], user_context: Optional["UserContext"] = None):
+    def __init__(self, config: dict[str, Any], user_context: Optional["UserContext"] = None):
         """Initialize the plugin with configuration and optional user context.
 
         Args:
@@ -172,7 +164,7 @@ class MXCPBasePlugin:
         """
         return self._user_context
 
-    def get_user_token(self) -> Optional[str]:
+    def get_user_token(self) -> str | None:
         """Get the user's external OAuth token (e.g., GitHub token).
 
         Returns:
@@ -180,7 +172,7 @@ class MXCPBasePlugin:
         """
         return self._user_context.external_token if self._user_context else None
 
-    def get_username(self) -> Optional[str]:
+    def get_username(self) -> str | None:
         """Get the authenticated user's username.
 
         Returns:
@@ -188,7 +180,7 @@ class MXCPBasePlugin:
         """
         return self._user_context.username if self._user_context else None
 
-    def get_user_email(self) -> Optional[str]:
+    def get_user_email(self) -> str | None:
         """Get the authenticated user's email.
 
         Returns:
@@ -196,7 +188,7 @@ class MXCPBasePlugin:
         """
         return self._user_context.email if self._user_context else None
 
-    def get_user_provider(self) -> Optional[str]:
+    def get_user_provider(self) -> str | None:
         """Get the OAuth provider name (e.g., 'github', 'atlassian').
 
         Returns:
@@ -277,7 +269,7 @@ class MXCPBasePlugin:
         # Unknown types are not supported
         raise ValueError(f"Type '{python_type}' is not supported in UDF type annotations")
 
-    def udfs(self) -> List[Dict[str, Any]]:
+    def udfs(self) -> list[dict[str, Any]]:
         """Generate UDF definitions from type annotations.
 
         Only methods decorated with @udf will be included.
@@ -305,7 +297,7 @@ class MXCPBasePlugin:
             # Get argument types (excluding 'self')
             sig = inspect.signature(class_method)
             arg_types = []
-            for param_name, param in sig.parameters.items():
+            for param_name, _param in sig.parameters.items():
                 if param_name == "self":
                     continue
                 param_type = type_hints.get(param_name, Any)
@@ -329,7 +321,7 @@ class MXCPBasePlugin:
         return udfs
 
     @classmethod
-    def find_plugins(cls, module: str) -> List[Type["MXCPBasePlugin"]]:
+    def find_plugins(cls, module: str) -> list[type["MXCPBasePlugin"]]:
         """Find all subclasses of MXCPBasePlugin in a module.
 
         Args:

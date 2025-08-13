@@ -1,6 +1,6 @@
 import signal
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import click
 
@@ -33,11 +33,11 @@ from mxcp.server.mcp import RAWMCP
 )
 @track_command_with_timing("serve")  # type: ignore[misc]
 def serve(
-    profile: Optional[str],
-    transport: Optional[str],
-    port: Optional[int],
+    profile: str | None,
+    transport: str | None,
+    port: int | None,
     debug: bool,
-    sql_tools: Optional[str],
+    sql_tools: str | None,
     readonly: bool,
     stateless: bool,
 ) -> None:
@@ -136,7 +136,7 @@ def serve(
             if endpoint_counts["total"] == 0:
                 click.echo(f"   {click.style('⚠️  No endpoints found!', fg='yellow')}")
                 click.echo(
-                    f"   Create tools in the 'tools/' directory, resources in 'resources/', etc."
+                    "   Create tools in the 'tools/' directory, resources in 'resources/', etc."
                 )
 
             click.echo("\n" + "-" * 60)

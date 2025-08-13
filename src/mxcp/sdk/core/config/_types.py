@@ -5,14 +5,14 @@ This module defines TypedDict classes for the resolver configuration structure
 that supports vault, 1password, file, and environment variable resolution.
 """
 
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 
 class VaultConfigOptional(TypedDict, total=False):
     """Optional fields for VaultConfig."""
 
-    address: Optional[str]
-    token_env: Optional[str]
+    address: str | None
+    token_env: str | None
 
 
 class VaultConfig(VaultConfigOptional):
@@ -24,7 +24,7 @@ class VaultConfig(VaultConfigOptional):
 class OnePasswordConfigOptional(TypedDict, total=False):
     """Optional fields for OnePasswordConfig."""
 
-    token_env: Optional[str]
+    token_env: str | None
 
 
 class OnePasswordConfig(OnePasswordConfigOptional):
@@ -49,5 +49,5 @@ class ResolverConfig(TypedDict, total=False):
         token_env: "OP_SERVICE_ACCOUNT_TOKEN"
     """
 
-    vault: Optional[VaultConfig]
-    onepassword: Optional[OnePasswordConfig]
+    vault: VaultConfig | None
+    onepassword: OnePasswordConfig | None

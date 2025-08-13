@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """MXCP SDK Validator - OpenAPI-style type validation and conversion.
 
 This module provides comprehensive type validation functionality including:

@@ -13,7 +13,8 @@ Brief description of the changes in this PR.
 
 ## Testing
 - [ ] Tests pass locally with `uv run pytest`
-- [ ] Linting passes with `uv run black --check .` and `uv run isort --check .`
+- [ ] Linting passes with `uv run ruff check .`
+- [ ] Code formatting passes with `uv run black --check .`
 - [ ] Type checking passes with `uv run mypy .`
 - [ ] Added tests for new functionality (if applicable)
 - [ ] Updated documentation (if applicable)

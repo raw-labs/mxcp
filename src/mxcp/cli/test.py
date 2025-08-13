@@ -1,11 +1,10 @@
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 import click
 
-from mxcp.cli._types import MultiEndpointTestResults, TestResults
 from mxcp.cli.utils import (
     configure_logging,
     get_env_flag,
@@ -21,7 +20,7 @@ from mxcp.endpoints.utils import EndpointType
 from mxcp.sdk.auth import UserContext
 
 
-def format_test_results(results: Union[Dict[str, Any], str], debug: bool = False) -> str:
+def format_test_results(results: dict[str, Any] | str, debug: bool = False) -> str:
     """Format test results for human-readable output"""
     if isinstance(results, str):
         return results
@@ -76,7 +75,7 @@ def format_test_results(results: Union[Dict[str, Any], str], debug: bool = False
     endpoints = results.get("endpoints", [])
     if not endpoints:
         output.append(click.style("ℹ️  No endpoints found to test", fg="blue"))
-        output.append(f"   Create test cases in your endpoint YAML files")
+        output.append("   Create test cases in your endpoint YAML files")
         return "\n".join(output)
 
     # Count passed and failed endpoints
@@ -203,10 +202,10 @@ def format_test_results(results: Union[Dict[str, Any], str], debug: bool = False
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("test")  # type: ignore[misc]
 def test(
-    endpoint_type: Optional[str],
-    name: Optional[str],
-    user_context: Optional[str],
-    profile: Optional[str],
+    endpoint_type: str | None,
+    name: str | None,
+    user_context: str | None,
+    profile: str | None,
     json_output: bool,
     debug: bool,
     readonly: bool,
@@ -256,7 +255,7 @@ def test(
         # Handle graceful shutdown
         if not json_output:
             click.echo("\nOperation cancelled by user", err=True)
-        raise click.Abort()
+        raise click.Abort() from None
     except Exception as e:
         # Only catch non-Click exceptions
         output_error(e, json_output, debug)
@@ -264,10 +263,10 @@ def test(
 
 async def _test_impl(
     *,
-    endpoint_type: Optional[str],
-    name: Optional[str],
-    user_context: Optional[str],
-    profile: Optional[str],
+    endpoint_type: str | None,
+    name: str | None,
+    user_context: str | None,
+    profile: str | None,
     json_output: bool,
     debug: bool,
     readonly: bool,
@@ -294,13 +293,15 @@ async def _test_impl(
                 with open(file_path) as f:
                     context_data = json.load(f)
             except json.JSONDecodeError as e:
-                raise click.BadParameter(f"Invalid JSON in user context file {file_path}: {e}")
+                raise click.BadParameter(
+                    f"Invalid JSON in user context file {file_path}: {e}"
+                ) from e
         else:
             # Parse as JSON string
             try:
                 context_data = json.loads(user_context)
             except json.JSONDecodeError as e:
-                raise click.BadParameter(f"Invalid JSON in user context: {e}")
+                raise click.BadParameter(f"Invalid JSON in user context: {e}") from e
 
         # Create UserContext object from the data
         cli_user_context = UserContext(

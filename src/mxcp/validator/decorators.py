@@ -1,9 +1,10 @@
 """Validation decorators for MXCP validator."""
 
 import inspect
+from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union, cast
+from typing import Any, TypeVar, cast
 
 from mxcp.sdk.validator import TypeValidator
 
@@ -33,8 +34,8 @@ class validate:
 
     def __init__(
         self,
-        input_schema: Optional[Union[Dict[str, Any], List[Any]]] = None,
-        output_schema: Optional[Dict[str, Any]] = None,
+        input_schema: dict[str, Any] | list[Any] | None = None,
+        output_schema: dict[str, Any] | None = None,
         strict: bool = False,
         validate_signature: bool = True,
     ):
@@ -155,7 +156,7 @@ class validate:
 
     @classmethod
     def from_file(
-        cls, schema_path: Union[str, Path], strict: bool = False, validate_signature: bool = True
+        cls, schema_path: str | Path, strict: bool = False, validate_signature: bool = True
     ) -> "validate":
         """Create a validation decorator from a schema file.
 
@@ -182,7 +183,7 @@ class validate:
 
     @classmethod
     def from_dict(
-        cls, schema_dict: Dict[str, Any], strict: bool = False, validate_signature: bool = True
+        cls, schema_dict: dict[str, Any], strict: bool = False, validate_signature: bool = True
     ) -> "validate":
         """Create a validation decorator from a schema dictionary.
 
@@ -202,8 +203,8 @@ class validate:
         )
 
     def _map_args_to_params(
-        self, func: Callable[..., Any], args: Tuple[Any, ...], kwargs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, func: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
         """Map positional and keyword arguments to parameter names.
 
         Args:
@@ -229,9 +230,7 @@ class validate:
 
 
 # Convenience functions for common validation patterns
-def validate_input(
-    schema: Union[Dict[str, Any], List[Any]], strict: bool = False
-) -> Callable[..., Any]:
+def validate_input(schema: dict[str, Any] | list[Any], strict: bool = False) -> Callable[..., Any]:
     """Validate only input parameters.
 
     Args:
@@ -244,7 +243,7 @@ def validate_input(
     return validate(input_schema=schema, strict=strict)
 
 
-def validate_output(schema: Dict[str, Any], strict: bool = False) -> Callable[..., Any]:
+def validate_output(schema: dict[str, Any], strict: bool = False) -> Callable[..., Any]:
     """Validate only output.
 
     Args:
@@ -258,8 +257,8 @@ def validate_output(schema: Dict[str, Any], strict: bool = False) -> Callable[..
 
 
 def validate_strict(
-    input_schema: Optional[Union[Dict[str, Any], List[Any]]] = None,
-    output_schema: Optional[Dict[str, Any]] = None,
+    input_schema: dict[str, Any] | list[Any] | None = None,
+    output_schema: dict[str, Any] | None = None,
 ) -> Callable[..., Any]:
     """Strict validation with no type coercion.
 

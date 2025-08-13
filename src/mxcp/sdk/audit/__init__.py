@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """MXCP SDK Audit - Schema-based audit logging system for enterprise compliance.
 
 This module provides a comprehensive, schema-based audit logging system designed for

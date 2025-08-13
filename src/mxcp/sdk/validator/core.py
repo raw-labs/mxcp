@@ -1,7 +1,8 @@
 """Core validation logic for MXCP validator."""
 
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Union
+from collections.abc import Callable
+from typing import Any
 
 from ._types import ParameterSchema, TypeSchema, ValidationSchema
 from .converters import TypeConverter, ValidationError
@@ -28,10 +29,10 @@ class TypeValidator:
         """
         self.schema = schema
         self.strict = strict
-        self._custom_handlers: Dict[type, Dict[str, Any]] = {}
+        self._custom_handlers: dict[type, dict[str, Any]] = {}
 
     @classmethod
-    def from_dict(cls, schema_dict: Dict[str, Any], strict: bool = False) -> "TypeValidator":
+    def from_dict(cls, schema_dict: dict[str, Any], strict: bool = False) -> "TypeValidator":
         """Create a TypeValidator from a dictionary schema.
 
         Args:
@@ -44,7 +45,7 @@ class TypeValidator:
         schema = ValidationSchema.from_dict(schema_dict)
         return cls(schema, strict=strict)
 
-    def validate_input(self, params: Dict[str, Any], apply_defaults: bool = True) -> Dict[str, Any]:
+    def validate_input(self, params: dict[str, Any], apply_defaults: bool = True) -> dict[str, Any]:
         """Validate and convert input parameters.
 
         Args:
@@ -90,7 +91,7 @@ class TypeValidator:
             try:
                 validated[name] = TypeConverter.convert_parameter(value, param_schema)
             except ValidationError as e:
-                raise ValidationError(f"Error validating parameter '{name}': {str(e)}")
+                raise ValidationError(f"Error validating parameter '{name}': {str(e)}") from e
 
         return validated
 
@@ -114,7 +115,7 @@ class TypeValidator:
         try:
             TypeConverter.validate_output(value, self.schema.output_schema)
         except ValidationError as e:
-            raise ValidationError(f"Output validation failed: {str(e)}")
+            raise ValidationError(f"Output validation failed: {str(e)}") from e
 
         # Serialize if requested
         if serialize:
@@ -175,8 +176,8 @@ class TypeValidator:
                 raise ValidationError(f"Function has extra parameters: {extra}")
 
     def _apply_defaults(
-        self, params: Dict[str, Any], param_lookup: Dict[str, ParameterSchema]
-    ) -> Dict[str, Any]:
+        self, params: dict[str, Any], param_lookup: dict[str, ParameterSchema]
+    ) -> dict[str, Any]:
         """Apply default values to missing parameters.
 
         Args:
@@ -200,7 +201,7 @@ class TypeValidator:
         python_type: type,
         schema_type: str,
         converter: Callable[[Any], Any],
-        validator: Optional[Callable[[Any], bool]] = None,
+        validator: Callable[[Any], bool] | None = None,
     ) -> None:
         """Register a custom type handler for non-standard Python types.
 
@@ -216,7 +217,7 @@ class TypeValidator:
             "validator": validator,
         }
 
-    def get_input_schema(self) -> Optional[List[Dict[str, Any]]]:
+    def get_input_schema(self) -> list[dict[str, Any]] | None:
         """Get the input parameter schema as a list of dictionaries.
 
         Returns:
@@ -236,7 +237,7 @@ class TypeValidator:
 
         return result
 
-    def get_output_schema(self) -> Optional[Dict[str, Any]]:
+    def get_output_schema(self) -> dict[str, Any] | None:
         """Get the output schema as a dictionary.
 
         Returns:
@@ -247,9 +248,9 @@ class TypeValidator:
 
         return self._type_schema_to_dict(self.schema.output_schema)
 
-    def _type_schema_to_dict(self, schema: Union[TypeSchema, ParameterSchema]) -> Dict[str, Any]:
+    def _type_schema_to_dict(self, schema: TypeSchema | ParameterSchema) -> dict[str, Any]:
         """Convert a TypeSchema or ParameterSchema to a dictionary representation."""
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "type": schema.type,
             "description": schema.description,
             "format": schema.format,

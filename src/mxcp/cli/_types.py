@@ -1,6 +1,6 @@
 """Type definitions for MXCP CLI module."""
 
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import TypedDict
 
 
 class TestResult(TypedDict):
@@ -9,17 +9,17 @@ class TestResult(TypedDict):
     name: str
     status: str
     time: float
-    error: Optional[str]
-    description: Optional[str]
+    error: str | None
+    description: str | None
 
 
 class TestResults(TypedDict):
     """Test results for a single endpoint."""
 
     status: str  # "ok", "error", "failed"
-    message: Optional[str]
-    tests: List[TestResult]
-    tests_run: Optional[int]
+    message: str | None
+    tests: list[TestResult]
+    tests_run: int | None
 
 
 class EndpointTestResult(TypedDict):
@@ -33,7 +33,7 @@ class EndpointTestResult(TypedDict):
 class MultiEndpointTestResults(TypedDict):
     """Results from running tests on multiple endpoints."""
 
-    endpoints: List[EndpointTestResult]
+    endpoints: list[EndpointTestResult]
 
 
 class EvalResult(TypedDict):
@@ -41,8 +41,8 @@ class EvalResult(TypedDict):
 
     status: str
     duration: float
-    message: Optional[str]
-    error: Optional[str]
+    message: str | None
+    error: str | None
 
 
 class EvalEndpointResult(TypedDict):
@@ -50,9 +50,9 @@ class EvalEndpointResult(TypedDict):
 
     name: str
     status: str
-    message: Optional[str]
+    message: str | None
     duration: float
-    results: List[EvalResult]
+    results: list[EvalResult]
 
 
 class EvalResults(TypedDict):
@@ -60,5 +60,5 @@ class EvalResults(TypedDict):
 
     suite: str
     status: str
-    endpoints: List[EvalEndpointResult]
-    summary: Dict[str, int]
+    endpoints: list[EvalEndpointResult]
+    summary: dict[str, int]

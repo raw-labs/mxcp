@@ -5,12 +5,12 @@ configuration parsing or loading functionality.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 import celpy
 from celpy.adapter import json_to_cel
 
-from ._types import PolicyAction, PolicyDefinition, PolicyEnforcementError, PolicySet
+from ._types import PolicyAction, PolicyEnforcementError, PolicySet
 
 if TYPE_CHECKING:
     from mxcp.sdk.auth import UserContext
@@ -79,7 +79,7 @@ class PolicyEnforcer:
 
         return env
 
-    def _evaluate_condition(self, condition: str, context: Dict[str, Any]) -> bool:
+    def _evaluate_condition(self, condition: str, context: dict[str, Any]) -> bool:
         """Evaluate a CEL condition against the given context.
 
         Args:
@@ -104,14 +104,14 @@ class PolicyEnforcer:
             # On error, default to denying access for safety
             return False
 
-    def _python_to_cel_context(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _python_to_cel_context(self, context: dict[str, Any]) -> dict[str, Any]:
         """Convert Python context to CEL-compatible format."""
         cel_context = {}
         for key, value in context.items():
             cel_context[key] = json_to_cel(value)
         return cel_context
 
-    def _user_context_to_dict(self, user_context: Optional["UserContext"]) -> Dict[str, Any]:
+    def _user_context_to_dict(self, user_context: Optional["UserContext"]) -> dict[str, Any]:
         """Convert UserContext to a dictionary for CEL evaluation."""
         if user_context is None:
             return {
@@ -124,7 +124,7 @@ class PolicyEnforcer:
             }
 
         # Extract basic fields
-        user_dict: Dict[str, Any] = {
+        user_dict: dict[str, Any] = {
             "user_id": user_context.user_id,
             "username": user_context.username,
             "email": user_context.email,
@@ -142,7 +142,7 @@ class PolicyEnforcer:
         return user_dict
 
     def enforce_input_policies(
-        self, user_context: Optional["UserContext"], params: Dict[str, Any]
+        self, user_context: Optional["UserContext"], params: dict[str, Any]
     ) -> None:
         """Enforce input policies.
 
@@ -160,7 +160,7 @@ class PolicyEnforcer:
         # Check for dangerous naming collision
         if "user" in params:
             logger.warning(
-                f"Query parameter 'user' conflicts with user context namespace. This may cause policy evaluation issues."
+                "Query parameter 'user' conflicts with user context namespace. This may cause policy evaluation issues."
             )
             # For security, we prioritize user context over query parameters
             # Users should rename their parameter to avoid this collision
@@ -172,18 +172,20 @@ class PolicyEnforcer:
 
         # Evaluate each input policy
         for policy in self.policy_set.input_policies:
-            if self._evaluate_condition(policy.condition, context):
-                if policy.action == PolicyAction.DENY:
-                    reason = policy.reason or "Access denied by policy"
-                    logger.warning(f"Input policy denied access: {reason}")
-                    raise PolicyEnforcementError(reason)
+            if (
+                self._evaluate_condition(policy.condition, context)
+                and policy.action == PolicyAction.DENY
+            ):
+                reason = policy.reason or "Access denied by policy"
+                logger.warning(f"Input policy denied access: {reason}")
+                raise PolicyEnforcementError(reason)
 
     def enforce_output_policies(
         self,
         user_context: Optional["UserContext"],
         output: Any,
-        endpoint_def: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[Any, Optional[str]]:
+        endpoint_def: dict[str, Any] | None = None,
+    ) -> tuple[Any, str | None]:
         """Enforce output policies.
 
         Args:
@@ -231,7 +233,7 @@ class PolicyEnforcer:
 
         return output, applied_action
 
-    def _filter_fields(self, data: Any, fields: List[str]) -> Any:
+    def _filter_fields(self, data: Any, fields: list[str]) -> Any:
         """Remove specified fields from the output.
 
         Args:
@@ -254,11 +256,11 @@ class PolicyEnforcer:
             # Scalar values remain unchanged
             return data
 
-    def _filter_dict_fields(self, data: Dict[str, Any], fields: List[str]) -> Dict[str, Any]:
+    def _filter_dict_fields(self, data: dict[str, Any], fields: list[str]) -> dict[str, Any]:
         """Remove fields from a dictionary."""
         return {k: v for k, v in data.items() if k not in fields}
 
-    def _mask_fields(self, data: Any, fields: List[str]) -> Any:
+    def _mask_fields(self, data: Any, fields: list[str]) -> Any:
         """Mask specified fields in the output.
 
         Args:
@@ -281,7 +283,7 @@ class PolicyEnforcer:
             # Scalar values remain unchanged
             return data
 
-    def _mask_dict_fields(self, data: Dict[str, Any], fields: List[str]) -> Dict[str, Any]:
+    def _mask_dict_fields(self, data: dict[str, Any], fields: list[str]) -> dict[str, Any]:
         """Mask fields in a dictionary."""
         result = data.copy()
         for field in fields:
@@ -289,7 +291,7 @@ class PolicyEnforcer:
                 result[field] = "****"
         return result
 
-    def _filter_sensitive_fields(self, data: Any, type_def: Dict[str, Any]) -> Any:
+    def _filter_sensitive_fields(self, data: Any, type_def: dict[str, Any]) -> Any:
         """Recursively filter out fields marked as sensitive in the type definition.
 
         Args:

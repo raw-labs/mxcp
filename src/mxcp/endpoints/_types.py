@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
+from typing import Any, Literal, Optional, TypedDict
 
 from mxcp.cli._types import TestResults
 
@@ -16,123 +16,123 @@ class TestArgument(TypedDict):
 
 class TestDefinition(TypedDict):
     name: str
-    description: Optional[str]
-    arguments: List[TestArgument]
-    result: Optional[object]
-    user_context: Optional[Dict[str, Any]]  # User context for policy testing
-    result_contains: Optional[object]  # Partial match for objects/arrays
-    result_not_contains: Optional[List[str]]  # Fields that should NOT exist
-    result_contains_item: Optional[object]  # At least one array item matches
-    result_contains_all: Optional[List[object]]  # All items must be present (any order)
-    result_length: Optional[int]  # Array must have specific length
-    result_contains_text: Optional[str]  # Substring match for strings
+    description: str | None
+    arguments: list[TestArgument]
+    result: object | None
+    user_context: dict[str, Any] | None  # User context for policy testing
+    result_contains: object | None  # Partial match for objects/arrays
+    result_not_contains: list[str] | None  # Fields that should NOT exist
+    result_contains_item: object | None  # At least one array item matches
+    result_contains_all: list[object] | None  # All items must be present (any order)
+    result_length: int | None  # Array must have specific length
+    result_contains_text: str | None  # Substring match for strings
 
 
 class TypeDefinition(TypedDict):
     type: str
-    format: Optional[str]  # email, uri, date, time, date-time, duration, timestamp
-    sensitive: Optional[bool]  # Whether this field contains sensitive data
-    minLength: Optional[int]
-    maxLength: Optional[int]
-    minimum: Optional[float]
-    maximum: Optional[float]
-    exclusiveMinimum: Optional[float]
-    exclusiveMaximum: Optional[float]
-    multipleOf: Optional[float]
-    minItems: Optional[int]
-    maxItems: Optional[int]
-    uniqueItems: Optional[bool]
+    format: str | None  # email, uri, date, time, date-time, duration, timestamp
+    sensitive: bool | None  # Whether this field contains sensitive data
+    minLength: int | None
+    maxLength: int | None
+    minimum: float | None
+    maximum: float | None
+    exclusiveMinimum: float | None
+    exclusiveMaximum: float | None
+    multipleOf: float | None
+    minItems: int | None
+    maxItems: int | None
+    uniqueItems: bool | None
     items: Optional["TypeDefinition"]
-    properties: Optional[dict[str, "TypeDefinition"]]
-    required: Optional[List[str]]
-    additionalProperties: Optional[
-        bool
-    ]  # Whether to allow additional properties not defined in the schema
+    properties: dict[str, "TypeDefinition"] | None
+    required: list[str] | None
+    additionalProperties: (
+        bool | None
+    )  # Whether to allow additional properties not defined in the schema
 
 
 class ParamDefinition(TypedDict):
     name: str
     type: str
     description: str
-    default: Optional[object]
-    examples: Optional[List[object]]
-    enum: Optional[List[object]]
+    default: object | None
+    examples: list[object] | None
+    enum: list[object] | None
     # Type constraints inherited from TypeDefinition
-    format: Optional[str]
-    sensitive: Optional[bool]  # Whether this parameter contains sensitive data
-    minLength: Optional[int]
-    maxLength: Optional[int]
-    minItems: Optional[int]
-    maxItems: Optional[int]
-    items: Optional[TypeDefinition]
-    properties: Optional[dict[str, TypeDefinition]]
-    required: Optional[List[str]]
+    format: str | None
+    sensitive: bool | None  # Whether this parameter contains sensitive data
+    minLength: int | None
+    maxLength: int | None
+    minItems: int | None
+    maxItems: int | None
+    items: TypeDefinition | None
+    properties: dict[str, TypeDefinition] | None
+    required: list[str] | None
 
 
 class PolicyRule(TypedDict):
     condition: str
     action: Literal["deny", "filter_fields", "mask_fields", "filter_sensitive_fields"]
-    reason: Optional[str]
-    fields: Optional[List[str]]  # For filter_fields and mask_fields actions
+    reason: str | None
+    fields: list[str] | None  # For filter_fields and mask_fields actions
 
 
 class PoliciesDefinition(TypedDict):
-    input: Optional[List[PolicyRule]]
-    output: Optional[List[PolicyRule]]
+    input: list[PolicyRule] | None
+    output: list[PolicyRule] | None
 
 
 class ToolDefinition(TypedDict):
     name: str
-    description: Optional[str]
-    tags: Optional[List[str]]
-    annotations: Optional[Dict[str, Any]]
-    parameters: Optional[List[ParamDefinition]]
-    return_: Optional[TypeDefinition]
-    language: Optional[Literal["sql"]]
+    description: str | None
+    tags: list[str] | None
+    annotations: dict[str, Any] | None
+    parameters: list[ParamDefinition] | None
+    return_: TypeDefinition | None
+    language: Literal["sql"] | None
     source: SourceDefinition
-    enabled: Optional[bool]
-    tests: Optional[List[TestDefinition]]
-    policies: Optional[PoliciesDefinition]
+    enabled: bool | None
+    tests: list[TestDefinition] | None
+    policies: PoliciesDefinition | None
 
 
 class ResourceDefinition(TypedDict):
     uri: str
-    description: Optional[str]
-    tags: Optional[List[str]]
-    mime_type: Optional[str]
-    parameters: Optional[List[ParamDefinition]]
-    return_: Optional[TypeDefinition]
-    language: Optional[Literal["sql"]]
+    description: str | None
+    tags: list[str] | None
+    mime_type: str | None
+    parameters: list[ParamDefinition] | None
+    return_: TypeDefinition | None
+    language: Literal["sql"] | None
     source: SourceDefinition
-    enabled: Optional[bool]
-    tests: Optional[List[TestDefinition]]
-    policies: Optional[PoliciesDefinition]
+    enabled: bool | None
+    tests: list[TestDefinition] | None
+    policies: PoliciesDefinition | None
 
 
 class PromptMessage(TypedDict):
     prompt: str
-    role: Optional[str]
-    type: Optional[str]
+    role: str | None
+    type: str | None
 
 
 class PromptDefinition(TypedDict):
     name: str
-    description: Optional[str]
-    tags: Optional[List[str]]
-    parameters: Optional[List[ParamDefinition]]
-    return_: Optional[TypeDefinition]
-    messages: List[PromptMessage]
-    enabled: Optional[bool]
-    tests: Optional[List[TestDefinition]]
-    policies: Optional[PoliciesDefinition]
+    description: str | None
+    tags: list[str] | None
+    parameters: list[ParamDefinition] | None
+    return_: TypeDefinition | None
+    messages: list[PromptMessage]
+    enabled: bool | None
+    tests: list[TestDefinition] | None
+    policies: PoliciesDefinition | None
 
 
 class EndpointDefinition(TypedDict):
     mxcp: str
-    tool: Optional[ToolDefinition]
-    resource: Optional[ResourceDefinition]
-    prompt: Optional[PromptDefinition]
-    metadata: Optional[Dict[str, Any]]
+    tool: ToolDefinition | None
+    resource: ResourceDefinition | None
+    prompt: PromptDefinition | None
+    metadata: dict[str, Any] | None
 
 
 class EndpointTestsResultRequired(TypedDict):
@@ -154,4 +154,4 @@ class AllEndpointsTestResults(TypedDict):
 
     status: str  # "ok", "error", "failed"
     tests_run: int
-    endpoints: List[EndpointTestsResult]
+    endpoints: list[EndpointTestsResult]

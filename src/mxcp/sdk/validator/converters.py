@@ -3,7 +3,7 @@
 import json
 import re
 from datetime import date, datetime, time
-from typing import Any, Dict, List, Union
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -38,7 +38,7 @@ class TypeConverter:
         return type_map.get(python_type, python_type)
 
     @staticmethod
-    def convert_parameter(value: Any, schema: Union[ParameterSchema, TypeSchema]) -> Any:
+    def convert_parameter(value: Any, schema: ParameterSchema | TypeSchema) -> Any:
         """Convert input parameter values to appropriate types for execution."""
         param_type = schema.type
         param_format = schema.format
@@ -71,7 +71,7 @@ class TypeConverter:
                 try:
                     return datetime.fromtimestamp(float(value))
                 except (ValueError, OSError):
-                    raise ValidationError(f"Invalid timestamp: {value}")
+                    raise ValidationError(f"Invalid timestamp: {value}") from None
             elif param_format == "email":
                 if not re.match(r"[^@]+@[^@]+\.[^@]+", value):
                     raise ValidationError(f"Invalid email format: {value}")
@@ -102,7 +102,7 @@ class TypeConverter:
             try:
                 num_result = float(value)
             except (ValueError, TypeError):
-                raise ValidationError(f"Expected number, got {type(value).__name__}")
+                raise ValidationError(f"Expected number, got {type(value).__name__}") from None
             # Validate numeric constraints
             if schema.multiple_of is not None and num_result % schema.multiple_of != 0:
                 raise ValidationError(f"Value must be multiple of {schema.multiple_of}")
@@ -120,7 +120,7 @@ class TypeConverter:
             try:
                 int_result = int(value)
             except (ValueError, TypeError):
-                raise ValidationError(f"Expected integer, got {type(value).__name__}")
+                raise ValidationError(f"Expected integer, got {type(value).__name__}") from None
             # Validate integer constraints
             if schema.multiple_of is not None and int_result % schema.multiple_of != 0:
                 raise ValidationError(f"Value must be multiple of {schema.multiple_of}")
@@ -140,12 +140,12 @@ class TypeConverter:
             return bool(value)
 
         elif param_type == "array":
-            if not isinstance(value, (list, np.ndarray)):
+            if not isinstance(value, list | np.ndarray):
                 if isinstance(value, str):
                     try:
                         value = json.loads(value)
                     except json.JSONDecodeError:
-                        raise ValidationError(f"Invalid JSON array: {value}")
+                        raise ValidationError(f"Invalid JSON array: {value}") from None
                 else:
                     actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
                     raise ValidationError(f"Expected array, got {actual_type}")
@@ -158,7 +158,7 @@ class TypeConverter:
                 raise ValidationError(f"Array must have at least {schema.min_items} items")
             if schema.max_items is not None and len(value) > schema.max_items:
                 raise ValidationError(f"Array must have at most {schema.max_items} items")
-            if schema.unique_items and len(value) != len(set(str(v) for v in value)):
+            if schema.unique_items and len(value) != len({str(v) for v in value}):
                 raise ValidationError("Array must contain unique items")
 
             if schema.items:
@@ -171,7 +171,7 @@ class TypeConverter:
                     try:
                         value = json.loads(value)
                     except json.JSONDecodeError:
-                        raise ValidationError(f"Invalid JSON object: {value}")
+                        raise ValidationError(f"Invalid JSON object: {value}") from None
                 else:
                     actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
                     raise ValidationError(f"Expected object, got {actual_type}")
@@ -226,10 +226,13 @@ class TypeConverter:
             value = value.replace({pd.NaT: None}).tolist()
 
         if return_type == "string":
-            if not isinstance(value, str):
-                # Allow datetime-like objects that will be serialized to strings
-                if not hasattr(value, "strftime") and not hasattr(value, "isoformat"):
-                    raise ValidationError(f"Expected string, got {type(value).__name__}")
+            if (
+                not isinstance(value, str)
+                and not hasattr(value, "strftime")
+                and not hasattr(value, "isoformat")
+            ):
+                # Not a string and not a datetime-like object
+                raise ValidationError(f"Expected string, got {type(value).__name__}")
 
             # Validate format constraints for actual strings
             if isinstance(value, str):
@@ -239,11 +242,10 @@ class TypeConverter:
                 elif return_format == "uri":
                     if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:.*$", value):
                         raise ValidationError(f"Invalid URI format: {value}")
-                elif return_format == "duration":
-                    if not re.match(
-                        r"^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$", value
-                    ):
-                        raise ValidationError(f"Invalid duration format: {value}")
+                elif return_format == "duration" and not re.match(
+                    r"^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$", value
+                ):
+                    raise ValidationError(f"Invalid duration format: {value}")
 
                 # Validate string length constraints
                 if schema.min_length is not None and len(value) < schema.min_length:
@@ -256,7 +258,7 @@ class TypeConverter:
                     )
 
         elif return_type == "number":
-            if not isinstance(value, (int, float)) or isinstance(value, bool):
+            if not isinstance(value, int | float) or isinstance(value, bool):
                 raise ValidationError(f"Expected number, got {type(value).__name__}")
             # Validate numeric constraints
             if schema.minimum is not None and value < schema.minimum:
@@ -278,7 +280,7 @@ class TypeConverter:
                 raise ValidationError(f"Expected boolean, got {type(value).__name__}")
 
         elif return_type == "array":
-            if not isinstance(value, (list, np.ndarray)):
+            if not isinstance(value, list | np.ndarray):
                 raise ValidationError(f"Expected array, got {type(value).__name__}")
 
             # Convert numpy arrays to lists for consistent validation
@@ -297,7 +299,7 @@ class TypeConverter:
                     try:
                         TypeConverter.validate_output(item, schema.items)
                     except ValidationError as e:
-                        raise ValidationError(f"Array item {i}: {str(e)}")
+                        raise ValidationError(f"Array item {i}: {str(e)}") from e
 
         elif return_type == "object":
             if not isinstance(value, dict):
@@ -317,7 +319,7 @@ class TypeConverter:
                     try:
                         TypeConverter.validate_output(v, properties[k])
                     except ValidationError as e:
-                        raise ValidationError(f"Property '{k}': {str(e)}")
+                        raise ValidationError(f"Property '{k}': {str(e)}") from e
                 elif not schema.additional_properties:
                     raise ValidationError(f"Unexpected property: {k}")
 
@@ -326,7 +328,7 @@ class TypeConverter:
         """Serialize output objects for JSON compatibility."""
         if isinstance(obj, dict):
             return {k: TypeConverter.serialize_for_output(v) for k, v in obj.items()}
-        elif isinstance(obj, (list, np.ndarray)):
+        elif isinstance(obj, list | np.ndarray):
             # Convert numpy arrays to lists and serialize recursively
             items = obj.tolist() if isinstance(obj, np.ndarray) else obj
             return [TypeConverter.serialize_for_output(item) for item in items]
@@ -336,9 +338,7 @@ class TypeConverter:
         elif isinstance(obj, pd.Series):
             # Convert Series to list
             return obj.replace({pd.NaT: None}).tolist()
-        elif isinstance(obj, pd.Timestamp):
-            return obj.isoformat()
-        elif isinstance(obj, (datetime, date, time)):
+        elif isinstance(obj, pd.Timestamp | datetime | date | time):
             return obj.isoformat()
         elif isinstance(obj, type(pd.NaT)):
             return None

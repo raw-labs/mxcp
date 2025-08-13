@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """Salesforce OAuth provider implementation for MXCP authentication."""
+
 import logging
 import secrets
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
@@ -29,7 +29,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
     def __init__(
         self,
         salesforce_config: SalesforceAuthConfig,
-        transport_config: Optional[HttpTransportConfig] = None,
+        transport_config: HttpTransportConfig | None = None,
         host: str = "localhost",
         port: int = 8000,
     ):
@@ -62,7 +62,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         self.url_builder = URLBuilder(transport_config)
 
         # State storage for OAuth flow
-        self._state_store: Dict[str, StateMeta] = {}
+        self._state_store: dict[str, StateMeta] = {}
 
     # ----- authorize -----
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
@@ -101,7 +101,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         try:
             return self._state_store[state]
         except KeyError:
-            raise HTTPException(400, "Invalid state parameter")
+            raise HTTPException(400, "Invalid state parameter") from None
 
     def _pop_state(self, state: str) -> None:
         self._state_store.pop(state, None)
@@ -207,7 +207,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
             )
         except Exception as e:
             logger.error(f"Failed to get Salesforce user context: {e}")
-            raise HTTPException(500, f"Failed to retrieve user information: {e}")
+            raise HTTPException(500, f"Failed to retrieve user information: {e}") from e
 
     # ----- private helper -----
     async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
@@ -217,7 +217,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         # First get the identity URL from the token response
         async with create_mcp_http_client() as client:
             # Get token info to find the identity URL
-            token_info_resp = await client.get(
+            await client.get(
                 "https://login.salesforce.com/services/oauth2/token",
                 headers={"Authorization": f"Bearer {token}"},
             )
@@ -241,7 +241,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
                 )
             raise ValueError(f"Salesforce API error: {resp.status_code} - {error_body}")
 
-        user_data = cast(Dict[str, Any], resp.json())
+        user_data = cast(dict[str, Any], resp.json())
         logger.info(
             f"Successfully fetched Salesforce user profile for user_id: {user_data.get('user_id', 'unknown')}"
         )

@@ -9,7 +9,6 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from jsonschema import ValidationError, validate
@@ -19,7 +18,7 @@ from ._types import ResolverConfig
 logger = logging.getLogger(__name__)
 
 
-def load_resolver_config(config_path: Optional[Path] = None) -> ResolverConfig:
+def load_resolver_config(config_path: Path | None = None) -> ResolverConfig:
     """
     Load resolver configuration from config.yaml file.
 
@@ -62,10 +61,10 @@ def load_resolver_config(config_path: Optional[Path] = None) -> ResolverConfig:
 
     # Load the YAML file
     try:
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             raw_config = yaml.safe_load(f)
     except Exception as e:
-        raise ValueError(f"Failed to parse YAML config file {config_path}: {e}")
+        raise ValueError(f"Failed to parse YAML config file {config_path}: {e}") from e
 
     if not raw_config:
         logger.info("Empty resolver config file, using empty configuration")
@@ -74,13 +73,13 @@ def load_resolver_config(config_path: Optional[Path] = None) -> ResolverConfig:
     # Validate against schema
     schema_path = Path(__file__).parent / "schemas" / "resolver-config-schema.json"
     try:
-        with open(schema_path, "r") as f:
+        with open(schema_path) as f:
             schema = json.load(f)
         validate(instance=raw_config, schema=schema)
     except ValidationError as e:
-        raise ValueError(f"Invalid resolver config: {e.message}")
+        raise ValueError(f"Invalid resolver config: {e.message}") from e
     except Exception as e:
-        raise ValueError(f"Failed to validate resolver config: {e}")
+        raise ValueError(f"Failed to validate resolver config: {e}") from e
 
     # Extract the config section
     config_section = raw_config.get("config", {})
@@ -104,14 +103,12 @@ def _apply_defaults(config: ResolverConfig) -> ResolverConfig:
 
     # Apply vault defaults
     vault_config = result.get("vault")
-    if vault_config is not None:
-        if "token_env" not in vault_config:
-            vault_config["token_env"] = "VAULT_TOKEN"
+    if vault_config is not None and "token_env" not in vault_config:
+        vault_config["token_env"] = "VAULT_TOKEN"
 
     # Apply onepassword defaults
     op_config = result.get("onepassword")
-    if op_config is not None:
-        if "token_env" not in op_config:
-            op_config["token_env"] = "OP_SERVICE_ACCOUNT_TOKEN"
+    if op_config is not None and "token_env" not in op_config:
+        op_config["token_env"] = "OP_SERVICE_ACCOUNT_TOKEN"
 
     return result

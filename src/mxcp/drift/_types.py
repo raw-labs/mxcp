@@ -1,5 +1,4 @@
-from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
+from typing import Any, Literal, Optional, TypedDict
 
 
 class Column(TypedDict):
@@ -9,34 +8,34 @@ class Column(TypedDict):
 
 class Table(TypedDict):
     name: str
-    columns: List[Column]
+    columns: list[Column]
 
 
 class TypeDefinition(TypedDict):
     type: Literal["string", "number", "integer", "boolean", "array", "object"]
-    format: Optional[Literal["email", "uri", "date", "time", "date-time", "duration", "timestamp"]]
-    minLength: Optional[int]
-    maxLength: Optional[int]
-    minimum: Optional[float]
-    maximum: Optional[float]
-    exclusiveMinimum: Optional[float]
-    exclusiveMaximum: Optional[float]
-    multipleOf: Optional[float]
-    minItems: Optional[int]
-    maxItems: Optional[int]
-    uniqueItems: Optional[bool]
+    format: Literal["email", "uri", "date", "time", "date-time", "duration", "timestamp"] | None
+    minLength: int | None
+    maxLength: int | None
+    minimum: float | None
+    maximum: float | None
+    exclusiveMinimum: float | None
+    exclusiveMaximum: float | None
+    multipleOf: float | None
+    minItems: int | None
+    maxItems: int | None
+    uniqueItems: bool | None
     items: Optional["TypeDefinition"]
-    properties: Optional[Dict[str, "TypeDefinition"]]
-    required: Optional[List[str]]
-    additionalProperties: Optional[bool]
+    properties: dict[str, "TypeDefinition"] | None
+    required: list[str] | None
+    additionalProperties: bool | None
 
 
 class Parameter(TypeDefinition):
     name: str
     description: str
-    default: Optional[Any]
-    examples: Optional[List[Any]]
-    enum: Optional[List[Any]]
+    default: Any | None
+    examples: list[Any] | None
+    enum: list[Any] | None
 
 
 class TestArgument(TypedDict):
@@ -46,9 +45,9 @@ class TestArgument(TypedDict):
 
 class Test(TypedDict):
     name: str
-    description: Optional[str]
-    arguments: List[TestArgument]
-    result: Optional[Any]
+    description: str | None
+    arguments: list[TestArgument]
+    result: Any | None
 
 
 class Annotations(TypedDict, total=False):
@@ -62,89 +61,89 @@ class Annotations(TypedDict, total=False):
 class Tool(TypedDict):
     name: str
     description: str
-    tags: Optional[List[str]]
-    annotations: Optional[Annotations]
-    parameters: List[Parameter]
+    tags: list[str] | None
+    annotations: Annotations | None
+    parameters: list[Parameter]
     return_: TypeDefinition
-    tests: Optional[List[Test]]
+    tests: list[Test] | None
 
 
 class Resource(TypedDict):
     uri: str
     description: str
-    tags: Optional[List[str]]
-    mime_type: Optional[str]
-    parameters: List[Parameter]
+    tags: list[str] | None
+    mime_type: str | None
+    parameters: list[Parameter]
     return_: TypeDefinition
-    tests: Optional[List[Test]]
+    tests: list[Test] | None
 
 
 class PromptMessage(TypedDict):
-    role: Optional[str]
-    type: Optional[str]
+    role: str | None
+    type: str | None
     prompt: str
 
 
 class Prompt(TypedDict):
     name: str
     description: str
-    tags: Optional[List[str]]
-    parameters: List[Parameter]
-    messages: List[PromptMessage]
+    tags: list[str] | None
+    parameters: list[Parameter]
+    messages: list[PromptMessage]
 
 
 class ValidationResults(TypedDict):
     status: Literal["ok", "error"]
     path: str
-    message: Optional[str]
+    message: str | None
 
 
 class TestResult(TypedDict):
     name: str
-    description: Optional[str]
+    description: str | None
     status: Literal["passed", "failed", "error"]
-    error: Optional[str]
+    error: str | None
     time: float
 
 
 class TestResults(TypedDict):
     status: Literal["ok", "error", "failed"]
     tests_run: int
-    tests: Optional[List[TestResult]]
-    message: Optional[str]
+    tests: list[TestResult] | None
+    message: str | None
 
 
 class ResourceDefinition(TypedDict):
     validation_results: ValidationResults
-    test_results: Optional[TestResults]
-    definition: Optional[Union[Tool, Resource, Prompt]]
-    metadata: Optional[Dict[str, Any]]
+    test_results: TestResults | None
+    definition: Tool | Resource | Prompt | None
+    metadata: dict[str, Any] | None
 
 
 class DriftSnapshot(TypedDict):
     version: int
     generated_at: str
-    tables: List[Table]
-    resources: List[ResourceDefinition]
+    tables: list[Table]
+    resources: list[ResourceDefinition]
 
 
 # Drift Report Types
 class TableChange(TypedDict):
     name: str
     change_type: Literal["added", "removed", "modified"]
-    columns_added: Optional[List[Column]]
-    columns_removed: Optional[List[Column]]
-    columns_modified: Optional[List[Dict[str, Any]]]  # old/new column info
+    columns_added: list[Column] | None
+    columns_removed: list[Column] | None
+    columns_modified: list[dict[str, Any]] | None  # old/new column info
 
 
 class ResourceChange(TypedDict):
     path: str
-    endpoint: Optional[str]  # endpoint identifier like "tool/name"
+    endpoint: str | None  # endpoint identifier like "tool/name"
     change_type: Literal["added", "removed", "modified"]
-    validation_changed: Optional[bool]
-    test_results_changed: Optional[bool]
-    definition_changed: Optional[bool]
-    details: Optional[Dict[str, Any]]  # specific change details
+    validation_changed: bool | None
+    test_results_changed: bool | None
+    definition_changed: bool | None
+    details: dict[str, Any] | None  # specific change details
 
 
 class DriftReport(TypedDict):
@@ -154,6 +153,6 @@ class DriftReport(TypedDict):
     current_snapshot_generated_at: str
     baseline_snapshot_generated_at: str
     has_drift: bool
-    summary: Dict[str, int]  # counts of changes by type
-    table_changes: List[TableChange]
-    resource_changes: List[ResourceChange]
+    summary: dict[str, int]  # counts of changes by type
+    table_changes: list[TableChange]
+    resource_changes: list[ResourceChange]

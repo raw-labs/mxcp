@@ -10,8 +10,9 @@ import importlib
 import importlib.util
 import logging
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Set, cast
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +29,8 @@ class PythonEndpointLoader:
         """
         self.repo_root = repo_root
         self.python_dir = repo_root / "python"
-        self._loaded_modules: Dict[str, Any] = {}
-        self._module_paths: Set[str] = set()  # Track added paths
+        self._loaded_modules: dict[str, Any] = {}
+        self._module_paths: set[str] = set()  # Track added paths
         self._ensure_python_path()
 
     def _ensure_python_path(self) -> None:
@@ -114,7 +115,7 @@ class PythonEndpointLoader:
             if module_name in sys.modules:
                 del sys.modules[module_name]
             logger.error(f"Failed to load module {module_name}: {e}")
-            raise ImportError(f"Failed to load Python module from {abs_path}: {e}")
+            raise ImportError(f"Failed to load Python module from {abs_path}: {e}") from e
 
     def _get_module_name(self, abs_path: Path) -> str:
         """

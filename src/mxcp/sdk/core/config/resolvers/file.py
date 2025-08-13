@@ -8,7 +8,6 @@ like file:///path/to/file.
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 from ..plugins import ResolverPlugin
 
@@ -25,7 +24,7 @@ class FileResolver(ResolverPlugin):
         return "file"
 
     @property
-    def url_patterns(self) -> List[str]:
+    def url_patterns(self) -> list[str]:
         return [r"file://(.+)"]
 
     def can_resolve(self, reference: str) -> bool:
@@ -43,4 +42,4 @@ class FileResolver(ResolverPlugin):
         try:
             return file_path.read_text(encoding="utf-8").strip()
         except Exception as e:
-            raise ValueError(f"Failed to read file {file_path}: {e}")
+            raise ValueError(f"Failed to read file {file_path}: {e}") from e

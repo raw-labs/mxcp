@@ -9,11 +9,10 @@ This module provides the ResolverEngine class that:
 
 import json
 import logging
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, cast
 
 import yaml
 from jsonschema import ValidationError, validate
@@ -60,12 +59,12 @@ class ResolvedReference:
         ```
     """
 
-    path: List[Union[str, int]]  # Path to the value in the config dict
+    path: list[str | int]  # Path to the value in the config dict
     original_value: str  # Original reference string (e.g., "vault://secret/db#password")
     resolved_value: str  # Resolved value
     resolver_name: str  # Name of resolver used
     resolved_at: float  # Timestamp when resolved
-    error: Optional[str] = None  # Error message if resolution failed
+    error: str | None = None  # Error message if resolution failed
 
 
 class ResolverEngine:
@@ -235,7 +234,7 @@ class ResolverEngine:
     ```
     """
 
-    def __init__(self, resolver_config: Optional[ResolverConfig] = None):
+    def __init__(self, resolver_config: ResolverConfig | None = None):
         """
         Initialize the ResolverEngine.
 
@@ -244,12 +243,12 @@ class ResolverEngine:
         """
         self.resolver_config = resolver_config or ResolverConfig()
         self.registry = ResolverRegistry()
-        self._resolved_references: List[ResolvedReference] = []
-        self._current_config_path: List[Union[str, int]] = []
+        self._resolved_references: list[ResolvedReference] = []
+        self._current_config_path: list[str | int] = []
         self._initialize_resolvers()
 
     @classmethod
-    def from_config_file(cls, config_path: Optional[Union[str, Path]] = None) -> "ResolverEngine":
+    def from_config_file(cls, config_path: str | Path | None = None) -> "ResolverEngine":
         """
         Create a ResolverEngine from a configuration file.
 
@@ -267,7 +266,7 @@ class ResolverEngine:
         return cls(config)
 
     @classmethod
-    def from_dict(cls, config_dict: Dict[str, Any]) -> "ResolverEngine":
+    def from_dict(cls, config_dict: dict[str, Any]) -> "ResolverEngine":
         """
         Create a ResolverEngine from a configuration dictionary.
 
@@ -321,7 +320,7 @@ class ResolverEngine:
         self.registry.register(resolver)
         logger.debug(f"Registered custom resolver: {resolver.name}")
 
-    def list_resolvers(self) -> List[str]:
+    def list_resolvers(self) -> list[str]:
         """
         List all registered resolver names.
 
@@ -332,11 +331,11 @@ class ResolverEngine:
 
     def process_file(
         self,
-        file_path: Union[str, Path],
-        schema_file: Optional[Union[str, Path]] = None,
-        schema_dict: Optional[Dict[str, Any]] = None,
+        file_path: str | Path,
+        schema_file: str | Path | None = None,
+        schema_dict: dict[str, Any] | None = None,
         track_references: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Process a YAML configuration file with reference resolution.
 
@@ -355,10 +354,10 @@ class ResolverEngine:
             raise FileNotFoundError(f"Configuration file not found: {file_path}")
 
         try:
-            with open(file_path, "r") as f:
+            with open(file_path) as f:
                 config_data = yaml.safe_load(f)
         except yaml.YAMLError as e:
-            raise ValueError(f"Invalid YAML in {file_path}: {e}")
+            raise ValueError(f"Invalid YAML in {file_path}: {e}") from e
 
         if config_data is None:
             config_data = {}
@@ -367,11 +366,11 @@ class ResolverEngine:
 
     def process_config(
         self,
-        config_data: Dict[str, Any],
-        schema_file: Optional[Union[str, Path]] = None,
-        schema_dict: Optional[Dict[str, Any]] = None,
+        config_data: dict[str, Any],
+        schema_file: str | Path | None = None,
+        schema_dict: dict[str, Any] | None = None,
         track_references: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Process a configuration dictionary with reference resolution.
 
@@ -395,17 +394,17 @@ class ResolverEngine:
         if schema_file or schema_dict:
             self._validate_config(resolved_config, schema_file, schema_dict)
 
-        return cast(Dict[str, Any], resolved_config)
+        return cast(dict[str, Any], resolved_config)
 
     def _validate_config(
         self,
-        config_data: Dict[str, Any],
-        schema_file: Optional[Union[str, Path]] = None,
-        schema_dict: Optional[Dict[str, Any]] = None,
+        config_data: dict[str, Any],
+        schema_file: str | Path | None = None,
+        schema_dict: dict[str, Any] | None = None,
     ) -> None:
         """Validate configuration against JSON schema."""
         if schema_file:
-            with open(schema_file, "r") as f:
+            with open(schema_file) as f:
                 schema = json.load(f)
         elif schema_dict:
             schema = schema_dict
@@ -415,7 +414,7 @@ class ResolverEngine:
         try:
             validate(instance=config_data, schema=schema)
         except ValidationError as e:
-            raise ValueError(f"Configuration validation failed: {e.message}")
+            raise ValueError(f"Configuration validation failed: {e.message}") from e
 
     def _resolve_references(self, config: Any, track_references: bool = True) -> Any:
         """Recursively resolve references in configuration."""
@@ -488,7 +487,7 @@ class ResolverEngine:
         """Check if a string contains any references using the registry."""
         return self.registry.find_resolver_for_reference(value) is not None
 
-    def get_resolver_config(self) -> Optional[ResolverConfig]:
+    def get_resolver_config(self) -> ResolverConfig | None:
         """Get the current resolver configuration."""
         return self.resolver_config
 
@@ -504,7 +503,7 @@ class ResolverEngine:
         """Context manager exit - calls cleanup."""
         self.cleanup()
 
-    def get_resolved_references(self) -> List[ResolvedReference]:
+    def get_resolved_references(self) -> list[ResolvedReference]:
         """
         Get all resolved references from the last processing operation.
 
@@ -513,7 +512,7 @@ class ResolverEngine:
         """
         return self._resolved_references.copy()
 
-    def get_references_by_type(self, ref_type: str) -> List[ResolvedReference]:
+    def get_references_by_type(self, ref_type: str) -> list[ResolvedReference]:
         """
         Get resolved references filtered by resolver type.
 
@@ -525,7 +524,7 @@ class ResolverEngine:
         """
         return [ref for ref in self._resolved_references if ref.resolver_name == ref_type]
 
-    def get_failed_references(self) -> List[ResolvedReference]:
+    def get_failed_references(self) -> list[ResolvedReference]:
         """
         Get all references that failed to resolve.
 
@@ -535,8 +534,8 @@ class ResolverEngine:
         return [ref for ref in self._resolved_references if ref.error is not None]
 
     def find_references_in_config(
-        self, config: Dict[str, Any]
-    ) -> List[Tuple[List[Union[str, int]], str, str]]:
+        self, config: dict[str, Any]
+    ) -> list[tuple[list[str | int], str, str]]:
         """
         Find all external references in a configuration without resolving them.
 
@@ -548,7 +547,7 @@ class ResolverEngine:
         """
         references = []
 
-        def _scan_config(obj: Any, path: List[Union[str, int]]) -> None:
+        def _scan_config(obj: Any, path: list[str | int]) -> None:
             if isinstance(obj, dict):
                 for key, value in obj.items():
                     _scan_config(value, path + [key])
@@ -563,7 +562,7 @@ class ResolverEngine:
         _scan_config(config, [])
         return references
 
-    def get_reference_summary(self) -> Dict[str, Any]:
+    def get_reference_summary(self) -> dict[str, Any]:
         """
         Get a summary of all resolved references.
 

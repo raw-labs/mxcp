@@ -2,13 +2,13 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Union, cast
+from typing import Any, cast
 
 import jsonschema
 import yaml
 
 
-def load_schema(content: str, format: str = "yaml") -> Dict[str, Any]:
+def load_schema(content: str, format: str = "yaml") -> dict[str, Any]:
     """Load schema from string content.
 
     Args:
@@ -23,19 +23,19 @@ def load_schema(content: str, format: str = "yaml") -> Dict[str, Any]:
     """
     if format == "yaml":
         try:
-            return cast(Dict[str, Any], yaml.safe_load(content))
+            return cast(dict[str, Any], yaml.safe_load(content))
         except yaml.YAMLError as e:
-            raise ValueError(f"Failed to parse YAML: {e}")
+            raise ValueError(f"Failed to parse YAML: {e}") from e
     elif format == "json":
         try:
-            return cast(Dict[str, Any], json.loads(content))
+            return cast(dict[str, Any], json.loads(content))
         except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse JSON: {e}")
+            raise ValueError(f"Failed to parse JSON: {e}") from e
     else:
         raise ValueError(f"Unsupported format: {format}. Use 'yaml' or 'json'")
 
 
-def load_schema_from_file(path: Union[str, Path]) -> Dict[str, Any]:
+def load_schema_from_file(path: str | Path) -> dict[str, Any]:
     """Load schema from a YAML or JSON file.
 
     Args:
@@ -66,7 +66,7 @@ def load_schema_from_file(path: Union[str, Path]) -> Dict[str, Any]:
     return load_schema(content, format=format)
 
 
-def validate_schema_structure(schema: Dict[str, Any]) -> None:
+def validate_schema_structure(schema: dict[str, Any]) -> None:
     """Validate that a schema has the expected structure using JSON Schema.
 
     Args:
@@ -95,9 +95,9 @@ def validate_schema_structure(schema: Dict[str, Any]) -> None:
         # Convert JSON schema error to a more user-friendly message
         if e.absolute_path:
             path = ".".join(str(p) for p in e.absolute_path)
-            raise ValueError(f"Schema validation error at '{path}': {e.message}")
+            raise ValueError(f"Schema validation error at '{path}': {e.message}") from e
         else:
-            raise ValueError(f"Schema validation error: {e.message}")
+            raise ValueError(f"Schema validation error: {e.message}") from e
     except jsonschema.SchemaError as e:
         # This shouldn't happen unless our validation schema is invalid
-        raise ValueError(f"Invalid validation schema: {e.message}")
+        raise ValueError(f"Invalid validation schema: {e.message}") from e

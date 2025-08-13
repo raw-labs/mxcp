@@ -3,7 +3,6 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
 
 import click
 
@@ -19,7 +18,7 @@ from mxcp.sdk.audit import AuditLogger
 )
 @click.option("--json", "json_output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-def log_cleanup(profile: Optional[str], dry_run: bool, json_output: bool, debug: bool) -> None:
+def log_cleanup(profile: str | None, dry_run: bool, json_output: bool, debug: bool) -> None:
     """Apply retention policies to remove old audit records.
 
     This command deletes audit records older than their schema's retention policy.
@@ -52,14 +51,14 @@ def log_cleanup(profile: Optional[str], dry_run: bool, json_output: bool, debug:
         # Handle graceful shutdown
         if not json_output:
             click.echo("\nOperation cancelled by user", err=True)
-        raise click.Abort()
+        raise click.Abort() from None
     except Exception as e:
         # Only catch non-Click exceptions
         output_error(e, json_output, debug)
 
 
 async def _cleanup_async(
-    profile: Optional[str], dry_run: bool, json_output: bool, debug: bool
+    profile: str | None, dry_run: bool, json_output: bool, debug: bool
 ) -> None:
     """Async implementation of cleanup command."""
 
@@ -119,7 +118,7 @@ async def _cleanup_async(
 
                     # Count records older than cutoff
                     count = 0
-                    async for record in audit_logger.query_records(
+                    async for _record in audit_logger.query_records(
                         schema_name=schema.schema_name, end_time=cutoff_date
                     ):
                         count += 1

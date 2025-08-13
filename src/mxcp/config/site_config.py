@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 
 import yaml
 from jsonschema import ValidationError, validate
@@ -31,7 +31,7 @@ def find_repo_root() -> Path:
     raise FileNotFoundError("mxcp-site.yml not found in current directory or any parent directory")
 
 
-def _apply_defaults(config: Dict[str, Any], repo_root: Path) -> SiteConfig:
+def _apply_defaults(config: dict[str, Any], repo_root: Path) -> SiteConfig:
     """Apply default values to the config"""
     # Create a copy to avoid modifying the input
     config = config.copy()
@@ -162,7 +162,7 @@ def _apply_defaults(config: Dict[str, Any], repo_root: Path) -> SiteConfig:
     return cast(SiteConfig, config)
 
 
-def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
+def load_site_config(repo_path: Path | None = None) -> SiteConfig:
     """Load and validate the mxcp-site.yml configuration from the repository.
 
     Args:
@@ -195,15 +195,15 @@ def load_site_config(repo_path: Optional[Path] = None) -> SiteConfig:
     try:
         validate(instance=config, schema=schema)
     except ValidationError as e:
-        raise ValueError(f"Site config validation error: {e.message}")
+        raise ValueError(f"Site config validation error: {e.message}") from e
 
     # Apply defaults (e.g., duckdb.path)
     return _apply_defaults(config, repo_path)
 
 
 def get_active_profile(
-    user_config: UserConfig, site_config: SiteConfig, profile: Optional[str] = None
-) -> Dict[str, Any]:
+    user_config: UserConfig, site_config: SiteConfig, profile: str | None = None
+) -> dict[str, Any]:
     """Get the active profile from the user config based on site configuration.
 
     Args:
@@ -224,4 +224,4 @@ def get_active_profile(
     if profile_name not in project["profiles"]:
         raise ValueError(f"Profile '{profile_name}' not found in project '{project_name}'")
 
-    return cast(Dict[str, Any], project["profiles"][profile_name])
+    return cast(dict[str, Any], project["profiles"][profile_name])

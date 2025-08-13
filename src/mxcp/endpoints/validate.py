@@ -1,7 +1,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any
 
 from jinja2 import Environment, meta
 from jsonschema import validate as jsonschema_validate
@@ -9,7 +9,6 @@ from referencing import Registry, Resource
 
 from mxcp.config._types import SiteConfig
 from mxcp.config.site_config import find_repo_root
-from mxcp.drift._types import ValidationResults
 from mxcp.endpoints._types import EndpointDefinition, ResourceDefinition
 from mxcp.endpoints.loader import EndpointLoader
 from mxcp.endpoints.utils import get_endpoint_source_code
@@ -20,7 +19,7 @@ RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
 
 def _validate_resource_uri_vs_params(
     res_def: ResourceDefinition, path: Path
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     uri_params = set(RESOURCE_VAR_RE.findall(res_def["uri"]))
     params = res_def.get("parameters") or []
     yaml_params = {p["name"] for p in params}
@@ -41,7 +40,7 @@ def _validate_resource_uri_vs_params(
 
 def validate_all_endpoints(
     site_config: SiteConfig, execution_engine: ExecutionEngine
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Validate all endpoints in the repository.
 
     Args:
@@ -100,7 +99,7 @@ def _extract_template_variables(template: str) -> set[str]:
 
 def validate_endpoint_payload(
     endpoint: EndpointDefinition, path: str, execution_engine: ExecutionEngine
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Validate a single endpoint payload.
 
     Args:
@@ -334,11 +333,10 @@ def validate_endpoint_payload(
             }
 
         # Type inference and compatibility check
-        type_mismatches: List[str] = []
+        type_mismatches: list[str] = []
         if isinstance(yaml_params, list):
             for yaml_param in yaml_params:
                 name = yaml_param["name"]
-                yaml_type = yaml_param["type"]
                 # Skip type checking for now since we can't easily get SQL parameter types
                 # TODO: Implement proper type inference when DuckDB supports it
                 pass
@@ -358,7 +356,7 @@ def validate_endpoint_payload(
 
 def validate_endpoint(
     path: str, site_config: SiteConfig, execution_engine: ExecutionEngine
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Validate a single endpoint file."""
     try:
         # Use EndpointLoader to properly load and validate the endpoint

@@ -5,11 +5,11 @@ Handles backward compatibility and provides helpful migration guidance
 for users upgrading from pre-production versions.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 def check_and_migrate_legacy_version(
-    config_data: Dict[str, Any], config_type: str, config_path: Optional[str] = None
+    config_data: dict[str, Any], config_type: str, config_path: str | None = None
 ) -> None:
     """
     Check for legacy version format and provide migration guidance.
@@ -40,17 +40,17 @@ Your {config_file} file uses an old format from a pre-production release.
 REQUIRED CHANGES:
 
 1. Update version format:
-   OLD: mxcp: "{mxcp_version}"  
+   OLD: mxcp: "{mxcp_version}"
    NEW: mxcp: 1
 
 2. Reorganize your files to the new directory structure:
-   
+
    OLD structure:
    your-project/
    ├── endpoints/           # Mixed tool/resource/prompt files
    ├── mxcp-site.yml
    ├── drift-profile.json   # Drift files in root
-   ├── logs-profile.jsonl   # Audit files in root  
+   ├── logs-profile.jsonl   # Audit files in root
    └── db-profile.duckdb    # Database files in root
 
    NEW structure:
@@ -74,7 +74,7 @@ MIGRATION STEPS:
 1. Update mxcp-site.yml: change 'mxcp: "{mxcp_version}"' to 'mxcp: 1'
 2. Create directories: tools/, resources/, prompts/, evals/, python/, sql/, drift/, audit/, data/
 3. Move endpoint files to appropriate directories based on type
-4. Move SQL files to sql/ directory  
+4. Move SQL files to sql/ directory
 5. Update file references in YAML files
 """
         else:  # user config
@@ -95,7 +95,7 @@ Change the first line from:
 to:
    mxcp: 1
 
-This affects your global MXCP settings. After fixing this, you may also need 
+This affects your global MXCP settings. After fixing this, you may also need
 to update your project files to use the new directory structure.
 """
 

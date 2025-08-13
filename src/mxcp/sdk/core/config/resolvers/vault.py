@@ -8,7 +8,7 @@ references like vault://secret/path#key.
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..plugins import ResolverPlugin
 
@@ -20,7 +20,7 @@ class VaultResolver(ResolverPlugin):
 
     VAULT_URL_PATTERN = re.compile(r"vault://([^#]+)(?:#(.+))?")
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         super().__init__(config)
         self._vault_client = None
 
@@ -29,7 +29,7 @@ class VaultResolver(ResolverPlugin):
         return "vault"
 
     @property
-    def url_patterns(self) -> List[str]:
+    def url_patterns(self) -> list[str]:
         return [r"vault://([^#]+)(?:#(.+))?"]
 
     def can_resolve(self, reference: str) -> bool:
@@ -77,7 +77,7 @@ class VaultResolver(ResolverPlugin):
             return str(secret_data[key])
 
         except Exception as e:
-            raise ValueError(f"Failed to read from vault: {e}")
+            raise ValueError(f"Failed to read from vault: {e}") from e
 
     def cleanup(self) -> None:
         """Clean up the vault client."""
@@ -92,7 +92,7 @@ class VaultResolver(ResolverPlugin):
         except ImportError:
             raise ImportError(
                 "hvac package is required for Vault support. Install with: pip install hvac"
-            )
+            ) from None
 
         address = self.config.get("address")
         token_env = self.config.get("token_env", "VAULT_TOKEN")

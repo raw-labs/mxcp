@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 """Utility functions for audit operations."""
 
 import json
 import re
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from mxcp.sdk.audit import AuditRecord
 
@@ -89,7 +87,7 @@ def format_audit_record(record: AuditRecord, json_format: bool = False) -> str:
         )
 
 
-def map_legacy_query_params(**kwargs: Any) -> Dict[str, Any]:
+def map_legacy_query_params(**kwargs: Any) -> dict[str, Any]:
     """Map legacy CLI parameters to new AuditLogger query parameters.
 
     This function provides backward compatibility for the old CLI interface.

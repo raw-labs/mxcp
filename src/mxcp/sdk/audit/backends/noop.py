@@ -1,10 +1,10 @@
 """No-operation audit backend for disabled audit logging."""
 
+from collections.abc import AsyncIterator
 from datetime import datetime
-from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
 
-from .._types import AuditBackend, AuditRecord, AuditSchema, IntegrityResult, PolicyDecision, Status
+from .._types import AuditRecord, AuditSchema, IntegrityResult, PolicyDecision, Status
 
 
 class NoOpAuditBackend:
@@ -22,21 +22,19 @@ class NoOpAuditBackend:
         """No-op schema creation."""
         pass
 
-    async def get_schema(
-        self, schema_name: str, version: Optional[int] = None
-    ) -> Optional[AuditSchema]:
+    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchema | None:
         """No-op schema retrieval."""
         return None
 
-    async def list_schemas(self, active_only: bool = True) -> List[AuditSchema]:
+    async def list_schemas(self, active_only: bool = True) -> list[AuditSchema]:
         """No-op schema listing."""
         return []
 
-    async def deactivate_schema(self, schema_name: str, version: Optional[int] = None) -> None:
+    async def deactivate_schema(self, schema_name: str, version: int | None = None) -> None:
         """No-op schema deactivation."""
         pass
 
-    async def apply_retention_policies(self) -> Dict[str, Any]:
+    async def apply_retention_policies(self) -> dict[str, Any]:
         """No-op retention policy application."""
         return {"processed": 0, "deleted": 0}
 
@@ -46,18 +44,18 @@ class NoOpAuditBackend:
 
     async def query_records(
         self,
-        schema_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        operation_types: Optional[List[str]] = None,
-        operation_names: Optional[List[str]] = None,
-        operation_status: Optional[List[Status]] = None,
-        policy_decisions: Optional[List[PolicyDecision]] = None,
-        user_ids: Optional[List[str]] = None,
-        session_ids: Optional[List[str]] = None,
-        trace_ids: Optional[List[str]] = None,
-        business_context_filters: Optional[Dict[str, Any]] = None,
-        limit: Optional[int] = None,
+        schema_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        operation_types: list[str] | None = None,
+        operation_names: list[str] | None = None,
+        operation_status: list[Status] | None = None,
+        policy_decisions: list[PolicyDecision] | None = None,
+        user_ids: list[str] | None = None,
+        session_ids: list[str] | None = None,
+        trace_ids: list[str] | None = None,
+        business_context_filters: dict[str, Any] | None = None,
+        limit: int | None = None,
         offset: int = 0,
     ) -> AsyncIterator[AuditRecord]:
         """No-op record querying - yields nothing."""
@@ -65,7 +63,7 @@ class NoOpAuditBackend:
         # This is a generator that yields nothing
         yield
 
-    async def get_record(self, record_id: str) -> Optional[AuditRecord]:
+    async def get_record(self, record_id: str) -> AuditRecord | None:
         """No-op record retrieval."""
         return None
 

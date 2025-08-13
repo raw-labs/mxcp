@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import cast
 
 import yaml
 from jsonschema import validate
@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 def discover_eval_files(
-    site_config: Optional[SiteConfig] = None,
-) -> List[Tuple[Path, Optional[EvalSuite], Optional[str]]]:
+    site_config: SiteConfig | None = None,
+) -> list[tuple[Path, EvalSuite | None, str | None]]:
     """Discover all eval files in the configured evals directory.
 
     Args:
@@ -28,7 +28,7 @@ def discover_eval_files(
         - error_message: Error message if loading failed, None if successful
     """
     base_path = find_repo_root()
-    results: List[Tuple[Path, Optional[EvalSuite], Optional[str]]] = []
+    results: list[tuple[Path, EvalSuite | None, str | None]] = []
 
     # Determine the evals directory
     if site_config and "paths" in site_config:
@@ -79,8 +79,8 @@ def discover_eval_files(
 
 
 def load_eval_suite(
-    suite_name: str, site_config: Optional[SiteConfig] = None
-) -> Optional[Tuple[Path, EvalSuite]]:
+    suite_name: str, site_config: SiteConfig | None = None
+) -> tuple[Path, EvalSuite] | None:
     """Load a specific eval suite by name.
 
     Args:

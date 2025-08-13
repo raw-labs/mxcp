@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 
 import yaml
 from jsonschema import ValidationError, validate
@@ -13,10 +13,10 @@ from mxcp.config.references import interpolate_all
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["load_user_config", "generate_user_config_from_site"]
+__all__ = ["load_user_config"]
 
 
-def _apply_defaults(config: Dict[str, Any]) -> UserConfig:
+def _apply_defaults(config: dict[str, Any]) -> UserConfig:
     """Apply default values to the user config"""
     # Create a copy to avoid modifying the input
     config = config.copy()
@@ -51,9 +51,7 @@ def _apply_defaults(config: Dict[str, Any]) -> UserConfig:
                 profile["plugin"] = {"config": {}}
             elif "config" not in profile["plugin"]:
                 profile["plugin"]["config"] = {}
-            if "auth" not in profile:
-                profile["auth"] = {"provider": "none"}
-            elif profile["auth"] is None:
+            if "auth" not in profile or profile["auth"] is None:
                 profile["auth"] = {"provider": "none"}
             else:
                 # Ensure persistence defaults are set if auth is enabled and provider is not 'none'
@@ -179,7 +177,7 @@ def load_user_config(
             }
 
     # Apply defaults before validation
-    validated_config = _apply_defaults(cast(Dict[str, Any], config))
+    validated_config = _apply_defaults(cast(dict[str, Any], config))
     logger.debug(f"Config after applying defaults: {validated_config}")
 
     # Load and apply JSON Schema validation
@@ -190,6 +188,6 @@ def load_user_config(
     try:
         validate(instance=validated_config, schema=schema)
     except ValidationError as e:
-        raise ValueError(f"Invalid user config: {e.message}")
+        raise ValueError(f"Invalid user config: {e.message}") from e
 
     return validated_config

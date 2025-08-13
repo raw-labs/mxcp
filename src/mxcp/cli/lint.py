@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any
 
 import click
 
@@ -26,7 +26,7 @@ class LintIssue:
         path: str,
         location: str,
         message: str,
-        suggestion: Optional[str] = None,
+        suggestion: str | None = None,
     ):
         self.severity = severity  # "warning" or "error"
         self.path = path
@@ -36,7 +36,7 @@ class LintIssue:
 
 
 def lint_parameter(
-    param: ParamDefinition, index: int, endpoint_type: str, issues: List[LintIssue], path: str
+    param: ParamDefinition, index: int, endpoint_type: str, issues: list[LintIssue], path: str
 ) -> None:
     """Lint a parameter definition for missing metadata.
 
@@ -107,7 +107,7 @@ def lint_parameter(
 
 
 def lint_return_type(
-    return_def: TypeDefinition, endpoint_type: str, issues: List[LintIssue], path: str
+    return_def: TypeDefinition, endpoint_type: str, issues: list[LintIssue], path: str
 ) -> None:
     """Lint a return type definition for missing description.
 
@@ -141,7 +141,7 @@ def lint_return_type(
 
 
 def lint_nested_type(
-    type_def: TypeDefinition, location: str, issues: List[LintIssue], path: str
+    type_def: TypeDefinition, location: str, issues: list[LintIssue], path: str
 ) -> None:
     """Lint nested type definitions (used within parameters or return types).
 
@@ -180,7 +180,7 @@ def lint_nested_type(
 
 
 def lint_object_properties(
-    properties: dict[str, TypeDefinition], location: str, issues: List[LintIssue], path: str
+    properties: dict[str, TypeDefinition], location: str, issues: list[LintIssue], path: str
 ) -> None:
     """Lint object properties for missing descriptions.
 
@@ -207,13 +207,13 @@ def lint_object_properties(
             lint_nested_type(prop_def, f"{location}.{prop_name}", issues, path)
 
 
-def lint_endpoint(path: Path, endpoint: EndpointDefinition) -> List[LintIssue]:
+def lint_endpoint(path: Path, endpoint: EndpointDefinition) -> list[LintIssue]:
     """Lint a single endpoint for missing metadata."""
-    issues: List[LintIssue] = []
+    issues: list[LintIssue] = []
 
     # Determine endpoint type and get the specific definition
-    endpoint_type: Optional[str] = None
-    endpoint_def: Optional[Union[ToolDefinition, ResourceDefinition, PromptDefinition]] = None
+    endpoint_type: str | None = None
+    endpoint_def: ToolDefinition | ResourceDefinition | PromptDefinition | None = None
 
     if endpoint.get("tool") is not None:
         endpoint_type = "tool"
@@ -318,8 +318,8 @@ def lint_endpoint(path: Path, endpoint: EndpointDefinition) -> List[LintIssue]:
 
 
 def format_lint_results_as_json(
-    all_issues: List[Tuple[Path, List[LintIssue]]],
-) -> List[Dict[str, Any]]:
+    all_issues: list[tuple[Path, list[LintIssue]]],
+) -> list[dict[str, Any]]:
     """Format lint results as JSON-serializable data structure."""
     results = []
     for path, issues in all_issues:
@@ -336,7 +336,7 @@ def format_lint_results_as_json(
     return results
 
 
-def format_lint_results_as_text(all_issues: List[Tuple[Path, List[LintIssue]]]) -> str:
+def format_lint_results_as_text(all_issues: list[tuple[Path, list[LintIssue]]]) -> str:
     """Format lint results as human-readable text with colors and formatting."""
     # Human-readable format
     output = []

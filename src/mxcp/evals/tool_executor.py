@@ -5,7 +5,7 @@ corresponding endpoints and executing them through the SDK ExecutionEngine.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, cast
+from typing import Any
 
 from mxcp.endpoints._types import EndpointDefinition
 from mxcp.endpoints.utils import detect_language_from_source, extract_source_info
@@ -40,7 +40,7 @@ class EndpointToolExecutor:
         >>> llm_executor = LLMExecutor(model_config, tool_definitions, tool_executor)
     """
 
-    def __init__(self, engine: ExecutionEngine, endpoints: List[EndpointDefinition]):
+    def __init__(self, engine: ExecutionEngine, endpoints: list[EndpointDefinition]):
         """Initialize the endpoint tool executor.
 
         Args:
@@ -51,7 +51,7 @@ class EndpointToolExecutor:
         self.endpoints = endpoints
 
         # Create lookup map for faster tool resolution
-        self._tool_map: Dict[str, EndpointDefinition] = {}
+        self._tool_map: dict[str, EndpointDefinition] = {}
         for endpoint_def in endpoints:
             if "tool" in endpoint_def and endpoint_def["tool"]:
                 tool = endpoint_def["tool"]
@@ -63,7 +63,7 @@ class EndpointToolExecutor:
         logger.info(f"EndpointToolExecutor initialized with {len(endpoints)} endpoints")
 
     async def execute_tool(
-        self, tool_name: str, arguments: Dict[str, Any], user_context: Optional[UserContext] = None
+        self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
     ) -> Any:
         """Execute a tool by finding the corresponding endpoint.
 

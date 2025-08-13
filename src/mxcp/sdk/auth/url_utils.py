@@ -1,13 +1,10 @@
-# -*- coding: utf-8 -*-
 """URL generation utilities for OAuth authentication with reverse proxy support."""
+
 import logging
-import os
-from typing import Any, Dict, Optional
-from urllib.parse import urljoin, urlparse, urlunparse
 
 from starlette.requests import Request
 
-from ._types import AuthConfig, HttpTransportConfig
+from ._types import HttpTransportConfig
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +19,7 @@ class URLBuilder:
     - Fallback to request scheme
     """
 
-    def __init__(self, transport_config: Optional[HttpTransportConfig] = None):
+    def __init__(self, transport_config: HttpTransportConfig | None = None):
         """Initialize URL builder with transport configuration.
 
         Args:
@@ -32,9 +29,9 @@ class URLBuilder:
 
     def get_base_url(
         self,
-        request: Optional[Request] = None,
-        host: Optional[str] = None,
-        port: Optional[int] = None,
+        request: Request | None = None,
+        host: str | None = None,
+        port: int | None = None,
     ) -> str:
         """Get the base URL for the server, handling all scheme detection logic.
 
@@ -74,9 +71,9 @@ class URLBuilder:
     def build_callback_url(
         self,
         callback_path: str,
-        request: Optional[Request] = None,
-        host: Optional[str] = None,
-        port: Optional[int] = None,
+        request: Request | None = None,
+        host: str | None = None,
+        port: int | None = None,
     ) -> str:
         """Build a complete callback URL for OAuth flows.
 
@@ -93,7 +90,7 @@ class URLBuilder:
         callback_path = callback_path.lstrip("/")  # Remove leading slash
         return f"{base_url}/{callback_path}"
 
-    def _detect_scheme(self, request: Optional[Request] = None) -> str:
+    def _detect_scheme(self, request: Request | None = None) -> str:
         """Detect the appropriate URL scheme (http/https).
 
         Priority order:

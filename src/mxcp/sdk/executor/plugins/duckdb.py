@@ -36,7 +36,7 @@ Example usage:
 
 import logging
 import threading
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import duckdb
 
@@ -96,9 +96,9 @@ class DuckDBExecutor(ExecutorPlugin):
     def __init__(
         self,
         database_config: "DatabaseConfig",
-        plugins: List["PluginDefinition"],
+        plugins: list["PluginDefinition"],
         plugin_config: "PluginConfig",
-        secrets: List["SecretDefinition"],
+        secrets: list["SecretDefinition"],
     ):
         """Initialize DuckDB executor.
 
@@ -129,7 +129,7 @@ class DuckDBExecutor(ExecutorPlugin):
             logger.info("DuckDB session created successfully")
         except Exception as e:
             logger.error(f"Failed to create DuckDB session: {e}")
-            raise RuntimeError(f"Failed to create DuckDB session: {e}")
+            raise RuntimeError(f"Failed to create DuckDB session: {e}") from e
 
         # Log available plugins
         self._log_available_plugins()
@@ -196,7 +196,7 @@ class DuckDBExecutor(ExecutorPlugin):
             logger.debug(f"SQL validation failed: {e}")
             return False
 
-    def extract_parameters(self, source_code: str) -> List[str]:
+    def extract_parameters(self, source_code: str) -> list[str]:
         """Extract parameter names from SQL source code.
 
         Args:
@@ -216,7 +216,7 @@ class DuckDBExecutor(ExecutorPlugin):
             return []
 
     async def execute(
-        self, source_code: str, params: Dict[str, Any], context: ExecutionContext
+        self, source_code: str, params: dict[str, Any], context: ExecutionContext
     ) -> Any:
         """Execute SQL source code with parameters.
 
@@ -245,7 +245,7 @@ class DuckDBExecutor(ExecutorPlugin):
 
         except Exception as e:
             logger.error(f"SQL execution failed: {e}")
-            raise RuntimeError(f"Failed to execute SQL: {e}")
+            raise RuntimeError(f"Failed to execute SQL: {e}") from e
 
     def _log_available_plugins(self) -> None:
         """Log information about available DuckDB plugins."""
@@ -259,7 +259,7 @@ class DuckDBExecutor(ExecutorPlugin):
         except Exception as e:
             logger.warning(f"Failed to check available plugins: {e}")
 
-    def execute_raw_sql(self, sql: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    def execute_raw_sql(self, sql: str, params: dict[str, Any] | None = None) -> Any:
         """Execute raw SQL without parameter substitution.
 
         Args:

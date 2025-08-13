@@ -1,7 +1,5 @@
 import asyncio
-import json
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import click
 
@@ -139,7 +137,7 @@ def format_drift_report(report: Any, debug: bool = False) -> str:
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("drift-check")  # type: ignore[misc]
 def drift_check(
-    profile: Optional[str], baseline: Optional[str], json_output: bool, debug: bool, readonly: bool
+    profile: str | None, baseline: str | None, json_output: bool, debug: bool, readonly: bool
 ) -> None:
     """Check for drift between current state and baseline snapshot.
 
@@ -175,7 +173,7 @@ def drift_check(
         # Handle graceful shutdown
         if not json_output:
             click.echo("\nOperation cancelled by user", err=True)
-        raise click.Abort()
+        raise click.Abort() from None
     except Exception as e:
         # Only catch non-Click exceptions
         output_error(e, json_output, debug)
@@ -183,8 +181,8 @@ def drift_check(
 
 async def _drift_check_impl(
     *,
-    profile: Optional[str],
-    baseline: Optional[str],
+    profile: str | None,
+    baseline: str | None,
     json_output: bool,
     debug: bool,
     readonly: bool,

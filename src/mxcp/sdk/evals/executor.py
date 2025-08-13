@@ -7,7 +7,7 @@ and tool calling, with tool execution delegated to external implementations.
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Protocol, Tuple, cast
+from typing import Any, Protocol, cast
 
 import httpx
 
@@ -26,7 +26,7 @@ class ToolExecutor(Protocol):
     """
 
     async def execute_tool(
-        self, tool_name: str, arguments: Dict[str, Any], user_context: Optional[UserContext] = None
+        self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
     ) -> Any:
         """Execute a tool and return the result.
 
@@ -87,7 +87,7 @@ class LLMExecutor:
     def __init__(
         self,
         model_config: ModelConfigType,
-        available_tools: List[ToolDefinition],
+        available_tools: list[ToolDefinition],
         tool_executor: ToolExecutor,
     ):
         """Initialize LLM executor.
@@ -118,7 +118,7 @@ class LLMExecutor:
         return "=== AVAILABLE TOOLS ===\n\n" + "\n\n".join(tool_sections)
 
     def _get_model_prompt(
-        self, user_prompt: str, conversation_history: Optional[List[Dict[str, str]]] = None
+        self, user_prompt: str, conversation_history: list[dict[str, str]] | None = None
     ) -> str:
         """Get model-specific prompt format"""
         available_tools = self._format_tools_for_prompt()
@@ -135,7 +135,7 @@ class LLMExecutor:
         self,
         user_prompt: str,
         available_tools: str,
-        conversation_history: Optional[List[Dict[str, str]]] = None,
+        conversation_history: list[dict[str, str]] | None = None,
     ) -> str:
         """Claude-specific prompt format"""
         system_prompt = f"""You are a helpful assistant with access to the following tools:
@@ -162,7 +162,7 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
         self,
         user_prompt: str,
         available_tools: str,
-        conversation_history: Optional[List[Dict[str, str]]] = None,
+        conversation_history: list[dict[str, str]] | None = None,
     ) -> str:
         """OpenAI-specific prompt format"""
         system_prompt = f"""You are a helpful assistant with access to the following tools:
@@ -189,14 +189,14 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
         self,
         user_prompt: str,
         available_tools: str,
-        conversation_history: Optional[List[Dict[str, str]]] = None,
+        conversation_history: list[dict[str, str]] | None = None,
     ) -> str:
         """Default prompt format"""
         return self._get_claude_prompt(user_prompt, available_tools, conversation_history)
 
     async def execute_prompt(
-        self, prompt: str, user_context: Optional[UserContext] = None
-    ) -> Tuple[str, List[Dict[str, Any]]]:
+        self, prompt: str, user_context: UserContext | None = None
+    ) -> tuple[str, list[dict[str, Any]]]:
         """Execute a prompt and return the response and tool calls made.
 
         Args:
@@ -206,11 +206,11 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
         Returns:
             Tuple of (final_response, list_of_tool_calls_made)
         """
-        conversation_history: List[Dict[str, Any]] = []
-        tool_calls_made: List[Dict[str, Any]] = []
+        conversation_history: list[dict[str, Any]] = []
+        tool_calls_made: list[dict[str, Any]] = []
         max_iterations = 10  # Prevent infinite loops
 
-        for iteration in range(max_iterations):
+        for _iteration in range(max_iterations):
             # Get model-specific prompt
             full_prompt = self._get_model_prompt(prompt, conversation_history)
 
@@ -255,7 +255,7 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
         # If we reach here, we hit the max iterations
         return response, tool_calls_made
 
-    def _extract_tool_calls(self, response: str) -> List[Dict[str, Any]]:
+    def _extract_tool_calls(self, response: str) -> list[dict[str, Any]]:
         """Extract tool calls from LLM response"""
         try:
             # Try to parse as JSON (single tool call)

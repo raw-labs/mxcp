@@ -8,7 +8,8 @@ different types of configuration resolvers (vault, 1password, custom, etc.)
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Pattern, Type, Union
+from re import Pattern
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,7 @@ class ResolverPlugin(ABC):
     ```
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize the resolver plugin with configuration."""
         self.config = config or {}
         self.enabled = self.config.get("enabled", True)
@@ -177,7 +178,7 @@ class ResolverPlugin(ABC):
 
     @property
     @abstractmethod
-    def url_patterns(self) -> List[str]:
+    def url_patterns(self) -> list[str]:
         """Return regex patterns that this resolver can handle."""
         pass
 
@@ -201,7 +202,7 @@ class ResolverPlugin(ABC):
         Override this method if your resolver creates external clients or connections.
         This method should be idempotent - safe to call multiple times.
         """
-        pass
+        return  # Default implementation does nothing
 
     def __enter__(self) -> "ResolverPlugin":
         """Context manager entry."""
@@ -216,8 +217,8 @@ class ResolverRegistry:
     """Registry for managing resolver plugins."""
 
     def __init__(self) -> None:
-        self._resolvers: Dict[str, ResolverPlugin] = {}
-        self._patterns: List[tuple[Pattern[str], str]] = []
+        self._resolvers: dict[str, ResolverPlugin] = {}
+        self._patterns: list[tuple[Pattern[str], str]] = []
 
     def register(self, resolver: ResolverPlugin) -> None:
         """Register a resolver plugin."""
@@ -240,11 +241,11 @@ class ResolverRegistry:
 
         logger.debug(f"Registered resolver: {resolver.name}")
 
-    def get_resolver(self, name: str) -> Optional[ResolverPlugin]:
+    def get_resolver(self, name: str) -> ResolverPlugin | None:
         """Get a resolver by name."""
         return self._resolvers.get(name)
 
-    def find_resolver_for_reference(self, reference: str) -> Optional[ResolverPlugin]:
+    def find_resolver_for_reference(self, reference: str) -> ResolverPlugin | None:
         """Find the appropriate resolver for a reference."""
         # First try pattern matching
         for pattern, resolver_name in self._patterns:
@@ -260,7 +261,7 @@ class ResolverRegistry:
 
         return None
 
-    def list_resolvers(self) -> List[str]:
+    def list_resolvers(self) -> list[str]:
         """List all registered resolver names."""
         return list(self._resolvers.keys())
 

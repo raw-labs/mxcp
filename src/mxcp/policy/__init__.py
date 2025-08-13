@@ -1,18 +1,17 @@
-# -*- coding: utf-8 -*-
 """Policy enforcement for MXCP endpoints.
 
 This module provides MXCP-specific policy configuration parsing
 that converts YAML/JSON configuration into SDK policy types.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from mxcp.sdk.policy import PolicyAction, PolicyDefinition, PolicySet
 
 __all__ = ["parse_policies_from_config"]
 
 
-def parse_policies_from_config(policies_config: Optional[Dict[str, Any]]) -> Optional[PolicySet]:
+def parse_policies_from_config(policies_config: dict[str, Any] | None) -> PolicySet | None:
     """Parse policy configuration into PolicySet.
 
     This function handles parsing of policy configuration from YAML/JSON format

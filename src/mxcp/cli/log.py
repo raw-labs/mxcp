@@ -1,9 +1,7 @@
 """CLI command for querying MXCP audit logs."""
 
 import asyncio
-import json
 from pathlib import Path
-from typing import Optional
 
 import click
 
@@ -48,17 +46,17 @@ from mxcp.sdk.audit import AuditLogger
 @click.option("--json", "json_output", is_flag=True, help="Output in JSON format")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 def log(
-    profile: Optional[str],
-    tool: Optional[str],
-    resource: Optional[str],
-    prompt: Optional[str],
-    event_type: Optional[str],
-    policy: Optional[str],
-    status: Optional[str],
-    since: Optional[str],
+    profile: str | None,
+    tool: str | None,
+    resource: str | None,
+    prompt: str | None,
+    event_type: str | None,
+    policy: str | None,
+    status: str | None,
+    since: str | None,
     limit: int,
-    export_csv_path: Optional[str],
-    export_duckdb_path: Optional[str],
+    export_csv_path: str | None,
+    export_duckdb_path: str | None,
     json_output: bool,
     debug: bool,
 ) -> None:
@@ -117,24 +115,24 @@ def log(
         # Handle graceful shutdown
         if not json_output:
             click.echo("\nOperation cancelled by user", err=True)
-        raise click.Abort()
+        raise click.Abort() from None
     except Exception as e:
         # Only catch non-Click exceptions
         output_error(e, json_output, debug)
 
 
 async def _log_async(
-    profile: Optional[str],
-    tool: Optional[str],
-    resource: Optional[str],
-    prompt: Optional[str],
-    event_type: Optional[str],
-    policy: Optional[str],
-    status: Optional[str],
-    since: Optional[str],
+    profile: str | None,
+    tool: str | None,
+    resource: str | None,
+    prompt: str | None,
+    event_type: str | None,
+    policy: str | None,
+    status: str | None,
+    since: str | None,
     limit: int,
-    export_csv_path: Optional[str],
-    export_duckdb_path: Optional[str],
+    export_csv_path: str | None,
+    export_duckdb_path: str | None,
     json_output: bool,
     debug: bool,
 ) -> None:
@@ -293,5 +291,5 @@ async def _log_async(
         try:
             if audit_logger:
                 audit_logger.shutdown()
-        except:
+        except Exception:
             pass

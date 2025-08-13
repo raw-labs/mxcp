@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """MXCP SDK - Enterprise-grade MCP framework for building production AI tools.
 
 The MXCP SDK provides a comprehensive, standalone framework for building secure,

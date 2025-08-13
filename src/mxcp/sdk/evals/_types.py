@@ -6,7 +6,7 @@ and other data structures used in the evaluation framework.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from mxcp.endpoints._types import TypeDefinition
 
@@ -48,7 +48,7 @@ class OpenAIConfig(ModelConfig):
 
 
 # Union type for all supported model configurations
-ModelConfigType = Union[ClaudeConfig, OpenAIConfig]
+ModelConfigType = ClaudeConfig | OpenAIConfig
 
 
 @dataclass
@@ -58,7 +58,7 @@ class ParameterDefinition:
     name: str
     type: str
     description: str = ""
-    default: Optional[Any] = None
+    default: Any | None = None
     required: bool = True
 
 
@@ -72,10 +72,10 @@ class ToolDefinition:
 
     name: str
     description: str = ""
-    parameters: List[ParameterDefinition] = field(default_factory=list)
-    return_type: Optional[TypeDefinition] = None
-    annotations: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
+    parameters: list[ParameterDefinition] = field(default_factory=list)
+    return_type: TypeDefinition | None = None
+    annotations: dict[str, Any] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
 
     def to_prompt_format(self) -> str:
         """Format this tool definition for inclusion in LLM prompts."""

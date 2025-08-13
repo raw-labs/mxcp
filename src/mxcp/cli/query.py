@@ -1,8 +1,7 @@
 import asyncio
 import json
-import traceback
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import click
 
@@ -36,10 +35,10 @@ from mxcp.sdk.executor import ExecutionContext
 @click.option("--readonly", is_flag=True, help="Open database connection in read-only mode")
 @track_command_with_timing("query")  # type: ignore[misc]
 def query(
-    sql: Optional[str],
-    file: Optional[str],
+    sql: str | None,
+    file: str | None,
     param: tuple[str, ...],
-    profile: Optional[str],
+    profile: str | None,
     json_output: bool,
     debug: bool,
     readonly: bool,
@@ -72,17 +71,17 @@ def query(
         # Handle graceful shutdown
         if not json_output:
             click.echo("\nOperation cancelled by user", err=True)
-        raise click.Abort()
+        raise click.Abort() from None
     except Exception as e:
         # Only catch non-Click exceptions
         output_error(e, json_output, debug)
 
 
 async def _query_async(
-    sql: Optional[str],
-    file: Optional[str],
+    sql: str | None,
+    file: str | None,
     param: tuple[str, ...],
-    profile: Optional[str],
+    profile: str | None,
     json_output: bool,
     debug: bool,
     readonly: bool,
@@ -107,7 +106,7 @@ async def _query_async(
     profile_name = profile or site_config["profile"]
 
     # Parse parameters
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
     for p in param:
         if "=" not in p:
             raise click.BadParameter(
@@ -125,7 +124,7 @@ async def _query_async(
                 with open(file_path) as f:
                     value = json.load(f)
             except json.JSONDecodeError as e:
-                raise click.BadParameter(f"Invalid JSON in file {file_path}: {e}")
+                raise click.BadParameter(f"Invalid JSON in file {file_path}: {e}") from e
 
         params[key] = value
 
@@ -159,7 +158,7 @@ async def _query_async(
         if params:
             click.echo(f"\n{click.style('📋 Parameters:', fg='cyan')}")
             for key, value in params.items():
-                if isinstance(value, (dict, list)):
+                if isinstance(value, dict | list):
                     click.echo(f"   • ${key} = {json.dumps(value)}")
                 else:
                     click.echo(f"   • ${key} = {value}")

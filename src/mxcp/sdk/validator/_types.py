@@ -1,7 +1,7 @@
 """Type definitions for MXCP validator."""
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional, Union
+from dataclasses import dataclass
+from typing import Any, Literal, Optional
 
 
 @dataclass
@@ -9,37 +9,37 @@ class BaseTypeSchema:
     """Base schema for type definitions with common fields."""
 
     type: str
-    description: Optional[str] = None
-    format: Optional[str] = None
-    sensitive: Optional[bool] = False
+    description: str | None = None
+    format: str | None = None
+    sensitive: bool | None = False
 
     # String constraints
-    min_length: Optional[int] = None
-    max_length: Optional[int] = None
+    min_length: int | None = None
+    max_length: int | None = None
 
     # Numeric constraints
-    minimum: Optional[Union[int, float]] = None
-    maximum: Optional[Union[int, float]] = None
-    exclusive_minimum: Optional[Union[int, float]] = None
-    exclusive_maximum: Optional[Union[int, float]] = None
-    multiple_of: Optional[Union[int, float]] = None
+    minimum: int | float | None = None
+    maximum: int | float | None = None
+    exclusive_minimum: int | float | None = None
+    exclusive_maximum: int | float | None = None
+    multiple_of: int | float | None = None
 
     # Array constraints
-    min_items: Optional[int] = None
-    max_items: Optional[int] = None
-    unique_items: Optional[bool] = None
+    min_items: int | None = None
+    max_items: int | None = None
+    unique_items: bool | None = None
     items: Optional["TypeSchema"] = None
 
     # Object constraints
-    properties: Optional[Dict[str, "TypeSchema"]] = None
-    required: Optional[List[str]] = None
-    additional_properties: Optional[bool] = True
+    properties: dict[str, "TypeSchema"] | None = None
+    required: list[str] | None = None
+    additional_properties: bool | None = True
 
     # Value constraints
-    enum: Optional[List[Any]] = None
-    examples: Optional[List[Any]] = None
+    enum: list[Any] | None = None
+    examples: list[Any] | None = None
 
-    def _update_from_dict(self, data: Dict[str, Any]) -> None:
+    def _update_from_dict(self, data: dict[str, Any]) -> None:
         """Update fields from dictionary, handling nested schemas."""
         # Handle nested schemas
         if "items" in data and data["items"]:
@@ -87,11 +87,11 @@ class ParameterSchema(BaseTypeSchema):
     """Schema definition for a parameter."""
 
     name: str = ""  # Required, but set after base class init
-    default: Optional[Any] = None
+    default: Any | None = None
     has_default: bool = False
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ParameterSchema":
+    def from_dict(cls, data: dict[str, Any]) -> "ParameterSchema":
         """Create ParameterSchema from dictionary."""
         has_default = "default" in data
         default_value = data["default"] if has_default else None
@@ -108,7 +108,7 @@ class TypeSchema(BaseTypeSchema):
     """Schema definition for a type (used for return types and nested types)."""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TypeSchema":
+    def from_dict(cls, data: dict[str, Any]) -> "TypeSchema":
         """Create TypeSchema from dictionary."""
         instance = cls(type=data["type"])
         instance._update_from_dict(data)
@@ -119,11 +119,11 @@ class TypeSchema(BaseTypeSchema):
 class ValidationSchema:
     """Complete validation schema with input and output definitions."""
 
-    input_parameters: Optional[List[ParameterSchema]] = None
-    output_schema: Optional[TypeSchema] = None
+    input_parameters: list[ParameterSchema] | None = None
+    output_schema: TypeSchema | None = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ValidationSchema":
+    def from_dict(cls, data: dict[str, Any]) -> "ValidationSchema":
         """Create ValidationSchema from dictionary."""
         input_params = None
         if "input" in data and "parameters" in data["input"]:

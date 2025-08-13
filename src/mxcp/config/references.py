@@ -11,7 +11,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def is_external_reference(value: Any) -> bool:
     )
 
 
-def detect_reference_type(value: str) -> Optional[str]:
+def detect_reference_type(value: str) -> str | None:
     """Detect the type of external reference in a string value."""
     if value.startswith("vault://"):
         return "vault"
@@ -73,7 +73,7 @@ def resolve_env_var(value: str) -> str:
     return result
 
 
-def resolve_vault_url(vault_url: str, vault_config: Optional[Dict[str, Any]]) -> str:
+def resolve_vault_url(vault_url: str, vault_config: dict[str, Any] | None) -> str:
     """Resolve a vault:// URL to retrieve the secret value.
 
     Args:
@@ -110,7 +110,7 @@ def resolve_vault_url(vault_url: str, vault_config: Optional[Dict[str, Any]]) ->
     except ImportError:
         raise ImportError(
             "hvac library is required for Vault integration. Install with: pip install hvac"
-        )
+        ) from None
 
     # Get Vault configuration
     vault_address = vault_config.get("address")
@@ -138,7 +138,9 @@ def resolve_vault_url(vault_url: str, vault_config: Optional[Dict[str, Any]]) ->
                 response = client.secrets.kv.v1.read_secret(path=secret_path)
                 secret_data = response["data"]
             except Exception as e:
-                raise ValueError(f"Failed to read secret from Vault path '{secret_path}': {e}")
+                raise ValueError(
+                    f"Failed to read secret from Vault path '{secret_path}': {e}"
+                ) from e
 
         if secret_key not in secret_data:
             raise ValueError(
@@ -150,7 +152,7 @@ def resolve_vault_url(vault_url: str, vault_config: Optional[Dict[str, Any]]) ->
     except Exception as e:
         if isinstance(e, ValueError):
             raise
-        raise ValueError(f"Error connecting to Vault: {e}")
+        raise ValueError(f"Error connecting to Vault: {e}") from e
 
 
 def resolve_file_url(file_url: str) -> str:
@@ -198,12 +200,12 @@ def resolve_file_url(file_url: str) -> str:
     except FileNotFoundError:
         raise
     except PermissionError as e:
-        raise ValueError(f"Permission denied reading file '{file_path}': {e}")
+        raise ValueError(f"Permission denied reading file '{file_path}': {e}") from e
     except Exception as e:
-        raise ValueError(f"Error reading file '{file_path}': {e}")
+        raise ValueError(f"Error reading file '{file_path}': {e}") from e
 
 
-def resolve_onepassword_url(op_url: str, op_config: Optional[Dict[str, Any]]) -> str:
+def resolve_onepassword_url(op_url: str, op_config: dict[str, Any] | None) -> str:
     """Resolve a 1Password op:// URL to retrieve the secret value.
 
     Args:
@@ -239,7 +241,7 @@ def resolve_onepassword_url(op_url: str, op_config: Optional[Dict[str, Any]]) ->
     except ImportError:
         raise ImportError(
             "onepassword-sdk library is required for 1Password integration. Install with: pip install 'mxcp[onepassword]'"
-        )
+        ) from None
 
     # Build the secret reference - new SDK format
     if attribute == "otp":
@@ -285,8 +287,8 @@ def resolve_onepassword_url(op_url: str, op_config: Optional[Dict[str, Any]]) ->
 
 def resolve_value(
     value: str,
-    vault_config: Optional[Dict[str, Any]] = None,
-    op_config: Optional[Dict[str, Any]] = None,
+    vault_config: dict[str, Any] | None = None,
+    op_config: dict[str, Any] | None = None,
 ) -> str:
     """Resolve a single string value that may contain external references.
 
@@ -313,8 +315,8 @@ def resolve_value(
 
 def interpolate_all(
     config: Any,
-    vault_config: Optional[Dict[str, Any]] = None,
-    op_config: Optional[Dict[str, Any]] = None,
+    vault_config: dict[str, Any] | None = None,
+    op_config: dict[str, Any] | None = None,
 ) -> Any:
     """Recursively interpolate all external references in a configuration.
 
@@ -337,8 +339,8 @@ def interpolate_all(
 
 
 def find_references(
-    config: Any, path: Optional[List[Union[str, int]]] = None
-) -> List[Tuple[List[Union[str, int]], str, str]]:
+    config: Any, path: list[str | int] | None = None
+) -> list[tuple[list[str | int], str, str]]:
     """Find all external references in a configuration structure.
 
     Args:

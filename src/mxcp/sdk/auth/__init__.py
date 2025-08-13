@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """MXCP SDK Authentication - OAuth providers and user context management.
 
 This package provides comprehensive authentication functionality including:
@@ -69,7 +68,6 @@ from ._types import (
     KeycloakAuthConfig,
     OAuthClientConfig,
     SalesforceAuthConfig,
-    StateMeta,
     UserContext,
 )
 from .context import get_user_context, reset_user_context, set_user_context

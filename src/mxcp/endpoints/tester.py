@@ -1,23 +1,15 @@
-import asyncio
 import json
 import logging
-import os
 import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any
 
-import duckdb
 import numpy as np
-import yaml
-from jsonschema import validate
 
 from mxcp.config._types import SiteConfig, UserConfig
 from mxcp.config.execution_engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
 from mxcp.endpoints._types import (
-    AllEndpointsTestResults,
     EndpointDefinition,
-    EndpointTestsResult,
     TestDefinition,
 )
 from mxcp.endpoints.loader import EndpointLoader
@@ -33,10 +25,10 @@ logger = logging.getLogger(__name__)
 async def run_all_tests(
     user_config: UserConfig,
     site_config: SiteConfig,
-    profile: Optional[str],
-    readonly: Optional[bool] = None,
-    cli_user_context: Optional[UserContext] = None,
-) -> Dict[str, Any]:
+    profile: str | None,
+    readonly: bool | None = None,
+    cli_user_context: UserContext | None = None,
+) -> dict[str, Any]:
     """Run tests for all endpoints in the repository (async)"""
     repo_root = find_repo_root()
     logger.debug(f"Repository root: {repo_root}")
@@ -46,7 +38,7 @@ async def run_all_tests(
     endpoints = loader.discover_endpoints()
     logger.debug(f"Found {len(endpoints)} YAML files")
 
-    results: Dict[str, Any] = {"status": "ok", "tests_run": 0, "endpoints": []}
+    results: dict[str, Any] = {"status": "ok", "tests_run": 0, "endpoints": []}
 
     # Create execution engine once for all tests
     execution_engine = create_execution_engine(user_config, site_config, profile, readonly=readonly)
@@ -150,10 +142,10 @@ async def run_tests(
     name: str,
     user_config: UserConfig,
     site_config: SiteConfig,
-    profile: Optional[str],
-    readonly: Optional[bool] = None,
-    cli_user_context: Optional[UserContext] = None,
-) -> Dict[str, Any]:
+    profile: str | None,
+    readonly: bool | None = None,
+    cli_user_context: UserContext | None = None,
+) -> dict[str, Any]:
     """Run tests for a specific endpoint type and name."""
     # Create execution engine for this single test run
     execution_engine = create_execution_engine(user_config, site_config, profile, readonly=readonly)
@@ -171,8 +163,8 @@ async def run_tests_with_session(
     user_config: UserConfig,
     site_config: SiteConfig,
     execution_engine: ExecutionEngine,
-    cli_user_context: Optional[UserContext] = None,
-) -> Dict[str, Any]:
+    cli_user_context: UserContext | None = None,
+) -> dict[str, Any]:
     """Run tests for a specific endpoint type and name with an existing session."""
     try:
         logger.info(f"Running tests for endpoint: {endpoint_type}/{name}")
@@ -188,10 +180,10 @@ async def run_tests_with_session(
         endpoint_file_path, endpoint_def = result
 
         # Get test definitions
-        tests: List[Any] = []
+        tests: list[Any] = []
         if endpoint_def is None:
             logger.error(f"Endpoint definition is None for {endpoint_type}/{name}")
-            return {"status": "error", "message": f"Invalid endpoint definition"}
+            return {"status": "error", "message": "Invalid endpoint definition"}
 
         if endpoint_type == "tool":
             tool_def = endpoint_def.get("tool") if isinstance(endpoint_def, dict) else None
@@ -260,7 +252,7 @@ async def run_tests_with_session(
                 )
                 logger.info(f"Using test-defined user context: {test_context_data}")
             elif test_user_context:
-                logger.info(f"Using CLI-provided user context")
+                logger.info("Using CLI-provided user context")
 
             try:
                 result = await execute_endpoint_with_engine(
@@ -327,7 +319,7 @@ async def run_tests_with_session(
         return {"status": "error", "message": str(e)}
 
 
-def extract_column_names(endpoint_def: EndpointDefinition, endpoint_type: str) -> List[str]:
+def extract_column_names(endpoint_def: EndpointDefinition, endpoint_type: str) -> list[str]:
     """Extract column names from endpoint definition"""
     columns = []
 
@@ -364,7 +356,7 @@ def extract_column_names(endpoint_def: EndpointDefinition, endpoint_type: str) -
     return columns
 
 
-def normalize_result(result: Any, column_names: List[str], endpoint_type: str) -> Any:
+def normalize_result(result: Any, column_names: list[str], endpoint_type: str) -> Any:
     """Normalize DuckDB result for comparison with expected result"""
     # Handle empty results
     if not result:
@@ -373,27 +365,28 @@ def normalize_result(result: Any, column_names: List[str], endpoint_type: str) -
     # Handle prompt results
     if endpoint_type == "prompt":
         # Modern prompts return a list of message objects
-        if isinstance(result, list) and len(result) > 0:
+        if (
+            isinstance(result, list)
+            and len(result) > 0
+            and all(isinstance(msg, dict) and "role" in msg for msg in result)
+        ):
             # Check if this is a list of message objects
-            if all(isinstance(msg, dict) and "role" in msg for msg in result):
-                # Find the last assistant message
-                for msg in reversed(result):
-                    if msg.get("role") == "assistant" and "prompt" in msg:
-                        assistant_response = msg["prompt"].strip()
-                        # Try to parse JSON if the result looks like JSON
-                        if (
-                            assistant_response.startswith("[") and assistant_response.endswith("]")
-                        ) or (
-                            assistant_response.startswith("{") and assistant_response.endswith("}")
-                        ):
-                            try:
-                                return json.loads(assistant_response)
-                            except json.JSONDecodeError:
-                                # If JSON parsing fails, return the string as is
-                                pass
-                        return assistant_response
-                # If no assistant message found, return the full result
-                return result
+            # Find the last assistant message
+            for msg in reversed(result):
+                if msg.get("role") == "assistant" and "prompt" in msg:
+                    assistant_response = msg["prompt"].strip()
+                    # Try to parse JSON if the result looks like JSON
+                    if (
+                        assistant_response.startswith("[") and assistant_response.endswith("]")
+                    ) or (assistant_response.startswith("{") and assistant_response.endswith("}")):
+                        try:
+                            return json.loads(assistant_response)
+                        except json.JSONDecodeError:
+                            # If JSON parsing fails, return the string as is
+                            pass
+                    return assistant_response
+            # If no assistant message found, return the full result
+            return result
 
         # Legacy format: Prompts typically return [(messages,)]
         if (
@@ -439,7 +432,7 @@ def normalize_result(result: Any, column_names: List[str], endpoint_type: str) -
     return result
 
 
-def compare_results(result: Any, test_def: TestDefinition) -> tuple[bool, Optional[str]]:
+def compare_results(result: Any, test_def: TestDefinition) -> tuple[bool, str | None]:
     """Compare result with various assertion types in test definition.
 
     Returns: (passed: bool, error_message: str or None)
@@ -456,7 +449,7 @@ def compare_results(result: Any, test_def: TestDefinition) -> tuple[bool, Option
                     return obj.tolist()
                 elif isinstance(obj, dict):
                     return {k: make_serializable(v) for k, v in obj.items()}
-                elif isinstance(obj, (list, tuple)):
+                elif isinstance(obj, list | tuple):
                     return [make_serializable(item) for item in obj]
                 else:
                     return obj

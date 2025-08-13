@@ -11,7 +11,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from mxcp.config.references import (
     FILE_URL_PATTERN,
@@ -26,17 +26,17 @@ logger = logging.getLogger(__name__)
 class ExternalRef:
     """Represents an external configuration reference."""
 
-    path: List[Union[str, int]]  # Path to the value in the config dict
+    path: list[str | int]  # Path to the value in the config dict
     source: str  # Original reference string (e.g., "vault://secret/db#password")
     ref_type: str  # Type: "vault", "file", or "env"
-    last_resolved: Optional[Any] = None
+    last_resolved: Any | None = None
     last_checked: float = 0.0
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
     def resolve(
         self,
-        vault_config: Optional[Dict[str, Any]] = None,
-        op_config: Optional[Dict[str, Any]] = None,
+        vault_config: dict[str, Any] | None = None,
+        op_config: dict[str, Any] | None = None,
     ) -> Any:
         """Resolve this reference to its current value."""
         try:
@@ -53,11 +53,11 @@ class ExternalRefTracker:
     """Tracks and manages external configuration references."""
 
     def __init__(self) -> None:
-        self.refs: List[ExternalRef] = []
-        self._template_config: Optional[Dict[str, Any]] = None
-        self._resolved_config: Optional[Dict[str, Any]] = None
+        self.refs: list[ExternalRef] = []
+        self._template_config: dict[str, Any] | None = None
+        self._resolved_config: dict[str, Any] | None = None
 
-    def set_template(self, site_config: Dict[str, Any], user_config: Dict[str, Any]) -> None:
+    def set_template(self, site_config: dict[str, Any], user_config: dict[str, Any]) -> None:
         """Set the template configuration and scan for references."""
         self._template_config = {
             "site": copy.deepcopy(site_config),
@@ -80,9 +80,9 @@ class ExternalRefTracker:
 
     def resolve_all(
         self,
-        vault_config: Optional[Dict[str, Any]] = None,
-        op_config: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        vault_config: dict[str, Any] | None = None,
+        op_config: dict[str, Any] | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Resolve all external references and return updated configs.
 
         Args:
@@ -130,13 +130,13 @@ class ExternalRefTracker:
         self._resolved_config = resolved
         return resolved["site"], resolved["user"]
 
-    def _apply_value(self, config: Dict[str, Any], path: List[Union[str, int]], value: Any) -> None:
+    def _apply_value(self, config: dict[str, Any], path: list[str | int], value: Any) -> None:
         """Apply a resolved value at the specified path in the config."""
         current: Any = config
 
         # Navigate to the parent of the target
         for key in path[:-1]:
-            if isinstance(current, dict) and isinstance(key, str):
+            if isinstance(current, dict) and isinstance(key, str):  # noqa: SIM114
                 current = current[key]
             elif isinstance(current, list) and isinstance(key, int):
                 current = current[key]
@@ -145,14 +145,14 @@ class ExternalRefTracker:
 
         # Set the value
         final_key = path[-1]
-        if isinstance(current, dict) and isinstance(final_key, str):
+        if isinstance(current, dict) and isinstance(final_key, str):  # noqa: SIM114
             current[final_key] = value
         elif isinstance(current, list) and isinstance(final_key, int):
             current[final_key] = value
         else:
             raise TypeError(f"Invalid final key {final_key} for type {type(current)}")
 
-    def check_for_changes(self) -> List[ExternalRef]:
+    def check_for_changes(self) -> list[ExternalRef]:
         """Check if any file-based references have changed."""
         changed = []
 
@@ -179,6 +179,6 @@ class ExternalRefTracker:
 
         return changed
 
-    def has_changes(self, old_config: Dict[str, Any], new_config: Dict[str, Any]) -> bool:
+    def has_changes(self, old_config: dict[str, Any], new_config: dict[str, Any]) -> bool:
         """Check if resolved configurations are different."""
         return old_config != new_config

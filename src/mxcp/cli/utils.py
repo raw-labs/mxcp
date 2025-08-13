@@ -3,7 +3,7 @@ import logging
 import os
 import shutil
 import traceback
-from typing import Any, Dict, Optional
+from typing import Any
 
 import click
 
@@ -23,7 +23,7 @@ def get_env_flag(env_var: str, default: bool = False) -> bool:
     return value in ("1", "true", "yes") if value else default
 
 
-def get_env_profile() -> Optional[str]:
+def get_env_profile() -> str | None:
     """Get the profile name from environment variable.
 
     Returns:
@@ -79,7 +79,7 @@ def configure_logging(debug: bool = False) -> None:
         logger.propagate = True
 
 
-def format_error(error: Exception, debug: bool = False) -> Dict[str, Any]:
+def format_error(error: Exception, debug: bool = False) -> dict[str, Any]:
     """Format an error for output.
 
     Args:

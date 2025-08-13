@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
 """Base audit writer implementation with redaction support.
 
 This module provides the base implementation for audit writers,
 including field redaction and business context extraction.
 """
-import copy
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
 
-from ._types import AuditBackend, AuditRecord, AuditSchema, FieldRedaction, RedactionStrategy
+import copy
+from typing import Any
+
+from ._types import AuditRecord, AuditSchema, FieldRedaction, RedactionStrategy
 from .redaction import apply_redaction
 
 
@@ -23,7 +22,7 @@ class AuditRedactor:
         """
         self.default_strategy = default_strategy
 
-    def redact_record(self, record: AuditRecord, redactions: List[FieldRedaction]) -> AuditRecord:
+    def redact_record(self, record: AuditRecord, redactions: list[FieldRedaction]) -> AuditRecord:
         """Apply redactions to a record.
 
         Args:
@@ -55,10 +54,10 @@ class AuditRedactor:
 
     def _apply_redaction(
         self,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         field_path: str,
         strategy: RedactionStrategy,
-        options: Optional[Dict[str, Any]],
+        options: dict[str, Any] | None,
     ) -> None:
         """Apply redaction to a specific field path.
 
@@ -88,10 +87,10 @@ class AuditRedactor:
             current[final_key] = apply_redaction(current[final_key], strategy, options)
 
 
-class BaseAuditWriter(ABC):
+class BaseAuditWriter:
     """Base implementation for audit writers with common functionality."""
 
-    def __init__(self, redactor: Optional[AuditRedactor] = None):
+    def __init__(self, redactor: AuditRedactor | None = None):
         """Initialize the base writer.
 
         Args:
@@ -126,7 +125,7 @@ class BaseAuditWriter(ABC):
 
         return processed_record
 
-    def _extract_fields(self, data: Dict[str, Any], field_paths: List[str]) -> Dict[str, Any]:
+    def _extract_fields(self, data: dict[str, Any], field_paths: list[str]) -> dict[str, Any]:
         """Extract specified fields from data.
 
         Args:
@@ -150,7 +149,7 @@ class BaseAuditWriter(ABC):
 
         return extracted
 
-    def _get_nested_value(self, data: Dict[str, Any], path: str) -> Any:
+    def _get_nested_value(self, data: dict[str, Any], path: str) -> Any:
         """Get a value from nested dictionary using dot notation.
 
         Args:

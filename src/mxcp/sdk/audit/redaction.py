@@ -1,17 +1,17 @@
-# -*- coding: utf-8 -*-
 """Redaction strategies for audit logging.
 
 This module provides well-defined redaction strategies for reliable
 serialization and consistent behavior.
 """
+
 import hashlib
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 
 from ._types import RedactionStrategy
 
 
 def apply_redaction(
-    value: Any, strategy: RedactionStrategy, options: Optional[Dict[str, Any]] = None
+    value: Any, strategy: RedactionStrategy, options: dict[str, Any] | None = None
 ) -> Any:
     """Apply redaction using the specified strategy.
 
@@ -39,7 +39,7 @@ def apply_redaction(
         raise ValueError(f"Unknown redaction strategy: {strategy}")
 
 
-def _redact_full(value: Any, options: Optional[Dict[str, Any]] = None) -> str:
+def _redact_full(value: Any, options: dict[str, Any] | None = None) -> str:
     """Complete redaction - replaces entire value.
 
     Args:
@@ -52,7 +52,7 @@ def _redact_full(value: Any, options: Optional[Dict[str, Any]] = None) -> str:
     return "[REDACTED]"
 
 
-def _redact_partial(value: Any, options: Optional[Dict[str, Any]] = None) -> str:
+def _redact_partial(value: Any, options: dict[str, Any] | None = None) -> str:
     """Partial redaction - shows first/last few characters.
 
     Args:
@@ -85,7 +85,7 @@ def _redact_partial(value: Any, options: Optional[Dict[str, Any]] = None) -> str
         return f"{str_value[:show_first]}***{str_value[-show_last:]}"
 
 
-def _redact_hash(value: Any, options: Optional[Dict[str, Any]] = None) -> str:
+def _redact_hash(value: Any, options: dict[str, Any] | None = None) -> str:
     """Hash redaction - replaces with SHA256 hash.
 
     Args:
@@ -114,7 +114,7 @@ def _redact_hash(value: Any, options: Optional[Dict[str, Any]] = None) -> str:
     return cast(str, prefix + hash_obj.hexdigest())
 
 
-def _redact_truncate(value: Any, options: Optional[Dict[str, Any]] = None) -> str:
+def _redact_truncate(value: Any, options: dict[str, Any] | None = None) -> str:
     """Truncate redaction - shows only first N characters.
 
     Args:
@@ -139,7 +139,7 @@ def _redact_truncate(value: Any, options: Optional[Dict[str, Any]] = None) -> st
     return cast(str, str_value[:length] + suffix)
 
 
-def _redact_email(value: Any, options: Optional[Dict[str, Any]] = None) -> str:
+def _redact_email(value: Any, options: dict[str, Any] | None = None) -> str:
     """Email-specific redaction - preserves domain.
 
     Args:
@@ -166,7 +166,7 @@ def _redact_email(value: Any, options: Optional[Dict[str, Any]] = None) -> str:
     return f"{local[0]}***@{domain}"
 
 
-def _redact_preserve_type(value: Any, options: Optional[Dict[str, Any]] = None) -> Any:
+def _redact_preserve_type(value: Any, options: dict[str, Any] | None = None) -> Any:
     """Type-preserving redaction - maintains data type.
 
     Args:
