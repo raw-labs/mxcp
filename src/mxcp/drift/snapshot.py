@@ -7,7 +7,7 @@ from typing import cast
 import duckdb
 
 from mxcp.config._types import SiteConfig, UserConfig
-from mxcp.config.execution_engine import create_execution_engine
+from mxcp.executor.engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
 from mxcp.drift._types import (
     Column,
@@ -21,7 +21,7 @@ from mxcp.drift._types import (
     ValidationResults,
 )
 from mxcp.endpoints.loader import EndpointLoader
-from mxcp.endpoints.tester import run_tests_with_session
+from mxcp.executor.runners.test import TestRunner
 from mxcp.endpoints.validate import validate_endpoint_payload
 from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
 
@@ -149,8 +149,9 @@ async def generate_snapshot(
                 # Validate endpoint
                 validation_result = validate_endpoint_payload(endpoint, str(path), execution_engine)
                 # Run tests
-                test_result = await run_tests_with_session(
-                    endpoint_type, name, user_config, site_config, execution_engine, None
+                test_runner = TestRunner(user_config, site_config, execution_engine)
+                test_result = await test_runner.run_tests_for_endpoint(
+                    endpoint_type, name, None
                 )
                 # Add to snapshot
                 resource_data: ResourceDefinition = {

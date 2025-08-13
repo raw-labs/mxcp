@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mxcp.config.execution_engine import create_execution_engine
+from mxcp.executor.engine import create_execution_engine
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
 from mxcp.endpoints.sdk_executor import execute_endpoint_with_engine

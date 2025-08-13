@@ -20,7 +20,7 @@ from starlette.responses import JSONResponse
 
 from mxcp.audit.schemas import ENDPOINT_EXECUTION_SCHEMA
 from mxcp.config._types import SiteConfig, UserAuthConfig, UserConfig, UserHttpTransportConfig
-from mxcp.config.execution_engine import create_execution_engine
+from mxcp.executor.engine import create_execution_engine
 from mxcp.config.external_refs import ExternalRefTracker
 from mxcp.config.site_config import get_active_profile, load_site_config
 from mxcp.config.user_config import load_user_config

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from mxcp.endpoints._types import EndpointDefinition
-from mxcp.evals.tool_executor import EndpointToolExecutor
+from mxcp.executor.runners.tool import EndpointToolExecutor
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
 

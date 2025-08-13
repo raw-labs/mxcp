@@ -7,7 +7,7 @@ The ExecutionEngine provides a unified interface for executing SQL and Python co
 through the SDK executor system, with full plugin support and validation.
 
 Example usage:
-    >>> from mxcp.config.execution_engine import create_execution_engine
+    >>> from mxcp.executor.engine import create_execution_engine
     >>> from mxcp.config.user_config import load_user_config
     >>> from mxcp.config.site_config import load_site_config
     >>> from mxcp.sdk.executor import ExecutionContext
@@ -86,7 +86,7 @@ def create_execution_engine(
         ValueError: If profile is not found in configurations
 
     Example:
-        >>> from mxcp.config.execution_engine import create_execution_engine
+        >>> from mxcp.executor.engine import create_execution_engine
         >>> from mxcp.config.user_config import load_user_config
         >>> from mxcp.config.site_config import load_site_config
         >>>

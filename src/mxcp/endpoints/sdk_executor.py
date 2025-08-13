@@ -8,10 +8,10 @@ import logging
 from typing import Any, cast
 
 from mxcp.config._types import SiteConfig, UserConfig
-from mxcp.config.execution_engine import create_execution_engine
+from mxcp.executor.engine import create_execution_engine
 from mxcp.config.site_config import find_repo_root
 from mxcp.endpoints._types import PromptDefinition
-from mxcp.endpoints.execution import (
+from mxcp.executor.runners.endpoint import (
     execute_code_with_engine,
     execute_prompt_with_validation,
     transform_result_for_return_type,

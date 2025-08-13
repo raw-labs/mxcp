@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.config.execution_engine import create_execution_engine
+from mxcp.executor.engine import create_execution_engine
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
 from mxcp.endpoints.validate import validate_all_endpoints, validate_endpoint

@@ -1,7 +1,8 @@
-"""Tool executor implementation for MXCP evals using SDK ExecutionEngine.
+"""Tool executor implementation for executing endpoints as tools.
 
 This module provides EndpointToolExecutor which executes tools by finding
 corresponding endpoints and executing them through the SDK ExecutionEngine.
+This is primarily used by the evaluation system for LLM tool execution.
 """
 
 import logging
@@ -23,7 +24,7 @@ class EndpointToolExecutor:
 
     Example usage:
         >>> from mxcp.sdk.executor import ExecutionEngine
-        >>> from mxcp.evals.tool_executor import EndpointToolExecutor
+        >>> from mxcp.executor.runners.tool import EndpointToolExecutor
         >>>
         >>> # Create execution engine with DuckDB and Python executors
         >>> engine = ExecutionEngine()

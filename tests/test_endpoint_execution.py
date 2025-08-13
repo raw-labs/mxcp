@@ -5,7 +5,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from mxcp.config.execution_engine import create_execution_engine
+from mxcp.executor.engine import create_execution_engine
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
 from mxcp.endpoints.loader import EndpointLoader

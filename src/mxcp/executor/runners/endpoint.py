@@ -1,8 +1,8 @@
-"""Core execution logic for endpoints.
+"""Endpoint execution runner for the MXCP executor system.
 
 This module contains the core execution functions that handle the actual
-execution of code and prompt endpoints, separated from the higher-level
-endpoint loading and policy enforcement logic.
+execution of code and prompt endpoints. It provides the low-level execution
+logic used by higher-level endpoint orchestration code.
 """
 
 import logging
