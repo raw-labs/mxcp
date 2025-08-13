@@ -761,7 +761,7 @@ class RAWMCP:
         schema_def: dict[str, Any],
         model_name: str,
         endpoint_type: EndpointType | None = None,
-    ) -> Any:
+    ) -> Any:  # Returns types that can be used in type annotations
         """Create a Pydantic model from a JSON Schema definition.
 
         Args:
@@ -873,10 +873,10 @@ class RAWMCP:
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 # Use List with item_type as a generic parameter
-                final_type = Annotated[list[item_type], Field(**field_kwargs)]
+                final_type = Annotated[list[item_type], Field(**field_kwargs)]  # type: ignore[valid-type]
             else:
                 # Arrays without constraints
-                final_type = list[item_type]
+                final_type = list[item_type]  # type: ignore[valid-type]
             self._model_cache[cache_key] = final_type
             return final_type
 
@@ -1259,7 +1259,7 @@ class RAWMCP:
         return_schema = endpoint_def.get("return")
         if return_schema:
             return_type = self._create_pydantic_model_from_schema(
-                return_schema, f"{original_name}Return", endpoint_type
+                cast(dict[str, Any], return_schema), f"{original_name}Return", endpoint_type
             )
             handler.__annotations__["return"] = return_type
 
