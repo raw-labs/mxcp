@@ -134,7 +134,7 @@ class ExecutionEngine:
     The engine handles:
     - Registration of executor plugins for different languages
     - Engine lifecycle management (startup/shutdown)
-    - Input/output validation using mxcp.validator
+    - Input/output validation using mxcp.sdk.validator
     - Routing execution requests to appropriate executors
 
     Executors are ready to use immediately after registration.

@@ -16,6 +16,7 @@ class TestSchemaComparison:
             Path(__file__).parent.parent.parent
             / "src"
             / "mxcp"
+            / "sdk"
             / "validator"
             / "schemas"
             / "validation-schema-1.json"
@@ -175,6 +176,7 @@ class TestSchemaComparison:
             Path(__file__).parent.parent.parent
             / "src"
             / "mxcp"
+            / "sdk"
             / "validator"
             / "schemas"
             / "validation-schema-1.json"

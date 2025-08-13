@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.validator.loaders import validate_schema_structure
+from mxcp.sdk.validator.loaders import validate_schema_structure
 
 
 class TestJSONSchemaValidation:
@@ -14,9 +14,10 @@ class TestJSONSchemaValidation:
     def test_json_schema_exists(self):
         """Test that the JSON schema file exists."""
         schema_path = (
-            Path(__file__).parent.parent.parent
+            Path(__file__).parent.parent.parent.parent
             / "src"
             / "mxcp"
+            / "sdk"
             / "validator"
             / "schemas"
             / "validation-schema-1.json"

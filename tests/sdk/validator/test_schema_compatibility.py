@@ -3,7 +3,7 @@
 import pytest
 
 from mxcp.sdk.validator import TypeValidator, ValidationError
-from mxcp.validator.loaders import validate_schema_structure
+from mxcp.sdk.validator.loaders import validate_schema_structure
 
 
 class TestSchemaCompatibility:

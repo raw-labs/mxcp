@@ -220,7 +220,7 @@ async def _execute_prompt_with_validation(
 ) -> Any:
     """Execute prompt endpoint with proper validation and template rendering.
 
-    Uses the SAME validator as SDK executor (mxcp.validator) for full consistency.
+    Uses the SAME validator as SDK executor (mxcp.sdk.validator) for full consistency.
     Handles defaults, constraints, template rendering - everything the SDK does.
     """
 

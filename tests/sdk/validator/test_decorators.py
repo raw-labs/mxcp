@@ -1,11 +1,11 @@
-"""Tests for mxcp.validator.decorators module."""
+"""Tests for mxcp.sdk.validator.decorators module."""
 
 import asyncio
 
 import pytest
 
 from mxcp.sdk.validator import ValidationError
-from mxcp.validator import validate
+from mxcp.sdk.validator import validate
 
 
 class TestValidateDecorator:

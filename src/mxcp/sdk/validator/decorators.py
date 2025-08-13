@@ -6,7 +6,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
-from mxcp.sdk.validator import TypeValidator
+from .core import TypeValidator
 
 from .loaders import load_schema_from_file
 

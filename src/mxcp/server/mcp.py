@@ -36,13 +36,13 @@ from mxcp.endpoints.utils import EndpointType
 from mxcp.endpoints.validate import validate_endpoint
 from mxcp.sdk.audit import AuditLogger
 from mxcp.sdk.auth._types import HttpTransportConfig
-from mxcp.sdk.auth.atlassian import AtlassianOAuthHandler
+from mxcp.sdk.auth.providers.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.context import get_user_context
-from mxcp.sdk.auth.github import GitHubOAuthHandler
-from mxcp.sdk.auth.keycloak import KeycloakOAuthHandler
+from mxcp.sdk.auth.providers.github import GitHubOAuthHandler
+from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
-from mxcp.sdk.auth.providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
-from mxcp.sdk.auth.salesforce import SalesforceOAuthHandler
+from mxcp.sdk.auth import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.executor import ExecutionEngine
 

@@ -1,4 +1,4 @@
-"""Atlassian OAuth provider implementation for MXCP authentication."""
+"""Salesforce OAuth provider implementation for MXCP authentication."""
 
 import logging
 import secrets
@@ -10,54 +10,51 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
-from ._types import (
-    AtlassianAuthConfig,
+from .._types import (
     ExternalUserInfo,
     HttpTransportConfig,
+    SalesforceAuthConfig,
     StateMeta,
     UserContext,
 )
-from .providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
-from .url_utils import URLBuilder
+from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from ..url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
 
 
-class AtlassianOAuthHandler(ExternalOAuthHandler):
-    """Atlassian OAuth provider implementation for JIRA and Confluence Cloud."""
+class SalesforceOAuthHandler(ExternalOAuthHandler):
+    """Salesforce OAuth provider implementation for Salesforce Cloud."""
 
     def __init__(
         self,
-        atlassian_config: AtlassianAuthConfig,
+        salesforce_config: SalesforceAuthConfig,
         transport_config: HttpTransportConfig | None = None,
         host: str = "localhost",
         port: int = 8000,
     ):
-        """Initialize Atlassian OAuth handler.
+        """Initialize Salesforce OAuth handler.
 
         Args:
-            atlassian_config: Atlassian-specific OAuth configuration
+            salesforce_config: Salesforce-specific OAuth configuration
             transport_config: HTTP transport configuration for URL building
             host: The server host for callback URLs
             port: The server port for callback URLs
         """
-        logger.info(f"AtlassianOAuthHandler init: {atlassian_config}")
+        logger.info(f"SalesforceOAuthHandler init: {salesforce_config}")
 
         # Required fields are enforced by TypedDict structure
-        self.client_id = atlassian_config["client_id"]
-        self.client_secret = atlassian_config["client_secret"]
+        self.client_id = salesforce_config["client_id"]
+        self.client_secret = salesforce_config["client_secret"]
 
-        # Atlassian OAuth endpoints are standardized
-        self.auth_url = atlassian_config["auth_url"]
-        self.token_url = atlassian_config["token_url"]
+        # Salesforce OAuth endpoints
+        self.auth_url = salesforce_config["auth_url"]
+        self.token_url = salesforce_config["token_url"]
 
         # Use configured scope or default
-        self.scope = atlassian_config.get(
-            "scope",
-            "read:me read:jira-work read:jira-user read:confluence-content.all read:confluence-user offline_access",
-        )
+        self.scope = salesforce_config.get("scope", "api refresh_token openid profile email")
 
-        self._callback_path = atlassian_config["callback_path"]
+        self._callback_path = salesforce_config["callback_path"]
         self.host = host
         self.port = port
 
@@ -66,7 +63,6 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
 
         # State storage for OAuth flow
         self._state_store: dict[str, StateMeta] = {}
-        self._callback_store: dict[str, str] = {}  # Store callback URLs separately
 
     # ----- authorize -----
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
@@ -83,24 +79,21 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
             code_challenge=params.code_challenge,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             client_id=client_id,
+            callback_url=full_callback_url,
         )
-        # Store the callback URL separately for consistency
-        self._callback_store[state] = full_callback_url
 
         logger.info(
-            f"Atlassian OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
+            f"Salesforce OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
         )
 
-        # Atlassian requires specific parameters
+        # Salesforce OAuth parameters
         return (
             f"{self.auth_url}?"
-            f"audience=api.atlassian.com&"
             f"client_id={self.client_id}&"
-            f"scope={self.scope}&"
             f"redirect_uri={full_callback_url}&"
-            f"state={state}&"
+            f"scope={self.scope}&"
             f"response_type=code&"
-            f"prompt=consent"
+            f"state={state}"
         )
 
     # ----- state helpers -----
@@ -114,16 +107,15 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         self._state_store.pop(state, None)
 
     def cleanup_state(self, state: str) -> None:
-        """Clean up state and associated callback URL after OAuth flow completion."""
+        """Clean up state after OAuth flow completion."""
         self._pop_state(state)
-        self._callback_store.pop(state, None)
 
     # ----- code exchange -----
     async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
         meta = self.get_state_metadata(state)
 
         # Use the stored callback URL for consistency
-        full_callback_url = self._callback_store.get(state)
+        full_callback_url = meta.callback_url
         if not full_callback_url:
             # Fallback to constructing it using URL builder
             full_callback_url = self.url_builder.build_callback_url(
@@ -131,37 +123,37 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
             )
 
         logger.info(
-            f"Atlassian OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}"
+            f"Salesforce OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}"
         )
 
         async with create_mcp_http_client() as client:
             resp = await client.post(
                 self.token_url,
-                json={
+                data={
                     "grant_type": "authorization_code",
                     "client_id": self.client_id,
                     "client_secret": self.client_secret,
                     "code": code,
                     "redirect_uri": full_callback_url,
                 },
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
         if resp.status_code != 200:
-            logger.error(f"Atlassian token exchange failed: {resp.status_code} {resp.text}")
+            logger.error(f"Salesforce token exchange failed: {resp.status_code} {resp.text}")
             raise HTTPException(400, "Failed to exchange code for token")
         payload = resp.json()
         if "error" in payload:
-            logger.error(f"Atlassian token exchange error: {payload}")
+            logger.error(f"Salesforce token exchange error: {payload}")
             raise HTTPException(400, payload.get("error_description", payload["error"]))
 
         # Don't clean up state here - let handle_callback do it after getting metadata
-        logger.info(f"Atlassian OAuth token exchange successful for client: {meta.client_id}")
+        logger.info(f"Salesforce OAuth token exchange successful for client: {meta.client_id}")
 
         return ExternalUserInfo(
             id=meta.client_id,
             scopes=[],
             raw_token=payload["access_token"],
-            provider="atlassian",
+            provider="salesforce",
         )
 
     # ----- callback -----
@@ -170,7 +162,7 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         return self._callback_path
 
     async def on_callback(
-        self, request: Request, provider: "GeneralOAuthAuthorizationServer"
+        self, request: Request, provider: GeneralOAuthAuthorizationServer
     ) -> Response:  # noqa: E501
         code = request.query_params.get("code")
         state = request.query_params.get("state")
@@ -182,18 +174,18 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         except HTTPException:
             raise
         except Exception as exc:
-            logger.error("Atlassian callback failed", exc_info=exc)
+            logger.error("Salesforce callback failed", exc_info=exc)
             return HTMLResponse(status_code=500, content="oauth_failure")
 
     # ----- user context -----
     async def get_user_context(self, token: str) -> UserContext:
-        """Get standardized user context from Atlassian.
+        """Get standardized user context from Salesforce.
 
         Args:
-            token: Atlassian OAuth access token
+            token: Salesforce OAuth access token
 
         Returns:
-            UserContext with Atlassian user information
+            UserContext with Salesforce user information
 
         Raises:
             HTTPException: If token is invalid or user info cannot be retrieved
@@ -201,48 +193,56 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         try:
             user_profile = await self._fetch_user_profile(token)
 
-            # Extract Atlassian-specific fields and map to standard UserContext
+            # Extract Salesforce-specific fields and map to standard UserContext
             return UserContext(
-                provider="atlassian",
-                user_id=str(user_profile.get("account_id", "")),
+                provider="salesforce",
+                user_id=str(user_profile.get("user_id", "")),
                 username=user_profile.get(
-                    "nickname", f"user_{user_profile.get('account_id', 'unknown')}"
+                    "username", f"user_{user_profile.get('user_id', 'unknown')}"
                 ),
                 email=user_profile.get("email"),
-                name=user_profile.get("name"),
-                avatar_url=user_profile.get("picture"),
+                name=user_profile.get("display_name") or user_profile.get("name"),
+                avatar_url=user_profile.get("photos", {}).get("picture"),
                 raw_profile=user_profile,
             )
         except Exception as e:
-            logger.error(f"Failed to get Atlassian user context: {e}")
+            logger.error(f"Failed to get Salesforce user context: {e}")
             raise HTTPException(500, f"Failed to retrieve user information: {e}") from e
 
     # ----- private helper -----
     async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
-        """Fetch raw user profile from Atlassian User Identity API (private implementation detail)."""
-        logger.info(f"Fetching Atlassian user profile with token: {token[:10]}...")
+        """Fetch raw user profile from Salesforce UserInfo endpoint (private implementation detail)."""
+        logger.info(f"Fetching Salesforce user profile with token: {token[:10]}...")
 
+        # First get the identity URL from the token response
         async with create_mcp_http_client() as client:
-            resp = await client.get(
-                "https://api.atlassian.com/me",
+            # Get token info to find the identity URL
+            await client.get(
+                "https://login.salesforce.com/services/oauth2/token",
                 headers={"Authorization": f"Bearer {token}"},
             )
 
-        logger.info(f"Atlassian User Identity API response: {resp.status_code}")
+            # If token info doesn't work, try the standard userinfo endpoint
+            resp = await client.get(
+                "https://login.salesforce.com/services/oauth2/userinfo",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        logger.info(f"Salesforce UserInfo API response: {resp.status_code}")
 
         if resp.status_code != 200:
             error_body = ""
             try:
                 error_body = resp.text
-                logger.error(f"Atlassian User Identity API error {resp.status_code}: {error_body}")
+                logger.error(f"Salesforce UserInfo API error {resp.status_code}: {error_body}")
             except Exception:
                 logger.error(
-                    f"Atlassian User Identity API error {resp.status_code}: Unable to read response body"
+                    f"Salesforce UserInfo API error {resp.status_code}: Unable to read response body"
                 )
-            raise ValueError(f"Atlassian API error: {resp.status_code} - {error_body}")
+            raise ValueError(f"Salesforce API error: {resp.status_code} - {error_body}")
 
         user_data = cast(dict[str, Any], resp.json())
         logger.info(
-            f"Successfully fetched Atlassian user profile for account_id: {user_data.get('account_id', 'unknown')}"
+            f"Successfully fetched Salesforce user profile for user_id: {user_data.get('user_id', 'unknown')}"
         )
         return user_data

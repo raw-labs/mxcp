@@ -11,15 +11,15 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
-from ._types import (
+from .._types import (
     ExternalUserInfo,
     HttpTransportConfig,
     KeycloakAuthConfig,
     StateMeta,
     UserContext,
 )
-from .providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
-from .url_utils import URLBuilder
+from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from ..url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
 

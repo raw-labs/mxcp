@@ -9,7 +9,7 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 
 from ._types import UserContext
 from .context import reset_user_context, set_user_context
-from .providers import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from .base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 
 logger = logging.getLogger(__name__)
 
