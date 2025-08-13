@@ -3,6 +3,7 @@ from mxcp.runtime import config, on_init
 
 global_var = None
 
+
 @on_init
 def setup_global_var():
     global global_var
@@ -39,10 +40,7 @@ def get_users_detailed() -> Dict[str, Any]:
             "age": 28,
             "active": True,
             "roles": ["admin", "user"],
-            "profile": {
-                "department": "Engineering",
-                "location": "San Francisco"
-            }
+            "profile": {"department": "Engineering", "location": "San Francisco"},
         },
         {
             "id": 2,
@@ -51,10 +49,7 @@ def get_users_detailed() -> Dict[str, Any]:
             "age": 34,
             "active": False,
             "roles": ["user"],
-            "profile": {
-                "department": "Marketing",
-                "location": "New York"
-            }
+            "profile": {"department": "Marketing", "location": "New York"},
         },
         {
             "id": 3,
@@ -63,16 +58,10 @@ def get_users_detailed() -> Dict[str, Any]:
             "age": 31,
             "active": True,
             "roles": ["manager", "user"],
-            "profile": {
-                "department": "Sales",
-                "location": "Chicago"
-            }
-        }
+            "profile": {"department": "Sales", "location": "Chicago"},
+        },
     ]
-    return {
-        "users": users,
-        "n": len(users)
-    }
+    return {"users": users, "n": len(users)}
 
 
 def get_users_simple() -> Dict[str, Any]:
@@ -85,10 +74,7 @@ def get_users_simple() -> Dict[str, Any]:
             "age": 28,
             "active": True,
             "roles": ["admin", "user"],
-            "profile": {
-                "department": "Engineering",
-                "location": "San Francisco"
-            }
+            "profile": {"department": "Engineering", "location": "San Francisco"},
         },
         {
             "id": 2,
@@ -97,10 +83,7 @@ def get_users_simple() -> Dict[str, Any]:
             "age": 34,
             "active": False,
             "roles": ["user"],
-            "profile": {
-                "department": "Marketing",
-                "location": "New York"
-            }
+            "profile": {"department": "Marketing", "location": "New York"},
         },
         {
             "id": 3,
@@ -109,13 +92,7 @@ def get_users_simple() -> Dict[str, Any]:
             "age": 31,
             "active": True,
             "roles": ["manager", "user"],
-            "profile": {
-                "department": "Sales",
-                "location": "Chicago"
-            }
-        }
+            "profile": {"department": "Sales", "location": "Chicago"},
+        },
     ]
-    return {
-        "users": users,
-        "n": len(users)
-    }
+    return {"users": users, "n": len(users)}

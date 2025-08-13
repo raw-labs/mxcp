@@ -77,7 +77,7 @@ class MCPTestClient:
                     return structured_content["result"]
                 else:
                     return structured_content
-            
+
             # Fall back to regular content (legacy format)
             elif (
                 hasattr(result, "content")
@@ -636,7 +636,7 @@ def check_all_secrets() -> dict:
 
             async with MCPTestClient(server.port) as client:
                 result = await client.call_tool("get_users_detailed", {})
-                
+
                 # Verify it's an object with users array and count
                 assert isinstance(result, dict)
                 assert "users" in result
@@ -644,7 +644,7 @@ def check_all_secrets() -> dict:
                 assert result["n"] == 3
                 assert isinstance(result["users"], list)
                 assert len(result["users"]) == 3
-                
+
                 # Verify structure of first user
                 user = result["users"][0]
                 assert user["id"] == 1
@@ -655,7 +655,7 @@ def check_all_secrets() -> dict:
                 assert isinstance(user["roles"], list)
                 assert "admin" in user["roles"]
                 assert "user" in user["roles"]
-                
+
                 # Verify nested profile object
                 assert isinstance(user["profile"], dict)
                 assert user["profile"]["department"] == "Engineering"
@@ -669,7 +669,7 @@ def check_all_secrets() -> dict:
 
             async with MCPTestClient(server.port) as client:
                 result = await client.call_tool("get_users_simple", {})
-                
+
                 # Verify it's an object with users array and count (same data as detailed version)
                 assert isinstance(result, dict)
                 assert "users" in result
@@ -677,7 +677,7 @@ def check_all_secrets() -> dict:
                 assert result["n"] == 3
                 assert isinstance(result["users"], list)
                 assert len(result["users"]) == 3
-                
+
                 # Verify structure of first user (should be identical to detailed version)
                 user = result["users"][0]
                 assert user["id"] == 1
@@ -688,7 +688,7 @@ def check_all_secrets() -> dict:
                 assert isinstance(user["roles"], list)
                 assert "admin" in user["roles"]
                 assert "user" in user["roles"]
-                
+
                 # Verify nested profile object
                 assert isinstance(user["profile"], dict)
                 assert user["profile"]["department"] == "Engineering"
