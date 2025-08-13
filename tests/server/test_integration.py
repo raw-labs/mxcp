@@ -693,3 +693,57 @@ def check_all_secrets() -> dict:
                 assert isinstance(user["profile"], dict)
                 assert user["profile"]["department"] == "Engineering"
                 assert user["profile"]["location"] == "San Francisco"
+
+    @pytest.mark.asyncio
+    async def test_complex_object_input(self, integration_fixture_dir):
+        """Test tool that takes a complex object as input parameter."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                # Create a complex user data object
+                user_data = {
+                    "name": "John Doe",
+                    "age": 25,
+                    "preferences": {
+                        "interests": ["technology", "music", "sports"],
+                        "premium": True,
+                        "notifications": {
+                            "email": True,
+                            "sms": False
+                        }
+                    },
+                    "contact": {
+                        "email": "john.doe@example.com",
+                        "phone": "+1-555-0123",
+                        "address": {
+                            "street": "123 Main St",
+                            "city": "San Francisco",
+                            "country": "USA"
+                        }
+                    }
+                }
+
+                # Call the tool with the complex object
+                result = await client.call_tool("process_user_data", {"user_data": user_data})
+
+                # Verify the result structure
+                assert isinstance(result, dict)
+                assert "original_data" in result
+                assert "analysis" in result
+                assert "processing_status" in result
+                assert result["processing_status"] == "success"
+
+                # Verify the original data is preserved
+                assert result["original_data"] == user_data
+
+                # Verify the analysis results
+                analysis = result["analysis"]
+                assert analysis["processed_name"] == "JOHN DOE"
+                assert analysis["age_category"] == "adult"
+                assert analysis["has_email"] is True
+                assert analysis["has_phone"] is True
+                assert analysis["preference_count"] == 3
+                assert analysis["is_premium"] is True
+                assert "123 Main St, San Francisco, USA" in analysis["full_address"]
+                assert "John Doe is a 25-year-old premium user" in analysis["summary"]
