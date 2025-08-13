@@ -244,7 +244,7 @@ def evals(
     """
     # Configure logging first
     configure_logging(debug)
-    
+
     try:
         # Run async implementation
         asyncio.run(
@@ -343,7 +343,7 @@ async def _evals_impl(
 
     # Exit with error code if any tests failed
     if suite_name and not results.get("all_passed", True):
-        raise click.Exit(1)
+        raise SystemExit(1)
     elif not suite_name and results.get("suites"):
         if any(s.get("status") != "passed" for s in results["suites"]):
-            raise click.Exit(1)
+            raise SystemExit(1)

@@ -73,7 +73,7 @@ def run_endpoint(
     """
     # Configure logging first
     configure_logging(debug)
-    
+
     try:
         # Run async implementation
         asyncio.run(
@@ -182,7 +182,9 @@ async def _run_endpoint_impl(
     params: Dict[str, Any] = {}
     for p in param:
         if "=" not in p:
-            raise click.BadParameter(f"Parameter must be in format name=value or name=@file.json: {p}")
+            raise click.BadParameter(
+                f"Parameter must be in format name=value or name=@file.json: {p}"
+            )
 
         key, value = p.split("=", 1)
 

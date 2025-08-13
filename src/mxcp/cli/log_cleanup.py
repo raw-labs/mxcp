@@ -41,7 +41,7 @@ def log_cleanup(profile: Optional[str], dry_run: bool, json_output: bool, debug:
     """
     # Configure logging first
     configure_logging(debug)
-    
+
     try:
         # Run async implementation
         asyncio.run(_cleanup_async(profile, dry_run, json_output, debug))

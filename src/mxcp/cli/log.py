@@ -90,7 +90,7 @@ def log(
     """
     # Configure logging first
     configure_logging(debug)
-    
+
     try:
         # Run async implementation
         asyncio.run(
@@ -187,9 +187,7 @@ async def _log_async(
             if since:
                 filters["since"] = parse_time_since(since).isoformat()
 
-            count = await export_to_duckdb(
-                audit_logger, Path(export_duckdb_path), filters=filters
-            )
+            count = await export_to_duckdb(audit_logger, Path(export_duckdb_path), filters=filters)
             export_result = {"exported": count, "format": "duckdb", "path": export_duckdb_path}
             if json_output:
                 output_result(export_result, json_output, debug)

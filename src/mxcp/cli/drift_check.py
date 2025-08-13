@@ -156,7 +156,7 @@ def drift_check(
     """
     # Configure logging first
     configure_logging(debug)
-    
+
     try:
         # Run async implementation
         asyncio.run(
@@ -209,4 +209,4 @@ async def _drift_check_impl(
 
     # Exit with non-zero code if drift detected
     if report["has_drift"]:
-        raise click.Exit(1)
+        raise SystemExit(1)

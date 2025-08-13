@@ -61,7 +61,7 @@ def query(
     """
     # Configure logging first
     configure_logging(debug)
-    
+
     try:
         # Run async implementation
         asyncio.run(_query_async(sql, file, param, profile, json_output, debug, readonly))
@@ -110,7 +110,9 @@ async def _query_async(
     params: Dict[str, Any] = {}
     for p in param:
         if "=" not in p:
-            raise click.BadParameter(f"Parameter must be in format name=value or name=@file.json: {p}")
+            raise click.BadParameter(
+                f"Parameter must be in format name=value or name=@file.json: {p}"
+            )
 
         key, value = p.split("=", 1)
 
@@ -171,38 +173,36 @@ async def _query_async(
     engine = create_execution_engine(user_config, site_config, profile_name, readonly=readonly)
 
     try:
-            # Create execution context
-            context = ExecutionContext()
+        # Create execution context
+        context = ExecutionContext()
 
-            # Execute query using SDK executor with SQL language
-            result = await engine.execute(
-                language="sql", source_code=query_sql, params=params, context=context
-            )
+        # Execute query using SDK executor with SQL language
+        result = await engine.execute(
+            language="sql", source_code=query_sql, params=params, context=context
+        )
 
-            if json_output:
-                output_result(result, json_output, debug)
+        if json_output:
+            output_result(result, json_output, debug)
+        else:
+            # Show success and format results
+            click.echo(f"\n{click.style('✅ Query executed successfully!', fg='green', bold=True)}")
+
+            if isinstance(result, list) and len(result) > 0:
+                # Use shared table renderer
+                render_table(result, title="Query Results")
+                if len(result) > 100:
+                    click.echo(
+                        f"{click.style('💡 Tip:', fg='yellow')} Use {click.style('--json-output', fg='cyan')} to export all results"
+                    )
+
+            elif isinstance(result, list) and len(result) == 0:
+                click.echo(f"\n{click.style('ℹ️  No results returned', fg='blue')}")
             else:
-                # Show success and format results
-                click.echo(
-                    f"\n{click.style('✅ Query executed successfully!', fg='green', bold=True)}"
-                )
+                # Single value or other format
+                click.echo(f"\n{click.style('📊 Result:', fg='cyan', bold=True)}")
+                click.echo(json.dumps(result, indent=2))
 
-                if isinstance(result, list) and len(result) > 0:
-                    # Use shared table renderer
-                    render_table(result, title="Query Results")
-                    if len(result) > 100:
-                        click.echo(
-                            f"{click.style('💡 Tip:', fg='yellow')} Use {click.style('--json-output', fg='cyan')} to export all results"
-                        )
-
-                elif isinstance(result, list) and len(result) == 0:
-                    click.echo(f"\n{click.style('ℹ️  No results returned', fg='blue')}")
-                else:
-                    # Single value or other format
-                    click.echo(f"\n{click.style('📊 Result:', fg='cyan', bold=True)}")
-                    click.echo(json.dumps(result, indent=2))
-
-                click.echo()  # Empty line at end
+            click.echo()  # Empty line at end
 
     finally:
         engine.shutdown()
