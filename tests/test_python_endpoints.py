@@ -101,10 +101,10 @@ def test_configs(temp_project_dir):
 
 
 @pytest.fixture
-def execution_engine(test_configs):
+def execution_engine(test_configs, temp_project_dir):
     """Create execution engine for tests and set up test data."""
     user_config, site_config = test_configs
-    engine = create_execution_engine(user_config, site_config)
+    engine = create_execution_engine(user_config, site_config, repo_root=temp_project_dir)
 
     # Get the DuckDB executor from the engine
     duckdb_executor = None

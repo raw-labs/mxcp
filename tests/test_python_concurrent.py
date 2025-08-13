@@ -104,12 +104,12 @@ def test_configs(temp_project_dir):
 
 
 @pytest.fixture
-def execution_engine(test_configs):
+def execution_engine(test_configs, temp_project_dir):
     """Create an execution engine with test database setup."""
     user_config, site_config = test_configs
 
     # Create execution engine
-    engine = create_execution_engine(user_config, site_config, "test")
+    engine = create_execution_engine(user_config, site_config, "test", repo_root=temp_project_dir)
 
     # Store user_config on engine for runtime context access
     setattr(engine, "_user_config", user_config)

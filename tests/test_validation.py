@@ -52,10 +52,10 @@ def test_profile():
 
 
 @pytest.fixture
-def test_execution_engine(user_config, site_config, test_profile):
+def test_execution_engine(user_config, site_config, test_profile, validation_repo_path):
     """Create a test ExecutionEngine."""
     execution_engine = create_execution_engine(
-        user_config, site_config, test_profile, readonly=True
+        user_config, site_config, test_profile, repo_root=validation_repo_path, readonly=True
     )
     yield execution_engine
     execution_engine.shutdown()

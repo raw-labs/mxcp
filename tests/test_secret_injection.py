@@ -53,9 +53,9 @@ def test_profile():
 
 
 @pytest.fixture
-def execution_engine(user_config, site_config, test_profile):
+def execution_engine(user_config, site_config, test_profile, test_repo_path):
     """Create execution engine for secret injection tests."""
-    engine = create_execution_engine(user_config, site_config, test_profile, readonly=True)
+    engine = create_execution_engine(user_config, site_config, test_profile, repo_root=test_repo_path, readonly=True)
     yield engine
     engine.shutdown()
 

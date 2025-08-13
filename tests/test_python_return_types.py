@@ -79,10 +79,10 @@ def test_configs(temp_project_dir):
 
 
 @pytest.fixture
-def execution_engine(test_configs):
+def execution_engine(test_configs, temp_project_dir):
     """Create execution engine for tests."""
     user_config, site_config = test_configs
-    return create_execution_engine(user_config, site_config)
+    return create_execution_engine(user_config, site_config, repo_root=temp_project_dir)
 
 
 class TestScalarReturnTypes:

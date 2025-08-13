@@ -60,9 +60,9 @@ def user_config(test_repo_path):
 
 
 @pytest.fixture
-def execution_engine(user_config, site_config):
+def execution_engine(user_config, site_config, test_repo_path):
     """Create execution engine for tests."""
-    return create_execution_engine(user_config, site_config)
+    return create_execution_engine(user_config, site_config, repo_root=test_repo_path)
 
 
 async def test_array_return_type(execution_engine, user_config, site_config, test_repo_path):
