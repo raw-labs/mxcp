@@ -1,0 +1,19 @@
+mxcp: 1
+tool:
+  name: get_users_simple
+  description: Get users with simple object type specification
+  language: python
+  source:
+    file: ../python/test_endpoints.py
+  return:
+    type: object
+    properties:
+      users:
+        type: array
+      n:
+        type: integer
+        description: Number of users
+    required:
+      - users
+      - n
+      

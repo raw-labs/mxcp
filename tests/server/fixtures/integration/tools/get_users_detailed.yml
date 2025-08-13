@@ -1,0 +1,60 @@
+mxcp: 1
+tool:
+  name: get_users_detailed
+  description: Get users with detailed type specification
+  language: python
+  source:
+    file: ../python/test_endpoints.py
+  return:
+    type: object
+    properties:
+      users:
+        type: array
+        items:
+          type: object
+          properties:
+            id:
+              type: integer
+              description: User ID
+            name:
+              type: string
+              description: User's full name
+            email:
+              type: string
+              description: User's email address
+            age:
+              type: integer
+              description: User's age
+            active:
+              type: boolean
+              description: Whether the user is active
+            roles:
+              type: array
+              items:
+                type: string
+              description: User's roles
+            profile:
+              type: object
+              properties:
+                department:
+                  type: string
+                  description: User's department
+                location:
+                  type: string
+                  description: User's location
+              description: User's profile information
+          required:
+            - id
+            - name
+            - email
+            - age
+            - active
+            - roles
+            - profile
+        description: Array of user objects
+      n:
+        type: integer
+        description: Number of users
+    required:
+      - users
+      - n
