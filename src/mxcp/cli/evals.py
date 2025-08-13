@@ -242,82 +242,108 @@ def evals(
         mxcp evals --json-output        # Output results in JSON format
         mxcp evals --user-context '{"role": "admin"}'  # Run with admin role
     """
-    # Configure logging
+    # Configure logging first
     configure_logging(debug)
-
+    
     try:
-        site_config = load_site_config()
-        user_config = load_user_config(site_config)
-
-        # Parse user context if provided
-        cli_user_context = None
-        if user_context:
-            if user_context.startswith("@"):
-                # Load from file
-                file_path = Path(user_context[1:])
-                if not file_path.exists():
-                    raise click.BadParameter(f"User context file not found: {file_path}")
-                try:
-                    with open(file_path) as f:
-                        context_data = json.load(f)
-                except json.JSONDecodeError as e:
-                    raise click.BadParameter(f"Invalid JSON in user context file {file_path}: {e}")
-            else:
-                # Parse as JSON string
-                try:
-                    context_data = json.loads(user_context)
-                except json.JSONDecodeError as e:
-                    raise click.BadParameter(f"Invalid JSON in user context: {e}")
-
-            # Create UserContext object from the data
-            cli_user_context = UserContext(
-                provider="cli",
-                user_id=context_data.get("user_id", "cli_user"),
-                username=context_data.get("username", "cli_user"),
-                email=context_data.get("email"),
-                name=context_data.get("name"),
-                avatar_url=context_data.get("avatar_url"),
-                raw_profile=context_data,
+        # Run async implementation
+        asyncio.run(
+            _evals_impl(
+                suite_name=suite_name,
+                user_context=user_context,
+                model=model,
+                profile=profile,
+                json_output=json_output,
+                debug=debug,
             )
-
-        # Run evals
-        start_time = time.time()
-        if suite_name:
-            results = asyncio.run(
-                run_eval_suite(
-                    suite_name,
-                    user_config,
-                    site_config,
-                    profile,
-                    cli_user_context=cli_user_context,
-                    override_model=model,
-                )
-            )
-        else:
-            results = asyncio.run(
-                run_all_evals(
-                    user_config,
-                    site_config,
-                    profile,
-                    cli_user_context=cli_user_context,
-                    override_model=model,
-                )
-            )
-        elapsed_time = time.time() - start_time
-        results["elapsed_time"] = elapsed_time
-
-        if json_output:
-            output_result(results, json_output, debug)
-        else:
-            click.echo(format_eval_results(results, debug))
-
-        # Exit with error code if any tests failed
-        if suite_name and not results.get("all_passed", True):
-            exit(1)
-        elif not suite_name and results.get("suites"):
-            if any(s.get("status") != "passed" for s in results["suites"]):
-                exit(1)
-
+        )
+    except click.ClickException:
+        # Let Click exceptions propagate - they have their own formatting
+        raise
+    except KeyboardInterrupt:
+        # Handle graceful shutdown
+        if not json_output:
+            click.echo("\nOperation cancelled by user", err=True)
+        raise click.Abort()
     except Exception as e:
+        # Only catch non-Click exceptions
         output_error(e, json_output, debug)
-        exit(1)
+
+
+async def _evals_impl(
+    *,
+    suite_name: Optional[str],
+    user_context: Optional[str],
+    model: Optional[str],
+    profile: Optional[str],
+    json_output: bool,
+    debug: bool,
+) -> None:
+    """Async implementation of the evals command."""
+    site_config = load_site_config()
+    user_config = load_user_config(site_config)
+
+    # Parse user context if provided
+    cli_user_context = None
+    if user_context:
+        if user_context.startswith("@"):
+            # Load from file
+            file_path = Path(user_context[1:])
+            if not file_path.exists():
+                raise click.BadParameter(f"User context file not found: {file_path}")
+            try:
+                with open(file_path) as f:
+                    context_data = json.load(f)
+            except json.JSONDecodeError as e:
+                raise click.BadParameter(f"Invalid JSON in user context file {file_path}: {e}")
+        else:
+            # Parse as JSON string
+            try:
+                context_data = json.loads(user_context)
+            except json.JSONDecodeError as e:
+                raise click.BadParameter(f"Invalid JSON in user context: {e}")
+
+        # Create UserContext object from the data
+        cli_user_context = UserContext(
+            provider="cli",
+            user_id=context_data.get("user_id", "cli_user"),
+            username=context_data.get("username", "cli_user"),
+            email=context_data.get("email"),
+            name=context_data.get("name"),
+            avatar_url=context_data.get("avatar_url"),
+            raw_profile=context_data,
+        )
+
+    # Run evals
+    start_time = time.time()
+    if suite_name:
+        results = await run_eval_suite(
+            suite_name,
+            user_config,
+            site_config,
+            profile,
+            cli_user_context=cli_user_context,
+            override_model=model,
+        )
+    else:
+        results = await run_all_evals(
+            user_config,
+            site_config,
+            profile,
+            cli_user_context=cli_user_context,
+            override_model=model,
+        )
+    elapsed_time = time.time() - start_time
+    results["elapsed_time"] = elapsed_time
+
+    if json_output:
+        output_result(results, json_output, debug)
+    else:
+        click.echo(format_eval_results(results, debug))
+
+    # Exit with error code if any tests failed
+    if suite_name and not results.get("all_passed", True):
+        raise click.Exit(1)
+    elif not suite_name and results.get("suites"):
+        if any(s.get("status") != "passed" for s in results["suites"]):
+            raise click.Exit(1)

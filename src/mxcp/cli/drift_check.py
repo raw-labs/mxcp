@@ -154,33 +154,59 @@ def drift_check(
         mxcp drift-check --debug                    # Show detailed change information
         mxcp drift-check --readonly                 # Open database in read-only mode
     """
+    # Configure logging first
+    configure_logging(debug)
+    
+    try:
+        # Run async implementation
+        asyncio.run(
+            _drift_check_impl(
+                profile=profile,
+                baseline=baseline,
+                json_output=json_output,
+                debug=debug,
+                readonly=readonly,
+            )
+        )
+    except click.ClickException:
+        # Let Click exceptions propagate - they have their own formatting
+        raise
+    except KeyboardInterrupt:
+        # Handle graceful shutdown
+        if not json_output:
+            click.echo("\nOperation cancelled by user", err=True)
+        raise click.Abort()
+    except Exception as e:
+        # Only catch non-Click exceptions
+        output_error(e, json_output, debug)
+
+
+async def _drift_check_impl(
+    *,
+    profile: Optional[str],
+    baseline: Optional[str],
+    json_output: bool,
+    debug: bool,
+    readonly: bool,
+) -> None:
+    """Async implementation of the drift-check command."""
     # Get values from environment variables if not set by flags
     if not profile:
         profile = get_env_profile()
     if not readonly:
         readonly = get_env_flag("MXCP_READONLY")
 
-    # Configure logging
-    configure_logging(debug)
+    site_config = load_site_config()
+    user_config = load_user_config(site_config)
 
-    try:
-        site_config = load_site_config()
-        user_config = load_user_config(site_config)
+    # Run drift check
+    report = await check_drift(site_config, user_config, profile=profile, baseline_path=baseline)
 
-        # Run drift check
-        report = asyncio.run(
-            check_drift(site_config, user_config, profile=profile, baseline_path=baseline)
-        )
+    if json_output:
+        output_result(report, json_output, debug)
+    else:
+        click.echo(format_drift_report(report, debug))
 
-        if json_output:
-            output_result(report, json_output, debug)
-        else:
-            click.echo(format_drift_report(report, debug))
-
-        # Exit with non-zero code if drift detected
-        if report["has_drift"]:
-            click.get_current_context().exit(1)
-
-    except Exception as e:
-        output_error(e, json_output, debug)
-        click.get_current_context().exit(1)
+    # Exit with non-zero code if drift detected
+    if report["has_drift"]:
+        raise click.Exit(1)

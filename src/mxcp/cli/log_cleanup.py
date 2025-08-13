@@ -39,51 +39,61 @@ def log_cleanup(profile: Optional[str], dry_run: bool, json_output: bool, debug:
         # Systemd timer example:
         See mxcp-log-cleanup.service and mxcp-log-cleanup.timer
     """
-    asyncio.run(_cleanup_async(profile, dry_run, json_output, debug))
+    # Configure logging first
+    configure_logging(debug)
+    
+    try:
+        # Run async implementation
+        asyncio.run(_cleanup_async(profile, dry_run, json_output, debug))
+    except click.ClickException:
+        # Let Click exceptions propagate - they have their own formatting
+        raise
+    except KeyboardInterrupt:
+        # Handle graceful shutdown
+        if not json_output:
+            click.echo("\nOperation cancelled by user", err=True)
+        raise click.Abort()
+    except Exception as e:
+        # Only catch non-Click exceptions
+        output_error(e, json_output, debug)
 
 
 async def _cleanup_async(
     profile: Optional[str], dry_run: bool, json_output: bool, debug: bool
 ) -> None:
     """Async implementation of cleanup command."""
-    configure_logging(debug)
 
     audit_logger = None
     try:
         # Load site config and extract audit settings
-        try:
-            site_config = load_site_config()
-            profile_name = profile or site_config["profile"]
+        site_config = load_site_config()
+        profile_name = profile or site_config["profile"]
 
-            if profile_name not in site_config["profiles"]:
-                raise ValueError(f"Profile '{profile_name}' not found in configuration")
+        if profile_name not in site_config["profiles"]:
+            raise ValueError(f"Profile '{profile_name}' not found in configuration")
 
-            profile_config = site_config["profiles"][profile_name]
-            audit_config = profile_config.get("audit", {})
+        profile_config = site_config["profiles"][profile_name]
+        audit_config = profile_config.get("audit", {})
 
-            if not audit_config or not audit_config.get("enabled", False):
-                message = f"Audit logging is not enabled for profile '{profile_name}'"
-                if json_output:
-                    output_result(
-                        {"status": "skipped", "message": message, "deleted_per_schema": {}},
-                        json_output,
-                        debug,
-                    )
-                else:
-                    click.echo(message)
-                return
-
-            if audit_config and "path" not in audit_config:
-                raise ValueError("Audit configuration missing required 'path' field")
-
-            log_path_str = audit_config.get("path") if audit_config else None
-            if not log_path_str:
-                raise ValueError("Audit configuration missing required 'path' field")
-            log_path = Path(log_path_str)
-
-        except ValueError as e:
-            output_error(e, json_output, debug)
+        if not audit_config or not audit_config.get("enabled", False):
+            message = f"Audit logging is not enabled for profile '{profile_name}'"
+            if json_output:
+                output_result(
+                    {"status": "skipped", "message": message, "deleted_per_schema": {}},
+                    json_output,
+                    debug,
+                )
+            else:
+                click.echo(message)
             return
+
+        if audit_config and "path" not in audit_config:
+            raise ValueError("Audit configuration missing required 'path' field")
+
+        log_path_str = audit_config.get("path") if audit_config else None
+        if not log_path_str:
+            raise ValueError("Audit configuration missing required 'path' field")
+        log_path = Path(log_path_str)
 
         # Create audit logger
         audit_logger = await AuditLogger.jsonl(log_path)
@@ -172,8 +182,6 @@ async def _cleanup_async(
                     click.echo()
                     click.echo(f"Total records deleted: {total_deleted}")
 
-    except Exception as e:
-        output_error(e, json_output, debug)
     finally:
         if audit_logger:
             audit_logger.shutdown()

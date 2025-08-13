@@ -59,8 +59,23 @@ def query(
         mxcp query "SELECT * FROM sales" --profile production --json-output
         mxcp query "SELECT * FROM users" --readonly
     """
-    # Run the async implementation
-    asyncio.run(_query_async(sql, file, param, profile, json_output, debug, readonly))
+    # Configure logging first
+    configure_logging(debug)
+    
+    try:
+        # Run async implementation
+        asyncio.run(_query_async(sql, file, param, profile, json_output, debug, readonly))
+    except click.ClickException:
+        # Let Click exceptions propagate - they have their own formatting
+        raise
+    except KeyboardInterrupt:
+        # Handle graceful shutdown
+        if not json_output:
+            click.echo("\nOperation cancelled by user", err=True)
+        raise click.Abort()
+    except Exception as e:
+        # Only catch non-Click exceptions
+        output_error(e, json_output, debug)
 
 
 async def _query_async(
@@ -79,91 +94,83 @@ async def _query_async(
     if not readonly:
         readonly = get_env_flag("MXCP_READONLY")
 
-    # Configure logging
-    configure_logging(debug)
+    # Validate input
+    if not sql and not file:
+        raise click.BadParameter("Either SQL query or --file must be provided")
+    if sql and file:
+        raise click.BadParameter("Cannot provide both SQL query and --file")
+
+    # Load configs
+    site_config = load_site_config()
+    user_config = load_user_config(site_config)
+
+    profile_name = profile or site_config["profile"]
+
+    # Parse parameters
+    params: Dict[str, Any] = {}
+    for p in param:
+        if "=" not in p:
+            raise click.BadParameter(f"Parameter must be in format name=value or name=@file.json: {p}")
+
+        key, value = p.split("=", 1)
+
+        # Handle JSON file input
+        if value.startswith("@"):
+            file_path = Path(value[1:])
+            if not file_path.exists():
+                raise click.BadParameter(f"JSON file not found: {file_path}")
+            try:
+                with open(file_path) as f:
+                    value = json.load(f)
+            except json.JSONDecodeError as e:
+                raise click.BadParameter(f"Invalid JSON in file {file_path}: {e}")
+
+        params[key] = value
+
+    # Get SQL query
+    query_sql = sql
+    if file:
+        with open(file) as f:
+            query_sql = f.read()
+
+    # Ensure we have a query to execute
+    if not query_sql:
+        raise click.BadParameter("SQL query cannot be empty")
+
+    # Show what we're executing (only in non-JSON mode)
+    if not json_output:
+        click.echo(f"\n{click.style('🔍 Executing Query', fg='cyan', bold=True)}")
+        if file:
+            click.echo(f"   • Source: {click.style(file, fg='yellow')}")
+
+        # Show first few lines of query
+        query_lines = query_sql.strip().split("\n")
+        if len(query_lines) > 5:
+            preview = "\n".join(query_lines[:5]) + "\n   ..."
+        else:
+            preview = query_sql.strip()
+
+        click.echo(f"\n{click.style('📝 SQL:', fg='cyan')}")
+        for line in preview.split("\n"):
+            click.echo(f"   {line}")
+
+        if params:
+            click.echo(f"\n{click.style('📋 Parameters:', fg='cyan')}")
+            for key, value in params.items():
+                if isinstance(value, (dict, list)):
+                    click.echo(f"   • ${key} = {json.dumps(value)}")
+                else:
+                    click.echo(f"   • ${key} = {value}")
+
+        if readonly:
+            click.echo(f"\n{click.style('🔒 Mode:', fg='yellow')} Read-only")
+
+        click.echo(f"\n{click.style('⏳ Running...', fg='yellow')}")
+
+    # Create execution engine with readonly configuration if specified
+    engine = create_execution_engine(user_config, site_config, profile_name, readonly=readonly)
 
     try:
-        # Validate input
-        if not sql and not file:
-            raise click.BadParameter("Either SQL query or --file must be provided")
-        if sql and file:
-            raise click.BadParameter("Cannot provide both SQL query and --file")
-
-        # Load configs
-        site_config = load_site_config()
-        user_config = load_user_config(site_config)
-
-        profile_name = profile or site_config["profile"]
-
-        # Parse parameters
-        params: Dict[str, Any] = {}
-        for p in param:
-            if "=" not in p:
-                error_msg = f"Parameter must be in format name=value or name=@file.json: {p}"
-                if json_output:
-                    output_error(click.BadParameter(error_msg), json_output, debug)
-                else:
-                    raise click.BadParameter(error_msg)
-
-            key, value = p.split("=", 1)
-
-            # Handle JSON file input
-            if value.startswith("@"):
-                file_path = Path(value[1:])
-                if not file_path.exists():
-                    raise click.BadParameter(f"JSON file not found: {file_path}")
-                try:
-                    with open(file_path) as f:
-                        value = json.load(f)
-                except json.JSONDecodeError as e:
-                    raise click.BadParameter(f"Invalid JSON in file {file_path}: {e}")
-
-            params[key] = value
-
-        # Get SQL query
-        query_sql = sql
-        if file:
-            with open(file) as f:
-                query_sql = f.read()
-
-        # Ensure we have a query to execute
-        if not query_sql:
-            raise click.BadParameter("SQL query cannot be empty")
-
-        # Show what we're executing (only in non-JSON mode)
-        if not json_output:
-            click.echo(f"\n{click.style('🔍 Executing Query', fg='cyan', bold=True)}")
-            if file:
-                click.echo(f"   • Source: {click.style(file, fg='yellow')}")
-
-            # Show first few lines of query
-            query_lines = query_sql.strip().split("\n")
-            if len(query_lines) > 5:
-                preview = "\n".join(query_lines[:5]) + "\n   ..."
-            else:
-                preview = query_sql.strip()
-
-            click.echo(f"\n{click.style('📝 SQL:', fg='cyan')}")
-            for line in preview.split("\n"):
-                click.echo(f"   {line}")
-
-            if params:
-                click.echo(f"\n{click.style('📋 Parameters:', fg='cyan')}")
-                for key, value in params.items():
-                    if isinstance(value, (dict, list)):
-                        click.echo(f"   • ${key} = {json.dumps(value)}")
-                    else:
-                        click.echo(f"   • ${key} = {value}")
-
-            if readonly:
-                click.echo(f"\n{click.style('🔒 Mode:', fg='yellow')} Read-only")
-
-            click.echo(f"\n{click.style('⏳ Running...', fg='yellow')}")
-
-        # Create execution engine with readonly configuration if specified
-        engine = create_execution_engine(user_config, site_config, profile_name, readonly=readonly)
-
-        try:
             # Create execution context
             context = ExecutionContext()
 
@@ -197,16 +204,5 @@ async def _query_async(
 
                 click.echo()  # Empty line at end
 
-        finally:
-            engine.shutdown()
-
-    except Exception as e:
-        if json_output:
-            output_error(e, json_output, debug)
-        else:
-            click.echo(f"\n{click.style('❌ Query failed:', fg='red', bold=True)} {str(e)}")
-            if debug:
-
-                click.echo(f"\n{click.style('🔍 Stack trace:', fg='yellow')}")
-                click.echo(traceback.format_exc())
-            click.get_current_context().exit(1)
+    finally:
+        engine.shutdown()

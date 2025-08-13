@@ -233,76 +233,106 @@ def test(
         mxcp test --readonly            # Open database connection in read-only mode
         mxcp test --user-context '{"role": "admin"}'  # Test with admin role
     """
+    # Configure logging first
+    configure_logging(debug)
+    
+    try:
+        # Run async implementation
+        asyncio.run(
+            _test_impl(
+                endpoint_type=endpoint_type,
+                name=name,
+                user_context=user_context,
+                profile=profile,
+                json_output=json_output,
+                debug=debug,
+                readonly=readonly,
+            )
+        )
+    except click.ClickException:
+        # Let Click exceptions propagate - they have their own formatting
+        raise
+    except KeyboardInterrupt:
+        # Handle graceful shutdown
+        if not json_output:
+            click.echo("\nOperation cancelled by user", err=True)
+        raise click.Abort()
+    except Exception as e:
+        # Only catch non-Click exceptions
+        output_error(e, json_output, debug)
+
+
+async def _test_impl(
+    *,
+    endpoint_type: Optional[str],
+    name: Optional[str],
+    user_context: Optional[str],
+    profile: Optional[str],
+    json_output: bool,
+    debug: bool,
+    readonly: bool,
+) -> None:
+    """Async implementation of the test command."""
     # Get values from environment variables if not set by flags
     if not profile:
         profile = get_env_profile()
     if not readonly:
         readonly = get_env_flag("MXCP_READONLY")
 
-    # Configure logging
-    configure_logging(debug)
+    site_config = load_site_config()
+    user_config = load_user_config(site_config)
 
-    try:
-        site_config = load_site_config()
-        user_config = load_user_config(site_config)
-
-        # Parse user context if provided
-        cli_user_context = None
-        if user_context:
-            if user_context.startswith("@"):
-                # Load from file
-                file_path = Path(user_context[1:])
-                if not file_path.exists():
-                    raise click.BadParameter(f"User context file not found: {file_path}")
-                try:
-                    with open(file_path) as f:
-                        context_data = json.load(f)
-                except json.JSONDecodeError as e:
-                    raise click.BadParameter(f"Invalid JSON in user context file {file_path}: {e}")
-            else:
-                # Parse as JSON string
-                try:
-                    context_data = json.loads(user_context)
-                except json.JSONDecodeError as e:
-                    raise click.BadParameter(f"Invalid JSON in user context: {e}")
-
-            # Create UserContext object from the data
-            cli_user_context = UserContext(
-                provider="cli",  # Special provider for CLI usage
-                user_id=context_data.get("user_id", "cli_user"),
-                username=context_data.get("username", "cli_user"),
-                email=context_data.get("email"),
-                name=context_data.get("name"),
-                avatar_url=context_data.get("avatar_url"),
-                raw_profile=context_data,  # Store full context for policy access
-            )
-
-        if endpoint_type and name:
-            results = asyncio.run(
-                run_tests(
-                    endpoint_type,
-                    name,
-                    user_config,
-                    site_config,
-                    profile,
-                    readonly=readonly,
-                    cli_user_context=cli_user_context,
-                )
-            )
+    # Parse user context if provided
+    cli_user_context = None
+    if user_context:
+        if user_context.startswith("@"):
+            # Load from file
+            file_path = Path(user_context[1:])
+            if not file_path.exists():
+                raise click.BadParameter(f"User context file not found: {file_path}")
+            try:
+                with open(file_path) as f:
+                    context_data = json.load(f)
+            except json.JSONDecodeError as e:
+                raise click.BadParameter(f"Invalid JSON in user context file {file_path}: {e}")
         else:
-            results = asyncio.run(
-                run_all_tests(
-                    user_config,
-                    site_config,
-                    profile,
-                    readonly=readonly,
-                    cli_user_context=cli_user_context,
-                )
-            )
+            # Parse as JSON string
+            try:
+                context_data = json.loads(user_context)
+            except json.JSONDecodeError as e:
+                raise click.BadParameter(f"Invalid JSON in user context: {e}")
 
-        if json_output:
-            output_result(results, json_output, debug)
-        else:
-            click.echo(format_test_results(results, debug))
-    except Exception as e:
-        output_error(e, json_output, debug)
+        # Create UserContext object from the data
+        cli_user_context = UserContext(
+            provider="cli",  # Special provider for CLI usage
+            user_id=context_data.get("user_id", "cli_user"),
+            username=context_data.get("username", "cli_user"),
+            email=context_data.get("email"),
+            name=context_data.get("name"),
+            avatar_url=context_data.get("avatar_url"),
+            raw_profile=context_data,  # Store full context for policy access
+        )
+
+    if endpoint_type and name:
+        results = await run_tests(
+            endpoint_type,
+            name,
+            user_config,
+            site_config,
+            profile,
+            readonly=readonly,
+            cli_user_context=cli_user_context,
+        )
+    else:
+        results = await run_all_tests(
+            user_config,
+            site_config,
+            profile,
+            readonly=readonly,
+            cli_user_context=cli_user_context,
+        )
+
+    if json_output:
+        output_result(results, json_output, debug)
+    else:
+        click.echo(format_test_results(results, debug))
