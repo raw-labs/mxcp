@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import click
 
@@ -16,7 +16,22 @@ from mxcp.cli.utils import (
 from mxcp.config.analytics import track_command_with_timing
 from mxcp.config.site_config import load_site_config
 from mxcp.config.user_config import load_user_config
+from mxcp.drift._types import DriftSnapshot
 from mxcp.drift.snapshot import generate_snapshot
+
+
+def _compute_snapshot_hash(snapshot: DriftSnapshot) -> tuple[str, str]:
+    """Compute JSON string and hash for a snapshot.
+
+    Args:
+        snapshot: The snapshot dictionary
+
+    Returns:
+        Tuple of (snapshot_json_string, drift_hash)
+    """
+    snapshot_str = json.dumps(snapshot, sort_keys=True)
+    drift_hash = hashlib.sha256(snapshot_str.encode()).hexdigest()
+    return snapshot_str, drift_hash
 
 
 @click.command(name="drift-snapshot")
@@ -54,12 +69,45 @@ def drift_snapshot(
         mxcp drift-snapshot --dry-run       # Show what would be done
         mxcp drift-snapshot --json-output   # Output results in JSON format
     """
+    # Configure logging first
+    configure_logging(debug)
+
+    try:
+        # Run async implementation
+        asyncio.run(
+            _drift_snapshot_impl(
+                profile=profile,
+                force=force,
+                dry_run=dry_run,
+                json_output=json_output,
+                debug=debug,
+            )
+        )
+    except click.ClickException:
+        # Let Click exceptions propagate - they have their own formatting
+        raise
+    except KeyboardInterrupt:
+        # Handle graceful shutdown
+        if not json_output:
+            click.echo("\nOperation cancelled by user", err=True)
+        raise click.Abort()
+    except Exception as e:
+        # Only catch non-Click exceptions
+        output_error(e, json_output, debug)
+
+
+async def _drift_snapshot_impl(
+    *,
+    profile: Optional[str],
+    force: bool,
+    dry_run: bool,
+    json_output: bool,
+    debug: bool,
+) -> None:
+    """Async implementation of the drift-snapshot command."""
     # Get values from environment variables if not set by flags
     if not profile:
         profile = get_env_profile()
-
-    # Configure logging
-    configure_logging(debug)
 
     try:
         # Load configs
@@ -67,21 +115,17 @@ def drift_snapshot(
         user_config = load_user_config(site_config)
 
         # Generate snapshot
-        snapshot, path = asyncio.run(
-            generate_snapshot(
-                site_config=site_config,
-                user_config=user_config,
-                profile=profile,
-                force=force,
-                dry_run=dry_run,
-            )
+        snapshot, path = await generate_snapshot(
+            site_config=site_config,
+            user_config=user_config,
+            profile=profile,
+            force=force,
+            dry_run=dry_run,
         )
 
         if json_output:
             # Compute a simple hash for the snapshot
-
-            snapshot_str = json.dumps(snapshot, sort_keys=True)
-            drift_hash = hashlib.sha256(snapshot_str.encode()).hexdigest()
+            snapshot_str, drift_hash = _compute_snapshot_hash(snapshot)
 
             output_result(
                 {
@@ -100,9 +144,7 @@ def drift_snapshot(
                 click.echo(f"\n{click.style('📸 Snapshot Details:', fg='cyan', bold=True)}")
                 click.echo(f"   • Path: {click.style(str(path), fg='yellow')}")
                 # Compute a simple hash for the snapshot
-
-                snapshot_str = json.dumps(snapshot, sort_keys=True)
-                drift_hash = hashlib.sha256(snapshot_str.encode()).hexdigest()
+                snapshot_str, drift_hash = _compute_snapshot_hash(snapshot)
                 click.echo(f"   • Hash: {click.style(drift_hash[:12] + '...', fg='yellow')}")
                 click.echo(f"   • Generated: {click.style(snapshot['generated_at'], fg='yellow')}")
 
@@ -130,6 +172,7 @@ def drift_snapshot(
                 )
 
     except FileExistsError as e:
+        # Handle specific error with helpful guidance
         if json_output:
             output_error(e, json_output, debug)
         else:
@@ -140,6 +183,4 @@ def drift_snapshot(
             click.echo(
                 f"\n{click.style('💡 Tip:', fg='yellow')} Use {click.style('--force', fg='cyan')} to overwrite the existing snapshot\n"
             )
-            click.get_current_context().exit(1)
-    except Exception as e:
-        output_error(e, json_output, debug)
+            raise click.Abort()

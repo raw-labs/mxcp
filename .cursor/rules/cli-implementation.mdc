@@ -1,0 +1,66 @@
+---
+description: CLI command implementation patterns and error handling
+globs: ["**/cli/*.py"]
+alwaysApply: true
+---
+
+# CLI Implementation Pattern
+
+All CLI commands should follow this standard pattern for consistency and proper error handling:
+
+```python
+import asyncio
+from typing import Optional
+import click
+from mxcp.cli.utils import configure_logging, output_error
+
+@click.command()
+@click.option("--json-output", is_flag=True, help="Output in JSON format")
+@click.option("--debug", is_flag=True, help="Show detailed debug information")
+# ... other options
+def command(json_output: bool, debug: bool, **kwargs) -> None:
+    """Command description."""
+    # Configure logging first
+    configure_logging(debug)
+    
+    try:
+        # Run async implementation
+        asyncio.run(_command_impl(json_output=json_output, debug=debug, **kwargs))
+    except click.ClickException:
+        # Let Click exceptions propagate - they have their own formatting
+        raise
+    except KeyboardInterrupt:
+        # Handle graceful shutdown
+        if not json_output:
+            click.echo("\nOperation cancelled by user", err=True)
+        raise click.Abort()
+    except Exception as e:
+        # Only catch non-Click exceptions
+        output_error(e, json_output, debug)
+
+
+async def _command_impl(*, json_output: bool, debug: bool, **kwargs) -> None:
+    """Async implementation of the command.
+    
+    This function should:
+    1. Validate inputs (raise click.BadParameter for invalid CLI args)
+    2. Execute business logic
+    3. Handle business-specific exceptions
+    4. Output results
+    """
+    # Implementation here
+```
+
+## Error Handling Rules
+
+1. **In the sync wrapper**: Only catch non-Click exceptions, KeyboardInterrupt
+2. **In the async implementation**: Handle business-specific exceptions, raise click.BadParameter for validation
+3. **Never**: Catch click.BadParameter or other Click exceptions - let them propagate
+4. **Never**: Use broad Exception handlers in multiple places
+5. **Always**: Use output_error for consistent error formatting
+
+## Special Cases
+
+- For specific exception handling (e.g., FileExistsError), provide helpful user guidance
+- For commands with cleanup requirements, use try/finally blocks
+- For long-running operations, handle KeyboardInterrupt gracefully
