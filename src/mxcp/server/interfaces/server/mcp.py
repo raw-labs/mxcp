@@ -9,7 +9,7 @@ import threading
 import time
 import traceback
 from pathlib import Path
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, Literal, cast, List
 
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
@@ -861,19 +861,22 @@ class RAWMCP:
             return final_type
 
         elif json_type == "array":
-            # items_schema = schema_def.get("items", {"type": "string"})
-            # item_type would be used for array validation, but pydantic handles this
-            # self._create_pydantic_model_from_schema(
-            #     items_schema, f"{model_name}Item", endpoint_type
-            # )
+            items_schema = schema_def.get("items")
+            if items_schema is not None:
+                item_type = self._create_pydantic_model_from_schema(
+                    items_schema, f"{model_name}Item", endpoint_type
+                )
+            else:
+                # No items schema specified - use Any for maximum flexibility
+                item_type = Any
 
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 # Use List with item_type as a generic parameter
-                final_type = Annotated[list[Any], Field(**field_kwargs)]
+                final_type = Annotated[List[item_type], Field(**field_kwargs)]
             else:
                 # Arrays without constraints
-                final_type = list[Any]
+                final_type = List[item_type]
             self._model_cache[cache_key] = final_type
             return final_type
 
