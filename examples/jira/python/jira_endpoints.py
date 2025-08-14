@@ -22,7 +22,7 @@ _client_lock = threading.Lock()
 
 
 @on_init
-def setup_jira_client():
+def setup_jira_client() -> None:
     """Initialize JIRA client when server starts.
 
     Thread-safe: multiple threads can safely call this simultaneously.
@@ -54,7 +54,7 @@ def setup_jira_client():
 
 
 @on_shutdown
-def cleanup_jira_client():
+def cleanup_jira_client() -> None:
     """Clean up JIRA client when server stops."""
     global jira_client
     if jira_client:
@@ -63,7 +63,7 @@ def cleanup_jira_client():
         logger.info("JIRA client cleaned up")
 
 
-def retry_on_session_expiration(func: Callable) -> Callable:
+def retry_on_session_expiration(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Decorator that automatically retries functions on JIRA session expiration.
 
@@ -79,7 +79,7 @@ def retry_on_session_expiration(func: Callable) -> Callable:
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         max_retries = 2  # Hardcoded: 2 retries = 3 total attempts
 
         for attempt in range(max_retries + 1):
@@ -145,13 +145,13 @@ def _get_jira_client() -> Jira:
 
 @retry_on_session_expiration
 def jql_query(
-    query: str, start: Optional[int] = 0, limit: Optional[int] = None
+    query: str, start: Optional[int] = None, limit: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """Execute a JQL query against Jira.
 
     Args:
         query: The JQL query string
-        start: Starting index for pagination (default: 0)
+        start: Starting index for pagination (default: None, which becomes 0)
         limit: Maximum number of results to return (default: None, meaning no limit)
 
     Returns:
@@ -163,7 +163,7 @@ def jql_query(
 
     raw = jira.jql(
         jql=query,
-        start=start,
+        start=start if start is not None else 0,
         limit=limit,
         fields=(
             "key,summary,status,resolution,resolutiondate,"
@@ -171,6 +171,9 @@ def jql_query(
             "created,updated,labels,fixVersions,parent"
         ),
     )
+
+    if not raw:
+        raise ValueError("JIRA JQL query returned empty result")
 
     def _name(obj: Optional[Dict[str, Any]]) -> Optional[str]:
         """Return obj['name'] if present, else None."""
@@ -231,7 +234,7 @@ def get_issue(issue_key: str) -> Dict[str, Any]:
     fields = issue.get("fields", {})
     jira_url = jira.url
 
-    def _safe_get(obj, key, default=None):
+    def _safe_get(obj: Any, key: str, default: Any = None) -> Any:
         """Safely get a value from a dict/object that might be None."""
         if obj is None:
             return default
