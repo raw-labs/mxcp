@@ -257,16 +257,16 @@ def get_issue(issue_key: str) -> Dict[str, Any]:
         "updated": fields.get("updated"),
         "due_date": fields.get("duedate"),
         "labels": fields.get("labels", []) or [],
-        "components": [
-            comp.get("name") for comp in fields.get("components", []) if comp and comp.get("name")
-        ]
-        if fields.get("components")
-        else [],
-        "fix_versions": [
-            ver.get("name") for ver in fields.get("fixVersions", []) if ver and ver.get("name")
-        ]
-        if fields.get("fixVersions")
-        else [],
+        "components": (
+            [comp.get("name") for comp in fields.get("components", []) if comp and comp.get("name")]
+            if fields.get("components")
+            else []
+        ),
+        "fix_versions": (
+            [ver.get("name") for ver in fields.get("fixVersions", []) if ver and ver.get("name")]
+            if fields.get("fixVersions")
+            else []
+        ),
         "project": {
             "key": _safe_get(fields.get("project"), "key"),
             "name": _safe_get(fields.get("project"), "name"),
