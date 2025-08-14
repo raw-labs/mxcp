@@ -570,11 +570,7 @@ class RAWMCP:
         project_name = self.site_config["project"]
 
         # Configure telemetry for the current profile
-        configure_telemetry_from_config(
-            self.user_config,
-            project_name,
-            self.profile_name
-        )
+        configure_telemetry_from_config(self.user_config, project_name, self.profile_name)
 
         logger.info("Telemetry initialization complete.")
 
@@ -1260,7 +1256,9 @@ class RAWMCP:
                         policies_evaluated=policy_info["policies_evaluated"],
                         # Add user context if available
                         user_id=user_context.user_id if user_context else None,
-                        session_id=user_context.username if user_context else None,  # Using username as session
+                        session_id=(
+                            user_context.username if user_context else None
+                        ),  # Using username as session
                         # Add trace ID for correlation with telemetry
                         trace_id=get_current_trace_id(),
                     )

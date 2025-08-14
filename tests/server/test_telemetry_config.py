@@ -7,7 +7,7 @@ from mxcp.server.core.telemetry import (
     shutdown_telemetry,
 )
 from mxcp.sdk.telemetry import (
-    is_telemetry_enabled, 
+    is_telemetry_enabled,
     traced_operation,
     get_current_trace_id,
 )
@@ -20,15 +20,15 @@ def reset_telemetry():
     from opentelemetry import trace
     import mxcp.sdk.telemetry._config
     import mxcp.sdk.telemetry._tracer
-    
+
     # Reset before test
     trace._TRACER_PROVIDER = None
     trace._TRACER_PROVIDER_FACTORY = None
     mxcp.sdk.telemetry._config._telemetry_enabled = False
     mxcp.sdk.telemetry._tracer._tracer = None
-    
+
     yield
-    
+
     # Cleanup after test
     try:
         shutdown_telemetry()
@@ -52,12 +52,12 @@ def test_telemetry_config_disabled():
                     }
                 }
             }
-        }
+        },
     }
-    
+
     configure_telemetry_from_config(user_config, "test", "dev")
     assert not is_telemetry_enabled()
-    
+
     # Should create no-op spans
     with traced_operation("test.op") as span:
         assert span is not None
@@ -81,12 +81,12 @@ def test_telemetry_config_enabled():
                     }
                 }
             }
-        }
+        },
     }
-    
+
     configure_telemetry_from_config(user_config, "test", "dev")
     assert is_telemetry_enabled()
-    
+
     # Should create spans
     with traced_operation("test.op") as span:
         assert span is not None
@@ -98,7 +98,7 @@ def test_telemetry_config_enabled():
 def test_telemetry_config_with_endpoint():
     """Test telemetry with OTLP endpoint."""
     user_config: UserConfig = {
-        "mxcp": "1", 
+        "mxcp": "1",
         "projects": {
             "prod": {
                 "profiles": {
@@ -106,17 +106,15 @@ def test_telemetry_config_with_endpoint():
                         "telemetry": {
                             "enabled": True,
                             "endpoint": "http://localhost:4318",
-                            "headers": {
-                                "Authorization": "Bearer token"
-                            },
+                            "headers": {"Authorization": "Bearer token"},
                             "sampling_rate": 0.1,
                         }
                     }
                 }
             }
-        }
+        },
     }
-    
+
     configure_telemetry_from_config(user_config, "prod", "main")
     assert is_telemetry_enabled()
 
@@ -136,12 +134,12 @@ def test_telemetry_disabled_by_default():
                     }
                 }
             }
-        }
+        },
     }
-    
+
     configure_telemetry_from_config(user_config, "test", "dev")
     assert not is_telemetry_enabled()
-    
+
     # Should create no-op spans even with endpoint configured
     with traced_operation("test.op") as span:
         assert span is not None

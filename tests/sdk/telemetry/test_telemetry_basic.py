@@ -19,7 +19,7 @@ def test_telemetry_disabled_by_default():
     """Test that telemetry is disabled by default."""
     # Should not raise and should be disabled
     assert not is_telemetry_enabled()
-    
+
     with traced_operation("test.operation") as span:
         # Span should be a NoOpSpan when disabled
         assert span is not None
@@ -32,9 +32,9 @@ def test_configure_telemetry_with_kwargs():
     """Test configuring telemetry with keyword arguments."""
     # Configure with console export for testing
     configure_telemetry(enabled=True, console_export=True)
-    
+
     assert is_telemetry_enabled()
-    
+
     # Clean up
     shutdown_telemetry()
 
@@ -42,15 +42,12 @@ def test_configure_telemetry_with_kwargs():
 def test_configure_telemetry_with_config_object():
     """Test configuring telemetry with config object."""
     config = TelemetryConfig(
-        enabled=True,
-        console_export=True,
-        service_name="test-service",
-        environment="testing"
+        enabled=True, console_export=True, service_name="test-service", environment="testing"
     )
     configure_telemetry(config)
-    
+
     assert is_telemetry_enabled()
-    
+
     # Clean up
     shutdown_telemetry()
 
@@ -59,15 +56,15 @@ def test_traced_operation_when_enabled():
     """Test traced operation when telemetry is enabled."""
     # Configure telemetry
     configure_telemetry(enabled=True, console_export=True)
-    
+
     with traced_operation(
         "test.operation",
         attributes={"test.key": "value", "test.number": 42},
-        kind=SpanKind.INTERNAL
+        kind=SpanKind.INTERNAL,
     ) as span:
         # Span should not be None
         assert span is not None
-        
+
         # Should have trace and span IDs
         trace_id = get_current_trace_id()
         span_id = get_current_span_id()
@@ -76,8 +73,8 @@ def test_traced_operation_when_enabled():
         if trace_id:
             assert len(trace_id) == 32  # Hex format
         if span_id:
-            assert len(span_id) == 16   # Hex format
-        
+            assert len(span_id) == 16  # Hex format
+
         # Test setting attributes
         span.set_attribute("test.result", "success")
         span.set_attribute("test.count", 100)
@@ -88,16 +85,16 @@ def test_traced_operation_when_enabled():
 def test_traced_operation_with_exception():
     """Test traced operation with exception handling."""
     configure_telemetry(enabled=True, console_export=True)
-    
+
     try:
         with pytest.raises(ValueError):
             with traced_operation("test.error") as span:
                 assert span is not None
                 raise ValueError("Test error")
-                
+
         # The span should have recorded the exception
         # (We can't easily verify this without a test exporter)
-        
+
     finally:
         shutdown_telemetry()
 
@@ -105,21 +102,21 @@ def test_traced_operation_with_exception():
 def test_nested_traced_operations():
     """Test nested traced operations."""
     configure_telemetry(enabled=True, console_export=True)
-    
+
     with traced_operation("parent.operation") as parent_span:
         assert parent_span is not None
         parent_trace_id = get_current_trace_id()
         parent_span_id = get_current_span_id()
-        
+
         with traced_operation("child.operation") as child_span:
             assert child_span is not None
             child_trace_id = get_current_trace_id()
             child_span_id = get_current_span_id()
-            
+
             # Should have same trace ID (if both are set)
             if parent_trace_id and child_trace_id:
                 assert parent_trace_id == child_trace_id
-            
+
             # But different span IDs (if both are set)
             if parent_span_id and child_span_id:
                 assert child_span_id != parent_span_id
@@ -134,7 +131,7 @@ def test_config_from_dict():
         "environment": "production",
         "headers": {"Authorization": "Bearer token"},
     }
-    
+
     config = TelemetryConfig.from_dict(config_dict)
     assert config.enabled is True
     assert config.endpoint == "http://localhost:4318"

@@ -10,6 +10,7 @@ from typing import Any, Protocol
 
 class StatusCode(Enum):
     """Span status codes."""
+
     UNSET = 0
     OK = 1
     ERROR = 2
@@ -25,6 +26,7 @@ class Status:
 
 class SpanKind(Enum):
     """Type of span."""
+
     INTERNAL = 0
     SERVER = 1
     CLIENT = 2

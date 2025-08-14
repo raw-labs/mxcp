@@ -234,7 +234,7 @@ class ExecutionEngine:
                 "mxcp.params.count": len(params) if params else 0,
                 "mxcp.has_input_schema": input_schema is not None,
                 "mxcp.has_output_schema": output_schema is not None,
-            }
+            },
         ) as span:
             if language not in self._executors:
                 available = list(self._executors.keys())
@@ -257,13 +257,15 @@ class ExecutionEngine:
             # Validate output if schema provided
             if output_schema:
                 with traced_operation("mxcp.validation.output") as validation_span:
-                    validator = TypeValidator.from_dict({"output": output_schema}, strict=self._strict)
+                    validator = TypeValidator.from_dict(
+                        {"output": output_schema}, strict=self._strict
+                    )
                     result = validator.validate_output(result)
                     if validation_span:
                         validation_span.set_attribute("mxcp.validation.passed", True)
 
             # Add result info to span if available
-            if span and hasattr(result, '__len__'):
+            if span and hasattr(result, "__len__"):
                 with contextlib.suppress(Exception):
                     span.set_attribute("mxcp.result.count", len(result))
 

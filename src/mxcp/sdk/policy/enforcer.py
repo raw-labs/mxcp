@@ -164,7 +164,7 @@ class PolicyEnforcer:
             attributes={
                 "mxcp.policy.count": len(self.policy_set.input_policies),
                 "mxcp.policy.has_user": user_context is not None,
-            }
+            },
         ) as span:
             # Reset tracking for this enforcement cycle
             self.policies_evaluated = []
@@ -186,7 +186,9 @@ class PolicyEnforcer:
             # Build context with user context taking precedence over any "user" parameter
             context = {}
             context.update(params)  # Add parameters first
-            context["user"] = self._user_context_to_dict(user_context)  # User context takes precedence
+            context["user"] = self._user_context_to_dict(
+                user_context
+            )  # User context takes precedence
 
             # Evaluate each input policy
             for i, policy in enumerate(self.policy_set.input_policies):
@@ -199,12 +201,14 @@ class PolicyEnforcer:
                     attributes={
                         "mxcp.policy.condition": policy.condition,
                         "mxcp.policy.action": policy.action.value if policy.action else None,
-                    }
+                    },
                 ) as policy_span:
                     try:
                         condition_result = self._evaluate_condition(policy.condition, context)
                         if policy_span:
-                            policy_span.set_attribute("mxcp.policy.condition_result", condition_result)
+                            policy_span.set_attribute(
+                                "mxcp.policy.condition_result", condition_result
+                            )
 
                         if condition_result and policy.action == PolicyAction.DENY:
                             reason = policy.reason or "Access denied by policy"
@@ -256,7 +260,7 @@ class PolicyEnforcer:
                 "mxcp.policy.count": len(self.policy_set.output_policies),
                 "mxcp.policy.has_user": user_context is not None,
                 "mxcp.policy.has_endpoint_def": endpoint_def is not None,
-            }
+            },
         ) as span:
             # Build context for CEL evaluation
             # Note: Output policies don't have collision issues since they only use
@@ -277,12 +281,14 @@ class PolicyEnforcer:
                     attributes={
                         "mxcp.policy.condition": policy.condition,
                         "mxcp.policy.action": policy.action.value if policy.action else None,
-                    }
+                    },
                 ) as policy_span:
                     try:
                         condition_result = self._evaluate_condition(policy.condition, context)
                         if policy_span:
-                            policy_span.set_attribute("mxcp.policy.condition_result", condition_result)
+                            policy_span.set_attribute(
+                                "mxcp.policy.condition_result", condition_result
+                            )
 
                         if condition_result:
                             if policy.action == PolicyAction.DENY:
@@ -303,30 +309,44 @@ class PolicyEnforcer:
                                 applied_action = "filter_fields"
                                 any_policy_applied = True
                                 if policy_span:
-                                    policy_span.set_attribute("mxcp.policy.action_applied", "filter_fields")
-                                    policy_span.set_attribute("mxcp.policy.fields_filtered", len(policy.fields))
+                                    policy_span.set_attribute(
+                                        "mxcp.policy.action_applied", "filter_fields"
+                                    )
+                                    policy_span.set_attribute(
+                                        "mxcp.policy.fields_filtered", len(policy.fields)
+                                    )
 
                             elif policy.action == PolicyAction.MASK_FIELDS and policy.fields:
                                 output = self._mask_fields(output, policy.fields)
                                 applied_action = "mask_fields"
                                 any_policy_applied = True
                                 if policy_span:
-                                    policy_span.set_attribute("mxcp.policy.action_applied", "mask_fields")
-                                    policy_span.set_attribute("mxcp.policy.fields_masked", len(policy.fields))
+                                    policy_span.set_attribute(
+                                        "mxcp.policy.action_applied", "mask_fields"
+                                    )
+                                    policy_span.set_attribute(
+                                        "mxcp.policy.fields_masked", len(policy.fields)
+                                    )
 
                             elif policy.action == PolicyAction.FILTER_SENSITIVE_FIELDS:
                                 if endpoint_def and "return" in endpoint_def:
-                                    output = self._filter_sensitive_fields(output, endpoint_def["return"])
+                                    output = self._filter_sensitive_fields(
+                                        output, endpoint_def["return"]
+                                    )
                                     applied_action = "filter_sensitive_fields"
                                     any_policy_applied = True
                                     if policy_span:
-                                        policy_span.set_attribute("mxcp.policy.action_applied", "filter_sensitive_fields")
+                                        policy_span.set_attribute(
+                                            "mxcp.policy.action_applied", "filter_sensitive_fields"
+                                        )
                                 else:
                                     logger.warning(
                                         "filter_sensitive_fields policy requires endpoint definition with return type"
                                     )
                                     if policy_span:
-                                        policy_span.set_attribute("mxcp.policy.warning", "missing_endpoint_def")
+                                        policy_span.set_attribute(
+                                            "mxcp.policy.warning", "missing_endpoint_def"
+                                        )
                     except PolicyEnforcementError:
                         raise
                     except Exception as e:

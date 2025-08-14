@@ -53,10 +53,7 @@ class TelemetryConfig:
         )
 
 
-def configure_telemetry(
-    config: TelemetryConfig | None = None,
-    **kwargs: Any
-) -> None:
+def configure_telemetry(config: TelemetryConfig | None = None, **kwargs: Any) -> None:
     """Configure telemetry for MXCP.
 
     This completely wraps OpenTelemetry configuration so users don't need
@@ -116,8 +113,7 @@ def configure_telemetry(
     elif config.endpoint:
         # OTLP exporter for production
         exporter = OTLPSpanExporter(
-            endpoint=f"{config.endpoint}/v1/traces",
-            headers=config.headers or {}
+            endpoint=f"{config.endpoint}/v1/traces", headers=config.headers or {}
         )
         processor = BatchSpanProcessor(exporter)
     else:

@@ -259,7 +259,7 @@ class DuckDBExecutor(ExecutorPlugin):
                 "db.operation": operation,
                 "db.parameters.count": len(params) if params else 0,
                 "db.readonly": self.database_config.readonly,
-            }
+            },
         ) as span:
             try:
                 # Set execution context for UDFs to read dynamically

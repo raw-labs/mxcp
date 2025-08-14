@@ -44,7 +44,7 @@ class AuthenticationMiddleware:
             "mxcp.auth.check_authentication",
             attributes={
                 "mxcp.auth.enabled": self.auth_enabled,
-            }
+            },
         ) as span:
             if not self.auth_enabled:
                 logger.debug("Authentication is disabled")
@@ -111,7 +111,9 @@ class AuthenticationMiddleware:
                             user_span.set_attribute("mxcp.auth.provider", user_context.provider)
                             user_span.set_attribute("mxcp.auth.user_id", user_context.user_id)
                             # Don't log sensitive username for privacy
-                            user_span.set_attribute("mxcp.auth.has_username", bool(user_context.username))
+                            user_span.set_attribute(
+                                "mxcp.auth.has_username", bool(user_context.username)
+                            )
                             user_span.set_attribute("mxcp.auth.success", True)
 
                         if span:

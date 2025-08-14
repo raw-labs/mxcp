@@ -102,10 +102,10 @@ class SpanWrapper:
         if self._span is None:
             return False
         # Check if the wrapped span has is_recording method
-        if hasattr(self._span, 'is_recording'):
+        if hasattr(self._span, "is_recording"):
             return bool(self._span.is_recording())
         # If no is_recording method, check if it's a valid span context
-        return hasattr(self._span, 'get_span_context')
+        return hasattr(self._span, "get_span_context")
 
 
 # Global tracer instance
@@ -151,6 +151,7 @@ def traced_operation(
     # Check if telemetry is configured by trying to get a tracer
     # If we have a NoOpTracerProvider, tracer operations will be no-ops
     from ._config import is_telemetry_enabled
+
     if not is_telemetry_enabled():
         yield NoOpSpan()
         return
@@ -186,7 +187,7 @@ def get_current_trace_id() -> str | None:
     span = trace.get_current_span()
     if span.is_recording():
         span_context = span.get_span_context()
-        return format(span_context.trace_id, '032x')
+        return format(span_context.trace_id, "032x")
     return None
 
 
@@ -199,7 +200,7 @@ def get_current_span_id() -> str | None:
     span = trace.get_current_span()
     if span.is_recording():
         span_context = span.get_span_context()
-        return format(span_context.span_id, '016x')
+        return format(span_context.span_id, "016x")
     return None
 
 

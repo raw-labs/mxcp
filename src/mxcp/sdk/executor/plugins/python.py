@@ -354,7 +354,7 @@ class PythonExecutor(ExecutorPlugin):
                 "mxcp.python.type": execution_type,
                 "mxcp.python.name": display_name,
                 "mxcp.python.params.count": len(params) if params else 0,
-            }
+            },
         ):
             try:
                 # Check if it's a file path or inline code

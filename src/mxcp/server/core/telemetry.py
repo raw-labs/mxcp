@@ -69,9 +69,7 @@ def configure_telemetry_from_config(
 
 
 def _get_telemetry_config(
-    user_config: UserConfig,
-    project: str,
-    profile: str
+    user_config: UserConfig, project: str, profile: str
 ) -> UserTelemetryConfig | None:
     """Extract telemetry config for a specific project/profile.
 
