@@ -6,8 +6,8 @@ from pathlib import Path
 
 import click
 
-from mxcp.interfaces.cli.utils import configure_logging, output_error, output_result
 from mxcp.core.config.site_config import load_site_config
+from mxcp.interfaces.cli.utils import configure_logging, output_error, output_result
 from mxcp.sdk.audit import AuditLogger
 
 

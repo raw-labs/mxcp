@@ -2,9 +2,9 @@ import logging
 from typing import Any
 
 from mxcp.core.config._types import SiteConfig, UserConfig
-from mxcp.executor.engine import create_execution_engine
 from mxcp.core.config.site_config import find_repo_root
 from mxcp.definitions.endpoints.loader import EndpointLoader
+from mxcp.executor.engine import create_execution_engine
 from mxcp.executor.runners.test import TestRunner
 from mxcp.sdk.auth import UserContext
 
@@ -147,4 +147,3 @@ async def run_tests(
         return await test_runner.run_tests_for_endpoint(endpoint_type, name, cli_user_context)
     finally:
         execution_engine.shutdown()
-

@@ -3,7 +3,6 @@ from typing import Any
 
 import click
 
-from mxcp.interfaces.cli.utils import configure_logging, output_error, output_result
 from mxcp.core.config.analytics import track_command_with_timing
 from mxcp.core.config.site_config import load_site_config
 from mxcp.definitions.endpoints._types import (
@@ -15,6 +14,7 @@ from mxcp.definitions.endpoints._types import (
     TypeDefinition,
 )
 from mxcp.definitions.endpoints.loader import EndpointLoader
+from mxcp.interfaces.cli.utils import configure_logging, output_error, output_result
 
 
 class LintIssue:

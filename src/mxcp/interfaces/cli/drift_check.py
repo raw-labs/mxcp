@@ -3,6 +3,9 @@ from typing import Any
 
 import click
 
+from mxcp.core.config.analytics import track_command_with_timing
+from mxcp.core.config.site_config import load_site_config
+from mxcp.core.config.user_config import load_user_config
 from mxcp.interfaces.cli.utils import (
     configure_logging,
     get_env_flag,
@@ -10,9 +13,6 @@ from mxcp.interfaces.cli.utils import (
     output_error,
     output_result,
 )
-from mxcp.core.config.analytics import track_command_with_timing
-from mxcp.core.config.site_config import load_site_config
-from mxcp.core.config.user_config import load_user_config
 from mxcp.services.drift.checker import check_drift
 
 

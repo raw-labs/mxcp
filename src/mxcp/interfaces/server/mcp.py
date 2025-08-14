@@ -18,12 +18,10 @@ from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, Field, create_model
 from starlette.responses import JSONResponse
 
-from mxcp.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
 from mxcp.core.config._types import SiteConfig, UserAuthConfig, UserConfig, UserHttpTransportConfig
-from mxcp.executor.engine import create_execution_engine
-from mxcp.core.refs.external import ExternalRefTracker
 from mxcp.core.config.site_config import get_active_profile, load_site_config
 from mxcp.core.config.user_config import load_user_config
+from mxcp.core.refs.external import ExternalRefTracker
 from mxcp.definitions.endpoints._types import (
     ParamDefinition,
     PromptDefinition,
@@ -31,20 +29,22 @@ from mxcp.definitions.endpoints._types import (
     ToolDefinition,
 )
 from mxcp.definitions.endpoints.loader import EndpointLoader
-from mxcp.services.endpoint_service import execute_endpoint_with_engine
 from mxcp.definitions.endpoints.utils import EndpointType
-from mxcp.services.endpoints.validator import validate_endpoint
+from mxcp.executor.engine import create_execution_engine
+from mxcp.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
 from mxcp.sdk.audit import AuditLogger
+from mxcp.sdk.auth import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth._types import HttpTransportConfig
-from mxcp.sdk.auth.providers.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.context import get_user_context
+from mxcp.sdk.auth.middleware import AuthenticationMiddleware
+from mxcp.sdk.auth.providers.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.providers.github import GitHubOAuthHandler
 from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
-from mxcp.sdk.auth.middleware import AuthenticationMiddleware
-from mxcp.sdk.auth import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.executor import ExecutionEngine
+from mxcp.services.endpoint_service import execute_endpoint_with_engine
+from mxcp.services.endpoints.validator import validate_endpoint
 
 from ._types import ConfigInfo
 

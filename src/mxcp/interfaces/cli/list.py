@@ -3,11 +3,11 @@ from typing import Any
 
 import click
 
-from mxcp.interfaces.cli.utils import configure_logging, output_error, output_result
 from mxcp.core.config.analytics import track_command_with_timing
 from mxcp.core.config.site_config import load_site_config
 from mxcp.definitions.endpoints._types import EndpointDefinition
 from mxcp.definitions.endpoints.loader import EndpointLoader
+from mxcp.interfaces.cli.utils import configure_logging, output_error, output_result
 
 
 def parse_endpoint(path: Path, endpoint: EndpointDefinition) -> tuple[str, str, str | None]:

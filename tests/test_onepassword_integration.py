@@ -4,7 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mxcp.core.refs.resolver import ONEPASSWORD_URL_PATTERN, interpolate_all, resolve_onepassword_url
+from mxcp.core.refs.resolver import (
+    ONEPASSWORD_URL_PATTERN,
+    interpolate_all,
+    resolve_onepassword_url,
+)
 
 
 class TestOnePasswordIntegration:

@@ -7,8 +7,11 @@ from typing import cast
 import duckdb
 
 from mxcp.core.config._types import SiteConfig, UserConfig
-from mxcp.executor.engine import create_execution_engine
 from mxcp.core.config.site_config import find_repo_root
+from mxcp.definitions.endpoints.loader import EndpointLoader
+from mxcp.executor.engine import create_execution_engine
+from mxcp.executor.runners.test import TestRunner
+from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
 from mxcp.services.drift._types import (
     Column,
     DriftSnapshot,
@@ -20,10 +23,7 @@ from mxcp.services.drift._types import (
     Tool,
     ValidationResults,
 )
-from mxcp.definitions.endpoints.loader import EndpointLoader
-from mxcp.executor.runners.test import TestRunner
 from mxcp.services.endpoints.validator import validate_endpoint_payload
-from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -150,9 +150,7 @@ async def generate_snapshot(
                 validation_result = validate_endpoint_payload(endpoint, str(path), execution_engine)
                 # Run tests
                 test_runner = TestRunner(user_config, site_config, execution_engine)
-                test_result = await test_runner.run_tests_for_endpoint(
-                    endpoint_type, name, None
-                )
+                test_result = await test_runner.run_tests_for_endpoint(endpoint_type, name, None)
                 # Add to snapshot
                 resource_data: ResourceDefinition = {
                     "validation_results": cast(ValidationResults, validation_result),

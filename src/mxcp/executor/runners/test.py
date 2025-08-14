@@ -15,9 +15,9 @@ import numpy as np
 from mxcp.core.config._types import SiteConfig, UserConfig
 from mxcp.definitions.endpoints._types import EndpointDefinition, TestDefinition
 from mxcp.definitions.endpoints.loader import EndpointLoader
-from mxcp.services.endpoint_service import execute_endpoint_with_engine
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionEngine
+from mxcp.services.endpoint_service import execute_endpoint_with_engine
 
 logger = logging.getLogger(__name__)
 
@@ -202,13 +202,15 @@ class TestRunner:
         tests = type_def.get("tests")
         return tests if tests is not None else []
 
-    def _extract_column_names(self, endpoint_def: EndpointDefinition, endpoint_type: str) -> list[str]:
+    def _extract_column_names(
+        self, endpoint_def: EndpointDefinition, endpoint_type: str
+    ) -> list[str]:
         """Extract column names from endpoint return schema."""
         columns = []
 
         if endpoint_type in ["tool", "resource"]:
             type_def = endpoint_def.get(endpoint_type)
-            if type_def and type_def.get("return"):
+            if type_def and isinstance(type_def, dict) and type_def.get("return"):
                 return_def = type_def["return"]
                 if return_def and return_def.get("type") == "array" and "items" in return_def:
                     items = return_def["items"]
@@ -235,17 +237,18 @@ class TestRunner:
         # Check for test-defined context
         if "user_context" in test_def:
             test_context_data = test_def["user_context"]
-            test_user_context = UserContext(
-                provider="test",  # Special provider for test-defined contexts
-                user_id=test_context_data.get("user_id", "test_user"),
-                username=test_context_data.get("username", "test_user"),
-                email=test_context_data.get("email"),
-                name=test_context_data.get("name"),
-                avatar_url=test_context_data.get("avatar_url"),
-                raw_profile=test_context_data,  # Store full context for policy access
-            )
-            logger.info(f"Using test-defined user context: {test_context_data}")
-            return test_user_context
+            if test_context_data is not None:
+                test_user_context = UserContext(
+                    provider="test",  # Special provider for test-defined contexts
+                    user_id=test_context_data.get("user_id", "test_user"),
+                    username=test_context_data.get("username", "test_user"),
+                    email=test_context_data.get("email"),
+                    name=test_context_data.get("name"),
+                    avatar_url=test_context_data.get("avatar_url"),
+                    raw_profile=test_context_data,  # Store full context for policy access
+                )
+                logger.info(f"Using test-defined user context: {test_context_data}")
+                return test_user_context
 
         return None
 

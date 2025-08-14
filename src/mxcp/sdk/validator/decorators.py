@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, TypeVar, cast
 
 from .core import TypeValidator
-
 from .loaders import load_schema_from_file
 
 T = TypeVar("T", bound=Callable[..., Any])

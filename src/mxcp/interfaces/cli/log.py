@@ -5,12 +5,12 @@ from pathlib import Path
 
 import click
 
+from mxcp.core.config.site_config import load_site_config
+from mxcp.interfaces.cli.utils import configure_logging, output_error, output_result
+from mxcp.sdk.audit import AuditLogger
 from mxcp.services.audit import format_audit_record, parse_time_since
 from mxcp.services.audit.exporters import export_to_csv, export_to_duckdb
 from mxcp.services.audit.utils import map_legacy_query_params
-from mxcp.interfaces.cli.utils import configure_logging, output_error, output_result
-from mxcp.core.config.site_config import load_site_config
-from mxcp.sdk.audit import AuditLogger
 
 
 @click.command(name="log")

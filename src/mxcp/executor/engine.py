@@ -104,14 +104,16 @@ def create_execution_engine(
 
         # Get the profile name to use
         profile_name = profile or site_config["profile"]
-        
+
         # Handle readonly override
         db_readonly_from_config = False
         if "profiles" in site_config:
             site_profiles = site_config.get("profiles", {})
             site_profile_config = site_profiles.get(profile_name, {})
             duckdb_config = site_profile_config.get("duckdb", {})
-            db_readonly_from_config = duckdb_config.get("readonly", False) if duckdb_config else False
+            db_readonly_from_config = (
+                bool(duckdb_config.get("readonly", False)) if duckdb_config else False
+            )
         db_readonly = readonly if readonly is not None else db_readonly_from_config
 
         # Create SDK session configuration using the shared function
@@ -151,5 +153,3 @@ def create_execution_engine(
     except Exception as e:
         logger.error(f"Failed to create ExecutionEngine: {e}")
         raise RuntimeError(f"Failed to create ExecutionEngine: {e}") from e
-
-

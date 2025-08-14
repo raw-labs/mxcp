@@ -15,7 +15,11 @@ class TestFixtures:
         """Test loading and using calculator schema from fixtures."""
         # Get the fixture path
         fixture_path = (
-            Path(__file__).parent.parent.parent / "fixtures" / "sdk" / "validator" / "calculator.yaml"
+            Path(__file__).parent.parent.parent
+            / "fixtures"
+            / "sdk"
+            / "validator"
+            / "calculator.yaml"
         )
 
         @validate.from_file(str(fixture_path))
@@ -49,7 +53,11 @@ class TestFixtures:
     def test_schema_file_validation(self):
         """Test direct schema loading from file."""
         schema_path = (
-            Path(__file__).parent.parent.parent / "fixtures" / "sdk" / "validator" / "calculator.yaml"
+            Path(__file__).parent.parent.parent
+            / "fixtures"
+            / "sdk"
+            / "validator"
+            / "calculator.yaml"
         )
 
         # Load and create validator

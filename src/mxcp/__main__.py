@@ -1,5 +1,6 @@
 import click
 
+from mxcp.core.config.analytics import initialize_analytics, track_base_command
 from mxcp.interfaces.cli.dbt import dbt_config, dbt_wrapper
 from mxcp.interfaces.cli.drift_check import drift_check
 from mxcp.interfaces.cli.drift_snapshot import drift_snapshot
@@ -14,7 +15,6 @@ from mxcp.interfaces.cli.run import run_endpoint
 from mxcp.interfaces.cli.serve import serve
 from mxcp.interfaces.cli.test import test
 from mxcp.interfaces.cli.validate import validate
-from mxcp.core.config.analytics import initialize_analytics, track_base_command
 
 
 @click.group()

@@ -5,6 +5,9 @@ from typing import Any
 
 import click
 
+from mxcp.core.config.analytics import track_command_with_timing
+from mxcp.core.config.site_config import load_site_config
+from mxcp.core.config.user_config import load_user_config
 from mxcp.interfaces.cli.table_renderer import format_result_for_display
 from mxcp.interfaces.cli.utils import (
     configure_logging,
@@ -13,11 +16,8 @@ from mxcp.interfaces.cli.utils import (
     output_error,
     output_result,
 )
-from mxcp.core.config.analytics import track_command_with_timing
-from mxcp.core.config.site_config import load_site_config
-from mxcp.core.config.user_config import load_user_config
-from mxcp.services.endpoint_service import execute_endpoint
 from mxcp.sdk.auth import UserContext
+from mxcp.services.endpoint_service import execute_endpoint
 
 
 @click.command(name="run")

@@ -10,7 +10,6 @@ from mxcp.core.config.parsers import create_duckdb_session_config
 from mxcp.sdk.executor.plugins.duckdb_plugin.session import DuckDBSession
 
 
-
 def create_duckdb_session(
     site_config: SiteConfig,
     user_config: UserConfig,

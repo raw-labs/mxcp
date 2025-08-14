@@ -8,11 +8,11 @@ from typing import Any
 import click
 import yaml
 
-from mxcp.interfaces.cli.utils import configure_logging, get_env_profile, output_error
 from mxcp.core.config.analytics import track_command_with_timing
-from mxcp.executor.session.duckdb import create_duckdb_session
 from mxcp.core.config.site_config import load_site_config
 from mxcp.core.config.user_config import load_user_config
+from mxcp.executor.session.duckdb import create_duckdb_session
+from mxcp.interfaces.cli.utils import configure_logging, get_env_profile, output_error
 
 
 def check_existing_mxcp_repo(target_dir: Path) -> bool:

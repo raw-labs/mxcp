@@ -8,18 +8,23 @@ import logging
 from typing import Any, cast
 
 from mxcp.core.config._types import SiteConfig, UserConfig
-from mxcp.executor.engine import create_execution_engine
 from mxcp.core.config.site_config import find_repo_root
 from mxcp.definitions.endpoints._types import PromptDefinition
+from mxcp.definitions.endpoints.loader import EndpointLoader
+from mxcp.executor.engine import create_execution_engine
 from mxcp.executor.runners.endpoint import (
     execute_code_with_engine,
     execute_prompt_with_validation,
-    transform_result_for_return_type,
 )
-from mxcp.definitions.endpoints.loader import EndpointLoader
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
-from mxcp.sdk.policy import PolicyAction, PolicyDefinition, PolicyEnforcementError, PolicyEnforcer, PolicySet
+from mxcp.sdk.policy import (
+    PolicyAction,
+    PolicyDefinition,
+    PolicyEnforcementError,
+    PolicyEnforcer,
+    PolicySet,
+)
 
 logger = logging.getLogger(__name__)
 

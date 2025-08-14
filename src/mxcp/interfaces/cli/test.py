@@ -5,6 +5,10 @@ from typing import Any
 
 import click
 
+from mxcp.core.config.analytics import track_command_with_timing
+from mxcp.core.config.site_config import load_site_config
+from mxcp.core.config.user_config import load_user_config
+from mxcp.definitions.endpoints.utils import EndpointType
 from mxcp.interfaces.cli.utils import (
     configure_logging,
     get_env_flag,
@@ -12,12 +16,8 @@ from mxcp.interfaces.cli.utils import (
     output_error,
     output_result,
 )
-from mxcp.core.config.analytics import track_command_with_timing
-from mxcp.core.config.site_config import load_site_config
-from mxcp.core.config.user_config import load_user_config
-from mxcp.services.tester_service import run_all_tests, run_tests
-from mxcp.definitions.endpoints.utils import EndpointType
 from mxcp.sdk.auth import UserContext
+from mxcp.services.tester_service import run_all_tests, run_tests
 
 
 def format_test_results(results: dict[str, Any] | str, debug: bool = False) -> str:

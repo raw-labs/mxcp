@@ -6,11 +6,11 @@ specific to MXCP's config structure.
 """
 
 from mxcp.core.config._types import UserAuthConfig, UserConfig, UserHttpTransportConfig
+from mxcp.sdk.auth import ExternalOAuthHandler
 from mxcp.sdk.auth._types import AuthConfig, HttpTransportConfig
 from mxcp.sdk.auth.providers.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.providers.github import GitHubOAuthHandler
 from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
-from mxcp.sdk.auth import ExternalOAuthHandler
 from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 

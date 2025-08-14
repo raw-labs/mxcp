@@ -8,8 +8,8 @@ from typing import Any
 from mcp.server.auth.middleware.auth_context import get_access_token
 
 from ._types import UserContext
-from .context import reset_user_context, set_user_context
 from .base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from .context import reset_user_context, set_user_context
 
 logger = logging.getLogger(__name__)
 
