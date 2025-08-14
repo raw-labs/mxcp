@@ -89,7 +89,7 @@ class AuditLogger:
         input_params: dict[str, Any],
         duration_ms: int,
         schema_name: str,
-        policy_decision: PolicyDecision = "n/a",
+        policy_decision: PolicyDecision = None,
         reason: str | None = None,
         status: Status = "success",
         error: str | None = None,
@@ -97,6 +97,7 @@ class AuditLogger:
         user_id: str | None = None,
         session_id: str | None = None,
         trace_id: str | None = None,
+        policies_evaluated: list[str] | None = None,
     ) -> None:
         """Log an audit event.
 
@@ -115,6 +116,7 @@ class AuditLogger:
             user_id: Optional user identifier
             session_id: Optional session identifier
             trace_id: Optional trace identifier
+            policies_evaluated: Optional list of policies that were evaluated
         """
         try:
             # Create audit record with schema reference
@@ -135,6 +137,7 @@ class AuditLogger:
                 user_id=user_id,
                 session_id=session_id,
                 trace_id=trace_id,
+                policies_evaluated=policies_evaluated or [],
             )
 
             # Delegate to backend - clean async interface

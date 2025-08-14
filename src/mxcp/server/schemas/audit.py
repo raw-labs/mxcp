@@ -24,5 +24,12 @@ ENDPOINT_EXECUTION_SCHEMA = AuditSchema(
         ),  # "allow", "deny", "warn", "n/a"
         FieldDefinition("policy_reason", "string", required=False),
     ],
+    # Extract key fields for easier querying and business reporting
+    extract_fields=[
+        "operation_type",  # Tool, resource, or prompt
+        "operation_name",  # The specific endpoint
+        "operation_status",  # Success or error
+        "policy_decision",  # Allow, deny, warn, n/a
+    ],
     indexes=["operation_type", "operation_name", "timestamp", "user_id"],
 )

@@ -68,6 +68,10 @@ class PolicyEnforcer:
         """
         self.policy_set = policy_set
         self._cel_env = self._create_cel_environment()
+        # Track policy evaluation results for audit logging
+        self.policies_evaluated: list[str] = []
+        self.last_policy_decision: str | None = None
+        self.last_policy_reason: str | None = None
 
     def _create_cel_environment(self) -> celpy.Environment:
         """Create CEL environment with custom functions."""
@@ -153,6 +157,11 @@ class PolicyEnforcer:
         Raises:
             PolicyEnforcementError: If a policy denies access
         """
+        # Reset tracking for this enforcement cycle
+        self.policies_evaluated = []
+        self.last_policy_decision = "allow"  # Default to allow if no policies
+        self.last_policy_reason = None
+
         # Build context for CEL evaluation
         # IMPORTANT: User context is nested under "user" to prevent collision
         # with query parameters that might also be named "user"
@@ -171,12 +180,18 @@ class PolicyEnforcer:
         context["user"] = self._user_context_to_dict(user_context)  # User context takes precedence
 
         # Evaluate each input policy
-        for policy in self.policy_set.input_policies:
+        for i, policy in enumerate(self.policy_set.input_policies):
+            # Track that we evaluated this policy
+            policy_desc = f"input[{i}]: {policy.condition}"
+            self.policies_evaluated.append(policy_desc)
+
             if (
                 self._evaluate_condition(policy.condition, context)
                 and policy.action == PolicyAction.DENY
             ):
                 reason = policy.reason or "Access denied by policy"
+                self.last_policy_decision = "deny"
+                self.last_policy_reason = reason
                 logger.warning(f"Input policy denied access: {reason}")
                 raise PolicyEnforcementError(reason)
 
@@ -205,31 +220,46 @@ class PolicyEnforcer:
         context = {"user": self._user_context_to_dict(user_context), "response": output}
 
         applied_action = None
+        any_policy_applied = False
 
         # Evaluate each output policy
-        for policy in self.policy_set.output_policies:
+        for i, policy in enumerate(self.policy_set.output_policies):
+            # Track that we evaluated this policy
+            policy_desc = f"output[{i}]: {policy.condition}"
+            self.policies_evaluated.append(policy_desc)
+
             if self._evaluate_condition(policy.condition, context):
                 if policy.action == PolicyAction.DENY:
                     reason = policy.reason or "Output blocked by policy"
+                    self.last_policy_decision = "deny"
+                    self.last_policy_reason = reason
                     logger.warning(f"Output policy denied access: {reason}")
                     raise PolicyEnforcementError(reason)
 
                 elif policy.action == PolicyAction.FILTER_FIELDS and policy.fields:
                     output = self._filter_fields(output, policy.fields)
                     applied_action = "filter_fields"
+                    any_policy_applied = True
 
                 elif policy.action == PolicyAction.MASK_FIELDS and policy.fields:
                     output = self._mask_fields(output, policy.fields)
                     applied_action = "mask_fields"
+                    any_policy_applied = True
 
                 elif policy.action == PolicyAction.FILTER_SENSITIVE_FIELDS:
                     if endpoint_def and "return" in endpoint_def:
                         output = self._filter_sensitive_fields(output, endpoint_def["return"])
                         applied_action = "filter_sensitive_fields"
+                        any_policy_applied = True
                     else:
                         logger.warning(
                             "filter_sensitive_fields policy requires endpoint definition with return type"
                         )
+
+        # Update decision if output was modified
+        if any_policy_applied and self.last_policy_decision == "allow":
+            self.last_policy_decision = "warn"
+            self.last_policy_reason = f"Output modified by {applied_action}"
 
         return output, applied_action
 

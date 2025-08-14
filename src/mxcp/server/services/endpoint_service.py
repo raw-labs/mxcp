@@ -160,7 +160,7 @@ async def execute_endpoint(
         engine.shutdown()
 
 
-async def execute_endpoint_with_engine(
+async def execute_endpoint_with_engine_and_policy(
     endpoint_type: str,
     name: str,
     params: dict[str, Any],
@@ -169,11 +169,11 @@ async def execute_endpoint_with_engine(
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
-) -> Any:
-    """Execute endpoint using an existing SDK execution engine.
+) -> tuple[Any, dict[str, Any]]:
+    """Execute endpoint and return both result and policy information.
 
-    This variant receives an execution engine from the caller and reuses it,
-    which is more efficient for batch operations like testing multiple endpoints.
+    This is the full implementation that returns all execution details including
+    policy enforcement information.
 
     Args:
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
@@ -185,7 +185,10 @@ async def execute_endpoint_with_engine(
         user_context: User context for authentication/authorization
 
     Returns:
-        The result of endpoint execution
+        Tuple of (result, policy_info) where policy_info contains:
+            - policies_evaluated: List of policies that were evaluated
+            - policy_decision: "allow", "deny", "warn", or None
+            - policy_reason: Reason if denied or warned
 
     Raises:
         ValueError: If endpoint not found or invalid
@@ -289,4 +292,64 @@ async def execute_endpoint_with_engine(
         except PolicyEnforcementError as e:
             raise ValueError(f"Output policy enforcement failed: {e.reason}") from e
 
+    # Always return policy info
+    if policy_enforcer:
+        policy_info = {
+            "policies_evaluated": policy_enforcer.policies_evaluated,
+            "policy_decision": policy_enforcer.last_policy_decision,
+            "policy_reason": policy_enforcer.last_policy_reason,
+        }
+    else:
+        # No policies were defined
+        policy_info = {
+            "policies_evaluated": [],
+            "policy_decision": None,
+            "policy_reason": None,
+        }
+
+    return result, policy_info
+
+
+async def execute_endpoint_with_engine(
+    endpoint_type: str,
+    name: str,
+    params: dict[str, Any],
+    user_config: UserConfig,
+    site_config: SiteConfig,
+    execution_engine: ExecutionEngine,
+    skip_output_validation: bool = False,
+    user_context: UserContext | None = None,
+) -> Any:
+    """Execute endpoint using an existing SDK execution engine.
+
+    This is a convenience wrapper that only returns the execution result,
+    discarding policy information. Use execute_endpoint_with_engine_and_policy
+    if you need policy enforcement details.
+
+    Args:
+        endpoint_type: Type of endpoint ("tool", "resource", "prompt")
+        name: Name of the endpoint to execute
+        params: Parameters to pass to the endpoint
+        site_config: Site configuration (needed for EndpointLoader)
+        execution_engine: Pre-created execution engine to reuse
+        skip_output_validation: Whether to skip output schema validation
+        user_context: User context for authentication/authorization
+
+    Returns:
+        The result of endpoint execution
+
+    Raises:
+        ValueError: If endpoint not found or invalid
+        RuntimeError: If execution fails
+    """
+    result, _ = await execute_endpoint_with_engine_and_policy(
+        endpoint_type=endpoint_type,
+        name=name,
+        params=params,
+        user_config=user_config,
+        site_config=site_config,
+        execution_engine=execution_engine,
+        skip_output_validation=skip_output_validation,
+        user_context=user_context,
+    )
     return result

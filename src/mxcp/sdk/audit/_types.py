@@ -18,7 +18,7 @@ from uuid import uuid4
 # Type aliases
 CallerType = Literal["cli", "http", "stdio", "api", "system", "unknown"]
 EventType = Literal["tool", "resource", "prompt"]  # Backward compatibility
-PolicyDecision = Literal["allow", "deny", "warn", "n/a"]
+PolicyDecision = Literal["allow", "deny", "warn"] | None
 Status = Literal["success", "error"]
 
 # New type aliases
@@ -146,7 +146,7 @@ class AuditRecord:
 
     # Policy evaluation results (but not the policies themselves)
     policies_evaluated: list[str] = field(default_factory=list)
-    policy_decision: PolicyDecision | None = None
+    policy_decision: PolicyDecision = None
     policy_reason: str | None = None
 
     # Business context (extracted based on schema's extract_fields)

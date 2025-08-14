@@ -8,12 +8,9 @@ from typing import Any, Literal, cast
 
 import duckdb
 
-logger = logging.getLogger(__name__)
+from ._types import EventType, PolicyDecision, Status
 
-# Type aliases
-EventType = Literal["tool", "resource", "prompt"]
-PolicyDecision = Literal["allow", "deny", "warn", "n/a"]
-Status = Literal["success", "error"]
+logger = logging.getLogger(__name__)
 
 
 class AuditQuery:
