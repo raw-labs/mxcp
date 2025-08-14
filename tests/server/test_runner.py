@@ -5,7 +5,7 @@ import pytest
 
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.services.endpoint_service import execute_endpoint
+from mxcp.server.services.endpoints import execute_endpoint
 
 
 @pytest.fixture(scope="session", autouse=True)

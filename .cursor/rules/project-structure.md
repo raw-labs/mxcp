@@ -91,15 +91,17 @@ All server-specific functionality goes under `mxcp.server`:
 - **Example**: `mxcp.server.schemas.tool-schema-1.json`
 
 #### `mxcp.server.services/`
-- **Purpose**: High-level business services
+- **Purpose**: High-level business services organized by feature
+- **Structure**: Each service has a folder with `service.py` as the entry point
 - **What goes here**:
-  - Endpoint execution orchestration (`endpoint_service.py`)
-  - Test execution service (`tester_service.py`)
-  - Evaluation service (`eval_service.py`)
-  - Audit management (`audit/`)
+  - Endpoint execution and validation (`endpoints/service.py` + `endpoints/validator.py`)
+  - Test execution service (`tests/service.py`)
+  - Evaluation service (`evals/service.py`)
+  - Audit utilities (`audit/` - exporters, utils, no service.py as CLI works directly with SDK)
   - Drift detection (`drift/`)
   - DBT integration (`dbt/`)
-- **Example**: `mxcp.server.services.endpoint_service.execute_endpoint()`
+- **Pattern**: Use `<feature>/service.py` for main logic (exception: audit uses utilities directly)
+- **Example**: `mxcp.server.services.endpoints.execute_endpoint()`
 
 ### SDK Code (`mxcp.sdk.*`)
 
@@ -200,7 +202,11 @@ The SDK is designed to be standalone and should NEVER import from `mxcp.server.*
 
 ### Server Feature
 1. Determine the appropriate `mxcp.server.*` submodule
-2. If it's a new service, add to `mxcp.server.services/`
+2. If it's a new service:
+   - Create a folder under `mxcp.server.services/<feature>/`
+   - Add `service.py` as the main entry point
+   - Create `__init__.py` to export main functions
+   - Add supporting modules (utils, types) in same folder
 3. If it's a new interface, add to `mxcp.server.interfaces/`
 4. Update imports to use full paths
 

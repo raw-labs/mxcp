@@ -48,7 +48,7 @@ from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.utils import EndpointType
 from mxcp.server.executor.engine import create_execution_engine
 from mxcp.server.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
-from mxcp.server.services.endpoint_service import (
+from mxcp.server.services.endpoints import (
     execute_endpoint_with_engine,
     execute_endpoint_with_engine_and_policy,
 )
@@ -1152,7 +1152,11 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
-            policy_info: dict[str, Any] = {"policies_evaluated": [], "policy_decision": None, "policy_reason": None}
+            policy_info: dict[str, Any] = {
+                "policies_evaluated": [],
+                "policy_decision": None,
+                "policy_reason": None,
+            }
 
             try:
                 # Get the user context from the context variable (set by auth middleware)

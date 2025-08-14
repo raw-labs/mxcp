@@ -4,11 +4,9 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import duckdb
-
-from ._types import EventType, PolicyDecision, Status
 
 logger = logging.getLogger(__name__)
 

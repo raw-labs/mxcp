@@ -17,7 +17,7 @@ from mxcp.sdk.executor import ExecutionEngine
 from mxcp.server.core.config._types import SiteConfig, UserConfig
 from mxcp.server.definitions.endpoints._types import EndpointDefinition, TestDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
-from mxcp.server.services.endpoint_service import execute_endpoint_with_engine
+from mxcp.server.services.endpoints import execute_endpoint_with_engine
 
 logger = logging.getLogger(__name__)
 

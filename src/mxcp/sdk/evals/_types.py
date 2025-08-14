@@ -6,7 +6,7 @@ and other data structures used in the evaluation framework.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional, TypedDict
+from typing import Any
 
 from mxcp.sdk.validator import TypeSchema
 
@@ -104,7 +104,7 @@ class ToolDefinition:
             if self.return_type.description:
                 return_line += f" - {self.return_type.description}"
             lines.append(return_line)
-            
+
             # Add more context about the return type for the LLM
             if self.return_type.format:
                 lines.append(f"  Format: {self.return_type.format}")
@@ -117,7 +117,9 @@ class ToolDefinition:
             if self.return_type.maximum is not None:
                 lines.append(f"  Maximum value: {self.return_type.maximum}")
             if self.return_type.enum:
-                lines.append(f"  Allowed values: {', '.join(str(v) for v in self.return_type.enum)}")
+                lines.append(
+                    f"  Allowed values: {', '.join(str(v) for v in self.return_type.enum)}"
+                )
 
         # Format tags
         if self.tags:

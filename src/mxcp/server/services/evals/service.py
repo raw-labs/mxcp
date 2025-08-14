@@ -126,7 +126,7 @@ def _convert_endpoints_to_tool_definitions(
                 return_type = None
                 if tool.get("return_"):
                     return_type = TypeSchema.from_dict(cast(dict[str, Any], tool["return_"]))
-                
+
                 tool_definitions.append(
                     ToolDefinition(
                         name=tool["name"],
@@ -159,7 +159,7 @@ def _convert_endpoints_to_tool_definitions(
                 return_type = None
                 if resource.get("return"):
                     return_type = TypeSchema.from_dict(cast(dict[str, Any], resource["return"]))
-                
+
                 tool_definitions.append(
                     ToolDefinition(
                         name=resource["uri"],

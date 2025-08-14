@@ -17,7 +17,7 @@ from mxcp.server.interfaces.cli.utils import (
     output_error,
     output_result,
 )
-from mxcp.server.services.tester_service import run_all_tests, run_tests
+from mxcp.server.services.tests import run_all_tests, run_tests
 
 
 def format_test_results(results: dict[str, Any] | str, debug: bool = False) -> str:

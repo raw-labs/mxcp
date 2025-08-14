@@ -14,6 +14,7 @@ from mxcp.sdk.evals import (
     ToolDefinition,
     ToolExecutor,
 )
+from mxcp.sdk.validator import TypeSchema
 
 
 class MockToolExecutor:
@@ -249,7 +250,7 @@ class TestToolDefinition:
                 ),
                 ParameterDefinition(name="precision", type="integer", description="Decimal places"),
             ],
-            return_type={"type": "number", "description": "Result"},
+            return_type=TypeSchema(type="number", description="Result"),
             tags=["math", "utility"],
         )
 

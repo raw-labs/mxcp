@@ -17,7 +17,7 @@ from mxcp.server.interfaces.cli.utils import (
     output_error,
     output_result,
 )
-from mxcp.server.services.endpoint_service import execute_endpoint
+from mxcp.server.services.endpoints import execute_endpoint
 
 
 @click.command(name="run")
