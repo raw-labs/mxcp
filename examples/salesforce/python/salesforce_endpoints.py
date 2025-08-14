@@ -10,7 +10,7 @@ import logging
 import time
 import functools
 import threading
-import simple_salesforce
+from simple_salesforce import Salesforce  # type: ignore[attr-defined]
 from simple_salesforce.exceptions import SalesforceExpiredSession
 
 from mxcp.runtime import config, on_init, on_shutdown
@@ -18,13 +18,13 @@ from mxcp.runtime import config, on_init, on_shutdown
 logger = logging.getLogger(__name__)
 
 # Global Salesforce client for reuse across all function calls
-sf_client: Optional[simple_salesforce.Salesforce] = None
+sf_client: Optional[Salesforce] = None
 # Thread lock to protect client initialization
 _client_lock = threading.Lock()
 
 
 @on_init
-def setup_salesforce_client():
+def setup_salesforce_client() -> None:
     """Initialize Salesforce client when server starts.
 
     Thread-safe: multiple threads can safely call this simultaneously.
@@ -45,7 +45,7 @@ def setup_salesforce_client():
         if missing_keys:
             raise ValueError(f"Missing Salesforce configuration keys: {', '.join(missing_keys)}")
 
-        sf_client = simple_salesforce.Salesforce(
+        sf_client = Salesforce(
             username=sf_config["username"],
             password=sf_config["password"],
             security_token=sf_config["security_token"],
@@ -57,7 +57,7 @@ def setup_salesforce_client():
 
 
 @on_shutdown
-def cleanup_salesforce_client():
+def cleanup_salesforce_client() -> None:
     """Clean up Salesforce client when server stops."""
     global sf_client
     if sf_client:
@@ -66,7 +66,7 @@ def cleanup_salesforce_client():
         logger.info("Salesforce client cleaned up")
 
 
-def retry_on_session_expiration(func: Callable) -> Callable:
+def retry_on_session_expiration(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Decorator that automatically retries functions on session expiration.
 
@@ -84,7 +84,7 @@ def retry_on_session_expiration(func: Callable) -> Callable:
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         max_retries = 2  # Hardcoded: 2 retries = 3 total attempts
 
         for attempt in range(max_retries + 1):
@@ -112,7 +112,7 @@ def retry_on_session_expiration(func: Callable) -> Callable:
     return wrapper
 
 
-def _get_salesforce_client() -> simple_salesforce.Salesforce:
+def _get_salesforce_client() -> Salesforce:
     """Get the global Salesforce client."""
     if sf_client is None:
         raise RuntimeError(
@@ -140,7 +140,11 @@ def soql(query: str) -> List[Dict[str, Any]]:
     result = sf.query(query)
 
     # Remove 'attributes' field from each record for cleaner output
-    return [{k: v for k, v in record.items() if k != "attributes"} for record in result["records"]]
+    if "records" not in result:
+        raise ValueError(f"Unexpected SOQL response format: missing 'records' field in {result}")
+    
+    records = result["records"]
+    return [{k: v for k, v in record.items() if k != "attributes"} for record in records]
 
 
 @retry_on_session_expiration
@@ -162,7 +166,11 @@ def sosl(query: str) -> List[Dict[str, Any]]:
     result = sf.search(query)
 
     # Return the searchRecords directly as a list
-    return result.get("searchRecords", [])
+    if "searchRecords" not in result:
+        raise ValueError(f"Unexpected SOSL response format: missing 'searchRecords' field in {result}")
+    
+    search_records: List[Dict[str, Any]] = result["searchRecords"]
+    return search_records
 
 
 @retry_on_session_expiration
@@ -183,7 +191,8 @@ def search(search_term: str) -> List[Dict[str, Any]]:
     # Build a SOSL query that searches across common objects
     sosl_query = f"FIND {{{search_term}}} IN ALL FIELDS RETURNING Account(Name, Phone, BillingCity), Contact(FirstName, LastName, Email), Lead(FirstName, LastName, Company), Opportunity(Name, Amount, StageName)"
 
-    return sosl(sosl_query)
+    result: List[Dict[str, Any]] = sosl(sosl_query)
+    return result
 
 
 @retry_on_session_expiration
@@ -200,7 +209,21 @@ def list_sobjects(filter: Optional[str] = None) -> List[str]:
     sf = _get_salesforce_client()
     describe_result = sf.describe()
 
-    object_names = [obj["name"] for obj in describe_result["sobjects"]]
+    if not describe_result:
+        raise ValueError("Salesforce describe() returned empty result")
+    
+    if "sobjects" not in describe_result:
+        raise ValueError(f"Unexpected describe response format: missing 'sobjects' field in {describe_result}")
+    
+    sobjects = describe_result["sobjects"]
+    object_names = []
+    
+    for obj in sobjects:
+        if not isinstance(obj, dict):
+            raise ValueError(f"Unexpected sobject format: expected dict, got {type(obj)}: {obj}")
+        if "name" not in obj:
+            raise ValueError(f"Sobject missing 'name' field: {obj}")
+        object_names.append(obj["name"])
 
     if filter is not None and filter.strip():
         filter_lower = filter.lower()
@@ -231,14 +254,28 @@ def describe_sobject(sobject_name: str) -> Dict[str, Any]:
     try:
         sobject = getattr(sf, sobject_name)
     except AttributeError:
-        raise Exception(f"Salesforce object '{sobject_name}' does not exist")
+        raise ValueError(f"Salesforce object '{sobject_name}' does not exist")
 
     # Let API errors from describe() propagate naturally with their original messages
     describe_result = sobject.describe()
 
+    if not describe_result:
+        raise ValueError(f"Salesforce object '{sobject_name}' describe() returned empty result")
+    
+    if "fields" not in describe_result:
+        raise ValueError(f"Unexpected describe response format for '{sobject_name}': missing 'fields' field in {describe_result}")
+
     # Process fields into the required format
     fields_info = {}
     for field in describe_result["fields"]:
+        if not isinstance(field, dict):
+            raise ValueError(f"Unexpected field format in '{sobject_name}': expected dict, got {type(field)}: {field}")
+        
+        required_fields = ["name", "type", "label"]
+        for required_field in required_fields:
+            if required_field not in field:
+                raise ValueError(f"Field missing '{required_field}' in '{sobject_name}': {field}")
+        
         field_name = field["name"]
         field_info = {"type": field["type"], "label": field["label"]}
 
@@ -273,12 +310,13 @@ def get_sobject(sobject_name: str, record_id: str) -> Dict[str, Any]:
     try:
         sobject = getattr(sf, sobject_name)
     except AttributeError:
-        raise Exception(f"Salesforce object '{sobject_name}' does not exist")
+        raise ValueError(f"Salesforce object '{sobject_name}' does not exist")
 
     result = sobject.get(record_id)
 
     # Remove 'attributes' field for consistency with other functions
     if isinstance(result, dict) and "attributes" in result:
-        result = {k: v for k, v in result.items() if k != "attributes"}
+        cleaned_result: Dict[str, Any] = {k: v for k, v in result.items() if k != "attributes"}
+        return cleaned_result
 
-    return result
+    return dict(result) if result else {}
