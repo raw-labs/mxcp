@@ -4,11 +4,12 @@ projects:
   salesforce-demo:
     profiles:
       dev:
-        plugin:
-          config:
-            salesforce:
-              instance_url: "https://your-instance.salesforce.com"
-              username: "your-username@example.com"
-              password: "your-password"
-              security_token: "your-security-token"
-              client_id: "your-client-id" 
+        secrets:
+          - name: salesforce
+            type: python
+            parameters:
+              instance_url: "${SALESFORCE_URL}"
+              username: "${SALESFORCE_USERNAME}"
+              password: "${SALESFORCE_PASSWORD}"
+              security_token: "${SALESFORCE_TOKEN}"
+              client_id: "${SALESFORCE_CLIENT_ID}"
