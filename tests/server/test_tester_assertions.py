@@ -6,7 +6,7 @@ import pytest
 
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.services.tester_service import run_tests
+from mxcp.server.services.tests import run_tests
 from mxcp.sdk.auth import UserContext
 
 

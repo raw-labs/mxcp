@@ -11,6 +11,7 @@ from mxcp.sdk.evals import (
     ParameterDefinition,
     ToolDefinition,
 )
+from mxcp.sdk.validator import TypeSchema
 from mxcp.server.core.config._types import SiteConfig, UserConfig
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition
@@ -121,12 +122,17 @@ def _convert_endpoints_to_tool_definitions(
                         )
                     )
 
+                # Convert return TypeDefinition to TypeSchema if present
+                return_type = None
+                if tool.get("return_"):
+                    return_type = TypeSchema.from_dict(cast(dict[str, Any], tool["return_"]))
+
                 tool_definitions.append(
                     ToolDefinition(
                         name=tool["name"],
                         description=tool.get("description") or "",
                         parameters=parameters,
-                        return_type=tool.get("return_"),
+                        return_type=return_type,
                         annotations=tool.get("annotations") or {},
                         tags=tool.get("tags") or [],
                     )
@@ -149,12 +155,17 @@ def _convert_endpoints_to_tool_definitions(
                         )
                     )
 
+                # Convert return TypeDefinition to TypeSchema if present
+                return_type = None
+                if resource.get("return"):
+                    return_type = TypeSchema.from_dict(cast(dict[str, Any], resource["return"]))
+
                 tool_definitions.append(
                     ToolDefinition(
                         name=resource["uri"],
                         description=resource.get("description") or "",
                         parameters=parameters,
-                        return_type=resource.get("return"),
+                        return_type=return_type,
                         annotations={},
                         tags=resource.get("tags") or [],
                     )

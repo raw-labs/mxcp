@@ -4,16 +4,11 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import duckdb
 
 logger = logging.getLogger(__name__)
-
-# Type aliases
-EventType = Literal["tool", "resource", "prompt"]
-PolicyDecision = Literal["allow", "deny", "warn", "n/a"]
-Status = Literal["success", "error"]
 
 
 class AuditQuery:

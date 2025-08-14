@@ -9,19 +9,11 @@ from jsonschema import validate
 from referencing import Registry, Resource
 
 from mxcp.server.core.config._types import SiteConfig
+from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition
 
 # Configure logging
 logger = logging.getLogger(__name__)
-
-
-def find_repo_root() -> Path:
-    """Find the repository root (where mxcp-site.yml is)"""
-    current = Path.cwd()
-    for parent in [current] + list(current.parents):
-        if (parent / "mxcp-site.yml").exists():
-            return parent
-    raise FileNotFoundError("mxcp-site.yml not found in current directory or any parent directory")
 
 
 def extract_validation_error(error_msg: str) -> str:

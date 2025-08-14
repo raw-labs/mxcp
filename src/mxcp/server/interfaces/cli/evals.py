@@ -11,7 +11,7 @@ from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.interfaces.cli.utils import configure_logging, output_error, output_result
-from mxcp.server.services.eval_service import run_all_evals, run_eval_suite
+from mxcp.server.services.evals import run_all_evals, run_eval_suite
 
 
 def format_eval_results(results: dict[str, Any], debug: bool = False) -> str:

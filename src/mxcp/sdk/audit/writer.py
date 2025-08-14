@@ -113,8 +113,19 @@ class BaseAuditWriter:
 
         # Extract business context fields
         if schema.extract_fields:
+            # Create a combined data source that includes both record fields and input_data
+            combined_data = {
+                "operation_type": processed_record.operation_type,
+                "operation_name": processed_record.operation_name,
+                "operation_status": processed_record.operation_status,
+                "policy_decision": processed_record.policy_decision,
+                "caller_type": processed_record.caller_type,
+                "user_id": processed_record.user_id,
+                "duration_ms": processed_record.duration_ms,
+                **processed_record.input_data,  # Include input_data fields
+            }
             processed_record.business_context = self._extract_fields(
-                processed_record.input_data, schema.extract_fields
+                combined_data, schema.extract_fields
             )
 
         # Apply redactions

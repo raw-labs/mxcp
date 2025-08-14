@@ -6,34 +6,9 @@ and other data structures used in the evaluation framework.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional, TypedDict
+from typing import Any
 
-
-class TypeDefinition(TypedDict):
-    """Type definition for parameters and return types.
-
-    This is a copy of the TypeDefinition from server to maintain SDK isolation.
-    """
-
-    type: str
-    format: str | None  # email, uri, date, time, date-time, duration, timestamp
-    sensitive: bool | None  # Whether this field contains sensitive data
-    minLength: int | None
-    maxLength: int | None
-    minimum: float | None
-    maximum: float | None
-    exclusiveMinimum: float | None
-    exclusiveMaximum: float | None
-    multipleOf: float | None
-    minItems: int | None
-    maxItems: int | None
-    uniqueItems: bool | None
-    items: Optional["TypeDefinition"]
-    properties: dict[str, "TypeDefinition"] | None
-    required: list[str] | None
-    additionalProperties: (
-        bool | None
-    )  # Whether to allow additional properties not defined in the schema
+from mxcp.sdk.validator import TypeSchema
 
 
 # LLM Model configuration types
@@ -98,7 +73,7 @@ class ToolDefinition:
     name: str
     description: str = ""
     parameters: list[ParameterDefinition] = field(default_factory=list)
-    return_type: TypeDefinition | None = None
+    return_type: TypeSchema | None = None
     annotations: dict[str, Any] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
 
@@ -125,12 +100,26 @@ class ToolDefinition:
 
         # Format return type
         if self.return_type:
-            return_type_str = self.return_type.get("type", "any")
-            return_description = self.return_type.get("description", "")
-            return_line = f"Returns: {return_type_str}"
-            if return_description:
-                return_line += f" - {return_description}"
+            return_line = f"Returns: {self.return_type.type}"
+            if self.return_type.description:
+                return_line += f" - {self.return_type.description}"
             lines.append(return_line)
+
+            # Add more context about the return type for the LLM
+            if self.return_type.format:
+                lines.append(f"  Format: {self.return_type.format}")
+            if self.return_type.min_length is not None:
+                lines.append(f"  Min length: {self.return_type.min_length}")
+            if self.return_type.max_length is not None:
+                lines.append(f"  Max length: {self.return_type.max_length}")
+            if self.return_type.minimum is not None:
+                lines.append(f"  Minimum value: {self.return_type.minimum}")
+            if self.return_type.maximum is not None:
+                lines.append(f"  Maximum value: {self.return_type.maximum}")
+            if self.return_type.enum:
+                lines.append(
+                    f"  Allowed values: {', '.join(str(v) for v in self.return_type.enum)}"
+                )
 
         # Format tags
         if self.tags:

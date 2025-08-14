@@ -48,7 +48,10 @@ from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.utils import EndpointType
 from mxcp.server.executor.engine import create_execution_engine
 from mxcp.server.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
-from mxcp.server.services.endpoint_service import execute_endpoint_with_engine
+from mxcp.server.services.endpoints import (
+    execute_endpoint_with_engine,
+    execute_endpoint_with_engine_and_policy,
+)
 from mxcp.server.services.endpoints.validator import validate_endpoint
 
 from ._types import ConfigInfo
@@ -1149,7 +1152,11 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
-            exec_ = None  # Initialize to prevent NameError in finally block
+            policy_info: dict[str, Any] = {
+                "policies_evaluated": [],
+                "policy_decision": None,
+                "policy_reason": None,
+            }
 
             try:
                 # Get the user context from the context variable (set by auth middleware)
@@ -1170,7 +1177,7 @@ class RAWMCP:
                     name = cast(str, endpoint_def.get("uri", "unknown"))
                 else:
                     name = cast(str, endpoint_def.get("name", "unnamed"))
-                result = await execute_endpoint_with_engine(
+                result, policy_info = await execute_endpoint_with_engine_and_policy(
                     endpoint_type=endpoint_type.value,
                     name=name,
                     params=kwargs,  # No manual conversion needed - SDK handles it
@@ -1204,14 +1211,6 @@ class RAWMCP:
                     # Fallback to http if transport mode not set
                     caller = "http"
 
-                # Get policy decision from executor if available
-                policy_decision = "n/a"
-                policy_reason = None
-                if exec_ is not None and hasattr(exec_, "last_policy_decision"):
-                    policy_decision = exec_.last_policy_decision
-                if exec_ is not None and hasattr(exec_, "last_policy_reason"):
-                    policy_reason = exec_.last_policy_reason
-
                 # Log the audit event
                 if self.audit_logger:
                     await self.audit_logger.log_event(
@@ -1225,13 +1224,12 @@ class RAWMCP:
                         input_params=kwargs,
                         duration_ms=duration_ms,
                         schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                        policy_decision=cast(
-                            Literal["allow", "deny", "warn", "n/a"], policy_decision
-                        ),
-                        reason=policy_reason,
+                        policy_decision=policy_info["policy_decision"],
+                        reason=policy_info["policy_reason"],
                         status=cast(Literal["success", "error"], status),
                         error=error_msg,
                         output_data=result,  # Return the result as output_data
+                        policies_evaluated=policy_info["policies_evaluated"],
                     )
 
         # -------------------------------------------------------------------
@@ -1386,7 +1384,7 @@ class RAWMCP:
                             input_params={"sql": sql},
                             duration_ms=duration_ms,
                             schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                            policy_decision="n/a",
+                            policy_decision=None,
                             reason=None,
                             status=cast(Literal["success", "error"], status),
                             error=error_msg,
@@ -1465,7 +1463,7 @@ class RAWMCP:
                             input_params={},
                             duration_ms=duration_ms,
                             schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                            policy_decision="n/a",
+                            policy_decision=None,
                             reason=None,
                             status=cast(Literal["success", "error"], status),
                             error=error_msg,
@@ -1551,7 +1549,7 @@ class RAWMCP:
                             input_params={"table_name": table_name},
                             duration_ms=duration_ms,
                             schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                            policy_decision="n/a",
+                            policy_decision=None,
                             reason=None,
                             status=cast(Literal["success", "error"], status),
                             error=error_msg,
