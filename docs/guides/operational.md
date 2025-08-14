@@ -18,6 +18,8 @@ slug: /guides/operational
 
 This comprehensive guide provides everything DevOps professionals need to deploy and operate MXCP in production environments. It consolidates operational information from across the documentation and adds production-ready deployment patterns.
 
+> **See Also**: For detailed information on distributed tracing and observability setup, refer to the [Telemetry Guide](./telemetry.md).
+
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
@@ -1073,7 +1075,7 @@ EOF
 
 ### OpenTelemetry Support
 
-MXCP now includes built-in OpenTelemetry support for distributed tracing, providing deeper insights into your application's performance and behavior.
+MXCP now includes built-in OpenTelemetry support for distributed tracing, providing deeper insights into your application's performance and behavior. For complete setup instructions and details on what data is collected, see the [Telemetry Guide](./telemetry.md).
 
 #### What is OpenTelemetry?
 
