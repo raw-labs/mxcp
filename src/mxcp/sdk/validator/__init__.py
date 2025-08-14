@@ -1,6 +1,6 @@
 """MXCP SDK Validator - OpenAPI-style type validation and conversion.
 
-This module provides comprehensive type validation functionality including:
+This module provides core type validation functionality used by MXCP internally:
 - Input parameter validation with default values and constraints
 - Output result validation with schema compliance
 - Type conversion between Python and OpenAPI types
@@ -17,6 +17,15 @@ This module provides comprehensive type validation functionality including:
 - `ValidationSchema`: Complete validation configuration
 - `ParameterSchema`: Individual parameter definition
 - `TypeSchema`: Type definitions (string, number, object, array, etc.)
+
+## High-Level Decorators
+
+For decorator-based validation and schema loading utilities, see the
+`mxcp.sdk.validator.decorators` submodule:
+
+```python
+from mxcp.sdk.validator.decorators import validate, validate_input, validate_output
+```
 
 ## Quick Examples
 
@@ -77,6 +86,8 @@ validator = TypeValidator(schema)
 validated_output = validator.validate_output(result)
 # sensitive_data is automatically masked: "[REDACTED]"
 ```
+
+
 """
 
 from ._types import (

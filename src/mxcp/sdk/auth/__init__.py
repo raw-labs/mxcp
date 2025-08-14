@@ -70,12 +70,12 @@ from ._types import (
     SalesforceAuthConfig,
     UserContext,
 )
-from .context import get_user_context, reset_user_context, set_user_context
-from .middleware import AuthenticationMiddleware
-from .providers import (
+from .base import (
     ExternalOAuthHandler,
     GeneralOAuthAuthorizationServer,
 )
+from .context import get_user_context, reset_user_context, set_user_context
+from .middleware import AuthenticationMiddleware
 
 __all__ = [
     # Types
