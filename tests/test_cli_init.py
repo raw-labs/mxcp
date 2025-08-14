@@ -11,8 +11,8 @@ import pytest
 import yaml
 from click.testing import CliRunner
 
-from mxcp.cli.init import init
-from mxcp.config.site_config import load_site_config
+from mxcp.interfaces.cli.init import init
+from mxcp.core.config.site_config import load_site_config
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -168,7 +168,7 @@ def test_init_bootstrap_complete_directory_structure(tmp_path):
     try:
         os.chdir(project_dir)
 
-        from mxcp.config.site_config import load_site_config
+        from mxcp.core.config.site_config import load_site_config
 
         loaded_config = load_site_config()
 
@@ -279,7 +279,7 @@ def test_user_config_generation_uses_integer_version():
     if str(mxcp_src_path) not in sys.path:
         sys.path.insert(0, str(mxcp_src_path))
 
-    from mxcp.config.user_config import _generate_default_config
+    from mxcp.core.config.user_config import _generate_default_config
 
     # Create a mock site config (as would be created by mxcp init)
     site_config = {"mxcp": 1, "project": "test-new-project", "profile": "default"}
@@ -517,7 +517,7 @@ def test_init_bootstrap_with_duckdb_initialization():
 
 def test_user_config_generation_uses_integer_version():
     """Test that _generate_default_config uses integer version format, not string."""
-    from mxcp.config.user_config import _generate_default_config
+    from mxcp.core.config.user_config import _generate_default_config
 
     # Create a mock site config
     site_config = {"mxcp": 1, "project": "test-project", "profile": "default"}
@@ -531,7 +531,7 @@ def test_user_config_generation_uses_integer_version():
 
 def test_migration_exception_handling():
     """Test that migration exceptions are properly caught and displayed by other commands."""
-    from mxcp.cli.list import list_endpoints
+    from mxcp.interfaces.cli.list import list_endpoints
 
     runner = CliRunner()
 

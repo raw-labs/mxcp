@@ -4,7 +4,7 @@ from typing import Any, cast
 
 from mxcp.core.config._types import SiteConfig, UserConfig
 from mxcp.executor.engine import create_execution_engine
-from mxcp.config.site_config import find_repo_root
+from mxcp.core.config.site_config import find_repo_root
 from mxcp.definitions.endpoints._types import EndpointDefinition
 from mxcp.definitions.endpoints.loader import EndpointLoader
 from mxcp.definitions.evals.loader import discover_eval_files, load_eval_suite

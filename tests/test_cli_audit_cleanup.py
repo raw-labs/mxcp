@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from mxcp.cli.log_cleanup import log_cleanup
+from mxcp.interfaces.cli.log_cleanup import log_cleanup
 from mxcp.sdk.audit import AuditLogger, AuditSchema
 
 

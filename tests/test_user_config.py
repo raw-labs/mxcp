@@ -5,7 +5,7 @@ import pytest
 import yaml
 
 from mxcp.core.config._types import SiteConfig
-from mxcp.config.user_config import load_user_config
+from mxcp.core.config.user_config import load_user_config
 
 
 def test_env_var_interpolation(tmp_path):

@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mxcp.config.site_config import SiteConfig
-from mxcp.config.user_config import UserConfig
+from mxcp.core.config.site_config import SiteConfig
+from mxcp.core.config.user_config import UserConfig
 from mxcp.definitions.evals.loader import discover_eval_files, load_eval_suite
 from mxcp.sdk.auth import UserContext
 

@@ -7,7 +7,7 @@ from unittest.mock import patch
 import aiohttp
 import pytest
 
-from mxcp.server.mcp import RAWMCP
+from mxcp.interfaces.server.mcp import RAWMCP
 
 
 @pytest.fixture(scope="session", autouse=True)

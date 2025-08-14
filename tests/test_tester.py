@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.config.site_config import load_site_config
-from mxcp.config.user_config import load_user_config
+from mxcp.core.config.site_config import load_site_config
+from mxcp.core.config.user_config import load_user_config
 from mxcp.services.tester_service import run_all_tests, run_tests
 
 

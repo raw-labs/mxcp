@@ -7,14 +7,14 @@ from typing import Any, cast
 import click
 import yaml
 
-from ..core.config._types import (
+from mxcp.core.config._types import (
     SiteConfig,
     UserConfig,
     UserProfileConfig,
     UserProjectConfig,
     UserSecretDefinition,
 )
-from ..core.config.site_config import find_repo_root
+from mxcp.core.config.site_config import find_repo_root
 
 
 def _get_dbt_profiles_dir() -> Path:

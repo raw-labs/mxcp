@@ -10,8 +10,8 @@ import pytest
 import yaml
 
 from mxcp.executor.engine import create_execution_engine
-from mxcp.config.site_config import load_site_config
-from mxcp.config.user_config import load_user_config
+from mxcp.core.config.site_config import load_site_config
+from mxcp.core.config.user_config import load_user_config
 from mxcp.services.endpoint_service import execute_endpoint_with_engine
 
 

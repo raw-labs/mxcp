@@ -1,19 +1,19 @@
 import click
 
-from mxcp.cli.dbt import dbt_config, dbt_wrapper
-from mxcp.cli.drift_check import drift_check
-from mxcp.cli.drift_snapshot import drift_snapshot
-from mxcp.cli.evals import evals
-from mxcp.cli.init import init
-from mxcp.cli.lint import lint
-from mxcp.cli.list import list_endpoints
-from mxcp.cli.log import log
-from mxcp.cli.log_cleanup import log_cleanup
-from mxcp.cli.query import query
-from mxcp.cli.run import run_endpoint
-from mxcp.cli.serve import serve
-from mxcp.cli.test import test
-from mxcp.cli.validate import validate
+from mxcp.interfaces.cli.dbt import dbt_config, dbt_wrapper
+from mxcp.interfaces.cli.drift_check import drift_check
+from mxcp.interfaces.cli.drift_snapshot import drift_snapshot
+from mxcp.interfaces.cli.evals import evals
+from mxcp.interfaces.cli.init import init
+from mxcp.interfaces.cli.lint import lint
+from mxcp.interfaces.cli.list import list_endpoints
+from mxcp.interfaces.cli.log import log
+from mxcp.interfaces.cli.log_cleanup import log_cleanup
+from mxcp.interfaces.cli.query import query
+from mxcp.interfaces.cli.run import run_endpoint
+from mxcp.interfaces.cli.serve import serve
+from mxcp.interfaces.cli.test import test
+from mxcp.interfaces.cli.validate import validate
 from mxcp.core.config.analytics import initialize_analytics, track_base_command
 
 

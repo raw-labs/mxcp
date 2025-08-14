@@ -7,7 +7,7 @@ import yaml
 from jsonschema import validate
 
 from mxcp.core.config._types import SiteConfig
-from mxcp.config.site_config import find_repo_root
+from mxcp.core.config.site_config import find_repo_root
 from mxcp.definitions.evals._types import EvalSuite
 
 logger = logging.getLogger(__name__)

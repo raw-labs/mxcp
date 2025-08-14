@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from mxcp.cli.run import run_endpoint
+from mxcp.interfaces.cli.run import run_endpoint
 
 
 @pytest.fixture(scope="session", autouse=True)

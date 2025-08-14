@@ -8,7 +8,7 @@ import duckdb
 
 from mxcp.core.config._types import SiteConfig, UserConfig
 from mxcp.executor.engine import create_execution_engine
-from mxcp.config.site_config import find_repo_root
+from mxcp.core.config.site_config import find_repo_root
 from mxcp.services.drift._types import (
     Column,
     DriftSnapshot,
@@ -22,7 +22,7 @@ from mxcp.services.drift._types import (
 )
 from mxcp.definitions.endpoints.loader import EndpointLoader
 from mxcp.executor.runners.test import TestRunner
-from mxcp.endpoints.validate import validate_endpoint_payload
+from mxcp.services.endpoints.validator import validate_endpoint_payload
 from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
 
 logger = logging.getLogger(__name__)

@@ -1,6 +1,6 @@
 from typing import Any, Literal, Optional, TypedDict
 
-from mxcp.cli._types import TestResults
+from mxcp.interfaces.cli._types import TestResults
 
 
 class SourceDefinition(TypedDict, total=False):

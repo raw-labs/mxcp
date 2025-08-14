@@ -6,7 +6,7 @@ SDK DuckDB sessions across the codebase.
 """
 
 from mxcp.core.config._types import SiteConfig, UserConfig
-from mxcp.config.duckdb_config import create_duckdb_session_config
+from mxcp.core.config.parsers import create_duckdb_session_config
 from mxcp.sdk.executor.plugins.duckdb_plugin.session import DuckDBSession
 
 

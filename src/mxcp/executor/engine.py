@@ -8,8 +8,8 @@ through the SDK executor system, with full plugin support and validation.
 
 Example usage:
     >>> from mxcp.executor.engine import create_execution_engine
-    >>> from mxcp.config.user_config import load_user_config
-    >>> from mxcp.config.site_config import load_site_config
+    >>> from mxcp.core.config.user_config import load_user_config
+    >>> from mxcp.core.config.site_config import load_site_config
     >>> from mxcp.sdk.executor import ExecutionContext
     >>> from mxcp.sdk.auth import UserContext
     >>>
@@ -45,9 +45,8 @@ import logging
 from pathlib import Path
 
 from mxcp.core.config._types import SiteConfig, UserConfig
-from mxcp.config.duckdb_config import create_duckdb_session_config
-from mxcp.config.execution_context import execution_context_for_init_hooks
-from mxcp.config.site_config import find_repo_root
+from mxcp.core.config.parsers import create_duckdb_session_config, execution_context_for_init_hooks
+from mxcp.core.config.site_config import find_repo_root
 from mxcp.sdk.executor import ExecutionEngine
 from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
 
@@ -87,8 +86,8 @@ def create_execution_engine(
 
     Example:
         >>> from mxcp.executor.engine import create_execution_engine
-        >>> from mxcp.config.user_config import load_user_config
-        >>> from mxcp.config.site_config import load_site_config
+        >>> from mxcp.core.config.user_config import load_user_config
+        >>> from mxcp.core.config.site_config import load_site_config
         >>>
         >>> site_config = load_site_config()
         >>> user_config = load_user_config(site_config)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.audit.exporters import export_to_csv, export_to_json, export_to_jsonl
+from mxcp.services.audit.exporters import export_to_csv, export_to_json, export_to_jsonl
 from mxcp.sdk.audit import AuditLogger, AuditSchema
 
 

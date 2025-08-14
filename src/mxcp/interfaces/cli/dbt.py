@@ -5,9 +5,9 @@ from typing import Any
 
 import click
 
-from ..core.config.site_config import find_repo_root, load_site_config
-from ..core.config.user_config import load_user_config
-from ..services.dbt.runner import configure_dbt
+from mxcp.core.config.site_config import find_repo_root, load_site_config
+from mxcp.core.config.user_config import load_user_config
+from mxcp.services.dbt.runner import configure_dbt
 from .utils import check_command_available, configure_logging
 
 
