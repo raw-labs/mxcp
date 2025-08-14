@@ -14,6 +14,7 @@ class TypeDefinition(TypedDict):
 
     This is a copy of the TypeDefinition from server to maintain SDK isolation.
     """
+
     type: str
     format: str | None  # email, uri, date, time, date-time, duration, timestamp
     sensitive: bool | None  # Whether this field contains sensitive data
