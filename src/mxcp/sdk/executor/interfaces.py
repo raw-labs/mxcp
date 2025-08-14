@@ -28,15 +28,13 @@ Example usage:
     >>> engine.shutdown()
 """
 
+import contextlib
 import threading
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from mxcp.sdk.telemetry import traced_operation
 from mxcp.sdk.validator import TypeValidator
-
-if TYPE_CHECKING:
-    pass
 
 from .context import ExecutionContext
 
@@ -266,10 +264,8 @@ class ExecutionEngine:
 
             # Add result info to span if available
             if span and hasattr(result, '__len__'):
-                try:
+                with contextlib.suppress(Exception):
                     span.set_attribute("mxcp.result.count", len(result))
-                except Exception:
-                    pass
 
             return result
 

@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Callable
 from functools import wraps
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 
@@ -12,9 +12,6 @@ from mxcp.sdk.telemetry import traced_operation
 from ._types import UserContext
 from .base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from .context import reset_user_context, set_user_context
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +45,7 @@ class AuthenticationMiddleware:
             attributes={
                 "mxcp.auth.enabled": self.auth_enabled,
             }
-        ) as span:  # type: "Span"
+        ) as span:
             if not self.auth_enabled:
                 logger.debug("Authentication is disabled")
                 return None
@@ -71,7 +68,7 @@ class AuthenticationMiddleware:
                     logger.warning("OAuth server not configured")
                     return None
 
-                with traced_operation("mxcp.auth.validate_token") as token_span:  # type: Span
+                with traced_operation("mxcp.auth.validate_token") as token_span:
                     token_info = await self.oauth_server.load_access_token(access_token.token)
                     if not token_info:
                         logger.warning("Invalid or expired access token")
@@ -98,7 +95,7 @@ class AuthenticationMiddleware:
 
                 # Get standardized user context from the provider
                 try:
-                    with traced_operation("mxcp.auth.get_user_context") as user_span:  # type: Span
+                    with traced_operation("mxcp.auth.get_user_context") as user_span:
                         if not self.oauth_handler:
                             logger.warning("OAuth handler not configured")
                             return None

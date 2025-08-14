@@ -355,7 +355,7 @@ class PythonExecutor(ExecutorPlugin):
                 "mxcp.python.name": display_name,
                 "mxcp.python.params.count": len(params) if params else 0,
             }
-        ) as span:
+        ):
             try:
                 # Check if it's a file path or inline code
                 logger.info(f"Executing Python source: {repr(source_code[:100])}...")
@@ -365,13 +365,6 @@ class PythonExecutor(ExecutorPlugin):
                 else:
                     logger.info("Detected as inline code, using _execute_inline")
                     result = await self._execute_inline(source_code, params, context)
-
-                # Add result info to span if available
-                if span and hasattr(result, '__len__'):
-                    try:
-                        span.set_attribute("mxcp.python.result.count", len(result))
-                    except Exception:
-                        pass
 
                 return result
             except (ImportError, SyntaxError) as e:
