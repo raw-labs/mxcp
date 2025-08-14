@@ -1,20 +1,20 @@
 import click
 
-from mxcp.core.config.analytics import initialize_analytics, track_base_command
-from mxcp.interfaces.cli.dbt import dbt_config, dbt_wrapper
-from mxcp.interfaces.cli.drift_check import drift_check
-from mxcp.interfaces.cli.drift_snapshot import drift_snapshot
-from mxcp.interfaces.cli.evals import evals
-from mxcp.interfaces.cli.init import init
-from mxcp.interfaces.cli.lint import lint
-from mxcp.interfaces.cli.list import list_endpoints
-from mxcp.interfaces.cli.log import log
-from mxcp.interfaces.cli.log_cleanup import log_cleanup
-from mxcp.interfaces.cli.query import query
-from mxcp.interfaces.cli.run import run_endpoint
-from mxcp.interfaces.cli.serve import serve
-from mxcp.interfaces.cli.test import test
-from mxcp.interfaces.cli.validate import validate
+from mxcp.server.core.config.analytics import initialize_analytics, track_base_command
+from mxcp.server.interfaces.cli.dbt import dbt_config, dbt_wrapper
+from mxcp.server.interfaces.cli.drift_check import drift_check
+from mxcp.server.interfaces.cli.drift_snapshot import drift_snapshot
+from mxcp.server.interfaces.cli.evals import evals
+from mxcp.server.interfaces.cli.init import init
+from mxcp.server.interfaces.cli.lint import lint
+from mxcp.server.interfaces.cli.list import list_endpoints
+from mxcp.server.interfaces.cli.log import log
+from mxcp.server.interfaces.cli.log_cleanup import log_cleanup
+from mxcp.server.interfaces.cli.query import query
+from mxcp.server.interfaces.cli.run import run_endpoint
+from mxcp.server.interfaces.cli.serve import serve
+from mxcp.server.interfaces.cli.test import test
+from mxcp.server.interfaces.cli.validate import validate
 
 
 @click.group()

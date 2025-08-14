@@ -87,33 +87,35 @@ all = [
 package-dir = {"" = "src"}
 packages = [
     "mxcp",
-    # Core modules
-    "mxcp.core",
-    "mxcp.core.auth",
-    "mxcp.core.config",
-    "mxcp.core.refs",
-    # Definitions
-    "mxcp.definitions",
-    "mxcp.definitions.endpoints",
-    "mxcp.definitions.evals",
-    # Executor
-    "mxcp.executor",
-    "mxcp.executor.runners",
-    "mxcp.executor.session",
-    # Interfaces
-    "mxcp.interfaces",
-    "mxcp.interfaces.cli",
-    "mxcp.interfaces.server",
-    # Other core modules
-    "mxcp.plugins",
-    "mxcp.runtime",
-    "mxcp.schemas",
-    # Services
-    "mxcp.services",
-    "mxcp.services.audit",
-    "mxcp.services.dbt",
-    "mxcp.services.drift",
-    "mxcp.services.endpoints",
+    "mxcp.runtime",  # Extension system - kept at top-level for backward compatibility
+    "mxcp.plugins",  # Plugin system - kept at top-level for backward compatibility
+    # Server
+    "mxcp.server",
+    # Server - Core modules
+    "mxcp.server.core",
+    "mxcp.server.core.auth",
+    "mxcp.server.core.config",
+    "mxcp.server.core.refs",
+    # Server - Definitions
+    "mxcp.server.definitions",
+    "mxcp.server.definitions.endpoints",
+    "mxcp.server.definitions.evals",
+    # Server - Executor
+    "mxcp.server.executor",
+    "mxcp.server.executor.runners",
+    "mxcp.server.executor.session",
+    # Server - Interfaces
+    "mxcp.server.interfaces",
+    "mxcp.server.interfaces.cli",
+    "mxcp.server.interfaces.server",
+    # Server - Other core modules
+    "mxcp.server.schemas",
+    # Server - Services
+    "mxcp.server.services",
+    "mxcp.server.services.audit",
+    "mxcp.server.services.dbt",
+    "mxcp.server.services.drift",
+    "mxcp.server.services.endpoints",
     # SDK
     "mxcp.sdk",
     "mxcp.sdk.audit",
@@ -139,7 +141,7 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 "mxcp" = ["py.typed"]
-"mxcp.schemas" = ["*.json"]
+"mxcp.server.schemas" = ["*.json"]
 "mxcp.sdk.core.config.schemas" = ["*.json"]
 "mxcp.sdk.validator.decorators.schemas" = ["*.json"]
 

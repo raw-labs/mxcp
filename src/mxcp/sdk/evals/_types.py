@@ -6,9 +6,33 @@ and other data structures used in the evaluation framework.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional, TypedDict
 
-from mxcp.definitions.endpoints._types import TypeDefinition
+
+class TypeDefinition(TypedDict):
+    """Type definition for parameters and return types.
+
+    This is a copy of the TypeDefinition from server to maintain SDK isolation.
+    """
+    type: str
+    format: str | None  # email, uri, date, time, date-time, duration, timestamp
+    sensitive: bool | None  # Whether this field contains sensitive data
+    minLength: int | None
+    maxLength: int | None
+    minimum: float | None
+    maximum: float | None
+    exclusiveMinimum: float | None
+    exclusiveMaximum: float | None
+    multipleOf: float | None
+    minItems: int | None
+    maxItems: int | None
+    uniqueItems: bool | None
+    items: Optional["TypeDefinition"]
+    properties: dict[str, "TypeDefinition"] | None
+    required: list[str] | None
+    additionalProperties: (
+        bool | None
+    )  # Whether to allow additional properties not defined in the schema
 
 
 # LLM Model configuration types

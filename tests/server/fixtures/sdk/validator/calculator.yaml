@@ -1,0 +1,24 @@
+# Calculator function type schema
+input:
+  parameters:
+    - name: a
+      type: number
+      description: First number
+    - name: b
+      type: number  
+      description: Second number
+    - name: operation
+      type: string
+      enum: ["add", "subtract", "multiply", "divide"]
+      description: Operation to perform
+
+output:
+  type: object
+  properties:
+    result:
+      type: number
+      description: Calculation result
+    operation:
+      type: string
+      description: Operation performed
+  required: ["result", "operation"] 
