@@ -142,7 +142,7 @@ def soql(query: str) -> List[Dict[str, Any]]:
     # Remove 'attributes' field from each record for cleaner output
     if "records" not in result:
         raise ValueError(f"Unexpected SOQL response format: missing 'records' field in {result}")
-    
+
     records = result["records"]
     return [{k: v for k, v in record.items() if k != "attributes"} for record in records]
 
@@ -167,8 +167,10 @@ def sosl(query: str) -> List[Dict[str, Any]]:
 
     # Return the searchRecords directly as a list
     if "searchRecords" not in result:
-        raise ValueError(f"Unexpected SOSL response format: missing 'searchRecords' field in {result}")
-    
+        raise ValueError(
+            f"Unexpected SOSL response format: missing 'searchRecords' field in {result}"
+        )
+
     search_records: List[Dict[str, Any]] = result["searchRecords"]
     return search_records
 
@@ -211,13 +213,15 @@ def list_sobjects(filter: Optional[str] = None) -> List[str]:
 
     if not describe_result:
         raise ValueError("Salesforce describe() returned empty result")
-    
+
     if "sobjects" not in describe_result:
-        raise ValueError(f"Unexpected describe response format: missing 'sobjects' field in {describe_result}")
-    
+        raise ValueError(
+            f"Unexpected describe response format: missing 'sobjects' field in {describe_result}"
+        )
+
     sobjects = describe_result["sobjects"]
     object_names = []
-    
+
     for obj in sobjects:
         if not isinstance(obj, dict):
             raise ValueError(f"Unexpected sobject format: expected dict, got {type(obj)}: {obj}")
@@ -261,21 +265,25 @@ def describe_sobject(sobject_name: str) -> Dict[str, Any]:
 
     if not describe_result:
         raise ValueError(f"Salesforce object '{sobject_name}' describe() returned empty result")
-    
+
     if "fields" not in describe_result:
-        raise ValueError(f"Unexpected describe response format for '{sobject_name}': missing 'fields' field in {describe_result}")
+        raise ValueError(
+            f"Unexpected describe response format for '{sobject_name}': missing 'fields' field in {describe_result}"
+        )
 
     # Process fields into the required format
     fields_info = {}
     for field in describe_result["fields"]:
         if not isinstance(field, dict):
-            raise ValueError(f"Unexpected field format in '{sobject_name}': expected dict, got {type(field)}: {field}")
-        
+            raise ValueError(
+                f"Unexpected field format in '{sobject_name}': expected dict, got {type(field)}: {field}"
+            )
+
         required_fields = ["name", "type", "label"]
         for required_field in required_fields:
             if required_field not in field:
                 raise ValueError(f"Field missing '{required_field}' in '{sobject_name}': {field}")
-        
+
         field_name = field["name"]
         field_info = {"type": field["type"], "label": field["label"]}
 
