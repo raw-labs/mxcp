@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.sdk.validator.loaders import validate_schema_structure
+from mxcp.sdk.validator.decorators import validate_schema_structure
 
 
 class TestJSONSchemaValidation:
@@ -19,6 +19,7 @@ class TestJSONSchemaValidation:
             / "mxcp"
             / "sdk"
             / "validator"
+            / "decorators"
             / "schemas"
             / "validation-schema-1.json"
         )

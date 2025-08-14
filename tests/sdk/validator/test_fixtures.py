@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from mxcp.sdk.validator import TypeValidator, ValidationError
-from mxcp.sdk.validator import load_schema_from_file, validate
+from mxcp.sdk.validator.decorators import load_schema_from_file, validate
 
 
 class TestFixtures:

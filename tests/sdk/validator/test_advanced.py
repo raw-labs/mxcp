@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 
 from mxcp.sdk.validator import TypeValidator, ValidationError
-from mxcp.sdk.validator import validate
+from mxcp.sdk.validator.decorators import validate
 
 
 class TestAdvancedValidation:

@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from mxcp.sdk.validator import ValidationError
-from mxcp.sdk.validator import validate
+from mxcp.sdk.validator.decorators import validate
 
 
 class TestValidateDecorator:

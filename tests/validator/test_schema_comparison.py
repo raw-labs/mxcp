@@ -18,6 +18,7 @@ class TestSchemaComparison:
             / "mxcp"
             / "sdk"
             / "validator"
+            / "decorators"
             / "schemas"
             / "validation-schema-1.json"
         )
@@ -177,6 +178,7 @@ class TestSchemaComparison:
             / "mxcp"
             / "sdk"
             / "validator"
+            / "decorators"
             / "schemas"
             / "validation-schema-1.json"
         )
