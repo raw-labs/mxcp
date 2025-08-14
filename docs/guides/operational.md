@@ -1071,6 +1071,239 @@ LIMIT 20;
 EOF
 ```
 
+### OpenTelemetry Support
+
+MXCP now includes built-in OpenTelemetry support for distributed tracing, providing deeper insights into your application's performance and behavior.
+
+#### What is OpenTelemetry?
+
+OpenTelemetry (OTel) is an open-source observability framework that provides:
+- **Distributed Tracing**: Track requests across multiple services and execution steps
+- **Metrics**: Collect performance counters and histograms (coming soon)
+- **Logs**: Structured logging with trace context correlation
+
+#### Enabling OpenTelemetry
+
+Configure telemetry in your user config file (`~/.mxcp/config.yml`):
+
+```yaml
+mxcp: 1
+
+projects:
+  myproject:
+    profiles:
+      # Development - console output for debugging
+      development:
+        telemetry:
+          enabled: true
+          console_export: true  # Print spans to console
+          service_name: mxcp-dev
+          environment: development
+      
+      # Production - send to OTLP collector
+      production:
+        telemetry:
+          enabled: true
+          endpoint: http://otel-collector:4318  # OTLP HTTP endpoint
+          service_name: mxcp-prod
+          environment: production
+          sampling_rate: 0.1  # Sample 10% of traces
+          headers:
+            # Optional authentication headers
+            Authorization: Bearer your-token
+```
+
+#### What Gets Traced?
+
+MXCP automatically traces:
+
+1. **Endpoint Execution**:
+   - Overall execution time
+   - Input/output validation
+   - Policy enforcement
+   
+2. **Authentication**:
+   - Token validation
+   - User context retrieval
+   - Provider authentication flows
+
+3. **Policy Enforcement**:
+   - Input policy evaluation (before execution)
+   - Output policy evaluation (after execution)
+   - Individual policy condition evaluation
+   - Policy decisions (allow, deny, filter, mask)
+
+4. **Database Operations**:
+   - SQL query execution (queries are hashed for privacy)
+   - Query type (SELECT, INSERT, UPDATE, etc.)
+   - Row counts and performance metrics
+   
+5. **Python Execution**:
+   - Function calls
+   - Inline code execution
+   - Parameter counts
+
+Example trace hierarchy:
+```
+mxcp.execution_engine.execute
+├── mxcp.policy.enforce_input
+│   ├── mxcp.policy.evaluate_input[0]
+│   └── mxcp.policy.evaluate_input[1]
+├── mxcp.validation.input
+├── mxcp.duckdb.execute
+│   └── db.query (SELECT * FROM users)
+├── mxcp.python.execute
+│   └── python.function (calculate_metrics)
+├── mxcp.validation.output
+└── mxcp.policy.enforce_output
+    ├── mxcp.policy.evaluate_output[0]
+    └── mxcp.policy.evaluate_output[1]
+```
+
+#### Key Span Attributes
+
+Common attributes across spans:
+- `mxcp.language`: Execution language (sql, python)
+- `mxcp.params.count`: Number of input parameters
+- `mxcp.result.count`: Number of result items
+- `mxcp.validation.passed`: Validation success status
+
+Authentication spans:
+- `mxcp.auth.enabled`: Whether authentication is enabled
+- `mxcp.auth.provider`: Authentication provider (github, keycloak, etc.)
+- `mxcp.auth.authenticated`: Authentication success status
+
+Policy enforcement spans:
+- `mxcp.policy.count`: Number of policies to evaluate
+- `mxcp.policy.condition`: CEL condition being evaluated
+- `mxcp.policy.action`: Policy action (deny, filter_fields, mask_fields)
+- `mxcp.policy.decision`: Final decision (allow, deny, warn)
+- `mxcp.policy.fields_filtered`: Number of fields filtered/masked
+
+Database spans:
+- `db.system`: Always "duckdb"
+- `db.statement.hash`: SHA256 hash of the query (for privacy)
+- `db.operation`: SQL operation type
+- `db.readonly`: Whether connection is read-only
+- `db.rows_affected`: Number of rows returned/affected
+
+#### Integration with Observability Platforms
+
+##### Jaeger (Local Development)
+
+```yaml
+# docker-compose.yml
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4318:4318"    # OTLP HTTP
+
+  mxcp:
+    environment:
+      - MXCP_PROFILE=development
+    depends_on:
+      - jaeger
+```
+
+Configure MXCP:
+```yaml
+telemetry:
+  enabled: true
+  endpoint: http://jaeger:4318
+  service_name: mxcp-dev
+```
+
+##### Grafana Cloud
+
+```yaml
+telemetry:
+  enabled: true
+  endpoint: https://otlp-gateway-prod-us-central-0.grafana.net/otlp
+  headers:
+    Authorization: Basic <base64-encoded-instance-id:api-key>
+  service_name: mxcp-prod
+  environment: production
+```
+
+##### AWS X-Ray
+
+Use the AWS Distro for OpenTelemetry Collector:
+```yaml
+telemetry:
+  enabled: true
+  endpoint: http://aws-otel-collector:4318
+  service_name: mxcp-prod
+```
+
+#### Correlating Traces with Audit Logs
+
+MXCP automatically includes trace IDs in audit logs when telemetry is enabled:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:45Z",
+  "trace_id": "a1b2c3d4e5f6g7h8",  // Correlate with traces
+  "span_id": "i9j0k1l2",
+  "operation_name": "query_users",
+  "duration_ms": 125,
+  "status": "success"
+}
+```
+
+Query audit logs by trace ID:
+```bash
+mxcp log --filter trace_id=a1b2c3d4e5f6g7h8
+```
+
+#### Privacy and Redaction
+
+OpenTelemetry respects MXCP's privacy settings:
+
+1. **SQL queries are hashed**: Only query signatures are sent, not full SQL
+2. **Python code is anonymized**: Inline code is hashed
+3. **Sensitive attributes can be redacted**: Future versions will support field-level redaction using the same policies as audit logs
+
+#### Performance Impact
+
+OpenTelemetry adds minimal overhead:
+- ~1-2ms per traced operation
+- Sampling reduces data volume in production
+- Async export doesn't block requests
+
+Recommended sampling rates:
+- Development: 100% (1.0)
+- Staging: 50% (0.5)
+- Production: 1-10% (0.01-0.1)
+
+#### Troubleshooting Telemetry
+
+1. **Enable debug logging**:
+   ```bash
+   mxcp serve --debug
+   ```
+
+2. **Use console export to verify**:
+   ```yaml
+   telemetry:
+     enabled: true
+     console_export: true  # See spans in logs
+   ```
+
+3. **Check connectivity**:
+   ```bash
+   curl -X POST http://your-collector:4318/v1/traces \
+     -H "Content-Type: application/json" \
+     -d '{}'
+   ```
+
+4. **Common issues**:
+   - Firewall blocking OTLP port (4318/4317)
+   - Invalid authentication headers
+   - Collector not configured for OTLP
+   - Sampling rate too low (0.0)
+
 ### Container Health Checks
 
 For Docker/Kubernetes, implement health checks at the container level:

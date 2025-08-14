@@ -3,13 +3,18 @@
 import logging
 from collections.abc import Callable
 from functools import wraps
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
+
+from mxcp.sdk.telemetry import traced_operation
 
 from ._types import UserContext
 from .base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from .context import reset_user_context, set_user_context
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -38,63 +43,97 @@ class AuthenticationMiddleware:
         Returns:
             UserContext if authenticated, None if not authenticated or auth is disabled
         """
-        if not self.auth_enabled:
-            logger.debug("Authentication is disabled")
-            return None
-
-        try:
-            # Get the access token from the current request context
-            access_token = get_access_token()
-            if not access_token:
-                logger.warning("No access token found in request context")
+        with traced_operation(
+            "mxcp.auth.check_authentication",
+            attributes={
+                "mxcp.auth.enabled": self.auth_enabled,
+            }
+        ) as span:  # type: "Span"
+            if not self.auth_enabled:
+                logger.debug("Authentication is disabled")
                 return None
 
-            logger.info(f"Found access token: {access_token.token[:10]}...")
-
-            # Validate the token with the OAuth server
-            if not self.oauth_server:
-                logger.warning("OAuth server not configured")
-                return None
-
-            token_info = await self.oauth_server.load_access_token(access_token.token)
-            if not token_info:
-                logger.warning("Invalid or expired access token")
-                return None
-
-            logger.info(f"Token validated successfully for client: {token_info.client_id}")
-
-            # Get the external token to fetch user context
-            if not self.oauth_server:
-                logger.warning("OAuth server not configured")
-                return None
-
-            external_token = self.oauth_server._token_mapping.get(access_token.token)
-            if not external_token:
-                logger.warning("No external token mapping found")
-                return None
-
-            logger.info(f"Found external token mapping: {external_token[:10]}...")
-
-            # Get standardized user context from the provider
             try:
-                if not self.oauth_handler:
-                    logger.warning("OAuth handler not configured")
+                # Get the access token from the current request context
+                access_token = get_access_token()
+                if not access_token:
+                    logger.warning("No access token found in request context")
+                    if span:
+                        span.set_attribute("mxcp.auth.has_token", False)
                     return None
 
-                user_context = await self.oauth_handler.get_user_context(external_token)
-                # Add external token to the user context for use in DuckDB functions
-                user_context.external_token = external_token
-                logger.info(
-                    f"Successfully retrieved user context for {user_context.username} (provider: {user_context.provider})"
-                )
-                return user_context
-            except Exception as e:
-                logger.error(f"Failed to get user context: {e}")
-                return None
+                logger.info(f"Found access token: {access_token.token[:10]}...")
+                if span:
+                    span.set_attribute("mxcp.auth.has_token", True)
 
-        except Exception as e:
-            logger.error(f"Authentication check failed: {e}")
-            return None
+                # Validate the token with the OAuth server
+                if not self.oauth_server:
+                    logger.warning("OAuth server not configured")
+                    return None
+
+                with traced_operation("mxcp.auth.validate_token") as token_span:  # type: Span
+                    token_info = await self.oauth_server.load_access_token(access_token.token)
+                    if not token_info:
+                        logger.warning("Invalid or expired access token")
+                        if token_span:
+                            token_span.set_attribute("mxcp.auth.token_valid", False)
+                        return None
+                    if token_span:
+                        token_span.set_attribute("mxcp.auth.token_valid", True)
+                        token_span.set_attribute("mxcp.auth.client_id", token_info.client_id)
+
+                logger.info(f"Token validated successfully for client: {token_info.client_id}")
+
+                # Get the external token to fetch user context
+                if not self.oauth_server:
+                    logger.warning("OAuth server not configured")
+                    return None
+
+                external_token = self.oauth_server._token_mapping.get(access_token.token)
+                if not external_token:
+                    logger.warning("No external token mapping found")
+                    return None
+
+                logger.info(f"Found external token mapping: {external_token[:10]}...")
+
+                # Get standardized user context from the provider
+                try:
+                    with traced_operation("mxcp.auth.get_user_context") as user_span:  # type: Span
+                        if not self.oauth_handler:
+                            logger.warning("OAuth handler not configured")
+                            return None
+
+                        user_context = await self.oauth_handler.get_user_context(external_token)
+                        # Add external token to the user context for use in DuckDB functions
+                        user_context.external_token = external_token
+                        logger.info(
+                            f"Successfully retrieved user context for {user_context.username} (provider: {user_context.provider})"
+                        )
+
+                        if user_span:
+                            user_span.set_attribute("mxcp.auth.provider", user_context.provider)
+                            user_span.set_attribute("mxcp.auth.user_id", user_context.user_id)
+                            # Don't log sensitive username for privacy
+                            user_span.set_attribute("mxcp.auth.has_username", bool(user_context.username))
+                            user_span.set_attribute("mxcp.auth.success", True)
+
+                        if span:
+                            span.set_attribute("mxcp.auth.authenticated", True)
+                            span.set_attribute("mxcp.auth.provider", user_context.provider)
+
+                        return user_context
+                except Exception as e:
+                    logger.error(f"Failed to get user context: {e}")
+                    if span:
+                        span.set_attribute("mxcp.auth.authenticated", False)
+                        span.set_attribute("mxcp.auth.error", str(e))
+                    return None
+
+            except Exception as e:
+                logger.error(f"Authentication check failed: {e}")
+                if span:
+                    span.set_attribute("mxcp.auth.error", str(e))
+                return None
 
     def require_auth(self, func: Callable[..., Any]) -> Callable[..., Any]:
         """Decorator to require authentication for a function.

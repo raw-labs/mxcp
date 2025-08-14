@@ -31,6 +31,11 @@ dependencies = [
     "posthog>=3.0.0",  # Usage analytics (always available)
     "dbt-core>=1.6.0",  # dbt core for data transformations
     "dbt-duckdb>=1.6.0",  # dbt DuckDB adapter
+    
+    # Observability (needed by SDK telemetry)
+    "opentelemetry-api>=1.24.0",  # OpenTelemetry API
+    "opentelemetry-sdk>=1.24.0",  # OpenTelemetry SDK
+    "opentelemetry-exporter-otlp-proto-http>=1.24.0",  # OTLP HTTP exporter
 ]
 
 [project.scripts]
@@ -133,6 +138,7 @@ packages = [
     "mxcp.sdk.executor.plugins.duckdb_plugin",
     "mxcp.sdk.executor.plugins.python_plugin",
     "mxcp.sdk.policy",
+    "mxcp.sdk.telemetry",
     "mxcp.sdk.validator",
     "mxcp.sdk.validator.decorators",
     "mxcp.sdk.validator.decorators.schemas",

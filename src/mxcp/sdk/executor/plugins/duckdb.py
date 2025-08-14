@@ -34,13 +34,17 @@ Example usage:
     ... )
 """
 
+import hashlib
 import logging
 import threading
+import time
 from typing import TYPE_CHECKING, Any, Optional
 
 import duckdb
 
-from ..context import ExecutionContext
+from mxcp.sdk.telemetry import traced_operation
+
+from ..context import ExecutionContext, reset_execution_context, set_execution_context
 from ..interfaces import ExecutorPlugin
 
 if TYPE_CHECKING:
@@ -228,24 +232,61 @@ class DuckDBExecutor(ExecutorPlugin):
         Returns:
             Query result as list of dictionaries
         """
-        try:
-            # Set execution context for UDFs to read dynamically
-            from ..context import reset_execution_context, set_execution_context
+        # Hash the query for privacy (similar to audit)
+        query_hash = hashlib.sha256(source_code.encode()).hexdigest()[:16]
 
-            # Set execution context for this execution
-            context_token = set_execution_context(context)
+        # Extract operation type from SQL
+        operation = "unknown"
+        sql_lower = source_code.lower().strip()
+        if sql_lower.startswith("select"):
+            operation = "select"
+        elif sql_lower.startswith("insert"):
+            operation = "insert"
+        elif sql_lower.startswith("update"):
+            operation = "update"
+        elif sql_lower.startswith("delete"):
+            operation = "delete"
+        elif sql_lower.startswith("create"):
+            operation = "create"
+        elif sql_lower.startswith("drop"):
+            operation = "drop"
 
+        with traced_operation(
+            "mxcp.duckdb.execute",
+            attributes={
+                "db.system": "duckdb",
+                "db.statement.hash": query_hash,
+                "db.operation": operation,
+                "db.parameters.count": len(params) if params else 0,
+                "db.readonly": self.database_config.readonly,
+            }
+        ) as span:
             try:
-                with self._db_lock:
-                    # Execute the query - UDFs will read from context dynamically
-                    return self.session.execute_query_to_dict(source_code, params)
-            finally:
-                # Always reset the context when done
-                reset_execution_context(context_token)
+                # Set execution context for UDFs to read dynamically
+                # Set execution context for this execution
+                context_token = set_execution_context(context)
 
-        except Exception as e:
-            logger.error(f"SQL execution failed: {e}")
-            raise RuntimeError(f"Failed to execute SQL: {e}") from e
+                try:
+                    with self._db_lock:
+                        # Time the actual query execution
+                        start_time = time.time()
+                        result = self.session.execute_query_to_dict(source_code, params)
+                        duration_ms = (time.time() - start_time) * 1000
+
+                        # Add performance metrics to span
+                        if span:
+                            span.set_attribute("db.duration_ms", duration_ms)
+                            if isinstance(result, list):
+                                span.set_attribute("db.rows_affected", len(result))
+
+                        return result
+                finally:
+                    # Always reset the context when done
+                    reset_execution_context(context_token)
+
+            except Exception as e:
+                logger.error(f"SQL execution failed: {e}")
+                raise RuntimeError(f"Failed to execute SQL: {e}") from e
 
     def _log_available_plugins(self) -> None:
         """Log information about available DuckDB plugins."""

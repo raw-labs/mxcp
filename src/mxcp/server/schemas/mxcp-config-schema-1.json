@@ -186,6 +186,50 @@
                         "additionalProperties": false
                       }
                     },
+                    "telemetry": {
+                      "type": "object",
+                      "description": "OpenTelemetry configuration for this profile.",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "description": "Whether to enable telemetry for this profile.",
+                          "default": false
+                        },
+                        "endpoint": {
+                          "type": "string",
+                          "description": "OTLP endpoint URL (e.g., http://localhost:4318).",
+                          "format": "uri"
+                        },
+                        "headers": {
+                          "type": "object",
+                          "description": "Additional headers for the OTLP exporter.",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "service_name": {
+                          "type": "string",
+                          "description": "Override the default service name (mxcp)."
+                        },
+                        "environment": {
+                          "type": "string",
+                          "description": "Deployment environment (e.g., production, staging)."
+                        },
+                        "sampling_rate": {
+                          "type": "number",
+                          "description": "Trace sampling rate (0.0 to 1.0).",
+                          "minimum": 0.0,
+                          "maximum": 1.0,
+                          "default": 1.0
+                        },
+                        "console_export": {
+                          "type": "boolean",
+                          "description": "Export spans to console for debugging.",
+                          "default": false
+                        }
+                      },
+                      "additionalProperties": false
+                    },
                     "plugin": {
                       "type": "object",
                       "description": "Plugin configuration for this profile.",

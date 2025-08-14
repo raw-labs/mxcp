@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any, Optional
 import celpy
 from celpy.adapter import json_to_cel
 
+from mxcp.sdk.telemetry import traced_operation
+
 from ._types import PolicyAction, PolicyEnforcementError, PolicySet
 
 if TYPE_CHECKING:
@@ -157,43 +159,77 @@ class PolicyEnforcer:
         Raises:
             PolicyEnforcementError: If a policy denies access
         """
-        # Reset tracking for this enforcement cycle
-        self.policies_evaluated = []
-        self.last_policy_decision = "allow"  # Default to allow if no policies
-        self.last_policy_reason = None
+        with traced_operation(
+            "mxcp.policy.enforce_input",
+            attributes={
+                "mxcp.policy.count": len(self.policy_set.input_policies),
+                "mxcp.policy.has_user": user_context is not None,
+            }
+        ) as span:
+            # Reset tracking for this enforcement cycle
+            self.policies_evaluated = []
+            self.last_policy_decision = "allow"  # Default to allow if no policies
+            self.last_policy_reason = None
 
-        # Build context for CEL evaluation
-        # IMPORTANT: User context is nested under "user" to prevent collision
-        # with query parameters that might also be named "user"
+            # Build context for CEL evaluation
+            # IMPORTANT: User context is nested under "user" to prevent collision
+            # with query parameters that might also be named "user"
 
-        # Check for dangerous naming collision
-        if "user" in params:
-            logger.warning(
-                "Query parameter 'user' conflicts with user context namespace. This may cause policy evaluation issues."
-            )
-            # For security, we prioritize user context over query parameters
-            # Users should rename their parameter to avoid this collision
+            # Check for dangerous naming collision
+            if "user" in params:
+                logger.warning(
+                    "Query parameter 'user' conflicts with user context namespace. This may cause policy evaluation issues."
+                )
+                # For security, we prioritize user context over query parameters
+                # Users should rename their parameter to avoid this collision
 
-        # Build context with user context taking precedence over any "user" parameter
-        context = {}
-        context.update(params)  # Add parameters first
-        context["user"] = self._user_context_to_dict(user_context)  # User context takes precedence
+            # Build context with user context taking precedence over any "user" parameter
+            context = {}
+            context.update(params)  # Add parameters first
+            context["user"] = self._user_context_to_dict(user_context)  # User context takes precedence
 
-        # Evaluate each input policy
-        for i, policy in enumerate(self.policy_set.input_policies):
-            # Track that we evaluated this policy
-            policy_desc = f"input[{i}]: {policy.condition}"
-            self.policies_evaluated.append(policy_desc)
+            # Evaluate each input policy
+            for i, policy in enumerate(self.policy_set.input_policies):
+                # Track that we evaluated this policy
+                policy_desc = f"input[{i}]: {policy.condition}"
+                self.policies_evaluated.append(policy_desc)
 
-            if (
-                self._evaluate_condition(policy.condition, context)
-                and policy.action == PolicyAction.DENY
-            ):
-                reason = policy.reason or "Access denied by policy"
-                self.last_policy_decision = "deny"
-                self.last_policy_reason = reason
-                logger.warning(f"Input policy denied access: {reason}")
-                raise PolicyEnforcementError(reason)
+                with traced_operation(
+                    f"mxcp.policy.evaluate_input[{i}]",
+                    attributes={
+                        "mxcp.policy.condition": policy.condition,
+                        "mxcp.policy.action": policy.action.value if policy.action else None,
+                    }
+                ) as policy_span:
+                    try:
+                        condition_result = self._evaluate_condition(policy.condition, context)
+                        if policy_span:
+                            policy_span.set_attribute("mxcp.policy.condition_result", condition_result)
+
+                        if condition_result and policy.action == PolicyAction.DENY:
+                            reason = policy.reason or "Access denied by policy"
+                            self.last_policy_decision = "deny"
+                            self.last_policy_reason = reason
+                            if policy_span:
+                                policy_span.set_attribute("mxcp.policy.denied", True)
+                                policy_span.set_attribute("mxcp.policy.reason", reason)
+                            if span:
+                                span.set_attribute("mxcp.policy.decision", "deny")
+                                span.set_attribute("mxcp.policy.denied_at", i)
+                            logger.warning(f"Input policy denied access: {reason}")
+                            raise PolicyEnforcementError(reason)
+                    except PolicyEnforcementError:
+                        raise
+                    except Exception as e:
+                        if policy_span:
+                            policy_span.set_attribute("mxcp.policy.error", str(e))
+                        logger.error(f"Error evaluating policy {i}: {e}")
+                        raise
+
+            # If we get here, all policies passed
+            if span:
+                span.set_attribute("mxcp.policy.decision", self.last_policy_decision)
+                span.set_attribute("mxcp.policy.evaluated_count", len(self.policies_evaluated))
 
     def enforce_output_policies(
         self,
@@ -214,54 +250,103 @@ class PolicyEnforcer:
         Raises:
             PolicyEnforcementError: If a policy denies access
         """
-        # Build context for CEL evaluation
-        # Note: Output policies don't have collision issues since they only use
-        # "user" (user context) and "response" (output data) - no query parameters
-        context = {"user": self._user_context_to_dict(user_context), "response": output}
+        with traced_operation(
+            "mxcp.policy.enforce_output",
+            attributes={
+                "mxcp.policy.count": len(self.policy_set.output_policies),
+                "mxcp.policy.has_user": user_context is not None,
+                "mxcp.policy.has_endpoint_def": endpoint_def is not None,
+            }
+        ) as span:
+            # Build context for CEL evaluation
+            # Note: Output policies don't have collision issues since they only use
+            # "user" (user context) and "response" (output data) - no query parameters
+            context = {"user": self._user_context_to_dict(user_context), "response": output}
 
-        applied_action = None
-        any_policy_applied = False
+            applied_action = None
+            any_policy_applied = False
 
-        # Evaluate each output policy
-        for i, policy in enumerate(self.policy_set.output_policies):
-            # Track that we evaluated this policy
-            policy_desc = f"output[{i}]: {policy.condition}"
-            self.policies_evaluated.append(policy_desc)
+            # Evaluate each output policy
+            for i, policy in enumerate(self.policy_set.output_policies):
+                # Track that we evaluated this policy
+                policy_desc = f"output[{i}]: {policy.condition}"
+                self.policies_evaluated.append(policy_desc)
 
-            if self._evaluate_condition(policy.condition, context):
-                if policy.action == PolicyAction.DENY:
-                    reason = policy.reason or "Output blocked by policy"
-                    self.last_policy_decision = "deny"
-                    self.last_policy_reason = reason
-                    logger.warning(f"Output policy denied access: {reason}")
-                    raise PolicyEnforcementError(reason)
+                with traced_operation(
+                    f"mxcp.policy.evaluate_output[{i}]",
+                    attributes={
+                        "mxcp.policy.condition": policy.condition,
+                        "mxcp.policy.action": policy.action.value if policy.action else None,
+                    }
+                ) as policy_span:
+                    try:
+                        condition_result = self._evaluate_condition(policy.condition, context)
+                        if policy_span:
+                            policy_span.set_attribute("mxcp.policy.condition_result", condition_result)
 
-                elif policy.action == PolicyAction.FILTER_FIELDS and policy.fields:
-                    output = self._filter_fields(output, policy.fields)
-                    applied_action = "filter_fields"
-                    any_policy_applied = True
+                        if condition_result:
+                            if policy.action == PolicyAction.DENY:
+                                reason = policy.reason or "Output blocked by policy"
+                                self.last_policy_decision = "deny"
+                                self.last_policy_reason = reason
+                                if policy_span:
+                                    policy_span.set_attribute("mxcp.policy.denied", True)
+                                    policy_span.set_attribute("mxcp.policy.reason", reason)
+                                if span:
+                                    span.set_attribute("mxcp.policy.decision", "deny")
+                                    span.set_attribute("mxcp.policy.denied_at", i)
+                                logger.warning(f"Output policy denied access: {reason}")
+                                raise PolicyEnforcementError(reason)
 
-                elif policy.action == PolicyAction.MASK_FIELDS and policy.fields:
-                    output = self._mask_fields(output, policy.fields)
-                    applied_action = "mask_fields"
-                    any_policy_applied = True
+                            elif policy.action == PolicyAction.FILTER_FIELDS and policy.fields:
+                                output = self._filter_fields(output, policy.fields)
+                                applied_action = "filter_fields"
+                                any_policy_applied = True
+                                if policy_span:
+                                    policy_span.set_attribute("mxcp.policy.action_applied", "filter_fields")
+                                    policy_span.set_attribute("mxcp.policy.fields_filtered", len(policy.fields))
 
-                elif policy.action == PolicyAction.FILTER_SENSITIVE_FIELDS:
-                    if endpoint_def and "return" in endpoint_def:
-                        output = self._filter_sensitive_fields(output, endpoint_def["return"])
-                        applied_action = "filter_sensitive_fields"
-                        any_policy_applied = True
-                    else:
-                        logger.warning(
-                            "filter_sensitive_fields policy requires endpoint definition with return type"
-                        )
+                            elif policy.action == PolicyAction.MASK_FIELDS and policy.fields:
+                                output = self._mask_fields(output, policy.fields)
+                                applied_action = "mask_fields"
+                                any_policy_applied = True
+                                if policy_span:
+                                    policy_span.set_attribute("mxcp.policy.action_applied", "mask_fields")
+                                    policy_span.set_attribute("mxcp.policy.fields_masked", len(policy.fields))
 
-        # Update decision if output was modified
-        if any_policy_applied and self.last_policy_decision == "allow":
-            self.last_policy_decision = "warn"
-            self.last_policy_reason = f"Output modified by {applied_action}"
+                            elif policy.action == PolicyAction.FILTER_SENSITIVE_FIELDS:
+                                if endpoint_def and "return" in endpoint_def:
+                                    output = self._filter_sensitive_fields(output, endpoint_def["return"])
+                                    applied_action = "filter_sensitive_fields"
+                                    any_policy_applied = True
+                                    if policy_span:
+                                        policy_span.set_attribute("mxcp.policy.action_applied", "filter_sensitive_fields")
+                                else:
+                                    logger.warning(
+                                        "filter_sensitive_fields policy requires endpoint definition with return type"
+                                    )
+                                    if policy_span:
+                                        policy_span.set_attribute("mxcp.policy.warning", "missing_endpoint_def")
+                    except PolicyEnforcementError:
+                        raise
+                    except Exception as e:
+                        if policy_span:
+                            policy_span.set_attribute("mxcp.policy.error", str(e))
+                        logger.error(f"Error evaluating output policy {i}: {e}")
+                        raise
 
-        return output, applied_action
+            # Update decision if output was modified
+            if any_policy_applied and self.last_policy_decision == "allow":
+                self.last_policy_decision = "warn"
+                self.last_policy_reason = f"Output modified by {applied_action}"
+
+            if span:
+                span.set_attribute("mxcp.policy.decision", self.last_policy_decision)
+                span.set_attribute("mxcp.policy.evaluated_count", len(self.policies_evaluated))
+                if applied_action:
+                    span.set_attribute("mxcp.policy.action_applied", applied_action)
+
+            return output, applied_action
 
     def _filter_fields(self, data: Any, fields: list[str]) -> Any:
         """Remove specified fields from the output.

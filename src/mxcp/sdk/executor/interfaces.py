@@ -32,6 +32,9 @@ import threading
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
+from mxcp.sdk.telemetry import traced_operation
+from mxcp.sdk.validator import TypeValidator
+
 if TYPE_CHECKING:
     pass
 
@@ -225,31 +228,50 @@ class ExecutionEngine:
         Raises:
             ValueError: If language is not supported or validation fails
         """
-        if language not in self._executors:
-            available = list(self._executors.keys())
-            raise ValueError(f"Language '{language}' not supported. Available: {available}")
+        # Start telemetry span for execution
+        with traced_operation(
+            "mxcp.execution_engine.execute",
+            attributes={
+                "mxcp.language": language,
+                "mxcp.params.count": len(params) if params else 0,
+                "mxcp.has_input_schema": input_schema is not None,
+                "mxcp.has_output_schema": output_schema is not None,
+            }
+        ) as span:
+            if language not in self._executors:
+                available = list(self._executors.keys())
+                raise ValueError(f"Language '{language}' not supported. Available: {available}")
 
-        # Validate input parameters if schema provided
-        if input_schema:
-            from mxcp.sdk.validator import TypeValidator
+            # Validate input parameters if schema provided
+            if input_schema:
+                with traced_operation("mxcp.validation.input") as validation_span:
+                    validator = TypeValidator.from_dict(
+                        {"input": {"parameters": input_schema}}, strict=self._strict
+                    )
+                    params = validator.validate_input(params)
+                    if validation_span:
+                        validation_span.set_attribute("mxcp.validation.passed", True)
 
-            validator = TypeValidator.from_dict(
-                {"input": {"parameters": input_schema}}, strict=self._strict
-            )
-            params = validator.validate_input(params)
+            # Execute the code (this will create a child span in the executor)
+            executor = self._executors[language]
+            result = await executor.execute(source_code, params, context)
 
-        # Execute the code
-        executor = self._executors[language]
-        result = await executor.execute(source_code, params, context)
+            # Validate output if schema provided
+            if output_schema:
+                with traced_operation("mxcp.validation.output") as validation_span:
+                    validator = TypeValidator.from_dict({"output": output_schema}, strict=self._strict)
+                    result = validator.validate_output(result)
+                    if validation_span:
+                        validation_span.set_attribute("mxcp.validation.passed", True)
 
-        # Validate output if schema provided
-        if output_schema:
-            from mxcp.sdk.validator import TypeValidator
+            # Add result info to span if available
+            if span and hasattr(result, '__len__'):
+                try:
+                    span.set_attribute("mxcp.result.count", len(result))
+                except Exception:
+                    pass
 
-            validator = TypeValidator.from_dict({"output": output_schema}, strict=self._strict)
-            result = validator.validate_output(result)
-
-        return result
+            return result
 
     def validate_source(self, language: str, source_code: str) -> bool:
         """Validate source code syntax without execution.

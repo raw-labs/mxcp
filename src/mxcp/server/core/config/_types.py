@@ -190,10 +190,21 @@ class UserModelsConfig(TypedDict, total=False):
     models: dict[str, UserModelConfig] | None  # Model configurations
 
 
+class UserTelemetryConfig(TypedDict, total=False):
+    enabled: bool
+    endpoint: str | None  # OTLP endpoint (e.g., http://localhost:4318)
+    headers: dict[str, str] | None  # Additional headers for OTLP exporter
+    service_name: str | None  # Override default service name
+    environment: str | None  # Deployment environment
+    sampling_rate: float | None  # Trace sampling rate (0.0-1.0)
+    console_export: bool | None  # For debugging
+
+
 class UserProfileConfig(TypedDict, total=False):
     secrets: list[UserSecretDefinition] | None
     plugin: UserPluginConfig | None
     auth: UserAuthConfig | None
+    telemetry: UserTelemetryConfig | None
 
 
 class UserProjectConfig(TypedDict):

@@ -29,6 +29,7 @@ from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.executor import ExecutionEngine
+from mxcp.sdk.telemetry import get_current_trace_id
 from mxcp.server.core.config._types import (
     SiteConfig,
     UserAuthConfig,
@@ -38,6 +39,7 @@ from mxcp.server.core.config._types import (
 from mxcp.server.core.config.site_config import get_active_profile, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.core.refs.external import ExternalRefTracker
+from mxcp.server.core.telemetry import configure_telemetry_from_config, shutdown_telemetry
 from mxcp.server.definitions.endpoints._types import (
     ParamDefinition,
     PromptDefinition,
@@ -239,6 +241,9 @@ class RAWMCP:
 
         # Resolve configurations
         self._resolve_and_apply_configs()
+
+        # Initialize telemetry
+        self._initialize_telemetry()
 
         # Initialize runtime components
         self._initialize_runtime_components()
@@ -557,6 +562,22 @@ class RAWMCP:
 
         logger.info("Runtime components initialization complete.")
 
+    def _initialize_telemetry(self) -> None:
+        """Initialize telemetry based on user config settings."""
+        logger.info("Initializing telemetry...")
+
+        # Get project name from site config
+        project_name = self.site_config["project"]
+
+        # Configure telemetry for the current profile
+        configure_telemetry_from_config(
+            self.user_config,
+            project_name,
+            self.profile_name
+        )
+
+        logger.info("Telemetry initialization complete.")
+
     def reload_configuration(self) -> None:
         """
         Reloads external configuration values (vault://, file://, env vars) only.
@@ -740,6 +761,13 @@ class RAWMCP:
                     logger.info("Closed audit logger")
                 except Exception as e:
                     logger.error(f"Error closing audit logger: {e}")
+
+            # Shutdown telemetry
+            try:
+                shutdown_telemetry()
+                logger.info("Shutdown telemetry")
+            except Exception as e:
+                logger.error(f"Error shutting down telemetry: {e}")
 
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
@@ -1230,6 +1258,11 @@ class RAWMCP:
                         error=error_msg,
                         output_data=result,  # Return the result as output_data
                         policies_evaluated=policy_info["policies_evaluated"],
+                        # Add user context if available
+                        user_id=user_context.user_id if user_context else None,
+                        session_id=user_context.username if user_context else None,  # Using username as session
+                        # Add trace ID for correlation with telemetry
+                        trace_id=get_current_trace_id(),
                     )
 
         # -------------------------------------------------------------------
@@ -1388,6 +1421,7 @@ class RAWMCP:
                             reason=None,
                             status=cast(Literal["success", "error"], status),
                             error=error_msg,
+                            trace_id=get_current_trace_id(),
                         )
                     )
 
@@ -1467,6 +1501,7 @@ class RAWMCP:
                             reason=None,
                             status=cast(Literal["success", "error"], status),
                             error=error_msg,
+                            trace_id=get_current_trace_id(),
                         )
                     )
 
@@ -1553,6 +1588,7 @@ class RAWMCP:
                             reason=None,
                             status=cast(Literal["success", "error"], status),
                             error=error_msg,
+                            trace_id=get_current_trace_id(),
                         )
                     )
 
