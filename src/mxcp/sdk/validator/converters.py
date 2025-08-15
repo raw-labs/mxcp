@@ -173,8 +173,27 @@ class TypeConverter:
                     except json.JSONDecodeError:
                         raise ValidationError(f"Invalid JSON object: {value}") from None
                 else:
-                    actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
-                    raise ValidationError(f"Expected object, got {actual_type}")
+                    # Check if it's a Pydantic model instance
+                    # Try to convert Pydantic model to dict
+                    if hasattr(value, "model_dump"):
+                        # Pydantic v2
+                        try:
+                            value = value.model_dump()
+                        except Exception:
+                            actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
+                            raise ValidationError(f"Expected object, got {actual_type}") from None
+                    elif hasattr(value, "dict"):
+                        # Pydantic v1
+                        try:
+                            value = value.dict()
+                        except Exception:
+                            actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
+                            raise ValidationError(f"Expected object, got {actual_type}") from None
+                    else:
+                        actual_type = TypeConverter.python_type_to_schema_type(
+                            type(value).__name__
+                        )
+                        raise ValidationError(f"Expected object, got {actual_type}")
 
             properties = schema.properties or {}
             required = schema.required or []
