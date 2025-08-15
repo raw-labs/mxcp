@@ -18,8 +18,6 @@ slug: /guides/operational
 
 This comprehensive guide provides everything DevOps professionals need to deploy and operate MXCP in production environments. It consolidates operational information from across the documentation and adds production-ready deployment patterns.
 
-> **See Also**: For detailed information on distributed tracing and observability setup, refer to the [Telemetry Guide](./telemetry.md).
-
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
@@ -913,13 +911,641 @@ During shutdown:
 
 ## Monitoring & Observability
 
-MXCP doesn't provide built-in health check endpoints or metrics exporters. However, it does provide comprehensive audit logging and operational commands that you can use for monitoring. Here's how to implement observability for MXCP:
+MXCP provides comprehensive observability through multiple channels: audit logging, OpenTelemetry (traces and metrics), and application logs. This section covers all aspects of monitoring your MXCP deployment.
 
-### Health Checks
+### Overview of Observability Signals
 
-Since MXCP doesn't expose health endpoints, you'll need to implement your own. Options include:
+MXCP provides three complementary observability signals:
 
-1. **Create a simple health check tool**:
+1. **Application Logs** 📝
+   - Traditional text-based logs for debugging
+   - Output to stdout/stderr
+   - Captured by container runtime
+   - Best for: Debugging specific issues
+
+2. **Audit Logs** 📋
+   - Structured JSONL format
+   - Every request is logged
+   - Includes user, timing, and policy decisions
+   - Best for: Compliance, security analysis, usage patterns
+
+3. **OpenTelemetry** 🔍
+   - **Traces**: Distributed tracing for request flow
+   - **Metrics**: Performance counters and histograms
+   - **Correlation**: Links traces with audit logs
+   - Best for: Performance analysis, system health
+
+### OpenTelemetry Integration
+
+> **Breaking Change (v0.5.0)**: MXCP now follows the modern observability pattern where performance metrics are derived from trace spans. Duration histograms are no longer exported directly. You must configure the OpenTelemetry Collector's spanmetrics processor to generate performance metrics. See the Span Metrics section below for configuration details.
+
+#### What is OpenTelemetry?
+
+OpenTelemetry (OTel) is an open-source observability framework that provides:
+- **Distributed Tracing**: Track requests across multiple services and execution steps
+- **Metrics**: Collect performance counters and histograms for all operations
+- **Logs**: Structured logging with trace context correlation (future)
+
+#### Enabling Telemetry
+
+Configure telemetry in your user config file (`~/.mxcp/config.yml`):
+
+```yaml
+mxcp: 1
+
+projects:
+  myproject:
+    profiles:
+      # Development - console output for debugging
+      development:
+        telemetry:
+          enabled: true
+          service_name: mxcp-dev
+          environment: development
+          # Separate configuration for each signal
+          tracing:
+            enabled: true
+            console_export: true  # Print spans to console
+          metrics:
+            enabled: true
+            export_interval: 60  # Export every 60 seconds
+            prometheus_port: 9090  # Optional Prometheus endpoint
+
+      # Production - send to OTLP collector
+      production:
+        telemetry:
+          enabled: true
+          endpoint: http://otel-collector:4318  # OTLP HTTP endpoint
+          service_name: mxcp-prod
+          environment: production
+          headers:
+            Authorization: Bearer your-token
+          tracing:
+            enabled: true
+          metrics:
+            enabled: true
+            export_interval: 60
+```
+
+#### What Gets Traced?
+
+MXCP automatically traces:
+
+1. **Endpoint Execution**:
+   - Overall execution time
+   - Input/output validation
+   - Policy enforcement
+   
+2. **Authentication**:
+   - Token validation
+   - User context retrieval
+   - Provider authentication flows
+
+3. **Policy Enforcement**:
+   - Input policy evaluation (before execution)
+   - Output policy evaluation (after execution)
+   - Individual policy condition evaluation
+   - Policy decisions (allow, deny, filter, mask)
+
+4. **Database Operations**:
+   - SQL query execution (queries are hashed for privacy)
+   - Query type (SELECT, INSERT, UPDATE, etc.)
+   - Row counts and performance metrics
+   
+5. **Python Execution**:
+   - Function calls
+   - Inline code execution
+   - Parameter counts
+
+Example trace hierarchy:
+```
+mxcp.execution_engine.execute
+├── mxcp.policy.enforce_input
+│   ├── mxcp.policy.evaluate_input[0]
+│   └── mxcp.policy.evaluate_input[1]
+├── mxcp.validation.input
+├── mxcp.duckdb.execute
+│   └── db.query (SELECT * FROM users)
+├── mxcp.python.execute
+│   └── python.function (calculate_metrics)
+├── mxcp.validation.output
+└── mxcp.policy.enforce_output
+    ├── mxcp.policy.evaluate_output[0]
+    └── mxcp.policy.evaluate_output[1]
+```
+
+#### Metrics Collected
+
+MXCP exports metrics in two ways:
+
+##### 1. Direct Metrics (Default)
+
+These metrics are directly exported by MXCP:
+
+**System Metrics**:
+- `mxcp.up`: Server startup counter
+- `mxcp.config_reloads_total`: Configuration reload attempts
+
+**Business Metrics** (Counters):
+- `mxcp.endpoint.requests_total`: Total requests by endpoint, status
+- `mxcp.endpoint.errors_total`: Error count by type
+- `mxcp.duckdb.queries_total`: Query count by operation type
+- `mxcp.executor.tasks_total`: Execution count by language
+- `mxcp.auth.attempts_total`: Authentication attempts by provider
+
+**Performance Metrics**: 
+Performance metrics are derived from trace spans. Configure your OpenTelemetry Collector with the spanmetrics processor to generate duration histograms automatically from span data. This modern approach eliminates manual timing code and ensures consistency across all operations.
+
+**Gauge Metrics**:
+- `mxcp.endpoint.concurrent_executions`: Currently running executions
+- `mxcp.auth.active_sessions`: Current active sessions
+
+##### 2. Span Metrics (Required for Performance Metrics)
+
+MXCP follows the modern observability approach where performance metrics are derived from trace spans. This eliminates manual timing code and ensures consistency.
+
+**Important**: To get performance metrics (latency histograms, percentiles, etc.), you MUST configure your OpenTelemetry Collector with the spanmetrics processor:
+
+```yaml
+# otel-collector-config.yaml
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+    
+  spanmetrics:
+    metrics_exporter: prometheus
+    latency_histogram_buckets: [5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2s, 5s]
+    dimensions:
+      # Standard dimensions
+      - name: service.name
+      - name: span.name
+      - name: span.kind
+      - name: status.code
+      
+      # MXCP-specific dimensions
+      - name: mxcp.endpoint.name
+        default: "unknown"
+      - name: mxcp.endpoint.type
+        default: "unknown"
+      - name: mxcp.execution.language
+        default: "unknown"
+      - name: mxcp.auth.provider
+        default: "unknown"
+      - name: mxcp.policy.decision
+        default: "unknown"
+      - name: mxcp.duckdb.operation
+        default: "unknown"
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: mxcp
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, spanmetrics]
+      exporters: [otlp/tempo]
+      
+    metrics/spanmetrics:
+      receivers: [spanmetrics]
+      exporters: [prometheus]
+```
+
+This automatically generates:
+- **Request rate**: `mxcp_calls_total{span_name="mxcp.endpoint.execute"}`
+- **Latency histogram**: `mxcp_latency_bucket{span_name="mxcp.endpoint.execute", le="100"}`
+- **Error rate**: Derived from `status_code="ERROR"` label
+
+For example queries and dashboards, see `examples/observability/otel-collector-spanmetrics.yaml`.
+
+Benefits of span metrics:
+- No manual timing in code
+- Automatic P50, P95, P99 calculations
+- Consistent metrics for all operations
+- Perfect correlation with traces
+- Reduced code complexity
+
+See the [OpenTelemetry spanmetrics documentation](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/spanmetricsprocessor) for advanced configuration.
+
+#### Privacy and Security
+
+MXCP takes a privacy-first approach to telemetry:
+
+**What We DO Send**:
+```yaml
+span: mxcp.endpoint.execute
+  attributes:
+    mxcp.endpoint.name: "get_customer"     # ✅ Endpoint name
+    mxcp.endpoint.type: "tool"             # ✅ Type
+    mxcp.execution.language: "sql"         # ✅ Language used
+    mxcp.result.count: 42                  # ✅ Result count
+    mxcp.auth.authenticated: true          # ✅ Auth status
+    mxcp.policy.decision: "allow"          # ✅ Policy decision
+  duration: 150ms
+```
+
+**What We DON'T Send**:
+- ❌ Actual SQL queries (only hashed query signatures)
+- ❌ Parameter values (only parameter names/types)
+- ❌ Result data (only counts and types)
+- ❌ User credentials or tokens
+- ❌ Python code content
+- ❌ Any PII or sensitive business data
+
+Example privacy protection:
+```python
+# What happens in the code:
+sql_query = "SELECT * FROM customers WHERE email = 'user@example.com'"
+
+# What gets sent to telemetry:
+span.set_attribute("mxcp.duckdb.query_hash", "a7b9c3...")  # SHA256 hash
+span.set_attribute("mxcp.duckdb.operation", "SELECT")      # Just the operation type
+```
+
+#### Quick Start with Jaeger
+
+For local development, Jaeger provides an all-in-one solution:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4318:4318"    # OTLP HTTP receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+  mxcp:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MXCP_CONFIG_PATH=/config/config.yml
+    depends_on:
+      - jaeger
+    volumes:
+      - ./config:/config:ro
+      - ./:/app:ro
+```
+
+Configure MXCP:
+```yaml
+telemetry:
+  enabled: true
+  endpoint: http://jaeger:4318
+  service_name: mxcp-dev
+  environment: development
+  tracing:
+    enabled: true
+  metrics:
+    enabled: true
+```
+
+Access Jaeger UI at http://localhost:16686 to view traces.
+
+#### Production Telemetry Backends
+
+##### Grafana Cloud
+
+```yaml
+telemetry:
+  enabled: true
+  endpoint: https://otlp-gateway-prod-us-central-0.grafana.net/otlp
+  headers:
+    Authorization: Basic <base64-encoded-instance-id:api-key>
+  service_name: mxcp-prod
+  environment: production
+```
+
+##### AWS X-Ray
+
+Use the AWS Distro for OpenTelemetry Collector:
+```yaml
+telemetry:
+  enabled: true
+  endpoint: http://aws-otel-collector:4318
+  service_name: mxcp-prod
+```
+
+##### Azure Monitor
+
+```yaml
+telemetry:
+  enabled: true
+  endpoint: https://dc.services.visualstudio.com/v2/track
+  headers:
+    X-API-Key: your-instrumentation-key
+```
+
+#### Correlating Traces with Audit Logs
+
+MXCP automatically includes both session IDs and trace IDs in audit logs when telemetry is enabled:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:45Z",
+  "session_id": "73cb4ef4-a359-484f-a040-c1eb163abb57",  // MCP session ID
+  "trace_id": "a1b2c3d4e5f6g7h8",  // OpenTelemetry trace ID
+  "operation_name": "query_users",
+  "duration_ms": 125,
+  "status": "success"
+}
+```
+
+Query audit logs by trace ID or session ID:
+```bash
+mxcp log --filter trace_id=a1b2c3d4e5f6g7h8
+mxcp log --filter session_id=73cb4ef4-a359-484f-a040-c1eb163abb57
+```
+
+**Session vs Trace IDs**:
+- **Session ID**: The MCP session identifier that persists across multiple requests from the same client (when using HTTP transports). This may be `null` in stateless mode.
+- **Trace ID**: The OpenTelemetry trace identifier unique to each request/operation.
+
+Both IDs are included in telemetry spans as attributes:
+- `mxcp.session.id`: The MCP session ID
+- `mxcp.trace.id`: The OpenTelemetry trace ID
+
+### Log Collection and Shipping
+
+MXCP produces several types of logs that need to be collected and shipped to centralized logging systems.
+
+#### Log Types
+
+1. **Application Logs**
+   - Format: Standard Python logging to stdout/stderr
+   - Content: Operational messages, warnings, errors
+   - Privacy: Should not contain sensitive data
+
+2. **Audit Logs**
+   - Format: JSONL (JSON Lines)
+   - Location: Configured in `mxcp-site.yml`
+   - Content: Structured execution records
+   - Privacy: Sensitive data is redacted
+
+3. **Access Logs** (HTTP mode)
+   - Format: Standard HTTP access logs
+   - Content: Request/response metadata
+   - Privacy: May contain IP addresses
+
+#### Log Shipping with Promtail
+
+Promtail is the recommended log shipper for Grafana Loki:
+
+```yaml
+# promtail-config.yml
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # MXCP Application Logs (from Docker)
+  - job_name: mxcp_app
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["com.mxcp.service=mxcp"]
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\S+) - (?P<logger>\S+) - (?P<level>\w+) - (?P<message>.*)$'
+      - labels:
+          level:
+          logger:
+      - timestamp:
+          format: RFC3339
+          source: timestamp
+
+  # MXCP Audit Logs (JSONL files)
+  - job_name: mxcp_audit
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: mxcp_audit
+          __path__: /app/audit/*.jsonl
+    pipeline_stages:
+      - json:
+          expressions:
+            timestamp: timestamp
+            trace_id: trace_id
+            operation: operation_name
+            duration: duration_ms
+            status: status
+            user: caller
+      - labels:
+          operation:
+          status:
+      - timestamp:
+          format: RFC3339
+          source: timestamp
+```
+
+Deploy with Docker Compose:
+```yaml
+services:
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - mxcp-audit:/app/audit:ro
+    command: -config.file=/etc/promtail/config.yml
+
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+```
+
+#### Log Shipping with Fluentd
+
+For more complex log processing:
+
+```ruby
+# fluent.conf
+<source>
+  @type forward
+  port 24224
+</source>
+
+# Parse MXCP application logs
+<filter mxcp.app>
+  @type parser
+  key_name log
+  <parse>
+    @type regexp
+    expression /^(?<time>\S+) - (?<logger>\S+) - (?<level>\w+) - (?<message>.*)$/
+    time_format %Y-%m-%dT%H:%M:%S
+  </parse>
+</filter>
+
+# Parse MXCP audit logs
+<source>
+  @type tail
+  path /app/audit/*.jsonl
+  pos_file /var/log/fluentd/audit.pos
+  tag mxcp.audit
+  <parse>
+    @type json
+    time_key timestamp
+    time_format %Y-%m-%dT%H:%M:%SZ
+  </parse>
+</source>
+
+# Add metadata
+<filter mxcp.**>
+  @type record_transformer
+  <record>
+    environment ${ENV['ENVIRONMENT']}
+    service mxcp
+    hostname ${hostname}
+  </record>
+</filter>
+
+# Output to Elasticsearch
+<match mxcp.**>
+  @type elasticsearch
+  host elasticsearch
+  port 9200
+  index_name mxcp-%Y.%m.%d
+  type_name _doc
+  <buffer>
+    @type file
+    path /var/log/fluentd/buffer
+    flush_interval 10s
+  </buffer>
+</match>
+```
+
+### Complete Observability Stack
+
+Here's a complete Docker Compose setup for local development with full observability:
+
+```yaml
+version: '3.8'
+
+services:
+  # MXCP Application
+  mxcp:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MXCP_CONFIG_PATH=/config/config.yml
+    volumes:
+      - ./config:/config:ro
+      - ./:/app:ro
+      - mxcp-audit:/app/audit
+    labels:
+      - "com.mxcp.service=mxcp"
+    depends_on:
+      - jaeger
+      - loki
+
+  # Tracing Backend
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4318:4318"    # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+  # Metrics Backend
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  # Logs Backend
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+
+  # Log Collector
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - mxcp-audit:/app/audit:ro
+    command: -config.file=/etc/promtail/config.yml
+
+  # Visualization
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+
+volumes:
+  mxcp-audit:
+```
+
+Prometheus configuration (`prometheus.yml`):
+```yaml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'mxcp'
+    static_configs:
+      - targets: ['mxcp:9090']  # If prometheus_port is configured
+```
+
+### Monitoring Without Built-in Health Endpoints
+
+Since MXCP doesn't provide built-in health check endpoints, implement monitoring through:
+
+1. **Create a health check tool**:
    ```yaml
    # tools/health.yml
    mxcp: 1
@@ -939,7 +1565,7 @@ Since MXCP doesn't expose health endpoints, you'll need to implement your own. O
            CURRENT_TIMESTAMP as timestamp
    ```
 
-2. **Use process monitoring**:
+2. **Process monitoring**:
    ```bash
    # Check if MXCP process is running
    pgrep -f "mxcp serve" || exit 1
@@ -948,79 +1574,15 @@ Since MXCP doesn't expose health endpoints, you'll need to implement your own. O
    nc -z localhost 8000 || exit 1
    ```
 
-3. **Test with a known endpoint**:
+3. **Synthetic monitoring**:
    ```bash
-   # Use curl to test if server responds
+   # Test endpoint availability
    curl -f http://localhost:8000/tools/list || exit 1
-   ```
-
-### Metrics Collection
-
-MXCP doesn't export Prometheus metrics natively. For monitoring, you can:
-
-1. **Use audit logs as your metrics source**:
-   - Parse JSONL audit logs in real-time
-   - Extract metrics like request count, error rate, response time
-   - Feed into your monitoring system
-
-2. **External monitoring**:
-   ```bash
-   # Monitor process metrics
-   pidstat -p $(pgrep -f "mxcp serve") 1
-   
-   # Monitor port connectivity
-   while true; do
-     if nc -z localhost 8000; then
-       echo "mxcp_up 1" | curl --data-binary @- http://prometheus-pushgateway:9091/metrics/job/mxcp
-     else
-       echo "mxcp_up 0" | curl --data-binary @- http://prometheus-pushgateway:9091/metrics/job/mxcp
-     fi
-     sleep 30
-   done
-   ```
-
-3. **Log-based metrics**:
-   ```bash
-   # Extract metrics from audit logs
-   tail -f /app/audit/production.jsonl | while read line; do
-     # Parse JSON and extract metrics
-     duration=$(echo "$line" | jq -r '.duration_ms // 0')
-     status=$(echo "$line" | jq -r '.status // "unknown"')
-     endpoint=$(echo "$line" | jq -r '.name // "unknown"')
-     
-     # Send to monitoring system
-     echo "mxcp_request_duration_ms{endpoint=\"$endpoint\",status=\"$status\"} $duration" | \
-       curl --data-binary @- http://prometheus-pushgateway:9091/metrics/job/mxcp
-   done
-   ```
-
-### What MXCP Provides
-
-MXCP does provide several built-in observability features:
-
-1. **Audit Logging** (when enabled):
-   - Every request is logged to JSONL format
-   - Includes timing, status, user info, policy decisions
-   - Can be analyzed with SQL using DuckDB
-
-2. **Operational Commands**:
-   - `mxcp log` - Query audit logs
-   - `mxcp drift-check` - Monitor schema changes
-   - `mxcp validate` - Check configuration validity
-   - `mxcp test` - Run endpoint tests
-
-3. **Debug Logging**:
-   ```bash
-   # Enable debug logging
-   mxcp serve --debug
-   
-   # Or set environment variable
-   export MXCP_LOG_LEVEL=DEBUG
    ```
 
 ### Audit Log Analysis
 
-MXCP's audit logs are your primary source of operational data. Query them for insights:
+Query audit logs for operational insights:
 
 ```bash
 # Export to DuckDB for analysis
@@ -1073,213 +1635,67 @@ LIMIT 20;
 EOF
 ```
 
-### OpenTelemetry Support
+### Performance Monitoring
 
-MXCP now includes built-in OpenTelemetry support for distributed tracing, providing deeper insights into your application's performance and behavior. For complete setup instructions and details on what data is collected, see the [Telemetry Guide](./telemetry.md).
+Key performance indicators to monitor:
 
-#### What is OpenTelemetry?
+1. **Response Time** (from traces/metrics):
+   - P50, P95, P99 latencies
+   - Breakdown by operation type
+   - Slow query identification
 
-OpenTelemetry (OTel) is an open-source observability framework that provides:
-- **Distributed Tracing**: Track requests across multiple services and execution steps
-- **Metrics**: Collect performance counters and histograms (coming soon)
-- **Logs**: Structured logging with trace context correlation
+2. **Error Rates** (from metrics):
+   - Overall error percentage
+   - Errors by endpoint
+   - Authentication failures
 
-#### Enabling OpenTelemetry
+3. **Resource Usage** (from metrics):
+   - Concurrent executions
+   - Memory usage
+   - Database connection pool
 
-Configure telemetry in your user config file (`~/.mxcp/config.yml`):
+4. **Business Metrics** (from audit logs):
+   - Active users
+   - Most used endpoints
+   - Policy violation trends
 
-```yaml
-mxcp: 1
+### Alerting Examples
 
-projects:
-  myproject:
-    profiles:
-      # Development - console output for debugging
-      development:
-        telemetry:
-          enabled: true
-          console_export: true  # Print spans to console
-          service_name: mxcp-dev
-          environment: development
-      
-      # Production - send to OTLP collector
-      production:
-        telemetry:
-          enabled: true
-          endpoint: http://otel-collector:4318  # OTLP HTTP endpoint
-          service_name: mxcp-prod
-          environment: production
-          sampling_rate: 0.1  # Sample 10% of traces
-          headers:
-            # Optional authentication headers
-            Authorization: Bearer your-token
-```
-
-#### What Gets Traced?
-
-MXCP automatically traces:
-
-1. **Endpoint Execution**:
-   - Overall execution time
-   - Input/output validation
-   - Policy enforcement
-   
-2. **Authentication**:
-   - Token validation
-   - User context retrieval
-   - Provider authentication flows
-
-3. **Policy Enforcement**:
-   - Input policy evaluation (before execution)
-   - Output policy evaluation (after execution)
-   - Individual policy condition evaluation
-   - Policy decisions (allow, deny, filter, mask)
-
-4. **Database Operations**:
-   - SQL query execution (queries are hashed for privacy)
-   - Query type (SELECT, INSERT, UPDATE, etc.)
-   - Row counts and performance metrics
-   
-5. **Python Execution**:
-   - Function calls
-   - Inline code execution
-   - Parameter counts
-
-Example trace hierarchy:
-```
-mxcp.execution_engine.execute
-├── mxcp.policy.enforce_input
-│   ├── mxcp.policy.evaluate_input[0]
-│   └── mxcp.policy.evaluate_input[1]
-├── mxcp.validation.input
-├── mxcp.duckdb.execute
-│   └── db.query (SELECT * FROM users)
-├── mxcp.python.execute
-│   └── python.function (calculate_metrics)
-├── mxcp.validation.output
-└── mxcp.policy.enforce_output
-    ├── mxcp.policy.evaluate_output[0]
-    └── mxcp.policy.evaluate_output[1]
-```
-
-#### Key Span Attributes
-
-Common attributes across spans:
-- `mxcp.language`: Execution language (sql, python)
-- `mxcp.params.count`: Number of input parameters
-- `mxcp.result.count`: Number of result items
-- `mxcp.validation.passed`: Validation success status
-
-Authentication spans:
-- `mxcp.auth.enabled`: Whether authentication is enabled
-- `mxcp.auth.provider`: Authentication provider (github, keycloak, etc.)
-- `mxcp.auth.authenticated`: Authentication success status
-
-Policy enforcement spans:
-- `mxcp.policy.count`: Number of policies to evaluate
-- `mxcp.policy.condition`: CEL condition being evaluated
-- `mxcp.policy.action`: Policy action (deny, filter_fields, mask_fields)
-- `mxcp.policy.decision`: Final decision (allow, deny, warn)
-- `mxcp.policy.fields_filtered`: Number of fields filtered/masked
-
-Database spans:
-- `db.system`: Always "duckdb"
-- `db.statement.hash`: SHA256 hash of the query (for privacy)
-- `db.operation`: SQL operation type
-- `db.readonly`: Whether connection is read-only
-- `db.rows_affected`: Number of rows returned/affected
-
-#### Integration with Observability Platforms
-
-##### Jaeger (Local Development)
+Configure alerts in Grafana based on metrics:
 
 ```yaml
-# docker-compose.yml
-services:
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    ports:
-      - "16686:16686"  # Jaeger UI
-      - "4318:4318"    # OTLP HTTP
+# High error rate
+alert: HighErrorRate
+expr: |
+  rate(mxcp_endpoint_errors_total[5m]) 
+  / rate(mxcp_endpoint_requests_total[5m]) > 0.05
+for: 5m
+annotations:
+  summary: "High error rate detected"
+  description: "Error rate is above 5% for 5 minutes"
 
-  mxcp:
-    environment:
-      - MXCP_PROFILE=development
-    depends_on:
-      - jaeger
+# Slow response time
+alert: SlowResponseTime
+expr: |
+  histogram_quantile(0.95, 
+    rate(mxcp_endpoint_duration_seconds_bucket[5m])
+  ) > 1.0
+for: 10m
+annotations:
+  summary: "Slow response times"
+  description: "95th percentile response time is above 1 second"
+
+# Authentication failures
+alert: AuthenticationFailures
+expr: |
+  rate(mxcp_auth_attempts_total{status!="success"}[5m]) > 0.1
+for: 5m
+annotations:
+  summary: "High authentication failure rate"
+  description: "More than 0.1 auth failures per second"
 ```
 
-Configure MXCP:
-```yaml
-telemetry:
-  enabled: true
-  endpoint: http://jaeger:4318
-  service_name: mxcp-dev
-```
-
-##### Grafana Cloud
-
-```yaml
-telemetry:
-  enabled: true
-  endpoint: https://otlp-gateway-prod-us-central-0.grafana.net/otlp
-  headers:
-    Authorization: Basic <base64-encoded-instance-id:api-key>
-  service_name: mxcp-prod
-  environment: production
-```
-
-##### AWS X-Ray
-
-Use the AWS Distro for OpenTelemetry Collector:
-```yaml
-telemetry:
-  enabled: true
-  endpoint: http://aws-otel-collector:4318
-  service_name: mxcp-prod
-```
-
-#### Correlating Traces with Audit Logs
-
-MXCP automatically includes trace IDs in audit logs when telemetry is enabled:
-
-```json
-{
-  "timestamp": "2024-01-15T10:30:45Z",
-  "trace_id": "a1b2c3d4e5f6g7h8",  // Correlate with traces
-  "span_id": "i9j0k1l2",
-  "operation_name": "query_users",
-  "duration_ms": 125,
-  "status": "success"
-}
-```
-
-Query audit logs by trace ID:
-```bash
-mxcp log --filter trace_id=a1b2c3d4e5f6g7h8
-```
-
-#### Privacy and Redaction
-
-OpenTelemetry respects MXCP's privacy settings:
-
-1. **SQL queries are hashed**: Only query signatures are sent, not full SQL
-2. **Python code is anonymized**: Inline code is hashed
-3. **Sensitive attributes can be redacted**: Future versions will support field-level redaction using the same policies as audit logs
-
-#### Performance Impact
-
-OpenTelemetry adds minimal overhead:
-- ~1-2ms per traced operation
-- Sampling reduces data volume in production
-- Async export doesn't block requests
-
-Recommended sampling rates:
-- Development: 100% (1.0)
-- Staging: 50% (0.5)
-- Production: 1-10% (0.01-0.1)
-
-#### Troubleshooting Telemetry
+### Troubleshooting Telemetry
 
 1. **Enable debug logging**:
    ```bash
@@ -1290,7 +1706,8 @@ Recommended sampling rates:
    ```yaml
    telemetry:
      enabled: true
-     console_export: true  # See spans in logs
+     tracing:
+       console_export: true  # See spans in logs
    ```
 
 3. **Check connectivity**:
@@ -1304,58 +1721,7 @@ Recommended sampling rates:
    - Firewall blocking OTLP port (4318/4317)
    - Invalid authentication headers
    - Collector not configured for OTLP
-   - Sampling rate too low (0.0)
-
-### Container Health Checks
-
-For Docker/Kubernetes, implement health checks at the container level:
-
-```dockerfile
-# In your Dockerfile
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD mxcp list >/dev/null 2>&1 || exit 1
-```
-
-```yaml
-# In Kubernetes
-livenessProbe:
-  exec:
-    command:
-    - mxcp
-    - list
-  initialDelaySeconds: 30
-  periodSeconds: 10
-
-readinessProbe:
-  tcpSocket:
-    port: 8000
-  initialDelaySeconds: 5
-  periodSeconds: 5
-```
-
-### Monitoring Recommendations
-
-1. **Use audit logs as your primary data source**:
-   - Ship logs to centralized logging (ELK, Splunk)
-   - Parse logs for metrics extraction
-   - Set up alerts based on patterns
-
-2. **Monitor at the infrastructure level**:
-   - Container/process health
-   - Resource usage (CPU, memory, disk)
-   - Network connectivity
-   - DuckDB file size growth
-
-3. **Application-level monitoring**:
-   - Endpoint error rates from audit logs
-   - Response times from duration_ms field
-   - Policy violations for security monitoring
-   - Drift detection results
-
-4. **External synthetic monitoring**:
-   - Periodically call test endpoints
-   - Verify OAuth flow works
-   - Check database connectivity
+   - Incorrect endpoint URL format
 
 ## Security Hardening
 
@@ -1467,6 +1833,27 @@ readinessProbe:
      enabled: true
      path: "/app/audit/production.jsonl"
    ```
+
+### Logging Security Guidelines
+
+**NEVER Log Sensitive Data**:
+- **Tokens/Keys**: Never log tokens, API keys, or secrets (not even truncated)
+- **Credentials**: No passwords, client secrets, or auth tokens
+- **PII**: Avoid logging email addresses, usernames, IP addresses unless necessary
+- **Query Content**: Don't log SQL queries or their parameters
+- **Response Data**: Never log actual data returned from queries
+
+**What TO Log**:
+- Operation names and types
+- Timing and performance metrics
+- Status codes and error types
+- Counts and aggregates
+- Provider/service names (not user identities)
+
+**Log Level Guidelines**:
+- **ERROR/WARNING**: Only operational context, no data
+- **INFO**: High-level operations without sensitive details
+- **DEBUG**: May include more context but still no secrets
 
 ## High Availability & Scaling
 
@@ -1703,7 +2090,7 @@ duckdb perf.db "SELECT name, AVG(duration_ms) as avg_ms, COUNT(*) as count FROM 
 - [ ] Security scan completed
 - [ ] Secrets configured in vault/environment
 - [ ] Backup procedures tested
-- [ ] Monitoring configured
+- [ ] Telemetry configured
 - [ ] Health checks implemented
 
 ### Deployment
@@ -1727,6 +2114,8 @@ duckdb perf.db "SELECT name, AVG(duration_ms) as avg_ms, COUNT(*) as count FROM 
 - [ ] Test each endpoint
 - [ ] Monitor error rates
 - [ ] Check performance metrics
+- [ ] Verify traces appearing in Jaeger/backend
+- [ ] Test log shipping pipeline
 - [ ] Document known issues
 - [ ] Set up alerts
 - [ ] Schedule backup verification
@@ -1741,8 +2130,9 @@ duckdb perf.db "SELECT name, AVG(duration_ms) as avg_ms, COUNT(*) as count FROM 
 - [ ] Test backup restoration quarterly
 - [ ] Review security patches
 - [ ] Monitor for drift: `mxcp drift-check`
-- [ ] Analyze usage patterns
-- [ ] Optimize slow queries
+- [ ] Analyze usage patterns via telemetry
+- [ ] Review slow traces for optimization
+- [ ] Monitor metric trends
 - [ ] Plan capacity scaling
 
 ## Additional Resources
@@ -1758,8 +2148,9 @@ duckdb perf.db "SELECT name, AVG(duration_ms) as avg_ms, COUNT(*) as count FROM 
 For operational support:
 1. Check the troubleshooting section above
 2. Review logs with debug mode enabled
-3. Consult the community forums
-4. Open an issue on GitHub with:
+3. Check telemetry traces for performance issues
+4. Consult the community forums
+5. Open an issue on GitHub with:
    - MXCP version
    - Deployment method (Docker/K8s/bare metal)
    - Error logs

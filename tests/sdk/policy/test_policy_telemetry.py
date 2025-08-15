@@ -11,7 +11,7 @@ from mxcp.sdk.policy import (
     PolicyEnforcementError,
 )
 from mxcp.sdk.telemetry import (
-    configure_telemetry,
+    configure_all,
     is_telemetry_enabled,
     traced_operation,
     shutdown_telemetry,
@@ -23,14 +23,14 @@ def reset_telemetry():
     """Reset telemetry state between tests."""
     # Reset OpenTelemetry's internal state
     from opentelemetry import trace
-    import mxcp.sdk.telemetry._config
-    import mxcp.sdk.telemetry._tracer
+    import mxcp.sdk.telemetry.config
+    import mxcp.sdk.telemetry.tracer
 
     # Reset before test
     trace._TRACER_PROVIDER = None
     trace._TRACER_PROVIDER_FACTORY = None
-    mxcp.sdk.telemetry._config._telemetry_enabled = False
-    mxcp.sdk.telemetry._tracer._tracer = None
+    mxcp.sdk.telemetry.config._telemetry_enabled = False
+    mxcp.sdk.telemetry.tracer._tracer = None
 
     yield
 
@@ -41,14 +41,14 @@ def reset_telemetry():
         pass
     trace._TRACER_PROVIDER = None
     trace._TRACER_PROVIDER_FACTORY = None
-    mxcp.sdk.telemetry._config._telemetry_enabled = False
-    mxcp.sdk.telemetry._tracer._tracer = None
+    mxcp.sdk.telemetry.config._telemetry_enabled = False
+    mxcp.sdk.telemetry.tracer._tracer = None
 
 
 def test_policy_enforcement_creates_telemetry_spans():
     """Test that policy enforcement creates telemetry spans."""
     # Enable telemetry
-    configure_telemetry(enabled=True, console_export=True)
+    configure_all(enabled=True, tracing={"console_export": True})
     assert is_telemetry_enabled()
 
     # Create a policy set with input and output policies
@@ -118,7 +118,7 @@ def test_policy_enforcement_creates_telemetry_spans():
 def test_policy_denial_tracked_in_telemetry():
     """Test that policy denials are tracked in telemetry."""
     # Enable telemetry
-    configure_telemetry(enabled=True, console_export=True)
+    configure_all(enabled=True, tracing={"console_export": True})
 
     # Create a policy that will deny
     policy_set = PolicySet(
@@ -150,7 +150,7 @@ def test_policy_denial_tracked_in_telemetry():
 def test_nested_policy_spans():
     """Test that policy evaluation creates nested spans."""
     # Enable telemetry
-    configure_telemetry(enabled=True, console_export=True)
+    configure_all(enabled=True, tracing={"console_export": True})
 
     # Create a policy set with multiple policies
     policy_set = PolicySet(

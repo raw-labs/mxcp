@@ -17,7 +17,7 @@ from uuid import uuid4
 
 # Type aliases
 CallerType = Literal["cli", "http", "stdio", "api", "system", "unknown"]
-EventType = Literal["tool", "resource", "prompt"]  # Backward compatibility
+EventType = Literal["tool", "resource", "prompt"]
 PolicyDecision = Literal["allow", "deny", "warn"] | None
 Status = Literal["success", "error"]
 

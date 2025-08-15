@@ -8,18 +8,7 @@ from typing import Any
 
 from posthog import Posthog
 
-try:
-    from importlib.metadata import version
-
-    PACKAGE_VERSION = version("mxcp")
-except ImportError:
-    # Fallback for Python < 3.8
-    try:
-        import pkg_resources  # type: ignore[import-not-found]
-
-        PACKAGE_VERSION = pkg_resources.get_distribution("mxcp").version
-    except Exception:
-        PACKAGE_VERSION = "unknown"
+from mxcp.sdk.core import PACKAGE_NAME, PACKAGE_VERSION
 
 POSTHOG_API_KEY = "phc_6BP2PRVBewZUihdpac9Qk6QHd4eXykdhrvoFncqBjl0"
 POSTHOG_HOST = "https://eu.i.posthog.com"  # Fixed: EU region
@@ -72,7 +61,7 @@ def track_event(event_name: str, properties: dict[str, Any] | None = None) -> No
             try:
                 # Add default properties
                 event_properties = {
-                    "app": "mxcp",
+                    "app": PACKAGE_NAME,
                     "version": PACKAGE_VERSION,  # Dynamic version from pyproject.toml
                     **(properties or {}),
                 }

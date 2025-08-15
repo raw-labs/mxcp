@@ -36,6 +36,7 @@ dependencies = [
     "opentelemetry-api>=1.24.0",  # OpenTelemetry API
     "opentelemetry-sdk>=1.24.0",  # OpenTelemetry SDK
     "opentelemetry-exporter-otlp-proto-http>=1.24.0",  # OTLP HTTP exporter
+    "opentelemetry-exporter-prometheus>=0.48b0",  # Prometheus metrics exporter
 ]
 
 [project.scripts]
@@ -223,6 +224,13 @@ exclude = [
     "tests/",
     "examples/",
     "scripts/"
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.16.1",
+    "pytest>=8.4.1",
+    "ruff>=0.12.8",
 ]
 
 # Overrides removed - tests and examples are excluded above

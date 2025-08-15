@@ -8,6 +8,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from mxcp.sdk.core import PACKAGE_NAME, PACKAGE_VERSION
+
 # Import OpenTelemetry only in this module
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -31,8 +33,8 @@ class TelemetryConfig:
 
     enabled: bool = False
     endpoint: str | None = None
-    service_name: str = "mxcp"
-    service_version: str = "1.0.0"
+    service_name: str = PACKAGE_NAME
+    service_version: str = PACKAGE_VERSION
     environment: str = "development"
     headers: dict[str, str] | None = None
     resource_attributes: dict[str, Any] | None = None
@@ -44,8 +46,8 @@ class TelemetryConfig:
         return cls(
             enabled=config.get("enabled", False),
             endpoint=config.get("endpoint"),
-            service_name=config.get("service_name", "mxcp"),
-            service_version=config.get("service_version", "1.0.0"),
+            service_name=config.get("service_name", PACKAGE_NAME),
+            service_version=config.get("service_version", PACKAGE_VERSION),
             environment=config.get("environment", "development"),
             headers=config.get("headers"),
             resource_attributes=config.get("resource_attributes"),

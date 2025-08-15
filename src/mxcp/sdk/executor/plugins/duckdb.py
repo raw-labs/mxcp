@@ -37,12 +37,17 @@ Example usage:
 import hashlib
 import logging
 import threading
-import time
 from typing import TYPE_CHECKING, Any, Optional
 
 import duckdb
 
-from mxcp.sdk.telemetry import traced_operation
+from mxcp.sdk.telemetry import (
+    decrement_gauge,
+    get_current_span,
+    increment_gauge,
+    record_counter,
+    traced_operation,
+)
 
 from ..context import ExecutionContext, reset_execution_context, set_execution_context
 from ..interfaces import ExecutorPlugin
@@ -251,42 +256,65 @@ class DuckDBExecutor(ExecutorPlugin):
         elif sql_lower.startswith("drop"):
             operation = "drop"
 
-        with traced_operation(
-            "mxcp.duckdb.execute",
-            attributes={
-                "db.system": "duckdb",
-                "db.statement.hash": query_hash,
-                "db.operation": operation,
-                "db.parameters.count": len(params) if params else 0,
-                "db.readonly": self.database_config.readonly,
-            },
-        ) as span:
-            try:
-                # Set execution context for UDFs to read dynamically
-                # Set execution context for this execution
-                context_token = set_execution_context(context)
+        # Track concurrent executions
+        increment_gauge(
+            "mxcp.duckdb.concurrent_executions",
+            attributes={"operation": operation},
+            description="Currently running DuckDB queries",
+        )
 
+        try:
+            with traced_operation(
+                "mxcp.duckdb.execute",
+                attributes={
+                    "db.system": "duckdb",
+                    "db.statement.hash": query_hash,
+                    "db.operation": operation,
+                    "db.parameters.count": len(params) if params else 0,
+                    "db.readonly": self.database_config.readonly,
+                },
+            ):
                 try:
-                    with self._db_lock:
-                        # Time the actual query execution
-                        start_time = time.time()
-                        result = self.session.execute_query_to_dict(source_code, params)
-                        duration_ms = (time.time() - start_time) * 1000
+                    # Set execution context for this execution, which is used for dynamic UDFs
+                    context_token = set_execution_context(context)
 
-                        # Add performance metrics to span
-                        if span:
-                            span.set_attribute("db.duration_ms", duration_ms)
-                            if isinstance(result, list):
+                    try:
+                        with self._db_lock:
+                            result = self.session.execute_query_to_dict(source_code, params)
+
+                            # Add result metrics to current span
+                            span = get_current_span()
+                            if span and isinstance(result, list):
                                 span.set_attribute("db.rows_affected", len(result))
 
-                        return result
-                finally:
-                    # Always reset the context when done
-                    reset_execution_context(context_token)
+                            # Record metrics
+                            record_counter(
+                                "mxcp.duckdb.queries_total",
+                                attributes={"operation": operation, "status": "success"},
+                                description="Total DuckDB queries executed",
+                            )
 
-            except Exception as e:
-                logger.error(f"SQL execution failed: {e}")
-                raise RuntimeError(f"Failed to execute SQL: {e}") from e
+                            return result
+                    finally:
+                        # Always reset the context when done
+                        reset_execution_context(context_token)
+
+                except Exception as e:
+                    logger.error(f"SQL execution failed: {e}")
+                    # Record failure metrics
+                    record_counter(
+                        "mxcp.duckdb.queries_total",
+                        attributes={"operation": operation, "status": "error"},
+                        description="Total DuckDB queries executed",
+                    )
+                    raise RuntimeError(f"Failed to execute SQL: {e}") from e
+        finally:
+            # Always decrement concurrent executions
+            decrement_gauge(
+                "mxcp.duckdb.concurrent_executions",
+                attributes={"operation": operation},
+                description="Currently running DuckDB queries",
+            )
 
     def _log_available_plugins(self) -> None:
         """Log information about available DuckDB plugins."""

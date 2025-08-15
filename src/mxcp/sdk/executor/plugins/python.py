@@ -54,7 +54,12 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 
-from mxcp.sdk.telemetry import traced_operation
+from mxcp.sdk.telemetry import (
+    decrement_gauge,
+    increment_gauge,
+    record_counter,
+    traced_operation,
+)
 
 from ..context import ExecutionContext
 from ..interfaces import ExecutorPlugin
@@ -348,32 +353,66 @@ class PythonExecutor(ExecutorPlugin):
             # For inline code, hash it for privacy
             display_name = f"inline_{hashlib.sha256(source_code.encode()).hexdigest()[:8]}"
 
-        with traced_operation(
-            "mxcp.python.execute",
-            attributes={
-                "mxcp.python.type": execution_type,
-                "mxcp.python.name": display_name,
-                "mxcp.python.params.count": len(params) if params else 0,
-            },
-        ):
-            try:
-                # Check if it's a file path or inline code
-                logger.info(f"Executing Python source: {repr(source_code[:100])}...")
-                if is_file:
-                    logger.info("Detected as file path, using _execute_from_file")
-                    result = await self._execute_from_file(source_code, params, context)
-                else:
-                    logger.info("Detected as inline code, using _execute_inline")
-                    result = await self._execute_inline(source_code, params, context)
+        # Track concurrent executions
+        increment_gauge(
+            "mxcp.python.concurrent_executions",
+            attributes={"type": execution_type},
+            description="Currently running Python executions",
+        )
 
-                return result
-            except (ImportError, SyntaxError) as e:
-                # These are executor-level errors that should be wrapped
-                logger.error(f"Python execution failed: {e}")
-                raise RuntimeError(f"Failed to execute Python code: {e}") from e
-            except Exception:
-                # Let other exceptions (FileNotFoundError, AttributeError, runtime errors) propagate
-                raise
+        try:
+            with traced_operation(
+                "mxcp.python.execute",
+                attributes={
+                    "mxcp.python.type": execution_type,
+                    "mxcp.python.name": display_name,
+                    "mxcp.python.params.count": len(params) if params else 0,
+                },
+            ):
+                try:
+                    # Check if it's a file path or inline code
+                    logger.info(f"Executing Python source: {repr(source_code[:100])}...")
+                    if is_file:
+                        logger.info("Detected as file path, using _execute_from_file")
+                        result = await self._execute_from_file(source_code, params, context)
+                    else:
+                        logger.info("Detected as inline code, using _execute_inline")
+                        result = await self._execute_inline(source_code, params, context)
+
+                    # Record success metrics
+                    record_counter(
+                        "mxcp.python.executions_total",
+                        attributes={"type": execution_type, "status": "success"},
+                        description="Total Python executions",
+                    )
+
+                    return result
+                except (ImportError, SyntaxError) as e:
+                    # These are executor-level errors that should be wrapped
+                    logger.error(f"Python execution failed: {e}")
+                    # Record error metrics
+                    record_counter(
+                        "mxcp.python.executions_total",
+                        attributes={"type": execution_type, "status": "error"},
+                        description="Total Python executions",
+                    )
+                    raise RuntimeError(f"Failed to execute Python code: {e}") from e
+                except Exception:
+                    # Let other exceptions (FileNotFoundError, AttributeError, runtime errors) propagate
+                    # But still record metrics
+                    record_counter(
+                        "mxcp.python.executions_total",
+                        attributes={"type": execution_type, "status": "error"},
+                        description="Total Python executions",
+                    )
+                    raise
+        finally:
+            # Always decrement concurrent executions
+            decrement_gauge(
+                "mxcp.python.concurrent_executions",
+                attributes={"type": execution_type},
+                description="Currently running Python executions",
+            )
 
     def _is_file_path(self, source_code: str) -> bool:
         """Check if source code is a file path."""

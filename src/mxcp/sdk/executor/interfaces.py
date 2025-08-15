@@ -33,7 +33,13 @@ import threading
 from abc import ABC, abstractmethod
 from typing import Any
 
-from mxcp.sdk.telemetry import traced_operation
+from mxcp.sdk.telemetry import (
+    decrement_gauge,
+    get_current_span,
+    increment_gauge,
+    record_counter,
+    traced_operation,
+)
 from mxcp.sdk.validator import TypeValidator
 
 from .context import ExecutionContext
@@ -226,50 +232,93 @@ class ExecutionEngine:
         Raises:
             ValueError: If language is not supported or validation fails
         """
-        # Start telemetry span for execution
-        with traced_operation(
-            "mxcp.execution_engine.execute",
-            attributes={
-                "mxcp.language": language,
-                "mxcp.params.count": len(params) if params else 0,
-                "mxcp.has_input_schema": input_schema is not None,
-                "mxcp.has_output_schema": output_schema is not None,
-            },
-        ) as span:
-            if language not in self._executors:
-                available = list(self._executors.keys())
-                raise ValueError(f"Language '{language}' not supported. Available: {available}")
+        # Track concurrent executions at the engine level
+        increment_gauge(
+            "mxcp.execution.concurrent",
+            attributes={"language": language},
+            description="Currently running executions across all languages",
+        )
 
-            # Validate input parameters if schema provided
-            if input_schema:
-                with traced_operation("mxcp.validation.input") as validation_span:
-                    validator = TypeValidator.from_dict(
-                        {"input": {"parameters": input_schema}}, strict=self._strict
+        try:
+            # Start telemetry span for execution
+            with traced_operation(
+                "mxcp.execution_engine.execute",
+                attributes={
+                    "mxcp.language": language,
+                    "mxcp.params.count": len(params) if params else 0,
+                    "mxcp.has_input_schema": input_schema is not None,
+                    "mxcp.has_output_schema": output_schema is not None,
+                },
+            ):
+                if language not in self._executors:
+                    available = list(self._executors.keys())
+                    # Record failure before raising
+                    record_counter(
+                        "mxcp.execution.total",
+                        attributes={
+                            "language": language,
+                            "status": "error",
+                            "error": "unsupported_language",
+                        },
+                        description="Total executions across all languages",
                     )
-                    params = validator.validate_input(params)
-                    if validation_span:
-                        validation_span.set_attribute("mxcp.validation.passed", True)
+                    raise ValueError(f"Language '{language}' not supported. Available: {available}")
 
-            # Execute the code (this will create a child span in the executor)
-            executor = self._executors[language]
-            result = await executor.execute(source_code, params, context)
+                # Validate input parameters if schema provided
+                if input_schema:
+                    with traced_operation("mxcp.validation.input"):
+                        validator = TypeValidator.from_dict(
+                            {"input": {"parameters": input_schema}}, strict=self._strict
+                        )
+                        params = validator.validate_input(params)
+                        validation_span = get_current_span()
+                        if validation_span:
+                            validation_span.set_attribute("mxcp.validation.passed", True)
 
-            # Validate output if schema provided
-            if output_schema:
-                with traced_operation("mxcp.validation.output") as validation_span:
-                    validator = TypeValidator.from_dict(
-                        {"output": output_schema}, strict=self._strict
-                    )
-                    result = validator.validate_output(result)
-                    if validation_span:
-                        validation_span.set_attribute("mxcp.validation.passed", True)
+                # Execute the code (this will create a child span in the executor)
+                executor = self._executors[language]
+                result = await executor.execute(source_code, params, context)
 
-            # Add result info to span if available
-            if span and hasattr(result, "__len__"):
-                with contextlib.suppress(Exception):
-                    span.set_attribute("mxcp.result.count", len(result))
+                # Validate output if schema provided
+                if output_schema:
+                    with traced_operation("mxcp.validation.output"):
+                        validator = TypeValidator.from_dict(
+                            {"output": output_schema}, strict=self._strict
+                        )
+                        result = validator.validate_output(result)
+                        validation_span = get_current_span()
+                        if validation_span:
+                            validation_span.set_attribute("mxcp.validation.passed", True)
 
-            return result
+                # Record success metrics
+                record_counter(
+                    "mxcp.execution.total",
+                    attributes={"language": language, "status": "success"},
+                    description="Total executions across all languages",
+                )
+
+                # Add result info to current span if available
+                span = get_current_span()
+                if span and hasattr(result, "__len__"):
+                    with contextlib.suppress(Exception):
+                        span.set_attribute("mxcp.result.count", len(result))
+
+                return result
+        except Exception:
+            # Record error metrics
+            record_counter(
+                "mxcp.execution.total",
+                attributes={"language": language, "status": "error"},
+                description="Total executions across all languages",
+            )
+            raise
+        finally:
+            # Always decrement concurrent executions
+            decrement_gauge(
+                "mxcp.execution.concurrent",
+                attributes={"language": language},
+                description="Currently running executions across all languages",
+            )
 
     def validate_source(self, language: str, source_code: str) -> bool:
         """Validate source code syntax without execution.

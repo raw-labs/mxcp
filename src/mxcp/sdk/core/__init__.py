@@ -4,6 +4,7 @@ This package provides core functionality shared across the SDK including:
 - Configuration resolution with secret providers (Vault, 1Password, environment)
 - Analytics and telemetry collection
 - Common utilities and helpers
+- Package version information
 
 ## Key Modules
 
@@ -16,6 +17,11 @@ This package provides core functionality shared across the SDK including:
 - Usage tracking and telemetry collection
 - Performance monitoring and timing decorators
 - Privacy-focused analytics with opt-out support
+
+### Version (`mxcp.sdk.core.version`)
+- `PACKAGE_NAME`: The package name ("mxcp")
+- `PACKAGE_VERSION`: The current package version
+- `get_package_info()`: Get both name and version as a tuple
 
 ## Quick Examples
 
@@ -58,4 +64,17 @@ def expensive_operation():
     # ... time-consuming work ...
     pass
 ```
+
+### Version Information
+```python
+from mxcp.sdk.core.version import PACKAGE_NAME, PACKAGE_VERSION
+
+print(f"{PACKAGE_NAME} version {PACKAGE_VERSION}")
+# Output: mxcp version 0.4.0
+```
 """
+
+# Export version utilities for easy access
+from .version import PACKAGE_NAME, PACKAGE_VERSION, get_package_info
+
+__all__ = ["PACKAGE_NAME", "PACKAGE_VERSION", "get_package_info"]

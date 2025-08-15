@@ -18,14 +18,14 @@ def reset_telemetry():
     """Reset telemetry state between tests."""
     # Reset OpenTelemetry's internal state
     from opentelemetry import trace
-    import mxcp.sdk.telemetry._config
-    import mxcp.sdk.telemetry._tracer
+    import mxcp.sdk.telemetry.config
+    import mxcp.sdk.telemetry.tracer
 
     # Reset before test
     trace._TRACER_PROVIDER = None
     trace._TRACER_PROVIDER_FACTORY = None
-    mxcp.sdk.telemetry._config._telemetry_enabled = False
-    mxcp.sdk.telemetry._tracer._tracer = None
+    mxcp.sdk.telemetry.config._telemetry_enabled = False
+    mxcp.sdk.telemetry.tracer._tracer = None
 
     yield
 
@@ -36,8 +36,8 @@ def reset_telemetry():
         pass
     trace._TRACER_PROVIDER = None
     trace._TRACER_PROVIDER_FACTORY = None
-    mxcp.sdk.telemetry._config._telemetry_enabled = False
-    mxcp.sdk.telemetry._tracer._tracer = None
+    mxcp.sdk.telemetry.config._telemetry_enabled = False
+    mxcp.sdk.telemetry.tracer._tracer = None
 
 
 def test_telemetry_config_disabled():

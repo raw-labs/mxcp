@@ -188,11 +188,11 @@
                     },
                     "telemetry": {
                       "type": "object",
-                      "description": "OpenTelemetry configuration for this profile.",
+                      "description": "Unified telemetry configuration for traces, metrics, and logs.",
                       "properties": {
                         "enabled": {
                           "type": "boolean",
-                          "description": "Whether to enable telemetry for this profile.",
+                          "description": "Global telemetry enable/disable.",
                           "default": false
                         },
                         "endpoint": {
@@ -211,21 +211,61 @@
                           "type": "string",
                           "description": "Override the default service name (mxcp)."
                         },
+                        "service_version": {
+                          "type": "string",
+                          "description": "Service version string."
+                        },
                         "environment": {
                           "type": "string",
                           "description": "Deployment environment (e.g., production, staging)."
                         },
-                        "sampling_rate": {
-                          "type": "number",
-                          "description": "Trace sampling rate (0.0 to 1.0).",
-                          "minimum": 0.0,
-                          "maximum": 1.0,
-                          "default": 1.0
+                        "resource_attributes": {
+                          "type": "object",
+                          "description": "Additional resource attributes for all telemetry.",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
                         },
-                        "console_export": {
-                          "type": "boolean",
-                          "description": "Export spans to console for debugging.",
-                          "default": false
+                        "tracing": {
+                          "type": "object",
+                          "description": "Distributed tracing configuration.",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean",
+                              "description": "Whether tracing is enabled.",
+                              "default": true
+                            },
+                            "console_export": {
+                              "type": "boolean",
+                              "description": "Export spans to console for debugging.",
+                              "default": false
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "metrics": {
+                          "type": "object",
+                          "description": "Metrics collection configuration.",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean",
+                              "description": "Whether metrics collection is enabled.",
+                              "default": true
+                            },
+                            "export_interval": {
+                              "type": "integer",
+                              "description": "Export interval in seconds.",
+                              "default": 60,
+                              "minimum": 1
+                            },
+                            "prometheus_port": {
+                              "type": "integer",
+                              "description": "Optional port for Prometheus scraping endpoint.",
+                              "minimum": 1024,
+                              "maximum": 65535
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false

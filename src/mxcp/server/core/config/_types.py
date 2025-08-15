@@ -190,14 +190,35 @@ class UserModelsConfig(TypedDict, total=False):
     models: dict[str, UserModelConfig] | None  # Model configurations
 
 
+class UserTracingConfig(TypedDict, total=False):
+    """Tracing-specific configuration."""
+
+    enabled: bool | None
+    console_export: bool | None  # For debugging - print spans to console
+
+
+class UserMetricsConfig(TypedDict, total=False):
+    """Metrics-specific configuration."""
+
+    enabled: bool | None
+    export_interval: int | None  # Export interval in seconds
+    prometheus_port: int | None  # Optional Prometheus scrape endpoint
+
+
 class UserTelemetryConfig(TypedDict, total=False):
-    enabled: bool
+    """Unified telemetry configuration treating all signals as equals."""
+
+    enabled: bool  # Global enable/disable
     endpoint: str | None  # OTLP endpoint (e.g., http://localhost:4318)
     headers: dict[str, str] | None  # Additional headers for OTLP exporter
     service_name: str | None  # Override default service name
+    service_version: str | None  # Service version
     environment: str | None  # Deployment environment
-    sampling_rate: float | None  # Trace sampling rate (0.0-1.0)
-    console_export: bool | None  # For debugging
+    resource_attributes: dict[str, Any] | None  # Additional resource attributes
+
+    # Signal-specific configurations
+    tracing: UserTracingConfig | None  # Tracing configuration
+    metrics: UserMetricsConfig | None  # Metrics configuration
 
 
 class UserProfileConfig(TypedDict, total=False):

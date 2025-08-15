@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import celpy
 from celpy.adapter import json_to_cel
 
-from mxcp.sdk.telemetry import traced_operation
+from mxcp.sdk.telemetry import record_counter, traced_operation
 
 from ._types import PolicyAction, PolicyEnforcementError, PolicySet
 
@@ -221,6 +221,22 @@ class PolicyEnforcer:
                                 span.set_attribute("mxcp.policy.decision", "deny")
                                 span.set_attribute("mxcp.policy.denied_at", i)
                             logger.warning(f"Input policy denied access: {reason}")
+
+                            # Record metrics before raising exception
+                            record_counter(
+                                "mxcp.policy.evaluations_total",
+                                attributes={"type": "input", "decision": self.last_policy_decision},
+                                description="Total policy evaluations",
+                            )
+                            record_counter(
+                                "mxcp.policy.denials_total",
+                                attributes={
+                                    "type": "input",
+                                    "reason": policy.action.value if policy.action else "unknown",
+                                },
+                                description="Total policy denials",
+                            )
+
                             raise PolicyEnforcementError(reason)
                     except PolicyEnforcementError:
                         raise
@@ -234,6 +250,13 @@ class PolicyEnforcer:
             if span:
                 span.set_attribute("mxcp.policy.decision", self.last_policy_decision)
                 span.set_attribute("mxcp.policy.evaluated_count", len(self.policies_evaluated))
+
+            # Record successful evaluation metrics
+            record_counter(
+                "mxcp.policy.evaluations_total",
+                attributes={"type": "input", "decision": self.last_policy_decision},
+                description="Total policy evaluations",
+            )
 
     def enforce_output_policies(
         self,
@@ -302,6 +325,27 @@ class PolicyEnforcer:
                                     span.set_attribute("mxcp.policy.decision", "deny")
                                     span.set_attribute("mxcp.policy.denied_at", i)
                                 logger.warning(f"Output policy denied access: {reason}")
+
+                                # Record metrics before raising exception
+                                record_counter(
+                                    "mxcp.policy.evaluations_total",
+                                    attributes={
+                                        "type": "output",
+                                        "decision": self.last_policy_decision,
+                                    },
+                                    description="Total policy evaluations",
+                                )
+                                record_counter(
+                                    "mxcp.policy.denials_total",
+                                    attributes={
+                                        "type": "output",
+                                        "reason": (
+                                            policy.action.value if policy.action else "unknown"
+                                        ),
+                                    },
+                                    description="Total policy denials",
+                                )
+
                                 raise PolicyEnforcementError(reason)
 
                             elif policy.action == PolicyAction.FILTER_FIELDS and policy.fields:
@@ -365,6 +409,13 @@ class PolicyEnforcer:
                 span.set_attribute("mxcp.policy.evaluated_count", len(self.policies_evaluated))
                 if applied_action:
                     span.set_attribute("mxcp.policy.action_applied", applied_action)
+
+            # Record successful evaluation metrics
+            record_counter(
+                "mxcp.policy.evaluations_total",
+                attributes={"type": "output", "decision": self.last_policy_decision},
+                description="Total policy evaluations",
+            )
 
             return output, applied_action
 

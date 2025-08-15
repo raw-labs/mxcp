@@ -2,12 +2,13 @@
 
 import pytest
 from mxcp.sdk.telemetry import (
-    configure_telemetry,
+    configure_all,
     traced_operation,
     get_current_trace_id,
     get_current_span_id,
     is_telemetry_enabled,
     shutdown_telemetry,
+    TracingConfig,
     TelemetryConfig,
     StatusCode,
     Status,
@@ -28,10 +29,10 @@ def test_telemetry_disabled_by_default():
         assert get_current_span_id() is None
 
 
-def test_configure_telemetry_with_kwargs():
+def test_configure_all_with_kwargs():
     """Test configuring telemetry with keyword arguments."""
     # Configure with console export for testing
-    configure_telemetry(enabled=True, console_export=True)
+    configure_all(enabled=True, tracing={"console_export": True})
 
     assert is_telemetry_enabled()
 
@@ -39,12 +40,15 @@ def test_configure_telemetry_with_kwargs():
     shutdown_telemetry()
 
 
-def test_configure_telemetry_with_config_object():
+def test_configure_all_with_config_object():
     """Test configuring telemetry with config object."""
     config = TelemetryConfig(
-        enabled=True, console_export=True, service_name="test-service", environment="testing"
+        enabled=True,
+        service_name="test-service",
+        environment="testing",
+        tracing=TracingConfig(enabled=True, console_export=True),
     )
-    configure_telemetry(config)
+    configure_all(config)
 
     assert is_telemetry_enabled()
 
@@ -55,7 +59,7 @@ def test_configure_telemetry_with_config_object():
 def test_traced_operation_when_enabled():
     """Test traced operation when telemetry is enabled."""
     # Configure telemetry
-    configure_telemetry(enabled=True, console_export=True)
+    configure_all(enabled=True, tracing={"console_export": True})
 
     with traced_operation(
         "test.operation",
@@ -84,7 +88,7 @@ def test_traced_operation_when_enabled():
 
 def test_traced_operation_with_exception():
     """Test traced operation with exception handling."""
-    configure_telemetry(enabled=True, console_export=True)
+    configure_all(enabled=True, tracing={"console_export": True})
 
     try:
         with pytest.raises(ValueError):
@@ -101,7 +105,7 @@ def test_traced_operation_with_exception():
 
 def test_nested_traced_operations():
     """Test nested traced operations."""
-    configure_telemetry(enabled=True, console_export=True)
+    configure_all(enabled=True, tracing={"console_export": True})
 
     with traced_operation("parent.operation") as parent_span:
         assert parent_span is not None

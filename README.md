@@ -33,12 +33,14 @@ MXCP isn't just another MCP implementation - it's a **complete methodology** for
 - 🧪 **Testing Framework**: Unit tests, integration tests, LLM behavior tests
 - 📈 **Performance**: Optimized queries, caching strategies, async support
 - 🔄 **Drift Detection**: Monitor schema changes across environments
+- 🔍 **OpenTelemetry**: Distributed tracing and metrics for production observability
 
 ```yaml
 # One config enables enterprise features
 auth: { provider: github }
 audit: { enabled: true }
 policies: { strict_mode: true }
+telemetry: { enabled: true, endpoint: "http://otel-collector:4318" }
 ```
 
 ## 🎯 60-Second Quickstart
@@ -225,6 +227,7 @@ MXCP provides comprehensive enterprise capabilities across security, quality, an
 - **[Drift Detection](https://github.com/raw-labs/mxcp/blob/main/docs/features/drift-detection.md)** - Schema change monitoring
 - **[dbt Integration](https://github.com/raw-labs/mxcp/blob/main/docs/guides/integrations.md#dbt-integration)** - Native data transformation
 - **[Command-Line Operations](https://github.com/raw-labs/mxcp/blob/main/docs/reference/cli.md)** - Direct endpoint execution and monitoring
+- **[OpenTelemetry Observability](https://github.com/raw-labs/mxcp/blob/main/docs/guides/operational.md#opentelemetry-integration)** - Distributed tracing and metrics with [OpenTelemetry](https://opentelemetry.io/)
 
 👉 **[See all features](https://github.com/raw-labs/mxcp/blob/main/docs/features/overview.md)** for a complete overview of MXCP's capabilities.
 

@@ -9,7 +9,7 @@ import pytest
 from mxcp.sdk.audit import AuditLogger
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.telemetry import (
-    configure_telemetry,
+    configure_all,
     shutdown_telemetry,
     traced_operation,
     get_current_trace_id,
@@ -22,14 +22,14 @@ def reset_telemetry():
     """Reset telemetry state between tests."""
     # Reset OpenTelemetry's internal state
     from opentelemetry import trace
-    import mxcp.sdk.telemetry._config
-    import mxcp.sdk.telemetry._tracer
+    import mxcp.sdk.telemetry.config
+    import mxcp.sdk.telemetry.tracer
 
     # Reset before test
     trace._TRACER_PROVIDER = None
     trace._TRACER_PROVIDER_FACTORY = None
-    mxcp.sdk.telemetry._config._telemetry_enabled = False
-    mxcp.sdk.telemetry._tracer._tracer = None
+    mxcp.sdk.telemetry.config._telemetry_enabled = False
+    mxcp.sdk.telemetry.tracer._tracer = None
 
     yield
 
@@ -40,14 +40,14 @@ def reset_telemetry():
         pass
     trace._TRACER_PROVIDER = None
     trace._TRACER_PROVIDER_FACTORY = None
-    mxcp.sdk.telemetry._config._telemetry_enabled = False
-    mxcp.sdk.telemetry._tracer._tracer = None
+    mxcp.sdk.telemetry.config._telemetry_enabled = False
+    mxcp.sdk.telemetry.tracer._tracer = None
 
 
 def test_audit_logs_include_trace_id():
     """Test that audit logs include trace IDs when telemetry is enabled."""
     # Enable telemetry with console export
-    configure_telemetry(enabled=True, console_export=True)
+    configure_all(enabled=True, tracing={"console_export": True})
 
     # Create temporary audit log file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:

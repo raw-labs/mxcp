@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 
-from mxcp.sdk.telemetry import traced_operation
+from mxcp.sdk.telemetry import record_counter, traced_operation
 
 from ._types import UserContext
 from .base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
@@ -40,6 +40,8 @@ class AuthenticationMiddleware:
         Returns:
             UserContext if authenticated, None if not authenticated or auth is disabled
         """
+        provider = "unknown"
+
         with traced_operation(
             "mxcp.auth.check_authentication",
             attributes={
@@ -57,9 +59,15 @@ class AuthenticationMiddleware:
                     logger.warning("No access token found in request context")
                     if span:
                         span.set_attribute("mxcp.auth.has_token", False)
+                    # Record failed auth attempt
+                    record_counter(
+                        "mxcp.auth.attempts_total",
+                        attributes={"provider": provider, "status": "no_token"},
+                        description="Total authentication attempts",
+                    )
                     return None
 
-                logger.info(f"Found access token: {access_token.token[:10]}...")
+                logger.info("Access token found in request context")
                 if span:
                     span.set_attribute("mxcp.auth.has_token", True)
 
@@ -74,6 +82,12 @@ class AuthenticationMiddleware:
                         logger.warning("Invalid or expired access token")
                         if token_span:
                             token_span.set_attribute("mxcp.auth.token_valid", False)
+                        # Record failed auth attempt
+                        record_counter(
+                            "mxcp.auth.attempts_total",
+                            attributes={"provider": provider, "status": "invalid_token"},
+                            description="Total authentication attempts",
+                        )
                         return None
                     if token_span:
                         token_span.set_attribute("mxcp.auth.token_valid", True)
@@ -91,7 +105,7 @@ class AuthenticationMiddleware:
                     logger.warning("No external token mapping found")
                     return None
 
-                logger.info(f"Found external token mapping: {external_token[:10]}...")
+                logger.info("External token mapping found")
 
                 # Get standardized user context from the provider
                 try:
@@ -120,18 +134,40 @@ class AuthenticationMiddleware:
                             span.set_attribute("mxcp.auth.authenticated", True)
                             span.set_attribute("mxcp.auth.provider", user_context.provider)
 
+                        # Set success flags for metrics
+                        provider = user_context.provider
+
+                        # Record auth attempt metrics before returning
+                        record_counter(
+                            "mxcp.auth.attempts_total",
+                            attributes={"provider": provider, "status": "success"},
+                            description="Total authentication attempts",
+                        )
+
                         return user_context
                 except Exception as e:
                     logger.error(f"Failed to get user context: {e}")
                     if span:
                         span.set_attribute("mxcp.auth.authenticated", False)
                         span.set_attribute("mxcp.auth.error", str(e))
+                    # Record failed auth attempt
+                    record_counter(
+                        "mxcp.auth.attempts_total",
+                        attributes={"provider": provider, "status": "error"},
+                        description="Total authentication attempts",
+                    )
                     return None
 
             except Exception as e:
                 logger.error(f"Authentication check failed: {e}")
                 if span:
                     span.set_attribute("mxcp.auth.error", str(e))
+                # Record failed auth attempt
+                record_counter(
+                    "mxcp.auth.attempts_total",
+                    attributes={"provider": provider, "status": "error"},
+                    description="Total authentication attempts",
+                )
                 return None
 
     def require_auth(self, func: Callable[..., Any]) -> Callable[..., Any]:
@@ -152,17 +188,10 @@ class AuthenticationMiddleware:
             if self.auth_enabled:
                 user_context = await self.check_authentication()
                 if user_context:
-                    # Log detailed user information when available
-                    log_parts = [
-                        f"user: {user_context.username} (ID: {user_context.user_id}, provider: {user_context.provider})"
-                    ]
-                    if user_context.name:
-                        log_parts.append(f"name: {user_context.name}")
-                    if user_context.email:
-                        log_parts.append(f"email: {user_context.email}")
-
+                    # Log authentication status without PII
                     logger.info(
-                        f"Executing {func.__name__} for authenticated {', '.join(log_parts)}"
+                        f"Executing {func.__name__} for authenticated user "
+                        f"(provider: {user_context.provider})"
                     )
                 else:
                     logger.error(f"Authentication required but failed for {func.__name__}")

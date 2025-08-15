@@ -12,6 +12,9 @@ from typing import Any
 from opentelemetry import trace
 from opentelemetry.trace import Status as OTelStatus
 from opentelemetry.trace import StatusCode as OTelStatusCode
+from opentelemetry.trace import get_current_span as otel_get_current_span
+
+from mxcp.sdk.core import PACKAGE_NAME, PACKAGE_VERSION
 
 from ._types import Span, SpanKind, Status, StatusCode
 
@@ -21,6 +24,7 @@ __all__ = [
     "traced_operation",
     "get_current_trace_id",
     "get_current_span_id",
+    "get_current_span",
     "set_span_attribute",
     "record_exception",
     "SpanKind",
@@ -116,7 +120,7 @@ def _get_tracer() -> trace.Tracer:
     """Get or create the MXCP tracer."""
     global _tracer
     if _tracer is None:
-        _tracer = trace.get_tracer("mxcp", "1.0.0")
+        _tracer = trace.get_tracer(PACKAGE_NAME, PACKAGE_VERSION)
     return _tracer
 
 
@@ -150,7 +154,7 @@ def traced_operation(
 
     # Check if telemetry is configured by trying to get a tracer
     # If we have a NoOpTracerProvider, tracer operations will be no-ops
-    from ._config import is_telemetry_enabled
+    from .config import is_telemetry_enabled
 
     if not is_telemetry_enabled():
         yield NoOpSpan()
@@ -176,6 +180,23 @@ def traced_operation(
             span.record_exception(e)
             span.set_status(Status(StatusCode.ERROR, str(e)))
             raise
+
+
+def get_current_span() -> Span | None:
+    """Get the current span if available.
+
+    Returns:
+        The current span wrapped in our interface, or None if no span is active.
+    """
+    from .config import is_telemetry_enabled
+
+    if not is_telemetry_enabled():
+        return None
+
+    otel_span = otel_get_current_span()
+    if otel_span and otel_span.is_recording():
+        return SpanWrapper(otel_span)
+    return None
 
 
 def get_current_trace_id() -> str | None:
