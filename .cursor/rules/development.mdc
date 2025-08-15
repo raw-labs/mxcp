@@ -10,7 +10,45 @@ alwaysApply: true
 - Do not create re-export modules or wrapper functions just to maintain old import paths - update imports directly to use the new locations
 - When consolidating or refactoring modules, always update all imports to use the new structure rather than preserving old import paths
 
+## Module Naming Conventions
+- Use underscore prefix ONLY for `_types.py` because `types` is a Python built-in module
+- DO NOT use underscore prefix for other module names (e.g., use `config.py` not `_config.py`)
+- The underscore convention is NOT for marking "internal" modules - it's only to avoid name conflicts with Python built-ins
+
 ## Import Organization
 - ALL imports must be at the top of the file, not in the middle of functions or methods
 - The ONLY exception is when the import is for a truly optional dependency (defined as optional in pyproject.toml)
 - Never put imports inside functions unless it's absolutely necessary for optional dependencies
+
+## Logging Security Guidelines
+
+### NEVER Log Sensitive Data
+- **Tokens/Keys**: Never log tokens, API keys, or secrets (not even truncated)
+- **Credentials**: No passwords, client secrets, or auth tokens
+- **PII**: Avoid logging email addresses, usernames, IP addresses
+- **Query Content**: Don't log SQL queries or their parameters
+- **Response Data**: Never log actual data returned from queries
+
+### What TO Log
+- Operation names and types
+- Timing and performance metrics
+- Status codes and error types
+- Counts and aggregates
+- Provider/service names (not user identities)
+
+### Log Level Guidelines
+- **ERROR/WARNING**: Only operational context, no data
+- **INFO**: High-level operations without sensitive details
+- **DEBUG**: May include more context but still no secrets
+
+### Examples
+```python
+# BAD - Logs sensitive data
+logger.info(f"Found token: {token[:10]}...")  # Even truncated tokens are sensitive
+logger.info(f"User {email} logged in")         # PII
+logger.debug(f"Executing SQL: {query}")        # Query content
+
+# GOOD - Logs operational context only  
+logger.info("Authentication token validated")
+logger.info(f"User authenticated (provider: {provider})")
+logger.debug("Executing SQL query (type: SELECT)")

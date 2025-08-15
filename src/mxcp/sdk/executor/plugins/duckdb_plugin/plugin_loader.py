@@ -9,16 +9,13 @@ import importlib
 import logging
 import os
 import sys
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import duckdb
 
 from mxcp.plugins import MXCPBasePlugin
 
 from ._types import PluginConfig, PluginDefinition
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

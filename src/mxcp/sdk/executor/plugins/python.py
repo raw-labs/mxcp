@@ -41,13 +41,25 @@ Example usage:
     ... )
 """
 
+import ast
 import asyncio
+import hashlib
 import inspect
 import logging
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import numpy as np
+import pandas as pd
+
+from mxcp.sdk.telemetry import (
+    decrement_gauge,
+    increment_gauge,
+    record_counter,
+    traced_operation,
+)
 
 from ..context import ExecutionContext
 from ..interfaces import ExecutorPlugin
@@ -270,8 +282,6 @@ class PythonExecutor(ExecutorPlugin):
     def _extract_parameters_from_inline(self, source_code: str) -> list[str]:
         """Extract parameters from inline Python code."""
         try:
-            import ast
-
             # Handle return statements by wrapping in a function
             if source_code.strip().startswith("return "):
                 # For simple return expressions, analyze what variables are referenced
@@ -328,22 +338,81 @@ class PythonExecutor(ExecutorPlugin):
         Returns:
             Execution result
         """
+        # Determine execution type
+        is_file = self._is_file_path(source_code)
+        execution_type = "file" if is_file else "inline"
+
+        # For files, extract just the filename for telemetry
+        if is_file:
+            # Remove any function suffix for the span name
+            display_name = source_code.split(":")[-1] if ":" in source_code else source_code
+            # Get just the filename without path
+            if "/" in display_name:
+                display_name = display_name.split("/")[-1]
+        else:
+            # For inline code, hash it for privacy
+            display_name = f"inline_{hashlib.sha256(source_code.encode()).hexdigest()[:8]}"
+
+        # Track concurrent executions
+        increment_gauge(
+            "mxcp.python.concurrent_executions",
+            attributes={"type": execution_type},
+            description="Currently running Python executions",
+        )
+
         try:
-            # Check if it's a file path or inline code
-            logger.info(f"Executing Python source: {repr(source_code[:100])}...")
-            if self._is_file_path(source_code):
-                logger.info("Detected as file path, using _execute_from_file")
-                return await self._execute_from_file(source_code, params, context)
-            else:
-                logger.info("Detected as inline code, using _execute_inline")
-                return await self._execute_inline(source_code, params, context)
-        except (ImportError, SyntaxError) as e:
-            # These are executor-level errors that should be wrapped
-            logger.error(f"Python execution failed: {e}")
-            raise RuntimeError(f"Failed to execute Python code: {e}") from e
-        except Exception:
-            # Let other exceptions (FileNotFoundError, AttributeError, runtime errors) propagate
-            raise
+            with traced_operation(
+                "mxcp.python.execute",
+                attributes={
+                    "mxcp.python.type": execution_type,
+                    "mxcp.python.name": display_name,
+                    "mxcp.python.params.count": len(params) if params else 0,
+                },
+            ):
+                try:
+                    # Check if it's a file path or inline code
+                    logger.info(f"Executing Python source: {repr(source_code[:100])}...")
+                    if is_file:
+                        logger.info("Detected as file path, using _execute_from_file")
+                        result = await self._execute_from_file(source_code, params, context)
+                    else:
+                        logger.info("Detected as inline code, using _execute_inline")
+                        result = await self._execute_inline(source_code, params, context)
+
+                    # Record success metrics
+                    record_counter(
+                        "mxcp.python.executions_total",
+                        attributes={"type": execution_type, "status": "success"},
+                        description="Total Python executions",
+                    )
+
+                    return result
+                except (ImportError, SyntaxError) as e:
+                    # These are executor-level errors that should be wrapped
+                    logger.error(f"Python execution failed: {e}")
+                    # Record error metrics
+                    record_counter(
+                        "mxcp.python.executions_total",
+                        attributes={"type": execution_type, "status": "error"},
+                        description="Total Python executions",
+                    )
+                    raise RuntimeError(f"Failed to execute Python code: {e}") from e
+                except Exception:
+                    # Let other exceptions (FileNotFoundError, AttributeError, runtime errors) propagate
+                    # But still record metrics
+                    record_counter(
+                        "mxcp.python.executions_total",
+                        attributes={"type": execution_type, "status": "error"},
+                        description="Total Python executions",
+                    )
+                    raise
+        finally:
+            # Always decrement concurrent executions
+            decrement_gauge(
+                "mxcp.python.concurrent_executions",
+                attributes={"type": execution_type},
+                description="Currently running Python executions",
+            )
 
     def _is_file_path(self, source_code: str) -> bool:
         """Check if source code is a file path."""
@@ -417,9 +486,6 @@ class PythonExecutor(ExecutorPlugin):
             namespace = params.copy()
 
             # Add common imports
-            import numpy as np
-            import pandas as pd
-
             namespace.update(
                 {
                     "pd": pd,

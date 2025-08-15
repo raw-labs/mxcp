@@ -1,5 +1,6 @@
 import asyncio
 import concurrent.futures
+import contextlib
 import hashlib
 import json
 import logging
@@ -13,7 +14,7 @@ from typing import Annotated, Any, Literal, cast
 
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, Field, create_model
 from starlette.responses import JSONResponse
@@ -28,7 +29,15 @@ from mxcp.sdk.auth.providers.github import GitHubOAuthHandler
 from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
+from mxcp.sdk.core import PACKAGE_VERSION
 from mxcp.sdk.executor import ExecutionEngine
+from mxcp.sdk.telemetry import (
+    decrement_gauge,
+    get_current_trace_id,
+    increment_gauge,
+    record_counter,
+    set_span_attribute,
+)
 from mxcp.server.core.config._types import (
     SiteConfig,
     UserAuthConfig,
@@ -38,6 +47,7 @@ from mxcp.server.core.config._types import (
 from mxcp.server.core.config.site_config import get_active_profile, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.core.refs.external import ExternalRefTracker
+from mxcp.server.core.telemetry import configure_telemetry_from_config, shutdown_telemetry
 from mxcp.server.definitions.endpoints._types import (
     ParamDefinition,
     PromptDefinition,
@@ -239,6 +249,9 @@ class RAWMCP:
 
         # Resolve configurations
         self._resolve_and_apply_configs()
+
+        # Initialize telemetry
+        self._initialize_telemetry()
 
         # Initialize runtime components
         self._initialize_runtime_components()
@@ -557,6 +570,30 @@ class RAWMCP:
 
         logger.info("Runtime components initialization complete.")
 
+    def _initialize_telemetry(self) -> None:
+        """Initialize telemetry based on user config settings."""
+        logger.info("Initializing telemetry...")
+
+        # Get project name from site config
+        project_name = self.site_config["project"]
+
+        # Configure telemetry for the current profile
+        configure_telemetry_from_config(self.user_config, project_name, self.profile_name)
+
+        # Record system startup metrics
+        record_counter(
+            "mxcp.up",
+            attributes={
+                "version": PACKAGE_VERSION,
+                "profile": self.profile_name,
+                "project": project_name,
+                "transport": getattr(self, "transport_mode", None) or "unknown",
+            },
+            description="MXCP server startup counter",
+        )
+
+        logger.info("Telemetry initialization complete.")
+
     def reload_configuration(self) -> None:
         """
         Reloads external configuration values (vault://, file://, env vars) only.
@@ -629,8 +666,22 @@ class RAWMCP:
 
                 logger.info("Configuration reload completed successfully.")
 
+                # Record config reload metric
+                record_counter(
+                    "mxcp.config_reloads_total",
+                    attributes={"status": "success", "profile": self.profile_name},
+                    description="Total configuration reloads",
+                )
+
             except Exception as e:
                 logger.error(f"Failed to reload configuration: {e}", exc_info=True)
+
+                # Record failed reload metric
+                record_counter(
+                    "mxcp.config_reloads_total",
+                    attributes={"status": "error", "profile": self.profile_name},
+                    description="Total configuration reloads",
+                )
                 # In case of failure, it's safer to shut down as the server state is unknown
                 logger.error(
                     "Server state may be inconsistent due to reload failure. Consider restarting."
@@ -740,6 +791,13 @@ class RAWMCP:
                     logger.info("Closed audit logger")
                 except Exception as e:
                     logger.error(f"Error closing audit logger: {e}")
+
+            # Shutdown telemetry
+            try:
+                shutdown_telemetry()
+                logger.info("Shutdown telemetry")
+            except Exception as e:
+                logger.error(f"Error shutting down telemetry: {e}")
 
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
@@ -1137,8 +1195,10 @@ class RAWMCP:
         parameters = endpoint_def.get("parameters") or []
 
         # Create function signature with proper Pydantic type annotations
-        param_annotations = {}
-        param_signatures = []
+        # Include Context as the first parameter for accessing session_id
+        param_annotations = {"ctx": Context}
+        param_signatures = ["ctx"]
+
         for param in parameters:
             param_name = param["name"]
             param_type = self._json_schema_to_python_type(param, endpoint_type)
@@ -1161,6 +1221,14 @@ class RAWMCP:
                 "policy_reason": None,
             }
 
+            # Extract the FastMCP Context (first parameter)
+            ctx = kwargs.pop("ctx", None)
+            mcp_session_id = None
+            if ctx and hasattr(ctx, "session_id"):
+                # session_id might be None in stateless mode
+                with contextlib.suppress(Exception):
+                    mcp_session_id = ctx.session_id
+
             try:
                 # Get the user context from the context variable (set by auth middleware)
                 user_context = get_user_context()
@@ -1180,6 +1248,21 @@ class RAWMCP:
                     name = cast(str, endpoint_def.get("uri", "unknown"))
                 else:
                     name = cast(str, endpoint_def.get("name", "unnamed"))
+
+                # Increment concurrent executions gauge
+                increment_gauge(
+                    "mxcp.endpoint.concurrent_executions",
+                    attributes={"endpoint": name, "type": endpoint_key},
+                    description="Currently running endpoint executions",
+                )
+
+                # Add session ID to current span if telemetry is enabled
+                trace_id = get_current_trace_id()
+                if trace_id:
+                    # Add both MCP session ID and trace ID to span
+                    if mcp_session_id:
+                        set_span_attribute("mxcp.session.id", mcp_session_id)
+                    set_span_attribute("mxcp.trace.id", trace_id)
                 result, policy_info = await execute_endpoint_with_engine_and_policy(
                     endpoint_type=endpoint_type.value,
                     name=name,
@@ -1214,6 +1297,40 @@ class RAWMCP:
                     # Fallback to http if transport mode not set
                     caller = "http"
 
+                # Record metrics
+                # Decrement concurrent executions
+                decrement_gauge(
+                    "mxcp.endpoint.concurrent_executions",
+                    attributes={"endpoint": name, "type": endpoint_key},
+                    description="Currently running endpoint executions",
+                )
+
+                # Record request counter
+                record_counter(
+                    "mxcp.endpoint.requests_total",
+                    attributes={
+                        "endpoint": name,
+                        "type": endpoint_key,
+                        "status": status,
+                        "caller": caller,
+                        "policy_decision": policy_info.get("policy_decision", "none"),
+                    },
+                    description="Total endpoint requests",
+                )
+
+                # Record error counter if error occurred
+                if status == "error":
+                    record_counter(
+                        "mxcp.endpoint.errors_total",
+                        attributes={
+                            "endpoint": name,
+                            "type": endpoint_key,
+                            "caller": caller,
+                            "error_type": type(error_msg).__name__ if error_msg else "unknown",
+                        },
+                        description="Total endpoint errors",
+                    )
+
                 # Log the audit event
                 if self.audit_logger:
                     await self.audit_logger.log_event(
@@ -1233,6 +1350,11 @@ class RAWMCP:
                         error=error_msg,
                         output_data=result,  # Return the result as output_data
                         policies_evaluated=policy_info["policies_evaluated"],
+                        # Add user context if available
+                        user_id=user_context.user_id if user_context else None,
+                        session_id=mcp_session_id,  # MCP session ID
+                        # Add trace ID for correlation with telemetry
+                        trace_id=get_current_trace_id(),
                     )
 
         # -------------------------------------------------------------------
@@ -1358,7 +1480,7 @@ class RAWMCP:
             try:
                 user_context = get_user_context()
                 if user_context:
-                    logger.info(f"User {user_context.username} executing SQL query")
+                    logger.info("Authenticated user executing SQL query")
 
                 # Use SDK execution engine
                 if self.execution_engine is None:
@@ -1383,7 +1505,7 @@ class RAWMCP:
                 duration_ms = int((time.time() - start_time) * 1000)
                 if self.audit_logger:
                     # Determine caller type
-                    caller = "stdio" if self.transport_mode == "stdio" else "http"
+                    caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
 
                     asyncio.run(
                         self.audit_logger.log_event(
@@ -1399,6 +1521,7 @@ class RAWMCP:
                             reason=None,
                             status=cast(Literal["success", "error"], status),
                             error=error_msg,
+                            trace_id=get_current_trace_id(),
                         )
                     )
 
@@ -1462,7 +1585,7 @@ class RAWMCP:
                 duration_ms = int((time.time() - start_time) * 1000)
                 if self.audit_logger:
                     # Determine caller type
-                    caller = "stdio" if self.transport_mode == "stdio" else "http"
+                    caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
 
                     asyncio.run(
                         self.audit_logger.log_event(
@@ -1478,6 +1601,7 @@ class RAWMCP:
                             reason=None,
                             status=cast(Literal["success", "error"], status),
                             error=error_msg,
+                            trace_id=get_current_trace_id(),
                         )
                     )
 
@@ -1548,7 +1672,7 @@ class RAWMCP:
                 duration_ms = int((time.time() - start_time) * 1000)
                 if self.audit_logger:
                     # Determine caller type
-                    caller = "stdio" if self.transport_mode == "stdio" else "http"
+                    caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
 
                     asyncio.run(
                         self.audit_logger.log_event(
@@ -1564,6 +1688,7 @@ class RAWMCP:
                             reason=None,
                             status=cast(Literal["success", "error"], status),
                             error=error_msg,
+                            trace_id=get_current_trace_id(),
                         )
                     )
 

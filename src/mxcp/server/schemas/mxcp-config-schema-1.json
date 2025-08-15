@@ -186,6 +186,90 @@
                         "additionalProperties": false
                       }
                     },
+                    "telemetry": {
+                      "type": "object",
+                      "description": "Unified telemetry configuration for traces, metrics, and logs.",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "description": "Global telemetry enable/disable.",
+                          "default": false
+                        },
+                        "endpoint": {
+                          "type": "string",
+                          "description": "OTLP endpoint URL (e.g., http://localhost:4318).",
+                          "format": "uri"
+                        },
+                        "headers": {
+                          "type": "object",
+                          "description": "Additional headers for the OTLP exporter.",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "service_name": {
+                          "type": "string",
+                          "description": "Override the default service name (mxcp)."
+                        },
+                        "service_version": {
+                          "type": "string",
+                          "description": "Service version string."
+                        },
+                        "environment": {
+                          "type": "string",
+                          "description": "Deployment environment (e.g., production, staging)."
+                        },
+                        "resource_attributes": {
+                          "type": "object",
+                          "description": "Additional resource attributes for all telemetry.",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "tracing": {
+                          "type": "object",
+                          "description": "Distributed tracing configuration.",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean",
+                              "description": "Whether tracing is enabled.",
+                              "default": true
+                            },
+                            "console_export": {
+                              "type": "boolean",
+                              "description": "Export spans to console for debugging.",
+                              "default": false
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "metrics": {
+                          "type": "object",
+                          "description": "Metrics collection configuration.",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean",
+                              "description": "Whether metrics collection is enabled.",
+                              "default": true
+                            },
+                            "export_interval": {
+                              "type": "integer",
+                              "description": "Export interval in seconds.",
+                              "default": 60,
+                              "minimum": 1
+                            },
+                            "prometheus_port": {
+                              "type": "integer",
+                              "description": "Optional port for Prometheus scraping endpoint.",
+                              "minimum": 1024,
+                              "maximum": 65535
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "additionalProperties": false
+                    },
                     "plugin": {
                       "type": "object",
                       "description": "Plugin configuration for this profile.",
