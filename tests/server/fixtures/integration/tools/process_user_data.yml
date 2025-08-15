@@ -1,0 +1,99 @@
+name: process_user_data
+description: Process a complex user data object and return analysis
+type: python
+python:
+  module: test_endpoints
+  function: process_user_data
+input_schema:
+  type: object
+  properties:
+    user_data:
+      type: object
+      description: Complex user data object to process
+      properties:
+        name:
+          type: string
+          description: User's name
+        age:
+          type: integer
+          description: User's age
+        preferences:
+          type: object
+          description: User preferences
+          properties:
+            interests:
+              type: array
+              items:
+                type: string
+              description: List of user interests
+            premium:
+              type: boolean
+              description: Whether user has premium status
+        contact:
+          type: object
+          description: Contact information
+          properties:
+            email:
+              type: string
+              description: User's email address
+            phone:
+              type: string
+              description: User's phone number
+            address:
+              type: object
+              description: User's address
+              properties:
+                street:
+                  type: string
+                  description: Street address
+                city:
+                  type: string
+                  description: City
+                country:
+                  type: string
+                  description: Country
+  required:
+    - user_data
+output_schema:
+  type: object
+  properties:
+    original_data:
+      type: object
+      description: The original user data that was processed
+    analysis:
+      type: object
+      description: Analysis results
+      properties:
+        processed_name:
+          type: string
+          description: Name in uppercase
+        age_category:
+          type: string
+          enum: ["adult", "minor"]
+          description: Age category classification
+        has_email:
+          type: boolean
+          description: Whether user has email
+        has_phone:
+          type: boolean
+          description: Whether user has phone
+        preference_count:
+          type: integer
+          description: Number of interests
+        is_premium:
+          type: boolean
+          description: Premium status
+        full_address:
+          type: string
+          description: Formatted full address
+        summary:
+          type: string
+          description: User summary
+    processing_status:
+      type: string
+      enum: ["success"]
+      description: Processing status
+  required:
+    - original_data
+    - analysis
+    - processing_status
