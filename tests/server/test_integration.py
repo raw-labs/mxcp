@@ -67,7 +67,19 @@ class MCPTestClient:
                     print(f"[DEBUG] Tool result attributes: {result.__dict__}")
 
             # Extract the actual result from MCP format
-            if (
+            # First check for structured content (new format with output schema)
+            if hasattr(result, "structuredContent") and result.structuredContent is not None:
+                structured_content = result.structuredContent
+                if os.environ.get("MXCP_TEST_DEBUG"):
+                    print(f"[DEBUG] Using structured content: {structured_content}")
+                # Structured content is wrapped in a 'result' key, so unwrap it
+                if isinstance(structured_content, dict) and "result" in structured_content:
+                    return structured_content["result"]
+                else:
+                    return structured_content
+
+            # Fall back to regular content (legacy format)
+            elif (
                 hasattr(result, "content")
                 and isinstance(result.content, list)
                 and len(result.content) > 0
@@ -614,4 +626,70 @@ def check_all_secrets() -> dict:
 
             async with MCPTestClient(server.port) as client:
                 result = await client.call_tool("get_global_var", {})
-                assert result["result"] == "initial_key_123"
+                assert result == "initial_key_123"
+
+    @pytest.mark.asyncio
+    async def test_get_users_detailed(self, integration_fixture_dir):
+        """Test tool with detailed object type specification."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                result = await client.call_tool("get_users_detailed", {})
+
+                # Verify it's an object with users array and count
+                assert isinstance(result, dict)
+                assert "users" in result
+                assert "n" in result
+                assert result["n"] == 3
+                assert isinstance(result["users"], list)
+                assert len(result["users"]) == 3
+
+                # Verify structure of first user
+                user = result["users"][0]
+                assert user["id"] == 1
+                assert user["name"] == "Alice Johnson"
+                assert user["email"] == "alice@example.com"
+                assert user["age"] == 28
+                assert user["active"] is True
+                assert isinstance(user["roles"], list)
+                assert "admin" in user["roles"]
+                assert "user" in user["roles"]
+
+                # Verify nested profile object
+                assert isinstance(user["profile"], dict)
+                assert user["profile"]["department"] == "Engineering"
+                assert user["profile"]["location"] == "San Francisco"
+
+    @pytest.mark.asyncio
+    async def test_get_users_simple(self, integration_fixture_dir):
+        """Test tool with simple object type specification."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                result = await client.call_tool("get_users_simple", {})
+
+                # Verify it's an object with users array and count (same data as detailed version)
+                assert isinstance(result, dict)
+                assert "users" in result
+                assert "n" in result
+                assert result["n"] == 3
+                assert isinstance(result["users"], list)
+                assert len(result["users"]) == 3
+
+                # Verify structure of first user (should be identical to detailed version)
+                user = result["users"][0]
+                assert user["id"] == 1
+                assert user["name"] == "Alice Johnson"
+                assert user["email"] == "alice@example.com"
+                assert user["age"] == 28
+                assert user["active"] is True
+                assert isinstance(user["roles"], list)
+                assert "admin" in user["roles"]
+                assert "user" in user["roles"]
+
+                # Verify nested profile object
+                assert isinstance(user["profile"], dict)
+                assert user["profile"]["department"] == "Engineering"
+                assert user["profile"]["location"] == "San Francisco"
