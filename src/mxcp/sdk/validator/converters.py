@@ -180,19 +180,21 @@ class TypeConverter:
                         try:
                             value = value.model_dump()
                         except Exception:
-                            actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
+                            actual_type = TypeConverter.python_type_to_schema_type(
+                                type(value).__name__
+                            )
                             raise ValidationError(f"Expected object, got {actual_type}") from None
                     elif hasattr(value, "dict"):
                         # Pydantic v1
                         try:
                             value = value.dict()
                         except Exception:
-                            actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
+                            actual_type = TypeConverter.python_type_to_schema_type(
+                                type(value).__name__
+                            )
                             raise ValidationError(f"Expected object, got {actual_type}") from None
                     else:
-                        actual_type = TypeConverter.python_type_to_schema_type(
-                            type(value).__name__
-                        )
+                        actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
                         raise ValidationError(f"Expected object, got {actual_type}")
 
             properties = schema.properties or {}

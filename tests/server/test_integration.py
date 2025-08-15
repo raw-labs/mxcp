@@ -708,10 +708,7 @@ def check_all_secrets() -> dict:
                     "preferences": {
                         "interests": ["technology", "music", "sports"],
                         "premium": True,
-                        "notifications": {
-                            "email": True,
-                            "sms": False
-                        }
+                        "notifications": {"email": True, "sms": False},
                     },
                     "contact": {
                         "email": "john.doe@example.com",
@@ -719,9 +716,9 @@ def check_all_secrets() -> dict:
                         "address": {
                             "street": "123 Main St",
                             "city": "San Francisco",
-                            "country": "USA"
-                        }
-                    }
+                            "country": "USA",
+                        },
+                    },
                 }
 
                 # Call the tool with the complex object
