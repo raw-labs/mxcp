@@ -8,8 +8,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from mxcp.sdk.core import PACKAGE_NAME, PACKAGE_VERSION
-
 # Import OpenTelemetry only in this module
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -20,6 +18,8 @@ from opentelemetry.sdk.trace.export import (
     ConsoleSpanExporter,
     SimpleSpanProcessor,
 )
+
+from mxcp.sdk.core import PACKAGE_NAME, PACKAGE_VERSION
 
 logger = logging.getLogger(__name__)
 
