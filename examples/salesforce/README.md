@@ -54,9 +54,6 @@ project: salesforce-demo
 profile: dev
 secrets:
   - salesforce
-
-extensions:
-  - json
 ```
 
 ## Available Tools
