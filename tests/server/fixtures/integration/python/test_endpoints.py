@@ -96,3 +96,28 @@ def get_users_simple() -> Dict[str, Any]:
         },
     ]
     return {"users": users, "n": len(users)}
+
+
+def process_user_data(user_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Process a complex user data object and return analysis."""
+    # Extract user info
+    name = user_data.get("name", "Unknown")
+    age = user_data.get("age", 0)
+    preferences = user_data.get("preferences", {})
+    contact = user_data.get("contact", {})
+
+    # Perform some meaningful processing
+    analysis = {
+        "processed_name": name.upper(),
+        "age_category": "adult" if age >= 18 else "minor",
+        "has_email": bool(contact.get("email")),
+        "has_phone": bool(contact.get("phone")),
+        "preference_count": len(preferences.get("interests", [])),
+        "is_premium": preferences.get("premium", False),
+        "full_address": f"{contact.get('address', {}).get('street', '')}, {contact.get('address', {}).get('city', '')}, {contact.get('address', {}).get('country', '')}".strip(
+            ", "
+        ),
+        "summary": f"{name} is a {age}-year-old {'premium' if preferences.get('premium') else 'regular'} user",
+    }
+
+    return {"original_data": user_data, "analysis": analysis, "processing_status": "success"}
