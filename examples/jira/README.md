@@ -22,17 +22,26 @@ This example uses Python functions that are exposed as MCP tools:
 
 ### 1. Creating an Atlassian API Token
 
-Follow the same process as the plugin example:
+**Important:** This plugin currently only supports API tokens **without scopes**. While Atlassian has introduced scoped API tokens, there are known compatibility issues when using scoped tokens with basic authentication that this plugin relies on.
+
+To create an API token without scopes:
 
 1. **Log in to your Atlassian account** at [https://id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
 
-2. **Create the API token**:
+2. **Verify your identity** (if prompted):
+   - Atlassian may ask you to verify your identity before creating API tokens
+   - Check your email for a one-time passcode and enter it when prompted
+
+3. **Create the API token**:
    - Click **"Create API token"** (not "Create API token with scopes")
    - Enter a descriptive name for your token (e.g., "MXCP Jira Python Integration")
-   - Select an expiration date
+   - Select an expiration date (tokens can last from 1 day to 1 year)
    - Click **"Create"**
 
-3. **Copy and save your token** securely
+4. **Copy and save your token**:
+   - Click **"Copy to clipboard"** to copy the token
+   - **Important:** Save this token securely (like in a password manager) as you won't be able to view it again
+   - This token will be used as your "password" in the configuration below
 
 ### 2. User Configuration
 
