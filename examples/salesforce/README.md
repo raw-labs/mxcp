@@ -1,112 +1,112 @@
-# MXCP Salesforce Example
+# MXCP Salesforce Python Endpoints Example
 
-This example demonstrates how to use MXCP with Salesforce data. It shows how to:
-- Create and use a custom MXCP plugin for Salesforce integration
-- Query Salesforce data using SQL
-- Combine Salesforce data with other data sources
+This example demonstrates how to use MXCP with Salesforce data using **Python endpoints**.
 
-## Setup
+## Overview
 
-1. Configure your Salesforce credentials:
-   Add the following to your MXCP user config (`~/.mxcp/config.yml`). You can use the example `config.yml` in this directory as a template:
+This example provides Python MCP endpoints that allow you to:
+- Execute SOQL queries to retrieve Salesforce data
+- Execute SOSL searches across multiple objects
+- List all available Salesforce objects
+- Get detailed object descriptions
+- Retrieve specific records by ID
+- Perform simple text searches across common objects
 
-   ```yaml
-   mxcp: 1
+## Configuration
 
-   projects:
-     salesforce-demo:
-       profiles:
-         dev:
-           plugin:
-             config:
-               salesforce:
-                 instance_url: "https://your-instance.salesforce.com"
-                 username: "your-username@example.com"
-                 password: "your-password"
-                 security_token: "your-security-token"
-                 client_id: "your-client-id"
-   ```
+### 1. Getting Salesforce Credentials
 
-2. Create an `mxcp-site.yml` file:
+To use this example, you'll need:
 
-   ```yaml
-   mxcp: 1
-   project: salesforce-demo
-   profile: dev
-   plugin:
-     - name: salesforce
-       module: mxcp_plugin_salesforce
-       config: salesforce
-   ```
+1. **Salesforce Username**: Your Salesforce username (email address)
+2. **Salesforce Password**: Your Salesforce password
+3. **Security Token**: Your Salesforce security token (get from Setup → My Personal Information → Reset My Security Token)
+4. **Instance URL**: Your Salesforce instance URL (e.g., https://your-domain.salesforce.com)
+5. **Client ID**: A connected app client ID (you can use any valid client ID)
 
-3. Start the MXCP server:
-   ```bash
-   mxcp serve
-   ```
+### 2. User Configuration
+
+Add the following to your MXCP user config (`~/.mxcp/config.yml`):
+
+```yaml
+mxcp: 1
+
+projects:
+  salesforce-demo:
+    profiles:
+      dev:
+        secrets:
+          salesforce:
+            instance_url: "https://your-instance.salesforce.com"
+            username: "your-username@example.com"
+            password: "your-password"
+            security_token: "your-security-token"
+            client_id: "your-client-id"
+```
+
+### 3. Site Configuration
+
+Create an `mxcp-site.yml` file:
+
+```yaml
+mxcp: 1
+project: salesforce-demo
+profile: dev
+secrets:
+  - salesforce
+```
 
 ## Available Tools
 
-The example provides several tools for interacting with Salesforce:
-
-### List Objects
-```sql
--- List all available Salesforce objects
-SELECT list_sobjects_salesforce() as result;
-```
-
-### Describe Object
-```sql
--- Get field descriptions for an object
-SELECT describe_sobject_salesforce($object_name) as result;
-```
-
-### Get Object
-```sql
--- Get a specific record
-SELECT get_sobject_salesforce($object_name, $record_id) as result;
-```
-
 ### SOQL Query
-```sql
--- Execute a SOQL query
-SELECT soql_salesforce($query) as result;
+Execute SOQL queries directly as Python function calls:
+```bash
+mxcp run tool soql --param query="SELECT Id, Name FROM Account LIMIT 10"
 ```
 
 ### SOSL Search
-```sql
--- Execute a SOSL search
-SELECT sosl_salesforce($query) as result;
+Execute SOSL searches across multiple objects:
+```bash
+mxcp run tool sosl --param query="FIND {Acme} IN ALL FIELDS RETURNING Account(Name, Phone)"
 ```
 
-## Example Queries
-
-1. Query accounts with their contacts:
-```sql
-WITH accounts AS (
-  SELECT * FROM soql_salesforce('SELECT Id, Name FROM Account')
-),
-contacts AS (
-  SELECT * FROM soql_salesforce('SELECT Id, Name, AccountId FROM Contact')
-)
-SELECT 
-  a.Name as account_name,
-  ARRAY_AGG(c.Name) as contact_names
-FROM accounts a
-LEFT JOIN contacts c ON c.AccountId = a.Id
-GROUP BY a.Name;
+### Simple Search
+Perform simple text searches across common objects:
+```bash
+mxcp run tool search --param search_term="Acme"
 ```
 
-## Plugin Development
+### List Objects
+List all available Salesforce objects:
+```bash
+mxcp run tool list_sobjects
+```
 
-The `mxcp_plugin_salesforce` directory contains a complete MXCP plugin implementation that you can use as a reference for creating your own plugins. It demonstrates:
+### Describe Object
+Get detailed information about a specific object:
+```bash
+mxcp run tool describe_sobject --param sobject_name="Account"
+```
 
-- Plugin class structure
-- Type conversion
-- UDF implementation
-- Configuration handling
+### Get Object
+Get a specific record by its ID:
+```bash
+mxcp run tool get_sobject --param sobject_name="Account" --param record_id="001xx000003DIloAAG"
+```
 
-## Notes
+## Project Structure
 
-- Make sure to keep your Salesforce credentials secure and never commit them to version control.
-- The plugin requires proper authentication and API permissions to work with your Salesforce instance.
-- All functions return JSON strings containing the requested data. 
+```
+salesforce/
+├── mxcp-site.yml           # Site configuration
+├── python/                 # Python implementations
+│   └── salesforce_endpoints.py # All Salesforce endpoint functions
+├── tools/                  # Tool definitions
+│   ├── soql.yml
+│   ├── sosl.yml
+│   ├── search.yml
+│   ├── list_sobjects.yml
+│   ├── describe_sobject.yml
+│   └── get_sobject.yml
+└── README.md
+```

@@ -1,11 +1,5 @@
 mxcp: 1
 project: salesforce-demo
 profile: dev
-
-extensions:
-  - json
-
-plugin:
-  - name: salesforce
-    module: mxcp_plugin_salesforce
-    config: salesforce
+secrets:
+  - salesforce

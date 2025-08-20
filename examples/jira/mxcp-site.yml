@@ -1,7 +1,5 @@
 mxcp: 1
 project: jira-demo
-profile: dev
-plugin:
-  - name: jira
-    module: mxcp_plugin_jira
-    config: jira 
+profile: default
+secrets:
+  - jira

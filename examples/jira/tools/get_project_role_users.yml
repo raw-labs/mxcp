@@ -1,0 +1,78 @@
+mxcp: 1
+
+tool:
+  name: get_project_role_users
+  description: |
+    Get users and groups for a specific role in a project.
+    Returns detailed information about users and groups assigned to the role.
+  type: tool
+  annotations:
+    title: Get Project Role Users
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  language: python
+  source:
+    file: ../python/jira_endpoints.py
+  parameters:
+    - name: project_key
+      type: string
+      description: |
+        The project key (e.g., 'TEST' for project TEST).
+        This is the short identifier for the project.
+      examples: [
+        "TEST",
+        "PROJ",
+        "DEV"
+      ]
+    - name: role_name
+      type: string
+      description: |
+        The name of the role to get users for.
+        Common roles include 'Administrators', 'Developers', 'Users'.
+      examples: [
+        "Administrators",
+        "Developers",
+        "Users"
+      ]
+  return:
+    type: object
+    properties:
+      project_key:
+        type: string
+        description: The project key
+      role_name:
+        type: string
+        description: The role name
+      role_id:
+        type: string
+        description: The role ID
+      users:
+        type: array
+        items:
+          type: object
+          properties:
+            accountId:
+              type: string
+            displayName:
+              type: string
+        description: List of users in the role
+      groups:
+        type: array
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+            groupId:
+              type: string
+        description: List of groups in the role
+  tests:
+    - name: "Get role users"
+      description: "Verify role users returns expected structure"
+      arguments:
+        - key: project_key
+          value: "RD"
+        - key: role_name
+          value: "Administrators"
