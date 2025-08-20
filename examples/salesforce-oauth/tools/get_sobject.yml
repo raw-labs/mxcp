@@ -1,0 +1,37 @@
+mxcp: 1
+tool:
+  name: get_sobject
+  description: |
+    Retrieve a specific Salesforce record by its ID.
+    Returns the complete record data with all accessible fields.
+  tags: ["salesforce", "data", "records"]
+  annotations:
+    title: "Get Salesforce Record"
+    readOnlyHint: true
+    idempotentHint: true
+  parameters:
+    - name: object_name
+      type: string
+      description: "Name of the Salesforce object type"
+      examples: ["Account", "Contact", "Opportunity", "Lead", "Case"]
+    - name: record_id
+      type: string
+      description: "Salesforce record ID (15 or 18 character ID)"
+      examples: ["001000000000001", "003000000000001AAA"]
+  return:
+    type: object
+    description: "Complete record data"
+    additionalProperties: true
+  language: python
+  source:
+    file: ../python/salesforce_client.py
+  tests:
+    - name: "Get Account record"
+      description: "Test retrieving an Account record by ID"
+      arguments:
+        - key: object_name
+          value: "Account"
+        - key: record_id
+          value: "001000000000001"
+      result_contains:
+        Id: "001000000000001" 

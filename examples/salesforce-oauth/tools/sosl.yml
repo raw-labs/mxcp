@@ -1,0 +1,36 @@
+mxcp: 1
+tool:
+  name: sosl
+  description: |
+    Execute a raw SOSL (Salesforce Object Search Language) query.
+    Allows complex search queries with specific object targeting and field selection.
+  language: python
+  source:
+    file: ../python/salesforce_client.py
+  parameters:
+    - name: query
+      type: string
+      description: "SOSL query string to execute"
+      examples: ["FIND {test} IN ALL FIELDS RETURNING Account(Id, Name)", "FIND {John} RETURNING Contact(Id, Name, Email)"]
+  return:
+    type: array
+    description: "Search results"
+    items:
+      type: object
+      description: "Search result record"
+      additionalProperties: true
+  tags:
+    - salesforce
+    - search
+    - advanced
+  annotations:
+    title: "Execute SOSL Query"
+    readOnlyHint: true
+    idempotentHint: true
+  tests:
+    - name: "Simple SOSL query"
+      description: "Test executing a basic SOSL search query"
+      arguments:
+        - key: query
+          value: "FIND {test} IN ALL FIELDS RETURNING Account(Id, Name)"
+      result: [] 
