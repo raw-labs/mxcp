@@ -64,6 +64,7 @@ from ._types import (
     AuthPersistenceConfig,
     ExternalUserInfo,
     GitHubAuthConfig,
+    GoogleAuthConfig,
     HttpTransportConfig,
     KeycloakAuthConfig,
     OAuthClientConfig,
@@ -86,6 +87,7 @@ __all__ = [
     "AtlassianAuthConfig",
     "SalesforceAuthConfig",
     "KeycloakAuthConfig",
+    "GoogleAuthConfig",
     "AuthPersistenceConfig",
     "AuthorizationConfig",
     # Core classes
