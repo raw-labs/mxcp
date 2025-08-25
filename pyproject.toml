@@ -122,6 +122,8 @@ packages = [
     "mxcp.server.services.dbt",
     "mxcp.server.services.drift",
     "mxcp.server.services.endpoints",
+    "mxcp.server.services.evals",
+    "mxcp.server.services.tests",
     # SDK
     "mxcp.sdk",
     "mxcp.sdk.audit",
