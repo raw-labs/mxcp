@@ -157,6 +157,15 @@ class UserKeycloakAuthConfig(TypedDict):
     callback_path: str
 
 
+class UserGoogleAuthConfig(TypedDict):
+    client_id: str
+    client_secret: str
+    scope: str | None
+    callback_path: str
+    auth_url: str
+    token_url: str
+
+
 class UserAuthPersistenceConfig(TypedDict, total=False):
     type: Literal["sqlite"] | None
     path: str | None
@@ -167,12 +176,13 @@ class UserAuthorizationConfig(TypedDict, total=False):
 
 
 class UserAuthConfig(TypedDict, total=False):
-    provider: Literal["none", "github", "atlassian", "salesforce", "keycloak"] | None
+    provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google"] | None
     clients: list[UserOAuthClientConfig] | None
     github: UserGitHubAuthConfig | None
     atlassian: UserAtlassianAuthConfig | None
     salesforce: UserSalesforceAuthConfig | None
     keycloak: UserKeycloakAuthConfig | None
+    google: UserGoogleAuthConfig | None
     authorization: UserAuthorizationConfig | None
     persistence: UserAuthPersistenceConfig | None
 
