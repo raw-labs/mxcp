@@ -91,3 +91,9 @@ jobs:
     - name: Check package metadata
       run: |
         uv run twine check dist/*
+    
+    - name: Test package installation
+      run: |
+        pip install dist/mxcp-*.whl
+        mxcp --help
+        mxcp validate --help
