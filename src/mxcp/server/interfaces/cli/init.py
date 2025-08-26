@@ -286,7 +286,7 @@ def show_next_steps(
     click.echo(f"\n{click.style('📚 Resources:', fg='cyan', bold=True)}")
     click.echo("   • Documentation: https://mxcp.dev")
     click.echo("   • Examples: https://github.com/raw-labs/mxcp/tree/main/examples")
-    click.echo("   • Discord: https://discord.gg/XeqRp5Ud")
+    click.echo("   • Discord: https://discord.gg/bqY5834PvH")
     click.echo("")
 
 
