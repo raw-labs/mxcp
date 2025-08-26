@@ -61,7 +61,7 @@ def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str)
 
 
 def _ensure_project_directories(target_dir: Path) -> None:
-    """Ensure standard project directories exist and add .gitkeep where helpful."""
+    """Ensure standard project directories exist."""
     directories = [
         "tools",
         "resources",
@@ -78,18 +78,6 @@ def _ensure_project_directories(target_dir: Path) -> None:
     for directory in directories:
         dir_path = target_dir / directory
         dir_path.mkdir(parents=True, exist_ok=True)
-
-        if directory in [
-            "resources",
-            "prompts",
-            "evals",
-            "python",
-            "plugins",
-            "drift",
-            "audit",
-            "data",
-        ]:
-            (dir_path / ".gitkeep").touch()
 
 
 def create_hello_world_files(target_dir: Path) -> None:
@@ -224,7 +212,7 @@ def show_next_steps(
         click.echo("   ├── resources/          # Resource definitions")
         click.echo("   ├── prompts/            # Prompt definitions")
         click.echo("   ├── evals/              # Evaluation definitions")
-        click.echo("   ├── python/             # Python extensions")
+        click.echo("   ├── python/             # Python implementations")
         click.echo("   ├── plugins/            # Plugin definitions")
         click.echo("   ├── drift/              # Drift snapshots")
         click.echo("   ├── audit/              # Audit logs")
@@ -234,7 +222,7 @@ def show_next_steps(
         click.echo("   ├── resources/          # Create your resource definitions here")
         click.echo("   ├── prompts/            # Create your prompt definitions here")
         click.echo("   ├── evals/              # Create your evaluation definitions here")
-        click.echo("   ├── python/             # Create your Python extensions here")
+        click.echo("   ├── python/             # Create your Python implementations here")
         click.echo("   ├── plugins/            # Create your plugin definitions here")
         click.echo("   ├── sql/                # Create your SQL implementations here")
         click.echo("   ├── drift/              # Drift snapshots will be stored here")
