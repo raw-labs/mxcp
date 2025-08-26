@@ -423,7 +423,7 @@ class TestIntegration:
 
             async with MCPTestClient(server.port) as client:
                 # Test with float value 0.0 - this should be converted to int(0)
-                result = await client.call_tool("test_integer_parameter", {"top_n": 0.0})
+                result = await client.call_tool("check_integer_parameter", {"top_n": 0.0})
                 
                 # If the bug exists, test_passed will be False and we'll get an error
                 if not result["test_passed"]:
@@ -435,7 +435,7 @@ class TestIntegration:
                 assert result["test_passed"] is True
                 
                 # Test with float value 2.0 - this should be converted to int(2)
-                result = await client.call_tool("test_integer_parameter", {"top_n": 2.0})
+                result = await client.call_tool("check_integer_parameter", {"top_n": 2.0})
                 
                 if not result["test_passed"]:
                     pytest.fail(f"Integer conversion bug detected: {result.get('error', 'Unknown error')}")

@@ -123,7 +123,7 @@ def process_user_data(user_data: Dict[str, Any]) -> Dict[str, Any]:
     return {"original_data": user_data, "analysis": analysis, "processing_status": "success"}
 
 
-def test_integer_parameter(top_n: int) -> Dict[str, Any]:
+def check_integer_parameter(top_n: int) -> Dict[str, Any]:
     """Test function that expects an integer parameter and fails if it gets a float.
     
     This function reproduces the bug where JSON float values like 0.0 are not

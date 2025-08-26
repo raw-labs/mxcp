@@ -1,6 +1,6 @@
 mxcp: 1
 tool:
-  name: test_integer_parameter
+  name: check_integer_parameter
   description: Test function that expects an integer parameter
   language: python
   source:
