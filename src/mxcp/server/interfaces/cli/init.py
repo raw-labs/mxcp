@@ -60,9 +60,8 @@ def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str)
         yaml.dump(config, f, default_flow_style=False)
 
 
-def create_hello_world_files(target_dir: Path) -> None:
-    """Create example hello world endpoint files and directory structure."""
-    # Create all directories for the new structure
+def _ensure_project_directories(target_dir: Path) -> None:
+    """Ensure standard project directories exist and add .gitkeep where helpful."""
     directories = [
         "tools",
         "resources",
@@ -78,9 +77,8 @@ def create_hello_world_files(target_dir: Path) -> None:
 
     for directory in directories:
         dir_path = target_dir / directory
-        dir_path.mkdir(exist_ok=True)
+        dir_path.mkdir(parents=True, exist_ok=True)
 
-        # Create .gitkeep files for empty directories
         if directory in [
             "resources",
             "prompts",
@@ -91,8 +89,13 @@ def create_hello_world_files(target_dir: Path) -> None:
             "audit",
             "data",
         ]:
-            gitkeep_file = dir_path / ".gitkeep"
-            gitkeep_file.touch()
+            (dir_path / ".gitkeep").touch()
+
+
+def create_hello_world_files(target_dir: Path) -> None:
+    """Create example hello world endpoint files and directory structure."""
+    # Ensure base structure exists first
+    _ensure_project_directories(target_dir)
 
     # Create hello-world.sql in the sql directory
     hello_world_sql = """SELECT 'Hello, ' || $name || '!' as greeting
@@ -352,6 +355,13 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool) 
         # Create mxcp-site.yml
         create_mxcp_site_yml(target_dir, project, profile)
         click.echo("✓ Created mxcp-site.yml")
+
+        # Always ensure standard directory structure exists
+        try:
+            _ensure_project_directories(target_dir)
+            click.echo("✓ Created project directories")
+        except Exception as e:
+            click.echo(f"⚠️  Warning: Failed to create project directories: {e}")
 
         # Create example files if requested
         if bootstrap:
