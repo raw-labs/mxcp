@@ -125,13 +125,13 @@ def process_user_data(user_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def check_integer_parameter(top_n: int) -> Dict[str, Any]:
     """Test function that expects an integer parameter and fails if it gets a float.
-    
+
     This function reproduces the bug where JSON float values like 0.0 are not
     converted to integers before being passed to Python functions.
     """
     # Log the actual type and value received for debugging
     actual_type = type(top_n)
-    
+
     # This assertion should pass if type conversion is working correctly
     # If this fails, it means the bug exists - float values are not being converted to int
     if not isinstance(top_n, int):
@@ -140,21 +140,21 @@ def check_integer_parameter(top_n: int) -> Dict[str, Any]:
             "type_received": str(actual_type),
             "selected_items": [],
             "test_passed": False,
-            "error": f"Expected int, got {actual_type}: {top_n}"
+            "error": f"Expected int, got {actual_type}: {top_n}",
         }
-    
+
     # Use the parameter as an array index to demonstrate why integers are needed
     test_array = ["first", "second", "third", "fourth", "fifth"]
-    
+
     # This would fail with a float even if it's 0.0
     if top_n < 0 or top_n >= len(test_array):
         selected_items = []
     else:
         selected_items = test_array[:top_n] if top_n > 0 else []
-    
+
     return {
         "top_n": top_n,
         "type_received": str(actual_type),
         "selected_items": selected_items,
-        "test_passed": True
+        "test_passed": True,
     }
