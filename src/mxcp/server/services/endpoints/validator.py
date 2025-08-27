@@ -20,61 +20,41 @@ RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
 def _check_duplicate_endpoint_names(
     endpoints: list[tuple[Path, EndpointDefinition | None, str | None]]
 ) -> list[dict[str, Any]]:
-    """Check for duplicate endpoint names across all endpoints.
+    """Check for duplicate endpoint names across all endpoints."""
+    name_to_paths: dict[str, list[Path]] = {}
     
-    Args:
-        endpoints: List of discovered endpoints from EndpointLoader
-        
-    Returns:
-        List of validation errors for duplicate names
-    """
-    name_to_paths: dict[str, list[tuple[str, str, Path]]] = {}  # name -> [(endpoint_type, name, path), ...]
-    errors = []
-    
+    # Collect names and their paths
     for path, endpoint, error in endpoints:
         if error or not endpoint:
             continue
             
-        # Determine endpoint type and extract name
-        endpoint_type = None
-        for t in ("tool", "resource", "prompt"):
-            if endpoint.get(t) is not None:
-                endpoint_type = t
-                break
-                
-        if not endpoint_type:
-            continue
-            
-        try:
-            name = get_endpoint_name_or_uri(endpoint, endpoint_type)
-            
-            # Only check for duplicate names for tools and prompts (resources use URIs which can be different)
-            if endpoint_type in ("tool", "prompt"):
-                if name not in name_to_paths:
-                    name_to_paths[name] = []
-                name_to_paths[name].append((endpoint_type, name, path))
-        except ValueError:
-            # Skip endpoints that can't be processed
-            continue
-    
-    # Check for duplicates
-    for name, paths_info in name_to_paths.items():
-        if len(paths_info) > 1:
-            # Found duplicate names
-            path_list = [str(path) for _, _, path in paths_info]
-            for endpoint_type, _, path in paths_info:
+        # Find endpoint type and extract name
+        for endpoint_type in ("tool", "prompt"):  # Only check tools and prompts
+            if endpoint_type in endpoint:
                 try:
-                    repo_root = find_repo_root()
-                    path_obj = Path(path).resolve()
-                    relative_path = str(path_obj.relative_to(repo_root))
-                except (ValueError, Exception):
-                    relative_path = Path(path).name
-                    
-                errors.append({
-                    "status": "error",
-                    "path": relative_path,
-                    "message": f"Duplicate {endpoint_type} name '{name}' found in files: {', '.join(path_list)}"
-                })
+                    name = get_endpoint_name_or_uri(endpoint, endpoint_type)
+                    name_to_paths.setdefault(name, []).append(path)
+                    break
+                except ValueError:
+                    continue
+    
+    # Generate errors for duplicates
+    errors = []
+    for name, paths in name_to_paths.items():
+        if len(paths) > 1:
+            # Create one error entry for the first file, mentioning all duplicates
+            try:
+                repo_root = find_repo_root()
+                relative_path = str(paths[0].relative_to(repo_root))
+            except (ValueError, Exception):
+                relative_path = paths[0].name
+                
+            path_names = [p.name for p in paths]
+            errors.append({
+                "status": "error", 
+                "path": relative_path,
+                "message": f"Duplicate tool/prompt name '{name}' found in: {', '.join(path_names)}"
+            })
     
     return errors
 
