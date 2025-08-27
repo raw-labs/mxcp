@@ -1,5 +1,6 @@
 from typing import Dict, Any
 from mxcp.runtime import config, on_init
+from pydantic import BaseModel
 
 global_var = None
 
@@ -121,3 +122,53 @@ def process_user_data(user_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     return {"original_data": user_data, "analysis": analysis, "processing_status": "success"}
+
+
+# Pydantic models for testing
+class UserProfile(BaseModel):
+    """User profile model."""
+
+    name: str
+    age: int
+    email: str
+    is_premium: bool = False
+
+
+class UserStats(BaseModel):
+    """User statistics model."""
+
+    total_users: int
+    active_users: int
+    premium_users: int
+    average_age: float
+
+
+def validate_user_profile(profile: UserProfile) -> str:
+    """Take a pydantic model as parameter and return a primitive result."""
+    # Validate and process the user profile
+    if profile.age < 0:
+        return "Invalid age: must be non-negative"
+
+    if not profile.email or "@" not in profile.email:
+        return "Invalid email format"
+
+    status = "premium" if profile.is_premium else "regular"
+    return f"User {profile.name} ({profile.age} years old, {profile.email}) is a {status} user - validation passed"
+
+
+def get_user_stats(user_count: int) -> UserStats:
+    """Take a primitive argument and return a pydantic model."""
+    # Generate some mock statistics based on the user count
+    active_ratio = 0.8
+    premium_ratio = 0.3
+
+    active_users = int(user_count * active_ratio)
+    premium_users = int(user_count * premium_ratio)
+    average_age = 32.5  # Mock average age
+
+    return UserStats(
+        total_users=user_count,
+        active_users=active_users,
+        premium_users=premium_users,
+        average_age=average_age,
+    )

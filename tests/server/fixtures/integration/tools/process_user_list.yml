@@ -1,0 +1,37 @@
+mxcp: 1
+tool:
+  name: process_user_list
+  description: Process a list of users (pydantic models in containers)
+  language: python
+  source:
+    file: ../python/test_container_types.py
+  parameters:
+    - name: users
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          age:
+            type: integer
+          email:
+            type: string
+        required:
+          - name
+          - age
+          - email
+      description: List of user objects
+  return:
+    type: object
+    properties:
+      user_count:
+        type: integer
+      average_age:
+        type: number
+      names:
+        type: array
+        items:
+          type: string
+      total_age:
+        type: integer
