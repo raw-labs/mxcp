@@ -197,3 +197,29 @@ def test_validate_complex_jinja_prompt_invalid(
         assert "item" in result["message"]
     finally:
         os.chdir(original_dir)
+
+
+def test_validate_duplicate_tool_names(validation_repo_path, site_config, test_execution_engine):
+    """Test validation detects duplicate tool names across different files."""
+    original_dir = os.getcwd()
+    os.chdir(validation_repo_path)
+    try:
+        # Validate all endpoints - should detect duplicate tool names
+        result = validate_all_endpoints(site_config, test_execution_engine)
+        
+        # The validation should fail due to duplicate tool names
+        assert result["status"] == "error"
+        
+        # Check that the error message mentions duplicate names
+        # Look through all validation results for duplicate name errors
+        duplicate_error_found = False
+        for validated_result in result.get("validated", []):
+            if "duplicate" in validated_result.get("message", "").lower():
+                duplicate_error_found = True
+                break
+        
+        # This test should fail initially since duplicate detection isn't implemented yet
+        assert duplicate_error_found, "Expected duplicate tool name validation error not found"
+        
+    finally:
+        os.chdir(original_dir)
