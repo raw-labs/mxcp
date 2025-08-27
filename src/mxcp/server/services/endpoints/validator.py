@@ -13,8 +13,8 @@ from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition, ResourceDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.utils import (
-    get_endpoint_source_code,
     get_endpoint_name_or_uri,
+    get_endpoint_source_code,
 )
 
 RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
