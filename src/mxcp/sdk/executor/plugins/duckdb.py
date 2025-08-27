@@ -123,7 +123,7 @@ class DuckDBExecutor(ExecutorPlugin):
         self.plugins = plugins
         self.plugin_config = plugin_config
         self.secrets = secrets
-        self._db_lock = threading.Lock()  # Internal locking for thread safety
+        self.__db_lock = threading.Lock()  # Private lock for DuckDB thread safety
 
         # Create session immediately in constructor
         try:
@@ -196,7 +196,7 @@ class DuckDBExecutor(ExecutorPlugin):
             if not session or not session.conn:
                 return False
 
-            with self._db_lock:
+            with self.__db_lock:
                 conn = session.conn
                 conn.execute(f"PREPARE stmt AS {source_code}")
                 conn.execute("DEALLOCATE stmt")
@@ -279,7 +279,7 @@ class DuckDBExecutor(ExecutorPlugin):
                     context_token = set_execution_context(context)
 
                     try:
-                        with self._db_lock:
+                        with self.__db_lock:
                             result = self.session.execute_query_to_dict(source_code, params)
 
                             # Add result metrics to current span
@@ -343,7 +343,7 @@ class DuckDBExecutor(ExecutorPlugin):
             if not session or not session.conn:
                 raise RuntimeError("No DuckDB session available")
 
-            with self._db_lock:
+            with self.__db_lock:
                 # Use the same pattern as the old code: fetchdf().to_dict("records")
                 # to return dictionaries instead of tuples
                 from pandas import NaT

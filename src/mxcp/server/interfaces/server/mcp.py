@@ -9,6 +9,7 @@ import signal
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
@@ -272,8 +273,14 @@ class RAWMCP:
         self.transport_mode = None
         self._shutdown_called = False
 
-        # Create shared lock for thread-safety
-        self.db_lock = threading.Lock()
+        # Request tracking for safe reloading
+        self.active_requests = 0
+        self.requests_lock = threading.Lock()
+        self.draining = False
+        self.drain_complete = threading.Event()
+
+        # Single execution lock for all operations
+        self.execution_lock = threading.RLock()  # RLock for re-entrant locking
 
         # Register signal handlers
         self._register_signal_handlers()
@@ -594,99 +601,177 @@ class RAWMCP:
 
         logger.info("Telemetry initialization complete.")
 
+    def _reload_with_draining(
+        self,
+        reload_func: Callable[[], None],
+        operation_name: str = "reload",
+        metric_name: str = "config_reloads_total",
+    ) -> None:
+        """
+        Common reload pattern with request draining.
+
+        This method handles the common pattern of:
+        1. Start draining requests
+        2. Wait for active requests to complete
+        3. Acquire exclusive lock
+        4. Shutdown runtime components
+        5. Run the provided reload function
+        6. Recreate runtime components
+        7. Resume normal operations
+
+        Args:
+            reload_func: Function to run during reload (with exclusive access)
+            operation_name: Name for logging (e.g., "configuration reload", "custom reload")
+            metric_name: Metric name for tracking (e.g., "config_reloads_total")
+        """
+        logger.info(f"Starting {operation_name} with request draining...")
+
+        # Step 1: Start draining
+        self.draining = True
+        self.drain_complete.clear()
+
+        # Step 2: Wait for active requests to complete
+        logger.info(f"Waiting for {self.active_requests} active requests to complete...")
+        start_time = time.time()
+        timeout = 30  # seconds
+
+        while self.active_requests > 0:
+            if time.time() - start_time > timeout:
+                logger.warning(
+                    f"Timeout waiting for {self.active_requests} requests after {timeout}s, proceeding with {operation_name}"
+                )
+                break
+
+            # Wait with timeout
+            self.drain_complete.wait(timeout=0.5)
+
+        logger.info("All requests drained, acquiring exclusive lock...")
+        with self.execution_lock:
+            logger.info(f"Exclusive lock acquired. Starting {operation_name}...")
+            try:
+                # Shutdown runtime components
+                self._shutdown_runtime_components()
+
+                # Run the specific reload logic
+                reload_func()
+
+                # Recreate runtime components
+                self._initialize_runtime_components()
+
+                logger.info(f"{operation_name} completed successfully.")
+
+                # Record success metric
+                record_counter(
+                    f"mxcp.{metric_name}",
+                    attributes={"status": "success", "profile": self.profile_name},
+                    description=f"Total {operation_name} operations",
+                )
+
+            except Exception as e:
+                logger.error(f"Failed {operation_name}: {e}", exc_info=True)
+
+                # Record failed metric
+                record_counter(
+                    f"mxcp.{metric_name}",
+                    attributes={"status": "error", "profile": self.profile_name},
+                    description=f"Total {operation_name} operations",
+                )
+                raise
+            finally:
+                # Always clear draining flag
+                self.draining = False
+                logger.info(f"{operation_name} process completed, normal operations resumed")
+
     def reload_configuration(self) -> None:
         """
         Reloads external configuration values (vault://, file://, env vars) only.
 
         This method refreshes all external references without re-reading the
         configuration files themselves, making it safer for long-running services.
-
-        The reload process:
-        1. Loads raw config templates if not already loaded
-        2. Resolves all external references again
-        3. If values changed, recreates runtime components with new values
         """
-        logger.info("Acquiring lock for configuration reload...")
-        with self.db_lock:
-            logger.info("Lock acquired. Starting configuration reload...")
-            try:
-                # Ensure we have raw templates for external reference tracking
-                if not self._config_templates_loaded or not self.ref_tracker._template_config:
-                    logger.info("Loading raw configuration templates for hot reload...")
 
-                    # Load raw configs without resolving references
+        def _reload_config() -> None:
+            """Inner function that performs the actual configuration reload."""
+            # Ensure we have raw templates for external reference tracking
+            if not self._config_templates_loaded or not self.ref_tracker._template_config:
+                logger.info("Loading raw configuration templates for hot reload...")
 
-                    # Determine site config path
-                    site_path = self.site_config_path or Path.cwd()
+                # Determine site config path
+                site_path = self.site_config_path or Path.cwd()
 
-                    # Load raw templates
-                    site_template = load_site_config(site_path)
-                    user_template = load_user_config(site_template, resolve_refs=False)
+                # Load raw templates
+                site_template = load_site_config(site_path)
+                user_template = load_user_config(site_template, resolve_refs=False)
 
-                    # Set templates in tracker
-                    self.ref_tracker.set_template(
-                        cast(dict[str, Any], site_template), cast(dict[str, Any], user_template)
-                    )
-                    self._config_templates_loaded = True
-                    logger.info("Raw configuration templates loaded.")
+                # Set templates in tracker
+                self.ref_tracker.set_template(
+                    cast(dict[str, Any], site_template), cast(dict[str, Any], user_template)
+                )
+                self._config_templates_loaded = True
+                logger.info("Raw configuration templates loaded.")
 
-                # Save current configs for comparison
-                old_site_config = self.site_config
-                old_user_config = self.user_config
+            # Save current configs for comparison
+            old_site_config = self.site_config
+            old_user_config = self.user_config
 
-                # Resolve all external references again
-                logger.info("Resolving external configuration references...")
-                new_site_config, new_user_config = self.ref_tracker.resolve_all()
+            # Resolve all external references again
+            logger.info("Resolving external configuration references...")
+            new_site_config, new_user_config = self.ref_tracker.resolve_all()
 
-                # Check if anything actually changed
-                if old_site_config == new_site_config and old_user_config == new_user_config:
-                    logger.info("No changes detected in external configuration values.")
-                    logger.info("Proceeding with reload anyway to refresh DuckDB session...")
-                else:
-                    logger.info(
-                        "External configuration values have changed. Reloading runtime components..."
-                    )
-
-                # Shutdown runtime components
-                self._shutdown_runtime_components()
-
-                # Apply the new configurations
-                self.site_config = cast(SiteConfig, new_site_config)
-                self.user_config = cast(UserConfig, new_user_config)
-                self.active_profile = get_active_profile(
-                    self.user_config, self.site_config, self.profile_name
+            # Check if anything actually changed
+            if old_site_config == new_site_config and old_user_config == new_user_config:
+                logger.info("No changes detected in external configuration values.")
+                logger.info("Proceeding with reload anyway to refresh DuckDB session...")
+            else:
+                logger.info(
+                    "External configuration values have changed. Reloading runtime components..."
                 )
 
-                # Recreate runtime components with new values
-                logger.info("Creating new execution engine...")
-                self.execution_engine = create_execution_engine(
-                    self.user_config, self.site_config, self.profile_name, readonly=self.readonly
-                )
-                logger.info("New execution engine created.")
+            # Apply the new configurations
+            self.site_config = cast(SiteConfig, new_site_config)
+            self.user_config = cast(UserConfig, new_user_config)
+            self.active_profile = get_active_profile(
+                self.user_config, self.site_config, self.profile_name
+            )
 
-                logger.info("Configuration reload completed successfully.")
+        # Use the common reload pattern
+        try:
+            self._reload_with_draining(
+                reload_func=_reload_config,
+                operation_name="configuration reload",
+                metric_name="config_reloads_total",
+            )
+        except Exception:
+            # Add the additional error message for config reload
+            logger.error(
+                "Server state may be inconsistent due to reload failure. Consider restarting."
+            )
+            # Re-raise to maintain same behavior
+            raise
 
-                # Record config reload metric
-                record_counter(
-                    "mxcp.config_reloads_total",
-                    attributes={"status": "success", "profile": self.profile_name},
-                    description="Total configuration reloads",
-                )
+    def reload_with_custom_logic(self, rebuild_func: Callable[[], None]) -> None:
+        """
+        Reload with custom database rebuild logic.
 
-            except Exception as e:
-                logger.error(f"Failed to reload configuration: {e}", exc_info=True)
+        This allows Python endpoints to trigger a reload with custom rebuild steps.
 
-                # Record failed reload metric
-                record_counter(
-                    "mxcp.config_reloads_total",
-                    attributes={"status": "error", "profile": self.profile_name},
-                    description="Total configuration reloads",
-                )
-                # In case of failure, it's safer to shut down as the server state is unknown
-                logger.error(
-                    "Server state may be inconsistent due to reload failure. Consider restarting."
-                )
-                # Don't auto-shutdown here, let the operator decide
+        Args:
+            rebuild_func: Function to run after shutdown and before recreating engine.
+                         Called with no active DuckDB connections.
+        """
+
+        def _custom_reload() -> None:
+            """Inner function that runs the custom rebuild."""
+            logger.info("Running custom rebuild function...")
+            rebuild_func()
+            logger.info("Custom rebuild function completed.")
+
+        # Use the common reload pattern
+        self._reload_with_draining(
+            reload_func=_custom_reload,
+            operation_name="custom reload",
+            metric_name="custom_reloads_total",
+        )
 
     def _ensure_async_completes(
         self, coro: Any, timeout: float = 10.0, operation_name: str = "operation"
@@ -1263,14 +1348,13 @@ class RAWMCP:
                     if mcp_session_id:
                         set_span_attribute("mxcp.session.id", mcp_session_id)
                     set_span_attribute("mxcp.trace.id", trace_id)
-                result, policy_info = await execute_endpoint_with_engine_and_policy(
+                # Use the common execution wrapper with policy info
+                result, policy_info = await self._execute_with_draining(
                     endpoint_type=endpoint_type.value,
                     name=name,
                     params=kwargs,  # No manual conversion needed - SDK handles it
-                    user_config=self.user_config,
-                    site_config=self.site_config,
-                    execution_engine=self.execution_engine,
                     user_context=user_context,
+                    with_policy_info=True,
                 )
                 logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                 return result
@@ -1485,13 +1569,10 @@ class RAWMCP:
                 # Use SDK execution engine
                 if self.execution_engine is None:
                     raise RuntimeError("Execution engine not initialized")
-                result = await execute_endpoint_with_engine(
+                result = await self._execute_with_draining(
                     endpoint_type="sql",
                     name="user_sql_query",
                     params={"sql": sql},
-                    user_config=self.user_config,
-                    site_config=self.site_config,
-                    execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
                 return cast(list[dict[str, Any]], result)
@@ -1556,7 +1637,7 @@ class RAWMCP:
                 # Use SDK execution engine
                 if self.execution_engine is None:
                     raise RuntimeError("Execution engine not initialized")
-                result = await execute_endpoint_with_engine(
+                result = await self._execute_with_draining(
                     endpoint_type="sql",
                     name="list_tables",
                     params={
@@ -1569,9 +1650,6 @@ class RAWMCP:
                         ORDER BY table_name
                     """
                     },
-                    user_config=self.user_config,
-                    site_config=self.site_config,
-                    execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
                 return cast(list[dict[str, str]], result)
@@ -1641,7 +1719,7 @@ class RAWMCP:
                 # Use SDK execution engine
                 if self.execution_engine is None:
                     raise RuntimeError("Execution engine not initialized")
-                result = await execute_endpoint_with_engine(
+                result = await self._execute_with_draining(
                     endpoint_type="sql",
                     name="get_table_schema",
                     params={
@@ -1656,9 +1734,6 @@ class RAWMCP:
                     """,
                         "table_name": table_name,
                     },
-                    user_config=self.user_config,
-                    site_config=self.site_config,
-                    execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
                 return cast(list[dict[str, Any]], result)
@@ -1693,6 +1768,80 @@ class RAWMCP:
                     )
 
         logger.info("Registered built-in DuckDB features")
+
+    async def _execute_with_draining(
+        self,
+        endpoint_type: str,
+        name: str,
+        params: dict[str, Any],
+        user_context: Any = None,
+        with_policy_info: bool = False,
+    ) -> Any:
+        """Execute endpoint with draining and locking logic.
+
+        This wrapper ensures all endpoints (both dynamic and pre-registered)
+        go through the same draining and locking process.
+
+        Args:
+            endpoint_type: Type of endpoint to execute
+            name: Name of endpoint
+            params: Parameters to pass
+            user_context: User context
+            with_policy_info: If True, returns (result, policy_info) tuple
+
+        Returns:
+            Result of execution, or (result, policy_info) if with_policy_info=True
+        """
+        # Wait if draining is in progress
+        # Note: We check self.draining without a lock for performance.
+        # A request might slip through right as draining starts, but this is fine
+        # because active_requests tracking ensures correctness.
+        wait_start = time.time()
+        wait_timeout = 30  # seconds
+        while self.draining:
+            if time.time() - wait_start > wait_timeout:
+                raise RuntimeError(
+                    "Service is reloading and taking longer than expected. Please retry in a few seconds."
+                )
+            await asyncio.sleep(0.1)
+
+        # Track this request
+        with self.requests_lock:
+            self.active_requests += 1
+
+        try:
+            # Acquire execution lock for the actual execution
+            with self.execution_lock:
+                if self.execution_engine is None:
+                    raise RuntimeError("Execution engine not initialized")
+
+                if with_policy_info:
+                    return await execute_endpoint_with_engine_and_policy(
+                        endpoint_type=endpoint_type,
+                        name=name,
+                        params=params,
+                        user_config=self.user_config,
+                        site_config=self.site_config,
+                        execution_engine=self.execution_engine,
+                        user_context=user_context,
+                        server_ref=self,
+                    )
+                else:
+                    return await execute_endpoint_with_engine(
+                        endpoint_type=endpoint_type,
+                        name=name,
+                        params=params,
+                        user_config=self.user_config,
+                        site_config=self.site_config,
+                        execution_engine=self.execution_engine,
+                        user_context=user_context,
+                    )
+        finally:
+            # Decrement request counter and signal if draining
+            with self.requests_lock:
+                self.active_requests -= 1
+                if self.active_requests == 0 and self.draining:
+                    self.drain_complete.set()
 
     def register_endpoints(self) -> None:
         """Register all discovered endpoints with MCP."""

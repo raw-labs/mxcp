@@ -7,9 +7,12 @@ logic used by higher-level endpoint orchestration code.
 
 import logging
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from jinja2 import Template
+
+if TYPE_CHECKING:
+    from mxcp.server.interfaces.server.mcp import RAWMCP
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
@@ -82,6 +85,7 @@ async def execute_code_with_engine(
     user_config: UserConfig,
     site_config: SiteConfig,
     user_context: UserContext | None = None,
+    server_ref: Optional["RAWMCP"] = None,
 ) -> Any:
     """Execute tool/resource endpoint using SDK execution engine.
 
@@ -103,6 +107,8 @@ async def execute_code_with_engine(
     # Populate context with data that runtime module expects
     execution_context.set("user_config", user_config)
     execution_context.set("site_config", site_config)
+    if server_ref:
+        execution_context.set("_mxcp_server", server_ref)
     if hasattr(execution_engine, "_executors") and "sql" in execution_engine._executors:
         sql_executor = execution_engine._executors["sql"]
 

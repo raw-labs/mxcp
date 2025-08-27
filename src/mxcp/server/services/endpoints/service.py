@@ -5,7 +5,10 @@ replacing the legacy DuckDBSession-based execution. This is used by CLI commands
 """
 
 import logging
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
+
+if TYPE_CHECKING:
+    from mxcp.server.interfaces.server.mcp import RAWMCP
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
@@ -169,6 +172,7 @@ async def execute_endpoint_with_engine_and_policy(
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
+    server_ref: Optional["RAWMCP"] = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Execute endpoint and return both result and policy information.
 
@@ -273,6 +277,7 @@ async def execute_endpoint_with_engine_and_policy(
             user_config,
             site_config,
             user_context,
+            server_ref,
         )
 
     # Enforce output policies (symmetry with input policy enforcement above)

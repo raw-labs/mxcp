@@ -222,3 +222,59 @@ def run_shutdown_hooks() -> None:
             hook()
         except Exception as e:
             logger.error(f"Error in shutdown hook {hook.__name__}: {e}")
+
+
+def request_reload(rebuild_func: Callable[[], None] | None = None) -> None:
+    """
+    Request a configuration reload with optional custom rebuild logic.
+
+    This function will:
+    1. Drain all active requests
+    2. Shut down the execution engine (closing DuckDB)
+    3. Run custom rebuild function (if provided)
+    4. Reload configuration and recreate engine
+
+    Args:
+        rebuild_func: Optional function to run during reload.
+                     Called with no active DuckDB connections.
+                     This is where you can:
+                     - Run dbt to rebuild models
+                     - Copy new database files
+                     - Run incremental updates
+                     - Any custom data pipeline logic
+
+    Example:
+        def rebuild():
+            import subprocess
+            # Run dbt
+            subprocess.run(["dbt", "run"], check=True)
+            # Or copy new data
+            import shutil
+            shutil.copy("new_data.duckdb", "data.duckdb")
+        mxcp.runtime.request_reload(rebuild)
+
+    Note:
+        This function blocks until the reload is complete.
+        Requests made during reload will wait up to 30 seconds before timing out.
+    """
+    context = get_execution_context()
+    if not context:
+        raise RuntimeError(
+            "No execution context available - function not called from MXCP executor"
+        )
+
+    # Get server reference from context
+    server = context.get("_mxcp_server")
+    if not server:
+        raise RuntimeError(
+            "Server reference not available in context. "
+            "This function can only be called from within MXCP server endpoints."
+        )
+
+    # Perform reload
+    if rebuild_func is not None:
+        logger.info("Requesting custom reload with provided rebuild function")
+        server.reload_with_custom_logic(rebuild_func)
+    else:
+        logger.info("Requesting standard configuration reload")
+        server.reload_configuration()
