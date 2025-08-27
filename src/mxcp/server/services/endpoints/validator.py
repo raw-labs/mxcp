@@ -12,22 +12,25 @@ from mxcp.server.core.config._types import SiteConfig
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition, ResourceDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
-from mxcp.server.definitions.endpoints.utils import get_endpoint_source_code, get_endpoint_name_or_uri
+from mxcp.server.definitions.endpoints.utils import (
+    get_endpoint_source_code,
+    get_endpoint_name_or_uri,
+)
 
 RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
 
 
 def _check_duplicate_endpoint_names(
-    endpoints: list[tuple[Path, EndpointDefinition | None, str | None]]
+    endpoints: list[tuple[Path, EndpointDefinition | None, str | None]],
 ) -> list[dict[str, Any]]:
     """Check for duplicate endpoint names across all endpoints."""
     name_to_paths: dict[str, list[Path]] = {}
-    
+
     # Collect names and their paths
     for path, endpoint, error in endpoints:
         if error or not endpoint:
             continue
-            
+
         # Find endpoint type and extract name
         for endpoint_type in ("tool", "prompt"):  # Only check tools and prompts
             if endpoint_type in endpoint:
@@ -37,7 +40,7 @@ def _check_duplicate_endpoint_names(
                     break
                 except ValueError:
                     continue
-    
+
     # Generate errors for duplicates
     errors = []
     for name, paths in name_to_paths.items():
@@ -48,14 +51,16 @@ def _check_duplicate_endpoint_names(
                 relative_path = str(paths[0].relative_to(repo_root))
             except (ValueError, Exception):
                 relative_path = paths[0].name
-                
+
             path_names = [p.name for p in paths]
-            errors.append({
-                "status": "error", 
-                "path": relative_path,
-                "message": f"Duplicate tool/prompt name '{name}' found in: {', '.join(path_names)}"
-            })
-    
+            errors.append(
+                {
+                    "status": "error",
+                    "path": relative_path,
+                    "message": f"Duplicate tool/prompt name '{name}' found in: {', '.join(path_names)}",
+                }
+            )
+
     return errors
 
 
@@ -101,11 +106,11 @@ def validate_all_endpoints(
 
         # Check for duplicate endpoint names first
         duplicate_errors = _check_duplicate_endpoint_names(endpoints)
-        
+
         # Validate each endpoint
         results = []
         has_errors = False
-        
+
         # Add duplicate name errors to results
         results.extend(duplicate_errors)
         if duplicate_errors:
