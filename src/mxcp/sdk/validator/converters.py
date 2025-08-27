@@ -323,8 +323,26 @@ class TypeConverter:
                         raise ValidationError(f"Array item {i}: {str(e)}") from e
 
         elif return_type == "object":
+            # Handle pydantic models by converting them to dict first
             if not isinstance(value, dict):
-                raise ValidationError(f"Expected object, got {type(value).__name__}")
+                if hasattr(value, "model_dump"):
+                    # Pydantic v2
+                    try:
+                        value = value.model_dump()
+                    except Exception:
+                        raise ValidationError(
+                            f"Expected object, got {type(value).__name__}"
+                        ) from None
+                elif hasattr(value, "dict"):
+                    # Pydantic v1
+                    try:
+                        value = value.dict()
+                    except Exception:
+                        raise ValidationError(
+                            f"Expected object, got {type(value).__name__}"
+                        ) from None
+                else:
+                    raise ValidationError(f"Expected object, got {type(value).__name__}")
 
             properties = schema.properties or {}
             required = schema.required or []
@@ -366,6 +384,20 @@ class TypeConverter:
         elif hasattr(obj, "isoformat"):
             # Handle any other datetime-like objects
             return obj.isoformat()
+        elif hasattr(obj, "model_dump"):
+            # Handle Pydantic v2 models
+            try:
+                serialized = obj.model_dump()
+                return TypeConverter.serialize_for_output(serialized)
+            except Exception:
+                return obj
+        elif hasattr(obj, "dict"):
+            # Handle Pydantic v1 models
+            try:
+                serialized = obj.dict()
+                return TypeConverter.serialize_for_output(serialized)
+            except Exception:
+                return obj
         else:
             return obj
 

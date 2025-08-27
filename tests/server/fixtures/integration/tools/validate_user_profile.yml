@@ -1,0 +1,31 @@
+mxcp: 1
+tool:
+  name: validate_user_profile
+  description: Validate a user profile using pydantic model and return validation result
+  language: python
+  source:
+    file: ../python/test_endpoints.py
+  parameters:
+    - name: profile
+      type: object
+      description: User profile to validate
+      properties:
+        name:
+          type: string
+          description: User's full name
+        age:
+          type: integer
+          description: User's age
+        email:
+          type: string
+          description: User's email address
+        is_premium:
+          type: boolean
+          description: Whether user has premium status
+      required:
+        - name
+        - age
+        - email
+  return:
+    type: string
+    description: Validation result message

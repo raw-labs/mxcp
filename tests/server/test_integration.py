@@ -744,3 +744,77 @@ def check_all_secrets() -> dict:
                 assert analysis["is_premium"] is True
                 assert "123 Main St, San Francisco, USA" in analysis["full_address"]
                 assert "John Doe is a 25-year-old premium user" in analysis["summary"]
+
+    @pytest.mark.asyncio
+    async def test_pydantic_model_input(self, integration_fixture_dir):
+        """Test tool that takes a pydantic model as input parameter and returns primitive."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                # Create a user profile object matching the pydantic model
+                profile_data = {
+                    "name": "Jane Smith",
+                    "age": 29,
+                    "email": "jane.smith@example.com",
+                    "is_premium": True,
+                }
+
+                # Call the tool with the pydantic model data
+                result = await client.call_tool("validate_user_profile", {"profile": profile_data})
+
+                # Verify the result is a string (primitive) with expected content
+                assert isinstance(result, str)
+                assert "Jane Smith" in result
+                assert "29 years old" in result
+                assert "jane.smith@example.com" in result
+                assert "premium user" in result
+                assert "validation passed" in result
+
+    @pytest.mark.asyncio
+    async def test_pydantic_model_output(self, integration_fixture_dir):
+        """Test tool that takes primitive input and returns a pydantic model."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                # Call the tool with a primitive integer
+                result = await client.call_tool("get_user_stats", {"user_count": 100})
+
+                # Verify the result is an object (pydantic model serialized) with expected structure
+                assert isinstance(result, dict)
+                assert "total_users" in result
+                assert "active_users" in result
+                assert "premium_users" in result
+                assert "average_age" in result
+
+                # Verify the calculated values
+                assert result["total_users"] == 100
+                assert result["active_users"] == 80  # 80% of 100
+                assert result["premium_users"] == 30  # 30% of 100
+                assert result["average_age"] == 32.5
+
+    @pytest.mark.asyncio
+    async def test_pydantic_validation_error(self, integration_fixture_dir):
+        """Test pydantic model validation with invalid data."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                # Create invalid profile data (negative age)
+                invalid_profile = {
+                    "name": "Invalid User",
+                    "age": -5,
+                    "email": "invalid@example.com",
+                    "is_premium": False,
+                }
+
+                # Call the tool with invalid data
+                result = await client.call_tool(
+                    "validate_user_profile", {"profile": invalid_profile}
+                )
+
+                # Verify the validation error is returned
+                assert isinstance(result, str)
+                assert "Invalid age" in result
+                assert "must be non-negative" in result
