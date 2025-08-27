@@ -1,0 +1,84 @@
+mxcp: 1
+tool:
+  name: list_calendars
+  title: List Google Calendars
+  description: |
+    List all calendars accessible to the authenticated user.
+    Returns calendars with their access permissions, timezones, and display properties.
+    
+    Example usage:
+    - "Show me all my calendars"
+    - "List calendars I can write to" (with min_access_role: "writer")
+    - "What calendars do I have access to?"
+    - "Show me my work calendars" (then filter by name)
+  tags:
+    - google-calendar
+    - calendars
+    - list
+  annotations:
+    readOnlyHint: true
+    idempotentHint: true
+  parameters:
+    - name: show_hidden
+      type: boolean
+      description: "Include hidden calendars in results"
+      default: false
+      examples: [false, true]
+    - name: show_deleted
+      type: boolean
+      description: "Include deleted calendars in results"
+      default: false
+      examples: [false, true]
+    - name: max_results
+      type: integer
+      description: "Maximum number of calendars to return"
+      default: 100
+      minimum: 1
+      maximum: 250
+      examples: [10, 50, 100]
+    - name: min_access_role
+      type: string
+      description: "Filter by minimum access role"
+      enum: ["freeBusyReader", "owner", "reader", "writer"]
+      default: null
+      examples: ["reader", "writer", "owner"]
+  return:
+    type: array
+    description: "List of accessible calendars"
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+          description: "Calendar identifier (email address or calendar ID)"
+        summary:
+          type: string
+          description: "Calendar name/title"
+        description:
+          type: string
+          description: "Calendar description"
+        timeZone:
+          type: string
+          description: "IANA timezone identifier"
+        accessRole:
+          type: string
+          description: "User's access level"
+        primary:
+          type: boolean
+          description: "Whether this is user's primary calendar"
+        backgroundColor:
+          type: string
+          description: "Background color hex code"
+        foregroundColor:
+          type: string
+          description: "Foreground color hex code"
+        selected:
+          type: boolean
+          description: "Whether calendar is selected in UI"
+        hidden:
+          type: boolean
+          description: "Whether calendar is hidden from list"
+      required: ["id", "summary", "timeZone", "accessRole"]
+  language: python
+  source:
+    file: ../python/google_calendar_client.py

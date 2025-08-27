@@ -1,0 +1,63 @@
+mxcp: 1
+tool:
+  name: get_calendar
+  title: Get Calendar Details
+  description: |
+    Get detailed information for a specific calendar by ID.
+    Returns calendar metadata including timezone, access role, and display properties.
+    
+    Example usage:
+    - "Get details for my primary calendar"
+    - "Show me information about the work@company.com calendar"
+    - "What timezone is my calendar set to?"
+  tags:
+    - google-calendar
+    - calendars
+    - get
+  annotations:
+    readOnlyHint: true
+    idempotentHint: true
+  parameters:
+    - name: calendar_id
+      type: string
+      description: "Calendar identifier or 'primary' for main calendar"
+      default: "primary"
+      examples: ["primary", "work@company.com", "team@company.com"]
+  return:
+    type: object
+    description: "Calendar details and metadata"
+    properties:
+      id:
+        type: string
+        description: "Calendar identifier"
+      summary:
+        type: string
+        description: "Calendar name/title"
+      description:
+        type: string
+        description: "Calendar description"
+      timeZone:
+        type: string
+        description: "IANA timezone identifier"
+      accessRole:
+        type: string
+        description: "User's access level"
+      primary:
+        type: boolean
+        description: "Whether this is user's primary calendar"
+      backgroundColor:
+        type: string
+        description: "Background color hex code"
+      foregroundColor:
+        type: string
+        description: "Foreground color hex code"
+      selected:
+        type: boolean
+        description: "Whether calendar is selected in UI"
+      hidden:
+        type: boolean
+        description: "Whether calendar is hidden from list"
+    required: ["id", "summary", "timeZone", "accessRole"]
+  language: python
+  source:
+    file: ../python/google_calendar_client.py
