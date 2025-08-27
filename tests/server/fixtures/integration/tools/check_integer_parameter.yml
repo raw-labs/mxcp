@@ -1,0 +1,26 @@
+mxcp: 1
+tool:
+  name: check_integer_parameter
+  description: Test function that expects an integer parameter
+  language: python
+  source:
+    file: ../python/test_endpoints.py
+  parameters:
+    - name: top_n
+      type: integer
+      description: Number of top items to return
+      minimum: 0
+      default: 0
+  return:
+    type: object
+    properties:
+      top_n:
+        type: integer
+      type_received:
+        type: string
+      selected_items:
+        type: array
+        items:
+          type: string
+      test_passed:
+        type: boolean
