@@ -12,9 +12,71 @@ from mxcp.server.core.config._types import SiteConfig
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition, ResourceDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
-from mxcp.server.definitions.endpoints.utils import get_endpoint_source_code
+from mxcp.server.definitions.endpoints.utils import get_endpoint_source_code, get_endpoint_name_or_uri
 
 RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
+
+
+def _check_duplicate_endpoint_names(
+    endpoints: list[tuple[Path, EndpointDefinition | None, str | None]]
+) -> list[dict[str, Any]]:
+    """Check for duplicate endpoint names across all endpoints.
+    
+    Args:
+        endpoints: List of discovered endpoints from EndpointLoader
+        
+    Returns:
+        List of validation errors for duplicate names
+    """
+    name_to_paths: dict[str, list[tuple[str, str, Path]]] = {}  # name -> [(endpoint_type, name, path), ...]
+    errors = []
+    
+    for path, endpoint, error in endpoints:
+        if error or not endpoint:
+            continue
+            
+        # Determine endpoint type and extract name
+        endpoint_type = None
+        for t in ("tool", "resource", "prompt"):
+            if endpoint.get(t) is not None:
+                endpoint_type = t
+                break
+                
+        if not endpoint_type:
+            continue
+            
+        try:
+            name = get_endpoint_name_or_uri(endpoint, endpoint_type)
+            
+            # Only check for duplicate names for tools and prompts (resources use URIs which can be different)
+            if endpoint_type in ("tool", "prompt"):
+                if name not in name_to_paths:
+                    name_to_paths[name] = []
+                name_to_paths[name].append((endpoint_type, name, path))
+        except ValueError:
+            # Skip endpoints that can't be processed
+            continue
+    
+    # Check for duplicates
+    for name, paths_info in name_to_paths.items():
+        if len(paths_info) > 1:
+            # Found duplicate names
+            path_list = [str(path) for _, _, path in paths_info]
+            for endpoint_type, _, path in paths_info:
+                try:
+                    repo_root = find_repo_root()
+                    path_obj = Path(path).resolve()
+                    relative_path = str(path_obj.relative_to(repo_root))
+                except (ValueError, Exception):
+                    relative_path = Path(path).name
+                    
+                errors.append({
+                    "status": "error",
+                    "path": relative_path,
+                    "message": f"Duplicate {endpoint_type} name '{name}' found in files: {', '.join(path_list)}"
+                })
+    
+    return errors
 
 
 def _validate_resource_uri_vs_params(
@@ -57,9 +119,17 @@ def validate_all_endpoints(
         if not endpoints:
             return {"status": "error", "message": "No endpoints found"}
 
+        # Check for duplicate endpoint names first
+        duplicate_errors = _check_duplicate_endpoint_names(endpoints)
+        
         # Validate each endpoint
         results = []
         has_errors = False
+        
+        # Add duplicate name errors to results
+        results.extend(duplicate_errors)
+        if duplicate_errors:
+            has_errors = True
 
         for path, endpoint, error in endpoints:
             path_str = str(path)  # Convert PosixPath to string
