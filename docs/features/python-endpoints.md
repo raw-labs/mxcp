@@ -167,6 +167,140 @@ def cleanup():
 
 **Important:** These hooks are for managing Python resources (HTTP clients, connections to external services, etc.), NOT for database management. The DuckDB connection is managed automatically by MXCP.
 
+## Dynamic Reload with Database Rebuild
+
+MXCP provides a powerful feature that allows Python endpoints to trigger a safe reload of the server. This enables you to .e.g update your DuckDB database with fresh data without restarting the server.
+
+### Why Use Dynamic Reload?
+
+Traditional approaches to updating analytical databases often require:
+- Stopping the server to update data files
+- Running ETL pipelines separately and hoping no queries run during updates
+- Complex orchestration to minimize downtime
+
+MXCP's `request_reload` solves these problems by providing a safe, atomic way to rebuild your database while the server continues handling requests.
+
+### How It Works
+
+```python
+from mxcp.runtime import request_reload
+import subprocess
+import pandas as pd
+
+def update_analytics_data():
+    """Endpoint that triggers a data refresh."""
+    
+    def rebuild_database():
+        """This runs with exclusive access to the database file."""
+        # Option 1: Run dbt to rebuild models
+        subprocess.run(["dbt", "run", "--target", "prod"], check=True)
+        
+        # Option 2: Replace with a pre-built database
+        import shutil
+        shutil.copy("/staging/analytics.duckdb", "/app/data/analytics.duckdb")
+        
+        # Option 3: Load fresh data from APIs/files
+        df = pd.read_parquet("s3://bucket/latest-data.parquet")
+        # DuckDB file is exclusively ours during rebuild
+        import duckdb
+        conn = duckdb.connect("/app/data/analytics.duckdb")
+        conn.execute("CREATE OR REPLACE TABLE sales AS SELECT * FROM df")
+        conn.close()
+    
+    # Trigger the reload with our rebuild function
+    request_reload(rebuild_database)
+    
+    return {"status": "Data refresh completed successfully"}
+```
+
+### The Reload Process
+
+When you call `request_reload`, MXCP:
+
+1. **Starts draining requests** - New requests wait, existing ones complete
+2. **Acquires exclusive lock** - Ensures no concurrent operations
+3. **Shuts down DuckDB** - Closes all connections cleanly
+4. **Runs your rebuild function** - With exclusive access to the database file
+5. **Reloads configuration** - Picks up any changed secrets or settings
+6. **Recreates services** - New DuckDB connection with fresh data
+7. **Resumes normal operations** - Queued requests proceed with new data
+
+### Real-World Example: Scheduled Data Updates
+
+```python
+from mxcp.runtime import request_reload, db
+from datetime import datetime
+import requests
+
+def scheduled_update(source: str = "api") -> dict:
+    """Endpoint called by cron to update data."""
+    
+    start_time = datetime.now()
+    
+    def rebuild_from_api():
+        """Fetch latest data and rebuild database."""
+        # Fetch data from external API
+        response = requests.get("https://api.example.com/analytics/export")
+        data = response.json()
+        
+        # Write to DuckDB (we have exclusive access)
+        import duckdb
+        conn = duckdb.connect("/app/data/analytics.duckdb")
+        
+        # Clear old data
+        conn.execute("DROP TABLE IF EXISTS daily_metrics")
+        
+        # Load new data
+        conn.execute("""
+            CREATE TABLE daily_metrics AS 
+            SELECT * FROM read_json_auto(?)
+        """, [data])
+        
+        # Update metadata
+        conn.execute("""
+            INSERT INTO update_log (timestamp, source, record_count)
+            VALUES (?, ?, ?)
+        """, [datetime.now(), source, len(data)])
+        
+        conn.close()
+    
+    # Trigger the rebuild
+    request_reload(rebuild_from_api)
+    
+    # Check the results
+    result = db.execute("SELECT COUNT(*) as count FROM daily_metrics")
+    duration = (datetime.now() - start_time).total_seconds()
+    
+    return {
+        "status": "success",
+        "records_loaded": result[0]["count"],
+        "duration_seconds": duration
+    }
+```
+
+### Best Practices
+
+1. **Keep rebuilds focused** - Do one thing well in your rebuild function
+2. **Handle errors gracefully** - Failed rebuilds leave the server in its previous state
+3. **Monitor duration** - Requests wait up to 30 seconds during reload
+4. **Test thoroughly** - Rebuild functions run with elevated privileges
+5. **Use for data updates** - Not for schema migrations or structural changes
+
+### Configuration-Only Reloads
+
+You can also reload just the configuration (secrets, environment variables) without a rebuild:
+
+```python
+def rotate_secrets():
+    """Endpoint to reload after secret rotation."""
+    # Trigger config reload without database rebuild
+    request_reload()
+    
+    # New secrets are now active
+    new_key = config.get_secret("api_key")
+    return {"status": "Secrets reloaded successfully"}
+```
+
 ## Async Functions
 
 Python endpoints support both synchronous and asynchronous functions:
