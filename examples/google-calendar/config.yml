@@ -1,0 +1,22 @@
+mxcp: 1
+transport:
+  http:
+    port: 8000
+    host: 0.0.0.0
+    # Set base_url to your server's public URL for production
+    base_url: http://localhost:8000
+
+projects:
+  google-calendar:
+    profiles:
+      default:
+        # OAuth Authentication Configuration
+        auth:
+          provider: google
+          google:
+            client_id: "${GOOGLE_CLIENT_ID}"
+            client_secret: "${GOOGLE_CLIENT_SECRET}"
+            scope: "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email"
+            callback_path: "/google/callback"
+            auth_url: "https://accounts.google.com/o/oauth2/v2/auth"
+            token_url: "https://oauth2.googleapis.com/token"
