@@ -247,7 +247,9 @@ def test_validate_duplicate_resource_uris(validation_repo_path, site_config, tes
                 duplicate_error_found = True
                 break
 
-        assert duplicate_error_found, "Expected duplicate resource URI validation error not found: " + str(result)
+        assert (
+            duplicate_error_found
+        ), "Expected duplicate resource URI validation error not found: " + str(result)
 
     finally:
         os.chdir(original_dir)
