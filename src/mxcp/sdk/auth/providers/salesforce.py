@@ -146,13 +146,23 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
             logger.error(f"Salesforce token exchange error: {payload}")
             raise HTTPException(400, payload.get("error_description", payload["error"]))
 
+        # Get user info to extract the actual user ID
+        access_token = payload["access_token"]
+        user_profile = await self._fetch_user_profile(access_token)
+
+        # Use Salesforce's 'user_id' field as the unique identifier
+        user_id = user_profile.get("user_id", "")
+        if not user_id:
+            logger.error("Salesforce user profile missing 'user_id' field")
+            raise HTTPException(400, "Invalid user profile: missing user ID")
+
         # Don't clean up state here - let handle_callback do it after getting metadata
-        logger.info(f"Salesforce OAuth token exchange successful for client: {meta.client_id}")
+        logger.info(f"Salesforce OAuth token exchange successful for user: {user_id}")
 
         return ExternalUserInfo(
-            id=meta.client_id,
+            id=user_id,
             scopes=[],
-            raw_token=payload["access_token"],
+            raw_token=access_token,
             provider="salesforce",
         )
 
@@ -204,6 +214,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
                 name=user_profile.get("display_name") or user_profile.get("name"),
                 avatar_url=user_profile.get("photos", {}).get("picture"),
                 raw_profile=user_profile,
+                external_token=token,
             )
         except Exception as e:
             logger.error(f"Failed to get Salesforce user context: {e}")
