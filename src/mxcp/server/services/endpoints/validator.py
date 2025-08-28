@@ -23,23 +23,20 @@ RESOURCE_VAR_RE = re.compile(r"{([^{}]+)}")
 def _check_duplicate_endpoint_names(
     endpoints: list[tuple[Path, EndpointDefinition | None, str | None]],
 ) -> list[dict[str, Any]]:
-    """Check for duplicate endpoint names across all endpoints."""
+    """Check for duplicate endpoint names/URIs across all endpoints."""
     name_to_paths: dict[str, list[Path]] = {}
 
-    # Collect names and their paths
+    # Collect names/URIs and their paths
     for path, endpoint, error in endpoints:
         if error or not endpoint:
             continue
 
-        # Find endpoint type and extract name
-        for endpoint_type in ("tool", "prompt"):  # Only check tools and prompts
+        # Find endpoint type and extract name/uri
+        for endpoint_type in ("tool", "prompt", "resource"):
             if endpoint_type in endpoint:
-                try:
-                    name = get_endpoint_name_or_uri(endpoint, endpoint_type)
-                    name_to_paths.setdefault(name, []).append(path)
-                    break
-                except ValueError:
-                    continue
+                name = get_endpoint_name_or_uri(endpoint, endpoint_type)
+                name_to_paths.setdefault(name, []).append(path)
+                break
 
     # Generate errors for duplicates
     errors = []
@@ -73,9 +70,21 @@ def _validate_resource_uri_vs_params(
 
     extra_in_yaml = yaml_params - uri_params
     if extra_in_yaml:
+        # Calculate relative path for results
+        try:
+            repo_root = find_repo_root()
+            path_obj = Path(path).resolve()
+            relative_path = str(path_obj.relative_to(repo_root))
+        except ValueError:
+            # If path is not relative to repo_root, use the filename
+            relative_path = Path(path).name
+        except Exception:
+            # If we can't find repo root or resolve path, use filename as fallback
+            relative_path = Path(path).name
+            
         return {
             "status": "error",
-            "path": path,
+            "path": relative_path,
             "message": (
                 f"Resource parameter(s) {sorted(extra_in_yaml)} are not used "
                 f"in uri '{res_def['uri']}'. Put them in the uri or make a "
