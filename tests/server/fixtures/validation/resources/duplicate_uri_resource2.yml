@@ -1,0 +1,19 @@
+mxcp: 1
+
+resource:
+  uri: test://duplicate.resource
+  description: Second resource with duplicate URI
+  parameters:
+    - name: filter
+      type: string
+      description: Filter parameter
+  return:
+    type: object
+    properties:
+      id:
+        type: string
+      status:
+        type: string
+  source:
+    code: |
+      SELECT 'test' as id, $filter as status
