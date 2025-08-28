@@ -320,7 +320,7 @@ def _create_integration_fixture(fixture_path: Path):
         "mxcp": 1,
         "project": "integration_test",
         "profile": "default",
-        "profiles": {"default": {"duckdb": {"path": ":memory:"}}},
+        "profiles": {"default": {"duckdb": {"path": "test.duckdb"}}},
         "secrets": ["test_secret"],
     }
 
@@ -494,6 +494,184 @@ class TestIntegration:
                 assert result2["reversed"] == "daoler retfa tset"
                 # The result should still work correctly after reload
                 assert result2["length"] == len("test after reload")
+
+    @pytest.mark.asyncio
+    async def test_reload_duckdb_from_tool(self, integration_fixture_dir):
+        """Test that reload_duckdb called from a tool doesn't hang."""
+        # Create a Python endpoint that calls reload_duckdb
+        python_dir = integration_fixture_dir / "python"
+        python_dir.mkdir(exist_ok=True)
+        
+        reload_tool_py = python_dir / "reload_tool.py"
+        reload_tool_py.write_text('''
+import time
+import shutil
+from pathlib import Path
+from mxcp.runtime import reload_duckdb, db, config
+
+def trigger_reload(message: str = "test") -> dict:
+    """Trigger a DuckDB reload from within a tool - realistic user code."""
+    import duckdb
+    from datetime import datetime
+    
+    # Track timing
+    start_time = time.time()
+    
+    # First, check what's in the database before modification
+    assert db is not None, "db proxy is None - implementation is broken!"
+    
+    try:
+        # Try to query existing data
+        before_data = db.execute("SELECT * FROM reload_test ORDER BY id")
+        before_count = len(before_data)
+    except:
+        # Table doesn't exist yet - this is fine for first run
+        before_count = 0
+    
+    # Get DuckDB file path
+    site_config = config.site_config
+    db_path = Path(site_config["profiles"]["default"]["duckdb"]["path"])
+    if not db_path.is_absolute():
+        db_path = Path.cwd() / db_path
+    
+    # Create a new database file with additional test data
+    temp_db = db_path.with_suffix('.tmp')
+    
+    # If database exists, copy it to preserve existing data
+    if db_path.exists():
+        shutil.copy2(db_path, temp_db)
+    
+    # Add new data to the temp database
+    timestamp = datetime.now().isoformat()
+    with duckdb.connect(str(temp_db)) as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS reload_test (id INTEGER, message VARCHAR, created_at VARCHAR)")
+        # Add a new row with current count + 1
+        conn.execute(
+            f"INSERT INTO reload_test VALUES ({before_count + 1}, '{message}', '{timestamp}')"
+        )
+        conn.commit()
+    
+    # Replace the database file atomically
+    shutil.move(str(temp_db), str(db_path))
+    
+    # Now reload DuckDB to pick up the changes
+    reload_duckdb()
+    
+    # Query the database after reload - this MUST work through the db proxy
+    # If it doesn't, the implementation is broken!
+    assert db is not None, "db proxy is None - implementation is broken!"
+    
+    # Verify the reload worked by querying through the db proxy
+    after_data = db.execute("SELECT * FROM reload_test ORDER BY id")
+    after_count = len(after_data)
+    
+    # Find the newly added row
+    new_row = None
+    for row in after_data:
+        if row["id"] == before_count + 1:
+            new_row = row
+            break
+    
+    # Assertions to verify the reload worked correctly
+    assert after_count == before_count + 1, f"Expected {before_count + 1} rows after reload, got {after_count}"
+    assert new_row is not None, "Could not find newly added row after reload"
+    assert new_row["message"] == message, f"Expected message '{message}', got '{new_row['message']}'"
+    assert new_row["created_at"] == timestamp, "Timestamp mismatch after reload"
+    
+    elapsed = time.time() - start_time
+    
+    return {
+        "message": message,
+        "before_count": before_count,
+        "after_count": after_count,
+        "new_row": new_row,
+        "all_data": after_data,
+        "reload_success": True,
+        "elapsed_time": elapsed,
+        "db_path": str(db_path)
+    }
+''')
+        
+        # Create the tool YAML in the expected format
+        tools_dir = integration_fixture_dir / "tools"
+        reload_tool_yml = tools_dir / "trigger_reload.yml"
+        reload_tool = {
+            "mxcp": 1,
+            "tool": {
+                "name": "trigger_reload",
+                "description": "Test tool that triggers a reload",
+                "language": "python",
+                "source": {"file": "../python/reload_tool.py"},
+                "parameters": [
+                    {
+                        "name": "message",
+                        "type": "string",
+                        "description": "Test message",
+                        "default": "test"
+                    }
+                ],
+                "return": {"type": "object"}
+            }
+        }
+        
+        with open(reload_tool_yml, "w") as f:
+            yaml.dump(reload_tool, f)
+        
+        # Start the server
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+            
+            async with MCPTestClient(server.port) as client:
+                # Set a timeout for the entire test
+                start_time = time.time()
+                
+                # Call the tool that triggers reload - this should NOT hang!
+                result = await asyncio.wait_for(
+                    client.call_tool("trigger_reload", {"message": "integration_test"}),
+                    timeout=10.0  # 10 second timeout - if it hangs, test fails
+                )
+                
+                elapsed = time.time() - start_time
+                
+                # Verify the reload succeeded
+                assert result["reload_success"] is True
+                assert result["message"] == "integration_test"
+                
+                # Verify first call created the first row
+                assert result["before_count"] == 0
+                assert result["after_count"] == 1
+                assert result["new_row"]["id"] == 1
+                assert result["new_row"]["message"] == "integration_test"
+                assert "created_at" in result["new_row"]
+                
+                # Verify it didn't hang
+                assert result["elapsed_time"] < 2.0, f"Reload took too long: {result['elapsed_time']}s"
+                
+                # The overall tool call should be quick (not hanging)
+                assert elapsed < 5.0, f"Tool call took too long: {elapsed}s"
+                
+                # Log the DB path for debugging
+                print(f"DB path: {result['db_path']}")
+                print(f"First reload data: {result['all_data']}")
+                
+                # Call again to verify persistence and accumulation
+                result2 = await client.call_tool("trigger_reload", {"message": "second_test"})
+                assert result2["reload_success"] is True
+                assert result2["message"] == "second_test"
+                assert result2["before_count"] == 1  # Should see the previous row
+                assert result2["after_count"] == 2   # Should have two rows now
+                assert result2["new_row"]["id"] == 2
+                assert result2["new_row"]["message"] == "second_test"
+                assert result2["elapsed_time"] < 2.0
+                
+                # Verify all data is preserved
+                assert len(result2["all_data"]) == 2
+                assert result2["all_data"][0]["message"] == "integration_test"
+                assert result2["all_data"][1]["message"] == "second_test"
+                
+                # Verify server is still functional after reload
+                echo_result = await client.call_tool("echo_message", {"message": "still alive"})
+                assert echo_result["original"] == "still alive"
 
     @pytest.mark.asyncio
     async def test_non_duckdb_secret_types(self, integration_fixture_dir):

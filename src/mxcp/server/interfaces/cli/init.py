@@ -60,9 +60,8 @@ def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str)
         yaml.dump(config, f, default_flow_style=False)
 
 
-def create_hello_world_files(target_dir: Path) -> None:
-    """Create example hello world endpoint files and directory structure."""
-    # Create all directories for the new structure
+def _ensure_project_directories(target_dir: Path) -> None:
+    """Ensure standard project directories exist."""
     directories = [
         "tools",
         "resources",
@@ -78,21 +77,13 @@ def create_hello_world_files(target_dir: Path) -> None:
 
     for directory in directories:
         dir_path = target_dir / directory
-        dir_path.mkdir(exist_ok=True)
+        dir_path.mkdir(parents=True, exist_ok=True)
 
-        # Create .gitkeep files for empty directories
-        if directory in [
-            "resources",
-            "prompts",
-            "evals",
-            "python",
-            "plugins",
-            "drift",
-            "audit",
-            "data",
-        ]:
-            gitkeep_file = dir_path / ".gitkeep"
-            gitkeep_file.touch()
+
+def create_hello_world_files(target_dir: Path) -> None:
+    """Create example hello world endpoint files and directory structure."""
+    # Ensure base structure exists first
+    _ensure_project_directories(target_dir)
 
     # Create hello-world.sql in the sql directory
     hello_world_sql = """SELECT 'Hello, ' || $name || '!' as greeting
@@ -221,7 +212,7 @@ def show_next_steps(
         click.echo("   ├── resources/          # Resource definitions")
         click.echo("   ├── prompts/            # Prompt definitions")
         click.echo("   ├── evals/              # Evaluation definitions")
-        click.echo("   ├── python/             # Python extensions")
+        click.echo("   ├── python/             # Python implementations")
         click.echo("   ├── plugins/            # Plugin definitions")
         click.echo("   ├── drift/              # Drift snapshots")
         click.echo("   ├── audit/              # Audit logs")
@@ -231,7 +222,7 @@ def show_next_steps(
         click.echo("   ├── resources/          # Create your resource definitions here")
         click.echo("   ├── prompts/            # Create your prompt definitions here")
         click.echo("   ├── evals/              # Create your evaluation definitions here")
-        click.echo("   ├── python/             # Create your Python extensions here")
+        click.echo("   ├── python/             # Create your Python implementations here")
         click.echo("   ├── plugins/            # Create your plugin definitions here")
         click.echo("   ├── sql/                # Create your SQL implementations here")
         click.echo("   ├── drift/              # Drift snapshots will be stored here")
@@ -283,7 +274,7 @@ def show_next_steps(
     click.echo(f"\n{click.style('📚 Resources:', fg='cyan', bold=True)}")
     click.echo("   • Documentation: https://mxcp.dev")
     click.echo("   • Examples: https://github.com/raw-labs/mxcp/tree/main/examples")
-    click.echo("   • Discord: https://discord.gg/XeqRp5Ud")
+    click.echo("   • Discord: https://discord.gg/bqY5834PvH")
     click.echo("")
 
 
@@ -352,6 +343,13 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool) 
         # Create mxcp-site.yml
         create_mxcp_site_yml(target_dir, project, profile)
         click.echo("✓ Created mxcp-site.yml")
+
+        # Always ensure standard directory structure exists
+        try:
+            _ensure_project_directories(target_dir)
+            click.echo("✓ Created project directories")
+        except Exception as e:
+            click.echo(f"⚠️  Warning: Failed to create project directories: {e}")
 
         # Create example files if requested
         if bootstrap:

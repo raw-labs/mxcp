@@ -94,7 +94,7 @@ MXCP provides a comprehensive set of enterprise features designed for production
 
 ### [Python Reference](../reference/python.md)
 - **Runtime APIs**: Database, config, secrets access
-- **Lifecycle Hooks**: Server initialization/shutdown
+- **Lifecycle Hooks**: Server initialization/shutdown/reload
 - **Thread Safety**: Concurrent execution support
 - **Type Compatibility**: Seamless SQL/Python integration
 

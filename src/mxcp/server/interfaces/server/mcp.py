@@ -9,6 +9,7 @@ import signal
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
@@ -272,8 +273,14 @@ class RAWMCP:
         self.transport_mode = None
         self._shutdown_called = False
 
-        # Create shared lock for thread-safety
-        self.db_lock = threading.Lock()
+        # Request tracking for safe reloading
+        self.active_requests = 0
+        self.requests_lock = threading.Lock()
+        self.draining = False
+        self.drain_complete = threading.Event()
+
+        # Single execution lock for all operations
+        self.execution_lock = threading.RLock()  # RLock for re-entrant locking
 
         # Register signal handlers
         self._register_signal_handlers()
@@ -514,8 +521,10 @@ class RAWMCP:
     def _register_signal_handlers(self) -> None:
         """Register signal handlers for graceful shutdown and reload."""
         if hasattr(signal, "SIGHUP"):
+            # SIGHUP is the ONLY way to trigger full system reload (Config + Python + DuckDB)
+            # For DuckDB-only reloads, use mxcp.runtime.reload_duckdb()
             signal.signal(signal.SIGHUP, self._handle_reload_signal)
-            logger.info("Registered SIGHUP handler for configuration reload.")
+            logger.info("Registered SIGHUP handler for full system reload.")
 
         # Handle SIGTERM (e.g., from `kill`) and SIGINT (e.g., from Ctrl+C)
         signal.signal(signal.SIGTERM, self._handle_exit_signal)
@@ -594,99 +603,168 @@ class RAWMCP:
 
         logger.info("Telemetry initialization complete.")
 
-    def reload_configuration(self) -> None:
+    def _drain_all_requests_and_reload(self) -> None:
         """
-        Reloads external configuration values (vault://, file://, env vars) only.
-
-        This method refreshes all external references without re-reading the
-        configuration files themselves, making it safer for long-running services.
-
-        The reload process:
-        1. Loads raw config templates if not already loaded
-        2. Resolves all external references again
-        3. If values changed, recreates runtime components with new values
+        Drain all active requests and perform full system reload.
+        
+        This is only called by SIGHUP handler for full system reloads.
+        Always waits for ALL requests to complete (zero active).
         """
-        logger.info("Acquiring lock for configuration reload...")
-        with self.db_lock:
-            logger.info("Lock acquired. Starting configuration reload...")
+        logger.info("Starting full system reload with request draining (SIGHUP)...")
+
+        # Step 1: Start draining
+        self.draining = True
+        self.drain_complete.clear()
+
+        # Step 2: Wait for ALL requests to complete
+        logger.info(f"Waiting for {self.active_requests} active requests to complete...")
+        start_time = time.time()
+        timeout = 90  # seconds
+
+        while True:
+            with self.requests_lock:
+                current_count = self.active_requests
+            
+            if current_count == 0:
+                break
+                
+            if time.time() - start_time > timeout:
+                logger.warning(
+                    f"Timeout waiting for requests after {timeout}s (active: {current_count}), proceeding with reload"
+                )
+                break
+
+            # Sleep briefly to avoid busy waiting
+            time.sleep(0.1)
+
+        logger.info("All requests drained, acquiring exclusive lock...")
+        with self.execution_lock:
+            logger.info("Exclusive lock acquired. Starting full system reload...")
             try:
-                # Ensure we have raw templates for external reference tracking
-                if not self._config_templates_loaded or not self.ref_tracker._template_config:
-                    logger.info("Loading raw configuration templates for hot reload...")
-
-                    # Load raw configs without resolving references
-
-                    # Determine site config path
-                    site_path = self.site_config_path or Path.cwd()
-
-                    # Load raw templates
-                    site_template = load_site_config(site_path)
-                    user_template = load_user_config(site_template, resolve_refs=False)
-
-                    # Set templates in tracker
-                    self.ref_tracker.set_template(
-                        cast(dict[str, Any], site_template), cast(dict[str, Any], user_template)
-                    )
-                    self._config_templates_loaded = True
-                    logger.info("Raw configuration templates loaded.")
-
-                # Save current configs for comparison
-                old_site_config = self.site_config
-                old_user_config = self.user_config
-
-                # Resolve all external references again
-                logger.info("Resolving external configuration references...")
-                new_site_config, new_user_config = self.ref_tracker.resolve_all()
-
-                # Check if anything actually changed
-                if old_site_config == new_site_config and old_user_config == new_user_config:
-                    logger.info("No changes detected in external configuration values.")
-                    logger.info("Proceeding with reload anyway to refresh DuckDB session...")
-                else:
-                    logger.info(
-                        "External configuration values have changed. Reloading runtime components..."
-                    )
-
-                # Shutdown runtime components
+                # Shutdown everything
                 self._shutdown_runtime_components()
-
-                # Apply the new configurations
-                self.site_config = cast(SiteConfig, new_site_config)
-                self.user_config = cast(UserConfig, new_user_config)
-                self.active_profile = get_active_profile(
-                    self.user_config, self.site_config, self.profile_name
-                )
-
-                # Recreate runtime components with new values
-                logger.info("Creating new execution engine...")
-                self.execution_engine = create_execution_engine(
-                    self.user_config, self.site_config, self.profile_name, readonly=self.readonly
-                )
-                logger.info("New execution engine created.")
-
-                logger.info("Configuration reload completed successfully.")
-
-                # Record config reload metric
-                record_counter(
-                    "mxcp.config_reloads_total",
-                    attributes={"status": "success", "profile": self.profile_name},
-                    description="Total configuration reloads",
-                )
-
+                
+                # Reload configuration
+                logger.info("Reloading external configuration references...")
+                new_site_config, new_user_config = self.ref_tracker.resolve_all()
+                self.site_config = new_site_config
+                self.user_config = new_user_config
+                logger.info("External references reloaded successfully")
+                
+                # Recreate everything (including Python init hooks)
+                self._initialize_runtime_components()
+                
+                logger.info("Full system reload completed successfully.")
+                
             except Exception as e:
-                logger.error(f"Failed to reload configuration: {e}", exc_info=True)
-
-                # Record failed reload metric
-                record_counter(
-                    "mxcp.config_reloads_total",
-                    attributes={"status": "error", "profile": self.profile_name},
-                    description="Total configuration reloads",
-                )
-                # In case of failure, it's safer to shut down as the server state is unknown
+                logger.error(f"Failed configuration reload: {e}", exc_info=True)
                 logger.error(
                     "Server state may be inconsistent due to reload failure. Consider restarting."
                 )
-                # Don't auto-shutdown here, let the operator decide
+                raise
+            finally:
+                # Always clear draining flag
+                self.draining = False
+                logger.info("Configuration reload process completed, normal operations resumed")
+
+    def reload_configuration(self) -> None:
+        """
+        Full system reload triggered by SIGHUP signal.
+        
+        This performs a complete reload of the system:
+        1. Drains ALL requests (waits for zero active requests)
+        2. Shuts down Python and DuckDB executors
+        3. Reloads external configuration references
+        4. Recreates all executors (runs Python init hooks)
+        
+        This is the ONLY way to reload Python code and configuration.
+        """
+        # Ensure we have raw templates for external reference tracking
+        if not self._config_templates_loaded or not self.ref_tracker._template_config:
+            logger.info("Loading raw configuration templates for hot reload...")
+
+            # Determine site config path
+            site_path = self.site_config_path or Path.cwd()
+
+            # Load raw templates
+            site_template = load_site_config(site_path)
+            user_template = load_user_config(site_template, resolve_refs=False)
+
+            # Set templates in tracker
+            self.ref_tracker.set_template(
+                cast(dict[str, Any], site_template), cast(dict[str, Any], user_template)
+            )
+            self._config_templates_loaded = True
+            logger.info("Raw configuration templates loaded.")
+
+        # Use the simplified full reload method
+        try:
+            self._drain_all_requests_and_reload()
+            
+            # Record success metric
+            record_counter(
+                "mxcp.config_reloads_total",
+                attributes={"status": "success", "profile": self.profile_name},
+                description="Total configuration reload operations",
+            )
+            
+        except Exception as e:
+            # Record failed metric
+            record_counter(
+                "mxcp.config_reloads_total",
+                attributes={"status": "error", "profile": self.profile_name},
+                description="Total configuration reload operations",
+            )
+            raise
+
+    def reload_duckdb_only(self) -> None:
+        """
+        Reload only the DuckDB connection.
+        
+        This method safely reloads the DuckDB connection without affecting
+        the Python runtime. The DuckDB executor handles its own thread safety.
+        """
+        logger.info("Starting DuckDB-only reload")
+
+        try:
+            if not self.execution_engine:
+                raise RuntimeError("Execution engine not initialized")
+                
+            # Find the DuckDB executor
+            duckdb_executor = None
+            if hasattr(self.execution_engine, "_executors"):
+                duckdb_executor = self.execution_engine._executors.get("sql")
+            
+            if not duckdb_executor:
+                raise RuntimeError("DuckDB executor not found in execution engine")
+                
+            from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
+            if not isinstance(duckdb_executor, DuckDBExecutor):
+                raise RuntimeError("SQL executor is not a DuckDBExecutor")
+            
+            logger.info("Reloading DuckDB connection...")
+            
+            # Simply reload the connection - the executor handles thread safety
+            duckdb_executor.reload_connection()
+            
+            logger.info("DuckDB connection reloaded successfully")
+            
+            # Record success metric
+            record_counter(
+                "mxcp.duckdb_reloads_total",
+                attributes={"status": "success", "profile": self.profile_name},
+                description="Total DuckDB reload operations",
+            )
+            
+        except Exception as e:
+            logger.error(f"DuckDB reload failed: {e}", exc_info=True)
+            # Record failed metric
+            record_counter(
+                "mxcp.duckdb_reloads_total",
+                attributes={"status": "error", "profile": self.profile_name},
+                description="Total DuckDB reload operations",
+            )
+            raise
 
     def _ensure_async_completes(
         self, coro: Any, timeout: float = 10.0, operation_name: str = "operation"
@@ -1263,14 +1341,13 @@ class RAWMCP:
                     if mcp_session_id:
                         set_span_attribute("mxcp.session.id", mcp_session_id)
                     set_span_attribute("mxcp.trace.id", trace_id)
-                result, policy_info = await execute_endpoint_with_engine_and_policy(
+                # Use the common execution wrapper with policy info
+                result, policy_info = await self._execute_with_draining(
                     endpoint_type=endpoint_type.value,
                     name=name,
                     params=kwargs,  # No manual conversion needed - SDK handles it
-                    user_config=self.user_config,
-                    site_config=self.site_config,
-                    execution_engine=self.execution_engine,
                     user_context=user_context,
+                    with_policy_info=True,
                 )
                 logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                 return result
@@ -1485,13 +1562,10 @@ class RAWMCP:
                 # Use SDK execution engine
                 if self.execution_engine is None:
                     raise RuntimeError("Execution engine not initialized")
-                result = await execute_endpoint_with_engine(
+                result = await self._execute_with_draining(
                     endpoint_type="sql",
                     name="user_sql_query",
                     params={"sql": sql},
-                    user_config=self.user_config,
-                    site_config=self.site_config,
-                    execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
                 return cast(list[dict[str, Any]], result)
@@ -1556,7 +1630,7 @@ class RAWMCP:
                 # Use SDK execution engine
                 if self.execution_engine is None:
                     raise RuntimeError("Execution engine not initialized")
-                result = await execute_endpoint_with_engine(
+                result = await self._execute_with_draining(
                     endpoint_type="sql",
                     name="list_tables",
                     params={
@@ -1569,9 +1643,6 @@ class RAWMCP:
                         ORDER BY table_name
                     """
                     },
-                    user_config=self.user_config,
-                    site_config=self.site_config,
-                    execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
                 return cast(list[dict[str, str]], result)
@@ -1641,7 +1712,7 @@ class RAWMCP:
                 # Use SDK execution engine
                 if self.execution_engine is None:
                     raise RuntimeError("Execution engine not initialized")
-                result = await execute_endpoint_with_engine(
+                result = await self._execute_with_draining(
                     endpoint_type="sql",
                     name="get_table_schema",
                     params={
@@ -1656,9 +1727,6 @@ class RAWMCP:
                     """,
                         "table_name": table_name,
                     },
-                    user_config=self.user_config,
-                    site_config=self.site_config,
-                    execution_engine=self.execution_engine,
                     user_context=user_context,
                 )
                 return cast(list[dict[str, Any]], result)
@@ -1693,6 +1761,83 @@ class RAWMCP:
                     )
 
         logger.info("Registered built-in DuckDB features")
+
+    async def _execute_with_draining(
+        self,
+        endpoint_type: str,
+        name: str,
+        params: dict[str, Any],
+        user_context: Any = None,
+        with_policy_info: bool = False,
+    ) -> Any:
+        """Execute endpoint with draining and locking logic.
+
+        This wrapper ensures all endpoints (both dynamic and pre-registered)
+        go through the same draining and locking process.
+
+        Args:
+            endpoint_type: Type of endpoint to execute
+            name: Name of endpoint
+            params: Parameters to pass
+            user_context: User context
+            with_policy_info: If True, returns (result, policy_info) tuple
+
+        Returns:
+            Result of execution, or (result, policy_info) if with_policy_info=True
+        """
+        # Wait if draining is in progress
+        # Note: We check self.draining without a lock for performance.
+        # A request might slip through right as draining starts, but this is fine
+        # because active_requests tracking ensures correctness.
+        wait_start = time.time()
+        wait_timeout = 30  # seconds
+        while self.draining:
+            if time.time() - wait_start > wait_timeout:
+                raise RuntimeError(
+                    "Service is reloading and taking longer than expected. Please retry in a few seconds."
+                )
+            await asyncio.sleep(0.1)
+
+        # Track this request
+        with self.requests_lock:
+            self.active_requests += 1
+
+        try:
+            # Acquire execution lock for the actual execution
+            with self.execution_lock:
+                if self.execution_engine is None:
+                    raise RuntimeError("Execution engine not initialized")
+
+                if with_policy_info:
+                    return await execute_endpoint_with_engine_and_policy(
+                        endpoint_type=endpoint_type,
+                        name=name,
+                        params=params,
+                        user_config=self.user_config,
+                        site_config=self.site_config,
+                        execution_engine=self.execution_engine,
+                        user_context=user_context,
+                        server_ref=self,
+                    )
+                else:
+                    return await execute_endpoint_with_engine(
+                        endpoint_type=endpoint_type,
+                        name=name,
+                        params=params,
+                        user_config=self.user_config,
+                        site_config=self.site_config,
+                        execution_engine=self.execution_engine,
+                        user_context=user_context,
+                        server_ref=self,
+                    )
+        finally:
+            # Decrement request counter and signal if draining
+            with self.requests_lock:
+                self.active_requests -= 1
+                if self.draining and self.active_requests == 0:
+                    # Signal drain complete when all requests are done
+                    # The reload logic will determine the expected count
+                    self.drain_complete.set()
 
     def register_endpoints(self) -> None:
         """Register all discovered endpoints with MCP."""

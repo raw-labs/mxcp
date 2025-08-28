@@ -19,7 +19,7 @@ Python endpoints in MXCP have access to the `mxcp.runtime` module, which provide
 ## Quick Example
 
 ```python
-from mxcp.runtime import db, config, plugins, on_init, on_shutdown
+from mxcp.runtime import db, config, plugins, on_init, on_shutdown, request_reload
 
 def my_endpoint(param: str) -> dict:
     # Query database
@@ -138,6 +138,55 @@ def cleanup():
     # Clean up resources
     print("Server shutting down")
 ```
+
+## Reload Management
+
+### `request_reload(rebuild_func=None)`
+Request a configuration reload with optional custom database rebuild logic.
+
+This powerful feature allows Python endpoints to trigger a safe reload of the MXCP server, optionally rebuilding the DuckDB database with new data. During the reload:
+1. All active requests are drained (allowed to complete)
+2. New requests wait until reload completes
+3. The execution engine and DuckDB are shut down
+4. Your custom rebuild function runs (if provided)
+5. Configuration is reloaded and services are recreated
+
+```python
+from mxcp.runtime import request_reload
+import subprocess
+import shutil
+
+def rebuild_database():
+    """Custom rebuild function - runs with exclusive access."""
+    # Run dbt to rebuild models
+    subprocess.run(["dbt", "run"], check=True)
+    
+    # Or copy a new database file
+    shutil.copy("/data/updated.duckdb", "/app/data.duckdb")
+    
+    # Or fetch and load new data
+    fetch_latest_data()
+    load_into_duckdb()
+
+# Trigger reload with custom rebuild
+request_reload(rebuild_database)
+
+# Or just reload configuration (refreshes secrets, env vars, etc.)
+request_reload()
+```
+
+**Use Cases:**
+- Updating DuckDB data without server restart
+- Running ETL pipelines on demand
+- Refreshing materialized views
+- Swapping in pre-built database files
+- Reloading secrets after rotation
+
+**Important Notes:**
+- This function blocks until reload completes
+- Requests made during reload wait up to 30 seconds
+- The rebuild function has exclusive access (no concurrent operations)
+- Only available when called from within MXCP endpoints
 
 ## Context Availability
 

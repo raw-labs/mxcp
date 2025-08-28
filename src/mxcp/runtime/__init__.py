@@ -3,6 +3,12 @@ MXCP Runtime module for Python endpoints.
 
 This module provides access to runtime services for Python endpoints.
 Uses the SDK executor context system for proper context access.
+
+Key APIs:
+- db: Database proxy for executing SQL queries
+- config: Configuration proxy for accessing secrets and settings
+- plugins: Plugin proxy for accessing loaded plugins
+- reload_duckdb(): Reload DuckDB connection
 """
 
 import logging
@@ -222,3 +228,49 @@ def run_shutdown_hooks() -> None:
             hook()
         except Exception as e:
             logger.error(f"Error in shutdown hook {hook.__name__}: {e}")
+
+
+def reload_duckdb() -> None:
+    """
+    Reload the DuckDB connection.
+    
+    This function safely reloads only the DuckDB connection without affecting
+    Python runtime or configuration. It can be called from within a Python endpoint.
+    
+    The database file will be closed and reopened, allowing external processes
+    to modify or replace the database file before calling this function.
+    
+    Example:
+        # Replace database with a new version
+        import shutil
+        shutil.copy("updated_data.duckdb", "data.duckdb")
+        
+        # Reload to use the new database
+        mxcp.runtime.reload_duckdb()
+    
+    Note:
+        - This function blocks until the reload is complete
+        - Only affects DuckDB connection, not Python runtime
+        - Safe to call from within a request
+        - Active queries on the old connection will complete
+        - New queries will use the new connection
+    
+    Raises:
+        RuntimeError: If called outside of MXCP execution context
+    """
+    context = get_execution_context()
+    if not context:
+        raise RuntimeError(
+            "No execution context available - function not called from MXCP executor"
+        )
+
+    # Get server reference from context
+    server = context.get("_mxcp_server")
+    if not server:
+        raise RuntimeError(
+            "Server reference not available in context. "
+            "This function can only be called from within MXCP server endpoints."
+        )
+    
+    logger.info("Requesting DuckDB reload")
+    server.reload_duckdb_only()

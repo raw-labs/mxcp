@@ -5,7 +5,10 @@ replacing the legacy DuckDBSession-based execution. This is used by CLI commands
 """
 
 import logging
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
+
+if TYPE_CHECKING:
+    from mxcp.server.interfaces.server.mcp import RAWMCP
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
@@ -169,6 +172,7 @@ async def execute_endpoint_with_engine_and_policy(
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
+    server_ref: Optional["RAWMCP"] = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Execute endpoint and return both result and policy information.
 
@@ -273,6 +277,7 @@ async def execute_endpoint_with_engine_and_policy(
             user_config,
             site_config,
             user_context,
+            server_ref,
         )
 
     # Enforce output policies (symmetry with input policy enforcement above)
@@ -319,6 +324,7 @@ async def execute_endpoint_with_engine(
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
+    server_ref: Optional["RAWMCP"] = None,
 ) -> Any:
     """Execute endpoint using an existing SDK execution engine.
 
@@ -330,10 +336,12 @@ async def execute_endpoint_with_engine(
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
         name: Name of the endpoint to execute
         params: Parameters to pass to the endpoint
+        user_config: User configuration
         site_config: Site configuration (needed for EndpointLoader)
         execution_engine: Pre-created execution engine to reuse
         skip_output_validation: Whether to skip output schema validation
         user_context: User context for authentication/authorization
+        server_ref: Optional reference to the server (for runtime access)
 
     Returns:
         The result of endpoint execution
@@ -351,5 +359,6 @@ async def execute_endpoint_with_engine(
         execution_engine=execution_engine,
         skip_output_validation=skip_output_validation,
         user_context=user_context,
+        server_ref=server_ref,
     )
     return result
