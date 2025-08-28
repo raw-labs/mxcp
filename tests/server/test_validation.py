@@ -241,7 +241,9 @@ def test_validate_duplicate_resource_uris(validation_repo_path, site_config, tes
         duplicate_error_found = False
         for validated_result in result.get("validated", []):
             message = validated_result.get("message", "").lower()
-            if "duplicate" in message and ("uri" in message or "test://duplicate.resource" in message):
+            if "duplicate" in message and (
+                "uri" in message or "test://duplicate.resource" in message
+            ):
                 duplicate_error_found = True
                 break
 
