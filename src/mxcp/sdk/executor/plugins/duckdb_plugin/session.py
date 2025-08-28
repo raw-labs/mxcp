@@ -122,7 +122,7 @@ class DuckDBSession:
         # Create user token UDFs that call get_user_context() dynamically
         self._create_user_token_udfs()
 
-        # Mark as initialized to prevent re-initialization
+        # Mark as initialized
         self._initialized = True
 
     def _create_user_token_udfs(self) -> None:
@@ -169,7 +169,7 @@ class DuckDBSession:
                 return context.email
             return ""
 
-        # Register the UDFs with DuckDB (created once, called dynamically)
+        # Register the UDFs with DuckDB
         if self.conn:
             self.conn.create_function("get_user_external_token", get_user_external_token, [], None)
             self.conn.create_function("get_username", get_username, [], None)

@@ -49,8 +49,10 @@ from mxcp.sdk.telemetry import (
     traced_operation,
 )
 
-from ..context import ExecutionContext, reset_execution_context, set_execution_context
+from ..context import ExecutionContext, reset_execution_context, set_execution_context, get_execution_context
 from ..interfaces import ExecutorPlugin
+from .duckdb_plugin.session import DuckDBSession
+                
 
 if TYPE_CHECKING:
     from .duckdb_plugin._types import (
@@ -59,7 +61,6 @@ if TYPE_CHECKING:
         PluginDefinition,
         SecretDefinition,
     )
-    from .duckdb_plugin.session import DuckDBSession
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +128,6 @@ class DuckDBExecutor(ExecutorPlugin):
 
         # Create session immediately in constructor
         try:
-            from .duckdb_plugin.session import DuckDBSession
-
             self._session = DuckDBSession(
                 database_config=self.database_config,
                 plugins=self.plugins,
@@ -136,6 +135,10 @@ class DuckDBExecutor(ExecutorPlugin):
                 secrets=self.secrets,
             )
             logger.info("DuckDB session created successfully")
+            
+            # Update execution context with session and plugins
+            self._update_execution_context()
+            
         except Exception as e:
             logger.error(f"Failed to create DuckDB session: {e}")
             raise RuntimeError(f"Failed to create DuckDB session: {e}") from e
@@ -156,6 +159,51 @@ class DuckDBExecutor(ExecutorPlugin):
         if not self._session:
             raise RuntimeError("DuckDB session not initialized")
         return self._session
+    
+    def _update_execution_context(self) -> None:
+        """Update the execution context with current DuckDB session and plugins."""
+        context = get_execution_context()
+        if context:
+            self.prepare_context(context)
+    
+    def prepare_context(self, context: ExecutionContext) -> None:
+        """Prepare the execution context with DuckDB session and plugins."""
+        if self._session:
+            logger.debug("Preparing execution context with DuckDB session and plugins")
+            context.set("duckdb_session", self._session)
+            context.set("plugins", self._session.plugins)
+
+    def reload_connection(self) -> None:
+        """
+        Reload the DuckDB connection.
+        
+        This method safely closes the current connection and creates a new one
+        with the same configuration. It's thread-safe and preserves all settings.
+        """
+        with self.__db_lock:
+            logger.info("Reloading DuckDB connection...")
+            
+            # Close current session
+            if self._session:
+                self._session.close()
+                logger.info("Closed existing DuckDB session")
+            
+            try:
+                # Create new session with same config
+                self._session = DuckDBSession(
+                    database_config=self.database_config,
+                    plugins=self.plugins,
+                    plugin_config=self.plugin_config,
+                    secrets=self.secrets,
+                )
+                logger.info("DuckDB connection reloaded successfully")
+                
+                # Update execution context with new session and plugins
+                self._update_execution_context()
+                
+            except Exception as e:
+                logger.error(f"Failed to reload DuckDB connection: {e}")
+                raise RuntimeError(f"Failed to reload DuckDB connection: {e}") from e
 
     def shutdown(self) -> None:
         """Clean up DuckDB executor resources."""
@@ -164,7 +212,7 @@ class DuckDBExecutor(ExecutorPlugin):
         if self._session:
             try:
                 # Shutdown DuckDB plugins first (plugins loaded into this session)
-                if hasattr(self._session, "plugins") and self._session.plugins:
+                if self._session.plugins:
                     logger.info(f"Shutting down {len(self._session.plugins)} DuckDB plugins...")
                     for plugin_name, plugin in self._session.plugins.items():
                         try:
@@ -320,7 +368,7 @@ class DuckDBExecutor(ExecutorPlugin):
         """Log information about available DuckDB plugins."""
         try:
             session = self.session
-            if hasattr(session, "plugins") and session.plugins:
+            if session.plugins:
                 plugin_names = list(session.plugins.keys())
                 logger.info(f"DuckDB plugins available: {plugin_names}")
             else:

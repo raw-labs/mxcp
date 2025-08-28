@@ -3,6 +3,12 @@ MXCP Runtime module for Python endpoints.
 
 This module provides access to runtime services for Python endpoints.
 Uses the SDK executor context system for proper context access.
+
+Key APIs:
+- db: Database proxy for executing SQL queries
+- config: Configuration proxy for accessing secrets and settings
+- plugins: Plugin proxy for accessing loaded plugins
+- reload_duckdb(): Reload DuckDB connection
 """
 
 import logging
@@ -224,38 +230,33 @@ def run_shutdown_hooks() -> None:
             logger.error(f"Error in shutdown hook {hook.__name__}: {e}")
 
 
-def request_reload(rebuild_func: Callable[[], None] | None = None) -> None:
+def reload_duckdb() -> None:
     """
-    Request a configuration reload with optional custom rebuild logic.
-
-    This function will:
-    1. Drain all active requests
-    2. Shut down the execution engine (closing DuckDB)
-    3. Run custom rebuild function (if provided)
-    4. Reload configuration and recreate engine
-
-    Args:
-        rebuild_func: Optional function to run during reload.
-                     Called with no active DuckDB connections.
-                     This is where you can:
-                     - Run dbt to rebuild models
-                     - Copy new database files
-                     - Run incremental updates
-                     - Any custom data pipeline logic
-
+    Reload the DuckDB connection.
+    
+    This function safely reloads only the DuckDB connection without affecting
+    Python runtime or configuration. It can be called from within a Python endpoint.
+    
+    The database file will be closed and reopened, allowing external processes
+    to modify or replace the database file before calling this function.
+    
     Example:
-        def rebuild():
-            import subprocess
-            # Run dbt
-            subprocess.run(["dbt", "run"], check=True)
-            # Or copy new data
-            import shutil
-            shutil.copy("new_data.duckdb", "data.duckdb")
-        mxcp.runtime.request_reload(rebuild)
-
+        # Replace database with a new version
+        import shutil
+        shutil.copy("updated_data.duckdb", "data.duckdb")
+        
+        # Reload to use the new database
+        mxcp.runtime.reload_duckdb()
+    
     Note:
-        This function blocks until the reload is complete.
-        Requests made during reload will wait up to 30 seconds before timing out.
+        - This function blocks until the reload is complete
+        - Only affects DuckDB connection, not Python runtime
+        - Safe to call from within a request
+        - Active queries on the old connection will complete
+        - New queries will use the new connection
+    
+    Raises:
+        RuntimeError: If called outside of MXCP execution context
     """
     context = get_execution_context()
     if not context:
@@ -270,11 +271,6 @@ def request_reload(rebuild_func: Callable[[], None] | None = None) -> None:
             "Server reference not available in context. "
             "This function can only be called from within MXCP server endpoints."
         )
-
-    # Perform reload
-    if rebuild_func is not None:
-        logger.info("Requesting custom reload with provided rebuild function")
-        server.reload_with_custom_logic(rebuild_func)
-    else:
-        logger.info("Requesting standard configuration reload")
-        server.reload_configuration()
+    
+    logger.info("Requesting DuckDB reload")
+    server.reload_duckdb_only()

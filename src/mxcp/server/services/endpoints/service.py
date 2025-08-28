@@ -324,6 +324,7 @@ async def execute_endpoint_with_engine(
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
+    server_ref: Optional["RAWMCP"] = None,
 ) -> Any:
     """Execute endpoint using an existing SDK execution engine.
 
@@ -335,10 +336,12 @@ async def execute_endpoint_with_engine(
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
         name: Name of the endpoint to execute
         params: Parameters to pass to the endpoint
+        user_config: User configuration
         site_config: Site configuration (needed for EndpointLoader)
         execution_engine: Pre-created execution engine to reuse
         skip_output_validation: Whether to skip output schema validation
         user_context: User context for authentication/authorization
+        server_ref: Optional reference to the server (for runtime access)
 
     Returns:
         The result of endpoint execution
@@ -356,5 +359,6 @@ async def execute_endpoint_with_engine(
         execution_engine=execution_engine,
         skip_output_validation=skip_output_validation,
         user_context=user_context,
+        server_ref=server_ref,
     )
     return result
