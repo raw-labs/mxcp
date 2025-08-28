@@ -81,7 +81,7 @@ def _validate_resource_uri_vs_params(
         except Exception:
             # If we can't find repo root or resolve path, use filename as fallback
             relative_path = Path(path).name
-            
+
         return {
             "status": "error",
             "path": relative_path,
