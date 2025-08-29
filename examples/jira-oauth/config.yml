@@ -19,9 +19,7 @@ projects:
               name: "MXCP Jira OAuth Integration"
               redirect_uris:
                 # For production, use your actual domain (must match base_url above)
-                - "https://your-domain.com/atlassian/callback"
-                # For local development, uncomment the line below:
-                # - "http://localhost:8000/atlassian/callback"
+                - "http://localhost:8000/atlassian/callback"
               scopes:
                 - "mxcp:access"
           atlassian:
