@@ -1,0 +1,37 @@
+mxcp: 1
+tool:
+  name: process_user_dict
+  description: Process a dictionary of users (pydantic models in dict containers)
+  language: python
+  source:
+    file: ../python/test_container_types.py
+  parameters:
+    - name: user_map
+      type: object
+      additionalProperties:
+        type: object
+        properties:
+          name:
+            type: string
+          age:
+            type: integer
+          email:
+            type: string
+        required:
+          - name
+          - age
+          - email
+      description: Dictionary mapping keys to user objects
+  return:
+    type: object
+    properties:
+      user_count:
+        type: integer
+      user_keys:
+        type: array
+        items:
+          type: string
+      average_age:
+        type: number
+      oldest_user:
+        type: string

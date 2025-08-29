@@ -1,0 +1,32 @@
+mxcp: 1
+tool:
+  name: get_user_stats
+  description: Get user statistics based on user count, returns pydantic model
+  language: python
+  source:
+    file: ../python/test_endpoints.py
+  parameters:
+    - name: user_count
+      type: integer
+      description: Total number of users to generate stats for
+  return:
+    type: object
+    description: User statistics object
+    properties:
+      total_users:
+        type: integer
+        description: Total number of users
+      active_users:
+        type: integer
+        description: Number of active users
+      premium_users:
+        type: integer
+        description: Number of premium users
+      average_age:
+        type: number
+        description: Average age of users
+    required:
+      - total_users
+      - active_users
+      - premium_users
+      - average_age
