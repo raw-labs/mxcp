@@ -24,9 +24,9 @@ def _check_duplicate_endpoint_names(
     endpoints: list[tuple[Path, EndpointDefinition | None, str | None]],
 ) -> list[dict[str, Any]]:
     """Check for duplicate endpoint names/URIs across all endpoints."""
-    name_to_paths: dict[str, list[Path]] = {}
+    name_to_info: dict[str, list[tuple[Path, str]]] = {}
 
-    # Collect names/URIs and their paths
+    # Collect names/URIs and their paths with endpoint types
     for path, endpoint, error in endpoints:
         if error or not endpoint:
             continue
@@ -35,13 +35,21 @@ def _check_duplicate_endpoint_names(
         for endpoint_type in ("tool", "prompt", "resource"):
             if endpoint_type in endpoint:
                 name = get_endpoint_name_or_uri(endpoint, endpoint_type)
-                name_to_paths.setdefault(name, []).append(path)
+                name_to_info.setdefault(name, []).append((path, endpoint_type))
                 break
 
     # Generate errors for duplicates
     errors = []
-    for name, paths in name_to_paths.items():
-        if len(paths) > 1:
+    for name, path_type_pairs in name_to_info.items():
+        if len(path_type_pairs) > 1:
+            paths = [pair[0] for pair in path_type_pairs]
+            endpoint_types = [pair[1] for pair in path_type_pairs]
+
+            # Determine what we're calling this (name vs URI)
+            # If any of the duplicates is a resource, call it URI, otherwise name
+            has_resource = "resource" in endpoint_types
+            identifier_type = "URI" if has_resource else "name"
+
             # Create one error entry for the first file, mentioning all duplicates
             try:
                 repo_root = find_repo_root()
@@ -49,12 +57,20 @@ def _check_duplicate_endpoint_names(
             except (ValueError, Exception):
                 relative_path = paths[0].name
 
-            path_names = [p.name for p in paths]
+            # Convert all paths to relative paths consistently
+            relative_paths = []
+            for path in paths:
+                try:
+                    repo_root = find_repo_root()
+                    relative_paths.append(str(path.relative_to(repo_root)))
+                except (ValueError, Exception):
+                    relative_paths.append(path.name)
+
             errors.append(
                 {
                     "status": "error",
                     "path": relative_path,
-                    "message": f"Duplicate tool/prompt name '{name}' found in: {', '.join(path_names)}",
+                    "message": f"Duplicate endpoint {identifier_type} '{name}' found in: {', '.join(relative_paths)}",
                 }
             )
 
