@@ -4,7 +4,7 @@ transport:
     port: 8000
     host: 0.0.0.0
     # Set base_url to your server's public URL for production
-    base_url: https://your-domain.com
+    base_url: http://localhost:8000
 
 projects:
   jira-oauth-demo:
@@ -19,9 +19,7 @@ projects:
               name: "MXCP Jira OAuth Integration"
               redirect_uris:
                 # For production, use your actual domain (must match base_url above)
-                - "https://your-domain.com/atlassian/callback"
-                # For local development, uncomment the line below:
-                # - "http://localhost:8000/atlassian/callback"
+                - "http://localhost:8000/atlassian/callback"
               scopes:
                 - "mxcp:access"
           atlassian:

@@ -76,7 +76,7 @@ transport:
     port: 8000
     host: 0.0.0.0
     # Set base_url to your server's public URL for production
-    base_url: https://your-domain.com
+    base_url: http://localhost:8000
 
 projects:
   my-jira-project:
