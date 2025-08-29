@@ -1,7 +1,7 @@
 mxcp: 1
 
 resource:
-  uri: test://duplicate.resource
+  uri: test://duplicate.resource/{id}
   description: First resource with duplicate URI
   parameters:
     - name: id
