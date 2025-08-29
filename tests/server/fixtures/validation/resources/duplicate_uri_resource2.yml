@@ -1,12 +1,12 @@
 mxcp: 1
 
 resource:
-  uri: test://duplicate.resource
-  description: Second resource with duplicate URI
+  uri: test://duplicate.resource/{id}
+  description: Second resource with duplicate URI  
   parameters:
-    - name: filter
+    - name: id
       type: string
-      description: Filter parameter
+      description: Resource identifier
   return:
     type: object
     properties:
@@ -16,4 +16,4 @@ resource:
         type: string
   source:
     code: |
-      SELECT 'test' as id, $filter as status
+      SELECT $id as id, 'status2' as status
