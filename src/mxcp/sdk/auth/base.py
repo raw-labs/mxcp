@@ -487,7 +487,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
             # Store external token (temporary until exchanged for MCP token)
             await self._store_token(
-                user_info.raw_token, user_info.id, user_info.scopes, None, user_info.raw_token
+                user_info.raw_token, meta.client_id, user_info.scopes, None, user_info.raw_token
             )
             self._token_mapping[mcp_code] = user_info.raw_token
 

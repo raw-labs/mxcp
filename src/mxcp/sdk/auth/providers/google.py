@@ -41,7 +41,7 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
             host: The server host for callback URLs
             port: The server port for callback URLs
         """
-        logger.info(f"GoogleOAuthHandler init: {google_config}")
+        logger.info("GoogleOAuthHandler initialized for Google Workspace authentication")
 
         # Required fields are enforced by TypedDict structure
         self.client_id = google_config["client_id"]
@@ -120,7 +120,8 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
 
     # ----- code exchange -----
     async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
-        meta = self.get_state_metadata(state)
+        # Validate state parameter
+        self.get_state_metadata(state)
 
         # Use the stored callback URL for consistency
         full_callback_url = self._callback_store.get(state)
@@ -154,13 +155,23 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
             logger.error(f"Google token exchange error: {payload}")
             raise HTTPException(400, payload.get("error_description", payload["error"]))
 
+        # Get user info to extract the actual user ID
+        access_token = payload["access_token"]
+        user_profile = await self._fetch_user_profile(access_token)
+
+        # Use either 'sub' (OpenID Connect) or 'id' (OAuth2) as the unique identifier
+        user_id = user_profile.get("sub") or user_profile.get("id", "")
+        if not user_id:
+            logger.error("Google user profile missing both 'sub' and 'id' fields")
+            raise HTTPException(400, "Invalid user profile: missing user ID")
+
         # Don't clean up state here - let handle_callback do it after getting metadata
-        logger.info(f"Google OAuth token exchange successful for client: {meta.client_id}")
+        logger.info(f"Google OAuth token exchange successful for user: {user_id}")
 
         return ExternalUserInfo(
-            id=meta.client_id,
+            id=user_id,
             scopes=[],
-            raw_token=payload["access_token"],
+            raw_token=access_token,
             provider="google",
         )
 
@@ -175,12 +186,12 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
         code = request.query_params.get("code")
         state = request.query_params.get("state")
         error = request.query_params.get("error")
-        
+
         if error:
             logger.error(f"Google OAuth error: {error}")
             error_desc = request.query_params.get("error_description", error)
             return HTMLResponse(status_code=400, content=f"OAuth error: {error_desc}")
-            
+
         if not code or not state:
             raise HTTPException(400, "Missing code or state")
         try:
@@ -209,16 +220,19 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
             user_profile = await self._fetch_user_profile(token)
 
             # Extract Google-specific fields and map to standard UserContext
+            # Use either 'sub' (OpenID Connect) or 'id' (OAuth2) as the unique identifier
+            user_id = str(user_profile.get("sub") or user_profile.get("id", ""))
             return UserContext(
                 provider="google",
-                user_id=str(user_profile.get("sub", "")),  # Subject is the unique user ID
-                username=user_profile.get(
-                    "email", f"user_{user_profile.get('sub', 'unknown')}"
-                ).split("@")[0],  # Use email prefix as username
+                user_id=user_id,  # Use whichever ID field is available
+                username=user_profile.get("email", f"user_{user_id}").split("@")[
+                    0
+                ],  # Use email prefix as username
                 email=user_profile.get("email"),
                 name=user_profile.get("name"),
                 avatar_url=user_profile.get("picture"),
                 raw_profile=user_profile,
+                external_token=token,
             )
         except Exception as e:
             logger.error(f"Failed to get Google user context: {e}")

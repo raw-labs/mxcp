@@ -1,0 +1,83 @@
+mxcp: 1
+tool:
+  name: get_freebusy
+  title: Check Calendar Availability
+  description: |
+    Check free/busy status across multiple calendars for a specified time range.
+    Useful for finding meeting slots and checking availability before scheduling.
+    
+    Example usage:
+    - "Check my availability tomorrow from 9 AM to 5 PM"
+    - "Find free time slots across my work and personal calendars"
+    - "When am I free for a meeting this week?"
+    - "Check availability for multiple team members' calendars"
+  tags:
+    - google-calendar
+    - freebusy
+    - availability
+  annotations:
+    readOnlyHint: true
+    idempotentHint: true
+  parameters:
+    - name: calendar_ids
+      type: array
+      description: "List of calendar IDs to check (use 'primary' for main calendar)"
+      items:
+        type: string
+        description: "Calendar identifier"
+      minItems: 1
+      examples: [["primary"], ["primary", "work@company.com"], ["team@company.com", "resources@company.com"]]
+    - name: time_min
+      type: string
+      format: date-time
+      description: "Start time for availability check (RFC3339 format)"
+      examples: ["2024-01-15T09:00:00Z", "2024-01-15T09:00:00-08:00"]
+    - name: time_max
+      type: string
+      format: date-time
+      description: "End time for availability check (RFC3339 format)"
+      examples: ["2024-01-15T17:00:00Z", "2024-01-15T17:00:00-08:00"]
+  return:
+    type: object
+    description: "Free/busy information for requested calendars"
+    properties:
+      time_min:
+        type: string
+        format: date-time
+        description: "Query start time"
+      time_max:
+        type: string
+        format: date-time
+        description: "Query end time"
+      calendars:
+        type: array
+        description: "Per-calendar availability information"
+        items:
+          type: object
+          properties:
+            calendar_id:
+              type: string
+              description: "Calendar identifier"
+            busy:
+              type: array
+              description: "Busy time periods"
+              items:
+                type: object
+                properties:
+                  start:
+                    type: string
+                    format: date-time
+                    description: "Busy period start"
+                  end:
+                    type: string
+                    format: date-time
+                    description: "Busy period end"
+            errors:
+              type: array
+              description: "API errors for this calendar"
+              items:
+                type: object
+    required: ["time_min", "time_max", "calendars"]
+  language: python
+  source:
+    file: ../python/google_calendar_client.py
