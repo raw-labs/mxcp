@@ -100,7 +100,8 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
 
     # ----- code exchange -----
     async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
-        meta = self.get_state_metadata(state)
+        # Validate state parameter
+        self.get_state_metadata(state)
 
         # Use the stored callback URL for consistency
         full_callback_url = self._callback_store.get(state)
@@ -133,13 +134,23 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
             logger.error(f"GitHub token exchange error: {payload}")
             raise HTTPException(400, payload.get("error_description", payload["error"]))
 
+        # Get user info to extract the actual user ID
+        access_token = payload["access_token"]
+        user_profile = await self._fetch_user_profile(access_token)
+
+        # Use GitHub's 'id' field as the unique identifier
+        user_id = user_profile.get("id", "")
+        if not user_id:
+            logger.error("GitHub user profile missing 'id' field")
+            raise HTTPException(400, "Invalid user profile: missing user ID")
+
         # Don't clean up state here - let handle_callback do it after getting metadata
-        logger.info(f"GitHub OAuth token exchange successful for client: {meta.client_id}")
+        logger.info(f"GitHub OAuth token exchange successful for user: {user_id}")
 
         return ExternalUserInfo(
-            id=meta.client_id,
+            id=str(user_id),
             scopes=[],
-            raw_token=payload["access_token"],
+            raw_token=access_token,
             provider="github",
         )
 
@@ -189,6 +200,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
                 name=user_profile.get("name"),
                 avatar_url=user_profile.get("avatar_url"),
                 raw_profile=user_profile,
+                external_token=token,
             )
         except Exception as e:
             logger.error(f"Failed to get GitHub user context: {e}")
