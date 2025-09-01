@@ -4,21 +4,16 @@ This example shows how to connect JIRA to MXCP using secure OAuth authentication
 
 ## What You Get
 
-Once configured, you can query your Jira data directly from MXCP:
+Once configured, you can interact with your Jira data through MXCP tools:
 
-```sql
--- Find all issues assigned to you
-SELECT jql_query_jira('assignee = currentUser()') AS my_issues;
+- **JQL Query**: Execute JQL queries to search for issues
+- **List Projects**: Get all your accessible projects
+- **Get Project**: Get detailed information about a specific project
+- **Get Issue**: Retrieve detailed issue information by key
+- **User Management**: Search users and get user details
+- **Project Roles**: View project roles and their members
 
--- Get recent bugs in a project
-SELECT jql_query_jira('project = MYPROJECT AND type = Bug AND created >= -7d') AS recent_bugs;
-
--- List all your accessible projects
-SELECT list_projects_jira() AS projects;
-
--- Get user information
-SELECT get_user_jira('john.doe@company.com') AS user_info;
-```
+These tools provide comprehensive access to your Jira instance through a secure OAuth connection.
 
 ## Quick Setup Guide
 
@@ -111,34 +106,39 @@ projects:
    - Configure the MXCP server in your MCP client (e.g., Claude Desktop)
    - When the client connects, you'll be redirected to Atlassian to authorize the app
    - After authorization, you'll be redirected back to your MCP client
-   - You're now ready to query Jira!
+   - You're now ready to use the Jira tools!
 
-## Available Functions
+## Available Tools
 
-| Function | Description | Example |
-|----------|-------------|---------|
-| `jql_query_jira(query, start, limit)` | Execute JQL queries | `SELECT jql_query_jira('project = TEST')` |
-| `list_projects_jira()` | List all your accessible projects | `SELECT list_projects_jira()` |
-| `get_project_jira(key)` | Get details for a specific project | `SELECT get_project_jira('TEST')` |
-| `get_user_jira(username)` | Get user information | `SELECT get_user_jira('john@company.com')` |
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `jql_query` | Execute JQL queries to search for issues | `query`, `start` (optional), `limit` (optional) |
+| `list_projects` | List all your accessible projects | None |
+| `get_project` | Get details for a specific project | `project_key` |
+| `get_issue` | Get detailed information for a specific issue | `issue_key` |
+| `get_user` | Get user information by account ID | `account_id` |
+| `search_user` | Search for users by query string | `query` |
+| `get_project_roles` | Get all roles available in a project | `project_key` |
+| `get_project_role_users` | Get users and groups for a specific role | `project_key`, `role_name` |
 
-## Example Queries
+## Example Usage
 
-```sql
--- Get your assigned issues
-SELECT jql_query_jira('assignee = currentUser() AND status != Done', 0, 20) AS my_open_issues;
+When connected to an MCP client (like Claude Desktop), you can use these tools to interact with your Jira instance:
 
--- Find high priority bugs
-SELECT jql_query_jira('priority = High AND type = Bug', 0, 10) AS high_priority_bugs;
+**Find Issues:**
+- Use `jql_query` with queries like `"assignee = currentUser() AND status != Done"` to find your open issues
+- Search for bugs with `"priority = High AND type = Bug"`
+- Find recent activity with `"project = MYPROJECT AND updated >= -3d"`
 
--- Recent activity in a project
-SELECT jql_query_jira('project = MYPROJECT AND updated >= -3d') AS recent_activity;
+**Manage Projects:**
+- Use `list_projects` to see all accessible projects
+- Use `get_project` with a project key like `"TEST"` to get project details
+- Use `get_project_roles` to see available roles in a project
 
--- Get project information
-SELECT 
-    list_projects_jira() AS all_projects,
-    get_project_jira('MYPROJECT') AS project_details;
+**User Management:**
+- Use `search_user` with queries like `"john@company.com"` or `"Benjamin"` to find users
+- Use `get_user` with an account ID to get detailed user information
+- Use `get_project_role_users` to see who has specific roles in projects
 
--- Find issues by reporter
-SELECT jql_query_jira('reporter = "john.doe@company.com"') AS johns_issues;
-```
+**Issue Details:**
+- Use `get_issue` with an issue key like `"RD-123"` to get comprehensive issue information
