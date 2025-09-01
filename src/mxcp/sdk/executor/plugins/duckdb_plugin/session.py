@@ -5,6 +5,7 @@ This module handles DuckDB connection management and query execution.
 This is a cloned version of the session for the executor plugin system.
 """
 
+import contextlib
 import logging
 from collections.abc import Hashable
 from pathlib import Path
@@ -70,8 +71,6 @@ class DuckDBSession:
 
     def __del__(self) -> None:
         """Destructor - ensure connection is closed if object is garbage collected"""
-        import contextlib
-
         with contextlib.suppress(Exception):
             self.close()
 
@@ -115,8 +114,6 @@ class DuckDBSession:
         inject_secrets(self.conn, self.secrets)
 
         # Load plugins
-        # context_for_plugins = None  # No longer passed to constructor
-
         self.plugins = load_plugins(self.plugins_definitions, self.plugin_config, self.conn)
 
         # Create user token UDFs that call get_user_context() dynamically
