@@ -108,57 +108,6 @@ For remote servers or production deployments, you need to:
 - For production deployments, Google requires HTTPS for callback URLs
 - You can configure multiple callback URLs in your OAuth credentials to support both local development and production
 
-## Running the Examples
-
-### 1. Authenticate with Google
-
-When you first run MXCP, you'll need to authenticate with Google:
-
-```bash
-# Start the MXCP server with the config file - this will prompt for authentication
-MXCP_CONFIG=config.yml mxcp serve
-```
-
-The authentication flow will:
-1. Open your browser to Google's OAuth consent screen
-2. You'll log in with your Google credentials
-3. Grant permission for read-only calendar access
-4. Redirect back to complete authentication
-
-### 2. Test the Tools
-
-Once authenticated, you can test the tools:
-
-```bash
-# Get information about the authenticated user
-mxcp run tool whoami --config config.yml
-
-# List all your calendars
-mxcp run tool list_calendars --config config.yml
-
-# List events from your primary calendar for today
-mxcp run tool list_events --config config.yml \
-  --time_min "2024-01-15T00:00:00Z" \
-  --time_max "2024-01-15T23:59:59Z"
-
-# Search for meetings with a specific person
-mxcp run tool search_events --config config.yml \
-  --q "John Smith"
-
-# Check your availability for tomorrow
-mxcp run tool get_freebusy --config config.yml \
-  --calendar_ids '["primary"]' \
-  --time_min "2024-01-16T09:00:00Z" \
-  --time_max "2024-01-16T17:00:00Z"
-```
-
-### 3. Use with MCP Clients
-
-```bash
-# Start the MXCP server for use with MCP clients like Claude Desktop
-mxcp serve --config config.yml
-```
-
 ## Project Structure
 
 ```
@@ -186,6 +135,22 @@ google-calendar/
 4. **Project-wide Configuration**: Authentication is configured at the project level in `config.yml`
 5. **Error Handling**: Comprehensive error handling for authentication and API failures
 6. **Type Safety**: Uses Python type hints and comprehensive error handling for data validation
+
+## Running the Example
+
+Once you've completed the setup above:
+
+1. **Start MXCP**:
+   ```bash
+   # From the examples/google-calendar directory:
+   MXCP_CONFIG=config.yml mxcp serve
+   ```
+
+2. **Connect your MCP client** (e.g., Claude Desktop) to the MXCP server
+
+3. **Authenticate**: When the client first connects, you'll be redirected to Google to authorize the application
+
+4. **Use the tools**: Once authenticated, you can use all the Google Calendar tools through your MCP client
 
 ## Example Usage
 
