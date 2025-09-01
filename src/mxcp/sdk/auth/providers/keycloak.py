@@ -120,7 +120,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
     async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
         """Exchange authorization code for tokens."""
         # Validate state parameter and get metadata
-        state_meta = self.get_state_metadata(state)
+        state_meta = self._get_state_metadata(state)
 
         # Use the stored callback URL from state metadata
         full_callback_url = state_meta.callback_url
@@ -193,7 +193,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
             return cast(dict[str, Any], response.json())
 
-    def get_state_metadata(self, state: str) -> StateMeta:
+    def _get_state_metadata(self, state: str) -> StateMeta:
         """Return metadata stored for a given state."""
         state_meta = self._state_store.get(state)
         if not state_meta:

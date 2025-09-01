@@ -97,7 +97,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         )
 
     # ----- state helpers -----
-    def get_state_metadata(self, state: str) -> StateMeta:
+    def _get_state_metadata(self, state: str) -> StateMeta:
         try:
             return self._state_store[state]
         except KeyError:
@@ -112,7 +112,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
 
     # ----- code exchange -----
     async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
-        meta = self.get_state_metadata(state)
+        meta = self._get_state_metadata(state)
 
         # Use the stored callback URL for consistency
         full_callback_url = meta.callback_url

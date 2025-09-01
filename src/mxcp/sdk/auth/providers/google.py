@@ -102,7 +102,7 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
         )
 
     # ----- state helpers -----
-    def get_state_metadata(self, state: str) -> StateMeta:
+    def _get_state_metadata(self, state: str) -> StateMeta:
         try:
             return self._state_store[state]
         except KeyError:
@@ -118,7 +118,7 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
     # ----- code exchange -----
     async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
         # Validate state parameter and get metadata
-        state_meta = self.get_state_metadata(state)
+        state_meta = self._get_state_metadata(state)
 
         # Use the stored callback URL from state metadata
         full_callback_url = state_meta.callback_url

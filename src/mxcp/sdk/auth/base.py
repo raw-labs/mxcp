@@ -64,11 +64,6 @@ class ExternalOAuthHandler(ABC):
     async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
         """Turn `code` + `state` into `ExternalUserInfo` and `StateMeta` or raise `HTTPException`."""
 
-    # ----- state retrieval -----
-    @abstractmethod
-    def get_state_metadata(self, state: str) -> StateMeta:
-        """Return metadata stored during `get_authorize_url`."""
-
     # ----- callback wiring -----
     @property
     @abstractmethod
