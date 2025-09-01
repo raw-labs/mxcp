@@ -162,12 +162,12 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         if not access_token:
             raise HTTPException(400, "No access token received")
 
-        # Get user info using the access token
-        user_info = await self._get_user_info(access_token)
+            # Get user info using the access token
+        user_profile = await self._get_user_info(access_token)
 
         # Map Keycloak claims to ExternalUserInfo
         # Keycloak typically uses 'sub' as the unique user identifier
-        user_id = user_info.get("sub", "")
+        user_id = user_profile.get("sub", "")
 
         # Extract scopes from the token response or use default
         scopes = token_response.get("scope", self.scope).split()
@@ -177,7 +177,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         user_info = ExternalUserInfo(
             id=user_id, scopes=scopes, raw_token=access_token, provider="keycloak"
         )
-        
+
         return user_info, state_meta
 
     async def _get_user_info(self, access_token: str) -> dict[str, Any]:
@@ -258,18 +258,18 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         """
         try:
             # Get user info from Keycloak
-            user_info = await self._get_user_info(token)
+            user_profile = await self._get_user_info(token)
 
             # Map Keycloak claims to UserContext
             # Keycloak uses standard OIDC claims
             return UserContext(
                 provider="keycloak",
-                user_id=user_info.get("sub", ""),
-                username=user_info.get("preferred_username", user_info.get("email", "")),
-                email=user_info.get("email"),
-                name=user_info.get("name"),
-                avatar_url=user_info.get("picture"),
-                raw_profile=user_info,
+                user_id=user_profile.get("sub", ""),
+                username=user_profile.get("preferred_username", user_profile.get("email", "")),
+                email=user_profile.get("email"),
+                name=user_profile.get("name"),
+                avatar_url=user_profile.get("picture"),
+                raw_profile=user_profile,
                 external_token=token,
             )
         except Exception as e:

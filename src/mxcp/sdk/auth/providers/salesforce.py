@@ -165,7 +165,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
             raw_token=access_token,
             provider="salesforce",
         )
-        
+
         return user_info, meta
 
     # ----- callback -----

@@ -67,7 +67,6 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         # State storage for OAuth flow
         self._state_store: dict[str, StateMeta] = {}
 
-
     # ----- authorize -----
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
         state = params.state or secrets.token_hex(16)
@@ -115,7 +114,6 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
     def cleanup_state(self, state: str) -> None:
         """Clean up state and associated callback URL after OAuth flow completion."""
         self._pop_state(state)
-
 
     # ----- code exchange -----
     async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
@@ -173,7 +171,7 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
             raw_token=access_token,
             provider="atlassian",
         )
-        
+
         return user_info, state_meta
 
     # ----- callback -----
