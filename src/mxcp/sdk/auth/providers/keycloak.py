@@ -76,9 +76,16 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         """Generate the authorization URL for Keycloak."""
         state = secrets.token_urlsafe(32)
 
-        # Store state metadata
+        # Determine the actual redirect URI that will be used
+        actual_redirect_uri = (
+            str(params.redirect_uri)
+            if params.redirect_uri
+            else self.url_builder.build_callback_url(self._callback_path)
+        )
+
+        # Store state metadata with the actual redirect URI that will be used
         self._state_store[state] = StateMeta(
-            redirect_uri=str(params.redirect_uri),
+            redirect_uri=actual_redirect_uri,
             code_challenge=params.code_challenge,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             client_id=client_id,
@@ -88,11 +95,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         auth_params = {
             "client_id": self.client_id,
             "response_type": "code",
-            "redirect_uri": (
-                str(params.redirect_uri)
-                if params.redirect_uri
-                else self.url_builder.build_callback_url(self._callback_path)
-            ),
+            "redirect_uri": actual_redirect_uri,
             "scope": self.scope,
             "state": state,
         }
@@ -114,10 +117,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
     async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
         """Exchange authorization code for tokens."""
         # Retrieve state metadata
-        state_meta = self._state_store.get(state)
-        if not state_meta:
-            raise HTTPException(400, "Invalid state parameter")
-
+        state_meta = self.get_state_metadata(state)
         # Prepare token exchange request
         token_data = {
             "grant_type": "authorization_code",

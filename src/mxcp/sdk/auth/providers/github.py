@@ -52,7 +52,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
 
         # State storage for OAuth flow
         self._state_store: dict[str, StateMeta] = {}
-        self._callback_store: dict[str, str] = {}  # Store callback URLs separately
+
 
     # ----- authorize -----
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
@@ -69,9 +69,8 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
             code_challenge=params.code_challenge,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             client_id=client_id,
+            callback_url=full_callback_url,
         )
-        # Store the callback URL separately for consistency
-        self._callback_store[state] = full_callback_url
 
         logger.info(
             f"GitHub OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
@@ -96,15 +95,15 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
     def cleanup_state(self, state: str) -> None:
         """Clean up state and associated callback URL after OAuth flow completion."""
         self._pop_state(state)
-        self._callback_store.pop(state, None)
+
 
     # ----- code exchange -----
     async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
-        # Validate state parameter
-        self.get_state_metadata(state)
+        # Validate state parameter and get metadata
+        state_meta = self.get_state_metadata(state)
 
-        # Use the stored callback URL for consistency
-        full_callback_url = self._callback_store.get(state)
+        # Use the stored callback URL from state metadata
+        full_callback_url = state_meta.callback_url
         if not full_callback_url:
             # Fallback to constructing it using URL builder
             full_callback_url = self.url_builder.build_callback_url(
