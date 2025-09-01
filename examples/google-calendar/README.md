@@ -116,7 +116,7 @@ When you first run MXCP, you'll need to authenticate with Google:
 
 ```bash
 # Start the MXCP server with the config file - this will prompt for authentication
-mxcp serve --config config.yml
+MXCP_CONFIG=config.yml mxcp serve
 ```
 
 The authentication flow will:
