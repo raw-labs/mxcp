@@ -76,23 +76,29 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         """Generate the authorization URL for Keycloak."""
         state = secrets.token_urlsafe(32)
 
-        # Store state metadata
+        # Use URL builder to construct callback URL with proper scheme detection
+        full_callback_url = self.url_builder.build_callback_url(
+            self._callback_path, host=self.host, port=self.port
+        )
+
+        # Store the original redirect URI and callback URL in state for later use
         self._state_store[state] = StateMeta(
             redirect_uri=str(params.redirect_uri),
             code_challenge=params.code_challenge,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             client_id=client_id,
+            callback_url=full_callback_url,
+        )
+
+        logger.info(
+            f"Keycloak OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
         )
 
         # Prepare authorization parameters
         auth_params = {
             "client_id": self.client_id,
             "response_type": "code",
-            "redirect_uri": (
-                str(params.redirect_uri)
-                if params.redirect_uri
-                else self.url_builder.build_callback_url(self._callback_path)
-            ),
+            "redirect_uri": full_callback_url,
             "scope": self.scope,
             "state": state,
         }
@@ -111,12 +117,22 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
         return auth_url
 
-    async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
+    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
         """Exchange authorization code for tokens."""
-        # Retrieve state metadata
-        state_meta = self._state_store.get(state)
-        if not state_meta:
-            raise HTTPException(400, "Invalid state parameter")
+        # Validate state parameter and get metadata
+        state_meta = self._get_state_metadata(state)
+
+        # Use the stored callback URL from state metadata
+        full_callback_url = state_meta.callback_url
+        if not full_callback_url:
+            # Fallback to constructing it using URL builder
+            full_callback_url = self.url_builder.build_callback_url(
+                self._callback_path, host=self.host, port=self.port
+            )
+
+        logger.info(
+            f"Keycloak OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}"
+        )
 
         # Prepare token exchange request
         token_data = {
@@ -124,7 +140,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
             "code": code,
             "client_id": self.client_id,
             "client_secret": self.client_secret,
-            "redirect_uri": state_meta.redirect_uri,
+            "redirect_uri": full_callback_url,
         }
 
         # Exchange code for tokens
@@ -146,19 +162,23 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         if not access_token:
             raise HTTPException(400, "No access token received")
 
-        # Get user info using the access token
-        user_info = await self._get_user_info(access_token)
+            # Get user info using the access token
+        user_profile = await self._get_user_info(access_token)
 
         # Map Keycloak claims to ExternalUserInfo
         # Keycloak typically uses 'sub' as the unique user identifier
-        user_id = user_info.get("sub", "")
+        user_id = user_profile.get("sub", "")
 
         # Extract scopes from the token response or use default
         scopes = token_response.get("scope", self.scope).split()
 
-        return ExternalUserInfo(
+        logger.info(f"Keycloak OAuth token exchange successful for user: {user_id}")
+
+        user_info = ExternalUserInfo(
             id=user_id, scopes=scopes, raw_token=access_token, provider="keycloak"
         )
+
+        return user_info, state_meta
 
     async def _get_user_info(self, access_token: str) -> dict[str, Any]:
         """Get user information from Keycloak userinfo endpoint."""
@@ -173,7 +193,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
             return cast(dict[str, Any], response.json())
 
-    def get_state_metadata(self, state: str) -> StateMeta:
+    def _get_state_metadata(self, state: str) -> StateMeta:
         """Return metadata stored for a given state."""
         state_meta = self._state_store.get(state)
         if not state_meta:
@@ -238,18 +258,18 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         """
         try:
             # Get user info from Keycloak
-            user_info = await self._get_user_info(token)
+            user_profile = await self._get_user_info(token)
 
             # Map Keycloak claims to UserContext
             # Keycloak uses standard OIDC claims
             return UserContext(
                 provider="keycloak",
-                user_id=user_info.get("sub", ""),
-                username=user_info.get("preferred_username", user_info.get("email", "")),
-                email=user_info.get("email"),
-                name=user_info.get("name"),
-                avatar_url=user_info.get("picture"),
-                raw_profile=user_info,
+                user_id=user_profile.get("sub", ""),
+                username=user_profile.get("preferred_username", user_profile.get("email", "")),
+                email=user_profile.get("email"),
+                name=user_profile.get("name"),
+                avatar_url=user_profile.get("picture"),
+                raw_profile=user_profile,
                 external_token=token,
             )
         except Exception as e:

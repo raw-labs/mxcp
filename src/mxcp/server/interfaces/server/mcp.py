@@ -26,6 +26,7 @@ from mxcp.sdk.auth.context import get_user_context
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.auth.providers.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.providers.github import GitHubOAuthHandler
+from mxcp.sdk.auth.providers.google import GoogleOAuthHandler
 from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
@@ -151,6 +152,13 @@ def create_oauth_handler(
         if not keycloak_config:
             raise ValueError("Keycloak provider selected but no Keycloak configuration found")
         return KeycloakOAuthHandler(keycloak_config, transport_config, host=host, port=port)
+
+    elif provider == "google":
+
+        google_config = user_auth_config.get("google")
+        if not google_config:
+            raise ValueError("Google provider selected but no Google configuration found")
+        return GoogleOAuthHandler(google_config, transport_config, host=host, port=port)
 
     else:
         raise ValueError(f"Unsupported auth provider: {provider}")

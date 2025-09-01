@@ -4,6 +4,7 @@ description: "Set up OAuth authentication in MXCP with GitHub, Atlassian, or Sal
 keywords:
   - mxcp authentication
   - oauth setup
+  - google oauth
   - github oauth
   - atlassian oauth
   - salesforce oauth
@@ -55,6 +56,7 @@ Currently supported providers:
 - `atlassian` (Atlassian Cloud - JIRA & Confluence)
 - `salesforce` (Salesforce Cloud)
 - `keycloak` (Keycloak - Open Source Identity and Access Management)
+- `google` (Google OAuth - Google Workspace APIs)
 
 ## Provider Configuration
 
@@ -760,6 +762,216 @@ FROM read_json_auto(
 ```
 
 Keycloak tokens are JWTs that contain user claims and can be decoded to access user information directly.
+
+### Google OAuth
+
+MXCP supports OAuth authentication with Google, enabling access to Google Workspace APIs including Calendar, Drive, Gmail, and more. This allows your MCP server to authenticate users through their Google accounts and access Google services on their behalf.
+
+#### Creating a Google OAuth App
+
+Before configuring MXCP, you need to create OAuth 2.0 credentials in the Google Cloud Console:
+
+**Step 1: Create a Google Cloud Project**
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com)
+2. Click **Select a project** → **New Project**
+3. Enter a project name and click **Create**
+
+**Step 2: Enable Required APIs**
+
+1. In your project, go to **APIs & Services** → **Library**
+2. Search for and enable the APIs you need:
+   - **Google Calendar API** (for calendar access)
+   - **Google Drive API** (for file access)
+   - **Gmail API** (for email access)
+   - Enable other APIs as needed
+
+**Step 3: Configure OAuth Consent Screen**
+
+1. Go to **APIs & Services** → **OAuth consent screen**
+2. Select **External** for user type (or **Internal** for Google Workspace users)
+3. Fill in the required information:
+   - **App name**: Your application name
+   - **User support email**: Your email address
+   - **Developer contact information**: Your email address
+4. Add scopes (click **Add or Remove Scopes**):
+   - `.../auth/userinfo.email` (for email address)
+   - `.../auth/userinfo.profile` (for basic profile)
+   - `.../auth/calendar.readonly` (for calendar read access)
+   - Add other scopes as needed
+5. Add test users if in testing mode
+6. Review and save
+
+**Step 4: Create OAuth 2.0 Credentials**
+
+1. Go to **APIs & Services** → **Credentials**
+2. Click **Create Credentials** → **OAuth client ID**
+3. Select **Web application** as the application type
+4. Configure the client:
+   - **Name**: A descriptive name for your client
+   - **Authorized redirect URIs**: Add your callback URLs
+     - For local development: `http://localhost:8000/google/callback`
+     - For production: `https://your-domain.com/google/callback`
+5. Click **Create**
+6. Save your **Client ID** and **Client Secret**
+
+#### Environment Variables
+
+Set these environment variables with your Google OAuth credentials:
+
+```bash
+export GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+export GOOGLE_CLIENT_SECRET="your-client-secret"
+```
+
+#### MXCP Configuration
+
+Configure Google OAuth in your profile's auth section:
+
+```yaml
+projects:
+  my_project:
+    profiles:
+      production:
+        auth:
+          provider: google
+          clients:
+            - client_id: "${GOOGLE_CLIENT_ID}"
+              client_secret: "${GOOGLE_CLIENT_SECRET}"
+              name: "My MXCP Application"
+              redirect_uris:
+                - "https://your-domain.com/google/callback"
+              scopes:
+                - "mxcp:access"
+          google:
+            client_id: "${GOOGLE_CLIENT_ID}"
+            client_secret: "${GOOGLE_CLIENT_SECRET}"
+            scope: "https://www.googleapis.com/auth/calendar.readonly openid profile email"
+            callback_path: "/google/callback"
+            auth_url: "https://accounts.google.com/o/oauth2/v2/auth"
+            token_url: "https://oauth2.googleapis.com/token"
+```
+
+#### OAuth Scopes
+
+Google uses fine-grained OAuth scopes to control access to different services:
+
+**Core Identity Scopes:**
+- `openid` - OpenID Connect authentication
+- `profile` - Basic profile information
+- `email` - Email address
+
+**Google Calendar Scopes:**
+- `https://www.googleapis.com/auth/calendar.readonly` - Read calendar events
+- `https://www.googleapis.com/auth/calendar` - Full calendar access
+- `https://www.googleapis.com/auth/calendar.events` - Manage calendar events
+
+**Google Drive Scopes:**
+- `https://www.googleapis.com/auth/drive.readonly` - Read-only access to files
+- `https://www.googleapis.com/auth/drive.file` - Access to files created by the app
+- `https://www.googleapis.com/auth/drive` - Full Drive access
+
+**Gmail Scopes:**
+- `https://www.googleapis.com/auth/gmail.readonly` - Read emails
+- `https://www.googleapis.com/auth/gmail.send` - Send emails
+- `https://www.googleapis.com/auth/gmail.modify` - Read and modify emails
+
+Always request the minimum scopes needed for your application.
+
+#### Testing Your Configuration
+
+1. Start your MXCP server:
+   ```bash
+   mxcp serve --debug
+   ```
+
+2. The authentication flow will begin when a client connects
+3. Users will be redirected to Google for authentication
+4. Google will show a consent screen listing the requested permissions
+5. After approval, they'll be redirected back to your callback URL
+6. Check the logs for successful authentication
+
+#### Troubleshooting
+
+**Common Issues:**
+
+1. **Invalid Client Configuration**:
+   ```
+   ValueError: Google OAuth configuration is incomplete
+   ```
+   - Ensure `client_id` and `client_secret` are provided
+   - Check that environment variables are set correctly
+
+2. **Redirect URI Mismatch**:
+   ```
+   Error 400: redirect_uri_mismatch
+   ```
+   - Verify the callback URL in Google Cloud Console matches your MXCP configuration
+   - Ensure the URL scheme (http/https) and port are exact matches
+
+3. **Insufficient Scopes**:
+   ```
+   403 Forbidden - Insufficient Permission
+   ```
+   - Check that you've enabled the required APIs in Google Cloud Console
+   - Verify the requested scopes match the enabled APIs
+   - Ensure the user has granted all requested permissions
+
+4. **Application Not Verified**:
+   ```
+   This app isn't verified
+   ```
+   - For development, add test users in the OAuth consent screen
+   - For production, submit your app for Google verification
+
+**Debug Tips:**
+
+- Enable debug logging: `mxcp serve --debug`
+- Check the Google Cloud Console for API quotas and errors
+- Use the [Google OAuth 2.0 Playground](https://developers.google.com/oauthplayground/) to test scopes
+- Verify API enablement in your Google Cloud project
+
+#### Security Best Practices
+
+- **Store credentials securely**: Use environment variables, not config files
+- **Use HTTPS**: Required for production OAuth flows
+- **Minimal scopes**: Request only the permissions you need
+- **Domain verification**: Verify your domain for production apps
+- **Regular audits**: Review OAuth consent screen and app permissions
+- **Token management**: Implement proper token refresh logic
+- **Rate limiting**: Be aware of Google API quotas and implement appropriate rate limiting
+
+#### Working with Google APIs
+
+Once authenticated, you can use the user's Google token to access various Google services:
+
+```sql
+-- Example: List Google Calendar events
+SELECT *
+FROM read_json_auto(
+    'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+    headers = MAP {
+        'Authorization': 'Bearer ' || get_user_external_token(),
+        'Content-Type': 'application/json'
+    }
+);
+
+-- Example: Search Google Drive files
+SELECT *
+FROM read_json_auto(
+    'https://www.googleapis.com/drive/v3/files?q=name+contains+''report''',
+    headers = MAP {
+        'Authorization': 'Bearer ' || get_user_external_token()
+    }
+);
+```
+
+**API Endpoints:**
+- Calendar API: `https://www.googleapis.com/calendar/v3/`
+- Drive API: `https://www.googleapis.com/drive/v3/`
+- Gmail API: `https://www.googleapis.com/gmail/v1/`
+
+For detailed API documentation, refer to [Google Workspace Developer Guides](https://developers.google.com/workspace).
 
 ## OAuth Client Registration
 
