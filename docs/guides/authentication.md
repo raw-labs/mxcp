@@ -4,6 +4,7 @@ description: "Set up OAuth authentication in MXCP with GitHub, Atlassian, or Sal
 keywords:
   - mxcp authentication
   - oauth setup
+  - google oauth
   - github oauth
   - atlassian oauth
   - salesforce oauth

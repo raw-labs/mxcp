@@ -41,7 +41,7 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
             host: The server host for callback URLs
             port: The server port for callback URLs
         """
-        logger.info(f"GoogleOAuthHandler init: {google_config}")
+        logger.info("GoogleOAuthHandler initialized for Google Workspace authentication")
 
         # Required fields are enforced by TypedDict structure
         self.client_id = google_config["client_id"]
@@ -66,7 +66,6 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
 
         # State storage for OAuth flow
         self._state_store: dict[str, StateMeta] = {}
-        self._callback_store: dict[str, str] = {}  # Store callback URLs separately
 
     # ----- authorize -----
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
@@ -83,9 +82,8 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
             code_challenge=params.code_challenge,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             client_id=client_id,
+            callback_url=full_callback_url,
         )
-        # Store the callback URL separately for consistency
-        self._callback_store[state] = full_callback_url
 
         logger.info(
             f"Google OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
@@ -104,7 +102,7 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
         )
 
     # ----- state helpers -----
-    def get_state_metadata(self, state: str) -> StateMeta:
+    def _get_state_metadata(self, state: str) -> StateMeta:
         try:
             return self._state_store[state]
         except KeyError:
@@ -116,14 +114,14 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
     def cleanup_state(self, state: str) -> None:
         """Clean up state and associated callback URL after OAuth flow completion."""
         self._pop_state(state)
-        self._callback_store.pop(state, None)
 
     # ----- code exchange -----
-    async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
-        meta = self.get_state_metadata(state)
+    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
+        # Validate state parameter and get metadata
+        state_meta = self._get_state_metadata(state)
 
-        # Use the stored callback URL for consistency
-        full_callback_url = self._callback_store.get(state)
+        # Use the stored callback URL from state metadata
+        full_callback_url = state_meta.callback_url
         if not full_callback_url:
             # Fallback to constructing it using URL builder
             full_callback_url = self.url_builder.build_callback_url(
@@ -154,15 +152,27 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
             logger.error(f"Google token exchange error: {payload}")
             raise HTTPException(400, payload.get("error_description", payload["error"]))
 
-        # Don't clean up state here - let handle_callback do it after getting metadata
-        logger.info(f"Google OAuth token exchange successful for client: {meta.client_id}")
+        # Get user info to extract the actual user ID
+        access_token = payload["access_token"]
+        user_profile = await self._fetch_user_profile(access_token)
 
-        return ExternalUserInfo(
-            id=meta.client_id,
+        # Use either 'sub' (OpenID Connect) or 'id' (OAuth2) as the unique identifier
+        user_id = user_profile.get("sub") or user_profile.get("id", "")
+        if not user_id:
+            logger.error("Google user profile missing both 'sub' and 'id' fields")
+            raise HTTPException(400, "Invalid user profile: missing user ID")
+
+        # Don't clean up state here - let handle_callback do it after getting metadata
+        logger.info(f"Google OAuth token exchange successful for user: {user_id}")
+
+        user_info = ExternalUserInfo(
+            id=user_id,
             scopes=[],
-            raw_token=payload["access_token"],
+            raw_token=access_token,
             provider="google",
         )
+
+        return user_info, state_meta
 
     # ----- callback -----
     @property
@@ -175,12 +185,12 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
         code = request.query_params.get("code")
         state = request.query_params.get("state")
         error = request.query_params.get("error")
-        
+
         if error:
             logger.error(f"Google OAuth error: {error}")
             error_desc = request.query_params.get("error_description", error)
             return HTMLResponse(status_code=400, content=f"OAuth error: {error_desc}")
-            
+
         if not code or not state:
             raise HTTPException(400, "Missing code or state")
         try:
@@ -209,16 +219,19 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
             user_profile = await self._fetch_user_profile(token)
 
             # Extract Google-specific fields and map to standard UserContext
+            # Use either 'sub' (OpenID Connect) or 'id' (OAuth2) as the unique identifier
+            user_id = str(user_profile.get("sub") or user_profile.get("id", ""))
             return UserContext(
                 provider="google",
-                user_id=str(user_profile.get("sub", "")),  # Subject is the unique user ID
-                username=user_profile.get(
-                    "email", f"user_{user_profile.get('sub', 'unknown')}"
-                ).split("@")[0],  # Use email prefix as username
+                user_id=user_id,  # Use whichever ID field is available
+                username=user_profile.get("email", f"user_{user_id}").split("@")[
+                    0
+                ],  # Use email prefix as username
                 email=user_profile.get("email"),
                 name=user_profile.get("name"),
                 avatar_url=user_profile.get("picture"),
                 raw_profile=user_profile,
+                external_token=token,
             )
         except Exception as e:
             logger.error(f"Failed to get Google user context: {e}")

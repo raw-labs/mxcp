@@ -52,7 +52,6 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
 
         # State storage for OAuth flow
         self._state_store: dict[str, StateMeta] = {}
-        self._callback_store: dict[str, str] = {}  # Store callback URLs separately
 
     # ----- authorize -----
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
@@ -69,9 +68,8 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
             code_challenge=params.code_challenge,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             client_id=client_id,
+            callback_url=full_callback_url,
         )
-        # Store the callback URL separately for consistency
-        self._callback_store[state] = full_callback_url
 
         logger.info(
             f"GitHub OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
@@ -84,7 +82,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
         )
 
     # ----- state helpers -----
-    def get_state_metadata(self, state: str) -> StateMeta:
+    def _get_state_metadata(self, state: str) -> StateMeta:
         try:
             return self._state_store[state]
         except KeyError:
@@ -96,14 +94,14 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
     def cleanup_state(self, state: str) -> None:
         """Clean up state and associated callback URL after OAuth flow completion."""
         self._pop_state(state)
-        self._callback_store.pop(state, None)
 
     # ----- code exchange -----
-    async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
-        meta = self.get_state_metadata(state)
+    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
+        # Validate state parameter and get metadata
+        state_meta = self._get_state_metadata(state)
 
-        # Use the stored callback URL for consistency
-        full_callback_url = self._callback_store.get(state)
+        # Use the stored callback URL from state metadata
+        full_callback_url = state_meta.callback_url
         if not full_callback_url:
             # Fallback to constructing it using URL builder
             full_callback_url = self.url_builder.build_callback_url(
@@ -133,15 +131,27 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
             logger.error(f"GitHub token exchange error: {payload}")
             raise HTTPException(400, payload.get("error_description", payload["error"]))
 
-        # Don't clean up state here - let handle_callback do it after getting metadata
-        logger.info(f"GitHub OAuth token exchange successful for client: {meta.client_id}")
+        # Get user info to extract the actual user ID
+        access_token = payload["access_token"]
+        user_profile = await self._fetch_user_profile(access_token)
 
-        return ExternalUserInfo(
-            id=meta.client_id,
+        # Use GitHub's 'id' field as the unique identifier
+        user_id = user_profile.get("id", "")
+        if not user_id:
+            logger.error("GitHub user profile missing 'id' field")
+            raise HTTPException(400, "Invalid user profile: missing user ID")
+
+        # Don't clean up state here - let handle_callback do it after getting metadata
+        logger.info(f"GitHub OAuth token exchange successful for user: {user_id}")
+
+        user_info = ExternalUserInfo(
+            id=str(user_id),
             scopes=[],
-            raw_token=payload["access_token"],
+            raw_token=access_token,
             provider="github",
         )
+
+        return user_info, state_meta
 
     # ----- callback -----
     @property
@@ -189,6 +199,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
                 name=user_profile.get("name"),
                 avatar_url=user_profile.get("avatar_url"),
                 raw_profile=user_profile,
+                external_token=token,
             )
         except Exception as e:
             logger.error(f"Failed to get GitHub user context: {e}")

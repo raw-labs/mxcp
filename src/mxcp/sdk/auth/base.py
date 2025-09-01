@@ -61,13 +61,8 @@ class ExternalOAuthHandler(ABC):
 
     # ----- code exchange step -----
     @abstractmethod
-    async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
-        """Turn `code` + `state` into `ExternalUserInfo` or raise `HTTPException`."""
-
-    # ----- state retrieval -----
-    @abstractmethod
-    def get_state_metadata(self, state: str) -> StateMeta:
-        """Return metadata stored during `get_authorize_url`."""
+    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
+        """Turn `code` + `state` into `ExternalUserInfo` and `StateMeta` or raise `HTTPException`."""
 
     # ----- callback wiring -----
     @property
@@ -435,8 +430,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
     # ----- IdP callback → auth code -----
     async def handle_callback(self, code: str, state: str) -> str:
-        user_info = await self.handler.exchange_code(code, state)
-        meta = self.handler.get_state_metadata(state)
+        user_info, meta = await self.handler.exchange_code(code, state)
 
         # Clean up the handler's state now that we have the metadata
         if hasattr(self.handler, "cleanup_state"):
@@ -487,7 +481,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
             # Store external token (temporary until exchanged for MCP token)
             await self._store_token(
-                user_info.raw_token, user_info.id, user_info.scopes, None, user_info.raw_token
+                user_info.raw_token, meta.client_id, user_info.scopes, None, user_info.raw_token
             )
             self._token_mapping[mcp_code] = user_info.raw_token
 
