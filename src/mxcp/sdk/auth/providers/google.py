@@ -118,7 +118,7 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
 
 
     # ----- code exchange -----
-    async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
+    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
         # Validate state parameter and get metadata
         state_meta = self.get_state_metadata(state)
 
@@ -167,12 +167,14 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
         # Don't clean up state here - let handle_callback do it after getting metadata
         logger.info(f"Google OAuth token exchange successful for user: {user_id}")
 
-        return ExternalUserInfo(
+        user_info = ExternalUserInfo(
             id=user_id,
             scopes=[],
             raw_token=access_token,
             provider="google",
         )
+        
+        return user_info, state_meta
 
     # ----- callback -----
     @property

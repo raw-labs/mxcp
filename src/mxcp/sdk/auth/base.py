@@ -61,8 +61,8 @@ class ExternalOAuthHandler(ABC):
 
     # ----- code exchange step -----
     @abstractmethod
-    async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
-        """Turn `code` + `state` into `ExternalUserInfo` or raise `HTTPException`."""
+    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
+        """Turn `code` + `state` into `ExternalUserInfo` and `StateMeta` or raise `HTTPException`."""
 
     # ----- state retrieval -----
     @abstractmethod
@@ -435,8 +435,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
     # ----- IdP callback → auth code -----
     async def handle_callback(self, code: str, state: str) -> str:
-        user_info = await self.handler.exchange_code(code, state)
-        meta = self.handler.get_state_metadata(state)
+        user_info, meta = await self.handler.exchange_code(code, state)
 
         # Clean up the handler's state now that we have the metadata
         if hasattr(self.handler, "cleanup_state"):

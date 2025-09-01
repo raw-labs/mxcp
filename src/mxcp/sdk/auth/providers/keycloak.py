@@ -76,26 +76,29 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         """Generate the authorization URL for Keycloak."""
         state = secrets.token_urlsafe(32)
 
-        # Determine the actual redirect URI that will be used
-        actual_redirect_uri = (
-            str(params.redirect_uri)
-            if params.redirect_uri
-            else self.url_builder.build_callback_url(self._callback_path)
+        # Use URL builder to construct callback URL with proper scheme detection
+        full_callback_url = self.url_builder.build_callback_url(
+            self._callback_path, host=self.host, port=self.port
         )
 
-        # Store state metadata with the actual redirect URI that will be used
+        # Store the original redirect URI and callback URL in state for later use
         self._state_store[state] = StateMeta(
-            redirect_uri=actual_redirect_uri,
+            redirect_uri=str(params.redirect_uri),
             code_challenge=params.code_challenge,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             client_id=client_id,
+            callback_url=full_callback_url,
+        )
+
+        logger.info(
+            f"Keycloak OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
         )
 
         # Prepare authorization parameters
         auth_params = {
             "client_id": self.client_id,
             "response_type": "code",
-            "redirect_uri": actual_redirect_uri,
+            "redirect_uri": full_callback_url,
             "scope": self.scope,
             "state": state,
         }
@@ -114,17 +117,30 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
         return auth_url
 
-    async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
+    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
         """Exchange authorization code for tokens."""
-        # Retrieve state metadata
+        # Validate state parameter and get metadata
         state_meta = self.get_state_metadata(state)
+
+        # Use the stored callback URL from state metadata
+        full_callback_url = state_meta.callback_url
+        if not full_callback_url:
+            # Fallback to constructing it using URL builder
+            full_callback_url = self.url_builder.build_callback_url(
+                self._callback_path, host=self.host, port=self.port
+            )
+
+        logger.info(
+            f"Keycloak OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}"
+        )
+
         # Prepare token exchange request
         token_data = {
             "grant_type": "authorization_code",
             "code": code,
             "client_id": self.client_id,
             "client_secret": self.client_secret,
-            "redirect_uri": state_meta.redirect_uri,
+            "redirect_uri": full_callback_url,
         }
 
         # Exchange code for tokens
@@ -156,9 +172,13 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         # Extract scopes from the token response or use default
         scopes = token_response.get("scope", self.scope).split()
 
-        return ExternalUserInfo(
+        logger.info(f"Keycloak OAuth token exchange successful for user: {user_id}")
+
+        user_info = ExternalUserInfo(
             id=user_id, scopes=scopes, raw_token=access_token, provider="keycloak"
         )
+        
+        return user_info, state_meta
 
     async def _get_user_info(self, access_token: str) -> dict[str, Any]:
         """Get user information from Keycloak userinfo endpoint."""

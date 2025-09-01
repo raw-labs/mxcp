@@ -111,7 +111,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         self._pop_state(state)
 
     # ----- code exchange -----
-    async def exchange_code(self, code: str, state: str) -> ExternalUserInfo:
+    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
         meta = self.get_state_metadata(state)
 
         # Use the stored callback URL for consistency
@@ -159,12 +159,14 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         # Don't clean up state here - let handle_callback do it after getting metadata
         logger.info(f"Salesforce OAuth token exchange successful for user: {user_id}")
 
-        return ExternalUserInfo(
+        user_info = ExternalUserInfo(
             id=user_id,
             scopes=[],
             raw_token=access_token,
             provider="salesforce",
         )
+        
+        return user_info, meta
 
     # ----- callback -----
     @property
