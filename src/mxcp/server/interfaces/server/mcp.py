@@ -1249,6 +1249,22 @@ class RAWMCP:
                         f"Authenticated user: {user_context.username} (provider: {user_context.provider})"
                     )
 
+                # Apply parameter type conversion as defensive measure
+                # Even though SDK handles validation, ensure JSON float values are converted to integers
+                converted_params = kwargs.copy()
+                for param in parameters:
+                    param_name = param.get("name")
+                    param_type = param.get("type")
+                    if param_name in converted_params and param_type:
+                        try:
+                            converted_params[param_name] = self._convert_param_type(
+                                converted_params[param_name], param_type
+                            )
+                        except Exception as e:
+                            logger.debug(f"Parameter conversion failed for {param_name}: {e}")
+                            # Continue with original value if conversion fails
+                            pass
+
                 # run through new SDK executor (handles type conversion automatically)
                 if self.execution_engine is None:
                     raise RuntimeError("Execution engine not initialized")
@@ -1274,7 +1290,7 @@ class RAWMCP:
                 result, policy_info = await execute_endpoint_with_engine_and_policy(
                     endpoint_type=endpoint_type.value,
                     name=name,
-                    params=kwargs,  # No manual conversion needed - SDK handles it
+                    params=converted_params,  # Use converted parameters
                     user_config=self.user_config,
                     site_config=self.site_config,
                     execution_engine=self.execution_engine,

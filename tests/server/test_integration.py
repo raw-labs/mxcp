@@ -416,6 +416,40 @@ class TestIntegration:
                 assert result["endpoint"] == "https://api.example.com"
 
     @pytest.mark.asyncio
+    async def test_integer_parameter_conversion(self, integration_fixture_dir):
+        """Test that integer parameters are properly converted from JSON float values."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                # Test with float value 0.0 - this should be converted to int(0)
+                result = await client.call_tool("check_integer_parameter", {"top_n": 0.0})
+
+                # If the bug exists, test_passed will be False and we'll get an error
+                if not result["test_passed"]:
+                    pytest.fail(
+                        f"Integer conversion bug detected: {result.get('error', 'Unknown error')}"
+                    )
+
+                assert result["top_n"] == 0
+                assert result["type_received"] == "<class 'int'>"
+                assert result["selected_items"] == []
+                assert result["test_passed"] is True
+
+                # Test with float value 2.0 - this should be converted to int(2)
+                result = await client.call_tool("check_integer_parameter", {"top_n": 2.0})
+
+                if not result["test_passed"]:
+                    pytest.fail(
+                        f"Integer conversion bug detected: {result.get('error', 'Unknown error')}"
+                    )
+
+                assert result["top_n"] == 2
+                assert result["type_received"] == "<class 'int'>"
+                assert result["selected_items"] == ["first", "second"]
+                assert result["test_passed"] is True
+
+    @pytest.mark.asyncio
     async def test_reload_with_external_ref(self, integration_fixture_dir):
         """Test reload with external references (env vars, files)."""
         # Create a secret file
