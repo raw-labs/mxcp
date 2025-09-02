@@ -55,11 +55,24 @@ class ReloadRequest:
     description: str = ""
     created_at: datetime = field(default_factory=datetime.now)
     metadata: dict[str, Any] = field(default_factory=dict)
+    _completion_event: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
 
     def __post_init__(self) -> None:
         """Validate the reload request."""
         if self.payload_func is not None and not callable(self.payload_func):
             raise ValueError("payload_func must be callable")
+    
+    def wait_for_completion(self, timeout: float | None = None) -> bool:
+        """
+        Wait for this reload request to complete.
+        
+        Args:
+            timeout: Maximum time to wait in seconds. None means wait forever.
+            
+        Returns:
+            True if completed, False if timed out
+        """
+        return self._completion_event.wait(timeout)
 
 
 class ReloadManager:
@@ -194,6 +207,9 @@ class ReloadManager:
                     )
 
                 finally:
+                    # Always mark request as complete to unblock waiters
+                    request._completion_event.set()
+                    
                     with self._lock:
                         self._processing = False
                         self._current_request = None

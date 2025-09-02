@@ -169,7 +169,7 @@ def cleanup():
 
 ## Dynamic Reload with Database Rebuild
 
-MXCP provides a powerful feature that allows Python endpoints to trigger a safe reload of the server. This enables you to .e.g update your DuckDB database with fresh data without restarting the server.
+MXCP provides a feature that allows Python endpoints to trigger a safe reload of the server. This enables you to, for example, update your DuckDB database externally with fresh data without restarting the server.
 
 ### Why Use Dynamic Reload?
 
@@ -178,12 +178,12 @@ Traditional approaches to updating analytical databases often require:
 - Running ETL pipelines separately and hoping no queries run during updates
 - Complex orchestration to minimize downtime
 
-MXCP's `request_reload` solves these problems by providing a safe, atomic way to rebuild your database while the server continues handling requests.
+MXCP's `reload_duckdb` solves these problems by providing a safe way to rebuild your database while the server continues handling requests.
 
 ### How It Works
 
 ```python
-from mxcp.runtime import request_reload
+from mxcp.runtime import reload_duckdb
 import subprocess
 import pandas as pd
 
@@ -191,7 +191,7 @@ def update_analytics_data():
     """Endpoint that triggers a data refresh."""
     
     def rebuild_database():
-        """This runs with exclusive access to the database file."""
+        """This runs with all connections closed."""
         # Option 1: Run dbt to rebuild models
         subprocess.run(["dbt", "run", "--target", "prod"], check=True)
         
@@ -207,28 +207,33 @@ def update_analytics_data():
         conn.execute("CREATE OR REPLACE TABLE sales AS SELECT * FROM df")
         conn.close()
     
-    # Trigger the reload with our rebuild function
-    request_reload(rebuild_database)
+    # Schedule the reload with our rebuild function
+    reload_duckdb(
+        payload_func=rebuild_database,
+        description="Updating analytics data"
+    )
     
-    return {"status": "Data refresh completed successfully"}
+    # Return immediately - reload happens asynchronously
+    return {"status": "Data refresh scheduled", "message": "Reload will complete in background"}
 ```
 
 ### The Reload Process
 
-When you call `request_reload`, MXCP:
+When you call `reload_duckdb`, MXCP:
 
-1. **Starts draining requests** - New requests wait, existing ones complete
-2. **Acquires exclusive lock** - Ensures no concurrent operations
-3. **Shuts down DuckDB** - Closes all connections cleanly
-4. **Runs your rebuild function** - With exclusive access to the database file
-5. **Reloads configuration** - Picks up any changed secrets or settings
-6. **Recreates services** - New DuckDB connection with fresh data
-7. **Resumes normal operations** - Queued requests proceed with new data
+1. **Queues the reload request** - Function returns immediately
+2. **Drains active requests** - Existing requests complete normally
+3. **Shuts down runtime components** - Closes Python hooks and DuckDB connections
+4. **Runs your payload function** - With all connections closed
+5. **Restarts runtime components** - Fresh configuration and connections
+6. **Processes waiting requests** - With the updated data
+
+The reload happens asynchronously after your request completes.
 
 ### Real-World Example: Scheduled Data Updates
 
 ```python
-from mxcp.runtime import request_reload, db
+from mxcp.runtime import reload_duckdb, db
 from datetime import datetime
 import requests
 
@@ -264,42 +269,48 @@ def scheduled_update(source: str = "api") -> dict:
         
         conn.close()
     
-    # Trigger the rebuild
-    request_reload(rebuild_from_api)
+    # Schedule the rebuild
+    reload_duckdb(
+        payload_func=rebuild_from_api,
+        description=f"Scheduled update from {source}"
+    )
     
-    # Check the results
-    result = db.execute("SELECT COUNT(*) as count FROM daily_metrics")
-    duration = (datetime.now() - start_time).total_seconds()
-    
+    # Return immediately - the reload happens asynchronously
     return {
-        "status": "success",
-        "records_loaded": result[0]["count"],
-        "duration_seconds": duration
+        "status": "scheduled",
+        "source": source,
+        "timestamp": datetime.now().isoformat(),
+        "message": "Data update will complete in background"
     }
 ```
 
 ### Best Practices
 
-1. **Keep rebuilds focused** - Do one thing well in your rebuild function
-2. **Handle errors gracefully** - Failed rebuilds leave the server in its previous state
-3. **Monitor duration** - Requests wait up to 30 seconds during reload
-4. **Test thoroughly** - Rebuild functions run with elevated privileges
+1. **Keep payload functions focused** - Do one thing well in your payload function
+2. **Handle errors gracefully** - Failed reloads leave the server in its previous state
+3. **Return quickly** - The reload happens asynchronously, so return a status immediately
+4. **Test thoroughly** - Payload functions run with all connections closed
 5. **Use for data updates** - Not for schema migrations or structural changes
+6. **Check completion indirectly** - Query data or use monitoring to verify reload completed
 
 ### Configuration-Only Reloads
 
-You can also reload just the configuration (secrets, environment variables) without a rebuild:
+You can also reload just the configuration (secrets, environment variables) without a payload:
 
 ```python
 def rotate_secrets():
     """Endpoint to reload after secret rotation."""
-    # Trigger config reload without database rebuild
-    request_reload()
+    # Schedule config reload without database rebuild
+    reload_duckdb(description="Reloading after secret rotation")
     
-    # New secrets are now active
-    new_key = config.get_secret("api_key")
-    return {"status": "Secrets reloaded successfully"}
+    # Return immediately - new secrets will be active after reload
+    return {
+        "status": "Reload scheduled",
+        "message": "Configuration will refresh in background"
+    }
 ```
+
+**Important Note:** Since `reload_duckdb` is asynchronous, you cannot immediately use the new configuration values. The reload happens after your current request completes.
 
 ## Async Functions
 

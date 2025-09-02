@@ -47,7 +47,7 @@ from mxcp.server.core.config._types import (
 from mxcp.server.core.config.site_config import get_active_profile, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.core.refs.external import ExternalRefTracker
-from mxcp.server.core.reload import ReloadManager
+from mxcp.server.core.reload import ReloadManager, ReloadRequest
 from mxcp.server.core.telemetry import configure_telemetry_from_config, shutdown_telemetry
 from mxcp.server.definitions.endpoints._types import (
     ParamDefinition,
@@ -540,10 +540,16 @@ class RAWMCP:
         """Handle SIGHUP signal to reload the configuration."""
         logger.info("Received SIGHUP signal, initiating configuration reload...")
 
-        # Queue a reload request
-        self.reload_manager.request_reload(
-            description="SIGHUP triggered reload", metadata={"signal": signum}
-        )
+        # Request configuration reload and wait for it to complete
+        request = self.reload_configuration()
+        
+        # Wait for the reload to complete
+        completed = request.wait_for_completion(timeout=60.0)  # 60 second timeout
+        
+        if completed:
+            logger.info("SIGHUP reload completed successfully")
+        else:
+            logger.error("SIGHUP reload timed out after 60 seconds")
 
     def shutdown_runtime_components(self) -> None:
         """
@@ -605,7 +611,7 @@ class RAWMCP:
 
         logger.info("Telemetry initialization complete.")
 
-    def reload_configuration(self) -> None:
+    def reload_configuration(self) -> "ReloadRequest":
         """
         Request a full system reload.
 
@@ -656,7 +662,7 @@ class RAWMCP:
             logger.info("Configuration files reloaded")
 
         # Request a reload with config reload as payload
-        self.reload_manager.request_reload(
+        return self.reload_manager.request_reload(
             payload_func=reload_config_files, description="Configuration reload (SIGHUP)"
         )
 

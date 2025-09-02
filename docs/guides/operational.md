@@ -871,7 +871,7 @@ http:
 
 ### SIGHUP Configuration Reload
 
-MXCP supports hot configuration reload via SIGHUP:
+MXCP supports hot configuration reload via SIGHUP. The reload process is designed to be safe and minimize disruption:
 
 ```bash
 # Send SIGHUP to reload configuration
@@ -881,15 +881,26 @@ kill -HUP <mxcp-pid>
 docker kill -s HUP mxcp-container
 ```
 
+**Reload Process:**
+1. SIGHUP handler queues a reload request
+2. Active requests are allowed to complete (drained)
+3. Runtime components are shut down
+4. Configuration files are re-read from disk
+5. Runtime components are restarted with new configuration
+6. The handler waits up to 60 seconds for completion
+
 What gets reloaded:
 - External configuration values (environment variables, vault://, file://)
 - Secret values
 - Database connections
+- Python runtime hooks
 
 What doesn't reload:
 - Endpoint definitions (requires restart)
 - OAuth configuration (requires restart)
 - Transport settings (requires restart)
+
+**Note:** New requests that arrive during reload will wait until the reload completes before being processed.
 
 ### Graceful Shutdown
 
