@@ -1,7 +1,10 @@
 """Keycloak OAuth provider implementation for MXCP authentication."""
 
+import base64
+import hashlib
 import logging
 import secrets
+from dataclasses import dataclass
 from typing import Any, cast
 from urllib.parse import urlencode
 
@@ -22,6 +25,29 @@ from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from ..url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class KeycloakStateMeta(StateMeta):
+    """Extended state metadata for Keycloak OAuth flow with PKCE support."""
+
+    keycloak_code_verifier: str | None = None  # For Keycloak token exchange
+
+
+def _generate_pkce_pair() -> tuple[str, str]:
+    """Generate PKCE code verifier and challenge pair.
+
+    Returns:
+        Tuple of (code_verifier, code_challenge)
+    """
+    # Generate a cryptographically random code_verifier (43-128 chars)
+    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("utf-8").rstrip("=")
+
+    # Generate code_challenge using S256 method
+    challenge_bytes = hashlib.sha256(code_verifier.encode("utf-8")).digest()
+    code_challenge = base64.urlsafe_b64encode(challenge_bytes).decode("utf-8").rstrip("=")
+
+    return code_verifier, code_challenge
 
 
 class KeycloakOAuthHandler(ExternalOAuthHandler):
@@ -65,7 +91,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         self.url_builder = URLBuilder(transport_config)
 
         # Internal state management
-        self._state_store: dict[str, StateMeta] = {}
+        self._state_store: dict[str, KeycloakStateMeta] = {}
 
     @property
     def callback_path(self) -> str:
@@ -74,20 +100,24 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
         """Generate the authorization URL for Keycloak."""
-        state = secrets.token_urlsafe(32)
+        state = params.state or secrets.token_hex(16)
 
         # Use URL builder to construct callback URL with proper scheme detection
         full_callback_url = self.url_builder.build_callback_url(
             self._callback_path, host=self.host, port=self.port
         )
 
-        # Store the original redirect URI and callback URL in state for later use
-        self._state_store[state] = StateMeta(
+        # Generate PKCE pair for Keycloak (always required)
+        keycloak_code_verifier, keycloak_code_challenge = _generate_pkce_pair()
+
+        # Store the original redirect URI, callback URL, and both PKCE flows
+        self._state_store[state] = KeycloakStateMeta(
             redirect_uri=str(params.redirect_uri),
-            code_challenge=params.code_challenge,
+            code_challenge=params.code_challenge,  # MCP client's original (for internal MCP flow)
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             client_id=client_id,
             callback_url=full_callback_url,
+            keycloak_code_verifier=keycloak_code_verifier,  # For Keycloak token exchange
         )
 
         logger.info(
@@ -101,12 +131,9 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
             "redirect_uri": full_callback_url,
             "scope": self.scope,
             "state": state,
+            "code_challenge": keycloak_code_challenge,  # Always use our generated challenge for Keycloak
+            "code_challenge_method": "S256",
         }
-
-        # Add optional parameters
-        if params.code_challenge:
-            auth_params["code_challenge"] = params.code_challenge
-            auth_params["code_challenge_method"] = "S256"  # Always use S256 for PKCE
 
         # Note: prompt and login_hint are not standard AuthorizationParams attributes
         # They would need to be passed through a different mechanism if needed
@@ -117,7 +144,9 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
         return auth_url
 
-    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
+    async def exchange_code(
+        self, code: str, state: str
+    ) -> tuple[ExternalUserInfo, KeycloakStateMeta]:
         """Exchange authorization code for tokens."""
         # Validate state parameter and get metadata
         state_meta = self._get_state_metadata(state)
@@ -142,6 +171,11 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
             "client_secret": self.client_secret,
             "redirect_uri": full_callback_url,
         }
+
+        # Add Keycloak-specific PKCE code_verifier (required for PKCE flow)
+        if state_meta.keycloak_code_verifier:
+            token_data["code_verifier"] = state_meta.keycloak_code_verifier
+            logger.debug("Added Keycloak PKCE code_verifier to token exchange request")
 
         # Exchange code for tokens
         async with create_mcp_http_client() as client:
@@ -193,7 +227,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
             return cast(dict[str, Any], response.json())
 
-    def _get_state_metadata(self, state: str) -> StateMeta:
+    def _get_state_metadata(self, state: str) -> KeycloakStateMeta:
         """Return metadata stored for a given state."""
         state_meta = self._state_store.get(state)
         if not state_meta:
