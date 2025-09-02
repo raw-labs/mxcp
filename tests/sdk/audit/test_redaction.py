@@ -71,7 +71,7 @@ def test_preserve_type_redaction():
     assert apply_redaction("string", RedactionStrategy.PRESERVE_TYPE) == "[REDACTED]"
     assert apply_redaction(123, RedactionStrategy.PRESERVE_TYPE) == 0
     assert apply_redaction(45.67, RedactionStrategy.PRESERVE_TYPE) == 0.0
-    assert apply_redaction(True, RedactionStrategy.PRESERVE_TYPE) == False
+    assert not apply_redaction(True, RedactionStrategy.PRESERVE_TYPE)
     assert apply_redaction([1, 2, 3], RedactionStrategy.PRESERVE_TYPE) == []
     assert apply_redaction({"key": "value"}, RedactionStrategy.PRESERVE_TYPE) == {}
     assert apply_redaction(None, RedactionStrategy.PRESERVE_TYPE) is None

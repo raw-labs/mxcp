@@ -5,10 +5,9 @@ multiple executor plugins and provides a unified interface for code execution.
 """
 
 import asyncio
+import contextlib
 import tempfile
 from pathlib import Path
-from typing import Any, Dict
-from unittest.mock import Mock
 
 import pytest
 
@@ -416,15 +415,13 @@ class TestExecutionEngineErrorHandling:
         engine = engine_with_executors
 
         # Cause an error
-        try:
+        with contextlib.suppress(Exception):
             await engine.execute(
                 language="python",
                 source_code="def invalid syntax:",
                 params={},
                 context=mock_context,
             )
-        except Exception:
-            pass
 
         # Engine should still be usable
         assert len(engine._executors) > 0
@@ -465,7 +462,7 @@ class TestExecutionEngineIntegration:
         await engine.execute(
             language="sql",
             source_code="""
-                INSERT INTO test_integration VALUES 
+                INSERT INTO test_integration VALUES
                 (1, 'first'),
                 (2, 'second')
             """,

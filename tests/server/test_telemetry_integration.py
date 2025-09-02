@@ -1,15 +1,17 @@
 """Integration test for telemetry with execution engine."""
 
 import asyncio
-import pytest
+import builtins
+import contextlib
 from pathlib import Path
-from mxcp.server.core.config._types import UserConfig, SiteConfig
-from mxcp.server.executor.engine import create_execution_engine
-from mxcp.server.services.endpoints.service import execute_endpoint
-from mxcp.server.core.telemetry import configure_telemetry_from_config
-from mxcp.sdk.telemetry import is_telemetry_enabled, get_current_trace_id, shutdown_telemetry
+
+import pytest
+
 from mxcp.sdk.executor import ExecutionContext
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.telemetry import is_telemetry_enabled, shutdown_telemetry
+from mxcp.server.core.config._types import SiteConfig, UserConfig
+from mxcp.server.core.telemetry import configure_telemetry_from_config
+from mxcp.server.executor.engine import create_execution_engine
 
 
 @pytest.fixture(autouse=True)
@@ -17,6 +19,7 @@ def reset_telemetry():
     """Reset telemetry state between tests."""
     # Reset OpenTelemetry's internal state
     from opentelemetry import trace
+
     import mxcp.sdk.telemetry.config
     import mxcp.sdk.telemetry.tracer
 
@@ -29,10 +32,8 @@ def reset_telemetry():
     yield
 
     # Cleanup after test
-    try:
+    with contextlib.suppress(builtins.BaseException):
         shutdown_telemetry()
-    except:
-        pass
     trace._TRACER_PROVIDER = None
     trace._TRACER_PROVIDER_FACTORY = None
     mxcp.sdk.telemetry.config._telemetry_enabled = False
@@ -162,10 +163,10 @@ def test_nested_telemetry_spans():
 
     # Test nested spans directly with execution engine
     async def run_nested_operations():
-        from mxcp.sdk.telemetry import traced_operation
-
         # Create execution engine for nested operations
         import tempfile
+
+        from mxcp.sdk.telemetry import traced_operation
 
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)

@@ -8,10 +8,7 @@ and error conditions.
 import asyncio
 import tempfile
 from pathlib import Path
-from typing import Any, Dict
-from unittest.mock import Mock, patch
 
-import duckdb
 import pytest
 
 from mxcp.sdk.auth import UserContext
@@ -21,8 +18,6 @@ from mxcp.sdk.executor.plugins.duckdb_plugin._types import (
     DatabaseConfig,
     ExtensionDefinition,
     PluginConfig,
-    PluginDefinition,
-    SecretDefinition,
 )
 
 
@@ -129,16 +124,16 @@ class TestDuckDBExecutorBasics:
     def test_validate_sql_source(self, duckdb_executor, mock_context):
         """Test SQL source validation."""
         # Valid SQL
-        assert duckdb_executor.validate_source("SELECT 1") == True
+        assert duckdb_executor.validate_source("SELECT 1")
 
         # Invalid SQL should return False
-        assert duckdb_executor.validate_source("INVALID SQL SYNTAX") == False
+        assert not duckdb_executor.validate_source("INVALID SQL SYNTAX")
 
         # Empty string should return False
-        assert duckdb_executor.validate_source("") == False
+        assert not duckdb_executor.validate_source("")
 
         # None should return False
-        assert duckdb_executor.validate_source(None) == False
+        assert not duckdb_executor.validate_source(None)
 
 
 class TestDuckDBSQLExecution:
@@ -296,7 +291,7 @@ class TestDuckDBErrorHandling:
     @pytest.mark.asyncio
     async def test_parameter_missing_error(self, duckdb_executor, mock_context):
         """Test handling of missing parameter errors."""
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(Exception):
             await duckdb_executor.execute(
                 "SELECT * FROM table WHERE id = $missing_param", {}, mock_context
             )

@@ -1,18 +1,16 @@
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 import yaml
 from click.testing import CliRunner
 
-from mxcp.server.interfaces.cli.init import init
 from mxcp.server.core.config.site_config import load_site_config
+from mxcp.server.interfaces.cli.init import init
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mxcp.server.core.config._types import SiteConfig
 from mxcp.server.core.config.user_config import load_user_config
 
 
@@ -393,7 +392,7 @@ def test_load_without_resolving_refs(tmp_path):
         # Now load with resolving references (default behavior)
         # This will fail on vault resolution, but that's expected
         with pytest.raises(ValueError, match="Vault URL .* found but Vault is not enabled"):
-            config_resolved = load_user_config(site_config, resolve_refs=True)
+            load_user_config(site_config, resolve_refs=True)
     finally:
         # Clean up the secret file
         if secret_file.exists():

@@ -227,6 +227,17 @@ class PythonExecutor(ExecutorPlugin):
             logger.debug(f"Python parameter extraction failed: {e}")
             return []
 
+    def prepare_context(self, context: ExecutionContext) -> None:
+        """Prepare the execution context with executor-specific resources.
+
+        This method is called before any execution to allow executors
+        to add their resources to the context.
+
+        Args:
+            context: The execution context to prepare
+        """
+        pass
+
     def _extract_parameters_from_file(self, file_path: str) -> list[str]:
         """Extract parameters from a Python file."""
         try:

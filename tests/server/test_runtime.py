@@ -10,7 +10,6 @@ This test suite verifies that all runtime APIs work correctly:
 - Lifecycle hooks (on_init, on_shutdown)
 """
 
-import asyncio
 import os
 from pathlib import Path
 

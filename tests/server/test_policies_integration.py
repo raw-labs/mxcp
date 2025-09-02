@@ -1,15 +1,14 @@
 """Integration tests for policy enforcement functionality."""
 
-import asyncio
 import os
 from pathlib import Path
 
 import pytest
 
+from mxcp.sdk.auth import UserContext
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.services.endpoints import execute_endpoint
-from mxcp.sdk.auth import UserContext
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -546,7 +545,7 @@ class TestPolicyEnforcementEdgeCases:
             )
             # If we get here, the policy was bypassed due to the bug
             print(f"Result: {result}")
-            assert False, "This test should fail due to the user parameter collision bug"
+            raise AssertionError("This test should fail due to the user parameter collision bug")
         except Exception as e:
             # The policy evaluation will likely fail because "test_value".role doesn't exist
             print(f"Exception as expected due to collision bug: {e}")

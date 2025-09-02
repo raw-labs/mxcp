@@ -9,7 +9,6 @@ import signal
 import threading
 import time
 import traceback
-from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
@@ -244,7 +243,7 @@ class RAWMCP:
 
         # Initialize external reference tracker for hot reload
         self.ref_tracker = ExternalRefTracker()
-        
+
         # Initialize reload manager
         self.reload_manager = ReloadManager(self)
 
@@ -543,8 +542,7 @@ class RAWMCP:
 
         # Queue a reload request
         self.reload_manager.request_reload(
-            description="SIGHUP triggered reload",
-            metadata={"signal": signum}
+            description="SIGHUP triggered reload", metadata={"signal": signum}
         )
 
     def shutdown_runtime_components(self) -> None:
@@ -610,7 +608,7 @@ class RAWMCP:
     def reload_configuration(self) -> None:
         """
         Request a full system reload.
-        
+
         Typically triggered by SIGHUP signal. The reload will:
         1. Drain active requests
         2. Shutdown runtime components
@@ -639,29 +637,27 @@ class RAWMCP:
         def reload_config_files() -> None:
             """Reload configuration files from disk."""
             logger.info("Reloading configuration files...")
-            
+
             # Reload site config
             site_path = self.site_config_path or Path.cwd()
             new_site_template = load_site_config(site_path)
             new_user_template = load_user_config(new_site_template, resolve_refs=False)
-            
+
             # Update templates in tracker
             self.ref_tracker.set_template(
-                cast(dict[str, Any], new_site_template), 
-                cast(dict[str, Any], new_user_template)
+                cast(dict[str, Any], new_site_template), cast(dict[str, Any], new_user_template)
             )
-            
+
             # Resolve and update configs
             new_site_config, new_user_config = self.ref_tracker.resolve_all()
-            self.site_config = new_site_config
-            self.user_config = new_user_config
-            
+            self.site_config = cast(SiteConfig, new_site_config)
+            self.user_config = cast(UserConfig, new_user_config)
+
             logger.info("Configuration files reloaded")
 
         # Request a reload with config reload as payload
         self.reload_manager.request_reload(
-            payload_func=reload_config_files,
-            description="Configuration reload (SIGHUP)"
+            payload_func=reload_config_files, description="Configuration reload (SIGHUP)"
         )
 
     def _ensure_async_completes(
@@ -747,7 +743,7 @@ class RAWMCP:
             # Stop the reload manager
             if self.reload_manager:
                 self.reload_manager.stop()
-                
+
             # Gracefully shut down the reloadable runtime components first
             # This handles python runtimes, plugins, and the db session.
             self.shutdown_runtime_components()
@@ -1821,7 +1817,7 @@ class RAWMCP:
             logger.info("Starting MCP server...")
             # Store transport mode for use in handlers
             self.transport_mode = transport
-            
+
             # Start the reload manager
             self.reload_manager.start()
 

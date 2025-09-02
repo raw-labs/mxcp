@@ -1,14 +1,12 @@
-import asyncio
 import os
 from pathlib import Path
 
-import duckdb
 import pytest
 
-from mxcp.server.executor.engine import create_execution_engine
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
+from mxcp.server.executor.engine import create_execution_engine
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
 
 
@@ -81,13 +79,6 @@ def test_parameter_validation(site_config, test_repo_path):
     os.chdir(test_repo_path)
     try:
         # Test valid parameters - this will be validated internally by the execution engine
-        valid_params = {
-            "name": "test",
-            "age": 25,
-            "is_active": True,
-            "tags": ["tag1", "tag2"],
-            "preferences": {"notifications": True, "theme": "dark"},
-        }
 
         # Load endpoint to check schema structure
         loader = EndpointLoader(site_config)

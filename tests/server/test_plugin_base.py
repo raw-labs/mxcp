@@ -1,6 +1,6 @@
 import base64
 from datetime import date, datetime, time, timedelta
-from typing import Any, Dict, List, TypedDict
+from typing import Any, TypedDict
 
 import duckdb
 import pytest
@@ -16,7 +16,7 @@ class MyStruct(TypedDict):
 class PluginImpl(MXCPBasePlugin):
     """A test plugin that implements simple operations for all supported types."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config)
 
     # Primitive types

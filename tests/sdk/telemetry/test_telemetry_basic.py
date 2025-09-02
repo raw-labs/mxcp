@@ -1,18 +1,17 @@
 """Basic tests for MXCP SDK telemetry module."""
 
 import pytest
+
 from mxcp.sdk.telemetry import (
+    SpanKind,
+    TelemetryConfig,
+    TracingConfig,
     configure_all,
-    traced_operation,
-    get_current_trace_id,
     get_current_span_id,
+    get_current_trace_id,
     is_telemetry_enabled,
     shutdown_telemetry,
-    TracingConfig,
-    TelemetryConfig,
-    StatusCode,
-    Status,
-    SpanKind,
+    traced_operation,
 )
 
 
@@ -91,10 +90,9 @@ def test_traced_operation_with_exception():
     configure_all(enabled=True, tracing={"console_export": True})
 
     try:
-        with pytest.raises(ValueError):
-            with traced_operation("test.error") as span:
-                assert span is not None
-                raise ValueError("Test error")
+        with pytest.raises(ValueError), traced_operation("test.error") as span:
+            assert span is not None
+            raise ValueError("Test error")
 
         # The span should have recorded the exception
         # (We can't easily verify this without a test exporter)

@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -61,10 +62,8 @@ async def http_server(mcp_server):
     await asyncio.sleep(1)  # Give server time to start
     yield mcp_server
     server_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await server_task
-    except asyncio.CancelledError:
-        pass
 
 
 @pytest.fixture

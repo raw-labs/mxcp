@@ -233,40 +233,40 @@ def run_shutdown_hooks() -> None:
 def reload_duckdb(payload_func: Callable[[], None] | None = None, description: str = "") -> None:
     """
     Request a system reload with an optional payload function.
-    
+
     This triggers a full system reload where:
     1. Active requests are drained
     2. Runtime components (Python + DuckDB) are shut down
     3. Your payload function runs (if provided)
     4. Runtime components are restarted
-    
+
     The payload function runs when the system is safely shut down, making it
     ideal for operations like replacing database files or updating configuration.
-    
+
     Args:
         payload_func: Optional function to execute during reload
         description: Optional description of what the reload is doing
-    
+
     Example:
         # Simple reload (just restarts everything)
         mxcp.runtime.reload_duckdb()
-        
+
         # Reload with database replacement
         def replace_database():
             import shutil
             shutil.copy("updated_data.duckdb", "data.duckdb")
-        
+
         mxcp.runtime.reload_duckdb(
             payload_func=replace_database,
             description="Replacing database with updated version"
         )
-    
+
     Note:
         - The reload happens asynchronously after this function returns
         - The payload function runs with all connections closed
         - Safe to call from within a request
         - Active requests will complete before the reload
-    
+
     Raises:
         RuntimeError: If called outside of MXCP execution context
     """
@@ -283,11 +283,10 @@ def reload_duckdb(payload_func: Callable[[], None] | None = None, description: s
             "Server reference not available in context. "
             "This function can only be called from within MXCP server endpoints."
         )
-    
+
     logger.info(f"Requesting DuckDB reload: {description or 'No description'}")
-    
+
     # Use the server's reload manager to queue the reload
     server.reload_manager.request_reload(
-        payload_func=payload_func,
-        description=description or "DuckDB reload via runtime API"
+        payload_func=payload_func, description=description or "DuckDB reload via runtime API"
     )

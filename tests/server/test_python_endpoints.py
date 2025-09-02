@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.runtime import _init_hooks, _shutdown_hooks
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
+from mxcp.server.executor.engine import create_execution_engine
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
-from mxcp.runtime import _init_hooks, _shutdown_hooks
 
 
 @pytest.fixture
@@ -134,7 +134,7 @@ def execution_engine(test_configs, temp_project_dir):
                 )
                 conn.execute(
                     """
-                    INSERT INTO test_data VALUES 
+                    INSERT INTO test_data VALUES
                     (1, 'Alice', 100.5),
                     (2, 'Bob', 200.7),
                     (3, 'Charlie', 300.9)
@@ -301,10 +301,10 @@ def get_secret_info() -> dict:
     api_key_params = config.get_secret("api_key")
     missing = config.get_secret("missing_key")
     setting = config.get_setting("project")
-    
+
     # Extract value from value-type secret
     api_key = api_key_params["value"] if api_key_params else None
-    
+
     return {
         "has_api_key": api_key is not None,
         "api_key_starts_with": api_key[:5] if api_key else None,
@@ -377,15 +377,15 @@ def setup():
     global _hook_state
     _hook_state["init_called"] = True
     _hook_state["init_timestamp"] = time.time()
-    
+
 @on_shutdown
 def cleanup():
     '''Shutdown hook that sets global state.'''
     import time
-    global _hook_state  
+    global _hook_state
     _hook_state["shutdown_called"] = True
     _hook_state["shutdown_timestamp"] = time.time()
-    
+
 def check_hook_state() -> dict:
     '''Return the current hook execution state.'''
     return _hook_state.copy()
@@ -501,10 +501,10 @@ from mxcp.runtime import db
 async def slow_query(delay: float) -> dict:
     # Simulate async operation
     await asyncio.sleep(delay)
-    
+
     # Access database
     result = db.execute("SELECT COUNT(*) as count FROM test_data")
-    
+
     return {
         "delayed": delay,
         "count": result[0]["count"]
@@ -569,7 +569,7 @@ async def test_context_access() -> dict:
         db_access_works = False
         row_count = None
         error = str(e)
-    
+
     # Try to access config (requires context)
     try:
         project = config.get_setting("project")
@@ -580,10 +580,10 @@ async def test_context_access() -> dict:
         config_access_works = False
         project = None
         secret_value = None
-    
+
     # Test nested async calls
     nested_result = await _nested_async()
-    
+
     return {
         "db_access_works": db_access_works,
         "row_count": row_count,
@@ -596,7 +596,7 @@ async def test_context_access() -> dict:
 async def _nested_async() -> dict:
     \"\"\"Nested async function to test context propagation.\"\"\"
     await asyncio.sleep(0.01)  # Simulate async work
-    
+
     try:
         # Context should still be available in nested async calls
         result = db.execute("SELECT name FROM test_data WHERE id = 1")
@@ -690,7 +690,7 @@ def test_custom_secrets() -> dict:
     # Test getting custom type secret
     custom_params = config.get_secret("custom_api")
     python_params = config.get_secret("python_only")
-    
+
     return {
         "custom_api_key": custom_params["api_key"] if custom_params else None,
         "custom_endpoint": custom_params.get("endpoint") if custom_params else None,
@@ -897,14 +897,14 @@ def test_sql_with_dates() -> list:
             updated_at DATE
         )
     \"\"\")
-    
+
     # Insert test data
     db.execute(\"\"\"
-        INSERT INTO test_dates VALUES 
+        INSERT INTO test_dates VALUES
         (1, CURRENT_TIMESTAMP, CURRENT_DATE),
         (2, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_DATE - INTERVAL '1 day')
     \"\"\")
-    
+
     # Query and return results
     return db.execute("SELECT * FROM test_dates ORDER BY id")
 """
