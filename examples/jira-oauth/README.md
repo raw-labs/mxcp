@@ -120,7 +120,7 @@ projects:
 2. **Start MXCP**:
    ```bash
    # From the examples/jira-oauth directory:
-   mxcp serve --config config.yml
+   MXCP_CONFIG=config.yml mxcp serve
    ```
 
 3. **Authenticate**:
