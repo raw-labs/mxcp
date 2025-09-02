@@ -117,6 +117,7 @@ async def execute_endpoint(
     readonly: bool = False,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
+    request_headers: dict[str, str] | None = None,
 ) -> Any:
     """Execute endpoint using SDK executor system.
 
@@ -153,6 +154,7 @@ async def execute_endpoint(
             execution_engine=engine,
             skip_output_validation=skip_output_validation,
             user_context=user_context,
+            request_headers=request_headers,
         )
 
     finally:
@@ -164,6 +166,7 @@ async def execute_endpoint_with_engine_and_policy(
     endpoint_type: str,
     name: str,
     params: dict[str, Any],
+    request_headers: dict[str, str] | None,
     user_config: UserConfig,
     site_config: SiteConfig,
     execution_engine: ExecutionEngine,
@@ -179,6 +182,7 @@ async def execute_endpoint_with_engine_and_policy(
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
         name: Name of the endpoint to execute
         params: Parameters to pass to the endpoint
+        request_headers: Request headers from FastMCP
         site_config: Site configuration (needed for EndpointLoader)
         execution_engine: Pre-created execution engine to reuse
         skip_output_validation: Whether to skip output schema validation
@@ -273,6 +277,7 @@ async def execute_endpoint_with_engine_and_policy(
             user_config,
             site_config,
             user_context,
+            request_headers,
         )
 
     # Enforce output policies (symmetry with input policy enforcement above)
@@ -319,6 +324,7 @@ async def execute_endpoint_with_engine(
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
+    request_headers: dict[str, str] | None = None,
 ) -> Any:
     """Execute endpoint using an existing SDK execution engine.
 
@@ -330,6 +336,7 @@ async def execute_endpoint_with_engine(
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
         name: Name of the endpoint to execute
         params: Parameters to pass to the endpoint
+        request_headers: Request headers from FastMCP
         site_config: Site configuration (needed for EndpointLoader)
         execution_engine: Pre-created execution engine to reuse
         skip_output_validation: Whether to skip output schema validation
@@ -346,6 +353,7 @@ async def execute_endpoint_with_engine(
         endpoint_type=endpoint_type,
         name=name,
         params=params,
+        request_headers=request_headers,
         user_config=user_config,
         site_config=site_config,
         execution_engine=execution_engine,

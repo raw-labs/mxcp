@@ -1232,10 +1232,21 @@ class RAWMCP:
             # Extract the FastMCP Context (first parameter)
             ctx = kwargs.pop("ctx", None)
             mcp_session_id = None
-            if ctx and hasattr(ctx, "session_id"):
-                # session_id might be None in stateless mode
-                with contextlib.suppress(Exception):
-                    mcp_session_id = ctx.session_id
+            request_headers = None
+            if ctx:
+                if hasattr(ctx, "session_id"):
+                    # session_id might be None in stateless mode
+                    with contextlib.suppress(Exception):
+                        mcp_session_id = ctx.session_id
+                if hasattr(ctx, "request_context"):
+                    request_context = ctx.request_context
+                    if (
+                        request_context
+                        and hasattr(request_context, "request")
+                        and request_context.request
+                    ):
+                        with contextlib.suppress(Exception):
+                            request_headers = dict(request_context.request.headers)
 
             try:
                 # Get the user context from the context variable (set by auth middleware)
@@ -1279,6 +1290,7 @@ class RAWMCP:
                     site_config=self.site_config,
                     execution_engine=self.execution_engine,
                     user_context=user_context,
+                    request_headers=request_headers,  # Pass the FastMCP request headers
                 )
                 logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                 return result
