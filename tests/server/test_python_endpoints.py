@@ -1315,6 +1315,10 @@ def extra_args(a: int) -> dict:
     \"\"\"Function that expects only one argument\"\"\"
     return {"result": a * 2}
 
+def validate_params(a: int) -> dict:
+    \"\"\"Function for parameter validation test\"\"\"
+    return {"result": a * 2}
+
 def optional_params(a: int, b: int = 10, c: str = "default") -> dict:
     \"\"\"Function with optional parameters\"\"\"
     return {
@@ -1455,7 +1459,7 @@ tool:
         """
 mxcp: 1
 tool:
-  name: extra_args
+  name: validate_params
   description: Test YAML validation
   language: python
   source:
@@ -1473,7 +1477,7 @@ tool:
     with pytest.raises(ValueError, match="Unknown parameter: b"):
         await execute_endpoint_with_engine(
             endpoint_type="tool",
-            name="extra_args",
+            name="validate_params",
             params={"a": 5, "b": 10},
             user_config=user_config,
             site_config=site_config,
