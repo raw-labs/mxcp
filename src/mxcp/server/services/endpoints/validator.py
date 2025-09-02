@@ -76,7 +76,19 @@ def validate_all_endpoints(
         for path, endpoint, error in endpoints:
             path_str = str(path)  # Convert PosixPath to string
             if error:
-                results.append({"status": "error", "path": path_str, "message": error})
+                # Normalize path to relative path for consistency
+                try:
+                    repo_root = find_repo_root()
+                    path_obj = Path(path).resolve()
+                    relative_path = str(path_obj.relative_to(repo_root))
+                except ValueError:
+                    # If path is not relative to repo_root, use the filename
+                    relative_path = Path(path).name
+                except Exception:
+                    # If we can't find repo root or resolve path, use filename as fallback
+                    relative_path = Path(path).name
+                
+                results.append({"status": "error", "path": relative_path, "message": error})
                 has_errors = True
             elif endpoint:
                 result = validate_endpoint_payload(endpoint, path_str, execution_engine)
