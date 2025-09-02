@@ -542,10 +542,10 @@ class RAWMCP:
 
         # Request configuration reload and wait for it to complete
         request = self.reload_configuration()
-        
+
         # Wait for the reload to complete
         completed = request.wait_for_completion(timeout=60.0)  # 60 second timeout
-        
+
         if completed:
             logger.info("SIGHUP reload completed successfully")
         else:

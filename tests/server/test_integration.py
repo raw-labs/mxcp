@@ -613,7 +613,7 @@ def verify_reload(expected_count: int, expected_message: str, expected_timestamp
 
         # Create the tool YAML in the expected format
         tools_dir = integration_fixture_dir / "tools"
-        
+
         # Tool to trigger reload
         reload_tool_yml = tools_dir / "trigger_reload.yml"
         reload_tool = {
@@ -636,7 +636,7 @@ def verify_reload(expected_count: int, expected_message: str, expected_timestamp
         }
         with open(reload_tool_yml, "w") as f:
             yaml.dump(reload_tool, f)
-            
+
         # Tool to verify reload
         verify_tool_yml = tools_dir / "verify_reload.yml"
         verify_tool = {
@@ -661,7 +661,7 @@ def verify_reload(expected_count: int, expected_message: str, expected_timestamp
                         "name": "expected_timestamp",
                         "type": "string",
                         "description": "Expected timestamp",
-                    }
+                    },
                 ],
                 "return": {"type": "object"},
             },
@@ -689,7 +689,7 @@ def verify_reload(expected_count: int, expected_message: str, expected_timestamp
                 assert result["reload_requested"] is True
                 assert result["message"] == "integration_test"
                 assert result["before_count"] == 0  # First run, no data yet
-                
+
                 # Save values for verification
                 timestamp1 = result["timestamp"]
 
@@ -700,12 +700,15 @@ def verify_reload(expected_count: int, expected_message: str, expected_timestamp
                 await asyncio.sleep(3.0)
 
                 # Step 2: Verify the reload completed
-                verify_result = await client.call_tool("verify_reload", {
-                    "expected_count": 1,
-                    "expected_message": "integration_test",
-                    "expected_timestamp": timestamp1
-                })
-                
+                verify_result = await client.call_tool(
+                    "verify_reload",
+                    {
+                        "expected_count": 1,
+                        "expected_message": "integration_test",
+                        "expected_timestamp": timestamp1,
+                    },
+                )
+
                 assert verify_result["reload_success"] is True
                 assert verify_result["count"] >= 1
                 assert verify_result["found_row"] is not None
@@ -716,19 +719,22 @@ def verify_reload(expected_count: int, expected_message: str, expected_timestamp
                 assert result2["reload_requested"] is True
                 assert result2["message"] == "second_test"
                 assert result2["before_count"] == 1  # Should see the previous row
-                
+
                 timestamp2 = result2["timestamp"]
-                
+
                 # Wait for the second reload
                 await asyncio.sleep(3.0)
-                
+
                 # Verify second reload
-                verify_result2 = await client.call_tool("verify_reload", {
-                    "expected_count": 2,
-                    "expected_message": "second_test", 
-                    "expected_timestamp": timestamp2
-                })
-                
+                verify_result2 = await client.call_tool(
+                    "verify_reload",
+                    {
+                        "expected_count": 2,
+                        "expected_message": "second_test",
+                        "expected_timestamp": timestamp2,
+                    },
+                )
+
                 assert verify_result2["reload_success"] is True
                 assert verify_result2["count"] >= 2
                 assert verify_result2["found_row"] is not None

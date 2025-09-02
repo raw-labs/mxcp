@@ -26,10 +26,10 @@ class TestReloadFunctionality:
         server.ref_tracker = MagicMock()
         server.ref_tracker._template_config = True
         server.site_config_path = None
-        
+
         # Mock the reload manager
         server.reload_manager = MagicMock(spec=ReloadManager)
-        
+
         # Set up the methods we need
         server.reload_configuration = RAWMCP.reload_configuration.__get__(server, RAWMCP)
         server._handle_reload_signal = RAWMCP._handle_reload_signal.__get__(server, RAWMCP)
@@ -49,10 +49,10 @@ class TestReloadFunctionality:
         server = MagicMock(spec=RAWMCP)
         server.profile_name = "test"
         server.reload_manager = MagicMock(spec=ReloadManager)
-        
+
         # Create a payload function
         payload_func = MagicMock()
-        
+
         # Use the runtime API to trigger a reload
         from mxcp.sdk.executor import ExecutionContext
 
@@ -101,7 +101,7 @@ class TestReloadFunctionality:
         """Test that reload operations record appropriate metrics."""
         # The new reload system uses ReloadManager which handles metrics internally
         # This test verifies that reload requests are properly queued
-        
+
         # Create a minimal mock server
         server = MagicMock(spec=RAWMCP)
         server.profile_name = "test"
@@ -121,7 +121,7 @@ class TestReloadFunctionality:
 
                 # Verify reload was requested
                 server.reload_manager.request_reload.assert_called_once()
-                
+
                 # Check that a payload function was provided
                 call_args = server.reload_manager.request_reload.call_args
                 assert call_args[1]["payload_func"] is not None
