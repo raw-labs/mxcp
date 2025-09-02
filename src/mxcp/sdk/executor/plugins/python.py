@@ -48,12 +48,14 @@ import inspect
 import logging
 import sys
 import tempfile
+import typing
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from mxcp.sdk.telemetry import (
     decrement_gauge,
@@ -621,9 +623,6 @@ class PythonExecutor(ExecutorPlugin):
             Converted parameters dictionary, or dict with __validation_errors on failure.
             The __validation_errors contains structured per-parameter error details.
         """
-        import typing
-
-        from pydantic import ValidationError
 
         # Get function signature
         sig = inspect.signature(func)
@@ -701,9 +700,15 @@ class PythonExecutor(ExecutorPlugin):
                 validation_errors[param_name] = param_errors
 
             except Exception as e:
-                # Log unexpected errors with stack trace but continue processing other parameters
-                logger.exception(f"Unexpected error converting parameter '{param_name}': {e}")
-                converted_params[param_name] = param_value
+                # Log unexpected errors with stack trace and fail validation
+                logger.exception(f"Unexpected error converting parameter '{param_name}'")
+                validation_errors[param_name] = [
+                    {
+                        "field": param_name,
+                        "message": f"Unexpected conversion error: {str(e)}",
+                        "type": "unexpected_error",
+                    }
+                ]
 
         # Return structured validation errors if any occurred
         if validation_errors:
@@ -735,7 +740,6 @@ class PythonExecutor(ExecutorPlugin):
         Raises:
             ValidationError: If pydantic validation fails
         """
-        from pydantic import BaseModel, TypeAdapter
 
         # Fast path: if value is already a BaseModel instance, keep it as-is
         if isinstance(param_value, BaseModel):
