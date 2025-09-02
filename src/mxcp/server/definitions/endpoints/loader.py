@@ -11,6 +11,7 @@ from referencing import Registry, Resource
 from mxcp.server.core.config._types import SiteConfig
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition
+from mxcp.server.definitions.endpoints.utils import get_endpoint_name_or_uri
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -71,6 +72,60 @@ class EndpointLoader:
             if prompt_def:
                 return bool(prompt_def.get("enabled", True))
         return True
+
+    def _check_duplicate_endpoint_names(
+        self, endpoints: list[tuple[Path, EndpointDefinition | None, str | None]]
+    ) -> list[tuple[Path, None, str]]:
+        """Check for duplicate endpoint names/URIs across all endpoints.
+
+        Args:
+            endpoints: List of discovered endpoints
+
+        Returns:
+            List of error tuples in the same format as discovery results:
+            (path, None, error_message) for each duplicate found
+        """
+        name_to_info: dict[str, list[tuple[Path, str]]] = {}
+
+        # Collect names/URIs and their paths with endpoint types
+        for path, endpoint, error in endpoints:
+            if error or not endpoint:
+                continue
+
+            # Find endpoint type and extract name/uri
+            for endpoint_type in ("tool", "prompt", "resource"):
+                if endpoint_type in endpoint:
+                    name = get_endpoint_name_or_uri(endpoint, endpoint_type)
+                    name_to_info.setdefault(name, []).append((path, endpoint_type))
+                    break
+
+        # Generate errors for duplicates
+        error_tuples = []
+        for name, path_type_pairs in name_to_info.items():
+            if len(path_type_pairs) > 1:
+                paths = [pair[0] for pair in path_type_pairs]
+                endpoint_types = [pair[1] for pair in path_type_pairs]
+
+                # Determine what we're calling this (name vs URI)
+                # If any of the duplicates is a resource, call it URI, otherwise name
+                has_resource = "resource" in endpoint_types
+                identifier_type = "URI" if has_resource else "name"
+
+                # Convert all paths to relative paths consistently
+                relative_paths = []
+                for path in paths:
+                    try:
+                        relative_paths.append(str(path.relative_to(self._repo_root)))
+                    except (ValueError, Exception):
+                        relative_paths.append(path.name)
+
+                # Create error message
+                error_message = f"Duplicate endpoint {identifier_type} '{name}' found in: {', '.join(relative_paths)}"
+
+                # Add error tuple for the first occurrence
+                error_tuples.append((paths[0], None, error_message))
+
+        return error_tuples
 
     def _load_schema(self, schema_name: str) -> tuple[dict[str, Any], Registry]:
         """Load a schema file by name and create a registry for cross-file references"""
@@ -189,6 +244,10 @@ class EndpointLoader:
         all_endpoints.extend(self.discover_tools())
         all_endpoints.extend(self.discover_resources())
         all_endpoints.extend(self.discover_prompts())
+
+        # Check for duplicate endpoint names/URIs and add as errors
+        duplicate_errors = self._check_duplicate_endpoint_names(all_endpoints)
+        all_endpoints.extend(duplicate_errors)
 
         return all_endpoints
 
