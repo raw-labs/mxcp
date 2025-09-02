@@ -75,15 +75,14 @@ class EndpointLoader:
 
     def _check_duplicate_endpoint_names(
         self, endpoints: list[tuple[Path, EndpointDefinition | None, str | None]]
-    ) -> list[tuple[Path, None, str]]:
+    ) -> dict[Path, str]:
         """Check for duplicate endpoint names/URIs across all endpoints.
-
+        
         Args:
             endpoints: List of discovered endpoints
-
+            
         Returns:
-            List of error tuples in the same format as discovery results:
-            (path, None, error_message) for each duplicate found
+            Dictionary mapping file paths to error messages for files with duplicates
         """
         name_to_info: dict[str, list[tuple[Path, str]]] = {}
 
@@ -99,8 +98,8 @@ class EndpointLoader:
                     name_to_info.setdefault(name, []).append((path, endpoint_type))
                     break
 
-        # Generate errors for duplicates
-        error_tuples = []
+        # Generate error messages for duplicates
+        duplicate_errors: dict[Path, str] = {}
         for name, path_type_pairs in name_to_info.items():
             if len(path_type_pairs) > 1:
                 paths = [pair[0] for pair in path_type_pairs]
@@ -121,11 +120,12 @@ class EndpointLoader:
 
                 # Create error message
                 error_message = f"Duplicate endpoint {identifier_type} '{name}' found in: {', '.join(relative_paths)}"
+                
+                # Mark ALL duplicate files as errors
+                for path in paths:
+                    duplicate_errors[path] = error_message
 
-                # Add error tuple for the first occurrence
-                error_tuples.append((paths[0], None, error_message))
-
-        return error_tuples
+        return duplicate_errors
 
     def _load_schema(self, schema_name: str) -> tuple[dict[str, Any], Registry]:
         """Load a schema file by name and create a registry for cross-file references"""
@@ -245,9 +245,13 @@ class EndpointLoader:
         all_endpoints.extend(self.discover_resources())
         all_endpoints.extend(self.discover_prompts())
 
-        # Check for duplicate endpoint names/URIs and add as errors
+        # Check for duplicate endpoint names/URIs and mark affected files as errors
         duplicate_errors = self._check_duplicate_endpoint_names(all_endpoints)
-        all_endpoints.extend(duplicate_errors)
+        
+        # Update existing entries to mark duplicates as errors
+        for i, (path, endpoint, error) in enumerate(all_endpoints):
+            if error is None and path in duplicate_errors:
+                all_endpoints[i] = (path, None, duplicate_errors[path])
 
         return all_endpoints
 
