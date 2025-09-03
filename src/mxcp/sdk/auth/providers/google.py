@@ -1,4 +1,4 @@
-"""Atlassian OAuth provider implementation for MXCP authentication."""
+"""Google OAuth provider implementation for MXCP authentication."""
 
 import logging
 import secrets
@@ -11,8 +11,8 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
 from .._types import (
-    AtlassianAuthConfig,
     ExternalUserInfo,
+    GoogleAuthConfig,
     HttpTransportConfig,
     StateMeta,
     UserContext,
@@ -23,41 +23,41 @@ from ..url_utils import URLBuilder
 logger = logging.getLogger(__name__)
 
 
-class AtlassianOAuthHandler(ExternalOAuthHandler):
-    """Atlassian OAuth provider implementation for JIRA and Confluence Cloud."""
+class GoogleOAuthHandler(ExternalOAuthHandler):
+    """Google OAuth provider implementation for Google Workspace APIs."""
 
     def __init__(
         self,
-        atlassian_config: AtlassianAuthConfig,
+        google_config: GoogleAuthConfig,
         transport_config: HttpTransportConfig | None = None,
         host: str = "localhost",
         port: int = 8000,
     ):
-        """Initialize Atlassian OAuth handler.
+        """Initialize Google OAuth handler.
 
         Args:
-            atlassian_config: Atlassian-specific OAuth configuration
+            google_config: Google-specific OAuth configuration
             transport_config: HTTP transport configuration for URL building
             host: The server host for callback URLs
             port: The server port for callback URLs
         """
-        logger.info(f"AtlassianOAuthHandler init: {atlassian_config}")
+        logger.info("GoogleOAuthHandler initialized for Google Workspace authentication")
 
         # Required fields are enforced by TypedDict structure
-        self.client_id = atlassian_config["client_id"]
-        self.client_secret = atlassian_config["client_secret"]
+        self.client_id = google_config["client_id"]
+        self.client_secret = google_config["client_secret"]
 
-        # Atlassian OAuth endpoints are standardized
-        self.auth_url = atlassian_config["auth_url"]
-        self.token_url = atlassian_config["token_url"]
+        # Google OAuth endpoints
+        self.auth_url = google_config["auth_url"]
+        self.token_url = google_config["token_url"]
 
-        # Use configured scope or default
-        self.scope = atlassian_config.get(
+        # Use configured scope or default to calendar read-only
+        self.scope = google_config.get(
             "scope",
-            "read:me read:jira-work read:jira-user read:confluence-content.all read:confluence-user offline_access",
+            "https://www.googleapis.com/auth/calendar.readonly openid profile email",
         )
 
-        self._callback_path = atlassian_config["callback_path"]
+        self._callback_path = google_config["callback_path"]
         self.host = host
         self.port = port
 
@@ -86,19 +86,19 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         )
 
         logger.info(
-            f"Atlassian OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
+            f"Google OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
         )
 
-        # Atlassian requires specific parameters
+        # Google requires specific parameters including access_type for refresh tokens
         return (
             f"{self.auth_url}?"
-            f"audience=api.atlassian.com&"
             f"client_id={self.client_id}&"
-            f"scope={self.scope}&"
             f"redirect_uri={full_callback_url}&"
-            f"state={state}&"
             f"response_type=code&"
-            f"prompt=consent"
+            f"scope={self.scope}&"
+            f"state={state}&"
+            f"access_type=offline&"  # Request refresh token
+            f"prompt=consent"  # Force consent to ensure refresh token is returned
         )
 
     # ----- state helpers -----
@@ -129,47 +129,47 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
             )
 
         logger.info(
-            f"Atlassian OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}"
+            f"Google OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}"
         )
 
         async with create_mcp_http_client() as client:
             resp = await client.post(
                 self.token_url,
-                json={
+                data={
                     "grant_type": "authorization_code",
                     "client_id": self.client_id,
                     "client_secret": self.client_secret,
                     "code": code,
                     "redirect_uri": full_callback_url,
                 },
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
         if resp.status_code != 200:
-            logger.error(f"Atlassian token exchange failed: {resp.status_code} {resp.text}")
+            logger.error(f"Google token exchange failed: {resp.status_code} {resp.text}")
             raise HTTPException(400, "Failed to exchange code for token")
         payload = resp.json()
         if "error" in payload:
-            logger.error(f"Atlassian token exchange error: {payload}")
+            logger.error(f"Google token exchange error: {payload}")
             raise HTTPException(400, payload.get("error_description", payload["error"]))
 
         # Get user info to extract the actual user ID
         access_token = payload["access_token"]
         user_profile = await self._fetch_user_profile(access_token)
 
-        # Use Atlassian's 'account_id' field as the unique identifier
-        user_id = user_profile.get("account_id", "")
+        # Use either 'sub' (OpenID Connect) or 'id' (OAuth2) as the unique identifier
+        user_id = user_profile.get("sub") or user_profile.get("id", "")
         if not user_id:
-            logger.error("Atlassian user profile missing 'account_id' field")
+            logger.error("Google user profile missing both 'sub' and 'id' fields")
             raise HTTPException(400, "Invalid user profile: missing user ID")
 
         # Don't clean up state here - let handle_callback do it after getting metadata
-        logger.info(f"Atlassian OAuth token exchange successful for user: {user_id}")
+        logger.info(f"Google OAuth token exchange successful for user: {user_id}")
 
         user_info = ExternalUserInfo(
             id=user_id,
             scopes=[],
             raw_token=access_token,
-            provider="atlassian",
+            provider="google",
         )
 
         return user_info, state_meta
@@ -184,6 +184,13 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
     ) -> Response:  # noqa: E501
         code = request.query_params.get("code")
         state = request.query_params.get("state")
+        error = request.query_params.get("error")
+
+        if error:
+            logger.error(f"Google OAuth error: {error}")
+            error_desc = request.query_params.get("error_description", error)
+            return HTMLResponse(status_code=400, content=f"OAuth error: {error_desc}")
+
         if not code or not state:
             raise HTTPException(400, "Missing code or state")
         try:
@@ -192,18 +199,18 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         except HTTPException:
             raise
         except Exception as exc:
-            logger.error("Atlassian callback failed", exc_info=exc)
+            logger.error("Google callback failed", exc_info=exc)
             return HTMLResponse(status_code=500, content="oauth_failure")
 
     # ----- user context -----
     async def get_user_context(self, token: str) -> UserContext:
-        """Get standardized user context from Atlassian.
+        """Get standardized user context from Google.
 
         Args:
-            token: Atlassian OAuth access token
+            token: Google OAuth access token
 
         Returns:
-            UserContext with Atlassian user information
+            UserContext with Google user information
 
         Raises:
             HTTPException: If token is invalid or user info cannot be retrieved
@@ -211,13 +218,15 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         try:
             user_profile = await self._fetch_user_profile(token)
 
-            # Extract Atlassian-specific fields and map to standard UserContext
+            # Extract Google-specific fields and map to standard UserContext
+            # Use either 'sub' (OpenID Connect) or 'id' (OAuth2) as the unique identifier
+            user_id = str(user_profile.get("sub") or user_profile.get("id", ""))
             return UserContext(
-                provider="atlassian",
-                user_id=str(user_profile.get("account_id", "")),
-                username=user_profile.get(
-                    "nickname", f"user_{user_profile.get('account_id', 'unknown')}"
-                ),
+                provider="google",
+                user_id=user_id,  # Use whichever ID field is available
+                username=user_profile.get("email", f"user_{user_id}").split("@")[
+                    0
+                ],  # Use email prefix as username
                 email=user_profile.get("email"),
                 name=user_profile.get("name"),
                 avatar_url=user_profile.get("picture"),
@@ -225,35 +234,35 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
                 external_token=token,
             )
         except Exception as e:
-            logger.error(f"Failed to get Atlassian user context: {e}")
+            logger.error(f"Failed to get Google user context: {e}")
             raise HTTPException(500, f"Failed to retrieve user information: {e}") from e
 
     # ----- private helper -----
     async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
-        """Fetch raw user profile from Atlassian User Identity API (private implementation detail)."""
-        logger.info(f"Fetching Atlassian user profile with token: {token[:10]}...")
+        """Fetch raw user profile from Google UserInfo API (private implementation detail)."""
+        logger.info(f"Fetching Google user profile with token: {token[:10]}...")
 
         async with create_mcp_http_client() as client:
             resp = await client.get(
-                "https://api.atlassian.com/me",
+                "https://www.googleapis.com/oauth2/v2/userinfo",
                 headers={"Authorization": f"Bearer {token}"},
             )
 
-        logger.info(f"Atlassian User Identity API response: {resp.status_code}")
+        logger.info(f"Google UserInfo API response: {resp.status_code}")
 
         if resp.status_code != 200:
             error_body = ""
             try:
                 error_body = resp.text
-                logger.error(f"Atlassian User Identity API error {resp.status_code}: {error_body}")
+                logger.error(f"Google UserInfo API error {resp.status_code}: {error_body}")
             except Exception:
                 logger.error(
-                    f"Atlassian User Identity API error {resp.status_code}: Unable to read response body"
+                    f"Google UserInfo API error {resp.status_code}: Unable to read response body"
                 )
-            raise ValueError(f"Atlassian API error: {resp.status_code} - {error_body}")
+            raise ValueError(f"Google API error: {resp.status_code} - {error_body}")
 
         user_data = cast(dict[str, Any], resp.json())
         logger.info(
-            f"Successfully fetched Atlassian user profile for account_id: {user_data.get('account_id', 'unknown')}"
+            f"Successfully fetched Google user profile for sub: {user_data.get('sub', 'unknown')}"
         )
         return user_data

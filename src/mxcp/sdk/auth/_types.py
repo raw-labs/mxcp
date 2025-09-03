@@ -92,6 +92,20 @@ class KeycloakAuthConfig(TypedDict):
     callback_path: str
 
 
+class GoogleAuthConfig(TypedDict):
+    """Google OAuth provider configuration.
+
+    For Google Workspace authentication including Calendar, Drive, etc.
+    """
+
+    client_id: str
+    client_secret: str
+    scope: str | None
+    callback_path: str
+    auth_url: str
+    token_url: str
+
+
 class AuthPersistenceConfig(TypedDict, total=False):
     """Authentication persistence backend configuration.
 
@@ -118,7 +132,7 @@ class AuthConfig(TypedDict, total=False):
     Provider-specific configs are passed directly to their respective handlers.
     """
 
-    provider: Literal["none", "github", "atlassian", "salesforce", "keycloak"] | None
+    provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google"] | None
     clients: list[OAuthClientConfig] | None  # Pre-configured OAuth clients
     authorization: AuthorizationConfig | None  # Authorization policies
     persistence: AuthPersistenceConfig | None  # Token/client persistence

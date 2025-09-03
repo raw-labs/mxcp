@@ -89,15 +89,13 @@ For remote servers or production deployments, you need to:
 - For production deployments, Salesforce requires HTTPS for callback URLs
 - You can configure multiple callback URLs in your Connected App to support both local development and production
 
-## Running the Examples
-
-### 1. Authenticate with Salesforce
+## Authenticate with Salesforce
 
 When you first run MXCP, you'll need to authenticate with Salesforce:
 
 ```bash
 # Start the MXCP server with the config file - this will prompt for authentication
-mxcp serve --config config.yml
+MXCP_CONFIG=config.yml mxcp serve
 ```
 
 The authentication flow will:
@@ -106,21 +104,6 @@ The authentication flow will:
 3. Authorize the MXCP application
 4. Redirect back to complete authentication
 
-### 2. Test the Tool
-
-Once authenticated, you can test the tools:
-
-```bash
-# List all Salesforce objects in your org (using the config file)
-mxcp run tool list_sobjects --config config.yml
-```
-
-### 3. Use with MCP Clients
-
-```bash
-# Start the MXCP server for use with MCP clients like Claude Desktop
-mxcp serve --config config.yml
-```
 
 ## Project Structure
 

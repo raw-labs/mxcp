@@ -1,0 +1,53 @@
+mxcp: 1
+tool:
+  name: whoami
+  title: Current User Information
+  description: |
+    Get the current authenticated user's information (id, email, name) from Google OAuth context.
+    Use this tool to verify authentication status and get user profile data.
+    
+    Example usage:
+    - "Who am I logged in as?"
+    - "What's my Google account information?"
+    - "Show me my user profile"
+  tags:
+    - google-calendar
+    - user
+    - auth
+  annotations:
+    readOnlyHint: true
+    idempotentHint: true
+  parameters: []
+  return:
+    type: object
+    description: Current user information from Google OAuth profile
+    properties:
+      id:
+        type: string
+        description: Google user ID (subject)
+      email:
+        type: string
+        description: User's email address
+      name:
+        type: string
+        description: User's full display name
+      given_name:
+        type: string
+        description: User's first name
+      family_name:
+        type: string
+        description: User's last name
+      picture:
+        type: string
+        description: User's profile picture URL
+      locale:
+        type: string
+        description: User's locale (e.g., 'en-US')
+      verified_email:
+        type: boolean
+        description: Whether email address is verified
+    required: ["id", "email", "name"]
+  language: python
+  source:
+    file: ../python/google_calendar_client.py
+  # NOTE: tests section omitted - OAuth tools cannot be tested via mxcp CLI
