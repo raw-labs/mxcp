@@ -161,7 +161,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
 
         # Extract scopes from token response
         scopes = payload.get("scope", "").split() if payload.get("scope") else []
-        
+
         user_info = ExternalUserInfo(
             id=user_id,
             scopes=scopes,
