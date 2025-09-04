@@ -165,9 +165,12 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
         # Don't clean up state here - let handle_callback do it after getting metadata
         logger.info(f"Google OAuth token exchange successful for user: {user_id}")
 
+        # Extract scopes from token response
+        scopes = payload.get("scope", "").split() if payload.get("scope") else []
+        
         user_info = ExternalUserInfo(
             id=user_id,
-            scopes=[],
+            scopes=scopes,
             raw_token=access_token,
             provider="google",
         )
