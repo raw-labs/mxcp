@@ -23,7 +23,7 @@ from mxcp.server.core.config._types import SiteConfig, UserConfig
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import PromptDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.endpoint import (
     execute_code_with_engine,
     execute_prompt_with_validation,
@@ -142,8 +142,10 @@ async def execute_endpoint(
         RuntimeError: If execution fails
     """
 
-    # Create execution engine
-    engine = create_execution_engine(user_config, site_config, profile_name, readonly=readonly)
+    # Create runtime environment
+    runtime_env = create_runtime_environment(
+        user_config, site_config, profile_name, readonly=readonly
+    )
 
     try:
         # Delegate to the with_engine variant to avoid code duplication
@@ -153,14 +155,14 @@ async def execute_endpoint(
             params=params,
             user_config=user_config,
             site_config=site_config,
-            execution_engine=engine,
+            execution_engine=runtime_env.execution_engine,
             skip_output_validation=skip_output_validation,
             user_context=user_context,
         )
 
     finally:
-        # Shutdown the engine
-        engine.shutdown()
+        # Shutdown the runtime environment
+        runtime_env.shutdown()
 
 
 async def execute_endpoint_with_engine_and_policy(

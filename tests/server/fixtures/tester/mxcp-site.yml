@@ -4,5 +4,5 @@ profile: "test"
 profiles:
   test:
     duckdb:
-      path: ":memory:"
+      path: "test.duckdb"
       readonly: false

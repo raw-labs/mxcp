@@ -7,7 +7,7 @@ The ExecutionEngine provides a unified interface for executing SQL and Python co
 through the SDK executor system, with full plugin support and validation.
 
 Example usage:
-    >>> from mxcp.server.executor.engine import create_execution_engine
+    >>> from mxcp.server.executor.engine import create_runtime_environment
     >>> from mxcp.server.core.config.user_config import load_user_config
     >>> from mxcp.server.core.config.site_config import load_site_config
     >>> from mxcp.sdk.executor import ExecutionContext
@@ -17,15 +17,15 @@ Example usage:
     >>> site_config = load_site_config()
     >>> user_config = load_user_config(site_config)
     >>>
-    >>> # Create execution engine
-    >>> engine = create_execution_engine(user_config, site_config, profile="development")
+    >>> # Create runtime environment
+    >>> runtime_env = create_runtime_environment(user_config, site_config, profile="development")
     >>>
     >>> # Create execution context
     >>> user_context = UserContext(provider="github", user_id="user123", username="user")
     >>> exec_context = ExecutionContext(user_context=user_context)
     >>>
     >>> # Execute SQL
-    >>> result = await engine.execute(
+    >>> result = await runtime_env.execution_engine.execute(
     ...     language="sql",
     ...     source_code="SELECT * FROM users WHERE active = $active",
     ...     params={"active": True},
@@ -33,17 +33,22 @@ Example usage:
     ... )
     >>>
     >>> # Execute Python
-    >>> result = await engine.execute(
+    >>> result = await runtime_env.execution_engine.execute(
     ...     language="python",
     ...     source_code="return sum(numbers)",
     ...     params={"numbers": [1, 2, 3, 4, 5]},
     ...     context=exec_context
     ... )
+    >>>
+    >>> # Shutdown everything properly
+    >>> runtime_env.shutdown()
 """
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
+from mxcp.sdk.duckdb import DuckDBRuntime
 from mxcp.sdk.executor import ExecutionEngine
 from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
 from mxcp.server.core.config._types import SiteConfig, UserConfig
@@ -56,22 +61,52 @@ from mxcp.server.core.config.site_config import find_repo_root
 logger = logging.getLogger(__name__)
 
 
-def create_execution_engine(
+@dataclass
+class RuntimeEnvironment:
+    """Container for all runtime components.
+
+    This class manages the lifecycle of both the ExecutionEngine and
+    the shared DuckDB runtime, ensuring proper shutdown order.
+    """
+
+    execution_engine: ExecutionEngine
+    duckdb_runtime: DuckDBRuntime
+
+    def shutdown(self) -> None:
+        """Shutdown all components in the correct order.
+
+        First shuts down the ExecutionEngine (which shuts down executors),
+        then shuts down shared resources like the DuckDB runtime.
+        """
+        logger.info("Shutting down runtime environment...")
+
+        # First shutdown engine (which shuts down executors)
+        logger.info("Shutting down execution engine...")
+        self.execution_engine.shutdown()
+
+        # Then shutdown shared resources
+        logger.info("Shutting down shared DuckDB runtime...")
+        self.duckdb_runtime.shutdown()
+
+        logger.info("Runtime environment shutdown complete")
+
+
+def create_runtime_environment(
     user_config: UserConfig,
     site_config: SiteConfig,
     profile: str | None = None,
     repo_root: Path | None = None,
     readonly: bool | None = None,
-) -> ExecutionEngine:
-    """Create an ExecutionEngine with DuckDB and Python executors.
+) -> RuntimeEnvironment:
+    """Create a RuntimeEnvironment with DuckDB and Python executors.
 
-    This function creates a fully configured ExecutionEngine with:
-    - DuckDB executor for SQL execution with plugins, extensions, and secrets
-    - Python executor for Python code execution with automatic lifecycle hooks
+    This function creates a fully configured RuntimeEnvironment with:
+    - An ExecutionEngine containing DuckDB and Python executors
+    - A shared DuckDB runtime for connection pooling and lifecycle management
 
-    The engine is fully initialized and ready for execution. The Python executor
+    The environment is fully initialized and ready for execution. The Python executor
     automatically handles module preloading and init hook execution during its
-    initialization. Shutdown hooks are run automatically when the engine is shut down.
+    initialization. Shutdown hooks are run automatically when the environment is shut down.
 
     Args:
         user_config: User configuration containing secrets and plugin configs by profile
@@ -81,24 +116,25 @@ def create_execution_engine(
         readonly: Optional override for database readonly setting (overrides site config)
 
     Returns:
-        Configured ExecutionEngine ready for use
+        RuntimeEnvironment containing ExecutionEngine and shared resources
 
     Raises:
-        RuntimeError: If ExecutionEngine creation fails
+        RuntimeError: If RuntimeEnvironment creation fails
         ValueError: If profile is not found in configurations
 
     Example:
-        >>> from mxcp.server.executor.engine import create_execution_engine
+        >>> from mxcp.server.executor.engine import create_runtime_environment
         >>> from mxcp.server.core.config.user_config import load_user_config
         >>> from mxcp.server.core.config.site_config import load_site_config
         >>>
         >>> site_config = load_site_config()
         >>> user_config = load_user_config(site_config)
-        >>> engine = create_execution_engine(user_config, site_config)
+        >>> runtime_env = create_runtime_environment(user_config, site_config)
+        >>> engine = runtime_env.execution_engine
         >>>
         >>> # Engine is ready to use with both SQL and Python execution
         >>> # Python init hooks have already run during PythonExecutor creation
-        >>> # Call engine.shutdown() when done to run shutdown hooks automatically
+        >>> # Call runtime_env.shutdown() when done to clean up all resources
     """
     try:
         # Create ExecutionEngine
@@ -123,13 +159,16 @@ def create_execution_engine(
             site_config, user_config, profile_name, readonly=db_readonly
         )
 
-        # Create and register DuckDB executor
-        duckdb_executor = DuckDBExecutor(
+        # Create shared DuckDB runtime first
+        duckdb_runtime = DuckDBRuntime(
             database_config=database_config,
             plugins=plugins_list,
             plugin_config=plugin_config,
             secrets=secrets_list,
         )
+
+        # Create and register DuckDB executor with shared runtime
+        duckdb_executor = DuckDBExecutor(duckdb_runtime)
         engine.register_executor(duckdb_executor)
         logger.info("Registered DuckDB executor")
 
@@ -137,21 +176,23 @@ def create_execution_engine(
         if repo_root is None:
             repo_root = find_repo_root()
 
-        # Create Python executor with runtime context for init hooks
-        # This ensures init hooks have access to config, db, and plugins
+        # Create Python executor with execution context for init hooks
+        # Init hooks need access to config and secrets
         with execution_context_for_init_hooks(
             user_config=user_config,
             site_config=site_config,
-            duckdb_session=duckdb_executor.session,
-            plugins=duckdb_executor.session.plugins,
+            duckdb_runtime=duckdb_runtime,
         ):
             python_executor = PythonExecutor(repo_root=repo_root)
-        engine.register_executor(python_executor)
-        logger.info("Registered Python executor")
+            engine.register_executor(python_executor)
+            logger.info("Registered Python executor")
 
-        logger.info("ExecutionEngine created successfully with DuckDB and Python executors")
-        return engine
+        # Create RuntimeEnvironment with all components
+        runtime_env = RuntimeEnvironment(execution_engine=engine, duckdb_runtime=duckdb_runtime)
+
+        logger.info("RuntimeEnvironment created successfully with DuckDB and Python executors")
+        return runtime_env
 
     except Exception as e:
-        logger.error(f"Failed to create ExecutionEngine: {e}")
-        raise RuntimeError(f"Failed to create ExecutionEngine: {e}") from e
+        logger.error(f"Failed to create RuntimeEnvironment: {e}")
+        raise RuntimeError(f"Failed to create RuntimeEnvironment: {e}") from e

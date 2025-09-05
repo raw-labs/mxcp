@@ -5,7 +5,7 @@ import click
 from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.interfaces.cli.utils import (
     configure_logging,
     get_env_flag,
@@ -137,10 +137,11 @@ def validate(
         site_config = load_site_config()
         user_config = load_user_config(site_config)
 
-        # Create a shared ExecutionEngine for all validations
-        execution_engine = create_execution_engine(
+        # Create a shared RuntimeEnvironment for all validations
+        runtime_env = create_runtime_environment(
             user_config, site_config, profile, readonly=readonly
         )
+        execution_engine = runtime_env.execution_engine
 
         try:
             if endpoint:
@@ -153,7 +154,7 @@ def validate(
             else:
                 click.echo(format_validation_results(result))
         finally:
-            execution_engine.shutdown()
+            runtime_env.shutdown()
 
     except Exception as e:
         output_error(e, json_output, debug)

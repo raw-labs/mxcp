@@ -10,7 +10,7 @@ from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
 from mxcp.server.core.config._types import SiteConfig, UserConfig
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.test import TestRunner
 from mxcp.server.services.drift._types import (
     Column,
@@ -80,10 +80,9 @@ async def generate_snapshot(
             f"Drift snapshot already exists at {drift_path}. Use --force to overwrite."
         )
 
-    # Create execution engine to get access to DuckDB session
-    execution_engine = create_execution_engine(
-        user_config, site_config, profile_name, readonly=True
-    )
+    # Create runtime environment to get access to DuckDB session
+    runtime_env = create_runtime_environment(user_config, site_config, profile_name, readonly=True)
+    execution_engine = runtime_env.execution_engine
 
     # Extract DuckDB connection from the SDK executor for direct database access
     duckdb_executor = execution_engine._executors.get("sql")
@@ -95,87 +94,93 @@ async def generate_snapshot(
     if not isinstance(duckdb_executor, DuckDBExecutor):
         raise RuntimeError("SQL executor is not a DuckDB executor")
 
-    conn = duckdb_executor.session.conn
     try:
-        loader = EndpointLoader(site_config)
-        discovered = loader.discover_endpoints()
+        # Get a connection from the runtime
+        with duckdb_executor._runtime.get_connection() as session:
+            conn = session.conn
+            loader = EndpointLoader(site_config)
+            discovered = loader.discover_endpoints()
 
-        # Get repository root for relative path calculation
-        repo_root = find_repo_root()
+            # Get repository root for relative path calculation
+            repo_root = find_repo_root()
 
-        resources: list[ResourceDefinition] = []
-        for path, endpoint, error in discovered:
-            # Convert to relative path from repository root
-            try:
-                relative_path = str(path.relative_to(repo_root))
-            except ValueError:
-                # If path is not relative to repo_root, use the filename
-                relative_path = path.name
+            resources: list[ResourceDefinition] = []
+            for path, endpoint, error in discovered:
+                # Convert to relative path from repository root
+                try:
+                    relative_path = str(path.relative_to(repo_root))
+                except ValueError:
+                    # If path is not relative to repo_root, use the filename
+                    relative_path = path.name
 
-            if error:
-                error_resource: ResourceDefinition = {
-                    "validation_results": {
-                        "status": "error",
-                        "path": relative_path,
-                        "message": error,
-                    },
-                    "test_results": None,
-                    "definition": None,
-                    "metadata": None,
-                }
-                resources.append(error_resource)
-            else:
-                # Determine endpoint type and name
-                if not endpoint:
-                    logger.warning(f"Skipping file {path}: endpoint is None")
-                    continue
-
-                if endpoint.get("tool") is not None:
-                    endpoint_type = "tool"
-                    tool = endpoint["tool"]
-                    name = tool.get("name", "unnamed") if tool else "unnamed"
-                elif endpoint.get("resource") is not None:
-                    endpoint_type = "resource"
-                    resource = endpoint["resource"]
-                    name = resource.get("uri", "unknown") if resource else "unknown"
-                elif endpoint.get("prompt") is not None:
-                    endpoint_type = "prompt"
-                    prompt = endpoint["prompt"]
-                    name = prompt.get("name", "unnamed") if prompt else "unnamed"
+                if error:
+                    error_resource: ResourceDefinition = {
+                        "validation_results": {
+                            "status": "error",
+                            "path": relative_path,
+                            "message": error,
+                        },
+                        "test_results": None,
+                        "definition": None,
+                        "metadata": None,
+                    }
+                    resources.append(error_resource)
                 else:
-                    logger.warning(f"Skipping file {path}: not a valid endpoint")
-                    continue
+                    # Determine endpoint type and name
+                    if not endpoint:
+                        logger.warning(f"Skipping file {path}: endpoint is None")
+                        continue
 
-                # Validate endpoint
-                validation_result = validate_endpoint_payload(endpoint, str(path), execution_engine)
-                # Run tests
-                test_runner = TestRunner(user_config, site_config, execution_engine)
-                test_result = await test_runner.run_tests_for_endpoint(endpoint_type, name, None)
-                # Add to snapshot
-                resource_data: ResourceDefinition = {
-                    "validation_results": cast(ValidationResults, validation_result),
-                    "test_results": cast(TestResults, test_result),
-                    "definition": cast(
-                        Tool | Resource | Prompt | None, endpoint
-                    ),  # Store the full endpoint structure
-                    "metadata": endpoint.get("metadata") if endpoint else None,
-                }
-                resources.append(resource_data)
-        if conn is None:
-            raise RuntimeError("DuckDB connection is not available")
-        tables = get_duckdb_tables(conn)
-        snapshot = DriftSnapshot(
-            version=1,
-            generated_at=datetime.now(timezone.utc).isoformat(),
-            tables=tables,
-            resources=resources,
-        )
-        if not dry_run:
-            with open(drift_path, "w") as f:
-                json.dump(snapshot, f, indent=2)
-            logger.info(f"Wrote drift snapshot to {drift_path}")
-        else:
-            logger.info(f"Would write drift snapshot as {snapshot}")
-        return snapshot, drift_path
+                    if endpoint.get("tool") is not None:
+                        endpoint_type = "tool"
+                        tool = endpoint["tool"]
+                        name = tool.get("name", "unnamed") if tool else "unnamed"
+                    elif endpoint.get("resource") is not None:
+                        endpoint_type = "resource"
+                        resource = endpoint["resource"]
+                        name = resource.get("uri", "unknown") if resource else "unknown"
+                    elif endpoint.get("prompt") is not None:
+                        endpoint_type = "prompt"
+                        prompt = endpoint["prompt"]
+                        name = prompt.get("name", "unnamed") if prompt else "unnamed"
+                    else:
+                        logger.warning(f"Skipping file {path}: not a valid endpoint")
+                        continue
+
+                    # Validate endpoint
+                    validation_result = validate_endpoint_payload(
+                        endpoint, str(path), execution_engine
+                    )
+                    # Run tests
+                    test_runner = TestRunner(user_config, site_config, execution_engine)
+                    test_result = await test_runner.run_tests_for_endpoint(
+                        endpoint_type, name, None
+                    )
+                    # Add to snapshot
+                    resource_data: ResourceDefinition = {
+                        "validation_results": cast(ValidationResults, validation_result),
+                        "test_results": cast(TestResults, test_result),
+                        "definition": cast(
+                            Tool | Resource | Prompt | None, endpoint
+                        ),  # Store the full endpoint structure
+                        "metadata": endpoint.get("metadata") if endpoint else None,
+                    }
+                    resources.append(resource_data)
+            if conn is None:
+                raise RuntimeError("DuckDB connection is not available")
+            tables = get_duckdb_tables(conn)
+            snapshot = DriftSnapshot(
+                version=1,
+                generated_at=datetime.now(timezone.utc).isoformat(),
+                tables=tables,
+                resources=resources,
+            )
+            if not dry_run:
+                with open(drift_path, "w") as f:
+                    json.dump(snapshot, f, indent=2)
+                logger.info(f"Wrote drift snapshot to {drift_path}")
+            else:
+                logger.info(f"Would write drift snapshot as {snapshot}")
+            return snapshot, drift_path
     finally:
-        execution_engine.shutdown()
+        runtime_env.shutdown()

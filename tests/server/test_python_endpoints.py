@@ -10,7 +10,7 @@ import yaml
 from mxcp.runtime import _init_hooks, _shutdown_hooks
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
 
 
@@ -104,7 +104,8 @@ def test_configs(temp_project_dir):
 def execution_engine(test_configs, temp_project_dir):
     """Create execution engine for tests and set up test data."""
     user_config, site_config = test_configs
-    engine = create_execution_engine(user_config, site_config, repo_root=temp_project_dir)
+    runtime_env = create_runtime_environment(user_config, site_config, repo_root=temp_project_dir)
+    engine = runtime_env.execution_engine
 
     # Get the DuckDB executor from the engine
     duckdb_executor = None
@@ -118,33 +119,34 @@ def execution_engine(test_configs, temp_project_dir):
         from mxcp.sdk.executor.plugins import DuckDBExecutor
 
         if isinstance(duckdb_executor, DuckDBExecutor):
-            session = duckdb_executor.session
-            conn = session.conn
+            # Get a connection from the runtime
+            with duckdb_executor._runtime.get_connection() as session:
+                conn = session.conn
 
-            # Create test table if connection exists
-            if conn:
-                conn.execute(
+                # Create test table if connection exists
+                if conn:
+                    conn.execute(
+                        """
+                        CREATE TABLE test_data (
+                            id INTEGER,
+                            name VARCHAR,
+                            value DOUBLE
+                        )
                     """
-                    CREATE TABLE test_data (
-                        id INTEGER,
-                        name VARCHAR,
-                        value DOUBLE
                     )
-                """
-                )
-                conn.execute(
+                    conn.execute(
+                        """
+                        INSERT INTO test_data VALUES
+                        (1, 'Alice', 100.5),
+                        (2, 'Bob', 200.7),
+                        (3, 'Charlie', 300.9)
                     """
-                    INSERT INTO test_data VALUES
-                    (1, 'Alice', 100.5),
-                    (2, 'Bob', 200.7),
-                    (3, 'Charlie', 300.9)
-                """
-                )
+                    )
 
     yield engine
 
-    # Clean up - the engine shutdown should handle this
-    engine.shutdown()
+    # Clean up - the runtime environment shutdown should handle this
+    runtime_env.shutdown()
 
 
 @pytest.mark.asyncio
@@ -414,7 +416,7 @@ tool:
     #    a) Preload Python modules (registering hooks)
     #    b) Run init hooks
     print("Creating execution engine (should preload modules and run init hooks)...")
-    execution_engine = create_execution_engine(user_config, site_config, "test")
+    runtime_env = create_runtime_environment(user_config, site_config, "test")
 
     try:
         # 2. Verify hooks were registered during module preload
@@ -429,7 +431,7 @@ tool:
             params={},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine,
+            execution_engine=runtime_env.execution_engine,
         )
 
         # Init hook should have run during engine creation
@@ -441,12 +443,12 @@ tool:
     finally:
         # 4. Shutdown engine - this should automatically run shutdown hooks
         print("Shutting down execution engine (should run shutdown hooks)...")
-        execution_engine.shutdown()
+        runtime_env.shutdown()
 
     # 5. Create a new engine to check if shutdown hooks ran
     # (We need a fresh engine because the first one is shut down)
     print("Creating new engine to verify shutdown hooks ran...")
-    execution_engine2 = create_execution_engine(user_config, site_config, "test")
+    runtime_env2 = create_runtime_environment(user_config, site_config, "test")
 
     try:
         # Check hook state again - both hooks should show as having been called
@@ -456,7 +458,7 @@ tool:
             params={},
             user_config=user_config,
             site_config=site_config,
-            execution_engine=execution_engine2,
+            execution_engine=runtime_env2.execution_engine,
         )
 
         # The module's global state persists across engine instances
@@ -475,7 +477,7 @@ tool:
         )
 
     finally:
-        execution_engine2.shutdown()
+        runtime_env2.shutdown()
 
     # Clear hooks to avoid affecting other tests
     _init_hooks.clear()
@@ -889,9 +891,15 @@ def test_constraints(
 
 def test_sql_with_dates() -> list:
     \"\"\"Test SQL execution returning timestamps.\"\"\"
-    # Create a temporary table with timestamps
+    # Drop existing table if it exists
+    try:
+        db.execute("DROP TABLE IF EXISTS test_type_dates")
+    except:
+        pass
+    
+    # Create a regular table with timestamps
     db.execute(\"\"\"
-        CREATE TEMPORARY TABLE IF NOT EXISTS test_dates (
+        CREATE TABLE test_type_dates (
             id INTEGER,
             created_at TIMESTAMP,
             updated_at DATE
@@ -900,13 +908,18 @@ def test_sql_with_dates() -> list:
 
     # Insert test data
     db.execute(\"\"\"
-        INSERT INTO test_dates VALUES
+        INSERT INTO test_type_dates VALUES
         (1, CURRENT_TIMESTAMP, CURRENT_DATE),
         (2, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_DATE - INTERVAL '1 day')
     \"\"\")
 
     # Query and return results
-    return db.execute("SELECT * FROM test_dates ORDER BY id")
+    results = db.execute("SELECT * FROM test_type_dates ORDER BY id")
+    
+    # Clean up
+    db.execute("DROP TABLE test_type_dates")
+    
+    return results
 """
     )
 

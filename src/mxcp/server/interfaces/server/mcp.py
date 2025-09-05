@@ -58,7 +58,7 @@ from mxcp.server.definitions.endpoints._types import (
 )
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.utils import EndpointType
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import RuntimeEnvironment, create_runtime_environment
 from mxcp.server.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
 from mxcp.server.services.endpoints import (
     execute_endpoint_with_engine,
@@ -255,8 +255,8 @@ class RAWMCP:
         # Initialize reload manager
         self.reload_manager = ReloadManager(self)
 
-        # Initialize execution engine (will be created in initialize_runtime_components)
-        self.execution_engine = None
+        # Initialize runtime environment (will be created in initialize_runtime_components)
+        self.runtime_environment: RuntimeEnvironment | None = None
         self._model_cache = {}
 
         # Resolve configurations
@@ -568,12 +568,10 @@ class RAWMCP:
         """
         logger.info("Shutting down runtime components...")
 
-        # Shut down execution engine (handles all executor-specific shutdown including plugins)
-        if self.execution_engine:
-            logger.info("Shutting down execution engine...")
-            self.execution_engine.shutdown()
-            self.execution_engine = None
-            logger.info("Execution engine shutdown complete.")
+        # Shut down runtime environment (handles all executor-specific shutdown including plugins)
+        if self.runtime_environment:
+            self.runtime_environment.shutdown()
+            self.runtime_environment = None
 
         logger.info("Runtime components shutdown complete.")
 
@@ -583,12 +581,12 @@ class RAWMCP:
         """
         logger.info("Initializing runtime components...")
 
-        # Create execution engine (replaces DuckDB session + Python runtime)
-        logger.info("Creating execution engine...")
-        self.execution_engine = create_execution_engine(
+        # Create runtime environment (contains execution engine + shared resources)
+        logger.info("Creating runtime environment...")
+        self.runtime_environment = create_runtime_environment(
             self.user_config, self.site_config, self.profile_name, readonly=self.readonly
         )
-        logger.info("Execution engine created.")
+        logger.info("Runtime environment created.")
 
         # Cache for dynamically created models
         self._model_cache = {}
@@ -1232,8 +1230,9 @@ class RAWMCP:
                     )
 
                 # run through new SDK executor (handles type conversion automatically)
-                if self.execution_engine is None:
+                if self.runtime_environment is None:
                     raise RuntimeError("Execution engine not initialized")
+                name: str
                 if endpoint_key == "resource":
                     name = cast(str, endpoint_def.get("uri", "unknown"))
                 else:
@@ -1471,7 +1470,7 @@ class RAWMCP:
                     logger.info("Authenticated user executing SQL query")
 
                 # Use SDK execution engine
-                if self.execution_engine is None:
+                if self.runtime_environment is None:
                     raise RuntimeError("Execution engine not initialized")
                 result = await self._execute_with_draining(
                     endpoint_type="sql",
@@ -1539,7 +1538,7 @@ class RAWMCP:
                     logger.info(f"User {user_context.username} listing tables")
 
                 # Use SDK execution engine
-                if self.execution_engine is None:
+                if self.runtime_environment is None:
                     raise RuntimeError("Execution engine not initialized")
                 result = await self._execute_with_draining(
                     endpoint_type="sql",
@@ -1621,7 +1620,7 @@ class RAWMCP:
                     )
 
                 # Use SDK execution engine
-                if self.execution_engine is None:
+                if self.runtime_environment is None:
                     raise RuntimeError("Execution engine not initialized")
                 result = await self._execute_with_draining(
                     endpoint_type="sql",
@@ -1716,7 +1715,7 @@ class RAWMCP:
         try:
             # Acquire execution lock for the actual execution
             with self.execution_lock:
-                if self.execution_engine is None:
+                if self.runtime_environment is None:
                     raise RuntimeError("Execution engine not initialized")
 
                 if with_policy_info:
@@ -1726,7 +1725,7 @@ class RAWMCP:
                         params=params,
                         user_config=self.user_config,
                         site_config=self.site_config,
-                        execution_engine=self.execution_engine,
+                        execution_engine=self.runtime_environment.execution_engine,
                         user_context=user_context,
                         server_ref=self,
                     )
@@ -1737,7 +1736,7 @@ class RAWMCP:
                         params=params,
                         user_config=self.user_config,
                         site_config=self.site_config,
-                        execution_engine=self.execution_engine,
+                        execution_engine=self.runtime_environment.execution_engine,
                         user_context=user_context,
                         server_ref=self,
                     )
@@ -1751,10 +1750,10 @@ class RAWMCP:
         for path, endpoint_def in self.endpoints:
             try:
                 # Validate endpoint before registration using shared session
-                if self.execution_engine is None:
+                if self.runtime_environment is None:
                     raise RuntimeError("Execution engine not initialized")
                 validation_result = validate_endpoint(
-                    str(path), self.site_config, self.execution_engine
+                    str(path), self.site_config, self.runtime_environment.execution_engine
                 )
 
                 if validation_result["status"] != "ok":

@@ -14,7 +14,7 @@ import pytest
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
 from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
-from mxcp.sdk.executor.plugins.duckdb_plugin._types import DatabaseConfig, PluginConfig
+from mxcp.sdk.duckdb import DatabaseConfig, PluginConfig, DuckDBRuntime
 from mxcp.sdk.validator import ValidationError
 
 
@@ -47,7 +47,7 @@ def mock_site_config():
         "mxcp": 1,
         "project": "test-project",
         "profile": "test",
-        "profiles": {"test": {"duckdb": {"path": ":memory:"}}},
+        "profiles": {"test": {"duckdb": {"path": "test.duckdb"}}},
         "paths": {"tools": "tools"},
         "extensions": [],
     }
@@ -67,20 +67,27 @@ def mock_context(mock_user_config, mock_site_config):
 
 
 @pytest.fixture
-def engine_with_executors(temp_repo_dir):
+def engine_with_executors(temp_repo_dir, tmp_path):
     """Create an execution engine with both Python and DuckDB executors."""
     engine = ExecutionEngine()
 
-    python_executor = PythonExecutor(repo_root=temp_repo_dir)
-    duckdb_executor = DuckDBExecutor(
-        database_config=DatabaseConfig(path=":memory:", readonly=False, extensions=[]),
+    # Create shared runtime
+    db_path = tmp_path / "test_engine.duckdb"
+    runtime = DuckDBRuntime(
+        database_config=DatabaseConfig(path=str(db_path), readonly=False, extensions=[]),
         plugins=[],
         plugin_config=PluginConfig(plugins_path="plugins", config={}),
         secrets=[],
     )
 
+    python_executor = PythonExecutor(repo_root=temp_repo_dir)
+    duckdb_executor = DuckDBExecutor(runtime)
+
     engine.register_executor(python_executor)
     engine.register_executor(duckdb_executor)
+
+    # Store runtime for cleanup
+    engine._test_runtime = runtime
 
     return engine
 
@@ -107,12 +114,17 @@ class TestExecutionEngineBasics:
         engine = ExecutionEngine()
 
         python_executor = PythonExecutor(repo_root=temp_repo_dir)
-        duckdb_executor = DuckDBExecutor(
-            database_config=DatabaseConfig(path=":memory:", readonly=False, extensions=[]),
+
+        # Create DuckDB runtime first
+        duckdb_runtime = DuckDBRuntime(
+            database_config=DatabaseConfig(
+                path=str(temp_repo_dir / "test.db"), readonly=False, extensions=[]
+            ),
             plugins=[],
             plugin_config=PluginConfig(plugins_path="plugins", config={}),
             secrets=[],
         )
+        duckdb_executor = DuckDBExecutor(runtime=duckdb_runtime)
 
         engine.register_executor(python_executor)
         engine.register_executor(duckdb_executor)
@@ -120,6 +132,9 @@ class TestExecutionEngineBasics:
         available_languages = list(engine._executors.keys())
         assert "python" in available_languages
         assert "sql" in available_languages
+
+        # Clean up
+        duckdb_runtime.shutdown()
 
     def test_duplicate_language_registration(self, temp_repo_dir):
         """Test registering executors with duplicate languages."""
@@ -523,24 +538,26 @@ def process_data():
 
         # Register same executor types
         engine1.register_executor(PythonExecutor(repo_root=temp_repo_dir))
-        engine1.register_executor(
-            DuckDBExecutor(
-                database_config=DatabaseConfig(path=":memory:", readonly=False, extensions=[]),
-                plugins=[],
-                plugin_config=PluginConfig(plugins_path="plugins", config={}),
-                secrets=[],
-            )
+        runtime1 = DuckDBRuntime(
+            database_config=DatabaseConfig(
+                path=str(temp_repo_dir / "test1.db"), readonly=False, extensions=[]
+            ),
+            plugins=[],
+            plugin_config=PluginConfig(plugins_path="plugins", config={}),
+            secrets=[],
         )
+        engine1.register_executor(DuckDBExecutor(runtime=runtime1))
 
         engine2.register_executor(PythonExecutor(repo_root=temp_repo_dir))
-        engine2.register_executor(
-            DuckDBExecutor(
-                database_config=DatabaseConfig(path=":memory:", readonly=False, extensions=[]),
-                plugins=[],
-                plugin_config=PluginConfig(plugins_path="plugins", config={}),
-                secrets=[],
-            )
+        runtime2 = DuckDBRuntime(
+            database_config=DatabaseConfig(
+                path=str(temp_repo_dir / "test2.db"), readonly=False, extensions=[]
+            ),
+            plugins=[],
+            plugin_config=PluginConfig(plugins_path="plugins", config={}),
+            secrets=[],
         )
+        engine2.register_executor(DuckDBExecutor(runtime=runtime2))
 
         # Start both engines
 
@@ -554,4 +571,7 @@ def process_data():
         assert len(engine2._executors) > 0
 
         # Cleanup
+        engine1.shutdown()
         engine2.shutdown()
+        runtime1.shutdown()
+        runtime2.shutdown()

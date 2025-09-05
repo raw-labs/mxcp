@@ -8,10 +8,11 @@ from typing import Any
 import click
 import yaml
 
+from mxcp.sdk.duckdb import DuckDBSession
 from mxcp.server.core.config.analytics import track_command_with_timing
+from mxcp.server.core.config.parsers import create_duckdb_session_config
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.executor.session.duckdb import create_duckdb_session
 from mxcp.server.interfaces.cli.utils import configure_logging, get_env_profile, output_error
 
 
@@ -362,7 +363,13 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool) 
 
         # Initialize DuckDB session to create .duckdb file
         try:
-            session = create_duckdb_session(site_config, new_user_config, readonly=False)
+            # Get DuckDB configuration
+            database_config, plugins, plugin_config, secrets = create_duckdb_session_config(
+                site_config, new_user_config, site_config["profile"], readonly=False
+            )
+
+            # Create session just to ensure database file exists
+            session = DuckDBSession(database_config, plugins, plugin_config, secrets)
             session.close()  # Database file is created when session connects in constructor
             click.echo("✓ Initialized DuckDB database")
         except Exception as e:

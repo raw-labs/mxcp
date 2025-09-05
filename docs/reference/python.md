@@ -151,6 +151,8 @@ This feature allows Python endpoints to trigger a safe reload of the MXCP server
 4. Your payload function runs (if provided)
 5. Runtime components are restarted with fresh configuration
 
+**Important**: If you would like to update the DuckDB database, you can do so in a regular database operation without triggering any reload. Reloading is not required for database updates, since DuckDB supports a MVCC transactional model.
+
 ```python
 from mxcp.runtime import reload_duckdb
 import subprocess

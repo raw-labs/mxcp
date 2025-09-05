@@ -14,7 +14,7 @@ import pytest
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.plugins import DuckDBExecutor
-from mxcp.sdk.executor.plugins.duckdb_plugin._types import (
+from mxcp.sdk.duckdb import (
     DatabaseConfig,
     ExtensionDefinition,
     PluginConfig,
@@ -41,9 +41,10 @@ def mock_user_config():
 
 
 @pytest.fixture
-def mock_database_config():
+def mock_database_config(tmp_path):
     """Create a mock database configuration."""
-    return DatabaseConfig(path=":memory:", readonly=False, extensions=[])
+    db_path = tmp_path / "test.duckdb"
+    return DatabaseConfig(path=str(db_path), readonly=False, extensions=[])
 
 
 @pytest.fixture
@@ -68,12 +69,15 @@ def mock_context():
 @pytest.fixture
 def duckdb_executor(mock_database_config, mock_plugin_config):
     """Create a DuckDB executor with test configuration."""
-    return DuckDBExecutor(
+    from mxcp.sdk.duckdb import DuckDBRuntime
+
+    runtime = DuckDBRuntime(
         database_config=mock_database_config,
         plugins=[],
         plugin_config=mock_plugin_config,
         secrets=[],
     )
+    return DuckDBExecutor(runtime)
 
 
 class TestDuckDBExecutorBasics:
@@ -82,55 +86,66 @@ class TestDuckDBExecutorBasics:
     def test_executor_initialization(self, duckdb_executor):
         """Test executor initialization."""
         assert duckdb_executor.language == "sql"
-        assert duckdb_executor.session is not None
+        assert duckdb_executor._runtime is not None
+        assert duckdb_executor._runtime.pool_size > 0
 
-    def test_executor_initialization_with_options(self):
+    def test_executor_initialization_with_options(self, tmp_path):
         """Test executor initialization with various options."""
-        # Test with different configuration (can't use readonly with :memory:)
+        from mxcp.sdk.duckdb import DuckDBRuntime
+
+        # Test with different configuration
+        db_path = tmp_path / "test_options.duckdb"
         database_config = DatabaseConfig(
-            path=":memory:", readonly=False, extensions=[ExtensionDefinition(name="json")]
+            path=str(db_path), readonly=False, extensions=[ExtensionDefinition(name="json")]
         )
         plugin_config = PluginConfig(plugins_path="plugins", config={})
 
-        executor = DuckDBExecutor(
+        runtime = DuckDBRuntime(
             database_config=database_config, plugins=[], plugin_config=plugin_config, secrets=[]
         )
+        executor = DuckDBExecutor(runtime)
 
         assert executor.language == "sql"
-        assert executor.session is not None
+        assert executor._runtime is not None
 
-    def test_new_instance_pattern(self, mock_context):
-        """Test creating new instances for config changes (instead of reload)."""
+    def test_new_instance_pattern(self, mock_context, tmp_path):
+        """Test creating new instances for config changes."""
+        from mxcp.sdk.duckdb import DuckDBRuntime
+
         # Create initial executor
-        initial_config = DatabaseConfig(path=":memory:", readonly=False, extensions=[])
+        db_path1 = tmp_path / "test1.duckdb"
+        initial_config = DatabaseConfig(path=str(db_path1), readonly=False, extensions=[])
         plugin_config = PluginConfig(plugins_path="plugins", config={})
-        executor1 = DuckDBExecutor(initial_config, [], plugin_config, [])
-
-        initial_session = executor1.session
+        runtime1 = DuckDBRuntime(initial_config, [], plugin_config, [])
+        executor1 = DuckDBExecutor(runtime1)
 
         # Create new executor with different configuration (different extensions)
+        db_path2 = tmp_path / "test2.duckdb"
         new_config = DatabaseConfig(
-            path=":memory:", readonly=False, extensions=[ExtensionDefinition(name="json")]
+            path=str(db_path2), readonly=False, extensions=[ExtensionDefinition(name="json")]
         )
-        executor2 = DuckDBExecutor(new_config, [], plugin_config, [])
+        runtime2 = DuckDBRuntime(new_config, [], plugin_config, [])
+        executor2 = DuckDBExecutor(runtime2)
 
-        # Sessions should be different
-        assert executor2.session is not initial_session
+        # Executors should be different instances with their own runtimes
+        assert executor1._runtime is not executor2._runtime
 
         # Clean up
         executor1.shutdown()
         executor2.shutdown()
+        runtime1.shutdown()
+        runtime2.shutdown()
 
     def test_validate_sql_source(self, duckdb_executor, mock_context):
         """Test SQL source validation."""
-        # Valid SQL
+        # Valid SQL returns True
         assert duckdb_executor.validate_source("SELECT 1")
-
-        # Invalid SQL should return False
+        # Invalid SQL returns False
         assert not duckdb_executor.validate_source("INVALID SQL SYNTAX")
 
         # Empty string should return False
         assert not duckdb_executor.validate_source("")
+        assert not duckdb_executor.validate_source("   ")  # Whitespace only
 
         # None should return False
         assert not duckdb_executor.validate_source(None)
@@ -454,49 +469,55 @@ class TestDuckDBQueryResults:
         assert abs(result[0]["decimal_val"] - 1.99) < 0.001
 
 
-class TestDuckDBSessionManagement:
-    """Test DuckDB session management functionality."""
+class TestDuckDBRuntime:
+    """Test DuckDB runtime functionality."""
 
-    def test_session_isolation(self, mock_context):
-        """Test that different executors have isolated sessions."""
-        database_config = DatabaseConfig(path=":memory:", readonly=False, extensions=[])
+    def test_runtime_isolation(self, mock_context, tmp_path):
+        """Test that different executors have isolated runtimes."""
+        from mxcp.sdk.duckdb import DuckDBRuntime
+
+        db_path1 = tmp_path / "test_iso1.duckdb"
+        db_path2 = tmp_path / "test_iso2.duckdb"
+        database_config1 = DatabaseConfig(path=str(db_path1), readonly=False, extensions=[])
+        database_config2 = DatabaseConfig(path=str(db_path2), readonly=False, extensions=[])
         plugin_config = PluginConfig(plugins_path="plugins", config={})
 
-        executor1 = DuckDBExecutor(
-            database_config=database_config, plugins=[], plugin_config=plugin_config, secrets=[]
+        runtime1 = DuckDBRuntime(
+            database_config=database_config1, plugins=[], plugin_config=plugin_config, secrets=[]
         )
-        executor2 = DuckDBExecutor(
-            database_config=database_config, plugins=[], plugin_config=plugin_config, secrets=[]
+        runtime2 = DuckDBRuntime(
+            database_config=database_config2, plugins=[], plugin_config=plugin_config, secrets=[]
         )
+        executor1 = DuckDBExecutor(runtime1)
+        executor2 = DuckDBExecutor(runtime2)
 
-        # Sessions should be different objects
-        assert executor1.session is not executor2.session
-
-        # Should be able to create same table in both without conflict
-        asyncio.run(executor1.execute("CREATE TABLE test (id INTEGER)", {}, mock_context))
-        asyncio.run(executor2.execute("CREATE TABLE test (id INTEGER)", {}, mock_context))
+        # Runtimes should be different objects
+        assert executor1._runtime is not executor2._runtime
 
         executor1.shutdown()
         executor2.shutdown()
+        runtime1.shutdown()
+        runtime2.shutdown()
 
-    def test_session_persistence(self, duckdb_executor, mock_context):
-        """Test that session persists across multiple queries."""
-        session1 = duckdb_executor.session
-
+    def test_memory_database_persistence(self, duckdb_executor, mock_context):
+        """Test that in-memory database persists data across queries."""
         # Create table
         asyncio.run(
             duckdb_executor.execute("CREATE TABLE persist_test (id INTEGER)", {}, mock_context)
         )
 
-        # Session should be the same
-        session2 = duckdb_executor.session
-        assert session1 is session2
+        # Insert data
+        asyncio.run(
+            duckdb_executor.execute("INSERT INTO persist_test VALUES (1), (2)", {}, mock_context)
+        )
 
         # Should be able to query the table created earlier
         result = asyncio.run(
-            duckdb_executor.execute("SELECT * FROM persist_test", {}, mock_context)
+            duckdb_executor.execute("SELECT * FROM persist_test ORDER BY id", {}, mock_context)
         )
-        assert result == []
+        assert len(result) == 2
+        assert result[0]["id"] == 1
+        assert result[1]["id"] == 2
 
     def test_memory_database_default(self, duckdb_executor, mock_context):
         """Test that memory database is properly configured."""
@@ -532,50 +553,6 @@ class TestDuckDBSessionManagement:
         assert result[0]["data"] == "test_data"
 
 
-class TestDuckDBRawExecution:
-    """Test DuckDB raw SQL execution functionality."""
-
-    def test_execute_raw_sql_basic(self, duckdb_executor, mock_context):
-        """Test basic raw SQL execution."""
-        result = duckdb_executor.execute_raw_sql("SELECT 1 as num, 'test' as str")
-
-        assert len(result) == 1
-        assert result[0]["num"] == 1
-        assert result[0]["str"] == "test"
-
-    def test_execute_raw_sql_with_table(self, duckdb_executor, mock_context):
-        """Test raw SQL execution with table operations."""
-        # Create table
-        duckdb_executor.execute_raw_sql(
-            """
-            CREATE TABLE raw_test (
-                id INTEGER,
-                name VARCHAR
-            )
-        """
-        )
-
-        # Insert data
-        duckdb_executor.execute_raw_sql(
-            """
-            INSERT INTO raw_test VALUES (1, 'test')
-        """
-        )
-
-        # Query data
-        result = duckdb_executor.execute_raw_sql("SELECT * FROM raw_test")
-        assert len(result) == 1
-        assert result[0]["id"] == 1
-        assert result[0]["name"] == "test"
-
-    def test_execute_raw_sql_error_handling(self, duckdb_executor, mock_context):
-        """Test error handling in raw SQL execution."""
-        with pytest.raises(Exception):
-            duckdb_executor.execute_raw_sql("INVALID SQL SYNTAX")
-
-        duckdb_executor.shutdown()
-
-
 class TestDuckDBExtensionsAndPlugins:
     """Test DuckDB extensions and plugins functionality."""
 
@@ -595,15 +572,17 @@ class TestDuckDBExtensionsAndPlugins:
         assert len(result) == 1
         assert result[0]["json_data"] is not None
 
-    def test_session_plugins_loaded(self, duckdb_executor, mock_context):
-        """Test that session has plugins properly loaded."""
-        # Session should have plugins dict (even if empty)
-        assert hasattr(duckdb_executor.session, "plugins")
-        assert isinstance(duckdb_executor.session.plugins, dict)
+    def test_plugins_available(self, duckdb_executor, mock_context):
+        """Test that plugins are available through the runtime."""
+        # Get a connection and check plugins
+        with duckdb_executor._runtime.get_connection() as session:
+            assert hasattr(session, "plugins")
+            assert isinstance(session.plugins, dict)
 
     def test_available_plugins_logged(self, duckdb_executor, mock_context):
         """Test that available plugins are logged during startup."""
         # Should not raise error during plugin logging
 
-        # Verify session was created successfully
-        assert duckdb_executor.session is not None
+        # Verify runtime was created successfully
+        assert duckdb_executor._runtime is not None
+        assert duckdb_executor._runtime.pool_size > 0

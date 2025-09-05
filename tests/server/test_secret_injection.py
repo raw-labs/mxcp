@@ -5,7 +5,7 @@ import pytest
 
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
 
 
@@ -54,11 +54,11 @@ def test_profile():
 @pytest.fixture
 def execution_engine(user_config, site_config, test_profile, test_repo_path):
     """Create execution engine for secret injection tests."""
-    engine = create_execution_engine(
+    runtime_env = create_runtime_environment(
         user_config, site_config, test_profile, repo_root=test_repo_path, readonly=True
     )
-    yield engine
-    engine.shutdown()
+    yield runtime_env.execution_engine
+    runtime_env.shutdown()
 
 
 @pytest.mark.asyncio

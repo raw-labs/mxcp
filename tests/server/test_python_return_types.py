@@ -9,7 +9,7 @@ import yaml
 
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
 
 
@@ -80,7 +80,9 @@ def test_configs(temp_project_dir):
 def execution_engine(test_configs, temp_project_dir):
     """Create execution engine for tests."""
     user_config, site_config = test_configs
-    return create_execution_engine(user_config, site_config, repo_root=temp_project_dir)
+    runtime_env = create_runtime_environment(user_config, site_config, repo_root=temp_project_dir)
+    yield runtime_env.execution_engine
+    runtime_env.shutdown()
 
 
 class TestScalarReturnTypes:

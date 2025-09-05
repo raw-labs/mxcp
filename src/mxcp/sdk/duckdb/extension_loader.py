@@ -1,15 +1,14 @@
 """
-Extension loader for DuckDB session in executor plugin.
+Extension loader for DuckDB.
 
 This module handles DuckDB extension loading.
-This is a cloned version of the extension loader for the executor plugin system.
 """
 
 import logging
 
 import duckdb
 
-from ._types import ExtensionDefinition
+from .types import ExtensionDefinition
 
 
 def load_extensions(
@@ -51,4 +50,5 @@ def _load_extension(con: duckdb.DuckDBPyConnection, name: str, repo: str | None 
             con.sql(f"INSTALL {name}; LOAD {name};")
             logging.info(f"DuckDB extension '{name}' loaded.")
     except Exception as e:
-        logging.warning(f"Failed to load DuckDB extension '{name}': {e}")
+        logging.error(f"Failed to load DuckDB extension '{name}': {e}")
+        raise

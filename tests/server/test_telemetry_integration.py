@@ -11,7 +11,7 @@ from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.telemetry import is_telemetry_enabled, shutdown_telemetry
 from mxcp.server.core.config._types import SiteConfig, UserConfig
 from mxcp.server.core.telemetry import configure_telemetry_from_config
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +40,7 @@ def reset_telemetry():
     mxcp.sdk.telemetry.tracer._tracer = None
 
 
-def test_telemetry_with_execution_engine():
+def test_telemetry_with_execution_engine(tmp_path):
     """Test that telemetry properly traces execution engine operations."""
     # Configure telemetry
     user_config: UserConfig = {
@@ -71,7 +71,7 @@ def test_telemetry_with_execution_engine():
         "profiles": {
             "dev": {
                 "duckdb": {
-                    "path": ":memory:",
+                    "path": str(tmp_path / "test.duckdb"),
                     "readonly": False,
                 }
             }
@@ -83,13 +83,15 @@ def test_telemetry_with_execution_engine():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         repo_root = Path(tmpdir)
-        engine = create_execution_engine(user_config, site_config, "dev", repo_root=repo_root)
+        runtime_env = create_runtime_environment(
+            user_config, site_config, "dev", repo_root=repo_root
+        )
 
         try:
             # Execute SQL with telemetry
             async def run_sql():
                 context = ExecutionContext()
-                result = await engine.execute(
+                result = await runtime_env.execution_engine.execute(
                     language="sql",
                     source_code="SELECT 1 as value, 'test' as name",
                     params={},
@@ -108,7 +110,7 @@ def test_telemetry_with_execution_engine():
             # Execute Python with telemetry
             async def run_python():
                 context = ExecutionContext()
-                result = await engine.execute(
+                result = await runtime_env.execution_engine.execute(
                     language="python",
                     source_code="return x + y",
                     params={"x": 10, "y": 20},
@@ -122,10 +124,10 @@ def test_telemetry_with_execution_engine():
 
         finally:
             # Cleanup
-            engine.shutdown()
+            runtime_env.shutdown()
 
 
-def test_nested_telemetry_spans():
+def test_nested_telemetry_spans(tmp_path):
     """Test that nested operations create proper parent-child span relationships."""
     # Configure telemetry
     user_config: UserConfig = {
@@ -154,7 +156,7 @@ def test_nested_telemetry_spans():
         "profiles": {
             "dev": {
                 "duckdb": {
-                    "path": ":memory:",
+                    "path": str(tmp_path / "test.duckdb"),
                     "readonly": False,
                 }
             }
@@ -170,7 +172,9 @@ def test_nested_telemetry_spans():
 
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
-            engine = create_execution_engine(user_config, site_config, "dev", repo_root=repo_root)
+            runtime_env = create_runtime_environment(
+                user_config, site_config, "dev", repo_root=repo_root
+            )
 
             try:
                 # Wrap in a root span to verify nesting
@@ -181,7 +185,7 @@ def test_nested_telemetry_spans():
                     context = ExecutionContext()
                     with traced_operation("test.sql_operation") as sql_span:
                         assert sql_span is not None
-                        result = await engine.execute(
+                        result = await runtime_env.execution_engine.execute(
                             language="sql",
                             source_code="SELECT 'nested' as test_value",
                             params={},
@@ -192,7 +196,7 @@ def test_nested_telemetry_spans():
                     # Execute Python - this should also create child spans
                     with traced_operation("test.python_operation") as py_span:
                         assert py_span is not None
-                        result = await engine.execute(
+                        result = await runtime_env.execution_engine.execute(
                             language="python",
                             source_code="return 'nested_result'",
                             params={},
@@ -201,7 +205,7 @@ def test_nested_telemetry_spans():
                         assert result == "nested_result"
 
             finally:
-                engine.shutdown()
+                runtime_env.shutdown()
 
     asyncio.run(run_nested_operations())
 

@@ -1,7 +1,7 @@
-"""Types specific to DuckDB executor plugin.
+"""Types for DuckDB infrastructure.
 
-This module contains data structures that are only relevant to the DuckDB executor,
-keeping them separate from the core executor interfaces.
+This module contains data structures for configuring and managing DuckDB
+connections, extensions, plugins, and secrets.
 """
 
 from dataclasses import dataclass, field

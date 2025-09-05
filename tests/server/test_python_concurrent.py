@@ -13,7 +13,7 @@ import yaml
 
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
 
 # Global shared state for testing thread safety
@@ -38,7 +38,9 @@ def temp_project_dir():
             "mxcp": 1,
             "project": "test-concurrent",
             "profile": "test",
-            "profiles": {"test": {"duckdb": {"path": ":memory:"}}},  # Use in-memory database
+            "profiles": {
+                "test": {"duckdb": {"path": str(project_dir / "test.duckdb")}}
+            },  # Use file-based database
             "paths": {"tools": "tools"},
         }
 
@@ -109,7 +111,10 @@ def execution_engine(test_configs, temp_project_dir):
     user_config, site_config = test_configs
 
     # Create execution engine
-    engine = create_execution_engine(user_config, site_config, "test", repo_root=temp_project_dir)
+    runtime_env = create_runtime_environment(
+        user_config, site_config, "test", repo_root=temp_project_dir
+    )
+    engine = runtime_env.execution_engine
 
     # Store user_config on engine for runtime context access
     engine._user_config = user_config
@@ -117,7 +122,7 @@ def execution_engine(test_configs, temp_project_dir):
     yield engine
 
     # Cleanup
-    engine.shutdown()
+    runtime_env.shutdown()
 
 
 @pytest.fixture(autouse=True)

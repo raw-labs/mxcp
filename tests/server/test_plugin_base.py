@@ -89,9 +89,10 @@ class PluginImpl(MXCPBasePlugin):
 
 
 @pytest.fixture
-def db_connection():
+def db_connection(tmp_path):
     """Create a DuckDB connection for testing."""
-    conn = duckdb.connect(":memory:")
+    db_path = tmp_path / "test.duckdb"
+    conn = duckdb.connect(str(db_path))
     yield conn
     conn.close()
 

@@ -80,26 +80,35 @@ except Exception as e:
 
 ### DuckDB Session Management
 
-MXCP uses a specific pattern for DuckDB connection management:
+MXCP manages DuckDB connections:
 
-- **No connection pooling**: DuckDB is embedded, so we use single connections per session
-- **One connection per operation**: Each CLI command creates its own session
-- **Session-scoped setup**: All Python functions, secrets, and plugins are loaded per session at startup
-- **Context manager pattern**: Ensures proper cleanup of connections
+- **Connection pooling**: MXCP manages a pool of connections for efficient resource usage
+- **Graceful reloads**: Connection pool intelligently drains and refreshes without service interruption
+- **Thread-safe operations**: Each request gets its own connection from the pool
+- **Context manager pattern**: Ensures proper acquisition and return of connections to the pool
+- **Zero-downtime updates**: Database changes are visible to new connections without stopping the service
 
 ```python
-# Session creation and management pattern
-with DuckDBSession(user_config, site_config, profile, readonly=readonly) as session:
+# Modern connection management pattern using DuckDBRuntime
+runtime = DuckDBRuntime(database_config, plugins, plugin_config, secrets)
+
+# Get a connection from the pool
+with runtime.get_connection() as session:
     # All database operations happen here
-    result = session.conn.execute(sql, params).fetchdf()
+    result = session.execute_query_to_dict(sql, params)
     
-# Connection automatically closed when context exits
+# Connection automatically returned to pool when context exits
+
+# For graceful shutdown
+runtime.shutdown()
 ```
 
-**Server vs CLI sessions:**
-- **CLI commands**: Create new session per operation
-- **Server mode**: Single shared session with thread-safe locking
-- **Session initialization**: Extensions, secrets, and plugins loaded once per session
+**Connection Management:**
+- **CLI commands**: Create their own `DuckDBRuntime` instance for the operation
+- **Server mode**: Shared `DuckDBRuntime` with connection pool (default size: 2 × CPU cores)
+- **Thread safety**: Each request gets its own connection from the pool
+- **Initialization**: Extensions, secrets, and plugins loaded once when pool is created
+- **Reload behavior**: Pool gracefully drains and refreshes without downtime
 
 ### Common CLI Patterns
 

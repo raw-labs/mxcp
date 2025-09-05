@@ -884,15 +884,15 @@ docker kill -s HUP mxcp-container
 **Reload Process:**
 1. SIGHUP handler queues a reload request
 2. Active requests are allowed to complete (drained)
-3. Runtime components are shut down
+3. Runtime components are shut down, including DuckDB connection pool
 4. Configuration files are re-read from disk
-5. Runtime components are restarted with new configuration
+5. Runtime components are restarted with new configuration, including a new DuckDB connection pool
 6. The handler waits up to 60 seconds for completion
 
 What gets reloaded:
 - External configuration values (environment variables, vault://, file://)
 - Secret values
-- Database connections
+- Database connection pool (gracefully, without downtime)
 - Python runtime hooks
 
 What doesn't reload:
