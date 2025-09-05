@@ -169,16 +169,17 @@ def cleanup():
 
 ## Dynamic Reload with Database Rebuild
 
-MXCP provides a feature that allows Python endpoints to trigger a safe reload of the server. This enables you to, for example, update your DuckDB database externally with fresh data without restarting the server.
+MXCP provides a feature that allows Python endpoints to trigger a safe reload of the server. This enables you to, for example, update your DuckDB database externally  without restarting the server.
 
-### Why Use Dynamic Reload?
+### Why Use DuckDB Reload?
 
-Traditional approaches to updating analytical databases often require:
-- Stopping the server to update data files
-- Running ETL pipelines separately and hoping no queries run during updates
-- Complex orchestration to minimize downtime
+**In most cases, you don't need this feature.** Your Python endpoints can perform database operations directly using the `db` proxy. DuckDB's concurrency model allows a single process (MXCP) to own the connection while multiple threads operate on it safely.
 
-MXCP's `reload_duckdb` solves these problems by providing a safe way to rebuild your database while the server continues handling requests.
+Even if you're using dbt, you can invoke the dbt Python API directly from your endpoints. Since it runs in the same process, dbt can apply changes to the DuckDB database without issues - this works correctly under DuckDB's MVCC transactional model.
+
+However, sometimes you may need to run external tools or processes that require exclusive access to the DuckDB database file. In these cases, MXCP must temporarily release its hold on the database so the external tool can operate safely.
+
+This is where MXCP's `reload_duckdb` solves these problems by providing a safe way to rebuild your database while the server continues handling requests.
 
 ### How It Works
 
@@ -193,6 +194,8 @@ def update_analytics_data():
     def rebuild_database():
         """This runs with all connections closed."""
         # Option 1: Run dbt to rebuild models
+        # NOTE: This is just an example of running an external tool.
+        # In most cases, you should use the dbt Python API directly instead.
         subprocess.run(["dbt", "run", "--target", "prod"], check=True)
         
         # Option 2: Replace with a pre-built database
@@ -208,6 +211,9 @@ def update_analytics_data():
         conn.close()
     
     # Schedule the reload with our rebuild function
+    # The payload function only runs after the server has drained all connections
+    # and released its hold on the database. This ensures safe external access.
+    # Afterwards, everything automatically comes back up with the updated data.
     reload_duckdb(
         payload_func=rebuild_database,
         description="Updating analytics data"
@@ -229,6 +235,8 @@ When you call `reload_duckdb`, MXCP:
 6. **Processes waiting requests** - With the updated data
 
 The reload happens asynchronously after your request completes.
+
+**Important:** Remember that you normally don't need to use this feature. Only use `reload_duckdb` if you absolutely must have an external process update the DuckDB database file. In general, direct database operations through the `db` proxy are preferred.
 
 ### Real-World Example: Scheduled Data Updates
 
@@ -285,6 +293,10 @@ def scheduled_update(source: str = "api") -> dict:
 ```
 
 ### Best Practices
+
+**Primary recommendation: Avoid using `reload_duckdb` when possible.** Use direct database operations through the `db` proxy instead - this works fine for most use cases and is much simpler.
+
+When you do need to use `reload_duckdb`:
 
 1. **Keep payload functions focused** - Do one thing well in your payload function
 2. **Handle errors gracefully** - Failed reloads leave the server in its previous state
