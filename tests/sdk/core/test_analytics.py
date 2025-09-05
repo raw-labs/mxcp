@@ -15,7 +15,7 @@ import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -27,7 +27,6 @@ from mxcp.sdk.core.analytics import (
     analytics_executor,
     initialize_analytics,
     is_analytics_opted_out,
-    posthog_client,
     track_base_command,
     track_command,
     track_command_with_timing,
@@ -170,7 +169,6 @@ class TestEventTracking:
     @patch("mxcp.sdk.core.analytics.posthog_client")
     def test_track_event_client_none(self, mock_client):
         """Test event tracking when client is None."""
-        mock_client = None
 
         with patch.dict(os.environ, {"MXCP_DISABLE_ANALYTICS": "false"}):
             # This should not raise an exception

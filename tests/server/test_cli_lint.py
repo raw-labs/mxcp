@@ -1,8 +1,5 @@
 import json
 import subprocess
-from pathlib import Path
-
-import pytest
 
 
 def test_lint_command_runs():

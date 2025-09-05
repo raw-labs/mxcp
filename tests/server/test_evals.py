@@ -1,13 +1,8 @@
 import os
-from pathlib import Path
 
-import pytest
 import yaml
 
-from mxcp.server.core.config.site_config import SiteConfig
-from mxcp.server.core.config.user_config import UserConfig
 from mxcp.server.definitions.evals.loader import discover_eval_files, load_eval_suite
-from mxcp.sdk.auth import UserContext
 
 
 def test_discover_eval_files(tmp_path):
@@ -49,7 +44,6 @@ tests:
     non_eval.write_text("mxcp: '1'\ntool:\n  name: test")
 
     # Change to tmp_path directory to discover files
-    import os
 
     original_cwd = os.getcwd()
     os.chdir(tmp_path)
@@ -152,7 +146,6 @@ tests:
     )
 
     # Load valid file should succeed
-    import os
 
     original_cwd = os.getcwd()
     os.chdir(tmp_path)

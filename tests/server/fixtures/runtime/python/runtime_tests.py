@@ -47,7 +47,7 @@ def test_db_execute() -> dict:
     try:
         conn = db.connection
         conn_exists = conn is not None
-    except Exception as e:
+    except Exception:
         conn_exists = False
 
     return {
@@ -145,7 +145,7 @@ def test_config_properties() -> dict:
         site_secrets = site_cfg["secrets"]
 
         access_works = True
-    except Exception as e:
+    except Exception:
         access_works = False
         project_name = None
         secrets_count = 0
@@ -223,7 +223,7 @@ def test_error_handling() -> dict:
 
     # Test with None parameters
     try:
-        result = db.execute("SELECT 1", None)
+        db.execute("SELECT 1", None)
         errors["db_none_params"] = None
     except Exception as e:
         errors["db_none_params"] = str(e)

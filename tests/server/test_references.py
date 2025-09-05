@@ -1,7 +1,6 @@
 """Tests for the unified references module."""
 
 import os
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -14,7 +13,6 @@ from mxcp.server.core.refs.resolver import (
     resolve_env_var,
     resolve_file_url,
     resolve_value,
-    resolve_vault_url,
 )
 
 

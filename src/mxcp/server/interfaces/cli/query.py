@@ -9,7 +9,7 @@ from mxcp.sdk.executor import ExecutionContext
 from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.interfaces.cli.table_renderer import render_table
 from mxcp.server.interfaces.cli.utils import (
     configure_logging,
@@ -168,8 +168,11 @@ async def _query_async(
 
         click.echo(f"\n{click.style('⏳ Running...', fg='yellow')}")
 
-    # Create execution engine with readonly configuration if specified
-    engine = create_execution_engine(user_config, site_config, profile_name, readonly=readonly)
+    # Create runtime environment with readonly configuration if specified
+    runtime_env = create_runtime_environment(
+        user_config, site_config, profile_name, readonly=readonly
+    )
+    engine = runtime_env.execution_engine
 
     try:
         # Create execution context
@@ -204,4 +207,4 @@ async def _query_async(
             click.echo()  # Empty line at end
 
     finally:
-        engine.shutdown()
+        runtime_env.shutdown()

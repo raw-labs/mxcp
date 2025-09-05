@@ -12,8 +12,7 @@ This module tests the new plugin-based configuration architecture including:
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -23,8 +22,6 @@ from mxcp.sdk.core.config import (
     EnvResolver,
     FileResolver,
     OnePasswordResolver,
-    ResolvedReference,
-    ResolverConfig,
     ResolverEngine,
     ResolverPlugin,
     ResolverRegistry,
@@ -238,7 +235,7 @@ class TestReferenceResolution:
         config = {"database": {"host": "${DB_HOST}", "port": 5432}}
 
         with patch.dict(os.environ, {"DB_HOST": "localhost"}):
-            resolved = engine.process_config(config, track_references=True)
+            engine.process_config(config, track_references=True)
 
             references = engine.get_resolved_references()
             assert len(references) == 1

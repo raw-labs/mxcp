@@ -10,19 +10,18 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any, cast
 
-from mxcp.sdk.executor import (
-    ExecutionContext,
-    reset_execution_context,
-    set_execution_context,
-)
-from mxcp.sdk.executor.plugins.duckdb_plugin._types import (
+from mxcp.sdk.duckdb import (
     DatabaseConfig,
     ExtensionDefinition,
     PluginConfig,
     PluginDefinition,
     SecretDefinition,
 )
-from mxcp.sdk.executor.plugins.duckdb_plugin.session import DuckDBSession
+from mxcp.sdk.executor import (
+    ExecutionContext,
+    reset_execution_context,
+    set_execution_context,
+)
 from mxcp.server.core.config._types import SiteConfig, UserConfig
 
 logger = logging.getLogger(__name__)
@@ -118,8 +117,7 @@ def create_duckdb_session_config(
 def execution_context_for_init_hooks(
     user_config: UserConfig | None = None,
     site_config: SiteConfig | None = None,
-    duckdb_session: DuckDBSession | None = None,
-    plugins: dict[str, Any] | None = None,
+    duckdb_runtime: Any | None = None,
 ) -> Generator[ExecutionContext | None, None, None]:
     """
     Context manager for setting up ExecutionContext for init hooks.
@@ -131,27 +129,25 @@ def execution_context_for_init_hooks(
     Args:
         user_config: UserConfig object containing user configuration for runtime context
         site_config: SiteConfig object containing site configuration for runtime context
-        duckdb_session: DuckDB session for runtime context
-        plugins: Plugins dict for runtime context
+        duckdb_runtime: DuckDB runtime instance for database access
 
     Yields:
         The ExecutionContext that was created and set
 
     Example:
-        >>> with execution_context_for_init_hooks(user_config, site_config, session) as context:
+        >>> with execution_context_for_init_hooks(user_config, site_config, duckdb_runtime) as context:
         ...     run_init_hooks()  # init hooks have access to context
     """
     context = None
     token = None
 
     try:
-        if user_config and site_config and duckdb_session:
+        if user_config and site_config:
             context = ExecutionContext()
             context.set("user_config", user_config)
             context.set("site_config", site_config)
-            context.set("duckdb_session", duckdb_session)
-            if plugins:
-                context.set("plugins", plugins)
+            if duckdb_runtime:
+                context.set("duckdb_runtime", duckdb_runtime)
             token = set_execution_context(context)
             logger.info("Set up ExecutionContext for init hooks")
 

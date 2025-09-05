@@ -1,8 +1,7 @@
 """Tests for external configuration reference tracking and resolution."""
 
+import contextlib
 import os
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -51,10 +50,8 @@ class TestExternalRef:
 
         assert ref.last_error is None
 
-        try:
+        with contextlib.suppress(ValueError):
             ref.resolve()
-        except ValueError:
-            pass
 
         assert ref.last_error is not None
         assert "MISSING_VAR" in ref.last_error

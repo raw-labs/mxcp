@@ -5,12 +5,8 @@ plugin, including code execution, parameter handling, lifecycle management,
 and error conditions.
 """
 
-import asyncio
-import inspect
 import tempfile
 from pathlib import Path
-from typing import Any, Dict
-from unittest.mock import Mock, patch
 
 import pytest
 

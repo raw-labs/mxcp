@@ -17,7 +17,7 @@ from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.evals.loader import discover_eval_files, load_eval_suite
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.tool import EndpointToolExecutor
 
 logger = logging.getLogger(__name__)
@@ -224,8 +224,9 @@ async def run_eval_suite(
     # Convert endpoints to tool definitions for the LLM
     tool_definitions = _convert_endpoints_to_tool_definitions(endpoints)
 
-    # Create execution engine
-    engine = create_execution_engine(user_config, site_config, profile)
+    # Create runtime environment
+    runtime_env = create_runtime_environment(user_config, site_config, profile)
+    engine = runtime_env.execution_engine
 
     # Create tool executor that bridges LLM calls to endpoint execution
     tool_executor = EndpointToolExecutor(engine, endpoints)
@@ -360,8 +361,8 @@ async def run_eval_suite(
                 )
 
     finally:
-        # Clean up execution engine
-        engine.shutdown()
+        # Clean up runtime environment
+        runtime_env.shutdown()
 
     all_passed = all(test.get("passed", False) for test in tests)
 
