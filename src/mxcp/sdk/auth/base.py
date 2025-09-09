@@ -212,13 +212,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             for client_config in clients:
                 client_id = client_config["client_id"]
                 redirect_uris_str = client_config.get("redirect_uris", [])
-                # Convert string URIs to AnyUrl objects
-                redirect_uris_any = []
-                for uri in redirect_uris_str or []:
-                    if isinstance(uri, str):
-                        redirect_uris_any.append(AnyUrl(uri))
-                    else:
-                        redirect_uris_any.append(uri)  # Already an AnyUrl object
+                redirect_uris_any = [AnyUrl(uri) for uri in redirect_uris_str or []]
 
                 client = OAuthClientInformationFull(
                     client_id=client_id,
@@ -345,13 +339,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             scope = client_metadata.get("scope", "mxcp:access")
             client_name = client_metadata.get("client_name", "MCP Client")
 
-            # Convert redirect URIs to AnyUrl objects as required by OAuthClientInformationFull
-            redirect_uris = []
-            for uri in redirect_uris_raw:
-                if isinstance(uri, str):
-                    redirect_uris.append(AnyUrl(uri))
-                else:
-                    redirect_uris.append(uri)  # Already an AnyUrl object
+            redirect_uris = [AnyUrl(uri) for uri in redirect_uris_raw]
 
             # Create client object
             client_info = OAuthClientInformationFull(
