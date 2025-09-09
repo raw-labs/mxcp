@@ -353,8 +353,6 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 else:
                     redirect_uris.append(uri)  # Already an AnyUrl object
 
-            logger.info(f"redirect_uris: {redirect_uris}")
-
             # Create client object
             client_info = OAuthClientInformationFull(
                 client_id=client_id,
