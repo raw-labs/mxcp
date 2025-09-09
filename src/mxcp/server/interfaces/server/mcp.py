@@ -1223,6 +1223,7 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
+            result = None  # Initialize result to avoid undefined variable in finally block
             policy_info: dict[str, Any] = {
                 "policies_evaluated": [],
                 "policy_decision": None,
