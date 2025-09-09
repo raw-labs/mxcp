@@ -161,14 +161,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             persisted_clients = await self.persistence.list_clients()
             for client_data in persisted_clients:
                 try:
-                    # Convert string URLs back to AnyHttpUrl objects for OAuthClientInformationFull
+                    # Convert string URLs back to AnyUrl objects for OAuthClientInformationFull
 
                     redirect_uris_pydantic = []
 
                     # Validate each redirect URI individually
                     for uri in client_data.redirect_uris:
                         try:
-                            redirect_uris_pydantic.append(AnyHttpUrl(uri))
+                            redirect_uris_pydantic.append(AnyUrl(uri))
                         except ValidationError as ve:
                             logger.warning(
                                 f"Skipping malformed redirect URI for client {client_data.client_id}: {uri} - {ve}"
@@ -185,9 +185,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     client = OAuthClientInformationFull(
                         client_id=client_data.client_id,
                         client_secret=client_data.client_secret,
-                        redirect_uris=cast(
-                            list[AnyUrl], redirect_uris_pydantic
-                        ),  # Use validated URIs
+                        redirect_uris=redirect_uris_pydantic,
                         grant_types=cast(
                             list[Literal["authorization_code", "refresh_token"]],
                             client_data.grant_types,
@@ -214,7 +212,13 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             for client_config in clients:
                 client_id = client_config["client_id"]
                 redirect_uris_str = client_config.get("redirect_uris", [])
-                redirect_uris_any = [cast(AnyUrl, uri) for uri in (redirect_uris_str or [])]
+                # Convert string URIs to AnyUrl objects
+                redirect_uris_any = []
+                for uri in redirect_uris_str or []:
+                    if isinstance(uri, str):
+                        redirect_uris_any.append(AnyUrl(uri))
+                    else:
+                        redirect_uris_any.append(uri)  # Already an AnyUrl object
 
                 client = OAuthClientInformationFull(
                     client_id=client_id,
@@ -253,14 +257,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     persisted_client = await self.persistence.load_client(client_id)
                     if persisted_client:
                         # Load into memory cache
-                        # Convert string URLs back to AnyHttpUrl objects for OAuthClientInformationFull
+                        # Convert string URLs back to AnyUrl objects for OAuthClientInformationFull
 
                         redirect_uris_pydantic = []
 
                         # Validate each redirect URI individually
                         for uri in persisted_client.redirect_uris:
                             try:
-                                redirect_uris_pydantic.append(AnyHttpUrl(uri))
+                                redirect_uris_pydantic.append(AnyUrl(uri))
                             except ValidationError as ve:
                                 logger.warning(
                                     f"Skipping malformed redirect URI for client {client_id}: {uri} - {ve}"
@@ -275,9 +279,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                         client = OAuthClientInformationFull(
                             client_id=persisted_client.client_id,
                             client_secret=persisted_client.client_secret,
-                            redirect_uris=cast(
-                                list[AnyUrl], redirect_uris_pydantic
-                            ),  # Use validated URIs
+                            redirect_uris=redirect_uris_pydantic,
                             grant_types=cast(
                                 list[Literal["authorization_code", "refresh_token"]],
                                 persisted_client.grant_types,
@@ -307,13 +309,13 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             # Store in persistence if available
             if self.persistence:
                 try:
-                    # Convert Pydantic AnyHttpUrl objects to strings for JSON serialization
+                    # Convert Pydantic AnyUrl objects to strings for JSON serialization
                     redirect_uris_str = [str(uri) for uri in client_info.redirect_uris]
 
                     persisted_client = PersistedClient(
                         client_id=client_info.client_id,
                         client_secret=client_info.client_secret,
-                        redirect_uris=redirect_uris_str,  # Convert AnyHttpUrl to strings
+                        redirect_uris=redirect_uris_str,  # Convert AnyUrl to strings
                         grant_types=cast(list[str], client_info.grant_types),
                         response_types=cast(list[str], client_info.response_types),
                         scope=client_info.scope or "",
@@ -337,11 +339,21 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             client_secret = secrets.token_urlsafe(64)
 
             # Extract and validate metadata
-            redirect_uris = client_metadata.get("redirect_uris", [])
+            redirect_uris_raw = client_metadata.get("redirect_uris", [])
             grant_types = client_metadata.get("grant_types", ["authorization_code"])
             response_types = client_metadata.get("response_types", ["code"])
             scope = client_metadata.get("scope", "mxcp:access")
             client_name = client_metadata.get("client_name", "MCP Client")
+
+            # Convert redirect URIs to AnyUrl objects as required by OAuthClientInformationFull
+            redirect_uris = []
+            for uri in redirect_uris_raw:
+                if isinstance(uri, str):
+                    redirect_uris.append(AnyUrl(uri))
+                else:
+                    redirect_uris.append(uri)  # Already an AnyUrl object
+
+            logger.info(f"redirect_uris: {redirect_uris}")
 
             # Create client object
             client_info = OAuthClientInformationFull(
