@@ -116,6 +116,49 @@ class AuthenticationMiddleware:
             if expired_keys:
                 logger.debug(f"🧹 Cache CLEANUP - removed {len(expired_keys)} expired entries")
 
+    async def _attempt_token_refresh(self, mcp_token: str, external_token: str) -> str | None:
+        """Attempt to refresh an expired external token.
+
+        Args:
+            mcp_token: The MCP token that needs its external token refreshed
+            external_token: The current (expired) external token
+
+        Returns:
+            New external token if refresh successful, None if failed
+        """
+        if not self.oauth_server:
+            logger.warning("No OAuth server available for token refresh")
+            return None
+
+        try:
+            # Invalidate cache for the expired token
+            async with self._cache_lock:
+                # Remove any cached entries for the expired token
+                expired_cache_keys = [
+                    key
+                    for key, cached_entry in self._user_context_cache.items()
+                    if key == external_token
+                ]
+                for key in expired_cache_keys:
+                    del self._user_context_cache[key]
+                    logger.debug(f"🗑️ Removed expired token from cache: {key[:20]}...")
+
+            # Attempt refresh through the OAuth server
+            new_external_token = await self.oauth_server.refresh_external_token(mcp_token)
+
+            if new_external_token:
+                logger.info(
+                    f"🔄 Successfully refreshed external token: {new_external_token[:20]}..."
+                )
+                return new_external_token
+            else:
+                logger.warning("Token refresh returned no new token")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error during token refresh: {e}")
+            return None
+
     async def check_authentication(self) -> UserContext | None:
         """Check if the current request is authenticated.
 
@@ -208,7 +251,38 @@ class AuthenticationMiddleware:
                                 f"🔄 Cache MISS - calling {provider_name}.get_user_context() - Provider API call #{hash(external_token) % 10000}"
                             )
 
-                            user_context = await self.oauth_handler.get_user_context(external_token)
+                            try:
+                                user_context = await self.oauth_handler.get_user_context(
+                                    external_token
+                                )
+                            except Exception as e:
+                                # Check if this is a 401/token expired error
+                                if hasattr(e, "status_code") and e.status_code == 401:
+                                    logger.info("🔄 Access token expired, attempting refresh...")
+
+                                    # Attempt to refresh the token
+                                    refreshed_token = await self._attempt_token_refresh(
+                                        access_token.token, external_token
+                                    )
+
+                                    if refreshed_token:
+                                        logger.info(
+                                            "✅ Token refresh successful, retrying user context"
+                                        )
+                                        # Retry with the new token
+                                        user_context = await self.oauth_handler.get_user_context(
+                                            refreshed_token
+                                        )
+                                        # Update external_token for caching
+                                        external_token = refreshed_token
+                                    else:
+                                        logger.error(
+                                            "❌ Token refresh failed, re-raising original error"
+                                        )
+                                        raise
+                                else:
+                                    # Not a token expiry error, re-raise
+                                    raise
 
                             # Cache the result for future requests
                             await self._cache_user_context(external_token, user_context)
