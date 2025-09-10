@@ -219,7 +219,7 @@ class AuthenticationMiddleware:
                     )
                     return None
 
-                logger.info("Access token found in request context")
+                logger.debug("Access token found in request context")
                 if span:
                     span.set_attribute("mxcp.auth.has_token", True)
 
@@ -245,7 +245,7 @@ class AuthenticationMiddleware:
                         token_span.set_attribute("mxcp.auth.token_valid", True)
                         token_span.set_attribute("mxcp.auth.client_id", token_info.client_id)
 
-                logger.info(f"Token validated successfully for client: {token_info.client_id}")
+                logger.debug(f"Token validated successfully for client: {token_info.client_id}")
 
                 # Get the external token to fetch user context
                 if not self.oauth_server:
@@ -257,7 +257,7 @@ class AuthenticationMiddleware:
                     logger.warning("No external token mapping found")
                     return None
 
-                logger.info("External token mapping found")
+                logger.debug("External token mapping found")
 
                 # Get standardized user context from the provider (with caching)
                 try:
@@ -274,7 +274,7 @@ class AuthenticationMiddleware:
                             provider_name = getattr(
                                 self.oauth_handler, "__class__", type(self.oauth_handler)
                             ).__name__
-                            logger.info(
+                            logger.debug(
                                 f"🔄 Cache MISS - calling {provider_name}.get_user_context() - Provider API call #{hash(external_token) % 10000}"
                             )
 
@@ -320,7 +320,7 @@ class AuthenticationMiddleware:
                         asyncio.create_task(self._cleanup_expired_cache_entries())
                         # Add external token to the user context for use in DuckDB functions
                         user_context.external_token = external_token
-                        logger.info(
+                        logger.debug(
                             f"Successfully retrieved user context for {user_context.username} (provider: {user_context.provider})"
                         )
 
@@ -392,7 +392,7 @@ class AuthenticationMiddleware:
                 user_context = await self.check_authentication()
                 if user_context:
                     # Log authentication status without PII
-                    logger.info(
+                    logger.debug(
                         f"Executing {func.__name__} for authenticated user "
                         f"(provider: {user_context.provider})"
                     )

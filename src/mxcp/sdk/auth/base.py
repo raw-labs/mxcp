@@ -257,7 +257,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             # First check memory cache
             client = self._clients.get(client_id)
             if client:
-                logger.info(f"Looking up client_id: {client_id}, found in memory cache")
+                logger.debug(f"Looking up client_id: {client_id}, found in memory cache")
                 return client
 
             # If not in cache and persistence is available, check persistence
@@ -300,7 +300,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                             client_name=persisted_client.client_name,
                         )
                         self._clients[client_id] = client
-                        logger.info(f"Looking up client_id: {client_id}, found in persistence")
+                        logger.debug(f"Looking up client_id: {client_id}, found in persistence")
                         return client
                 except Exception as e:
                     logger.error(f"Error loading client from persistence: {e}")
@@ -557,7 +557,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                             code_challenge=persisted_code.code_challenge or "",
                         )
                         self._auth_codes[code] = auth_code
-                        logger.info(f"Loaded auth code from persistence: {code}")
+                        logger.debug(f"Loaded auth code from persistence: {code}")
                 except Exception as e:
                     logger.error(f"Error loading auth code from persistence: {e}")
 
