@@ -732,9 +732,12 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 return None
 
             try:
-                persisted_token = await self.persistence.load_token(mcp_token)
+                # Look up the refresh token using the external token, not the MCP token
+                persisted_token = await self.persistence.load_token(external_token)
                 if not persisted_token or not persisted_token.refresh_token:
-                    logger.warning(f"No refresh token available for MCP token: {mcp_token[:10]}...")
+                    logger.warning(
+                        f"No refresh token available for external token: {external_token[:20]}..."
+                    )
                     return None
 
                 # Call the provider's refresh method
