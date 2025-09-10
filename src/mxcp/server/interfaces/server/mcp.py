@@ -582,8 +582,16 @@ class RAWMCP:
 
         self.mcp = FastMCP(**fastmcp_kwargs)
 
-        # Initialize authentication middleware
-        self.auth_middleware = AuthenticationMiddleware(self.oauth_handler, self.oauth_server)
+        # Initialize authentication middleware with configurable cache TTL
+        auth_config = self.active_profile.get("auth", {})
+        cache_ttl = auth_config.get("cache_ttl")
+        if cache_ttl is not None:
+            self.auth_middleware = AuthenticationMiddleware(
+                self.oauth_handler, self.oauth_server, cache_ttl=cache_ttl
+            )
+        else:
+            # Use default cache TTL
+            self.auth_middleware = AuthenticationMiddleware(self.oauth_handler, self.oauth_server)
 
         # Register OAuth routes if enabled
         if self.oauth_handler and self.oauth_server:
