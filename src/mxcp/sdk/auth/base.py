@@ -416,6 +416,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         scopes: list[str],
         expires_in: int | None,
         external_token: str | None = None,
+        refresh_token: str | None = None,
     ) -> None:
         expires_at = (time.time() + expires_in) if expires_in else None
         access_token = AccessToken(
@@ -439,6 +440,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     token=token,
                     client_id=client_id,
                     external_token=external_token,
+                    refresh_token=refresh_token,
                     scopes=scopes,
                     expires_at=expires_at,
                     created_at=time.time(),
@@ -501,7 +503,12 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
             # Store external token (temporary until exchanged for MCP token)
             await self._store_token(
-                user_info.raw_token, meta.client_id, user_info.scopes, None, user_info.raw_token
+                user_info.raw_token,
+                meta.client_id,
+                user_info.scopes,
+                None,
+                user_info.raw_token,
+                user_info.refresh_token,
             )
             self._token_mapping[mcp_code] = user_info.raw_token
 
@@ -700,3 +707,77 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     logger.debug(f"Revoked token from persistence: {token[:10]}...")
                 except Exception as e:
                     logger.error(f"Error revoking token from persistence: {e}")
+
+    async def refresh_external_token(self, mcp_token: str) -> str | None:
+        """Refresh an expired external token using its refresh token.
+
+        Args:
+            mcp_token: The MCP token whose external token needs refreshing
+
+        Returns:
+            New external access token if refresh successful, None if failed
+        """
+        async with self._lock:
+            # Get the current external token
+            external_token = self._token_mapping.get(mcp_token)
+            if not external_token:
+                logger.warning(
+                    f"No external token mapping found for MCP token: {mcp_token[:10]}..."
+                )
+                return None
+
+            # Load the persisted token to get the refresh token
+            if not self.persistence:
+                logger.warning("No persistence backend available for refresh token lookup")
+                return None
+
+            try:
+                persisted_token = await self.persistence.load_token(mcp_token)
+                if not persisted_token or not persisted_token.refresh_token:
+                    logger.warning(f"No refresh token available for MCP token: {mcp_token[:10]}...")
+                    return None
+
+                # Call the provider's refresh method
+                if not hasattr(self.handler, "refresh_access_token"):
+                    logger.warning(
+                        f"Provider {type(self.handler).__name__} does not support token refresh"
+                    )
+                    return None
+
+                refresh_response = await self.handler.refresh_access_token(
+                    persisted_token.refresh_token
+                )
+
+                # Extract new tokens
+                new_access_token = refresh_response.get("access_token")
+                new_refresh_token = refresh_response.get(
+                    "refresh_token", persisted_token.refresh_token
+                )
+
+                if not new_access_token:
+                    logger.error("No access token received from refresh")
+                    return None
+
+                # Update token mappings
+                self._token_mapping[mcp_token] = new_access_token
+
+                # Update persistence with new tokens
+                updated_token = PersistedAccessToken(
+                    token=persisted_token.token,
+                    client_id=persisted_token.client_id,
+                    external_token=new_access_token,
+                    refresh_token=new_refresh_token,
+                    scopes=persisted_token.scopes,
+                    expires_at=persisted_token.expires_at,  # Could update with new expiry if provided
+                    created_at=persisted_token.created_at,
+                )
+                await self.persistence.store_token(updated_token)
+
+                logger.info(
+                    f"Successfully refreshed external token for MCP token: {mcp_token[:10]}..."
+                )
+                return new_access_token
+
+            except Exception as e:
+                logger.error(f"Error refreshing external token: {e}")
+                return None
