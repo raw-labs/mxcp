@@ -9,6 +9,7 @@ from functools import wraps
 from typing import Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
+from starlette.exceptions import HTTPException
 
 from mxcp.sdk.telemetry import record_counter, traced_operation
 
@@ -281,9 +282,9 @@ class AuthenticationMiddleware:
                                 user_context = await self.oauth_handler.get_user_context(
                                     external_token
                                 )
-                            except Exception as e:
+                            except HTTPException as e:
                                 # Check if this is a 401/token expired error
-                                if hasattr(e, "status_code") and e.status_code == 401:
+                                if e.status_code == 401:
                                     logger.info("🔄 Access token expired, attempting refresh...")
 
                                     # Attempt to refresh the token
@@ -307,6 +308,10 @@ class AuthenticationMiddleware:
                                 else:
                                     # Not a token expiry error, re-raise
                                     raise
+                            except Exception as e:
+                                # Handle non-HTTP exceptions (network errors, etc.)
+                                logger.error(f"Non-HTTP error during get_user_context: {e}")
+                                raise
 
                             # Cache the result for future requests
                             await self._cache_user_context(access_token.token, user_context)
