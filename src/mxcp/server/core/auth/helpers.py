@@ -29,6 +29,7 @@ def translate_auth_config(user_auth_config: UserAuthConfig) -> AuthConfig:
     """
     return {
         "provider": user_auth_config.get("provider"),
+        "cache_ttl": user_auth_config.get("cache_ttl"),
         "clients": user_auth_config.get("clients"),
         "authorization": user_auth_config.get("authorization"),
         "persistence": user_auth_config.get("persistence"),
