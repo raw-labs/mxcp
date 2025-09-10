@@ -1,7 +1,10 @@
 """Authentication middleware for MXCP endpoints."""
 
+import asyncio
 import logging
+import time
 from collections.abc import Callable
+from dataclasses import dataclass, replace
 from functools import wraps
 from typing import Any
 
@@ -15,6 +18,21 @@ from .context import reset_user_context, set_user_context
 
 logger = logging.getLogger(__name__)
 
+# Default cache TTL in seconds (5 minutes)
+DEFAULT_USER_CONTEXT_CACHE_TTL = 300
+
+
+@dataclass
+class CachedUserContext:
+    """Cached user context with expiration timestamp."""
+
+    user_context: UserContext
+    expires_at: float
+
+    def is_expired(self) -> bool:
+        """Check if the cached context has expired."""
+        return time.time() >= self.expires_at
+
 
 class AuthenticationMiddleware:
     """Middleware to handle authentication for MXCP endpoints."""
@@ -23,16 +41,91 @@ class AuthenticationMiddleware:
         self,
         oauth_handler: ExternalOAuthHandler | None,
         oauth_server: GeneralOAuthAuthorizationServer | None,
+        cache_ttl: int = DEFAULT_USER_CONTEXT_CACHE_TTL,
     ):
         """Initialize authentication middleware.
 
         Args:
             oauth_handler: OAuth handler instance (None if auth is disabled)
             oauth_server: OAuth authorization server instance (None if auth is disabled)
+            cache_ttl: Cache TTL in seconds for user context caching
         """
         self.oauth_handler = oauth_handler
         self.oauth_server = oauth_server
         self.auth_enabled = oauth_handler is not None and oauth_server is not None
+        self.cache_ttl = cache_ttl
+
+        # Thread-safe cache for user contexts
+        self._user_context_cache: dict[str, CachedUserContext] = {}
+        self._cache_lock = asyncio.Lock()
+
+        # Cleanup task management to prevent task spam
+        self._cleanup_task: asyncio.Task[None] | None = None
+        self._cleanup_lock = asyncio.Lock()
+
+    async def _get_cached_user_context(self, external_token: str) -> UserContext | None:
+        """Get user context from cache if valid and not expired.
+
+        Args:
+            external_token: External OAuth token to use as cache key
+
+        Returns:
+            Cached user context if valid, None if expired or not found
+        """
+        async with self._cache_lock:
+            cached_entry = self._user_context_cache.get(external_token)
+            if cached_entry is None:
+                return None
+
+            if cached_entry.is_expired():
+                # Remove expired entry
+                del self._user_context_cache[external_token]
+                logger.debug(f"⏰ Cache EXPIRED - removed entry for token {external_token[:20]}...")
+                return None
+
+            logger.debug(
+                f"🎯 Cache HIT - using cached user context for token {external_token[:20]}..."
+            )
+            return cached_entry.user_context
+
+    async def _cache_user_context(self, external_token: str, user_context: UserContext) -> None:
+        """Store user context in cache with expiration.
+
+        Args:
+            external_token: External OAuth token to use as cache key
+            user_context: User context to cache
+        """
+        expires_at = time.time() + self.cache_ttl
+        cached_entry = CachedUserContext(user_context=user_context, expires_at=expires_at)
+
+        async with self._cache_lock:
+            self._user_context_cache[external_token] = cached_entry
+            logger.debug(
+                f"💾 Cache STORE - cached user context for token {external_token[:20]}... (TTL: {self.cache_ttl}s)"
+            )
+
+    async def _cleanup_expired_cache_entries(self) -> None:
+        """Clean up expired cache entries to prevent memory leaks."""
+        current_time = time.time()
+        expired_keys = []
+
+        async with self._cache_lock:
+            for token, cached_entry in self._user_context_cache.items():
+                if cached_entry.expires_at <= current_time:
+                    expired_keys.append(token)
+
+            for key in expired_keys:
+                del self._user_context_cache[key]
+
+            if expired_keys:
+                logger.debug(f"🧹 Cache CLEANUP - removed {len(expired_keys)} expired entries")
+
+    async def _schedule_cleanup_if_needed(self) -> None:
+        """Schedule cleanup task if one isn't already running."""
+        async with self._cleanup_lock:
+            # Only start a new cleanup task if one isn't already running
+            if self._cleanup_task is None or self._cleanup_task.done():
+                self._cleanup_task = asyncio.create_task(self._cleanup_expired_cache_entries())
 
     async def check_authentication(self) -> UserContext | None:
         """Check if the current request is authenticated.
@@ -107,16 +200,38 @@ class AuthenticationMiddleware:
 
                 logger.info("External token mapping found")
 
-                # Get standardized user context from the provider
+                # Get standardized user context from the provider (with caching)
                 try:
                     with traced_operation("mxcp.auth.get_user_context") as user_span:
                         if not self.oauth_handler:
                             logger.warning("OAuth handler not configured")
                             return None
 
-                        user_context = await self.oauth_handler.get_user_context(external_token)
-                        # Add external token to the user context for use in DuckDB functions
-                        user_context.external_token = external_token
+                        # Try to get user context from cache first
+                        cached_user_context = await self._get_cached_user_context(external_token)
+
+                        if cached_user_context is None:
+                            # Cache miss - call provider API
+                            provider_name = getattr(
+                                self.oauth_handler, "__class__", type(self.oauth_handler)
+                            ).__name__
+                            logger.info(
+                                f"🔄 Cache MISS - calling {provider_name}.get_user_context() - Provider API call #{hash(external_token) % 10000}"
+                            )
+
+                            cached_user_context = await self.oauth_handler.get_user_context(
+                                external_token
+                            )
+
+                            # Cache the result for future requests
+                            await self._cache_user_context(external_token, cached_user_context)
+
+                        # Schedule cleanup if needed (prevents task spam)
+                        await self._schedule_cleanup_if_needed()
+
+                        # Create a copy of the cached user context with the external token
+                        # This prevents race conditions when multiple requests use the same cached object
+                        user_context = replace(cached_user_context, external_token=external_token)
                         logger.info(
                             f"Successfully retrieved user context for {user_context.username} (provider: {user_context.provider})"
                         )
