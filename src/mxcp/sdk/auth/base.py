@@ -212,7 +212,17 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             for client_config in clients:
                 client_id = client_config["client_id"]
                 redirect_uris_str = client_config.get("redirect_uris", [])
-                redirect_uris_any = [AnyUrl(uri) for uri in redirect_uris_str or []]
+
+                # Validate each redirect URI individually
+                redirect_uris_any = []
+                for uri in redirect_uris_str or []:
+                    try:
+                        redirect_uris_any.append(AnyUrl(uri))
+                    except ValidationError as ve:
+                        logger.warning(
+                            f"Skipping malformed redirect URI in config for client {client_id}: {uri} - {ve}"
+                        )
+                        # Skip malformed URIs but continue loading the client
 
                 client = OAuthClientInformationFull(
                     client_id=client_id,
@@ -339,7 +349,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             scope = client_metadata.get("scope", "mxcp:access")
             client_name = client_metadata.get("client_name", "MCP Client")
 
-            redirect_uris = [AnyUrl(uri) for uri in redirect_uris_raw]
+            # Validate redirect URIs
+            redirect_uris = []
+            for uri in redirect_uris_raw:
+                try:
+                    redirect_uris.append(AnyUrl(uri))
+                except ValidationError as ve:
+                    logger.error(f"Invalid redirect URI in dynamic registration: {uri} - {ve}")
+                    raise HTTPException(400, f"Invalid redirect URI: {uri}") from ve
 
             # Create client object
             client_info = OAuthClientInformationFull(
