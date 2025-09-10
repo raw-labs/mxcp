@@ -58,6 +58,24 @@ class AuthenticationMiddleware:
         # Thread-safe cache for user contexts
         self._user_context_cache: dict[str, CachedUserContext] = {}
         self._cache_lock = asyncio.Lock()
+        
+        # Per-MCP-token locks for refresh operations to prevent race conditions
+        self._refresh_locks: dict[str, asyncio.Lock] = {}
+        self._refresh_locks_lock = asyncio.Lock()
+
+    async def _get_refresh_lock(self, mcp_token: str) -> asyncio.Lock:
+        """Get or create a refresh lock for the given MCP token.
+        
+        Args:
+            mcp_token: MCP token to get lock for
+            
+        Returns:
+            Lock specific to this MCP token
+        """
+        async with self._refresh_locks_lock:
+            if mcp_token not in self._refresh_locks:
+                self._refresh_locks[mcp_token] = asyncio.Lock()
+            return self._refresh_locks[mcp_token]
 
     async def _get_cached_user_context(self, mcp_token: str) -> UserContext | None:
         """Get user context from cache if valid and not expired.
@@ -130,29 +148,42 @@ class AuthenticationMiddleware:
             logger.warning("No OAuth server available for token refresh")
             return None
 
-        try:
-            # Invalidate cache for the expired MCP token
-            async with self._cache_lock:
-                # Remove cached entry for this MCP token
-                if mcp_token in self._user_context_cache:
-                    del self._user_context_cache[mcp_token]
-                    logger.debug(f"🗑️ Removed expired token from cache: {mcp_token[:20]}...")
+        # Get the refresh lock for this specific MCP token to prevent race conditions
+        refresh_lock = await self._get_refresh_lock(mcp_token)
+        
+        async with refresh_lock:
+            try:
+                # Check if another request already refreshed the token
+                # by checking if we have a valid cached user context now
+                cached_context = await self._get_cached_user_context(mcp_token)
+                if cached_context is not None:
+                    logger.debug(f"🎯 Token already refreshed by another request for {mcp_token[:20]}...")
+                    # Get the current external token from token mapping
+                    current_external_token = self.oauth_server._token_mapping.get(mcp_token)
+                    return current_external_token
 
-            # Attempt refresh through the OAuth server
-            new_external_token = await self.oauth_server.refresh_external_token(mcp_token)
+                # Invalidate cache for the expired MCP token
+                async with self._cache_lock:
+                    # Remove cached entry for this MCP token
+                    if mcp_token in self._user_context_cache:
+                        del self._user_context_cache[mcp_token]
+                        logger.debug(f"🗑️ Removed expired token from cache: {mcp_token[:20]}...")
 
-            if new_external_token:
-                logger.info(
-                    f"🔄 Successfully refreshed external token: {new_external_token[:20]}..."
-                )
-                return new_external_token
-            else:
-                logger.warning("Token refresh returned no new token")
+                # Attempt refresh through the OAuth server
+                new_external_token = await self.oauth_server.refresh_external_token(mcp_token)
+
+                if new_external_token:
+                    logger.info(
+                        f"🔄 Successfully refreshed external token: {new_external_token[:20]}..."
+                    )
+                    return new_external_token
+                else:
+                    logger.warning("Token refresh returned no new token")
+                    return None
+
+            except Exception as e:
+                logger.error(f"Error during token refresh: {e}")
                 return None
-
-        except Exception as e:
-            logger.error(f"Error during token refresh: {e}")
-            return None
 
     async def check_authentication(self) -> UserContext | None:
         """Check if the current request is authenticated.
