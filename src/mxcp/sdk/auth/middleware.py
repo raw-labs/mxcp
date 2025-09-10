@@ -79,7 +79,7 @@ class AuthenticationMiddleware:
                 logger.debug(f"⏰ Cache EXPIRED - removed entry for token {external_token[:20]}...")
                 return None
 
-            logger.info(
+            logger.debug(
                 f"🎯 Cache HIT - using cached user context for token {external_token[:20]}..."
             )
             return cached_entry.user_context
@@ -96,7 +96,7 @@ class AuthenticationMiddleware:
 
         async with self._cache_lock:
             self._user_context_cache[external_token] = cached_entry
-            logger.info(
+            logger.debug(
                 f"💾 Cache STORE - cached user context for token {external_token[:20]}... (TTL: {self.cache_ttl}s)"
             )
 
