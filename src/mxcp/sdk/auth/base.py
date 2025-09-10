@@ -224,6 +224,11 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                         )
                         # Skip malformed URIs but continue loading the client
 
+                # Skip client if no valid redirect URIs remain
+                if not redirect_uris_any and redirect_uris_str:
+                    logger.error(f"Skipping configured client {client_id}: no valid redirect URIs")
+                    continue
+
                 client = OAuthClientInformationFull(
                     client_id=client_id,
                     client_secret=client_config.get("client_secret"),  # None for public clients
