@@ -59,17 +59,17 @@ class AuthenticationMiddleware:
         # Thread-safe cache for user contexts
         self._user_context_cache: dict[str, CachedUserContext] = {}
         self._cache_lock = asyncio.Lock()
-        
+
         # Per-MCP-token locks for refresh operations to prevent race conditions
         self._refresh_locks: dict[str, asyncio.Lock] = {}
         self._refresh_locks_lock = asyncio.Lock()
 
     async def _get_refresh_lock(self, mcp_token: str) -> asyncio.Lock:
         """Get or create a refresh lock for the given MCP token.
-        
+
         Args:
             mcp_token: MCP token to get lock for
-            
+
         Returns:
             Lock specific to this MCP token
         """
@@ -98,9 +98,7 @@ class AuthenticationMiddleware:
                 logger.debug(f"⏰ Cache EXPIRED - removed entry for token {mcp_token[:20]}...")
                 return None
 
-            logger.debug(
-                f"🎯 Cache HIT - using cached user context for token {mcp_token[:20]}..."
-            )
+            logger.debug(f"🎯 Cache HIT - using cached user context for token {mcp_token[:20]}...")
             return cached_entry.user_context
 
     async def _cache_user_context(self, mcp_token: str, user_context: UserContext) -> None:
@@ -151,14 +149,16 @@ class AuthenticationMiddleware:
 
         # Get the refresh lock for this specific MCP token to prevent race conditions
         refresh_lock = await self._get_refresh_lock(mcp_token)
-        
+
         async with refresh_lock:
             try:
                 # Check if another request already refreshed the token
                 # by checking if we have a valid cached user context now
                 cached_context = await self._get_cached_user_context(mcp_token)
                 if cached_context is not None:
-                    logger.debug(f"🎯 Token already refreshed by another request for {mcp_token[:20]}...")
+                    logger.debug(
+                        f"🎯 Token already refreshed by another request for {mcp_token[:20]}..."
+                    )
                     # Get the current external token from token mapping
                     current_external_token = self.oauth_server._token_mapping.get(mcp_token)
                     return current_external_token

@@ -757,7 +757,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     "refresh_token", persisted_token.refresh_token
                 )
 
-                if not new_access_token:
+                if not new_access_token or not isinstance(new_access_token, str):
                     logger.error("No access token received from refresh")
                     return None
 
@@ -779,7 +779,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 logger.info(
                     f"Successfully refreshed external token for MCP token: {mcp_token[:10]}..."
                 )
-                return new_access_token
+                return str(new_access_token)
 
             except Exception as e:
                 logger.error(f"Error refreshing external token: {e}")
