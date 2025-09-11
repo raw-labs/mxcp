@@ -1185,6 +1185,42 @@ projects:
             # ... other GitHub config
 ```
 
+## User Context Caching
+
+MXCP caches user context information to improve performance and reduce load on OAuth providers. When a user is authenticated, their user information (username, email, provider details) is cached to avoid making API calls to the OAuth provider on every tool execution.
+
+### Cache TTL Configuration
+
+You can configure the cache duration using the `cache_ttl` setting:
+
+```yaml
+projects:
+  my_project:
+    profiles:
+      dev:
+        auth:
+          provider: github
+          cache_ttl: 300  # Cache user context for 5 minutes (default: 300 seconds)
+          
+          clients:
+            - client_id: "${CLIENT_ID}"
+              # ... client config
+```
+
+**Configuration Options:**
+
+- `cache_ttl`: Cache duration in seconds for user context information
+  - **Default**: 300 seconds (5 minutes)
+  - **Purpose**: Reduces API calls to OAuth providers, improving performance and avoiding rate limits
+  - **Range**: Any positive integer (recommended: 60-1800 seconds)
+
+**Security Considerations:**
+
+- Cached user context expires automatically after the TTL period
+- User information is cached in memory only (not persisted to disk)
+- Cache is cleared when the server restarts
+- Shorter TTL values provide more up-to-date user information but increase API calls
+
 ## Authorization Configuration
 
 MXCP supports configurable scope-based authorization to control access to your endpoints and tools. You can specify which OAuth scopes are required for accessing your server's resources.

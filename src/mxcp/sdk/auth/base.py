@@ -161,14 +161,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             persisted_clients = await self.persistence.list_clients()
             for client_data in persisted_clients:
                 try:
-                    # Convert string URLs back to AnyHttpUrl objects for OAuthClientInformationFull
+                    # Convert string URLs back to AnyUrl objects for OAuthClientInformationFull
 
                     redirect_uris_pydantic = []
 
                     # Validate each redirect URI individually
                     for uri in client_data.redirect_uris:
                         try:
-                            redirect_uris_pydantic.append(AnyHttpUrl(uri))
+                            redirect_uris_pydantic.append(AnyUrl(uri))
                         except ValidationError as ve:
                             logger.warning(
                                 f"Skipping malformed redirect URI for client {client_data.client_id}: {uri} - {ve}"
@@ -185,9 +185,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     client = OAuthClientInformationFull(
                         client_id=client_data.client_id,
                         client_secret=client_data.client_secret,
-                        redirect_uris=cast(
-                            list[AnyUrl], redirect_uris_pydantic
-                        ),  # Use validated URIs
+                        redirect_uris=redirect_uris_pydantic,
                         grant_types=cast(
                             list[Literal["authorization_code", "refresh_token"]],
                             client_data.grant_types,
@@ -214,7 +212,22 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             for client_config in clients:
                 client_id = client_config["client_id"]
                 redirect_uris_str = client_config.get("redirect_uris", [])
-                redirect_uris_any = [cast(AnyUrl, uri) for uri in (redirect_uris_str or [])]
+
+                # Validate each redirect URI individually
+                redirect_uris_any = []
+                for uri in redirect_uris_str or []:
+                    try:
+                        redirect_uris_any.append(AnyUrl(uri))
+                    except ValidationError as ve:
+                        logger.warning(
+                            f"Skipping malformed redirect URI in config for client {client_id}: {uri} - {ve}"
+                        )
+                        # Skip malformed URIs but continue loading the client
+
+                # Skip client if no valid redirect URIs remain
+                if not redirect_uris_any and redirect_uris_str:
+                    logger.error(f"Skipping configured client {client_id}: no valid redirect URIs")
+                    continue
 
                 client = OAuthClientInformationFull(
                     client_id=client_id,
@@ -244,7 +257,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             # First check memory cache
             client = self._clients.get(client_id)
             if client:
-                logger.info(f"Looking up client_id: {client_id}, found in memory cache")
+                logger.debug(f"Looking up client_id: {client_id}, found in memory cache")
                 return client
 
             # If not in cache and persistence is available, check persistence
@@ -253,14 +266,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     persisted_client = await self.persistence.load_client(client_id)
                     if persisted_client:
                         # Load into memory cache
-                        # Convert string URLs back to AnyHttpUrl objects for OAuthClientInformationFull
+                        # Convert string URLs back to AnyUrl objects for OAuthClientInformationFull
 
                         redirect_uris_pydantic = []
 
                         # Validate each redirect URI individually
                         for uri in persisted_client.redirect_uris:
                             try:
-                                redirect_uris_pydantic.append(AnyHttpUrl(uri))
+                                redirect_uris_pydantic.append(AnyUrl(uri))
                             except ValidationError as ve:
                                 logger.warning(
                                     f"Skipping malformed redirect URI for client {client_id}: {uri} - {ve}"
@@ -275,9 +288,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                         client = OAuthClientInformationFull(
                             client_id=persisted_client.client_id,
                             client_secret=persisted_client.client_secret,
-                            redirect_uris=cast(
-                                list[AnyUrl], redirect_uris_pydantic
-                            ),  # Use validated URIs
+                            redirect_uris=redirect_uris_pydantic,
                             grant_types=cast(
                                 list[Literal["authorization_code", "refresh_token"]],
                                 persisted_client.grant_types,
@@ -289,7 +300,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                             client_name=persisted_client.client_name,
                         )
                         self._clients[client_id] = client
-                        logger.info(f"Looking up client_id: {client_id}, found in persistence")
+                        logger.debug(f"Looking up client_id: {client_id}, found in persistence")
                         return client
                 except Exception as e:
                     logger.error(f"Error loading client from persistence: {e}")
@@ -307,13 +318,13 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             # Store in persistence if available
             if self.persistence:
                 try:
-                    # Convert Pydantic AnyHttpUrl objects to strings for JSON serialization
+                    # Convert Pydantic AnyUrl objects to strings for JSON serialization
                     redirect_uris_str = [str(uri) for uri in client_info.redirect_uris]
 
                     persisted_client = PersistedClient(
                         client_id=client_info.client_id,
                         client_secret=client_info.client_secret,
-                        redirect_uris=redirect_uris_str,  # Convert AnyHttpUrl to strings
+                        redirect_uris=redirect_uris_str,  # Convert AnyUrl to strings
                         grant_types=cast(list[str], client_info.grant_types),
                         response_types=cast(list[str], client_info.response_types),
                         scope=client_info.scope or "",
@@ -337,11 +348,20 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             client_secret = secrets.token_urlsafe(64)
 
             # Extract and validate metadata
-            redirect_uris = client_metadata.get("redirect_uris", [])
+            redirect_uris_raw = client_metadata.get("redirect_uris", [])
             grant_types = client_metadata.get("grant_types", ["authorization_code"])
             response_types = client_metadata.get("response_types", ["code"])
             scope = client_metadata.get("scope", "mxcp:access")
             client_name = client_metadata.get("client_name", "MCP Client")
+
+            # Validate redirect URIs
+            redirect_uris = []
+            for uri in redirect_uris_raw:
+                try:
+                    redirect_uris.append(AnyUrl(uri))
+                except ValidationError as ve:
+                    logger.error(f"Invalid redirect URI in dynamic registration: {uri} - {ve}")
+                    raise HTTPException(400, f"Invalid redirect URI: {uri}") from ve
 
             # Create client object
             client_info = OAuthClientInformationFull(
@@ -396,6 +416,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         scopes: list[str],
         expires_in: int | None,
         external_token: str | None = None,
+        refresh_token: str | None = None,
     ) -> None:
         expires_at = (time.time() + expires_in) if expires_in else None
         access_token = AccessToken(
@@ -419,6 +440,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     token=token,
                     client_id=client_id,
                     external_token=external_token,
+                    refresh_token=refresh_token,
                     scopes=scopes,
                     expires_at=expires_at,
                     created_at=time.time(),
@@ -481,7 +503,12 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
             # Store external token (temporary until exchanged for MCP token)
             await self._store_token(
-                user_info.raw_token, meta.client_id, user_info.scopes, None, user_info.raw_token
+                user_info.raw_token,
+                meta.client_id,
+                user_info.scopes,
+                None,
+                user_info.raw_token,
+                user_info.refresh_token,
             )
             self._token_mapping[mcp_code] = user_info.raw_token
 
@@ -530,7 +557,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                             code_challenge=persisted_code.code_challenge or "",
                         )
                         self._auth_codes[code] = auth_code
-                        logger.info(f"Loaded auth code from persistence: {code}")
+                        logger.debug(f"Loaded auth code from persistence: {code}")
                 except Exception as e:
                     logger.error(f"Error loading auth code from persistence: {e}")
 
@@ -680,3 +707,80 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     logger.debug(f"Revoked token from persistence: {token[:10]}...")
                 except Exception as e:
                     logger.error(f"Error revoking token from persistence: {e}")
+
+    async def refresh_external_token(self, mcp_token: str) -> str | None:
+        """Refresh an expired external token using its refresh token.
+
+        Args:
+            mcp_token: The MCP token whose external token needs refreshing
+
+        Returns:
+            New external access token if refresh successful, None if failed
+        """
+        async with self._lock:
+            # Get the current external token
+            external_token = self._token_mapping.get(mcp_token)
+            if not external_token:
+                logger.warning(
+                    f"No external token mapping found for MCP token: {mcp_token[:10]}..."
+                )
+                return None
+
+            # Load the persisted token to get the refresh token
+            if not self.persistence:
+                logger.warning("No persistence backend available for refresh token lookup")
+                return None
+
+            try:
+                # Look up the refresh token using the external token, not the MCP token
+                persisted_token = await self.persistence.load_token(external_token)
+                if not persisted_token or not persisted_token.refresh_token:
+                    logger.warning(
+                        f"No refresh token available for external token: {external_token[:20]}..."
+                    )
+                    return None
+
+                # Call the provider's refresh method
+                if not hasattr(self.handler, "refresh_access_token"):
+                    logger.warning(
+                        f"Provider {type(self.handler).__name__} does not support token refresh"
+                    )
+                    return None
+
+                refresh_response = await self.handler.refresh_access_token(
+                    persisted_token.refresh_token
+                )
+
+                # Extract new tokens
+                new_access_token = refresh_response.get("access_token")
+                new_refresh_token = refresh_response.get(
+                    "refresh_token", persisted_token.refresh_token
+                )
+
+                if not new_access_token or not isinstance(new_access_token, str):
+                    logger.error("No access token received from refresh")
+                    return None
+
+                # Update token mappings
+                self._token_mapping[mcp_token] = new_access_token
+
+                # Update persistence with new tokens
+                updated_token = PersistedAccessToken(
+                    token=persisted_token.token,
+                    client_id=persisted_token.client_id,
+                    external_token=new_access_token,
+                    refresh_token=new_refresh_token,
+                    scopes=persisted_token.scopes,
+                    expires_at=persisted_token.expires_at,  # Could update with new expiry if provided
+                    created_at=persisted_token.created_at,
+                )
+                await self.persistence.store_token(updated_token)
+
+                logger.info(
+                    f"Successfully refreshed external token for MCP token: {mcp_token[:10]}..."
+                )
+                return str(new_access_token)
+
+            except Exception as e:
+                logger.error(f"Error refreshing external token: {e}")
+                return None

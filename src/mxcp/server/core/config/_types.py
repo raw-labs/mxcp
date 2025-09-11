@@ -177,6 +177,7 @@ class UserAuthorizationConfig(TypedDict, total=False):
 
 class UserAuthConfig(TypedDict, total=False):
     provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google"] | None
+    cache_ttl: int | None  # Cache TTL in seconds for user context caching (default: 300)
     clients: list[UserOAuthClientConfig] | None
     github: UserGitHubAuthConfig | None
     atlassian: UserAtlassianAuthConfig | None
