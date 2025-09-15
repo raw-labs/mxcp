@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Optional
 
 import pytest
 import yaml
@@ -58,7 +58,7 @@ class MCPTestClient:
             if self.context:
                 await self.context.__aexit__(exc_type, exc_val, exc_tb)
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Call a tool via MCP protocol."""
         try:
             result = await self.session.call_tool(name, arguments)
@@ -148,7 +148,7 @@ class ServerProcess:
             sock.close()
         else:
             self.port = port
-        self.process: subprocess.Popen | None = None
+        self.process: Optional[subprocess.Popen] = None
         self.original_dir = os.getcwd()
 
     def start(self, extra_args: list = None):
@@ -432,7 +432,7 @@ class TestIntegration:
 
         # Update config to use external references
         config_path = integration_fixture_dir / "mxcp-config.yml"
-        with open(config_path) as f:
+        with open(config_path, "r") as f:
             config = yaml.safe_load(f)
 
         config["projects"]["integration_test"]["profiles"]["default"]["secrets"][0][
@@ -505,7 +505,7 @@ class TestIntegration:
         """Test that non-DuckDB secret types work correctly."""
         # Update config to have multiple secret types
         config_path = integration_fixture_dir / "mxcp-config.yml"
-        with open(config_path) as f:
+        with open(config_path, "r") as f:
             config = yaml.safe_load(f)
 
         # Add various non-DuckDB secret types
@@ -533,7 +533,7 @@ class TestIntegration:
 
         # Update site config to reference new secrets
         site_config_path = integration_fixture_dir / "mxcp-site.yml"
-        with open(site_config_path) as f:
+        with open(site_config_path, "r") as f:
             site_config = yaml.safe_load(f)
 
         site_config["secrets"] = ["custom_secret", "python_secret"]
@@ -753,16 +753,6 @@ def check_all_secrets() -> dict:
     @pytest.mark.asyncio
     async def test_sql_tools_registration(self, integration_fixture_dir):
         """Test that SQL tools are properly registered when enabled."""
-        # Update site config to enable SQL tools
-        site_config_path = integration_fixture_dir / "mxcp-site.yml"
-        with open(site_config_path) as f:
-            site_config = yaml.safe_load(f)
-
-        site_config["sql_tools"] = {"enabled": True}
-
-        with open(site_config_path, "w") as f:
-            yaml.dump(site_config, f)
-
         with ServerProcess(integration_fixture_dir) as server:
             server.start(extra_args=["--sql-tools", "true"])
 
@@ -785,24 +775,10 @@ def check_all_secrets() -> dict:
     @pytest.mark.asyncio
     async def test_sql_tools_functionality(self, integration_fixture_dir):
         """Test SQL tools functionality using dbt-created tables."""
-        # Update site config to enable SQL tools (dbt already enabled in fixture)
-        site_config_path = integration_fixture_dir / "mxcp-site.yml"
-        with open(site_config_path) as f:
-            site_config = yaml.safe_load(f)
-
-        site_config["sql_tools"] = {"enabled": True}
-
-        with open(site_config_path, "w") as f:
-            yaml.dump(site_config, f)
-
         # Run dbt to create the tables first
         original_dir = os.getcwd()
         try:
             os.chdir(integration_fixture_dir)
-
-            # Check if dbt is available, skip test if not
-            if not shutil.which("dbt"):
-                pytest.skip("dbt CLI not available - skipping SQL tools functionality test")
 
             # Load configs and generate dbt profile
             site_config = load_site_config(integration_fixture_dir)
@@ -812,8 +788,8 @@ def check_all_secrets() -> dict:
             configure_dbt(site_config=site_config, user_config=user_config, force=True)
 
             # Run the dbt workflow: seed -> run
-            subprocess.run(["dbt", "seed"], check=True, capture_output=True)
-            subprocess.run(["dbt", "run"], check=True, capture_output=True)
+            subprocess.run(["dbt", "seed"], check=True)
+            subprocess.run(["dbt", "run"], check=True)
 
         except subprocess.CalledProcessError as e:
             pytest.skip(f"dbt command failed: {e} - skipping SQL tools functionality test")
@@ -1002,10 +978,6 @@ def check_all_secrets() -> dict:
         original_dir = os.getcwd()
         try:
             os.chdir(integration_fixture_dir)
-
-            # Check if dbt is available, skip test if not
-            if not shutil.which("dbt"):
-                pytest.skip("dbt CLI not available - skipping dbt integration test")
 
             # Load configs and generate dbt profile
             site_config = load_site_config(integration_fixture_dir)
