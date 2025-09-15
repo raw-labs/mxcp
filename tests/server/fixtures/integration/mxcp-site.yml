@@ -4,4 +4,4 @@ profile: default
 secrets:
   - test_secret
 dbt:
-  enabled: true 
+  enabled: true
