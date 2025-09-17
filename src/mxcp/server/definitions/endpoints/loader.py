@@ -250,7 +250,7 @@ class EndpointLoader:
         duplicate_errors = self._check_duplicate_endpoint_names(all_endpoints)
 
         # Update existing entries to mark duplicates as errors and remove from cache
-        for i, (path, endpoint, error) in enumerate(all_endpoints):
+        for i, (path, _, error) in enumerate(all_endpoints):
             if error is None and path in duplicate_errors:
                 all_endpoints[i] = (path, None, duplicate_errors[path])
                 # Remove duplicate endpoint from cache to maintain consistency
