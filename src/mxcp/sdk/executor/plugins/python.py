@@ -62,7 +62,7 @@ from mxcp.sdk.telemetry import (
 )
 
 from ..context import ExecutionContext
-from ..interfaces import ExecutorPlugin
+from ..interfaces import ExecutorPlugin, ValidationResult
 
 if TYPE_CHECKING:
     from .python_plugin.loader import PythonEndpointLoader
@@ -182,31 +182,41 @@ class PythonExecutor(ExecutorPlugin):
 
         logger.info("Python executor shutdown complete")
 
-    def validate_source(self, source_code: str) -> bool:
+    def validate_source(self, source_code: str) -> ValidationResult:
         """Validate Python source code syntax.
 
         Args:
             source_code: Python code to validate
 
         Returns:
-            True if valid, False otherwise
+            ValidationResult with is_valid flag and optional error message
         """
         try:
             # Check if it's a file path
             if self._is_file_path(source_code):
                 if self.repo_root:
-                    return (self.repo_root / "python" / source_code).exists()
-                return False
+                    file_exists = (self.repo_root / "python" / source_code).exists()
+                    if not file_exists:
+                        return ValidationResult(
+                            is_valid=False,
+                            error_message=f"Python file not found: python/{source_code}",
+                        )
+                    return ValidationResult(is_valid=True)
+                return ValidationResult(
+                    is_valid=False, error_message="No repository root configured"
+                )
 
             # Validate inline code syntax
             compile(source_code, "<string>", "exec")
-            return True
+            return ValidationResult(is_valid=True)
         except SyntaxError as e:
-            logger.debug(f"Python syntax validation failed: {e}")
-            return False
+            error_message = f"Syntax error at line {e.lineno}: {e.msg}"
+            logger.debug(f"Python syntax validation failed: {error_message}")
+            return ValidationResult(is_valid=False, error_message=error_message)
         except Exception as e:
-            logger.debug(f"Python validation failed: {e}")
-            return False
+            error_message = str(e)
+            logger.debug(f"Python validation failed: {error_message}")
+            return ValidationResult(is_valid=False, error_message=error_message)
 
     def extract_parameters(self, source_code: str) -> list[str]:
         """Extract parameter names from Python source code.

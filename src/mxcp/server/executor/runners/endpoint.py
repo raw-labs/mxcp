@@ -190,7 +190,6 @@ async def execute_code_with_engine(
 
     # Now validate the transformed result
     if output_schema and not skip_output_validation:
-
         schema_dict = {"output": output_schema}
         validator = TypeValidator.from_dict(schema_dict)
         result = validator.validate_output(result)

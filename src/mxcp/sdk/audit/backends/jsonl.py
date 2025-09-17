@@ -250,7 +250,6 @@ class JSONLAuditWriter(BaseAuditWriter):
 
             # If not the last attempt, wait and try again
             if attempt < max_attempts - 1:
-
                 time.sleep(0.1)
 
         # All attempts failed

@@ -101,7 +101,6 @@ def create_execution_engine(
         >>> # Call engine.shutdown() when done to run shutdown hooks automatically
     """
     try:
-
         # Create ExecutionEngine
         engine = ExecutionEngine(strict=False)
 
