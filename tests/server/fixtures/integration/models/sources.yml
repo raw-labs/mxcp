@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: test_data
+    description: "Test data for integration testing"
+    tables:
+      - name: raw_users
+        description: "Raw user data from seed file"
+      - name: raw_orders  
+        description: "Raw order data from seed file"
