@@ -26,21 +26,9 @@ def _validate_resource_uri_vs_params(
 
     extra_in_yaml = yaml_params - uri_params
     if extra_in_yaml:
-        # Calculate relative path for results
-        try:
-            repo_root = find_repo_root()
-            path_obj = Path(path).resolve()
-            relative_path = str(path_obj.relative_to(repo_root))
-        except ValueError:
-            # If path is not relative to repo_root, use the filename
-            relative_path = Path(path).name
-        except Exception:
-            # If we can't find repo root or resolve path, use filename as fallback
-            relative_path = Path(path).name
-
         return {
             "status": "error",
-            "path": relative_path,
+            "path": path,
             "message": (
                 f"Resource parameter(s) {sorted(extra_in_yaml)} are not used "
                 f"in uri '{res_def['uri']}'. Put them in the uri or make a "
@@ -63,7 +51,7 @@ def validate_all_endpoints(
         Dictionary with validation status and details for each endpoint
     """
     try:
-        # Use EndpointLoader to discover endpoints (now includes duplicate checking)
+        # Use EndpointLoader to discover endpoints
         loader = EndpointLoader(site_config)
         endpoints = loader.discover_endpoints()
         if not endpoints:
@@ -76,19 +64,7 @@ def validate_all_endpoints(
         for path, endpoint, error in endpoints:
             path_str = str(path)  # Convert PosixPath to string
             if error:
-                # Normalize path to relative path for consistency
-                try:
-                    repo_root = find_repo_root()
-                    path_obj = Path(path).resolve()
-                    relative_path = str(path_obj.relative_to(repo_root))
-                except ValueError:
-                    # If path is not relative to repo_root, use the filename
-                    relative_path = Path(path).name
-                except Exception:
-                    # If we can't find repo root or resolve path, use filename as fallback
-                    relative_path = Path(path).name
-                
-                results.append({"status": "error", "path": relative_path, "message": error})
+                results.append({"status": "error", "path": path_str, "message": error})
                 has_errors = True
             elif endpoint:
                 result = validate_endpoint_payload(endpoint, path_str, execution_engine)

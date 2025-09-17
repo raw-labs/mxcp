@@ -77,10 +77,10 @@ class EndpointLoader:
         self, endpoints: list[tuple[Path, EndpointDefinition | None, str | None]]
     ) -> dict[Path, str]:
         """Check for duplicate endpoint names/URIs across all endpoints.
-        
+
         Args:
             endpoints: List of discovered endpoints
-            
+
         Returns:
             Dictionary mapping file paths to error messages for files with duplicates
         """
@@ -120,7 +120,7 @@ class EndpointLoader:
 
                 # Create error message
                 error_message = f"Duplicate endpoint {identifier_type} '{name}' found in: {', '.join(relative_paths)}"
-                
+
                 # Mark ALL duplicate files as errors
                 for path in paths:
                     duplicate_errors[path] = error_message
@@ -247,7 +247,7 @@ class EndpointLoader:
 
         # Check for duplicate endpoint names/URIs and mark affected files as errors
         duplicate_errors = self._check_duplicate_endpoint_names(all_endpoints)
-        
+
         # Update existing entries to mark duplicates as errors
         for i, (path, endpoint, error) in enumerate(all_endpoints):
             if error is None and path in duplicate_errors:
