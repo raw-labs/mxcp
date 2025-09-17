@@ -89,6 +89,7 @@ class EndpointLoader:
         # Collect names/URIs and their paths with endpoint types
         for path, endpoint, error in endpoints:
             if error or not endpoint:
+                # Skip endpoints with errors or None
                 continue
 
             # Find endpoint type and extract name/uri
@@ -248,10 +249,13 @@ class EndpointLoader:
         # Check for duplicate endpoint names/URIs and mark affected files as errors
         duplicate_errors = self._check_duplicate_endpoint_names(all_endpoints)
 
-        # Update existing entries to mark duplicates as errors
+        # Update existing entries to mark duplicates as errors and remove from cache
         for i, (path, endpoint, error) in enumerate(all_endpoints):
             if error is None and path in duplicate_errors:
                 all_endpoints[i] = (path, None, duplicate_errors[path])
+                # Remove duplicate endpoint from cache to maintain consistency
+                if str(path) in self._endpoints:
+                    del self._endpoints[str(path)]
 
         return all_endpoints
 
