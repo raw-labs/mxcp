@@ -1,15 +1,10 @@
 """Test that user context is properly passed to audit logs."""
 
-import asyncio
 import dataclasses
-import json
-import tempfile
-from pathlib import Path
 
 import pytest
+
 from mxcp.sdk.audit import AuditLogger, AuditRecord
-from mxcp.sdk.auth import UserContext
-from mxcp.server.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
 
 
 def test_audit_record_supports_user_context():

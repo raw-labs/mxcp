@@ -56,7 +56,7 @@ async def test_audit_logger_creates_records():
         # Verify log was written
         assert log_path.exists()
 
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             line = f.readline()
             data = json.loads(line)
 
@@ -146,7 +146,7 @@ async def test_audit_logger_sensitive_data_redaction():
         time.sleep(0.1)
 
         # Verify redaction - need to find the actual audit record
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             lines = f.readlines()
             # Find the audit record (not schema)
             record = None

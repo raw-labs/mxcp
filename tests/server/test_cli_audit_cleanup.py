@@ -1,17 +1,12 @@
 """Test the log cleanup CLI command."""
 
-import asyncio
 import json
-import os
-import tempfile
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 
 from mxcp.server.interfaces.cli.log_cleanup import log_cleanup
-from mxcp.sdk.audit import AuditLogger, AuditSchema
 
 
 def test_audit_cleanup_dry_run():

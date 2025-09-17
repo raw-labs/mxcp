@@ -1,6 +1,6 @@
 """Test core audit types, schemas, and data structures."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from mxcp.sdk.audit import (
     AuditRecord,

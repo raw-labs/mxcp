@@ -575,9 +575,10 @@ kill -HUP <pid>
 ```
 
 The reload process:
-1. **Only external references are refreshed** - the configuration file structure is NOT re-read
-2. **Service remains available** - queries wait for the reload to complete
-3. **Automatic rollback on failure** - if new values cause errors, the server continues with old values
+1. **SIGHUP handler waits synchronously** - up to 60 seconds for the reload to complete
+2. **Only external references are refreshed** - the configuration file structure is NOT re-read
+3. **Service remains available** - new requests wait while reload completes
+4. **Automatic rollback on failure** - if new values cause errors, the server continues with old values
 
 What gets refreshed:
 - ✅ Vault secrets (vault://)

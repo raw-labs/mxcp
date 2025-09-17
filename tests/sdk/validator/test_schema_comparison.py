@@ -3,8 +3,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
 
 class TestSchemaComparison:
     """Compare validation schema with common-types schema to ensure compatibility."""

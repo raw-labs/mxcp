@@ -5,7 +5,10 @@ replacing the legacy DuckDBSession-based execution. This is used by CLI commands
 """
 
 import logging
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
+
+if TYPE_CHECKING:
+    from mxcp.server.interfaces.server.mcp import RAWMCP
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
@@ -20,7 +23,7 @@ from mxcp.server.core.config._types import SiteConfig, UserConfig
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import PromptDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.endpoint import (
     execute_code_with_engine,
     execute_prompt_with_validation,
@@ -139,8 +142,10 @@ async def execute_endpoint(
         RuntimeError: If execution fails
     """
 
-    # Create execution engine
-    engine = create_execution_engine(user_config, site_config, profile_name, readonly=readonly)
+    # Create runtime environment
+    runtime_env = create_runtime_environment(
+        user_config, site_config, profile_name, readonly=readonly
+    )
 
     try:
         # Delegate to the with_engine variant to avoid code duplication
@@ -150,14 +155,14 @@ async def execute_endpoint(
             params=params,
             user_config=user_config,
             site_config=site_config,
-            execution_engine=engine,
+            execution_engine=runtime_env.execution_engine,
             skip_output_validation=skip_output_validation,
             user_context=user_context,
         )
 
     finally:
-        # Shutdown the engine
-        engine.shutdown()
+        # Shutdown the runtime environment
+        runtime_env.shutdown()
 
 
 async def execute_endpoint_with_engine_and_policy(
@@ -169,6 +174,7 @@ async def execute_endpoint_with_engine_and_policy(
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
+    server_ref: Optional["RAWMCP"] = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Execute endpoint and return both result and policy information.
 
@@ -273,6 +279,7 @@ async def execute_endpoint_with_engine_and_policy(
             user_config,
             site_config,
             user_context,
+            server_ref,
         )
 
     # Enforce output policies (symmetry with input policy enforcement above)
@@ -319,6 +326,7 @@ async def execute_endpoint_with_engine(
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
+    server_ref: Optional["RAWMCP"] = None,
 ) -> Any:
     """Execute endpoint using an existing SDK execution engine.
 
@@ -330,10 +338,12 @@ async def execute_endpoint_with_engine(
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
         name: Name of the endpoint to execute
         params: Parameters to pass to the endpoint
+        user_config: User configuration
         site_config: Site configuration (needed for EndpointLoader)
         execution_engine: Pre-created execution engine to reuse
         skip_output_validation: Whether to skip output schema validation
         user_context: User context for authentication/authorization
+        server_ref: Optional reference to the server (for runtime access)
 
     Returns:
         The result of endpoint execution
@@ -351,5 +361,6 @@ async def execute_endpoint_with_engine(
         execution_engine=execution_engine,
         skip_output_validation=skip_output_validation,
         user_context=user_context,
+        server_ref=server_ref,
     )
     return result

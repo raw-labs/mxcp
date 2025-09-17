@@ -6,7 +6,6 @@ method works correctly for memory-efficient processing.
 
 import asyncio
 import tempfile
-from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -86,13 +85,13 @@ async def test_streaming_with_limit():
 
         # Test with limit
         count = 0
-        async for record in logger.query_records(schema_name="limit_test", limit=10):
+        async for _record in logger.query_records(schema_name="limit_test", limit=10):
             count += 1
         assert count == 10
 
         # Test without limit (should get all)
         count = 0
-        async for record in logger.query_records(schema_name="limit_test"):
+        async for _record in logger.query_records(schema_name="limit_test"):
             count += 1
         assert count == 20
 
@@ -131,7 +130,7 @@ async def test_streaming_early_termination():
 
         # Test early termination
         count = 0
-        async for record in logger.query_records(schema_name="break_test"):
+        async for _record in logger.query_records(schema_name="break_test"):
             count += 1
             if count >= 5:
                 break  # Stop after 5 records
@@ -296,7 +295,7 @@ async def test_streaming_empty_results():
 
         # Query for non-existent user
         count = 0
-        async for record in logger.query_records(schema_name="empty_test", user_ids=["user_999"]):
+        async for _record in logger.query_records(schema_name="empty_test", user_ids=["user_999"]):
             count += 1
 
         assert count == 0  # Should have no results
@@ -324,7 +323,7 @@ async def test_noop_backend_streaming():
 
     # Query should return empty stream
     count = 0
-    async for record in logger.query_records():
+    async for _record in logger.query_records():
         count += 1
 
     assert count == 0  # NoOp backend should yield nothing

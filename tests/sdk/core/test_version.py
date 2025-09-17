@@ -1,7 +1,5 @@
 """Tests for the centralized version module."""
 
-import pytest
-
 from mxcp.sdk.core import PACKAGE_NAME, PACKAGE_VERSION, get_package_info
 
 

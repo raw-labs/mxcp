@@ -1,25 +1,24 @@
 """Tests for EndpointToolExecutor integration."""
 
-from typing import Any, Dict, Optional
-from unittest.mock import AsyncMock, Mock
+from typing import Any
 
 import pytest
 
+from mxcp.sdk.auth import UserContext
+from mxcp.sdk.executor import ExecutionContext
 from mxcp.server.definitions.endpoints._types import EndpointDefinition
 from mxcp.server.executor.runners.tool import EndpointToolExecutor
-from mxcp.sdk.auth import UserContext
-from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
 
 
 class MockExecutionEngine:
     """Mock execution engine for testing."""
 
-    def __init__(self, responses: Optional[Dict[str, Any]] = None):
+    def __init__(self, responses: dict[str, Any] | None = None):
         self.responses = responses or {}
         self.calls = []
 
     async def execute(
-        self, language: str, source_code: str, params: Dict[str, Any], context: ExecutionContext
+        self, language: str, source_code: str, params: dict[str, Any], context: ExecutionContext
     ) -> Any:
         """Mock execution that records calls and returns predefined responses."""
         self.calls.append(

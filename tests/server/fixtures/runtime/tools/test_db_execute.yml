@@ -22,7 +22,7 @@ tool:
         description: Names of secrets in DuckDB
       connection_available:
         type: boolean
-        description: Whether raw connection is accessible
+        description: Whether raw connection is accessible (always false - direct access not allowed)
   source:
     file: ../python/runtime_tests.py
   tests:
@@ -30,4 +30,4 @@ tool:
       arguments: []
       result_contains:
         secrets_count: 1
-        connection_available: true 
+        connection_available: false 

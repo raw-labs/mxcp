@@ -19,7 +19,7 @@ Python endpoints in MXCP have access to the `mxcp.runtime` module, which provide
 ## Quick Example
 
 ```python
-from mxcp.runtime import db, config, plugins, on_init, on_shutdown
+from mxcp.runtime import db, config, plugins, on_init, on_shutdown, reload_duckdb
 
 def my_endpoint(param: str) -> dict:
     # Query database
@@ -138,6 +138,67 @@ def cleanup():
     # Clean up resources
     print("Server shutting down")
 ```
+
+## Reload Management
+
+### `reload_duckdb(payload_func=None, description="")`
+Request an asynchronous system reload with an optional payload function.
+
+This feature allows Python endpoints to trigger a safe reload of the MXCP server, optionally executing custom logic like rebuilding the DuckDB database with new data. The reload process:
+1. Queues the reload request and returns immediately
+2. Active requests are drained (allowed to complete)
+3. Runtime components (Python hooks + DuckDB) are shut down
+4. Your payload function runs (if provided)
+5. Runtime components are restarted with fresh configuration
+
+**Important:** For most database updates, you don't need to use `reload_duckdb`. You can perform database operations directly using the `db` proxy without triggering any reload. This is the recommended approach since DuckDB supports concurrent operations through its MVCC transactional model.
+
+Only use `reload_duckdb` when you need external tools to have exclusive access to the database file.
+
+```python
+from mxcp.runtime import reload_duckdb
+import subprocess
+import shutil
+
+def replace_database():
+    """Payload function - runs with all connections closed."""
+    # Run dbt to rebuild models
+    subprocess.run(["dbt", "run"], check=True)
+    
+    # Or copy a new database file
+    shutil.copy("/data/updated.duckdb", "/app/data.duckdb")
+    
+    # Or fetch and load new data
+    fetch_latest_data()
+    load_into_duckdb()
+
+# Schedule reload with database replacement
+reload_duckdb(
+    payload_func=replace_database,
+    description="Replacing database with updated version"
+)
+
+# Or just reload configuration (refreshes secrets, env vars, etc.)
+reload_duckdb()
+
+# Return immediately - reload happens asynchronously
+return {"status": "Reload scheduled"}
+```
+
+**Use Cases:**
+- Updating DuckDB data without server restart
+- Running ETL pipelines on demand
+- Refreshing materialized views
+- Swapping in pre-built database files
+- Reloading configuration after secret rotation
+
+**Important Notes:**
+- This function returns immediately (non-blocking)
+- The reload happens asynchronously after the current request completes
+- The payload function runs with all connections closed
+- Only one reload can be processing at a time
+- From MCP tools, you cannot wait for completion - check status indirectly
+- Only available when called from within MXCP endpoints
 
 ## Context Availability
 
