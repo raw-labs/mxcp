@@ -38,7 +38,14 @@ def format_validation_results(results: Any) -> str:
             output.append(f"{click.style('❌ Validation failed!', fg='red', bold=True)}")
             output.append(f"\n{click.style('📄 File:', fg='cyan')} {path}")
             if message:
-                output.append(f"{click.style('Error:', fg='red')} {message}")
+                # Handle multi-line error messages with proper indentation
+                lines = message.split("\n")
+                first_line = lines[0]
+                output.append(f"{click.style('Error:', fg='red')} {first_line}")
+                # Indent subsequent lines to align under the error message
+                for line in lines[1:]:
+                    if line.strip():  # Only add non-empty lines
+                        output.append(f"{line}")
         return "\n".join(output)
 
     # Multiple endpoint validation
@@ -80,10 +87,23 @@ def format_validation_results(results: Any) -> str:
     # Show failed endpoints first
     if failed_endpoints:
         output.append(f"\n{click.style('❌ Failed validation:', fg='red', bold=True)}")
-        for path, message in sorted(failed_endpoints):
+        sorted_failed = sorted(failed_endpoints)
+        for i, (path, message) in enumerate(sorted_failed):
             output.append(f"  {click.style('✗', fg='red')} {path}")
             if message:
-                output.append(f"    {click.style('Error:', fg='red')} {message}")
+                # Handle multi-line error messages with proper indentation
+                # Strip trailing whitespace to ensure consistent spacing
+                clean_message = message.rstrip()
+                lines = clean_message.split("\n")
+                first_line = lines[0]
+                output.append(f"    {click.style('Error:', fg='red')} {first_line}")
+                # Indent subsequent lines to align under the error message
+                for line in lines[1:]:
+                    if line.strip():  # Only add non-empty lines
+                        output.append(f"    {line}")
+            # Add consistent blank line between errors (except after the last one)
+            if i < len(sorted_failed) - 1:
+                output.append("")
 
     # Then show valid endpoints
     if valid_endpoints:

@@ -1,0 +1,16 @@
+mxcp: 1
+tool:
+  name: test_deep_nested_error
+  description: Test tool to verify deeply nested property path error messages
+  parameters:
+    - name: limit
+      # This should be a string, but we're setting it to an integer to trigger a validation error
+      type: 123
+      description: Limit parameter
+  return:
+    type: object
+    properties:
+      result:
+        type: string
+  source:
+    code: "SELECT 1"
