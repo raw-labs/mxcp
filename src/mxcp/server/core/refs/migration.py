@@ -88,7 +88,7 @@ REQUIRED CHANGE:
    NEW: mxcp: 1
 
 Please update your global user configuration file at:
-{config_path or "~/.mxcp/config.yml"}
+{config_path or '~/.mxcp/config.yml'}
 
 Change the first line from:
    mxcp: "{mxcp_version}"

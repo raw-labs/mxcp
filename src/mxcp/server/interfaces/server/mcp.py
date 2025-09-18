@@ -125,30 +125,35 @@ def create_oauth_handler(
         transport_config = translate_transport_config(user_transport)
 
     if provider == "github":
+
         github_config = user_auth_config.get("github")
         if not github_config:
             raise ValueError("GitHub provider selected but no GitHub configuration found")
         return GitHubOAuthHandler(github_config, transport_config, host=host, port=port)
 
     elif provider == "atlassian":
+
         atlassian_config = user_auth_config.get("atlassian")
         if not atlassian_config:
             raise ValueError("Atlassian provider selected but no Atlassian configuration found")
         return AtlassianOAuthHandler(atlassian_config, transport_config, host=host, port=port)
 
     elif provider == "salesforce":
+
         salesforce_config = user_auth_config.get("salesforce")
         if not salesforce_config:
             raise ValueError("Salesforce provider selected but no Salesforce configuration found")
         return SalesforceOAuthHandler(salesforce_config, transport_config, host=host, port=port)
 
     elif provider == "keycloak":
+
         keycloak_config = user_auth_config.get("keycloak")
         if not keycloak_config:
             raise ValueError("Keycloak provider selected but no Keycloak configuration found")
         return KeycloakOAuthHandler(keycloak_config, transport_config, host=host, port=port)
 
     elif provider == "google":
+
         google_config = user_auth_config.get("google")
         if not google_config:
             raise ValueError("Google provider selected but no Google configuration found")
