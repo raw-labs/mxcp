@@ -462,6 +462,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
         # Validate redirect URI
         try:
+
             redirect_uri = AnyHttpUrl(meta.redirect_uri)
         except ValidationError as ve:
             logger.error(f"Invalid redirect URI in callback: {meta.redirect_uri} - {ve}")
@@ -529,6 +530,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
                         # Load into memory cache
                         try:
+
                             redirect_uri = AnyHttpUrl(persisted_code.redirect_uri)
                         except ValidationError as ve:
                             logger.error(

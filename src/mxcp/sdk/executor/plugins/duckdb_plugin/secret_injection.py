@@ -35,7 +35,7 @@ def inject_secrets(con: duckdb.DuckDBPyConnection, secrets: list[SecretDefinitio
         create_secret_sql = f"""
         CREATE TEMPORARY SECRET {secret.name} (
             TYPE {secret.type},
-            {", ".join(params)}
+            {', '.join(params)}
         )
         """
 
