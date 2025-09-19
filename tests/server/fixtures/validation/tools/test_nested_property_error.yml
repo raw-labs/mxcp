@@ -1,0 +1,12 @@
+mxcp: 1
+tool:
+  name: test_nested_property_error
+  description: Test tool to verify nested property path error messages
+  parameters:
+    - name: limit
+      type: integer
+      description: Limit parameter
+  # This should be an object with properties, but we're setting it to an array to trigger a validation error
+  return: []
+  source:
+    code: "SELECT 1"
