@@ -10,7 +10,6 @@ import os
 import shutil
 import signal
 import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
@@ -22,6 +21,11 @@ import yaml
 # Import MCP SDK for making protocol calls
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
+
+# Import MXCP components for dbt integration
+from mxcp.server.core.config.site_config import load_site_config
+from mxcp.server.core.config.user_config import load_user_config
+from mxcp.server.services.dbt.runner import configure_dbt
 
 
 class MCPTestClient:
@@ -474,7 +478,8 @@ class TestIntegration:
                 result = await client.call_tool("echo_message", {"message": "test1"})
                 assert result["original"] == "test1"
                 assert result["reversed"] == "1tset"
-                initial_length = result["length"]
+                # Verify initial state
+                assert result["length"] == len("test1")
 
             # Wait a moment to ensure timestamp would be different
             await asyncio.sleep(1)
@@ -544,7 +549,7 @@ def check_all_secrets() -> dict:
     """Check all secret types."""
     custom = config.get_secret("custom_secret")
     python = config.get_secret("python_secret")
-    
+
     return {
         "custom": {
             "found": custom is not None,
@@ -744,3 +749,329 @@ def check_all_secrets() -> dict:
                 assert analysis["is_premium"] is True
                 assert "123 Main St, San Francisco, USA" in analysis["full_address"]
                 assert "John Doe is a 25-year-old premium user" in analysis["summary"]
+
+    @pytest.mark.asyncio
+    async def test_sql_tools_registration(self, integration_fixture_dir):
+        """Test that SQL tools are properly registered when enabled."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start(extra_args=["--sql-tools", "true"])
+
+            async with MCPTestClient(server.port) as client:
+                tools = await client.list_tools()
+                tool_names = [t["name"] for t in tools] if tools else []
+
+                # Verify SQL tools are registered
+                assert "execute_sql_query" in tool_names, "execute_sql_query tool not found"
+                assert "list_tables" in tool_names, "list_tables tool not found"
+                assert "get_table_schema" in tool_names, "get_table_schema tool not found"
+
+                # Check tool descriptions
+                execute_sql_tool = next(
+                    (t for t in tools if t["name"] == "execute_sql_query"), None
+                )
+                assert execute_sql_tool is not None
+                assert "Execute a SQL query" in execute_sql_tool["description"]
+
+    @pytest.mark.asyncio
+    async def test_sql_tools_functionality(self, integration_fixture_dir):
+        """Test SQL tools functionality using dbt-created tables."""
+        # Run dbt to create the tables first
+        original_dir = os.getcwd()
+        try:
+            os.chdir(integration_fixture_dir)
+
+            # Load configs and generate dbt profile
+            site_config = load_site_config(integration_fixture_dir)
+            user_config = load_user_config(site_config)
+
+            # Configure dbt (creates profiles.yml)
+            configure_dbt(site_config=site_config, user_config=user_config, force=True)
+
+            # Run the dbt workflow: seed -> run
+            subprocess.run(["dbt", "seed"], check=True)
+            subprocess.run(["dbt", "run"], check=True)
+
+        except subprocess.CalledProcessError as e:
+            pytest.skip(f"dbt command failed: {e} - skipping SQL tools functionality test")
+        except Exception as e:
+            pytest.skip(f"dbt setup failed: {e} - skipping SQL tools functionality test")
+        finally:
+            os.chdir(original_dir)
+
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start(extra_args=["--sql-tools", "true"])
+
+            async with MCPTestClient(server.port) as client:
+                # Test list_tables - should show dbt-created tables
+                tables_result = await client.call_tool("list_tables", {})
+                assert isinstance(tables_result, list)
+                table_names = [table["name"] for table in tables_result]
+                assert "users" in table_names, "users dbt model should exist"
+                assert "raw_users" in table_names, "raw_users seed should exist"
+
+                # Test get_table_schema on dbt model
+                schema_result = await client.call_tool("get_table_schema", {"table_name": "users"})
+                assert isinstance(schema_result, list)
+                assert len(schema_result) == 5  # user_id, username, email, created_date, status
+
+                column_names = [col["name"] for col in schema_result]
+                expected_columns = ["user_id", "username", "email", "created_date", "status"]
+                for col in expected_columns:
+                    assert col in column_names, f"Column {col} should exist in users model"
+
+                # Test query execution (proper use of execute_sql_query - SELECT only)
+                query_result = await client.call_tool(
+                    "execute_sql_query", {"sql": "SELECT * FROM users ORDER BY user_id"}
+                )
+                assert isinstance(query_result, list)
+                assert len(query_result) == 3  # Should have 3 active users (Charlie is inactive)
+                assert query_result[0]["username"] == "Alice Johnson"
+                assert query_result[1]["username"] == "Bob Smith"
+                assert query_result[2]["username"] == "Diana Prince"
+
+    @pytest.mark.asyncio
+    async def test_sql_tools_asyncio_fix_regression(self, integration_fixture_dir):
+        """Test that SQL tools work correctly after the asyncio execution fix (regression test)."""
+        # Update site config to enable SQL tools
+        site_config_path = integration_fixture_dir / "mxcp-site.yml"
+        with open(site_config_path) as f:
+            site_config = yaml.safe_load(f)
+
+        site_config["sql_tools"] = {"enabled": True}
+
+        with open(site_config_path, "w") as f:
+            yaml.dump(site_config, f)
+
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start(extra_args=["--sql-tools", "true"])
+
+            async with MCPTestClient(server.port) as client:
+                # This is the main regression test - the fix was to remove asyncio.run()
+                # calls in the SQL tool implementations and use proper async execution
+
+                # Create test data using a single CREATE TABLE AS SELECT (acceptable for test setup)
+                await client.call_tool(
+                    "execute_sql_query",
+                    {
+                        "sql": """
+                        CREATE TABLE asyncio_test AS
+                        SELECT * FROM (VALUES
+                            (0, 'data_0'),
+                            (1, 'data_1'),
+                            (2, 'data_2')
+                        ) AS t(id, data)
+                    """
+                    },
+                )
+
+                # Make multiple concurrent SELECT calls to ensure no asyncio conflicts
+                tasks = []
+                for i in range(3):
+                    task = client.call_tool(
+                        "execute_sql_query", {"sql": f"SELECT * FROM asyncio_test WHERE id = {i}"}
+                    )
+                    tasks.append(task)
+
+                # Wait for all queries to complete - this would fail before the fix
+                results = await asyncio.gather(*tasks)
+
+                # Verify all queries returned correct data
+                for i, result in enumerate(results):
+                    assert isinstance(result, list)
+                    assert len(result) == 1
+                    assert result[0]["id"] == i
+                    assert result[0]["data"] == f"data_{i}"
+
+                # Test that list_tables and get_table_schema also work concurrently
+                concurrent_tasks = [
+                    client.call_tool("list_tables", {}),
+                    client.call_tool("get_table_schema", {"table_name": "asyncio_test"}),
+                    client.call_tool("execute_sql_query", {"sql": "SELECT * FROM asyncio_test"}),
+                ]
+
+                # This would deadlock or fail before the asyncio fix
+                tables, schema, data = await asyncio.gather(*concurrent_tasks)
+
+                # Verify results
+                table_names = [t["name"] for t in tables]
+                assert "asyncio_test" in table_names
+
+                column_names = [col["name"] for col in schema]
+                assert "id" in column_names
+                assert "data" in column_names
+
+                assert len(data) == 3
+
+    @pytest.mark.asyncio
+    async def test_dbt_integration(self, integration_fixture_dir):
+        """Test dbt integration commands work within project directory."""
+        # The fixture directory already has dbt_project.yml, models, and seeds
+        # Verify the dbt project structure exists
+        assert (
+            integration_fixture_dir / "dbt_project.yml"
+        ).exists(), "dbt_project.yml should exist in fixture"
+        assert (
+            integration_fixture_dir / "models"
+        ).exists(), "models directory should exist in fixture"
+        assert (
+            integration_fixture_dir / "seeds"
+        ).exists(), "seeds directory should exist in fixture"
+
+        # Test dbt-config command (should work from fixture directory)
+        with ServerProcess(integration_fixture_dir):
+            # Don't start the server, just use the directory management
+            original_dir = os.getcwd()
+            try:
+                os.chdir(integration_fixture_dir)
+
+                # Test that we can generate dbt config without errors
+                # This tests the dbt-config command functionality
+
+                # Load configs from the fixture directory
+                site_config = load_site_config(integration_fixture_dir)
+                user_config = load_user_config(site_config)
+
+                # Test dbt config generation (dry run)
+                try:
+                    configure_dbt(
+                        site_config=site_config,
+                        user_config=user_config,
+                        dry_run=True,  # Don't actually write files
+                        force=True,  # Allow overwriting existing profile
+                    )
+                    dbt_config_success = True
+                except Exception as e:
+                    dbt_config_success = False
+                    print(f"dbt-config failed: {e}")
+
+                assert dbt_config_success, "dbt-config should work in fixture directory"
+
+            finally:
+                os.chdir(original_dir)
+
+    @pytest.mark.asyncio
+    async def test_dbt_with_sql_tools(self, integration_fixture_dir):
+        """Test that dbt models can be queried through SQL tools."""
+        # The fixture directory already has dbt project structure with models and seeds
+        # Verify the dbt files exist
+        assert (
+            integration_fixture_dir / "models" / "users.sql"
+        ).exists(), "users.sql model should exist"
+        assert (
+            integration_fixture_dir / "seeds" / "raw_users.csv"
+        ).exists(), "raw_users.csv seed should exist"
+        assert (
+            integration_fixture_dir / "seeds" / "raw_orders.csv"
+        ).exists(), "raw_orders.csv seed should exist"
+
+        # Update site config to enable SQL tools (dbt already enabled in fixture)
+        site_config_path = integration_fixture_dir / "mxcp-site.yml"
+        with open(site_config_path) as f:
+            site_config = yaml.safe_load(f)
+
+        site_config["sql_tools"] = {"enabled": True}
+
+        with open(site_config_path, "w") as f:
+            yaml.dump(site_config, f)
+
+        # Run the proper dbt workflow first
+        original_dir = os.getcwd()
+        try:
+            os.chdir(integration_fixture_dir)
+
+            # Load configs and generate dbt profile
+            site_config = load_site_config(integration_fixture_dir)
+            user_config = load_user_config(site_config)
+
+            # Configure dbt (creates profiles.yml)
+            configure_dbt(site_config=site_config, user_config=user_config, force=True)
+
+            # Run the dbt workflow: seed -> run -> test
+            subprocess.run(["dbt", "seed"], check=True, capture_output=True)
+            subprocess.run(["dbt", "run"], check=True, capture_output=True)
+            subprocess.run(["dbt", "test"], check=True, capture_output=True)
+
+        except subprocess.CalledProcessError as e:
+            pytest.skip(f"dbt command failed: {e} - skipping dbt integration test")
+        except Exception as e:
+            pytest.skip(f"dbt setup failed: {e} - skipping dbt integration test")
+        finally:
+            os.chdir(original_dir)
+
+        # Now test SQL tools against the dbt-created tables
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start(extra_args=["--sql-tools", "true"])
+
+            async with MCPTestClient(server.port) as client:
+                # Test that we can see the dbt model tables through SQL tools
+                tables_result = await client.call_tool("list_tables", {})
+                table_names = [table["name"] for table in tables_result]
+                assert "users" in table_names, "users dbt model table should be visible"
+                assert (
+                    "user_order_summary" in table_names
+                ), "user_order_summary dbt model table should be visible"
+                assert "raw_users" in table_names, "raw_users seed table should be visible"
+                assert "raw_orders" in table_names, "raw_orders seed table should be visible"
+
+                # Test querying the users model (should only have active users)
+                users_result = await client.call_tool(
+                    "execute_sql_query", {"sql": "SELECT * FROM users ORDER BY user_id"}
+                )
+
+                assert len(users_result) == 3, "Should have 3 active users (Charlie is inactive)"
+                assert users_result[0]["username"] == "Alice Johnson"
+                assert users_result[1]["username"] == "Bob Smith"
+                assert users_result[2]["username"] == "Diana Prince"
+
+                # Test querying the summary model
+                summary_result = await client.call_tool(
+                    "execute_sql_query",
+                    {"sql": "SELECT * FROM user_order_summary ORDER BY user_id"},
+                )
+
+                assert len(summary_result) == 3
+                # Alice should have 2 orders totaling $79.98
+                alice_summary = next(r for r in summary_result if r["username"] == "Alice Johnson")
+                assert alice_summary["total_orders"] == 2
+                assert abs(alice_summary["total_spent"] - 79.98) < 0.01
+
+                # Test more complex analytical queries (what SQL tools are meant for)
+                analytics_result = await client.call_tool(
+                    "execute_sql_query",
+                    {
+                        "sql": """
+                        SELECT
+                            COUNT(*) as total_active_users,
+                            AVG(total_spent) as avg_spending,
+                            MAX(total_orders) as max_orders
+                        FROM user_order_summary
+                    """
+                    },
+                )
+
+                assert len(analytics_result) == 1
+                assert analytics_result[0]["total_active_users"] == 3
+
+                # Test schema inspection of dbt models
+                users_schema = await client.call_tool("get_table_schema", {"table_name": "users"})
+                users_columns = [col["name"] for col in users_schema]
+                expected_users_columns = ["user_id", "username", "email", "created_date", "status"]
+                for col in expected_users_columns:
+                    assert col in users_columns, f"Column {col} should exist in users dbt model"
+
+                summary_schema = await client.call_tool(
+                    "get_table_schema", {"table_name": "user_order_summary"}
+                )
+                summary_columns = [col["name"] for col in summary_schema]
+                expected_summary_columns = [
+                    "user_id",
+                    "username",
+                    "email",
+                    "total_orders",
+                    "total_spent",
+                    "last_order_date",
+                ]
+                for col in expected_summary_columns:
+                    assert (
+                        col in summary_columns
+                    ), f"Column {col} should exist in user_order_summary dbt model"
