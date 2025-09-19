@@ -24,11 +24,11 @@ def extract_validation_error(error: ValidationError | Exception | str) -> str:
         error: The ValidationError object, Exception, or error message string
 
     Returns:
-        A concise error message with property path when available
+        A concise error message with key path when available
     """
     # Handle ValidationError objects directly
     if isinstance(error, ValidationError):
-        # Build property path from absolute_path
+        # Build key path from absolute_path
         if error.absolute_path:
             path_parts = []
             for part in error.absolute_path:
@@ -36,8 +36,8 @@ def extract_validation_error(error: ValidationError | Exception | str) -> str:
                     path_parts.append(part)
                 else:
                     path_parts.append(str(part))
-            property_path = ".".join(path_parts)
-            return f"Property '{property_path}': {error.message}"
+            key_path = ".".join(path_parts)
+            return f"{key_path}: {error.message}"
         else:
             return error.message
 
