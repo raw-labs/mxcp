@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mxcp"
-version = "0.6.2"
+version = "0.7.0"
 description = "Enterprise MCP framework for building production AI tools with SQL/Python, featuring security, audit trails, and policy enforcement"
 authors = [{ name = "RAW Labs SA", email = "mxcp@raw-labs.com" }]
 readme = "README.md"
