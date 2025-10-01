@@ -1,0 +1,10 @@
+name: integration_test
+profile: integration_test_default
+model-paths:
+- models
+seed-paths:
+- seeds
+target-path: target
+clean-targets:
+- target
+config-version: 2
