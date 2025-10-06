@@ -278,7 +278,9 @@ class AuthenticationMiddleware:
                             return None
 
                         # Try to get user context from cache first
-                        cached_user_context = await self._get_cached_user_context(external_token)
+                        cached_user_context = await self._get_cached_user_context(
+                            access_token.token
+                        )
 
                         if cached_user_context is None:
                             # Cache miss - call provider API
@@ -307,6 +309,8 @@ class AuthenticationMiddleware:
                                         logger.info(
                                             "✅ Token refresh successful, retrying user context"
                                         )
+                                        # Update external_token to the refreshed token
+                                        external_token = refreshed_token
                                         # Retry with the new token
                                         cached_user_context = (
                                             await self.oauth_handler.get_user_context(
