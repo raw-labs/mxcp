@@ -22,6 +22,7 @@ class PersistedAccessToken:
     token: str
     client_id: str
     external_token: str | None
+    refresh_token: str | None  # refresh token for renewing external_token
     scopes: list[str]
     expires_at: float | None
     created_at: float
@@ -199,6 +200,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
                 token TEXT PRIMARY KEY,
                 client_id TEXT NOT NULL,
                 external_token TEXT,
+                refresh_token TEXT,
                 scopes TEXT NOT NULL,
                 expires_at REAL,
                 created_at REAL NOT NULL
@@ -213,6 +215,18 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             ON access_tokens(expires_at)
         """
         )
+
+        # Migration: Add refresh_token column if it doesn't exist
+        try:
+            cursor.execute("ALTER TABLE access_tokens ADD COLUMN refresh_token TEXT")
+            logger.info("✅ Added refresh_token column to existing access_tokens table")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                # Column already exists, this is expected for new databases
+                logger.debug("refresh_token column already exists")
+            else:
+                logger.error(f"Error adding refresh_token column: {e}")
+                raise
 
         # Authorization codes table
         cursor.execute(
@@ -271,13 +285,14 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO access_tokens
-                (token, client_id, external_token, scopes, expires_at, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (token, client_id, external_token, refresh_token, scopes, expires_at, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     token_data.token,
                     token_data.client_id,
                     token_data.external_token,
+                    token_data.refresh_token,
                     json.dumps(token_data.scopes),
                     token_data.expires_at,
                     token_data.created_at,
@@ -298,7 +313,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
             cursor = self.conn.cursor()
             cursor.execute(
                 """
-                SELECT token, client_id, external_token, scopes, expires_at, created_at
+                SELECT token, client_id, external_token, refresh_token, scopes, expires_at, created_at
                 FROM access_tokens WHERE token = ?
             """,
                 (token,),
@@ -312,6 +327,7 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
                 token=row["token"],
                 client_id=row["client_id"],
                 external_token=row["external_token"],
+                refresh_token=row["refresh_token"],
                 scopes=json.loads(row["scopes"]),
                 expires_at=row["expires_at"],
                 created_at=row["created_at"],
