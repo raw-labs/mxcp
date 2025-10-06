@@ -149,6 +149,7 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
             scopes=[],
             raw_token=access_token,
             provider="github",
+            refresh_token=None,  # GitHub tokens don't expire, no refresh needed
         )
 
         return user_info, state_meta
