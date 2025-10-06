@@ -148,6 +148,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
 
         # Get user info to extract the actual user ID
         access_token = payload["access_token"]
+        refresh_token = payload.get("refresh_token")  # May be None if not requested
         user_profile = await self._fetch_user_profile(access_token)
 
         # Use Salesforce's 'user_id' field as the unique identifier
@@ -164,6 +165,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
             scopes=[],
             raw_token=access_token,
             provider="salesforce",
+            refresh_token=refresh_token,
         )
 
         return user_info, meta
@@ -259,3 +261,27 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
             f"Successfully fetched Salesforce user profile for user_id: {user_data.get('user_id', 'unknown')}"
         )
         return user_data
+
+    async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
+        """Refresh an expired access token using the refresh token."""
+        refresh_data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+        }
+
+        async with create_mcp_http_client() as client:
+            response = await client.post(
+                self.token_url,
+                data=refresh_data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+            if response.status_code != 200:
+                logger.error(
+                    f"Salesforce token refresh failed: {response.status_code} - {response.text}"
+                )
+                raise HTTPException(400, "Failed to refresh access token")
+
+            return cast(dict[str, Any], response.json())

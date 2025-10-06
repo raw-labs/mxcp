@@ -145,8 +145,9 @@ class ExternalUserInfo:
 
     id: str
     scopes: list[str]
-    raw_token: str  # original token from the IdP (JWT or opaque)
+    raw_token: str  # original access token from the IdP (JWT or opaque)
     provider: str
+    refresh_token: str | None = None  # refresh token for renewing access tokens
 
 
 @dataclass
