@@ -130,6 +130,12 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         # Flag to track if persistence is initialized
         self._persistence_initialized = False
 
+        # Background cleanup task
+        self._cleanup_task: asyncio.Task[None] | None = None
+        # Default cleanup interval: 5 minutes (can be configured via auth_config)
+        cleanup_interval = auth_config.get("cleanup_interval") if auth_config else None
+        self._cleanup_interval: int = cleanup_interval if cleanup_interval is not None else 300
+
     async def initialize(self) -> None:
         """Initialize the OAuth server and persistence backend."""
         if self._persistence_initialized:
@@ -148,13 +154,103 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         if self.auth_config:
             await self._register_configured_clients(self.auth_config)
 
+        # Start background cleanup task
+        self._start_background_cleanup()
+
         self._persistence_initialized = True
 
     async def close(self) -> None:
         """Close the OAuth server and persistence backend."""
+        # Stop background cleanup task
+        if self._cleanup_task and not self._cleanup_task.done():
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
+            logger.debug("Background cleanup task stopped")
+
         if self.persistence:
             await self.persistence.close()
             logger.info("OAuth persistence backend closed")
+
+    async def cleanup_expired_mappings(self) -> int:
+        """Clean up orphaned temporary token mappings for expired authorization codes.
+
+        This method should be called periodically to prevent memory leaks from
+        abandoned OAuth flows where the authorization code expired but the client
+        never attempted token exchange.
+
+        Returns:
+            Number of orphaned mappings cleaned up
+        """
+        cleaned_count = 0
+        current_time = time.time()
+
+        async with self._lock:
+            # Find auth codes that have expired
+            expired_codes = []
+            for code, auth_code_obj in self._auth_codes.items():
+                if auth_code_obj.expires_at < current_time:
+                    expired_codes.append(code)
+
+            # Clean up expired codes and their associated temporary mappings
+            for code in expired_codes:
+                self._auth_codes.pop(code, None)
+                if self._token_mapping.pop(code, None):
+                    cleaned_count += 1
+                if self._refresh_token_mapping.pop(code, None):
+                    cleaned_count += 1
+
+            # Also check for orphaned mappings (mappings without corresponding auth codes)
+            orphaned_token_keys = []
+            for mapping_key in self._token_mapping.keys():
+                if mapping_key.startswith("mcp_") and mapping_key not in self._auth_codes:
+                    orphaned_token_keys.append(mapping_key)
+
+            orphaned_refresh_keys = []
+            for mapping_key in self._refresh_token_mapping.keys():
+                if mapping_key.startswith("mcp_") and mapping_key not in self._auth_codes:
+                    orphaned_refresh_keys.append(mapping_key)
+
+            # Clean up orphaned mappings
+            for key in orphaned_token_keys:
+                self._token_mapping.pop(key, None)
+                cleaned_count += 1
+
+            for key in orphaned_refresh_keys:
+                self._refresh_token_mapping.pop(key, None)
+                cleaned_count += 1
+
+            if cleaned_count > 0:
+                logger.info(f"Cleaned up {cleaned_count} orphaned temporary token mappings")
+
+        return cleaned_count
+
+    def _start_background_cleanup(self) -> None:
+        """Start the background cleanup task."""
+        if self._cleanup_task is None or self._cleanup_task.done():
+            self._cleanup_task = asyncio.create_task(self._background_cleanup_loop())
+            logger.debug(
+                f"Started background OAuth cleanup task (interval: {self._cleanup_interval}s)"
+            )
+
+    async def _background_cleanup_loop(self) -> None:
+        """Background loop that periodically cleans up expired mappings."""
+        try:
+            while True:
+                await asyncio.sleep(self._cleanup_interval)
+                try:
+                    cleaned_count = await self.cleanup_expired_mappings()
+                    if cleaned_count > 0:
+                        logger.info(
+                            f"Background cleanup removed {cleaned_count} orphaned OAuth mappings"
+                        )
+                except Exception as e:
+                    logger.error(f"Error in background OAuth cleanup: {e}")
+        except asyncio.CancelledError:
+            logger.debug("Background OAuth cleanup task cancelled")
+            raise
 
     async def _load_clients_from_persistence(self) -> None:
         """Load existing clients from persistence into memory cache."""
@@ -510,8 +606,11 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             self._token_mapping[mcp_code] = user_info.raw_token
 
             # Store refresh token mapping if available
-            if user_info.refresh_token:
+            if hasattr(user_info, "refresh_token") and user_info.refresh_token:
                 self._refresh_token_mapping[mcp_code] = user_info.refresh_token
+                logger.debug(f"Stored refresh token mapping for auth code: {mcp_code}")
+            else:
+                logger.debug(f"No refresh token available for auth code: {mcp_code}")
 
         logger.info(f"Created auth code: {mcp_code} for client: {meta.client_id}")
         return construct_redirect_uri(meta.redirect_uri, code=mcp_code, state=state)
@@ -531,8 +630,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     if persisted_code:
                         # Check if code is expired
                         if persisted_code.expires_at < time.time():
-                            # Clean up expired code
+                            # Clean up expired code and associated temporary mappings
                             await self.persistence.delete_auth_code(code)
+                            self._token_mapping.pop(
+                                code, None
+                            )  # Clean up temporary external token mapping
+                            self._refresh_token_mapping.pop(
+                                code, None
+                            )  # Clean up temporary refresh token mapping
                             logger.warning(f"Auth code {code} has expired (from persistence)")
                             return None
 
@@ -544,8 +649,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                             logger.error(
                                 f"Malformed redirect URI in auth code {code}: {persisted_code.redirect_uri} - {ve}"
                             )
-                            # Delete the malformed auth code
+                            # Delete the malformed auth code and clean up temporary mappings
                             await self.persistence.delete_auth_code(code)
+                            self._token_mapping.pop(
+                                code, None
+                            )  # Clean up temporary external token mapping
+                            self._refresh_token_mapping.pop(
+                                code, None
+                            )  # Clean up temporary refresh token mapping
                             return None
 
                         auth_code = AuthorizationCode(
@@ -566,8 +677,12 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 # Check expiration
                 if auth_code.expires_at < time.time():
                     logger.warning(f"Authorization code expired: {code}")
-                    # Clean up expired code
+                    # Clean up expired code and associated temporary mappings
                     self._auth_codes.pop(code, None)
+                    self._token_mapping.pop(code, None)  # Clean up temporary external token mapping
+                    self._refresh_token_mapping.pop(
+                        code, None
+                    )  # Clean up temporary refresh token mapping
                     if self.persistence:
                         try:
                             await self.persistence.delete_auth_code(code)
