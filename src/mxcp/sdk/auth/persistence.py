@@ -216,17 +216,13 @@ class SQLiteAuthPersistence(AuthPersistenceBackend):
         """
         )
 
-        # Migration: Add refresh_token column if it doesn't exist
-        try:
+        # Migration: Add refresh_token column if it doesn't exist (for existing databases)
+        cursor.execute("PRAGMA table_info(access_tokens)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "refresh_token" not in columns:
+            logger.info("Adding refresh_token column to access_tokens table")
             cursor.execute("ALTER TABLE access_tokens ADD COLUMN refresh_token TEXT")
-            logger.info("✅ Added refresh_token column to existing access_tokens table")
-        except sqlite3.OperationalError as e:
-            if "duplicate column name" in str(e).lower():
-                # Column already exists, this is expected for new databases
-                logger.debug("refresh_token column already exists")
-            else:
-                logger.error(f"Error adding refresh_token column: {e}")
-                raise
+            self.conn.commit()
 
         # Authorization codes table
         cursor.execute(
