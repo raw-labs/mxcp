@@ -1,0 +1,13 @@
+mxcp: 1
+tool:
+  name: get_data
+  description: Second tool with duplicate name
+  language: python
+  source:
+    file: ../python/duplicate_func_2.py
+  parameters:
+    - name: param2
+      type: integer
+      description: Parameter for second tool
+  return:
+    type: object
