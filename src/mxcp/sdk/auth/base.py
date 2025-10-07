@@ -202,15 +202,17 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 if self._refresh_token_mapping.pop(code, None):
                     cleaned_count += 1
 
-            # Also check for orphaned mappings (mappings without corresponding auth codes)
+            # Also check for orphaned mappings
+            # Token mappings: valid keys are either active auth codes (temporary) or active MCP tokens
             orphaned_token_keys = []
             for mapping_key in self._token_mapping:
-                if mapping_key.startswith("mcp_") and mapping_key not in self._auth_codes:
+                if mapping_key not in self._auth_codes and mapping_key not in self._tokens:
                     orphaned_token_keys.append(mapping_key)
 
+            # Refresh token mappings are only keyed by authorization codes; anything not in _auth_codes is orphaned
             orphaned_refresh_keys = []
             for mapping_key in self._refresh_token_mapping:
-                if mapping_key.startswith("mcp_") and mapping_key not in self._auth_codes:
+                if mapping_key not in self._auth_codes:
                     orphaned_refresh_keys.append(mapping_key)
 
             # Clean up orphaned mappings
