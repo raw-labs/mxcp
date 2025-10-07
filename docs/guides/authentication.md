@@ -1200,7 +1200,8 @@ projects:
       dev:
         auth:
           provider: github
-          cache_ttl: 300  # Cache user context for 5 minutes (default: 300 seconds)
+          cache_ttl: 300        # Cache user context for 5 minutes (default: 300 seconds)
+          cleanup_interval: 300 # OAuth cleanup interval in seconds (default: 300 seconds)
           
           clients:
             - client_id: "${CLIENT_ID}"
@@ -1214,12 +1215,58 @@ projects:
   - **Purpose**: Reduces API calls to OAuth providers, improving performance and avoiding rate limits
   - **Range**: Any positive integer (recommended: 60-1800 seconds)
 
+- `cleanup_interval`: OAuth cleanup interval in seconds
+  - **Default**: 300 seconds (5 minutes)
+  - **Purpose**: Removes expired OAuth codes and orphaned mappings to prevent memory leaks
+  - **Range**: Any positive integer (recommended: 60-1800 seconds)
+
 **Security Considerations:**
 
 - Cached user context expires automatically after the TTL period
 - User information is cached in memory only (not persisted to disk)
 - Cache is cleared when the server restarts
 - Shorter TTL values provide more up-to-date user information but increase API calls
+
+## OAuth Cleanup Configuration
+
+MXCP automatically cleans up expired OAuth authorization codes and orphaned token mappings to prevent memory leaks. This cleanup process runs in the background and can be configured to suit your needs.
+
+### Cleanup Interval Configuration
+
+You can configure how often the OAuth cleanup process runs using the `cleanup_interval` setting:
+
+```yaml
+projects:
+  my_project:
+    profiles:
+      dev:
+        auth:
+          provider: github
+          cache_ttl: 300        # User context cache TTL
+          cleanup_interval: 300 # OAuth cleanup interval in seconds (default: 300)
+          
+          clients:
+            - client_id: "${CLIENT_ID}"
+              # ... client config
+```
+
+**Configuration Options:**
+
+- `cleanup_interval`: How often to run OAuth cleanup in seconds
+  - **Default**: 300 seconds (5 minutes)
+  - **Purpose**: Removes expired authorization codes and orphaned token mappings to prevent memory leaks
+  - **Range**: Any positive integer (recommended: 60-1800 seconds)
+
+**What Gets Cleaned Up:**
+
+- **Expired authorization codes**: OAuth codes that have passed their 5-minute expiration time
+- **Orphaned token mappings**: External token mappings without corresponding authorization codes
+- **Orphaned refresh token mappings**: Refresh token mappings without corresponding authorization codes
+
+**Performance Considerations:**
+
+- The cleanup process is lightweight and runs asynchronously without blocking requests
+- Cleanup only runs when there are actually expired items to clean up
 
 ## Authorization Configuration
 
@@ -1494,6 +1541,12 @@ auth:
 - Callback URLs in OAuth provider settings match your configuration
 - URLs use HTTPS in production environments
 - No port numbers in URLs when using standard ports (80/443)
+
+**Memory usage concerns**: MXCP automatically cleans up OAuth-related memory:
+- Authorization codes expire after 5 minutes and are automatically cleaned up
+- Orphaned token mappings are removed by the background cleanup process
+- Adjust `cleanup_interval` to run cleanup more frequently if needed
+- User context cache is also automatically cleaned up based on `cache_ttl`
 
 ## Adding New Providers
 
