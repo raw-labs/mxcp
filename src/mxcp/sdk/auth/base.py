@@ -164,10 +164,10 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         # Stop background cleanup task
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
-            try:
+            from contextlib import suppress
+
+            with suppress(asyncio.CancelledError):
                 await self._cleanup_task
-            except asyncio.CancelledError:
-                pass
             logger.debug("Background cleanup task stopped")
 
         if self.persistence:
@@ -204,12 +204,12 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
             # Also check for orphaned mappings (mappings without corresponding auth codes)
             orphaned_token_keys = []
-            for mapping_key in self._token_mapping.keys():
+            for mapping_key in self._token_mapping:
                 if mapping_key.startswith("mcp_") and mapping_key not in self._auth_codes:
                     orphaned_token_keys.append(mapping_key)
 
             orphaned_refresh_keys = []
-            for mapping_key in self._refresh_token_mapping.keys():
+            for mapping_key in self._refresh_token_mapping:
                 if mapping_key.startswith("mcp_") and mapping_key not in self._auth_codes:
                     orphaned_refresh_keys.append(mapping_key)
 
