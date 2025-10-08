@@ -1,0 +1,18 @@
+mxcp: 1
+tool:
+  name: sql_code_error
+  description: A valid .yml with wrong SQL code
+  parameters:
+    - name: user_id
+      type: integer
+      description: User ID to query
+  return:
+    type: object
+    properties:
+      user_name:
+        type: string
+  source:
+    code: |
+      SELECT 'test_user' as user_name
+      FROM (SELECT as user_id) as users
+      WHERE user_id = $user_id
