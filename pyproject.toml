@@ -17,7 +17,7 @@ dependencies = [
     "starlette>=0.27.0",  # HTTP server framework
     
     # Data & Processing (needed by SDK)
-    "duckdb>=0.9.2",  # Embedded analytics database
+    "duckdb>=1.4.1",  # Embedded analytics database
     "pandas>=2.0.0",  # DataFrame operations with DuckDB
     "jsonschema>=4.0.0",  # Schema validation
     "pyyaml>=6.0.1",  # Configuration parsing
