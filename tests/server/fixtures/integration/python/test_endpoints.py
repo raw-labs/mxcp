@@ -1,4 +1,5 @@
-from typing import Dict, Any
+from typing import Any
+
 from mxcp.runtime import config, on_init
 
 global_var = None
@@ -30,7 +31,7 @@ def get_global_var() -> str:
     return global_var
 
 
-def get_users_detailed() -> Dict[str, Any]:
+def get_users_detailed() -> dict[str, Any]:
     """Return an object with users array and count."""
     users = [
         {
@@ -64,7 +65,7 @@ def get_users_detailed() -> Dict[str, Any]:
     return {"users": users, "n": len(users)}
 
 
-def get_users_simple() -> Dict[str, Any]:
+def get_users_simple() -> dict[str, Any]:
     """Return an object with users array and count (same data, different type spec in .yml)."""
     users = [
         {
@@ -98,7 +99,7 @@ def get_users_simple() -> Dict[str, Any]:
     return {"users": users, "n": len(users)}
 
 
-def process_user_data(user_data: Dict[str, Any]) -> Dict[str, Any]:
+def process_user_data(user_data: dict[str, Any]) -> dict[str, Any]:
     """Process a complex user data object and return analysis."""
     # Extract user info
     name = user_data.get("name", "Unknown")
@@ -121,3 +122,27 @@ def process_user_data(user_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     return {"original_data": user_data, "analysis": analysis, "processing_status": "success"}
+
+
+def check_optional_params(
+    required_param: str,
+    optional_param: str,
+    optional_number: int,
+    optional_float: float,
+    optional_bool: bool,
+    optional_date: str,
+    optional_datetime: str,
+) -> dict[str, Any]:
+    """Function with various optional parameters of different types.
+    Note: The parameter order in the .yml file is intentionally different from this function
+    to test that parameter matching works correctly regardless of order.
+    """
+    return {
+        "required_param": required_param,
+        "optional_param": optional_param,
+        "optional_number": optional_number,
+        "optional_float": optional_float,
+        "optional_bool": optional_bool,
+        "optional_date": optional_date,
+        "optional_datetime": optional_datetime,
+    }
