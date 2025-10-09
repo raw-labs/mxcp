@@ -23,6 +23,7 @@ from mxcp.sdk.audit import AuditLogger
 from mxcp.sdk.auth import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth._types import HttpTransportConfig
 from mxcp.sdk.auth.context import get_user_context
+from mxcp.sdk.executor.context import set_mcp_context, reset_mcp_context
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.auth.providers.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.providers.github import GitHubOAuthHandler
@@ -1237,6 +1238,9 @@ class RAWMCP:
                 with contextlib.suppress(Exception):
                     mcp_session_id = ctx.session_id
 
+            # Set the MCP context so endpoint code can access it
+            mcp_context_token = set_mcp_context(ctx)
+
             try:
                 # Get the user context from the context variable (set by auth middleware)
                 user_context = get_user_context()
@@ -1291,6 +1295,9 @@ class RAWMCP:
                 )
                 raise
             finally:
+                # Reset the MCP context
+                reset_mcp_context(mcp_context_token)
+                
                 # Calculate duration
                 duration_ms = int((time.time() - start_time) * 1000)
 

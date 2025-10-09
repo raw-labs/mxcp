@@ -8,6 +8,8 @@ import contextvars
 from dataclasses import dataclass, field
 from typing import Any
 
+from mcp.server.fastmcp import Context
+
 from mxcp.sdk.auth import UserContext
 
 
@@ -177,3 +179,132 @@ def reset_execution_context(token: "contextvars.Token[ExecutionContext | None]")
         token: The token returned by set_execution_context
     """
     execution_context_var.reset(token)
+
+
+
+# Thread-safe MCP context management using contextvars
+# This allows MCP handlers to set the FastMCP context and endpoint code to retrieve it
+# without explicit parameter passing through the call stack
+
+# Create a contextvar to store the current MCP context
+# The default is None, indicating no MCP context available
+mcp_context_var = contextvars.ContextVar[Context | None]("mcp_context", default=None)
+
+
+def get_mcp_context() -> Context | None:
+    """
+    Get the current MCP context from the request context.
+
+    Returns:
+        The FastMCP Context if available, None otherwise.
+
+    Example:
+        >>> mcp_context = get_mcp_context()
+        >>> if mcp_context:
+        ...     request = mcp_context.request_context.request
+        ...     if request:
+        ...         headers = request.headers
+        ...         user_agent = headers.get("user-agent")
+    """
+    return mcp_context_var.get()
+
+
+def set_mcp_context(context: Context | None) -> "contextvars.Token[Context | None]":
+    """
+    Set the MCP context in the current request context.
+
+    This is typically called by MCP handlers after receiving the FastMCP context.
+
+    Args:
+        context: The FastMCP Context to set, or None to clear context
+
+    Returns:
+        A token that can be used to reset the context
+
+    Example:
+        >>> token = set_mcp_context(ctx)
+        >>> try:
+        ...     # Execute endpoint code that can access MCP context
+        ...     pass
+        ... finally:
+        ...     reset_mcp_context(token)
+    """
+    return mcp_context_var.set(context)
+
+
+def reset_mcp_context(token: "contextvars.Token[Context | None]") -> None:
+    """
+    Reset the MCP context using a token.
+
+    This should be called to restore the previous context state,
+    typically in a finally block after setting an MCP context.
+
+    Args:
+        token: The token returned by set_mcp_context
+
+    Example:
+        >>> token = set_mcp_context(ctx)
+        >>> try:
+        ...     # Execute endpoint code
+        ...     pass
+        ... finally:
+        ...     reset_mcp_context(token)
+    """
+    mcp_context_var.reset(token)
+
+
+def get_request_headers() -> dict[str, str] | None:
+    """
+    Get HTTP headers from the current MCP request context.
+
+    Returns:
+        Dictionary of HTTP headers if available, None otherwise.
+
+    Example:
+        >>> headers = get_request_headers()
+        >>> if headers:
+        ...     user_agent = headers.get("user-agent")
+        ...     authorization = headers.get("authorization")
+        ...     custom_header = headers.get("x-custom-header")
+    """
+    mcp_context = get_mcp_context()
+    if mcp_context and hasattr(mcp_context, "request_context"):
+        request_context = mcp_context.request_context
+        if request_context and hasattr(request_context, "request") and request_context.request:
+            # Convert Starlette Headers to dict for easier access
+            return dict(request_context.request.headers)
+    return None
+
+
+def get_request_info() -> dict[str, Any] | None:
+    """
+    Get comprehensive request information from the current MCP context.
+
+    Returns:
+        Dictionary with request information if available, None otherwise.
+        Contains: method, url, headers, client_ip, etc.
+
+    Example:
+        >>> request_info = get_request_info()
+        >>> if request_info:
+        ...     method = request_info["method"]
+        ...     url = request_info["url"]
+        ...     client_ip = request_info["client_ip"]
+        ...     headers = request_info["headers"]
+    """
+    mcp_context = get_mcp_context()
+    if mcp_context and hasattr(mcp_context, "request_context"):
+        request_context = mcp_context.request_context
+        if request_context and hasattr(request_context, "request") and request_context.request:
+            request = request_context.request
+            return {
+                "method": request.method,
+                "url": str(request.url),
+                "headers": dict(request.headers),
+                "client_ip": request.client.host if request.client else None,
+                "client_port": request.client.port if request.client else None,
+                "path": request.url.path,
+                "query_params": dict(request.query_params),
+                "cookies": dict(request.cookies) if request.cookies else {},
+            }
+    return None
