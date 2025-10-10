@@ -133,6 +133,8 @@ class AuthConfig(TypedDict, total=False):
     """
 
     provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google"] | None
+    cache_ttl: int | None  # Cache TTL in seconds for user context caching
+    cleanup_interval: int | None  # Cleanup interval in seconds for OAuth mappings (default: 300)
     clients: list[OAuthClientConfig] | None  # Pre-configured OAuth clients
     authorization: AuthorizationConfig | None  # Authorization policies
     persistence: AuthPersistenceConfig | None  # Token/client persistence
@@ -144,8 +146,9 @@ class ExternalUserInfo:
 
     id: str
     scopes: list[str]
-    raw_token: str  # original token from the IdP (JWT or opaque)
+    raw_token: str  # original access token from the IdP (JWT or opaque)
     provider: str
+    refresh_token: str | None = None  # refresh token for renewing access tokens
 
 
 @dataclass
