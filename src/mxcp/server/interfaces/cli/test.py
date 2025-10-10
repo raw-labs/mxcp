@@ -318,15 +318,31 @@ async def _test_impl(
             raw_profile=context_data,  # Store full context for policy access
         )
 
+    # Parse request headers if provided
+    headers = None
     if request_headers:
-        try:
-            headers = json.loads(request_headers) if request_headers else None
-            if not isinstance(headers, dict):
-                raise click.BadParameter("Request headers must be a JSON object")
-        except json.JSONDecodeError as e:
-            raise click.BadParameter(f"Invalid JSON in request headers: {e}") from e
-    else:
-        headers = None
+        if request_headers.startswith("@"):
+            # Load from file
+            file_path = Path(request_headers[1:])
+            if not file_path.exists():
+                raise click.BadParameter(f"Request headers file not found: {file_path}")
+            try:
+                with open(file_path) as f:
+                    headers = json.load(f)
+            except json.JSONDecodeError as e:
+                raise click.BadParameter(
+                    f"Invalid JSON in request headers file {file_path}: {e}"
+                ) from e
+        else:
+            # Parse as JSON string
+            try:
+                headers = json.loads(request_headers)
+            except json.JSONDecodeError as e:
+                raise click.BadParameter(f"Invalid JSON in request headers: {e}") from e
+
+        # Validate it's a dictionary
+        if not isinstance(headers, dict):
+            raise click.BadParameter("Request headers must be a JSON object")
 
     if endpoint_type and name:
         results = await run_tests(
