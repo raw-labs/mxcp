@@ -1,0 +1,15 @@
+mxcp: 1
+
+tool:
+  name: headers
+  description: A simple tool that shows the request headers
+  parameters: []
+  return:
+    type: object
+    description: Request headers
+  language: python
+  source:
+    file: ../python/context_tools.py
+  tests:
+    - name: just_run
+      arguments: []

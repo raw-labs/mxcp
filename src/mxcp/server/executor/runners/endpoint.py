@@ -82,6 +82,7 @@ async def execute_code_with_engine(
     user_config: UserConfig,
     site_config: SiteConfig,
     user_context: UserContext | None = None,
+    request_headers: dict[str, str] | None = None,
 ) -> Any:
     """Execute tool/resource endpoint using SDK execution engine.
 
@@ -103,6 +104,11 @@ async def execute_code_with_engine(
     # Populate context with data that runtime module expects
     execution_context.set("user_config", user_config)
     execution_context.set("site_config", site_config)
+
+    # Add HTTP headers
+    if request_headers:
+        execution_context.set("request_headers", request_headers)
+
     if hasattr(execution_engine, "_executors") and "sql" in execution_engine._executors:
         sql_executor = execution_engine._executors["sql"]
 
