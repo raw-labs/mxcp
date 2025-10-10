@@ -23,7 +23,6 @@ from mxcp.sdk.audit import AuditLogger
 from mxcp.sdk.auth import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth._types import HttpTransportConfig
 from mxcp.sdk.auth.context import get_user_context
-from mxcp.sdk.executor.context import set_mcp_context, reset_mcp_context
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.auth.providers.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.providers.github import GitHubOAuthHandler
@@ -33,6 +32,7 @@ from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.core import PACKAGE_VERSION
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
+from mxcp.sdk.executor.context import reset_mcp_context, set_mcp_context
 from mxcp.sdk.telemetry import (
     decrement_gauge,
     get_current_trace_id,
@@ -1297,7 +1297,7 @@ class RAWMCP:
             finally:
                 # Reset the MCP context
                 reset_mcp_context(mcp_context_token)
-                
+
                 # Calculate duration
                 duration_ms = int((time.time() - start_time) * 1000)
 
