@@ -325,6 +325,8 @@ async def _test_impl(
                 raise click.BadParameter("Request headers must be a JSON object")
         except json.JSONDecodeError as e:
             raise click.BadParameter(f"Invalid JSON in request headers: {e}") from e
+    else:
+        headers = None
 
     if endpoint_type and name:
         results = await run_tests(

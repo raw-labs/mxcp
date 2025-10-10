@@ -99,6 +99,7 @@ async def run_all_tests(
                     kind,
                     name,
                     cli_user_context,
+                    request_headers,
                 )
 
                 # Wrap test results with endpoint context
