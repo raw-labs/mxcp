@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
-from jsonschema import validate
+from jsonschema import ValidationError, validate
 from referencing import Registry, Resource
 
 from mxcp.server.core.config._types import SiteConfig
@@ -17,22 +17,43 @@ from mxcp.server.definitions.endpoints.utils import get_endpoint_name_or_uri
 logger = logging.getLogger(__name__)
 
 
-def extract_validation_error(error_msg: str) -> str:
+def extract_validation_error(error: ValidationError | Exception | str) -> str:
     """Extract a concise validation error message from jsonschema error.
 
     Args:
-        error_msg: The mxcp error message from jsonschema
+        error: The ValidationError object, Exception, or error message string
 
     Returns:
-        A concise error message
+        A concise error message with key path when available
     """
+    # Handle ValidationError objects directly
+    if isinstance(error, ValidationError):
+        # Build key path from absolute_path
+        if error.absolute_path:
+            path_parts = []
+            for part in error.absolute_path:
+                if isinstance(part, str):
+                    path_parts.append(part)
+                else:
+                    path_parts.append(str(part))
+            key_path = ".".join(path_parts)
+            return f"{key_path}: {error.message}"
+        else:
+            return error.message
 
-    # For type errors
+    # Handle other exceptions by converting to string
+    if isinstance(error, Exception):
+        error_msg = str(error)
+    else:
+        error_msg = error
+
+    # For type errors in string format (fallback)
     if "is not of a type" in error_msg:
         parts = error_msg.split("'")
-        field = parts[1]
-        expected_type = parts[3]
-        return f"Invalid type for {field}: expected {expected_type}"
+        if len(parts) >= 4:
+            field = parts[1]
+            expected_type = parts[3]
+            return f"Invalid type for {field}: expected {expected_type}"
 
     # For other validation errors, return just the first line
     return error_msg.split("\n")[0]
@@ -203,8 +224,11 @@ class EndpointLoader:
 
                     endpoints.append((f, cast(EndpointDefinition, data), None))
                     self._endpoints[str(f)] = cast(EndpointDefinition, data)
+            except ValidationError as e:
+                error_msg = extract_validation_error(e)
+                endpoints.append((f, None, error_msg))
             except Exception as e:
-                error_msg = extract_validation_error(str(e))
+                error_msg = extract_validation_error(e)
                 endpoints.append((f, None, error_msg))
 
         return endpoints

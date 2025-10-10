@@ -292,11 +292,15 @@ def validate_endpoint_payload(
             language = "sql" if endpoint_type in ["tool", "resource"] else "python"
 
             # Validate source code syntax
-            if not execution_engine.validate_source(language, sql_query):
+            validation_result = execution_engine.validate_source(language, sql_query)
+            if not validation_result.is_valid:
+                error_message = (
+                    validation_result.error_message or "Source code syntax validation failed"
+                )
                 return {
                     "status": "error",
                     "path": relative_path,
-                    "message": "Source code syntax validation failed",
+                    "message": f"Source code syntax validation failed: {error_message}",
                 }
 
             # Extract parameter names using SDK execution engine

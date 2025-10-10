@@ -1,0 +1,16 @@
+mxcp: 1
+tool:
+  name: test_property_path_errors
+  description: Test tool to verify property path error messages
+  parameters:
+    - name: limit
+      type: integer
+      description: Limit parameter
+  return:
+    type: object
+    properties:
+      result:
+        type: string
+  source:
+    # This should be a string, but we're setting it to a boolean to trigger a validation error
+    code: true

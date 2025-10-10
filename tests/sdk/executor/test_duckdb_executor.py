@@ -129,16 +129,20 @@ class TestDuckDBExecutorBasics:
     def test_validate_sql_source(self, duckdb_executor, mock_context):
         """Test SQL source validation."""
         # Valid SQL
-        assert duckdb_executor.validate_source("SELECT 1") == True
+        result = duckdb_executor.validate_source("SELECT 1")
+        assert result.is_valid == True
 
         # Invalid SQL should return False
-        assert duckdb_executor.validate_source("INVALID SQL SYNTAX") == False
+        result = duckdb_executor.validate_source("INVALID SQL SYNTAX")
+        assert result.is_valid == False
 
         # Empty string should return False
-        assert duckdb_executor.validate_source("") == False
+        result = duckdb_executor.validate_source("")
+        assert result.is_valid == False
 
         # None should return False
-        assert duckdb_executor.validate_source(None) == False
+        result = duckdb_executor.validate_source(None)
+        assert result.is_valid == False
 
 
 class TestDuckDBSQLExecution:
