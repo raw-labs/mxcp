@@ -121,3 +121,28 @@ def process_user_data(user_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     return {"original_data": user_data, "analysis": analysis, "processing_status": "success"}
+
+
+def check_optional_params(
+    required_param: str,
+    optional_param: str = "default_value",
+    optional_number: int = 42,
+    optional_float: float = 3.14,
+    optional_bool: bool = True,
+    optional_date: str = "2024-01-15",
+    optional_datetime: str = "2024-01-15T10:30:00Z",
+) -> Dict[str, Any]:
+    """Function with various optional parameters of different types.
+    
+    Note: The parameter order in the .yml file is intentionally different from this function
+    to test that parameter matching works correctly regardless of order.
+    """
+    return {
+        "required_param": required_param,
+        "optional_param": optional_param,
+        "optional_number": optional_number,
+        "optional_float": optional_float,
+        "optional_bool": optional_bool,
+        "optional_date": optional_date,
+        "optional_datetime": optional_datetime,
+    }
