@@ -341,3 +341,57 @@ async def test_valid_prompt_default_value(
         assert "beginner" in result[1]["prompt"]
     finally:
         os.chdir(original_dir)
+
+
+@pytest.mark.asyncio
+async def test_headers_tool_with_headers(
+    test_repo_path, test_user_config, test_site_config, test_profile
+):
+    """Test headers tool execution with request headers provided"""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        endpoint_type = "tool"
+        name = "headers"
+        args = {}
+        request_headers = {
+            "Authorization": "Bearer test-token",
+            "Content-Type": "application/json",
+            "X-Custom-Header": "custom-value",
+        }
+        result = await execute_endpoint(
+            endpoint_type,
+            name,
+            args,
+            test_user_config,
+            test_site_config,
+            test_profile,
+            request_headers=request_headers,
+        )
+        # The headers tool should return the request headers
+        assert result == request_headers
+        assert result["Authorization"] == "Bearer test-token"
+        assert result["Content-Type"] == "application/json"
+        assert result["X-Custom-Header"] == "custom-value"
+    finally:
+        os.chdir(original_dir)
+
+
+@pytest.mark.asyncio
+async def test_headers_tool_without_headers(
+    test_repo_path, test_user_config, test_site_config, test_profile
+):
+    """Test headers tool execution without request headers"""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        endpoint_type = "tool"
+        name = "headers"
+        args = {}
+        result = await execute_endpoint(
+            endpoint_type, name, args, test_user_config, test_site_config, test_profile
+        )
+        # When no headers are provided, the result should be None
+        assert result is None
+    finally:
+        os.chdir(original_dir)
