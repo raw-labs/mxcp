@@ -847,8 +847,9 @@ class RAWMCP:
         # Declare variable with explicit type annotation
         final_type: Any
 
-        # Determine if parameters should be Optional (tools/prompts) or required (resources)
-        make_optional = endpoint_type in (EndpointType.TOOL, EndpointType.PROMPT)
+        # Determine if parameters should be nullable (tools/prompts parameters can be null)
+        # or not (resources templates cannot get null arguments)
+        make_nullable = endpoint_type in (EndpointType.TOOL, EndpointType.PROMPT)
 
         # Handle primitive types
         if json_type == "string":
@@ -858,7 +859,7 @@ class RAWMCP:
                 if all(isinstance(v, str) for v in enum_values):
                     # For enums, we'll use a simple str type with validation
                     # Since we can't dynamically create Literal unions in a type-safe way
-                    if make_optional:
+                    if make_nullable:
                         final_type = str | None
                     else:
                         final_type = str
@@ -868,12 +869,12 @@ class RAWMCP:
             # Create Field with constraints
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
-                if make_optional:
+                if make_nullable:
                     final_type = Annotated[str | None, Field(**field_kwargs)]
                 else:
                     final_type = Annotated[str, Field(**field_kwargs)]
             else:
-                if make_optional:
+                if make_nullable:
                     final_type = str | None
                 else:
                     final_type = str
@@ -883,12 +884,12 @@ class RAWMCP:
         elif json_type == "integer":
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
-                if make_optional:
+                if make_nullable:
                     final_type = Annotated[int | None, Field(**field_kwargs)]
                 else:
                     final_type = Annotated[int, Field(**field_kwargs)]
             else:
-                if make_optional:
+                if make_nullable:
                     final_type = int | None
                 else:
                     final_type = int
@@ -898,12 +899,12 @@ class RAWMCP:
         elif json_type == "number":
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
-                if make_optional:
+                if make_nullable:
                     final_type = Annotated[float | None, Field(**field_kwargs)]
                 else:
                     final_type = Annotated[float, Field(**field_kwargs)]
             else:
-                if make_optional:
+                if make_nullable:
                     final_type = float | None
                 else:
                     final_type = float
@@ -913,12 +914,12 @@ class RAWMCP:
         elif json_type == "boolean":
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
-                if make_optional:
+                if make_nullable:
                     final_type = Annotated[bool | None, Field(**field_kwargs)]
                 else:
                     final_type = Annotated[bool, Field(**field_kwargs)]
             else:
-                if make_optional:
+                if make_nullable:
                     final_type = bool | None
                 else:
                     final_type = bool
@@ -1206,12 +1207,25 @@ class RAWMCP:
         param_annotations = {"ctx": Context}
         param_signatures = ["ctx"]
 
-        for param in parameters:
+        # Sort parameters so required (no default) come before optional (with default)
+        # This is necessary for valid Python function signatures
+        required_params = [p for p in parameters if "default" not in p]
+        optional_params = [p for p in parameters if "default" in p]
+        sorted_parameters = required_params + optional_params
+
+        for param in sorted_parameters:
             param_name = param["name"]
             param_type = self._json_schema_to_python_type(param, endpoint_type)
             param_annotations[param_name] = param_type
-            # Create string representation for makefun
-            param_signatures.append(f"{param_name}")
+
+            # Create string representation for makefun with default values
+            if "default" in param:
+                # Parameter has a default value, make it optional in signature
+                default_value = repr(param["default"])
+                param_signatures.append(f"{param_name}={default_value}")
+            else:
+                # Required parameter
+                param_signatures.append(f"{param_name}")
 
         signature = f"({', '.join(param_signatures)})"
 
