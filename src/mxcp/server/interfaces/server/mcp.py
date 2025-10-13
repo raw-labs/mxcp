@@ -341,9 +341,6 @@ class RAWMCP:
         self.requests_lock = threading.Lock()
         self.draining = False
 
-        # Single execution lock for all operations
-        self.execution_lock = threading.RLock()  # RLock for re-entrant locking
-
         # Register signal handlers
         self._register_signal_handlers()
 
@@ -1737,35 +1734,33 @@ class RAWMCP:
         Returns:
             Result of execution, or (result, policy_info) if with_policy_info=True
         """
-        # Acquire execution lock for the actual execution
-        with self.execution_lock:
-            if self.runtime_environment is None:
-                raise RuntimeError("Execution engine not initialized")
+        if self.runtime_environment is None:
+            raise RuntimeError("Execution engine not initialized")
 
-            if with_policy_info:
-                return await execute_endpoint_with_engine_and_policy(
-                    endpoint_type=endpoint_type,
-                    name=name,
-                    params=params,
-                    user_config=self.user_config,
-                    site_config=self.site_config,
-                    execution_engine=self.runtime_environment.execution_engine,
-                    user_context=user_context,
-                    request_headers=request_headers,
-                    server_ref=self,
-                )
-            else:
-                return await execute_endpoint_with_engine(
-                    endpoint_type=endpoint_type,
-                    name=name,
-                    params=params,
-                    user_config=self.user_config,
-                    site_config=self.site_config,
-                    execution_engine=self.runtime_environment.execution_engine,
-                    user_context=user_context,
-                    request_headers=request_headers,
-                    server_ref=self,
-                )
+        if with_policy_info:
+            return await execute_endpoint_with_engine_and_policy(
+                endpoint_type=endpoint_type,
+                name=name,
+                params=params,
+                user_config=self.user_config,
+                site_config=self.site_config,
+                execution_engine=self.runtime_environment.execution_engine,
+                user_context=user_context,
+                request_headers=request_headers,
+                server_ref=self,
+            )
+        else:
+            return await execute_endpoint_with_engine(
+                endpoint_type=endpoint_type,
+                name=name,
+                params=params,
+                user_config=self.user_config,
+                site_config=self.site_config,
+                execution_engine=self.runtime_environment.execution_engine,
+                user_context=user_context,
+                request_headers=request_headers,
+                server_ref=self,
+            )
 
     @with_draining_and_request_tracking
     async def _execute_sql(
@@ -1787,21 +1782,19 @@ class RAWMCP:
         Returns:
             Result of SQL execution
         """
-        # Acquire execution lock for the actual execution
-        with self.execution_lock:
-            if self.runtime_environment is None:
-                raise RuntimeError("Execution engine not initialized")
+        if self.runtime_environment is None:
+            raise RuntimeError("Execution engine not initialized")
 
-            execution_context = ExecutionContext(user_context=user_context)
-            execution_context.set("user_config", self.user_config)
-            execution_context.set("site_config", self.site_config)
+        execution_context = ExecutionContext(user_context=user_context)
+        execution_context.set("user_config", self.user_config)
+        execution_context.set("site_config", self.site_config)
 
-            return await self.runtime_environment.execution_engine.execute(
-                language="sql",
-                source_code=source_code,
-                params=params or {},
-                context=execution_context,
-            )
+        return await self.runtime_environment.execution_engine.execute(
+            language="sql",
+            source_code=source_code,
+            params=params or {},
+            context=execution_context,
+        )
 
     def register_endpoints(self) -> None:
         """Register all discovered endpoints with MCP."""

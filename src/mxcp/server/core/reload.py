@@ -33,7 +33,6 @@ class ReloadableServer(Protocol):
     active_requests: int
     requests_lock: threading.Lock
     draining: bool
-    execution_lock: threading.RLock
     profile_name: str
 
     # Reload operations
@@ -238,31 +237,27 @@ class ReloadManager:
         try:
             # Phase 1: Drain requests
             self._drain_requests()
+            logger.info("Draining requests completed")
 
-            # Phase 2-5: Execute reload under lock
-            logger.info("Acquiring execution lock...")
-            with self.server.execution_lock:
-                logger.info("Execution lock acquired")
+            # Phase 2: Shutdown
+            logger.info("Shutting down runtime components...")
+            self.server.shutdown_runtime_components()
 
-                # Phase 3: Shutdown
-                logger.info("Shutting down runtime components...")
-                self.server.shutdown_runtime_components()
+            # Phase 3: Execute payload
+            if request.payload_func:
+                logger.info(f"Executing reload payload: {request.description}")
+                try:
+                    request.payload_func()
+                    logger.info("Payload execution completed")
+                except Exception as e:
+                    logger.error(f"Error in reload payload: {e}", exc_info=True)
+                    # Continue with reload despite payload errors
 
-                # Phase 4: Execute payload
-                if request.payload_func:
-                    logger.info(f"Executing reload payload: {request.description}")
-                    try:
-                        request.payload_func()
-                        logger.info("Payload execution completed")
-                    except Exception as e:
-                        logger.error(f"Error in reload payload: {e}", exc_info=True)
-                        # Continue with reload despite payload errors
+            # Phase 4: Restart
+            logger.info("Restarting runtime components...")
+            self.server.initialize_runtime_components()
 
-                # Phase 5: Restart
-                logger.info("Restarting runtime components...")
-                self.server.initialize_runtime_components()
-
-                logger.info("System reload completed")
+            logger.info("System reload completed")
 
         finally:
             # Always clear draining flag atomically
