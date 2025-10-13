@@ -50,7 +50,7 @@ from mxcp.sdk.telemetry import (
 )
 
 from ..context import ExecutionContext, reset_execution_context, set_execution_context
-from ..interfaces import ExecutorPlugin
+from ..interfaces import ExecutorPlugin, ValidationResult
 
 if TYPE_CHECKING:
     from .duckdb_plugin._types import (
@@ -181,29 +181,30 @@ class DuckDBExecutor(ExecutorPlugin):
             finally:
                 self._session = None
 
-    def validate_source(self, source_code: str) -> bool:
+    def validate_source(self, source_code: str) -> ValidationResult:
         """Validate SQL source code syntax.
 
         Args:
             source_code: SQL code to validate
 
         Returns:
-            True if valid, False otherwise
+            ValidationResult with is_valid flag and optional error message
         """
         try:
             # Try to prepare the statement to check syntax
             session = self.session
             if not session or not session.conn:
-                return False
+                return ValidationResult(is_valid=False, error_message="No DuckDB session available")
 
             with self._db_lock:
                 conn = session.conn
                 conn.execute(f"PREPARE stmt AS {source_code}")
                 conn.execute("DEALLOCATE stmt")
-            return True
+            return ValidationResult(is_valid=True)
         except Exception as e:
-            logger.debug(f"SQL validation failed: {e}")
-            return False
+            error_message = str(e)
+            logger.debug(f"SQL validation failed: {error_message}")
+            return ValidationResult(is_valid=False, error_message=error_message)
 
     def extract_parameters(self, source_code: str) -> list[str]:
         """Extract parameter names from SQL source code.
