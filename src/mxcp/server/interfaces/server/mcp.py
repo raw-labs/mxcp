@@ -61,6 +61,7 @@ from mxcp.server.definitions.endpoints.utils import EndpointType
 from mxcp.server.executor.engine import RuntimeEnvironment, create_runtime_environment
 from mxcp.server.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
 from mxcp.server.services.endpoints import (
+    execute_endpoint_with_engine,
     execute_endpoint_with_engine_and_policy,
 )
 from mxcp.server.services.endpoints.validator import validate_endpoint
