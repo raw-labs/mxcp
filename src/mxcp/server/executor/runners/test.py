@@ -157,6 +157,7 @@ class TestRunner:
                 self.execution_engine,
                 False,  # skip_output_validation
                 test_user_context,
+                None,  # server_ref
                 request_headers,
             )
             logger.info(f"Execution result: {result}")

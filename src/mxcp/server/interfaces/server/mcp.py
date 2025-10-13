@@ -1,6 +1,7 @@
 import asyncio
 import concurrent.futures
 import contextlib
+import functools
 import hashlib
 import json
 import logging
@@ -9,8 +10,9 @@ import signal
 import threading
 import time
 import traceback
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, Literal, TypeVar, cast
 
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
@@ -31,7 +33,7 @@ from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.core import PACKAGE_VERSION
-from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
+from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.telemetry import (
     decrement_gauge,
     get_current_trace_id,
@@ -69,6 +71,49 @@ from mxcp.server.services.endpoints.validator import validate_endpoint
 from ._types import ConfigInfo
 
 logger = logging.getLogger(__name__)
+
+# Type variable for the decorator
+T = TypeVar("T", bound=Callable[..., Awaitable[Any]])
+
+
+def with_draining_and_request_tracking(func: T) -> T:
+    """Decorator that handles draining wait and request counter tracking.
+    
+    This decorator wraps async methods to:
+    1. Wait while draining is in progress
+    2. Increment active request counter
+    3. Execute the wrapped method
+    4. Decrement the counter in finally block
+    
+    The wrapped method must be a method of a class that has:
+    - self.draining (bool)
+    - self.active_requests (int)
+    - self.requests_lock (threading.Lock)
+    """
+    @functools.wraps(func)
+    async def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        # Wait if draining is in progress, then atomically register this request.
+        wait_start = time.time()
+        wait_timeout = 30  # seconds
+        while self.draining:
+            if time.time() - wait_start > wait_timeout:
+                raise RuntimeError(
+                    "Service is reloading and taking longer than expected. Please retry in a few seconds."
+                )
+            await asyncio.sleep(0.1)
+
+        # Track this request
+        with self.requests_lock:
+            self.active_requests += 1
+
+        try:
+            return await func(self, *args, **kwargs)
+        finally:
+            # Decrement request counter
+            with self.requests_lock:
+                self.active_requests -= 1
+
+    return cast(T, wrapper)
 
 
 def translate_transport_config(
@@ -193,7 +238,6 @@ class RAWMCP:
     profile_name: str
     transport: str
     readonly: bool
-    execution_engine: ExecutionEngine | None
     _model_cache: dict[str, Any]
     transport_mode: str | None
 
@@ -1264,7 +1308,7 @@ class RAWMCP:
                         set_span_attribute("mxcp.session.id", mcp_session_id)
                     set_span_attribute("mxcp.trace.id", trace_id)
                 # Use the common execution wrapper with policy info
-                result, policy_info = await self._execute_with_draining(
+                result, policy_info = await self._execute(
                     endpoint_type=endpoint_type.value,
                     name=name,
                     params=kwargs,  # No manual conversion needed - SDK handles it
@@ -1481,18 +1525,10 @@ class RAWMCP:
                 if user_context:
                     logger.info("Authenticated user executing SQL query")
 
-                # Use SDK execution engine
-                if self.runtime_environment is None:
-                    raise RuntimeError("Execution engine not initialized")
-                execution_context = ExecutionContext(user_context=user_context)
-                execution_context.set("user_config", self.user_config)
-                execution_context.set("site_config", self.site_config)
-
-                result = await self.execution_engine.execute(
-                    language="sql",
+                result = await self._execute_sql(
                     source_code=sql,
                     params={},
-                    context=execution_context,
+                    user_context=user_context,
                 )
                 return cast(list[dict[str, Any]], result)
             except Exception as e:
@@ -1551,15 +1587,7 @@ class RAWMCP:
                 if user_context:
                     logger.info(f"User {user_context.username} listing tables")
 
-                # Use SDK execution engine
-                if self.runtime_environment is None:
-                    raise RuntimeError("Execution engine not initialized")
-                execution_context = ExecutionContext(user_context=user_context)
-                execution_context.set("user_config", self.user_config)
-                execution_context.set("site_config", self.site_config)
-
-                result = await self.execution_engine.execute(
-                    language="sql",
+                result = await self._execute_sql(
                     source_code="""
                         SELECT
                             table_name as name, table_type as type
@@ -1567,7 +1595,7 @@ class RAWMCP:
                         WHERE table_schema = 'main'
                         ORDER BY table_name""",
                     params={},
-                    context=execution_context,
+                    user_context=user_context,
                 )
                 return cast(list[dict[str, str]], result)
             except Exception as e:
@@ -1631,15 +1659,7 @@ class RAWMCP:
                         f"User {user_context.username} getting schema for table {table_name}"
                     )
 
-                # Use SDK execution engine
-                if self.runtime_environment is None:
-                    raise RuntimeError("Execution engine not initialized")
-                execution_context = ExecutionContext(user_context=user_context)
-                execution_context.set("user_config", self.user_config)
-                execution_context.set("site_config", self.site_config)
-
-                result = await self.execution_engine.execute(
-                    language="sql",
+                result = await self._execute_sql(
                     source_code="""
                         SELECT
                             column_name as name,
@@ -1650,7 +1670,7 @@ class RAWMCP:
                         ORDER BY ordinal_position
                     """,
                     params={"table_name": table_name},
-                    context=execution_context,
+                    user_context=user_context,
                 )
                 return cast(list[dict[str, Any]], result)
             except Exception as e:
@@ -1683,7 +1703,8 @@ class RAWMCP:
 
         logger.info("Registered built-in DuckDB features")
 
-    async def _execute_with_draining(
+    @with_draining_and_request_tracking
+    async def _execute(
         self,
         endpoint_type: str,
         name: str,
@@ -1692,10 +1713,10 @@ class RAWMCP:
         with_policy_info: bool = False,
         request_headers: dict[str, str] | None = None,
     ) -> Any:
-        """Execute endpoint with draining and locking logic.
+        """Execute endpoint with execution lock.
 
-        This wrapper ensures all endpoints (both dynamic and pre-registered)
-        go through the same draining and locking process.
+        This method handles the actual endpoint execution with the execution lock.
+        The draining wait and request tracking is handled by the decorator.
 
         Args:
             endpoint_type: Type of endpoint to execute
@@ -1703,61 +1724,76 @@ class RAWMCP:
             params: Parameters to pass
             user_context: User context
             with_policy_info: If True, returns (result, policy_info) tuple
+            request_headers: Request headers from FastMCP
 
         Returns:
             Result of execution, or (result, policy_info) if with_policy_info=True
         """
-        # Wait if draining is in progress
-        # Note: We check self.draining without a lock for performance.
-        # A request might slip through right as draining starts, but this is fine
-        # because active_requests tracking ensures correctness.
-        wait_start = time.time()
-        wait_timeout = 30  # seconds
-        while self.draining:
-            if time.time() - wait_start > wait_timeout:
-                raise RuntimeError(
-                    "Service is reloading and taking longer than expected. Please retry in a few seconds."
+        # Acquire execution lock for the actual execution
+        with self.execution_lock:
+            if self.runtime_environment is None:
+                raise RuntimeError("Execution engine not initialized")
+
+            if with_policy_info:
+                return await execute_endpoint_with_engine_and_policy(
+                    endpoint_type=endpoint_type,
+                    name=name,
+                    params=params,
+                    user_config=self.user_config,
+                    site_config=self.site_config,
+                    execution_engine=self.runtime_environment.execution_engine,
+                    user_context=user_context,
+                    request_headers=request_headers,
+                    server_ref=self,
                 )
-            await asyncio.sleep(0.1)
+            else:
+                return await execute_endpoint_with_engine(
+                    endpoint_type=endpoint_type,
+                    name=name,
+                    params=params,
+                    user_config=self.user_config,
+                    site_config=self.site_config,
+                    execution_engine=self.runtime_environment.execution_engine,
+                    user_context=user_context,
+                    request_headers=request_headers,
+                    server_ref=self,
+                )
 
-        # Track this request
-        with self.requests_lock:
-            self.active_requests += 1
+    @with_draining_and_request_tracking
+    async def _execute_sql(
+        self,
+        source_code: str,
+        params: dict[str, Any] | None = None,
+        user_context: Any = None,
+    ) -> Any:
+        """Execute SQL query with execution lock.
 
-        try:
-            # Acquire execution lock for the actual execution
-            with self.execution_lock:
-                if self.runtime_environment is None:
-                    raise RuntimeError("Execution engine not initialized")
+        This method handles SQL execution through the execution engine with the execution lock.
+        The draining wait and request tracking is handled by the decorator.
 
-                if with_policy_info:
-                    return await execute_endpoint_with_engine_and_policy(
-                        endpoint_type=endpoint_type,
-                        name=name,
-                        params=params,
-                        user_config=self.user_config,
-                        site_config=self.site_config,
-                        execution_engine=self.runtime_environment.execution_engine,
-                        user_context=user_context,
-                        request_headers=request_headers,
-                        server_ref=self,
-                    )
-                else:
-                    return await execute_endpoint_with_engine(
-                        endpoint_type=endpoint_type,
-                        name=name,
-                        params=params,
-                        user_config=self.user_config,
-                        site_config=self.site_config,
-                        execution_engine=self.runtime_environment.execution_engine,
-                        user_context=user_context,
-                        request_headers=request_headers,
-                        server_ref=self,
-                    )
-        finally:
-            # Decrement request counter
-            with self.requests_lock:
-                self.active_requests -= 1
+        Args:
+            source_code: SQL source code to execute
+            params: Parameters to pass to the SQL query
+            user_context: Optional user context for authentication/authorization
+
+        Returns:
+            Result of SQL execution
+        """
+        # Acquire execution lock for the actual execution
+        with self.execution_lock:
+            if self.runtime_environment is None:
+                raise RuntimeError("Execution engine not initialized")
+
+            execution_context = ExecutionContext(user_context=user_context)
+            execution_context.set("user_config", self.user_config)
+            execution_context.set("site_config", self.site_config)
+
+            return await self.runtime_environment.execution_engine.execute(
+                language="sql",
+                source_code=source_code,
+                params=params or {},
+                context=execution_context,
+            )
 
     def register_endpoints(self) -> None:
         """Register all discovered endpoints with MCP."""

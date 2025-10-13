@@ -17,7 +17,7 @@ try:
 except ImportError:
     # Fallback for Python < 3.8
     try:
-        import pkg_resources  # type: ignore
+        import pkg_resources
 
         PACKAGE_VERSION = pkg_resources.get_distribution(PACKAGE_NAME).version
     except Exception:
