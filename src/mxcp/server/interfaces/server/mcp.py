@@ -78,33 +78,41 @@ T = TypeVar("T", bound=Callable[..., Awaitable[Any]])
 
 def with_draining_and_request_tracking(func: T) -> T:
     """Decorator that handles draining wait and request counter tracking.
-    
+
     This decorator wraps async methods to:
     1. Wait while draining is in progress
     2. Increment active request counter
     3. Execute the wrapped method
     4. Decrement the counter in finally block
-    
+
     The wrapped method must be a method of a class that has:
     - self.draining (bool)
     - self.active_requests (int)
     - self.requests_lock (threading.Lock)
     """
+
     @functools.wraps(func)
     async def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
         # Wait if draining is in progress, then atomically register this request.
+        # The check and increment must be atomic to prevent requests from being
+        # registered after draining has started checking for zero active requests.
         wait_start = time.time()
         wait_timeout = 30  # seconds
-        while self.draining:
+
+        while True:
+            # Atomically check draining flag and register request if not draining
+            with self.requests_lock:
+                if not self.draining:
+                    # Safe to register - draining hasn't started or has finished
+                    self.active_requests += 1
+                    break
+
+            # Draining is in progress, wait and retry
             if time.time() - wait_start > wait_timeout:
                 raise RuntimeError(
                     "Service is reloading and taking longer than expected. Please retry in a few seconds."
                 )
             await asyncio.sleep(0.1)
-
-        # Track this request
-        with self.requests_lock:
-            self.active_requests += 1
 
         try:
             return await func(self, *args, **kwargs)

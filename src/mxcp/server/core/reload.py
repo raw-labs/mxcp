@@ -265,10 +265,11 @@ class ReloadManager:
                 logger.info("System reload completed")
 
         finally:
-            # Always clear draining flag
-            if self.server.draining:
-                self.server.draining = False
-                logger.info("Draining mode cleared")
+            # Always clear draining flag atomically
+            with self.server.requests_lock:
+                if self.server.draining:
+                    self.server.draining = False
+                    logger.info("Draining mode cleared")
 
     def _drain_requests(self, timeout: int = 90) -> None:
         """
@@ -278,7 +279,10 @@ class ReloadManager:
             timeout: Maximum time to wait in seconds
         """
         logger.info("Starting request draining...")
-        self.server.draining = True
+
+        # Set draining flag atomically to prevent race with request registration
+        with self.server.requests_lock:
+            self.server.draining = True
 
         start_time = time.time()
         initial_count = self._get_active_requests()
