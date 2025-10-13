@@ -5,33 +5,55 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
-from jsonschema import validate
+from jsonschema import ValidationError, validate
 from referencing import Registry, Resource
 
 from mxcp.server.core.config._types import SiteConfig
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition
+from mxcp.server.definitions.endpoints.utils import get_endpoint_name_or_uri
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 
-def extract_validation_error(error_msg: str) -> str:
+def extract_validation_error(error: ValidationError | Exception | str) -> str:
     """Extract a concise validation error message from jsonschema error.
 
     Args:
-        error_msg: The mxcp error message from jsonschema
+        error: The ValidationError object, Exception, or error message string
 
     Returns:
-        A concise error message
+        A concise error message with key path when available
     """
+    # Handle ValidationError objects directly
+    if isinstance(error, ValidationError):
+        # Build key path from absolute_path
+        if error.absolute_path:
+            path_parts = []
+            for part in error.absolute_path:
+                if isinstance(part, str):
+                    path_parts.append(part)
+                else:
+                    path_parts.append(str(part))
+            key_path = ".".join(path_parts)
+            return f"{key_path}: {error.message}"
+        else:
+            return error.message
 
-    # For type errors
+    # Handle other exceptions by converting to string
+    if isinstance(error, Exception):
+        error_msg = str(error)
+    else:
+        error_msg = error
+
+    # For type errors in string format (fallback)
     if "is not of a type" in error_msg:
         parts = error_msg.split("'")
-        field = parts[1]
-        expected_type = parts[3]
-        return f"Invalid type for {field}: expected {expected_type}"
+        if len(parts) >= 4:
+            field = parts[1]
+            expected_type = parts[3]
+            return f"Invalid type for {field}: expected {expected_type}"
 
     # For other validation errors, return just the first line
     return error_msg.split("\n")[0]
@@ -71,6 +93,61 @@ class EndpointLoader:
             if prompt_def:
                 return bool(prompt_def.get("enabled", True))
         return True
+
+    def _check_duplicate_endpoint_names(
+        self, endpoints: list[tuple[Path, EndpointDefinition | None, str | None]]
+    ) -> dict[Path, str]:
+        """Check for duplicate endpoint names/URIs across all endpoints.
+
+        Args:
+            endpoints: List of discovered endpoints
+
+        Returns:
+            Dictionary mapping file paths to error messages for files with duplicates
+        """
+        name_to_info: dict[str, list[tuple[Path, str]]] = {}
+
+        # Collect names/URIs and their paths with endpoint types
+        for path, endpoint, error in endpoints:
+            if error or not endpoint:
+                # Skip endpoints with errors or None
+                continue
+
+            # Find endpoint type and extract name/uri
+            for endpoint_type in ("tool", "prompt", "resource"):
+                if endpoint_type in endpoint:
+                    name = get_endpoint_name_or_uri(endpoint, endpoint_type)
+                    name_to_info.setdefault(name, []).append((path, endpoint_type))
+                    break
+
+        # Generate error messages for duplicates
+        duplicate_errors: dict[Path, str] = {}
+        for name, path_type_pairs in name_to_info.items():
+            if len(path_type_pairs) > 1:
+                paths = [pair[0] for pair in path_type_pairs]
+                endpoint_types = [pair[1] for pair in path_type_pairs]
+
+                # Determine what we're calling this (name vs URI)
+                # If any of the duplicates is a resource, call it URI, otherwise name
+                has_resource = "resource" in endpoint_types
+                identifier_type = "URI" if has_resource else "name"
+
+                # Convert all paths to relative paths consistently
+                relative_paths = []
+                for path in paths:
+                    try:
+                        relative_paths.append(str(path.relative_to(self._repo_root)))
+                    except (ValueError, Exception):
+                        relative_paths.append(path.name)
+
+                # Create error message
+                error_message = f"Duplicate endpoint {identifier_type} '{name}' found in: {', '.join(relative_paths)}"
+
+                # Mark ALL duplicate files as errors
+                for path in paths:
+                    duplicate_errors[path] = error_message
+
+        return duplicate_errors
 
     def _load_schema(self, schema_name: str) -> tuple[dict[str, Any], Registry]:
         """Load a schema file by name and create a registry for cross-file references"""
@@ -147,8 +224,11 @@ class EndpointLoader:
 
                     endpoints.append((f, cast(EndpointDefinition, data), None))
                     self._endpoints[str(f)] = cast(EndpointDefinition, data)
+            except ValidationError as e:
+                error_msg = extract_validation_error(e)
+                endpoints.append((f, None, error_msg))
             except Exception as e:
-                error_msg = extract_validation_error(str(e))
+                error_msg = extract_validation_error(e)
                 endpoints.append((f, None, error_msg))
 
         return endpoints
@@ -189,6 +269,17 @@ class EndpointLoader:
         all_endpoints.extend(self.discover_tools())
         all_endpoints.extend(self.discover_resources())
         all_endpoints.extend(self.discover_prompts())
+
+        # Check for duplicate endpoint names/URIs and mark affected files as errors
+        duplicate_errors = self._check_duplicate_endpoint_names(all_endpoints)
+
+        # Update existing entries to mark duplicates as errors and remove from cache
+        for i, (path, _, error) in enumerate(all_endpoints):
+            if error is None and path in duplicate_errors:
+                all_endpoints[i] = (path, None, duplicate_errors[path])
+                # Remove duplicate endpoint from cache to maintain consistency
+                if str(path) in self._endpoints:
+                    del self._endpoints[str(path)]
 
         return all_endpoints
 

@@ -31,7 +31,7 @@ from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.core import PACKAGE_VERSION
-from mxcp.sdk.executor import ExecutionEngine
+from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
 from mxcp.sdk.telemetry import (
     decrement_gauge,
     get_current_trace_id,
@@ -61,7 +61,6 @@ from mxcp.server.definitions.endpoints.utils import EndpointType
 from mxcp.server.executor.engine import RuntimeEnvironment, create_runtime_environment
 from mxcp.server.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
 from mxcp.server.services.endpoints import (
-    execute_endpoint_with_engine,
     execute_endpoint_with_engine_and_policy,
 )
 from mxcp.server.services.endpoints.validator import validate_endpoint
@@ -1203,6 +1202,7 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
+            result = None  # Initialize result to avoid undefined variable in finally block
             policy_info: dict[str, Any] = {
                 "policies_evaluated": [],
                 "policy_decision": None,
@@ -1212,10 +1212,20 @@ class RAWMCP:
             # Extract the FastMCP Context (first parameter)
             ctx = kwargs.pop("ctx", None)
             mcp_session_id = None
+            request_headers = None
             if ctx:
                 # session_id might be None in stateless mode
                 with contextlib.suppress(Exception):
                     mcp_session_id = getattr(ctx, "session_id", None)
+                if hasattr(ctx, "request_context"):
+                    request_context = ctx.request_context
+                    if (
+                        request_context
+                        and hasattr(request_context, "request")
+                        and request_context.request
+                    ):
+                        with contextlib.suppress(Exception):
+                            request_headers = dict(request_context.request.headers)
 
             try:
                 # Get the user context from the context variable (set by auth middleware)
@@ -1259,6 +1269,7 @@ class RAWMCP:
                     params=kwargs,  # No manual conversion needed - SDK handles it
                     user_context=user_context,
                     with_policy_info=True,
+                    request_headers=request_headers,  # Pass the FastMCP request headers
                 )
                 logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                 return result
@@ -1472,11 +1483,15 @@ class RAWMCP:
                 # Use SDK execution engine
                 if self.runtime_environment is None:
                     raise RuntimeError("Execution engine not initialized")
-                result = await self._execute_with_draining(
-                    endpoint_type="sql",
-                    name="user_sql_query",
-                    params={"sql": sql},
-                    user_context=user_context,
+                execution_context = ExecutionContext(user_context=user_context)
+                execution_context.set("user_config", self.user_config)
+                execution_context.set("site_config", self.site_config)
+
+                result = await self.execution_engine.execute(
+                    language="sql",
+                    source_code=sql,
+                    params={},
+                    context=execution_context,
                 )
                 return cast(list[dict[str, Any]], result)
             except Exception as e:
@@ -1491,22 +1506,20 @@ class RAWMCP:
                     # Determine caller type
                     caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
 
-                    asyncio.run(
-                        self.audit_logger.log_event(
-                            caller_type=cast(
-                                Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
-                            ),
-                            event_type="tool",
-                            name="execute_sql_query",
-                            input_params={"sql": sql},
-                            duration_ms=duration_ms,
-                            schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                            policy_decision=None,
-                            reason=None,
-                            status=cast(Literal["success", "error"], status),
-                            error=error_msg,
-                            trace_id=get_current_trace_id(),
-                        )
+                    await self.audit_logger.log_event(
+                        caller_type=cast(
+                            Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
+                        ),
+                        event_type="tool",
+                        name="execute_sql_query",
+                        input_params={"sql": sql},
+                        duration_ms=duration_ms,
+                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
+                        policy_decision=None,
+                        reason=None,
+                        status=cast(Literal["success", "error"], status),
+                        error=error_msg,
+                        trace_id=get_current_trace_id(),
                     )
 
         # Register table list tool with proper metadata
@@ -1540,20 +1553,20 @@ class RAWMCP:
                 # Use SDK execution engine
                 if self.runtime_environment is None:
                     raise RuntimeError("Execution engine not initialized")
-                result = await self._execute_with_draining(
-                    endpoint_type="sql",
-                    name="list_tables",
-                    params={
-                        "sql": """
+                execution_context = ExecutionContext(user_context=user_context)
+                execution_context.set("user_config", self.user_config)
+                execution_context.set("site_config", self.site_config)
+
+                result = await self.execution_engine.execute(
+                    language="sql",
+                    source_code="""
                         SELECT
-                            table_name as name,
-                            table_type as type
+                            table_name as name, table_type as type
                         FROM information_schema.tables
                         WHERE table_schema = 'main'
-                        ORDER BY table_name
-                    """
-                    },
-                    user_context=user_context,
+                        ORDER BY table_name""",
+                    params={},
+                    context=execution_context,
                 )
                 return cast(list[dict[str, str]], result)
             except Exception as e:
@@ -1568,22 +1581,20 @@ class RAWMCP:
                     # Determine caller type
                     caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
 
-                    asyncio.run(
-                        self.audit_logger.log_event(
-                            caller_type=cast(
-                                Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
-                            ),
-                            event_type="tool",
-                            name="list_tables",
-                            input_params={},
-                            duration_ms=duration_ms,
-                            schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                            policy_decision=None,
-                            reason=None,
-                            status=cast(Literal["success", "error"], status),
-                            error=error_msg,
-                            trace_id=get_current_trace_id(),
-                        )
+                    await self.audit_logger.log_event(
+                        caller_type=cast(
+                            Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
+                        ),
+                        event_type="tool",
+                        name="list_tables",
+                        input_params={},
+                        duration_ms=duration_ms,
+                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
+                        policy_decision=None,
+                        reason=None,
+                        status=cast(Literal["success", "error"], status),
+                        error=error_msg,
+                        trace_id=get_current_trace_id(),
                     )
 
         # Register schema tool with proper metadata
@@ -1622,11 +1633,13 @@ class RAWMCP:
                 # Use SDK execution engine
                 if self.runtime_environment is None:
                     raise RuntimeError("Execution engine not initialized")
-                result = await self._execute_with_draining(
-                    endpoint_type="sql",
-                    name="get_table_schema",
-                    params={
-                        "sql": """
+                execution_context = ExecutionContext(user_context=user_context)
+                execution_context.set("user_config", self.user_config)
+                execution_context.set("site_config", self.site_config)
+
+                result = await self.execution_engine.execute(
+                    language="sql",
+                    source_code="""
                         SELECT
                             column_name as name,
                             data_type as type,
@@ -1635,9 +1648,8 @@ class RAWMCP:
                         WHERE table_name = $table_name
                         ORDER BY ordinal_position
                     """,
-                        "table_name": table_name,
-                    },
-                    user_context=user_context,
+                    params={"table_name": table_name},
+                    context=execution_context,
                 )
                 return cast(list[dict[str, Any]], result)
             except Exception as e:
@@ -1652,22 +1664,20 @@ class RAWMCP:
                     # Determine caller type
                     caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
 
-                    asyncio.run(
-                        self.audit_logger.log_event(
-                            caller_type=cast(
-                                Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
-                            ),
-                            event_type="tool",
-                            name="get_table_schema",
-                            input_params={"table_name": table_name},
-                            duration_ms=duration_ms,
-                            schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                            policy_decision=None,
-                            reason=None,
-                            status=cast(Literal["success", "error"], status),
-                            error=error_msg,
-                            trace_id=get_current_trace_id(),
-                        )
+                    await self.audit_logger.log_event(
+                        caller_type=cast(
+                            Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
+                        ),
+                        event_type="tool",
+                        name="get_table_schema",
+                        input_params={"table_name": table_name},
+                        duration_ms=duration_ms,
+                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
+                        policy_decision=None,
+                        reason=None,
+                        status=cast(Literal["success", "error"], status),
+                        error=error_msg,
+                        trace_id=get_current_trace_id(),
                     )
 
         logger.info("Registered built-in DuckDB features")

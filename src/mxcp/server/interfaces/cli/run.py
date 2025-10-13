@@ -29,6 +29,7 @@ from mxcp.server.services.endpoints import execute_endpoint
     multiple=True,
     help="Parameter in format name=value or name=@file.json for complex values",
 )
+@click.option("--request-headers", help="Request headers as JSON string or @file.json")
 @click.option("--user-context", "-u", help="User context as JSON string or @file.json")
 @click.option("--profile", help="Profile name to use")
 @click.option("--json-output", is_flag=True, help="Output in JSON format")
@@ -44,6 +45,7 @@ def run_endpoint(
     endpoint_type: str,
     name: str,
     param: tuple[str, ...],
+    request_headers: str | None,
     user_context: str | None,
     profile: str | None,
     json_output: bool,
@@ -80,6 +82,7 @@ def run_endpoint(
                 endpoint_type=endpoint_type,
                 name=name,
                 param=param,
+                request_headers=request_headers,
                 user_context=user_context,
                 profile=profile,
                 json_output=json_output,
@@ -106,6 +109,7 @@ async def _run_endpoint_impl(
     endpoint_type: str,
     name: str,
     param: tuple[str, ...],
+    request_headers: str | None,
     user_context: str | None,
     profile: str | None,
     json_output: bool,
@@ -179,6 +183,32 @@ async def _run_endpoint_impl(
             raw_profile=context_data,  # Store full context for policy access
         )
 
+    # Parse request headers if provided
+    headers = None
+    if request_headers:
+        if request_headers.startswith("@"):
+            # Load from file
+            file_path = Path(request_headers[1:])
+            if not file_path.exists():
+                raise click.BadParameter(f"Request headers file not found: {file_path}")
+            try:
+                with open(file_path) as f:
+                    headers = json.load(f)
+            except json.JSONDecodeError as e:
+                raise click.BadParameter(
+                    f"Invalid JSON in request headers file {file_path}: {e}"
+                ) from e
+        else:
+            # Parse as JSON string
+            try:
+                headers = json.loads(request_headers)
+            except json.JSONDecodeError as e:
+                raise click.BadParameter(f"Invalid JSON in request headers: {e}") from e
+
+        # Validate it's a dictionary
+        if not isinstance(headers, dict):
+            raise click.BadParameter("Request headers must be a JSON object")
+
     # Parse parameters
     params: dict[str, Any] = {}
     for p in param:
@@ -213,6 +243,7 @@ async def _run_endpoint_impl(
         readonly,
         skip_output_validation,
         user_context_obj,
+        headers,
     )
 
     # Output result

@@ -85,6 +85,7 @@ async def execute_code_with_engine(
     site_config: SiteConfig,
     user_context: UserContext | None = None,
     server_ref: Optional["RAWMCP"] = None,
+    request_headers: dict[str, str] | None = None,
 ) -> Any:
     """Execute tool/resource endpoint using SDK execution engine.
 
@@ -108,6 +109,23 @@ async def execute_code_with_engine(
     execution_context.set("site_config", site_config)
     if server_ref:
         execution_context.set("_mxcp_server", server_ref)
+
+    # Add HTTP headers
+    if request_headers:
+        execution_context.set("request_headers", request_headers)
+
+    if hasattr(execution_engine, "_executors") and "sql" in execution_engine._executors:
+        sql_executor = execution_engine._executors["sql"]
+
+        if isinstance(sql_executor, DuckDBExecutor):
+            logger.info("Found DuckDB executor via direct access, setting session in context")
+            execution_context.set("duckdb_session", sql_executor.session)
+
+            # Get plugins from the session if available
+            if hasattr(sql_executor.session, "plugins"):
+                execution_context.set("plugins", sql_executor.session.plugins)
+    else:
+        logger.error("Could not find SQL executor anywhere")
 
     # Get validation schemas - SDK executor handles input validation internally
     input_schema: list[dict[str, Any]] | None = None
