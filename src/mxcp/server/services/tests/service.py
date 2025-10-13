@@ -150,6 +150,8 @@ async def run_tests(
     try:
         # Use TestRunner to run the tests
         test_runner = TestRunner(user_config, site_config, runtime_env.execution_engine)
-        return await test_runner.run_tests_for_endpoint(endpoint_type, name, cli_user_context, request_headers)
+        return await test_runner.run_tests_for_endpoint(
+            endpoint_type, name, cli_user_context, request_headers
+        )
     finally:
         runtime_env.shutdown()
