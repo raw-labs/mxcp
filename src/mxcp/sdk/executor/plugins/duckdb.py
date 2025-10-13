@@ -123,7 +123,9 @@ class DuckDBExecutor(ExecutorPlugin):
                 conn = session.conn
                 if conn is None:
                     logger.error("No database connection available")
-                    return False
+                    return ValidationResult(
+                        is_valid=False, error_message="No database connection available"
+                    )
                 conn.execute(f"PREPARE stmt AS {source_code}")
                 conn.execute("DEALLOCATE stmt")
             return ValidationResult(is_valid=True)
