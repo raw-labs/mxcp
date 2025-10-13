@@ -1689,6 +1689,7 @@ class RAWMCP:
         params: dict[str, Any],
         user_context: Any = None,
         with_policy_info: bool = False,
+        request_headers: dict[str, str] | None = None,
     ) -> Any:
         """Execute endpoint with draining and locking logic.
 
@@ -1737,6 +1738,7 @@ class RAWMCP:
                         site_config=self.site_config,
                         execution_engine=self.runtime_environment.execution_engine,
                         user_context=user_context,
+                        request_headers=request_headers,
                         server_ref=self,
                     )
                 else:
@@ -1748,6 +1750,7 @@ class RAWMCP:
                         site_config=self.site_config,
                         execution_engine=self.runtime_environment.execution_engine,
                         user_context=user_context,
+                        request_headers=request_headers,
                         server_ref=self,
                     )
         finally:
