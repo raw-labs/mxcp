@@ -19,6 +19,7 @@ async def run_all_tests(
     profile: str | None,
     readonly: bool | None = None,
     cli_user_context: UserContext | None = None,
+    request_headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Run tests for all endpoints in the repository (async)"""
     repo_root = find_repo_root()
@@ -95,7 +96,10 @@ async def run_all_tests(
                 # Run tests for this endpoint using TestRunner
                 test_runner = TestRunner(user_config, site_config, execution_engine)
                 test_results = await test_runner.run_tests_for_endpoint(
-                    kind, name, cli_user_context
+                    kind,
+                    name,
+                    cli_user_context,
+                    request_headers,
                 )
 
                 # Wrap test results with endpoint context
@@ -137,6 +141,7 @@ async def run_tests(
     profile: str | None,
     readonly: bool | None = None,
     cli_user_context: UserContext | None = None,
+    request_headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Run tests for a specific endpoint type and name."""
     # Create execution engine for this single test run
@@ -144,6 +149,8 @@ async def run_tests(
     try:
         # Use TestRunner to run the tests
         test_runner = TestRunner(user_config, site_config, execution_engine)
-        return await test_runner.run_tests_for_endpoint(endpoint_type, name, cli_user_context)
+        return await test_runner.run_tests_for_endpoint(
+            endpoint_type, name, cli_user_context, request_headers
+        )
     finally:
         execution_engine.shutdown()
