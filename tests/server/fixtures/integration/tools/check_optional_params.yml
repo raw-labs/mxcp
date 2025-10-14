@@ -1,0 +1,54 @@
+mxcp: 1
+tool:
+  name: check_optional_params
+  description: Test tool with both required and optional parameters of various types
+  language: python
+  parameters:
+    - name: optional_bool
+      type: boolean
+      description: An optional boolean parameter
+      default: true
+    - name: optional_datetime
+      type: string
+      format: date-time
+      description: An optional datetime parameter
+      default: "2024-01-15T10:30:00Z"
+    - name: required_param
+      type: string
+      description: A required parameter
+    - name: optional_float
+      type: number
+      description: An optional float parameter
+      default: 3.14
+    - name: optional_param
+      type: string
+      description: An optional parameter with default
+      default: "default_value"
+    - name: optional_date
+      type: string
+      format: date
+      description: An optional date parameter
+      default: "2024-01-15"
+    - name: optional_number
+      type: integer
+      description: An optional number parameter
+      default: 42
+  return:
+    type: object
+    properties:
+      required_param:
+        type: string
+      optional_param:
+        type: string
+      optional_number:
+        type: integer
+      optional_float:
+        type: number
+      optional_bool:
+        type: boolean
+      optional_date:
+        type: string
+      optional_datetime:
+        type: string
+  source:
+    file: ../python/test_endpoints.py
