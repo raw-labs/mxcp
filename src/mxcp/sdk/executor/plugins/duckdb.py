@@ -115,6 +115,11 @@ class DuckDBExecutor(ExecutorPlugin):
         try:
             # Get a connection from the pool to validate
             with self._runtime.get_connection() as session:
+                #### TODO do we need that really?
+                if not session.conn:
+                    return ValidationResult(
+                        is_valid=False, error_message="No DuckDB session available"
+                    )
                 conn = session.conn
                 conn.execute(f"PREPARE stmt AS {source_code}")
                 conn.execute("DEALLOCATE stmt")
