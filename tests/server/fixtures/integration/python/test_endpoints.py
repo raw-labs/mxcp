@@ -122,3 +122,27 @@ def process_user_data(user_data: dict[str, Any]) -> dict[str, Any]:
     }
 
     return {"original_data": user_data, "analysis": analysis, "processing_status": "success"}
+
+
+def check_optional_params(
+    required_param: str,
+    optional_param: str,
+    optional_number: int,
+    optional_float: float,
+    optional_bool: bool,
+    optional_date: str,
+    optional_datetime: str,
+) -> dict[str, Any]:
+    """Function with various optional parameters of different types.
+    Note: The parameter order in the .yml file is intentionally different from this function
+    to test that parameter matching works correctly regardless of order.
+    """
+    return {
+        "required_param": required_param,
+        "optional_param": optional_param,
+        "optional_number": optional_number,
+        "optional_float": optional_float,
+        "optional_bool": optional_bool,
+        "optional_date": optional_date,
+        "optional_datetime": optional_datetime,
+    }
