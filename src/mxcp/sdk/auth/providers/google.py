@@ -154,6 +154,7 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
 
         # Get user info to extract the actual user ID
         access_token = payload["access_token"]
+        refresh_token = payload.get("refresh_token")  # May be None if not requested
         user_profile = await self._fetch_user_profile(access_token)
 
         # Use either 'sub' (OpenID Connect) or 'id' (OAuth2) as the unique identifier
@@ -170,6 +171,7 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
             scopes=[],
             raw_token=access_token,
             provider="google",
+            refresh_token=refresh_token,
         )
 
         return user_info, state_meta
@@ -266,3 +268,27 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
             f"Successfully fetched Google user profile for sub: {user_data.get('sub', 'unknown')}"
         )
         return user_data
+
+    async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
+        """Refresh an expired access token using the refresh token."""
+        refresh_data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+        }
+
+        async with create_mcp_http_client() as client:
+            response = await client.post(
+                self.token_url,
+                data=refresh_data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+            if response.status_code != 200:
+                logger.error(
+                    f"Google token refresh failed: {response.status_code} - {response.text}"
+                )
+                raise HTTPException(400, "Failed to refresh access token")
+
+            return cast(dict[str, Any], response.json())
