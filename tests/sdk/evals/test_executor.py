@@ -1,7 +1,7 @@
 """Tests for mxcp.sdk.evals.executor module."""
 
-from typing import Any, Dict, Optional
-from unittest.mock import AsyncMock, Mock
+from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -12,7 +12,6 @@ from mxcp.sdk.evals import (
     OpenAIConfig,
     ParameterDefinition,
     ToolDefinition,
-    ToolExecutor,
 )
 from mxcp.sdk.validator import TypeSchema
 
@@ -20,12 +19,12 @@ from mxcp.sdk.validator import TypeSchema
 class MockToolExecutor:
     """Mock tool executor for testing."""
 
-    def __init__(self, responses: Optional[Dict[str, Any]] = None):
+    def __init__(self, responses: dict[str, Any] | None = None):
         self.responses = responses or {}
         self.calls = []
 
     async def execute_tool(
-        self, tool_name: str, arguments: Dict[str, Any], user_context: Optional[UserContext] = None
+        self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
     ) -> Any:
         """Mock tool execution that records calls and returns predefined responses."""
         self.calls.append(

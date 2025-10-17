@@ -61,7 +61,7 @@ async def test_jsonl_schema_persistence():
     """Test that schemas are properly persisted to JSONL."""
     with tempfile.TemporaryDirectory() as tmpdir:
         log_path = Path(tmpdir) / "audit.jsonl"
-        schema_path = Path(tmpdir) / "audit_schemas.jsonl"
+        Path(tmpdir) / "audit_schemas.jsonl"
 
         # Create backend and schema
         backend = JSONLAuditWriter(log_path)
@@ -129,7 +129,7 @@ async def test_jsonl_record_format():
         backend.shutdown()
 
         # Read the JSONL file and verify format
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             line = f.readline().strip()
             data = json.loads(line)
 
@@ -233,7 +233,7 @@ async def test_jsonl_concurrent_writes():
         assert len(set(record_ids)) == 10  # All IDs should be unique
 
         # Verify file contains all records
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             lines = f.readlines()
 
         assert len(lines) == 10

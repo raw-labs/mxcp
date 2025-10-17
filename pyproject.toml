@@ -55,6 +55,7 @@ dev = [
     "ruff",  # For linting and import sorting
     "mypy",  # For type checking
     "types-jsonschema",  # Type stubs for jsonschema
+    "types-PyYAML",  # Type stubs for PyYAML
     "pandas-stubs",  # Type stubs for pandas
     "build",  # For building the package
     "twine",  # For publishing to PyPI
@@ -109,7 +110,6 @@ packages = [
     # Server - Executor
     "mxcp.server.executor",
     "mxcp.server.executor.runners",
-    "mxcp.server.executor.session",
     # Server - Interfaces
     "mxcp.server.interfaces",
     "mxcp.server.interfaces.cli",
@@ -134,11 +134,10 @@ packages = [
     "mxcp.sdk.core.analytics",
     "mxcp.sdk.core.config",
     "mxcp.sdk.core.config.resolvers",
-    "mxcp.sdk.core.config.schemas",
+    "mxcp.sdk.duckdb",
     "mxcp.sdk.evals",
     "mxcp.sdk.executor",
     "mxcp.sdk.executor.plugins",
-    "mxcp.sdk.executor.plugins.duckdb_plugin",
     "mxcp.sdk.executor.plugins.python_plugin",
     "mxcp.sdk.policy",
     "mxcp.sdk.telemetry",
@@ -151,7 +150,7 @@ include-package-data = true
 [tool.setuptools.package-data]
 "mxcp" = ["py.typed"]
 "mxcp.server.schemas" = ["*.json"]
-"mxcp.sdk.core.config.schemas" = ["*.json"]
+"mxcp.sdk.core.config" = ["schemas/*.json"]
 "mxcp.sdk.validator.decorators.schemas" = ["*.json"]
 
 [tool.pytest.ini_options]
@@ -167,6 +166,9 @@ markers = [
 [tool.black]
 line-length = 100
 target-version = ["py310"]
+extend-exclude = '''
+^/examples/
+'''
 
 [tool.ruff]
 line-length = 100

@@ -1,18 +1,20 @@
 """Test that audit logs include trace IDs from telemetry."""
 
 import asyncio
+import builtins
+import contextlib
 import json
 import tempfile
 from pathlib import Path
 
 import pytest
+
 from mxcp.sdk.audit import AuditLogger
-from mxcp.sdk.auth import UserContext
 from mxcp.sdk.telemetry import (
     configure_all,
+    get_current_trace_id,
     shutdown_telemetry,
     traced_operation,
-    get_current_trace_id,
 )
 from mxcp.server.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
 
@@ -22,6 +24,7 @@ def reset_telemetry():
     """Reset telemetry state between tests."""
     # Reset OpenTelemetry's internal state
     from opentelemetry import trace
+
     import mxcp.sdk.telemetry.config
     import mxcp.sdk.telemetry.tracer
 
@@ -34,10 +37,8 @@ def reset_telemetry():
     yield
 
     # Cleanup after test
-    try:
+    with contextlib.suppress(builtins.BaseException):
         shutdown_telemetry()
-    except:
-        pass
     trace._TRACER_PROVIDER = None
     trace._TRACER_PROVIDER_FACTORY = None
     mxcp.sdk.telemetry.config._telemetry_enabled = False
@@ -91,7 +92,7 @@ def test_audit_logs_include_trace_id():
                 await logger.backend.close()
 
             # Read the audit log to verify
-            with open(audit_file, "r") as f:
+            with open(audit_file) as f:
                 content = f.read()
                 lines = content.strip().split("\n")
 
@@ -155,7 +156,7 @@ def test_audit_logs_trace_id_null_when_telemetry_disabled():
             await logger.backend.close()
 
             # Read the audit log to verify
-            with open(audit_file, "r") as f:
+            with open(audit_file) as f:
                 content = f.read()
                 lines = content.strip().split("\n")
 

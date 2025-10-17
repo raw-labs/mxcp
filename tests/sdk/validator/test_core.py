@@ -2,7 +2,6 @@
 
 from datetime import date, datetime, time
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -357,7 +356,7 @@ class TestTypeValidator:
         assert result == {"x": 42}
 
         # Without coercion (strict)
-        validator_strict = TypeValidator.from_dict(schema, strict=True)
+        TypeValidator.from_dict(schema, strict=True)
         # In strict mode, string "42" should not be coerced to int
         # This would need to be implemented in the TypeConverter
 

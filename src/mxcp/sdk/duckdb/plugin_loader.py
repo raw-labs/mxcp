@@ -1,8 +1,7 @@
 """
-Plugin loader for DuckDB session in executor plugin.
+Plugin loader for DuckDB.
 
 This module handles plugin loading for DuckDB sessions.
-This is a cloned version of the plugin loader for the executor plugin system.
 """
 
 import importlib
@@ -15,7 +14,7 @@ import duckdb
 
 from mxcp.plugins import MXCPBasePlugin
 
-from ._types import PluginConfig, PluginDefinition
+from .types import PluginConfig, PluginDefinition
 
 logger = logging.getLogger(__name__)
 

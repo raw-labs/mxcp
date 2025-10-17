@@ -1,10 +1,10 @@
 """
-DuckDB session for MXCP executor plugin.
+DuckDB session for MXCP.
 
 This module handles DuckDB connection management and query execution.
-This is a cloned version of the session for the executor plugin system.
 """
 
+import contextlib
 import logging
 from collections.abc import Hashable
 from pathlib import Path
@@ -15,10 +15,10 @@ from pandas import NaT
 
 from mxcp.plugins import MXCPBasePlugin
 
-from ._types import DatabaseConfig, PluginConfig, PluginDefinition, SecretDefinition
 from .extension_loader import load_extensions
 from .plugin_loader import load_plugins
 from .secret_injection import inject_secrets
+from .types import DatabaseConfig, PluginConfig, PluginDefinition, SecretDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -70,12 +70,8 @@ class DuckDBSession:
 
     def __del__(self) -> None:
         """Destructor - ensure connection is closed if object is garbage collected"""
-        import contextlib
-
         with contextlib.suppress(Exception):
             self.close()
-
-    # Remove _get_project_profile method as project/profile are no longer concerns of the session
 
     def _connect(self) -> None:
         """Connect to DuckDB database"""
@@ -83,23 +79,22 @@ class DuckDBSession:
 
         logger.debug(f"Connecting to DuckDB at: {db_path}")
 
-        # Ensure parent directory exists for database file (except for :memory: databases)
-        if db_path != ":memory:":
-            db_file = Path(db_path)
-            db_dir = db_file.parent
-            if not db_dir.exists():
-                logger.info(f"Creating directory {db_dir} for database file")
-                db_dir.mkdir(parents=True, exist_ok=True)
+        # Ensure parent directory exists for database file
+        db_file = Path(db_path)
+        db_dir = db_file.parent
+        if not db_dir.exists():
+            logger.info(f"Creating directory {db_dir} for database file")
+            db_dir.mkdir(parents=True, exist_ok=True)
 
-            # Handle read-only mode when database file doesn't exist
-            if self.database_config.readonly and not db_file.exists():
-                logger.info(
-                    f"Database file {db_path} doesn't exist. Creating it first before opening in read-only mode."
-                )
-                # Create the database file first
-                temp_conn = duckdb.connect(str(db_path))
-                temp_conn.close()
-                logger.info(f"Created database file {db_path}")
+        # Handle read-only mode when database file doesn't exist
+        if self.database_config.readonly and not db_file.exists():
+            logger.info(
+                f"Database file {db_path} doesn't exist. Creating it first before opening in read-only mode."
+            )
+            # Create the database file first
+            temp_conn = duckdb.connect(str(db_path))
+            temp_conn.close()
+            logger.info(f"Created database file {db_path}")
 
         # Open connection with readonly flag if specified
         if self.database_config.readonly:
@@ -115,14 +110,12 @@ class DuckDBSession:
         inject_secrets(self.conn, self.secrets)
 
         # Load plugins
-        # context_for_plugins = None  # No longer passed to constructor
-
         self.plugins = load_plugins(self.plugins_definitions, self.plugin_config, self.conn)
 
         # Create user token UDFs that call get_user_context() dynamically
         self._create_user_token_udfs()
 
-        # Mark as initialized to prevent re-initialization
+        # Mark as initialized
         self._initialized = True
 
     def _create_user_token_udfs(self) -> None:
@@ -132,7 +125,7 @@ class DuckDBSession:
         def get_user_external_token() -> str:
             """Return the current user's OAuth provider token (e.g., GitHub token)."""
             # Get the execution context dynamically when the function is called
-            from ...context import get_execution_context
+            from mxcp.sdk.executor.context import get_execution_context
 
             context = get_execution_context()
             if context and context.external_token:
@@ -142,7 +135,7 @@ class DuckDBSession:
         def get_username() -> str:
             """Return the current user's username."""
             # Get the execution context dynamically when the function is called
-            from ...context import get_execution_context
+            from mxcp.sdk.executor.context import get_execution_context
 
             context = get_execution_context()
             if context and context.username:
@@ -152,7 +145,7 @@ class DuckDBSession:
         def get_user_provider() -> str:
             """Return the current user's OAuth provider (e.g., 'github', 'atlassian')."""
             # Get the execution context dynamically when the function is called
-            from ...context import get_execution_context
+            from mxcp.sdk.executor.context import get_execution_context
 
             context = get_execution_context()
             if context and context.provider:
@@ -162,22 +155,39 @@ class DuckDBSession:
         def get_user_email() -> str:
             """Return the current user's email address."""
             # Get the execution context dynamically when the function is called
-            from ...context import get_execution_context
+            from mxcp.sdk.executor.context import get_execution_context
 
             context = get_execution_context()
             if context and context.email:
                 return context.email
             return ""
 
-        # Register the UDFs with DuckDB (created once, called dynamically)
+        # Register the UDFs with DuckDB
         if self.conn:
-            self.conn.create_function("get_user_external_token", get_user_external_token, [], None)
-            self.conn.create_function("get_username", get_username, [], None)
-            self.conn.create_function("get_user_provider", get_user_provider, [], None)
-            self.conn.create_function("get_user_email", get_user_email, [], None)
-            logger.info(
-                "Created user token UDFs: get_user_external_token(), get_username(), get_user_provider(), get_user_email()"
-            )
+            # Try to create each UDF, ignore if already exists
+            # UDFs are per database, so another connection may have already created them
+            udfs = [
+                ("get_user_external_token", get_user_external_token),
+                ("get_username", get_username),
+                ("get_user_provider", get_user_provider),
+                ("get_user_email", get_user_email),
+            ]
+
+            created_udfs = []
+            for name, func in udfs:
+                try:
+                    self.conn.create_function(name, func, [], None)
+                    created_udfs.append(name)
+                except duckdb.CatalogException as e:
+                    if "already exists" in str(e):
+                        logger.debug(f"UDF {name} already exists, skipping creation")
+                    else:
+                        raise
+
+            if created_udfs:
+                logger.info(f"Created user token UDFs: {', '.join(created_udfs)}")
+            else:
+                logger.debug("All user token UDFs already exist")
 
     def close(self) -> None:
         """Close the DuckDB connection"""

@@ -1,6 +1,7 @@
 import asyncio
 import concurrent.futures
 import contextlib
+import functools
 import hashlib
 import json
 import logging
@@ -9,8 +10,9 @@ import signal
 import threading
 import time
 import traceback
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, Literal, TypeVar, cast
 
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
@@ -31,7 +33,7 @@ from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.core import PACKAGE_VERSION
-from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
+from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.telemetry import (
     decrement_gauge,
     get_current_trace_id,
@@ -48,6 +50,7 @@ from mxcp.server.core.config._types import (
 from mxcp.server.core.config.site_config import get_active_profile, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.core.refs.external import ExternalRefTracker
+from mxcp.server.core.reload import ReloadManager, ReloadRequest
 from mxcp.server.core.telemetry import configure_telemetry_from_config, shutdown_telemetry
 from mxcp.server.definitions.endpoints._types import (
     ParamDefinition,
@@ -57,9 +60,10 @@ from mxcp.server.definitions.endpoints._types import (
 )
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.utils import EndpointType
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import RuntimeEnvironment, create_runtime_environment
 from mxcp.server.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
 from mxcp.server.services.endpoints import (
+    execute_endpoint_with_engine,
     execute_endpoint_with_engine_and_policy,
 )
 from mxcp.server.services.endpoints.validator import validate_endpoint
@@ -67,6 +71,57 @@ from mxcp.server.services.endpoints.validator import validate_endpoint
 from ._types import ConfigInfo
 
 logger = logging.getLogger(__name__)
+
+# Type variable for the decorator
+T = TypeVar("T", bound=Callable[..., Awaitable[Any]])
+
+
+def with_draining_and_request_tracking(func: T) -> T:
+    """Decorator that handles draining wait and request counter tracking.
+
+    This decorator wraps async methods to:
+    1. Wait while draining is in progress
+    2. Increment active request counter
+    3. Execute the wrapped method
+    4. Decrement the counter in finally block
+
+    The wrapped method must be a method of a class that has:
+    - self.draining (bool)
+    - self.active_requests (int)
+    - self.requests_lock (threading.Lock)
+    """
+
+    @functools.wraps(func)
+    async def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        # Wait if draining is in progress, then atomically register this request.
+        # The check and increment must be atomic to prevent requests from being
+        # registered after draining has started checking for zero active requests.
+        wait_start = time.time()
+        wait_timeout = 30  # seconds
+
+        while True:
+            # Atomically check draining flag and register request if not draining
+            with self.requests_lock:
+                if not self.draining:
+                    # Safe to register - draining hasn't started or has finished
+                    self.active_requests += 1
+                    break
+
+            # Draining is in progress, wait and retry
+            if time.time() - wait_start > wait_timeout:
+                raise RuntimeError(
+                    "Service is reloading and taking longer than expected. Please retry in a few seconds."
+                )
+            await asyncio.sleep(0.1)
+
+        try:
+            return await func(self, *args, **kwargs)
+        finally:
+            # Decrement request counter
+            with self.requests_lock:
+                self.active_requests -= 1
+
+    return cast(T, wrapper)
 
 
 def translate_transport_config(
@@ -191,7 +246,6 @@ class RAWMCP:
     profile_name: str
     transport: str
     readonly: bool
-    execution_engine: ExecutionEngine | None
     _model_cache: dict[str, Any]
     transport_mode: str | None
 
@@ -250,8 +304,11 @@ class RAWMCP:
         # Initialize external reference tracker for hot reload
         self.ref_tracker = ExternalRefTracker()
 
-        # Initialize execution engine (will be created in _initialize_runtime_components)
-        self.execution_engine = None
+        # Initialize reload manager
+        self.reload_manager = ReloadManager(self)
+
+        # Initialize runtime environment (will be created in initialize_runtime_components)
+        self.runtime_environment: RuntimeEnvironment | None = None
         self._model_cache = {}
 
         # Resolve configurations
@@ -261,7 +318,7 @@ class RAWMCP:
         self._initialize_telemetry()
 
         # Initialize runtime components
-        self._initialize_runtime_components()
+        self.initialize_runtime_components()
 
         # Initialize OAuth authentication
         self._initialize_oauth()
@@ -279,8 +336,10 @@ class RAWMCP:
         self.transport_mode = None
         self._shutdown_called = False
 
-        # Create shared lock for thread-safety
-        self.db_lock = threading.Lock()
+        # Request tracking for safe reloading
+        self.active_requests = 0
+        self.requests_lock = threading.Lock()
+        self.draining = False
 
         # Register signal handlers
         self._register_signal_handlers()
@@ -521,8 +580,9 @@ class RAWMCP:
     def _register_signal_handlers(self) -> None:
         """Register signal handlers for graceful shutdown and reload."""
         if hasattr(signal, "SIGHUP"):
+            # SIGHUP triggers a full system reload
             signal.signal(signal.SIGHUP, self._handle_reload_signal)
-            logger.info("Registered SIGHUP handler for configuration reload.")
+            logger.info("Registered SIGHUP handler for system reload.")
 
         # Handle SIGTERM (e.g., from `kill`) and SIGINT (e.g., from Ctrl+C)
         signal.signal(signal.SIGTERM, self._handle_exit_signal)
@@ -537,11 +597,18 @@ class RAWMCP:
         """Handle SIGHUP signal to reload the configuration."""
         logger.info("Received SIGHUP signal, initiating configuration reload...")
 
-        # Run the reload in a new thread to avoid blocking the signal handler
-        reload_thread = threading.Thread(target=self.reload_configuration)
-        reload_thread.start()
+        # Request configuration reload and wait for it to complete
+        request = self.reload_configuration()
 
-    def _shutdown_runtime_components(self) -> None:
+        # Wait for the reload to complete
+        completed = request.wait_for_completion(timeout=60.0)  # 60 second timeout
+
+        if completed:
+            logger.info("SIGHUP reload completed successfully")
+        else:
+            logger.error("SIGHUP reload timed out after 60 seconds")
+
+    def shutdown_runtime_components(self) -> None:
         """
         Gracefully shuts down all reloadable, configuration-dependent components.
         Uses the new SDK execution engine which handles all shutdown hooks automatically.
@@ -550,27 +617,25 @@ class RAWMCP:
         """
         logger.info("Shutting down runtime components...")
 
-        # Shut down execution engine (handles all executor-specific shutdown including plugins)
-        if hasattr(self, "execution_engine") and self.execution_engine:
-            logger.info("Shutting down execution engine...")
-            self.execution_engine.shutdown()
-            self.execution_engine = None
-            logger.info("Execution engine shutdown complete.")
+        # Shut down runtime environment (handles all executor-specific shutdown including plugins)
+        if self.runtime_environment:
+            self.runtime_environment.shutdown()
+            self.runtime_environment = None
 
         logger.info("Runtime components shutdown complete.")
 
-    def _initialize_runtime_components(self) -> None:
+    def initialize_runtime_components(self) -> None:
         """
         Initializes runtime components using the new SDK execution engine.
         """
         logger.info("Initializing runtime components...")
 
-        # Create execution engine (replaces DuckDB session + Python runtime)
-        logger.info("Creating execution engine...")
-        self.execution_engine = create_execution_engine(
+        # Create runtime environment (contains execution engine + shared resources)
+        logger.info("Creating runtime environment...")
+        self.runtime_environment = create_runtime_environment(
             self.user_config, self.site_config, self.profile_name, readonly=self.readonly
         )
-        logger.info("Execution engine created.")
+        logger.info("Runtime environment created.")
 
         # Cache for dynamically created models
         self._model_cache = {}
@@ -601,99 +666,60 @@ class RAWMCP:
 
         logger.info("Telemetry initialization complete.")
 
-    def reload_configuration(self) -> None:
+    def reload_configuration(self) -> "ReloadRequest":
         """
-        Reloads external configuration values (vault://, file://, env vars) only.
+        Request a full system reload.
 
-        This method refreshes all external references without re-reading the
-        configuration files themselves, making it safer for long-running services.
-
-        The reload process:
-        1. Loads raw config templates if not already loaded
-        2. Resolves all external references again
-        3. If values changed, recreates runtime components with new values
+        Typically triggered by SIGHUP signal. The reload will:
+        1. Drain active requests
+        2. Shutdown runtime components
+        3. Reload configuration from disk
+        4. Restart runtime components
         """
-        logger.info("Acquiring lock for configuration reload...")
-        with self.db_lock:
-            logger.info("Lock acquired. Starting configuration reload...")
-            try:
-                # Ensure we have raw templates for external reference tracking
-                if not self._config_templates_loaded or not self.ref_tracker._template_config:
-                    logger.info("Loading raw configuration templates for hot reload...")
+        # Ensure we have raw templates for external reference tracking
+        if not self._config_templates_loaded or not self.ref_tracker._template_config:
+            logger.info("Loading raw configuration templates for hot reload...")
 
-                    # Load raw configs without resolving references
+            # Determine site config path
+            site_path = self.site_config_path or Path.cwd()
 
-                    # Determine site config path
-                    site_path = self.site_config_path or Path.cwd()
+            # Load raw templates
+            site_template = load_site_config(site_path)
+            user_template = load_user_config(site_template, resolve_refs=False)
 
-                    # Load raw templates
-                    site_template = load_site_config(site_path)
-                    user_template = load_user_config(site_template, resolve_refs=False)
+            # Set templates in tracker
+            self.ref_tracker.set_template(
+                cast(dict[str, Any], site_template), cast(dict[str, Any], user_template)
+            )
+            self._config_templates_loaded = True
+            logger.info("Raw configuration templates loaded.")
 
-                    # Set templates in tracker
-                    self.ref_tracker.set_template(
-                        cast(dict[str, Any], site_template), cast(dict[str, Any], user_template)
-                    )
-                    self._config_templates_loaded = True
-                    logger.info("Raw configuration templates loaded.")
+        # Define payload to reload config from disk
+        def reload_config_files() -> None:
+            """Reload configuration files from disk."""
+            logger.info("Reloading configuration files...")
 
-                # Save current configs for comparison
-                old_site_config = self.site_config
-                old_user_config = self.user_config
+            # Reload site config
+            site_path = self.site_config_path or Path.cwd()
+            new_site_template = load_site_config(site_path)
+            new_user_template = load_user_config(new_site_template, resolve_refs=False)
 
-                # Resolve all external references again
-                logger.info("Resolving external configuration references...")
-                new_site_config, new_user_config = self.ref_tracker.resolve_all()
+            # Update templates in tracker
+            self.ref_tracker.set_template(
+                cast(dict[str, Any], new_site_template), cast(dict[str, Any], new_user_template)
+            )
 
-                # Check if anything actually changed
-                if old_site_config == new_site_config and old_user_config == new_user_config:
-                    logger.info("No changes detected in external configuration values.")
-                    logger.info("Proceeding with reload anyway to refresh DuckDB session...")
-                else:
-                    logger.info(
-                        "External configuration values have changed. Reloading runtime components..."
-                    )
+            # Resolve and update configs
+            new_site_config, new_user_config = self.ref_tracker.resolve_all()
+            self.site_config = cast(SiteConfig, new_site_config)
+            self.user_config = cast(UserConfig, new_user_config)
 
-                # Shutdown runtime components
-                self._shutdown_runtime_components()
+            logger.info("Configuration files reloaded")
 
-                # Apply the new configurations
-                self.site_config = cast(SiteConfig, new_site_config)
-                self.user_config = cast(UserConfig, new_user_config)
-                self.active_profile = get_active_profile(
-                    self.user_config, self.site_config, self.profile_name
-                )
-
-                # Recreate runtime components with new values
-                logger.info("Creating new execution engine...")
-                self.execution_engine = create_execution_engine(
-                    self.user_config, self.site_config, self.profile_name, readonly=self.readonly
-                )
-                logger.info("New execution engine created.")
-
-                logger.info("Configuration reload completed successfully.")
-
-                # Record config reload metric
-                record_counter(
-                    "mxcp.config_reloads_total",
-                    attributes={"status": "success", "profile": self.profile_name},
-                    description="Total configuration reloads",
-                )
-
-            except Exception as e:
-                logger.error(f"Failed to reload configuration: {e}", exc_info=True)
-
-                # Record failed reload metric
-                record_counter(
-                    "mxcp.config_reloads_total",
-                    attributes={"status": "error", "profile": self.profile_name},
-                    description="Total configuration reloads",
-                )
-                # In case of failure, it's safer to shut down as the server state is unknown
-                logger.error(
-                    "Server state may be inconsistent due to reload failure. Consider restarting."
-                )
-                # Don't auto-shutdown here, let the operator decide
+        # Request a reload with config reload as payload
+        return self.reload_manager.request_reload(
+            payload_func=reload_config_files, description="Configuration reload (SIGHUP)"
+        )
 
     def _ensure_async_completes(
         self, coro: Any, timeout: float = 10.0, operation_name: str = "operation"
@@ -775,9 +801,13 @@ class RAWMCP:
         logger.info("Shutting down MXCP server...")
 
         try:
+            # Stop the reload manager
+            if self.reload_manager:
+                self.reload_manager.stop()
+
             # Gracefully shut down the reloadable runtime components first
             # This handles python runtimes, plugins, and the db session.
-            self._shutdown_runtime_components()
+            self.shutdown_runtime_components()
 
             # Close OAuth server persistence - ensure it completes
             if self.oauth_server:
@@ -1248,10 +1278,9 @@ class RAWMCP:
             mcp_session_id = None
             request_headers = None
             if ctx:
-                if hasattr(ctx, "session_id"):
-                    # session_id might be None in stateless mode
-                    with contextlib.suppress(Exception):
-                        mcp_session_id = ctx.session_id
+                # session_id might be None in stateless mode
+                with contextlib.suppress(Exception):
+                    mcp_session_id = getattr(ctx, "session_id", None)
                 if hasattr(ctx, "request_context"):
                     request_context = ctx.request_context
                     if (
@@ -1275,8 +1304,9 @@ class RAWMCP:
                     )
 
                 # run through new SDK executor (handles type conversion automatically)
-                if self.execution_engine is None:
+                if self.runtime_environment is None:
                     raise RuntimeError("Execution engine not initialized")
+                name: str
                 if endpoint_key == "resource":
                     name = cast(str, endpoint_def.get("uri", "unknown"))
                 else:
@@ -1296,14 +1326,13 @@ class RAWMCP:
                     if mcp_session_id:
                         set_span_attribute("mxcp.session.id", mcp_session_id)
                     set_span_attribute("mxcp.trace.id", trace_id)
-                result, policy_info = await execute_endpoint_with_engine_and_policy(
+                # Use the common execution wrapper with policy info
+                result, policy_info = await self._execute(
                     endpoint_type=endpoint_type.value,
                     name=name,
                     params=kwargs,  # No manual conversion needed - SDK handles it
-                    user_config=self.user_config,
-                    site_config=self.site_config,
-                    execution_engine=self.execution_engine,
                     user_context=user_context,
+                    with_policy_info=True,
                     request_headers=request_headers,  # Pass the FastMCP request headers
                 )
                 logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
@@ -1321,8 +1350,7 @@ class RAWMCP:
                 duration_ms = int((time.time() - start_time) * 1000)
 
                 # Determine caller type based on transport
-                # Check if we're in HTTP mode by looking for transport_mode
-                if hasattr(self, "transport_mode") and self.transport_mode:
+                if self.transport_mode:
                     if self.transport_mode == "stdio":
                         caller = "stdio"
                     else:
@@ -1516,18 +1544,10 @@ class RAWMCP:
                 if user_context:
                     logger.info("Authenticated user executing SQL query")
 
-                # Use SDK execution engine
-                if self.execution_engine is None:
-                    raise RuntimeError("Execution engine not initialized")
-                execution_context = ExecutionContext(user_context=user_context)
-                execution_context.set("user_config", self.user_config)
-                execution_context.set("site_config", self.site_config)
-
-                result = await self.execution_engine.execute(
-                    language="sql",
+                result = await self._execute_sql(
                     source_code=sql,
                     params={},
-                    context=execution_context,
+                    user_context=user_context,
                 )
                 return cast(list[dict[str, Any]], result)
             except Exception as e:
@@ -1586,21 +1606,15 @@ class RAWMCP:
                 if user_context:
                     logger.info(f"User {user_context.username} listing tables")
 
-                # Use SDK execution engine
-                if self.execution_engine is None:
-                    raise RuntimeError("Execution engine not initialized")
-                execution_context = ExecutionContext(user_context=user_context)
-                execution_context.set("user_config", self.user_config)
-                execution_context.set("site_config", self.site_config)
-
-                result = await self.execution_engine.execute(
-                    language="sql",
-                    source_code="""SELECT table_name as name, table_type as type
+                result = await self._execute_sql(
+                    source_code="""
+                        SELECT
+                            table_name as name, table_type as type
                         FROM information_schema.tables
                         WHERE table_schema = 'main'
                         ORDER BY table_name""",
                     params={},
-                    context=execution_context,
+                    user_context=user_context,
                 )
                 return cast(list[dict[str, str]], result)
             except Exception as e:
@@ -1664,15 +1678,7 @@ class RAWMCP:
                         f"User {user_context.username} getting schema for table {table_name}"
                     )
 
-                # Use SDK execution engine
-                if self.execution_engine is None:
-                    raise RuntimeError("Execution engine not initialized")
-                execution_context = ExecutionContext(user_context=user_context)
-                execution_context.set("user_config", self.user_config)
-                execution_context.set("site_config", self.site_config)
-
-                result = await self.execution_engine.execute(
-                    language="sql",
+                result = await self._execute_sql(
                     source_code="""
                         SELECT
                             column_name as name,
@@ -1683,7 +1689,7 @@ class RAWMCP:
                         ORDER BY ordinal_position
                     """,
                     params={"table_name": table_name},
-                    context=execution_context,
+                    user_context=user_context,
                 )
                 return cast(list[dict[str, Any]], result)
             except Exception as e:
@@ -1716,15 +1722,103 @@ class RAWMCP:
 
         logger.info("Registered built-in DuckDB features")
 
+    @with_draining_and_request_tracking
+    async def _execute(
+        self,
+        endpoint_type: str,
+        name: str,
+        params: dict[str, Any],
+        user_context: Any = None,
+        with_policy_info: bool = False,
+        request_headers: dict[str, str] | None = None,
+    ) -> Any:
+        """Execute endpoint with execution lock.
+
+        This method handles the actual endpoint execution with the execution lock.
+        The draining wait and request tracking is handled by the decorator.
+
+        Args:
+            endpoint_type: Type of endpoint to execute
+            name: Name of endpoint
+            params: Parameters to pass
+            user_context: User context
+            with_policy_info: If True, returns (result, policy_info) tuple
+            request_headers: Request headers from FastMCP
+
+        Returns:
+            Result of execution, or (result, policy_info) if with_policy_info=True
+        """
+        if self.runtime_environment is None:
+            raise RuntimeError("Execution engine not initialized")
+
+        if with_policy_info:
+            return await execute_endpoint_with_engine_and_policy(
+                endpoint_type=endpoint_type,
+                name=name,
+                params=params,
+                user_config=self.user_config,
+                site_config=self.site_config,
+                execution_engine=self.runtime_environment.execution_engine,
+                user_context=user_context,
+                request_headers=request_headers,
+                server_ref=self,
+            )
+        else:
+            return await execute_endpoint_with_engine(
+                endpoint_type=endpoint_type,
+                name=name,
+                params=params,
+                user_config=self.user_config,
+                site_config=self.site_config,
+                execution_engine=self.runtime_environment.execution_engine,
+                user_context=user_context,
+                request_headers=request_headers,
+                server_ref=self,
+            )
+
+    @with_draining_and_request_tracking
+    async def _execute_sql(
+        self,
+        source_code: str,
+        params: dict[str, Any] | None = None,
+        user_context: Any = None,
+    ) -> Any:
+        """Execute SQL query with execution lock.
+
+        This method handles SQL execution through the execution engine with the execution lock.
+        The draining wait and request tracking is handled by the decorator.
+
+        Args:
+            source_code: SQL source code to execute
+            params: Parameters to pass to the SQL query
+            user_context: Optional user context for authentication/authorization
+
+        Returns:
+            Result of SQL execution
+        """
+        if self.runtime_environment is None:
+            raise RuntimeError("Execution engine not initialized")
+
+        execution_context = ExecutionContext(user_context=user_context)
+        execution_context.set("user_config", self.user_config)
+        execution_context.set("site_config", self.site_config)
+
+        return await self.runtime_environment.execution_engine.execute(
+            language="sql",
+            source_code=source_code,
+            params=params or {},
+            context=execution_context,
+        )
+
     def register_endpoints(self) -> None:
         """Register all discovered endpoints with MCP."""
         for path, endpoint_def in self.endpoints:
             try:
                 # Validate endpoint before registration using shared session
-                if self.execution_engine is None:
+                if self.runtime_environment is None:
                     raise RuntimeError("Execution engine not initialized")
                 validation_result = validate_endpoint(
-                    str(path), self.site_config, self.execution_engine
+                    str(path), self.site_config, self.runtime_environment.execution_engine
                 )
 
                 if validation_result["status"] != "ok":
@@ -1801,6 +1895,9 @@ class RAWMCP:
             logger.info("Starting MCP server...")
             # Store transport mode for use in handlers
             self.transport_mode = transport
+
+            # Start the reload manager
+            self.reload_manager.start()
 
             # Register all endpoints
             self.register_endpoints()

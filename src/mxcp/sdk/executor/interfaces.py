@@ -143,6 +143,19 @@ class ExecutorPlugin(ABC):
         """
         pass
 
+    @abstractmethod
+    def prepare_context(self, context: ExecutionContext) -> None:
+        """Prepare the execution context with executor-specific resources.
+
+        This method is called before any execution to allow executors
+        to add their resources to the context.
+
+        Args:
+            context: The execution context to prepare
+        """
+        # Default implementation does nothing
+        pass
+
 
 class ExecutionEngine:
     """Central execution engine that manages multiple executor plugins.
@@ -283,6 +296,10 @@ class ExecutionEngine:
                         validation_span = get_current_span()
                         if validation_span:
                             validation_span.set_attribute("mxcp.validation.passed", True)
+
+                # Prepare context with all executor resources
+                for _exec_lang, exec_instance in self._executors.items():
+                    exec_instance.prepare_context(context)
 
                 # Execute the code (this will create a child span in the executor)
                 executor = self._executors[language]

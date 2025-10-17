@@ -5,7 +5,7 @@ import pytest
 
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.services.endpoints.validator import validate_all_endpoints, validate_endpoint
 
 
@@ -54,11 +54,11 @@ def test_profile():
 @pytest.fixture
 def test_execution_engine(user_config, site_config, test_profile, validation_repo_path):
     """Create a test ExecutionEngine."""
-    execution_engine = create_execution_engine(
+    runtime_env = create_runtime_environment(
         user_config, site_config, test_profile, repo_root=validation_repo_path, readonly=True
     )
-    yield execution_engine
-    execution_engine.shutdown()
+    yield runtime_env.execution_engine
+    runtime_env.shutdown()
 
 
 def test_validate_valid_endpoint(validation_repo_path, site_config, test_execution_engine):

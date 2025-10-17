@@ -1,15 +1,14 @@
 """
-Secret injection for DuckDB session in executor plugin.
+Secret injection for DuckDB.
 
 This module handles secret injection into DuckDB sessions.
-This is a cloned version of the secret injection for the executor plugin system.
 """
 
 import logging
 
 import duckdb
 
-from ._types import SecretDefinition
+from .types import SecretDefinition
 
 logger = logging.getLogger(__name__)
 

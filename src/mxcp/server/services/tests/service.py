@@ -5,7 +5,7 @@ from mxcp.sdk.auth import UserContext
 from mxcp.server.core.config._types import SiteConfig, UserConfig
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
-from mxcp.server.executor.engine import create_execution_engine
+from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.test import TestRunner
 
 # Configure logging
@@ -32,8 +32,9 @@ async def run_all_tests(
 
     results: dict[str, Any] = {"status": "ok", "tests_run": 0, "endpoints": []}
 
-    # Create execution engine once for all tests
-    execution_engine = create_execution_engine(user_config, site_config, profile, readonly=readonly)
+    # Create runtime environment once for all tests
+    runtime_env = create_runtime_environment(user_config, site_config, profile, readonly=readonly)
+    execution_engine = runtime_env.execution_engine
 
     try:
         for file_path, endpoint, error_msg in endpoints:
@@ -128,7 +129,7 @@ async def run_all_tests(
                 )
                 results["status"] = "error"
     finally:
-        execution_engine.shutdown()
+        runtime_env.shutdown()
 
     return results
 
@@ -144,13 +145,13 @@ async def run_tests(
     request_headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Run tests for a specific endpoint type and name."""
-    # Create execution engine for this single test run
-    execution_engine = create_execution_engine(user_config, site_config, profile, readonly=readonly)
+    # Create runtime environment for this single test run
+    runtime_env = create_runtime_environment(user_config, site_config, profile, readonly=readonly)
     try:
         # Use TestRunner to run the tests
-        test_runner = TestRunner(user_config, site_config, execution_engine)
+        test_runner = TestRunner(user_config, site_config, runtime_env.execution_engine)
         return await test_runner.run_tests_for_endpoint(
             endpoint_type, name, cli_user_context, request_headers
         )
     finally:
-        execution_engine.shutdown()
+        runtime_env.shutdown()

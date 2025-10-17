@@ -167,6 +167,163 @@ def cleanup():
 
 **Important:** These hooks are for managing Python resources (HTTP clients, connections to external services, etc.), NOT for database management. The DuckDB connection is managed automatically by MXCP.
 
+## Dynamic Reload with Database Rebuild
+
+MXCP provides a feature that allows Python endpoints to trigger a safe reload of the server. This enables you to, for example, update your DuckDB database externally  without restarting the server.
+
+### Why Use DuckDB Reload?
+
+**In most cases, you don't need this feature.** Your Python endpoints can perform database operations directly using the `db` proxy. DuckDB's concurrency model allows a single process (MXCP) to own the connection while multiple threads operate on it safely.
+
+Even if you're using dbt, you can invoke the dbt Python API directly from your endpoints. Since it runs in the same process, dbt can apply changes to the DuckDB database without issues - this works correctly under DuckDB's MVCC transactional model.
+
+However, sometimes you may need to run external tools or processes that require exclusive access to the DuckDB database file. In these cases, MXCP must temporarily release its hold on the database so the external tool can operate safely.
+
+This is where MXCP's `reload_duckdb` solves these problems by providing a safe way to rebuild your database while the server continues handling requests.
+
+### How It Works
+
+```python
+from mxcp.runtime import reload_duckdb
+import subprocess
+import pandas as pd
+
+def update_analytics_data():
+    """Endpoint that triggers a data refresh."""
+    
+    def rebuild_database():
+        """This runs with all connections closed."""
+        # Option 1: Run dbt to rebuild models
+        # NOTE: This is just an example of running an external tool.
+        # In most cases, you should use the dbt Python API directly instead.
+        subprocess.run(["dbt", "run", "--target", "prod"], check=True)
+        
+        # Option 2: Replace with a pre-built database
+        import shutil
+        shutil.copy("/staging/analytics.duckdb", "/app/data/analytics.duckdb")
+        
+        # Option 3: Load fresh data from APIs/files
+        df = pd.read_parquet("s3://bucket/latest-data.parquet")
+        # DuckDB file is exclusively ours during rebuild
+        import duckdb
+        conn = duckdb.connect("/app/data/analytics.duckdb")
+        conn.execute("CREATE OR REPLACE TABLE sales AS SELECT * FROM df")
+        conn.close()
+    
+    # Schedule the reload with our rebuild function
+    # The payload function only runs after the server has drained all connections
+    # and released its hold on the database. This ensures safe external access.
+    # Afterwards, everything automatically comes back up with the updated data.
+    reload_duckdb(
+        payload_func=rebuild_database,
+        description="Updating analytics data"
+    )
+    
+    # Return immediately - reload happens asynchronously
+    return {"status": "Data refresh scheduled", "message": "Reload will complete in background"}
+```
+
+### The Reload Process
+
+When you call `reload_duckdb`, MXCP:
+
+1. **Queues the reload request** - Function returns immediately
+2. **Drains active requests** - Existing requests complete normally
+3. **Shuts down runtime components** - Closes Python hooks and DuckDB connections
+4. **Runs your payload function** - With all connections closed
+5. **Restarts runtime components** - Fresh configuration and connections
+6. **Processes waiting requests** - With the updated data
+
+The reload happens asynchronously after your request completes.
+
+**Important:** Remember that you normally don't need to use this feature. Only use `reload_duckdb` if you absolutely must have an external process update the DuckDB database file. In general, direct database operations through the `db` proxy are preferred.
+
+### Real-World Example: Scheduled Data Updates
+
+```python
+from mxcp.runtime import reload_duckdb, db
+from datetime import datetime
+import requests
+
+def scheduled_update(source: str = "api") -> dict:
+    """Endpoint called by cron to update data."""
+    
+    start_time = datetime.now()
+    
+    def rebuild_from_api():
+        """Fetch latest data and rebuild database."""
+        # Fetch data from external API
+        response = requests.get("https://api.example.com/analytics/export")
+        data = response.json()
+        
+        # Write to DuckDB (we have exclusive access)
+        import duckdb
+        conn = duckdb.connect("/app/data/analytics.duckdb")
+        
+        # Clear old data
+        conn.execute("DROP TABLE IF EXISTS daily_metrics")
+        
+        # Load new data
+        conn.execute("""
+            CREATE TABLE daily_metrics AS 
+            SELECT * FROM read_json_auto(?)
+        """, [data])
+        
+        # Update metadata
+        conn.execute("""
+            INSERT INTO update_log (timestamp, source, record_count)
+            VALUES (?, ?, ?)
+        """, [datetime.now(), source, len(data)])
+        
+        conn.close()
+    
+    # Schedule the rebuild
+    reload_duckdb(
+        payload_func=rebuild_from_api,
+        description=f"Scheduled update from {source}"
+    )
+    
+    # Return immediately - the reload happens asynchronously
+    return {
+        "status": "scheduled",
+        "source": source,
+        "timestamp": datetime.now().isoformat(),
+        "message": "Data update will complete in background"
+    }
+```
+
+### Best Practices
+
+**Primary recommendation: Avoid using `reload_duckdb` when possible.** Use direct database operations through the `db` proxy instead - this works fine for most use cases and is much simpler.
+
+When you do need to use `reload_duckdb`:
+
+1. **Keep payload functions focused** - Do one thing well in your payload function
+2. **Handle errors gracefully** - Failed reloads leave the server in its previous state
+3. **Return quickly** - The reload happens asynchronously, so return a status immediately
+4. **Test thoroughly** - Payload functions run with all connections closed
+5. **Use for data updates** - Not for schema migrations or structural changes
+6. **Check completion indirectly** - Query data or use monitoring to verify reload completed
+
+### Configuration-Only Reloads
+
+You can also reload just the configuration (secrets, environment variables) without a payload:
+
+```python
+def rotate_secrets():
+    """Endpoint to reload after secret rotation."""
+    # Schedule config reload without database rebuild
+    reload_duckdb(description="Reloading after secret rotation")
+    
+    # Return immediately - new secrets will be active after reload
+    return {
+        "status": "Reload scheduled",
+        "message": "Configuration will refresh in background"
+    }
+```
+
+**Important Note:** Since `reload_duckdb` is asynchronous, you cannot immediately use the new configuration values. The reload happens after your current request completes.
+
 ## Async Functions
 
 Python endpoints support both synchronous and asynchronous functions:

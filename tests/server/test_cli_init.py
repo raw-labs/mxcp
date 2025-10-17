@@ -1,18 +1,16 @@
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 import yaml
 from click.testing import CliRunner
 
-from mxcp.server.interfaces.cli.init import init
 from mxcp.server.core.config.site_config import load_site_config
+from mxcp.server.interfaces.cli.init import init
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -121,21 +119,7 @@ def test_init_bootstrap_complete_directory_structure(tmp_path):
         assert dir_path.exists(), f"Directory {directory} should exist"
         assert dir_path.is_dir(), f"{directory} should be a directory"
 
-    # Verify .gitkeep files exist in empty directories
-    empty_directories_with_gitkeep = [
-        "resources",
-        "prompts",
-        "evals",
-        "python",
-        "drift",
-        "audit",
-        "data",
-    ]
-
-    for directory in empty_directories_with_gitkeep:
-        gitkeep_path = project_dir / directory / ".gitkeep"
-        assert gitkeep_path.exists(), f".gitkeep should exist in {directory}"
-        assert gitkeep_path.is_file(), f".gitkeep in {directory} should be a file"
+    # No .gitkeep files are created; directories can be empty
 
     # Verify bootstrap files are in correct locations
     assert (project_dir / "tools" / "hello-world.yml").exists()
@@ -466,11 +450,7 @@ def test_init_bootstrap_complete_directory_structure():
             assert dir_path.exists(), f"Directory {dirname} was not created"
             assert dir_path.is_dir(), f"{dirname} is not a directory"
 
-        # Check .gitkeep files in empty directories
-        empty_dirs = ["resources", "prompts", "evals", "python", "drift", "audit", "data"]
-        for dirname in empty_dirs:
-            gitkeep = project_dir / dirname / ".gitkeep"
-            assert gitkeep.exists(), f".gitkeep not found in {dirname}"
+        # No .gitkeep files are created
 
         # Check bootstrap files were created correctly
         tool_file = project_dir / "tools" / "hello-world.yml"

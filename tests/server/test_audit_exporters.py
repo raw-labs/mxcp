@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.server.services.audit.exporters import export_to_csv, export_to_json, export_to_jsonl
 from mxcp.sdk.audit import AuditLogger, AuditSchema
+from mxcp.server.services.audit.exporters import export_to_csv, export_to_json, export_to_jsonl
 
 
 @pytest.mark.asyncio
@@ -52,7 +52,7 @@ async def test_exporters_with_jsonl_backend():
         assert csv_path.exists()
 
         # Verify CSV content
-        with open(csv_path, "r") as f:
+        with open(csv_path) as f:
             reader = csv.DictReader(f)
             rows = list(reader)
             assert len(rows) == 5
@@ -64,7 +64,7 @@ async def test_exporters_with_jsonl_backend():
         assert jsonl_path.exists()
 
         # Verify JSONL content
-        with open(jsonl_path, "r") as f:
+        with open(jsonl_path) as f:
             lines = f.readlines()
             assert len(lines) == 5
             for line in lines:
@@ -77,7 +77,7 @@ async def test_exporters_with_jsonl_backend():
         assert json_path.exists()
 
         # Verify JSON content
-        with open(json_path, "r") as f:
+        with open(json_path) as f:
             data = json.load(f)
             assert isinstance(data, list)
             assert len(data) == 5
@@ -115,7 +115,7 @@ async def test_exporters_with_noop_backend():
         assert csv_path.exists()
 
         # Verify CSV is empty (except header)
-        with open(csv_path, "r") as f:
+        with open(csv_path) as f:
             lines = f.readlines()
             assert len(lines) == 0  # No data, not even headers since no records
 
@@ -128,7 +128,7 @@ async def test_exporters_with_noop_backend():
         assert count == 0
         assert json_path.exists()
 
-        with open(json_path, "r") as f:
+        with open(json_path) as f:
             data = json.load(f)
             assert data == []
 
@@ -176,7 +176,7 @@ async def test_exporters_with_filters():
         count = await export_to_csv(logger, csv_path, filters=filters)
         assert count == 4  # Records 0, 3, 6, 9
 
-        with open(csv_path, "r") as f:
+        with open(csv_path) as f:
             reader = csv.DictReader(f)
             rows = list(reader)
             assert len(rows) == 4
@@ -239,9 +239,9 @@ async def test_exporters_memory_efficiency():
 
         # Verify file was created and has expected rows
         line_count = 0
-        with open(csv_path, "r") as f:
+        with open(csv_path) as f:
             reader = csv.DictReader(f)
-            for row in reader:
+            for _row in reader:
                 line_count += 1
 
         assert line_count == num_events

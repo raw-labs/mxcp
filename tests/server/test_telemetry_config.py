@@ -1,15 +1,18 @@
 """Test server-side telemetry configuration."""
 
+import builtins
+import contextlib
+
 import pytest
-from mxcp.server.core.config._types import UserConfig, UserTelemetryConfig
-from mxcp.server.core.telemetry import (
-    configure_telemetry_from_config,
-    shutdown_telemetry,
-)
+
 from mxcp.sdk.telemetry import (
     is_telemetry_enabled,
     traced_operation,
-    get_current_trace_id,
+)
+from mxcp.server.core.config._types import UserConfig
+from mxcp.server.core.telemetry import (
+    configure_telemetry_from_config,
+    shutdown_telemetry,
 )
 
 
@@ -18,6 +21,7 @@ def reset_telemetry():
     """Reset telemetry state between tests."""
     # Reset OpenTelemetry's internal state
     from opentelemetry import trace
+
     import mxcp.sdk.telemetry.config
     import mxcp.sdk.telemetry.tracer
 
@@ -30,10 +34,8 @@ def reset_telemetry():
     yield
 
     # Cleanup after test
-    try:
+    with contextlib.suppress(builtins.BaseException):
         shutdown_telemetry()
-    except:
-        pass
     trace._TRACER_PROVIDER = None
     trace._TRACER_PROVIDER_FACTORY = None
     mxcp.sdk.telemetry.config._telemetry_enabled = False

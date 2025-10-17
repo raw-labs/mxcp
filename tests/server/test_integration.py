@@ -324,7 +324,7 @@ def _create_integration_fixture(fixture_path: Path):
         "mxcp": 1,
         "project": "integration_test",
         "profile": "default",
-        "profiles": {"default": {"duckdb": {"path": ":memory:"}}},
+        "profiles": {"default": {"duckdb": {"path": "test.duckdb"}}},
         "secrets": ["test_secret"],
     }
 
@@ -445,23 +445,26 @@ class TestIntegration:
         with ServerProcess(integration_fixture_dir) as server:
             server.start()
 
+            # Check initial values
             async with MCPTestClient(server.port) as client:
-                # Check initial values
                 result1 = await client.call_tool("check_secret", {})
                 assert result1["api_key"] == "file_secret_v1"
                 assert result1["endpoint"] == "https://api.v1.example.com"
 
-                # Update external values
-                secret_file.write_text("file_secret_v2")
-                endpoint_file.write_text("https://api.v2.example.com")
+            # Update external values
+            secret_file.write_text("file_secret_v2")
+            endpoint_file.write_text("https://api.v2.example.com")
 
-                # Reload
-                server.reload()
+            # Reload - now no active requests should be holding up the reload
+            server.reload()
 
-                # Add a small additional delay to ensure the reload thread completes
-                await asyncio.sleep(0.5)
+            # Wait for the asynchronous reload to complete
+            # The reload is now scheduled asynchronously and happens after current requests finish
+            # Need to wait longer to ensure reload completes and new connections pick up the changes
+            await asyncio.sleep(10.0)
 
-                # Check updated values
+            # Check updated values with a new client connection
+            async with MCPTestClient(server.port) as client:
                 result2 = await client.call_tool("check_secret", {})
                 assert result2["api_key"] == "file_secret_v2"
                 assert result2["endpoint"] == "https://api.v2.example.com"
@@ -499,6 +502,252 @@ class TestIntegration:
                 assert result2["reversed"] == "daoler retfa tset"
                 # The result should still work correctly after reload
                 assert result2["length"] == len("test after reload")
+
+    @pytest.mark.asyncio
+    async def test_reload_duckdb_from_tool(self, integration_fixture_dir):
+        """Test that reload_duckdb called from a tool doesn't hang."""
+        # Create a Python endpoint that calls reload_duckdb
+        python_dir = integration_fixture_dir / "python"
+        python_dir.mkdir(exist_ok=True)
+
+        reload_tool_py = python_dir / "reload_tool.py"
+        reload_tool_py.write_text(
+            '''
+import time
+import shutil
+from pathlib import Path
+from mxcp.runtime import reload_duckdb, db, config
+
+def trigger_reload(message: str = "test") -> dict:
+    """Trigger a DuckDB reload from within a tool - realistic user code."""
+    import duckdb
+    from datetime import datetime
+
+    # Track timing
+    start_time = time.time()
+
+    # First, check what's in the database before modification
+    assert db is not None, "db proxy is None - implementation is broken!"
+
+    try:
+        # Try to query existing data
+        before_data = db.execute("SELECT * FROM reload_test ORDER BY id")
+        before_count = len(before_data)
+    except Exception as e:
+        # Table doesn't exist yet - this is fine for first run
+        print(f"Table doesn't exist yet: {e}")
+        before_count = 0
+        before_data = []
+
+    # Get DuckDB file path
+    site_config = config.site_config
+    db_path = Path(site_config["profiles"]["default"]["duckdb"]["path"])
+    if not db_path.is_absolute():
+        db_path = Path.cwd() / db_path
+
+    # Create a new database file with additional test data
+    temp_db = db_path.with_suffix('.tmp')
+
+    # If database exists, copy it to preserve existing data
+    if db_path.exists():
+        shutil.copy2(db_path, temp_db)
+
+    # Add new data to the temp database
+    timestamp = datetime.now().isoformat()
+    with duckdb.connect(str(temp_db)) as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS reload_test (id INTEGER, message VARCHAR, created_at VARCHAR)")
+        # Add a new row with current count + 1
+        conn.execute(
+            f"INSERT INTO reload_test VALUES ({before_count + 1}, '{message}', '{timestamp}')"
+        )
+        conn.commit()
+
+    # Replace the database file atomically
+    shutil.move(str(temp_db), str(db_path))
+
+    # Now reload DuckDB to pick up the changes
+    # IMPORTANT: reload_duckdb() is now asynchronous and will happen AFTER this request completes
+    # So we can't verify the reload in the same request
+    reload_duckdb()
+
+    # Since the reload is async and happens after this request, we can't query the new data yet
+    # Instead, we'll return info about what we did and let the test verify in a subsequent call
+    
+    elapsed = time.time() - start_time
+    
+    return {
+        "message": message,
+        "before_count": before_count,
+        "after_count": before_count,  # Can't get the real after count yet
+        "new_row": None,  # Can't get the new row yet
+        "all_data": before_data,  # Return the data we had before
+        "reload_requested": True,  # Indicate we requested a reload
+        "elapsed_time": elapsed,
+        "db_path": str(db_path),
+        "timestamp": timestamp  # Save this so we can verify later
+    }
+
+
+def verify_reload(expected_count: int, expected_message: str, expected_timestamp: str) -> dict:
+    """Verify that the reload completed and the new data is available."""
+    # Query the database to see if the reload worked
+    try:
+        data = db.execute("SELECT * FROM reload_test ORDER BY id")
+        count = len(data)
+        
+        # Find the row with the expected message
+        found_row = None
+        for row in data:
+            if row["message"] == expected_message and row["created_at"] == expected_timestamp:
+                found_row = row
+                break
+        
+        return {
+            "reload_success": count >= expected_count,
+            "count": count,
+            "expected_count": expected_count,
+            "found_row": found_row,
+            "all_data": data
+        }
+    except Exception as e:
+        return {
+            "reload_success": False,
+            "error": str(e)
+        }
+'''
+        )
+
+        # Create the tool YAML in the expected format
+        tools_dir = integration_fixture_dir / "tools"
+
+        # Tool to trigger reload
+        reload_tool_yml = tools_dir / "trigger_reload.yml"
+        reload_tool = {
+            "mxcp": 1,
+            "tool": {
+                "name": "trigger_reload",
+                "description": "Test tool that triggers a reload",
+                "language": "python",
+                "source": {"file": "../python/reload_tool.py"},
+                "parameters": [
+                    {
+                        "name": "message",
+                        "type": "string",
+                        "description": "Test message",
+                        "default": "test",
+                    }
+                ],
+                "return": {"type": "object"},
+            },
+        }
+        with open(reload_tool_yml, "w") as f:
+            yaml.dump(reload_tool, f)
+
+        # Tool to verify reload
+        verify_tool_yml = tools_dir / "verify_reload.yml"
+        verify_tool = {
+            "mxcp": 1,
+            "tool": {
+                "name": "verify_reload",
+                "description": "Verify that reload completed",
+                "language": "python",
+                "source": {"file": "../python/reload_tool.py"},
+                "parameters": [
+                    {
+                        "name": "expected_count",
+                        "type": "integer",
+                        "description": "Expected row count",
+                    },
+                    {
+                        "name": "expected_message",
+                        "type": "string",
+                        "description": "Expected message",
+                    },
+                    {
+                        "name": "expected_timestamp",
+                        "type": "string",
+                        "description": "Expected timestamp",
+                    },
+                ],
+                "return": {"type": "object"},
+            },
+        }
+        with open(verify_tool_yml, "w") as f:
+            yaml.dump(verify_tool, f)
+
+        # Start the server
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                # Set a timeout for the entire test
+                start_time = time.time()
+
+                # Call the tool that triggers reload - this should NOT hang!
+                result = await asyncio.wait_for(
+                    client.call_tool("trigger_reload", {"message": "integration_test"}),
+                    timeout=10.0,  # 10 second timeout - if it hangs, test fails
+                )
+
+                elapsed = time.time() - start_time
+
+                # Verify the trigger worked
+                assert result["reload_requested"] is True
+                assert result["message"] == "integration_test"
+                assert result["before_count"] == 0  # First run, no data yet
+
+                # Save values for verification
+                timestamp1 = result["timestamp"]
+
+                # The trigger call should be quick (not hanging)
+                assert elapsed < 5.0, f"Tool call took too long: {elapsed}s"
+
+                # Wait for the async reload to complete
+                await asyncio.sleep(3.0)
+
+                # Step 2: Verify the reload completed
+                verify_result = await client.call_tool(
+                    "verify_reload",
+                    {
+                        "expected_count": 1,
+                        "expected_message": "integration_test",
+                        "expected_timestamp": timestamp1,
+                    },
+                )
+
+                assert verify_result["reload_success"] is True
+                assert verify_result["count"] >= 1
+                assert verify_result["found_row"] is not None
+                assert verify_result["found_row"]["message"] == "integration_test"
+
+                # Call again to verify persistence and accumulation
+                result2 = await client.call_tool("trigger_reload", {"message": "second_test"})
+                assert result2["reload_requested"] is True
+                assert result2["message"] == "second_test"
+                assert result2["before_count"] == 1  # Should see the previous row
+
+                timestamp2 = result2["timestamp"]
+
+                # Wait for the second reload
+                await asyncio.sleep(3.0)
+
+                # Verify second reload
+                verify_result2 = await client.call_tool(
+                    "verify_reload",
+                    {
+                        "expected_count": 2,
+                        "expected_message": "second_test",
+                        "expected_timestamp": timestamp2,
+                    },
+                )
+
+                assert verify_result2["reload_success"] is True
+                assert verify_result2["count"] >= 2
+                assert verify_result2["found_row"] is not None
+
+                # Verify server is still functional after reload
+                echo_result = await client.call_tool("echo_message", {"message": "still alive"})
+                assert echo_result["original"] == "still alive"
 
     @pytest.mark.asyncio
     async def test_non_duckdb_secret_types(self, integration_fixture_dir):

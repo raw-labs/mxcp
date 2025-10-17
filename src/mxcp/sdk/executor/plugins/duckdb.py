@@ -1,15 +1,19 @@
 """DuckDB executor plugin for SQL execution.
 
 This plugin integrates with DuckDB to provide SQL execution with full plugin
-support and lifecycle management. It creates and manages its own DuckDB session
-and handles plugin loading internally.
+support and lifecycle management. It uses a shared DuckDB runtime for connection
+management.
 
 Example usage:
     >>> from mxcp.sdk.executor import ExecutionEngine, ExecutionContext
     >>> from mxcp.sdk.executor.plugins import DuckDBExecutor
+    >>> from mxcp.sdk.duckdb import DuckDBRuntime
     >>>
-    >>> # Create DuckDB executor (creates its own session)
-    >>> executor = DuckDBExecutor()
+    >>> # Create shared runtime
+    >>> runtime = DuckDBRuntime(database_config, plugins, plugin_config, secrets)
+    >>>
+    >>> # Create DuckDB executor with shared runtime
+    >>> executor = DuckDBExecutor(runtime)
     >>>
     >>> # Create engine and register executor
     >>> engine = ExecutionEngine()
@@ -36,8 +40,7 @@ Example usage:
 
 import hashlib
 import logging
-import threading
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import duckdb
 
@@ -49,17 +52,15 @@ from mxcp.sdk.telemetry import (
     traced_operation,
 )
 
-from ..context import ExecutionContext, reset_execution_context, set_execution_context
+from ..context import (
+    ExecutionContext,
+    reset_execution_context,
+    set_execution_context,
+)
 from ..interfaces import ExecutorPlugin, ValidationResult
 
 if TYPE_CHECKING:
-    from .duckdb_plugin._types import (
-        DatabaseConfig,
-        PluginConfig,
-        PluginDefinition,
-        SecretDefinition,
-    )
-    from .duckdb_plugin.session import DuckDBSession
+    from mxcp.sdk.duckdb import DuckDBRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -67,78 +68,16 @@ logger = logging.getLogger(__name__)
 class DuckDBExecutor(ExecutorPlugin):
     """Executor plugin for DuckDB SQL execution.
 
-    Creates and manages its own DuckDB session with the provided configuration.
-
-    Example usage:
-        >>> from mxcp.sdk.executor.plugins import DuckDBExecutor
-        >>> from mxcp.sdk.executor.plugins.duckdb_plugin._types import (
-        ...     DatabaseConfig, ExtensionDefinition, PluginDefinition,
-        ...     PluginConfig, SecretDefinition
-        ... )
-        >>>
-        >>> # Create database config
-        >>> database_config = DatabaseConfig(
-        ...     path="data/my_database.db",
-        ...     readonly=False,
-        ...     extensions=[ExtensionDefinition(name="json")]
-        ... )
-        >>>
-        >>> # Create executor with specific config
-        >>> executor = DuckDBExecutor(
-        ...     database_config=database_config,
-        ...     plugins=[],
-        ...     plugin_config=PluginConfig(plugins_path="plugins", config={}),
-        ...     secrets=[],
-        ...     required_secrets=[]
-        ... )
-        >>>
-        >>> # Execute SQL
-        >>> result = await executor.execute(
-        ...     "SELECT * FROM table WHERE id = $id",
-        ...     {"id": 123},
-        ...     context
-        ... )
+    Uses a shared DuckDB runtime for connection management.
     """
 
-    _session: Optional["DuckDBSession"] = None
-
-    def __init__(
-        self,
-        database_config: "DatabaseConfig",
-        plugins: list["PluginDefinition"],
-        plugin_config: "PluginConfig",
-        secrets: list["SecretDefinition"],
-    ):
-        """Initialize DuckDB executor.
-
-        Creates a DuckDB session immediately with the provided configuration.
+    def __init__(self, runtime: "DuckDBRuntime"):
+        """Initialize the DuckDB executor with shared runtime.
 
         Args:
-            database_config: Database configuration including path, readonly, extensions
-            plugins: List of plugin definitions to load
-            plugin_config: Plugin configuration with path and config data
-            secrets: List of secret definitions for injection
+            runtime: Shared DuckDB runtime for connection management
         """
-        self.database_config = database_config
-        self.plugins = plugins
-        self.plugin_config = plugin_config
-        self.secrets = secrets
-        self._db_lock = threading.Lock()  # Internal locking for thread safety
-
-        # Create session immediately in constructor
-        try:
-            from .duckdb_plugin.session import DuckDBSession
-
-            self._session = DuckDBSession(
-                database_config=self.database_config,
-                plugins=self.plugins,
-                plugin_config=self.plugin_config,
-                secrets=self.secrets,
-            )
-            logger.info("DuckDB session created successfully")
-        except Exception as e:
-            logger.error(f"Failed to create DuckDB session: {e}")
-            raise RuntimeError(f"Failed to create DuckDB session: {e}") from e
+        self._runtime = runtime
 
         # Log available plugins
         self._log_available_plugins()
@@ -150,36 +89,19 @@ class DuckDBExecutor(ExecutorPlugin):
         """The language this executor handles."""
         return "sql"
 
-    @property
-    def session(self) -> "DuckDBSession":
-        """Get the current DuckDB session."""
-        if not self._session:
-            raise RuntimeError("DuckDB session not initialized")
-        return self._session
+    def prepare_context(self, context: ExecutionContext) -> None:
+        """Prepare the execution context with DuckDB runtime.
+
+        This stores the runtime in the context so that runtime
+        modules can access the database and plugins.
+        """
+        logger.debug("Preparing execution context with DuckDB runtime")
+        context.set("duckdb_runtime", self._runtime)
 
     def shutdown(self) -> None:
         """Clean up DuckDB executor resources."""
-        logger.info("DuckDB executor shutting down")
-
-        if self._session:
-            try:
-                # Shutdown DuckDB plugins first (plugins loaded into this session)
-                if hasattr(self._session, "plugins") and self._session.plugins:
-                    logger.info(f"Shutting down {len(self._session.plugins)} DuckDB plugins...")
-                    for plugin_name, plugin in self._session.plugins.items():
-                        try:
-                            plugin.shutdown()
-                            logger.info(f"Shut down DuckDB plugin: {plugin_name}")
-                        except Exception as e:
-                            logger.error(f"Error shutting down plugin {plugin_name}: {e}")
-
-                # Now close the session
-                self._session.close()
-                logger.info("DuckDB session closed")
-            except Exception as e:
-                logger.error(f"Error closing DuckDB session: {e}")
-            finally:
-                self._session = None
+        # Runtime is managed externally, so we don't shut it down here
+        pass
 
     def validate_source(self, source_code: str) -> ValidationResult:
         """Validate SQL source code syntax.
@@ -191,12 +113,13 @@ class DuckDBExecutor(ExecutorPlugin):
             ValidationResult with is_valid flag and optional error message
         """
         try:
-            # Try to prepare the statement to check syntax
-            session = self.session
-            if not session or not session.conn:
-                return ValidationResult(is_valid=False, error_message="No DuckDB session available")
-
-            with self._db_lock:
+            # Get a connection from the pool to validate
+            with self._runtime.get_connection() as session:
+                #### TODO do we need that really?
+                if not session.conn:
+                    return ValidationResult(
+                        is_valid=False, error_message="No DuckDB session available"
+                    )
                 conn = session.conn
                 conn.execute(f"PREPARE stmt AS {source_code}")
                 conn.execute("DEALLOCATE stmt")
@@ -272,16 +195,17 @@ class DuckDBExecutor(ExecutorPlugin):
                     "db.statement.hash": query_hash,
                     "db.operation": operation,
                     "db.parameters.count": len(params) if params else 0,
-                    "db.readonly": self.database_config.readonly,
+                    "db.readonly": self._runtime.database_config.readonly,
                 },
             ):
                 try:
-                    # Set execution context for this execution, which is used for dynamic UDFs
-                    context_token = set_execution_context(context)
+                    # Get a connection from the pool
+                    with self._runtime.get_connection() as session:
+                        # Set execution context for this execution, which is used for dynamic UDFs
+                        context_token = set_execution_context(context)
 
-                    try:
-                        with self._db_lock:
-                            result = self.session.execute_query_to_dict(source_code, params)
+                        try:
+                            result = session.execute_query_to_dict(source_code, params)
 
                             # Add result metrics to current span
                             span = get_current_span()
@@ -296,9 +220,9 @@ class DuckDBExecutor(ExecutorPlugin):
                             )
 
                             return result
-                    finally:
-                        # Always reset the context when done
-                        reset_execution_context(context_token)
+                        finally:
+                            # Always reset the context when done
+                            reset_execution_context(context_token)
 
                 except Exception as e:
                     logger.error(f"SQL execution failed: {e}")
@@ -320,37 +244,10 @@ class DuckDBExecutor(ExecutorPlugin):
     def _log_available_plugins(self) -> None:
         """Log information about available DuckDB plugins."""
         try:
-            session = self.session
-            if hasattr(session, "plugins") and session.plugins:
-                plugin_names = list(session.plugins.keys())
+            if self._runtime.plugins:
+                plugin_names = list(self._runtime.plugins.keys())
                 logger.info(f"DuckDB plugins available: {plugin_names}")
             else:
                 logger.info("No DuckDB plugins available")
         except Exception as e:
             logger.warning(f"Failed to check available plugins: {e}")
-
-    def execute_raw_sql(self, sql: str, params: dict[str, Any] | None = None) -> Any:
-        """Execute raw SQL without parameter substitution.
-
-        Args:
-            sql: Raw SQL to execute
-            params: Optional parameters (will be ignored)
-
-        Returns:
-            Raw query results
-        """
-        try:
-            session = self.session
-            if not session or not session.conn:
-                raise RuntimeError("No DuckDB session available")
-
-            with self._db_lock:
-                # Use the same pattern as the old code: fetchdf().to_dict("records")
-                # to return dictionaries instead of tuples
-                from pandas import NaT
-
-                result = session.conn.execute(sql, params)
-                return result.fetchdf().replace({NaT: None}).to_dict("records")
-        except Exception as e:
-            logger.error(f"Raw SQL execution failed: {e}")
-            raise
