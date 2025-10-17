@@ -873,6 +873,148 @@ def check_all_secrets() -> dict:
                 assert len(echo_tool.get("inputSchema", {}).get("properties", {})) == 1
 
     @pytest.mark.asyncio
+    async def test_parameter_optionality_in_mcp_schema(self, integration_fixture_dir):
+        """Test that MCP schema correctly advertises optional vs required parameters."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                tools = await client.list_tools()
+
+                # Find our test tool with optional parameters
+                test_tool = next((t for t in tools if t["name"] == "check_optional_params"), None)
+                assert test_tool is not None, "check_optional_params tool not found"
+
+                # Get the input schema
+                input_schema = test_tool.get("inputSchema", {})
+                properties = input_schema.get("properties", {})
+                required_fields = input_schema.get("required", [])
+
+                # Verify we have all expected parameters
+                expected_params = [
+                    "required_param",
+                    "optional_param",
+                    "optional_number",
+                    "optional_float",
+                    "optional_bool",
+                    "optional_date",
+                    "optional_datetime",
+                ]
+                for param in expected_params:
+                    assert param in properties, f"{param} should be in properties"
+
+                # Verify only required_param is in required array
+                assert (
+                    "required_param" in required_fields
+                ), "required_param should be in required array"
+
+                optional_params = [
+                    "optional_param",
+                    "optional_number",
+                    "optional_float",
+                    "optional_bool",
+                    "optional_date",
+                    "optional_datetime",
+                ]
+                for param in optional_params:
+                    assert param not in required_fields, f"{param} should NOT be in required array"
+
+                # Verify default values are present in the schema with correct types
+                assert (
+                    properties["optional_param"].get("default") == "default_value"
+                ), "optional_param should have default value"
+                assert (
+                    properties["optional_number"].get("default") == 42
+                ), "optional_number should have default value"
+                assert (
+                    properties["optional_float"].get("default") == 3.14
+                ), "optional_float should have default value"
+                assert (
+                    properties["optional_bool"].get("default") is True
+                ), "optional_bool should have default value"
+                assert (
+                    properties["optional_date"].get("default") == "2024-01-15"
+                ), "optional_date should have default value"
+                assert (
+                    properties["optional_datetime"].get("default") == "2024-01-15T10:30:00Z"
+                ), "optional_datetime should have default value"
+                assert (
+                    "default" not in properties["required_param"]
+                ), "required_param should not have default value"
+
+    @pytest.mark.asyncio
+    async def test_optional_parameters_functionality(self, integration_fixture_dir):
+        """Test that tools with optional parameters work correctly when called."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                # Test calling with only required parameter (optional params should use defaults)
+                result1 = await client.call_tool(
+                    "check_optional_params", {"required_param": "test_value"}
+                )
+
+                assert result1["required_param"] == "test_value"
+                assert result1["optional_param"] == "default_value"  # Should use default
+                assert result1["optional_number"] == 42  # Should use default
+                assert result1["optional_float"] == 3.14  # Should use default
+                assert result1["optional_bool"] is True  # Should use default
+                assert result1["optional_date"] == "2024-01-15"  # Should use default
+                # Datetime may be normalized to +00:00 format instead of Z
+                assert result1["optional_datetime"] in [
+                    "2024-01-15T10:30:00Z",
+                    "2024-01-15T10:30:00+00:00",
+                ]  # Should use default
+
+                # Test calling with all parameters (should override defaults)
+                result2 = await client.call_tool(
+                    "check_optional_params",
+                    {
+                        "required_param": "test_value",
+                        "optional_param": "custom_value",
+                        "optional_number": 100,
+                        "optional_float": 2.71,
+                        "optional_bool": False,
+                        "optional_date": "2025-12-31",
+                        "optional_datetime": "2025-12-31T23:59:59Z",
+                    },
+                )
+
+                assert result2["required_param"] == "test_value"
+                assert result2["optional_param"] == "custom_value"  # Should use provided value
+                assert result2["optional_number"] == 100  # Should use provided value
+                assert result2["optional_float"] == 2.71  # Should use provided value
+                assert result2["optional_bool"] is False  # Should use provided value
+                assert result2["optional_date"] == "2025-12-31"  # Should use provided value
+                # Datetime may be normalized to +00:00 format instead of Z
+                assert result2["optional_datetime"] in [
+                    "2025-12-31T23:59:59Z",
+                    "2025-12-31T23:59:59+00:00",
+                ]  # Should use provided value
+
+                # Test calling with partial optional parameters (some defaults, some custom)
+                result3 = await client.call_tool(
+                    "check_optional_params",
+                    {
+                        "required_param": "test_value",
+                        "optional_float": 1.618,  # Override only some optional params
+                        "optional_bool": False,
+                    },
+                )
+
+                assert result3["required_param"] == "test_value"
+                assert result3["optional_param"] == "default_value"  # Should use default
+                assert result3["optional_number"] == 42  # Should use default
+                assert result3["optional_float"] == 1.618  # Should use provided value
+                assert result3["optional_bool"] is False  # Should use provided value
+                assert result3["optional_date"] == "2024-01-15"  # Should use default
+                # Datetime may be normalized to +00:00 format instead of Z
+                assert result3["optional_datetime"] in [
+                    "2024-01-15T10:30:00Z",
+                    "2024-01-15T10:30:00+00:00",
+                ]  # Should use default
+
+    @pytest.mark.asyncio
     async def test_global_var(self, integration_fixture_dir):
         """Test that global variables are set correctly."""
         with ServerProcess(integration_fixture_dir) as server:
