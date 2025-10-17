@@ -119,14 +119,14 @@ class TestPythonExecutorBasics:
         # Executor is ready immediately after construction
 
         # Valid Python code
-        assert executor.validate_source("def hello(): return 'world'")
-        assert executor.validate_source("x = 1 + 2")
-        assert executor.validate_source("import os")  # Valid import
+        assert executor.validate_source("def hello(): return 'world'").is_valid
+        assert executor.validate_source("x = 1 + 2").is_valid
+        assert executor.validate_source("import os").is_valid  # Valid import
 
         # Invalid Python code (syntax errors)
-        assert not executor.validate_source("def invalid syntax:")
-        assert not executor.validate_source("if incomplete")
-        assert not executor.validate_source("for x in:")
+        assert not executor.validate_source("def invalid syntax:").is_valid
+        assert not executor.validate_source("if incomplete").is_valid
+        assert not executor.validate_source("for x in:").is_valid
 
 
 class TestPythonCodeExecution:

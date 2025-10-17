@@ -31,6 +31,7 @@ Example usage:
 import contextlib
 import threading
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any
 
 from mxcp.sdk.telemetry import (
@@ -43,6 +44,14 @@ from mxcp.sdk.telemetry import (
 from mxcp.sdk.validator import TypeValidator
 
 from .context import ExecutionContext
+
+
+@dataclass
+class ValidationResult:
+    """Result of source code validation."""
+
+    is_valid: bool
+    error_message: str | None = None
 
 
 class ExecutorPlugin(ABC):
@@ -111,14 +120,14 @@ class ExecutorPlugin(ABC):
         pass
 
     @abstractmethod
-    def validate_source(self, source_code: str) -> bool:
+    def validate_source(self, source_code: str) -> ValidationResult:
         """Validate source code syntax without execution.
 
         Args:
             source_code: The source code to validate
 
         Returns:
-            True if valid, False otherwise
+            ValidationResult with is_valid flag and optional error message
         """
         pass
 
@@ -337,7 +346,7 @@ class ExecutionEngine:
                 description="Currently running executions across all languages",
             )
 
-    def validate_source(self, language: str, source_code: str) -> bool:
+    def validate_source(self, language: str, source_code: str) -> ValidationResult:
         """Validate source code syntax without execution.
 
         Args:
@@ -345,7 +354,7 @@ class ExecutionEngine:
             source_code: The source code to validate
 
         Returns:
-            True if valid, False otherwise
+            ValidationResult with is_valid flag and optional error message
 
         Raises:
             ValueError: If language is not supported

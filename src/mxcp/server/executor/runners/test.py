@@ -48,6 +48,7 @@ class TestRunner:
         endpoint_type: str,
         name: str,
         cli_user_context: UserContext | None = None,
+        request_headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Run tests for a specific endpoint.
 
@@ -88,7 +89,7 @@ class TestRunner:
 
             for test_def in tests:
                 test_result = await self._run_single_test(
-                    endpoint_type, name, test_def, column_names, cli_user_context
+                    endpoint_type, name, test_def, column_names, cli_user_context, request_headers
                 )
                 test_results.append(test_result)
 
@@ -118,6 +119,7 @@ class TestRunner:
         test_def: TestDefinition,
         column_names: list[str],
         cli_user_context: UserContext | None,
+        request_headers: dict[str, str] | None,
     ) -> dict[str, Any]:
         """Run a single test.
 
@@ -155,6 +157,8 @@ class TestRunner:
                 self.execution_engine,
                 False,  # skip_output_validation
                 test_user_context,
+                None,  # server_ref
+                request_headers,
             )
             logger.info(f"Execution result: {result}")
 

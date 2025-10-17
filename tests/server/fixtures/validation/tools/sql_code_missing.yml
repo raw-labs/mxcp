@@ -1,0 +1,15 @@
+mxcp: 1
+tool:
+  name: sql_code_missing
+  description: A valid .yml with missing SQL code
+  parameters:
+    - name: user_id
+      type: integer
+      description: User ID to query
+  return:
+    type: object
+    properties:
+      user_name:
+        type: string
+  source:
+    file: ../sql/missing.sql

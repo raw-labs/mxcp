@@ -1,6 +1,7 @@
 import asyncio
 import concurrent.futures
 import contextlib
+import functools
 import hashlib
 import json
 import logging
@@ -9,8 +10,9 @@ import signal
 import threading
 import time
 import traceback
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, Literal, TypeVar, cast
 
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
@@ -31,7 +33,7 @@ from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.core import PACKAGE_VERSION
-from mxcp.sdk.executor import ExecutionEngine
+from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.telemetry import (
     decrement_gauge,
     get_current_trace_id,
@@ -69,6 +71,57 @@ from mxcp.server.services.endpoints.validator import validate_endpoint
 from ._types import ConfigInfo
 
 logger = logging.getLogger(__name__)
+
+# Type variable for the decorator
+T = TypeVar("T", bound=Callable[..., Awaitable[Any]])
+
+
+def with_draining_and_request_tracking(func: T) -> T:
+    """Decorator that handles draining wait and request counter tracking.
+
+    This decorator wraps async methods to:
+    1. Wait while draining is in progress
+    2. Increment active request counter
+    3. Execute the wrapped method
+    4. Decrement the counter in finally block
+
+    The wrapped method must be a method of a class that has:
+    - self.draining (bool)
+    - self.active_requests (int)
+    - self.requests_lock (threading.Lock)
+    """
+
+    @functools.wraps(func)
+    async def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        # Wait if draining is in progress, then atomically register this request.
+        # The check and increment must be atomic to prevent requests from being
+        # registered after draining has started checking for zero active requests.
+        wait_start = time.time()
+        wait_timeout = 30  # seconds
+
+        while True:
+            # Atomically check draining flag and register request if not draining
+            with self.requests_lock:
+                if not self.draining:
+                    # Safe to register - draining hasn't started or has finished
+                    self.active_requests += 1
+                    break
+
+            # Draining is in progress, wait and retry
+            if time.time() - wait_start > wait_timeout:
+                raise RuntimeError(
+                    "Service is reloading and taking longer than expected. Please retry in a few seconds."
+                )
+            await asyncio.sleep(0.1)
+
+        try:
+            return await func(self, *args, **kwargs)
+        finally:
+            # Decrement request counter
+            with self.requests_lock:
+                self.active_requests -= 1
+
+    return cast(T, wrapper)
 
 
 def translate_transport_config(
@@ -193,7 +246,6 @@ class RAWMCP:
     profile_name: str
     transport: str
     readonly: bool
-    execution_engine: ExecutionEngine | None
     _model_cache: dict[str, Any]
     transport_mode: str | None
 
@@ -288,9 +340,6 @@ class RAWMCP:
         self.active_requests = 0
         self.requests_lock = threading.Lock()
         self.draining = False
-
-        # Single execution lock for all operations
-        self.execution_lock = threading.RLock()  # RLock for re-entrant locking
 
         # Register signal handlers
         self._register_signal_handlers()
@@ -1203,6 +1252,7 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
+            result = None  # Initialize result to avoid undefined variable in finally block
             policy_info: dict[str, Any] = {
                 "policies_evaluated": [],
                 "policy_decision": None,
@@ -1212,10 +1262,20 @@ class RAWMCP:
             # Extract the FastMCP Context (first parameter)
             ctx = kwargs.pop("ctx", None)
             mcp_session_id = None
+            request_headers = None
             if ctx:
                 # session_id might be None in stateless mode
                 with contextlib.suppress(Exception):
                     mcp_session_id = getattr(ctx, "session_id", None)
+                if hasattr(ctx, "request_context"):
+                    request_context = ctx.request_context
+                    if (
+                        request_context
+                        and hasattr(request_context, "request")
+                        and request_context.request
+                    ):
+                        with contextlib.suppress(Exception):
+                            request_headers = dict(request_context.request.headers)
 
             try:
                 # Get the user context from the context variable (set by auth middleware)
@@ -1253,12 +1313,13 @@ class RAWMCP:
                         set_span_attribute("mxcp.session.id", mcp_session_id)
                     set_span_attribute("mxcp.trace.id", trace_id)
                 # Use the common execution wrapper with policy info
-                result, policy_info = await self._execute_with_draining(
+                result, policy_info = await self._execute(
                     endpoint_type=endpoint_type.value,
                     name=name,
                     params=kwargs,  # No manual conversion needed - SDK handles it
                     user_context=user_context,
                     with_policy_info=True,
+                    request_headers=request_headers,  # Pass the FastMCP request headers
                 )
                 logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                 return result
@@ -1469,13 +1530,9 @@ class RAWMCP:
                 if user_context:
                     logger.info("Authenticated user executing SQL query")
 
-                # Use SDK execution engine
-                if self.runtime_environment is None:
-                    raise RuntimeError("Execution engine not initialized")
-                result = await self._execute_with_draining(
-                    endpoint_type="sql",
-                    name="user_sql_query",
-                    params={"sql": sql},
+                result = await self._execute_sql(
+                    source_code=sql,
+                    params={},
                     user_context=user_context,
                 )
                 return cast(list[dict[str, Any]], result)
@@ -1491,22 +1548,20 @@ class RAWMCP:
                     # Determine caller type
                     caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
 
-                    asyncio.run(
-                        self.audit_logger.log_event(
-                            caller_type=cast(
-                                Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
-                            ),
-                            event_type="tool",
-                            name="execute_sql_query",
-                            input_params={"sql": sql},
-                            duration_ms=duration_ms,
-                            schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                            policy_decision=None,
-                            reason=None,
-                            status=cast(Literal["success", "error"], status),
-                            error=error_msg,
-                            trace_id=get_current_trace_id(),
-                        )
+                    await self.audit_logger.log_event(
+                        caller_type=cast(
+                            Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
+                        ),
+                        event_type="tool",
+                        name="execute_sql_query",
+                        input_params={"sql": sql},
+                        duration_ms=duration_ms,
+                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
+                        policy_decision=None,
+                        reason=None,
+                        status=cast(Literal["success", "error"], status),
+                        error=error_msg,
+                        trace_id=get_current_trace_id(),
                     )
 
         # Register table list tool with proper metadata
@@ -1537,22 +1592,14 @@ class RAWMCP:
                 if user_context:
                     logger.info(f"User {user_context.username} listing tables")
 
-                # Use SDK execution engine
-                if self.runtime_environment is None:
-                    raise RuntimeError("Execution engine not initialized")
-                result = await self._execute_with_draining(
-                    endpoint_type="sql",
-                    name="list_tables",
-                    params={
-                        "sql": """
+                result = await self._execute_sql(
+                    source_code="""
                         SELECT
-                            table_name as name,
-                            table_type as type
+                            table_name as name, table_type as type
                         FROM information_schema.tables
                         WHERE table_schema = 'main'
-                        ORDER BY table_name
-                    """
-                    },
+                        ORDER BY table_name""",
+                    params={},
                     user_context=user_context,
                 )
                 return cast(list[dict[str, str]], result)
@@ -1568,22 +1615,20 @@ class RAWMCP:
                     # Determine caller type
                     caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
 
-                    asyncio.run(
-                        self.audit_logger.log_event(
-                            caller_type=cast(
-                                Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
-                            ),
-                            event_type="tool",
-                            name="list_tables",
-                            input_params={},
-                            duration_ms=duration_ms,
-                            schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                            policy_decision=None,
-                            reason=None,
-                            status=cast(Literal["success", "error"], status),
-                            error=error_msg,
-                            trace_id=get_current_trace_id(),
-                        )
+                    await self.audit_logger.log_event(
+                        caller_type=cast(
+                            Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
+                        ),
+                        event_type="tool",
+                        name="list_tables",
+                        input_params={},
+                        duration_ms=duration_ms,
+                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
+                        policy_decision=None,
+                        reason=None,
+                        status=cast(Literal["success", "error"], status),
+                        error=error_msg,
+                        trace_id=get_current_trace_id(),
                     )
 
         # Register schema tool with proper metadata
@@ -1619,14 +1664,8 @@ class RAWMCP:
                         f"User {user_context.username} getting schema for table {table_name}"
                     )
 
-                # Use SDK execution engine
-                if self.runtime_environment is None:
-                    raise RuntimeError("Execution engine not initialized")
-                result = await self._execute_with_draining(
-                    endpoint_type="sql",
-                    name="get_table_schema",
-                    params={
-                        "sql": """
+                result = await self._execute_sql(
+                    source_code="""
                         SELECT
                             column_name as name,
                             data_type as type,
@@ -1635,8 +1674,7 @@ class RAWMCP:
                         WHERE table_name = $table_name
                         ORDER BY ordinal_position
                     """,
-                        "table_name": table_name,
-                    },
+                    params={"table_name": table_name},
                     user_context=user_context,
                 )
                 return cast(list[dict[str, Any]], result)
@@ -1652,38 +1690,38 @@ class RAWMCP:
                     # Determine caller type
                     caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
 
-                    asyncio.run(
-                        self.audit_logger.log_event(
-                            caller_type=cast(
-                                Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
-                            ),
-                            event_type="tool",
-                            name="get_table_schema",
-                            input_params={"table_name": table_name},
-                            duration_ms=duration_ms,
-                            schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                            policy_decision=None,
-                            reason=None,
-                            status=cast(Literal["success", "error"], status),
-                            error=error_msg,
-                            trace_id=get_current_trace_id(),
-                        )
+                    await self.audit_logger.log_event(
+                        caller_type=cast(
+                            Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
+                        ),
+                        event_type="tool",
+                        name="get_table_schema",
+                        input_params={"table_name": table_name},
+                        duration_ms=duration_ms,
+                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
+                        policy_decision=None,
+                        reason=None,
+                        status=cast(Literal["success", "error"], status),
+                        error=error_msg,
+                        trace_id=get_current_trace_id(),
                     )
 
         logger.info("Registered built-in DuckDB features")
 
-    async def _execute_with_draining(
+    @with_draining_and_request_tracking
+    async def _execute(
         self,
         endpoint_type: str,
         name: str,
         params: dict[str, Any],
         user_context: Any = None,
         with_policy_info: bool = False,
+        request_headers: dict[str, str] | None = None,
     ) -> Any:
-        """Execute endpoint with draining and locking logic.
+        """Execute endpoint with execution lock.
 
-        This wrapper ensures all endpoints (both dynamic and pre-registered)
-        go through the same draining and locking process.
+        This method handles the actual endpoint execution with the execution lock.
+        The draining wait and request tracking is handled by the decorator.
 
         Args:
             endpoint_type: Type of endpoint to execute
@@ -1691,59 +1729,72 @@ class RAWMCP:
             params: Parameters to pass
             user_context: User context
             with_policy_info: If True, returns (result, policy_info) tuple
+            request_headers: Request headers from FastMCP
 
         Returns:
             Result of execution, or (result, policy_info) if with_policy_info=True
         """
-        # Wait if draining is in progress
-        # Note: We check self.draining without a lock for performance.
-        # A request might slip through right as draining starts, but this is fine
-        # because active_requests tracking ensures correctness.
-        wait_start = time.time()
-        wait_timeout = 30  # seconds
-        while self.draining:
-            if time.time() - wait_start > wait_timeout:
-                raise RuntimeError(
-                    "Service is reloading and taking longer than expected. Please retry in a few seconds."
-                )
-            await asyncio.sleep(0.1)
+        if self.runtime_environment is None:
+            raise RuntimeError("Execution engine not initialized")
 
-        # Track this request
-        with self.requests_lock:
-            self.active_requests += 1
+        if with_policy_info:
+            return await execute_endpoint_with_engine_and_policy(
+                endpoint_type=endpoint_type,
+                name=name,
+                params=params,
+                user_config=self.user_config,
+                site_config=self.site_config,
+                execution_engine=self.runtime_environment.execution_engine,
+                user_context=user_context,
+                request_headers=request_headers,
+                server_ref=self,
+            )
+        else:
+            return await execute_endpoint_with_engine(
+                endpoint_type=endpoint_type,
+                name=name,
+                params=params,
+                user_config=self.user_config,
+                site_config=self.site_config,
+                execution_engine=self.runtime_environment.execution_engine,
+                user_context=user_context,
+                request_headers=request_headers,
+                server_ref=self,
+            )
 
-        try:
-            # Acquire execution lock for the actual execution
-            with self.execution_lock:
-                if self.runtime_environment is None:
-                    raise RuntimeError("Execution engine not initialized")
+    @with_draining_and_request_tracking
+    async def _execute_sql(
+        self,
+        source_code: str,
+        params: dict[str, Any] | None = None,
+        user_context: Any = None,
+    ) -> Any:
+        """Execute SQL query with execution lock.
 
-                if with_policy_info:
-                    return await execute_endpoint_with_engine_and_policy(
-                        endpoint_type=endpoint_type,
-                        name=name,
-                        params=params,
-                        user_config=self.user_config,
-                        site_config=self.site_config,
-                        execution_engine=self.runtime_environment.execution_engine,
-                        user_context=user_context,
-                        server_ref=self,
-                    )
-                else:
-                    return await execute_endpoint_with_engine(
-                        endpoint_type=endpoint_type,
-                        name=name,
-                        params=params,
-                        user_config=self.user_config,
-                        site_config=self.site_config,
-                        execution_engine=self.runtime_environment.execution_engine,
-                        user_context=user_context,
-                        server_ref=self,
-                    )
-        finally:
-            # Decrement request counter
-            with self.requests_lock:
-                self.active_requests -= 1
+        This method handles SQL execution through the execution engine with the execution lock.
+        The draining wait and request tracking is handled by the decorator.
+
+        Args:
+            source_code: SQL source code to execute
+            params: Parameters to pass to the SQL query
+            user_context: Optional user context for authentication/authorization
+
+        Returns:
+            Result of SQL execution
+        """
+        if self.runtime_environment is None:
+            raise RuntimeError("Execution engine not initialized")
+
+        execution_context = ExecutionContext(user_context=user_context)
+        execution_context.set("user_config", self.user_config)
+        execution_context.set("site_config", self.site_config)
+
+        return await self.runtime_environment.execution_engine.execute(
+            language="sql",
+            source_code=source_code,
+            params=params or {},
+            context=execution_context,
+        )
 
     def register_endpoints(self) -> None:
         """Register all discovered endpoints with MCP."""

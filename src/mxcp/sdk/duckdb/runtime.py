@@ -142,29 +142,54 @@ class DuckDBRuntime:
             self._pool.put(session)
 
     def shutdown(self) -> None:
-        """Shutdown all connections in the runtime."""
+        """Shutdown all connections in the runtime.
+
+        This method uses a two-phase approach to ensure thread safety:
+        1. Set shutdown flag to prevent new connection requests
+        2. Acquire all connections from the pool, which guarantees:
+           - No thread is blocked waiting for a connection
+           - No thread has an active connection
+           - No thread can start new work
+        """
         logger.info("Shutting down DuckDB runtime...")
 
-        # Mark as shutting down to prevent new connections
+        # Phase 1: Mark as shutting down to prevent new connections
         self._shutdown = True
 
-        # Wait for all active connections to be returned
+        # Phase 2: Acquire all connections from the pool with timeout
+        # This ensures no thread can be using a connection or blocked waiting for one
         timeout = 5.0  # 5 second timeout
         start_time = time.time()
+        acquired_sessions: list[DuckDBSession] = []
 
-        while True:
-            with self._lock:
-                active_count = len(self._active_sessions)
+        logger.debug(f"Acquiring all {self.pool_size} connections from pool...")
 
-            if active_count == 0:
+        for i in range(self.pool_size):
+            try:
+                # Try to get a connection with timeout
+                remaining = timeout - (time.time() - start_time)
+                if remaining <= 0:
+                    logger.warning(
+                        f"Timeout acquiring connection {i+1}/{self.pool_size}. "
+                        f"Got {len(acquired_sessions)} connections, "
+                        f"{len(self._active_sessions)} still active."
+                    )
+                    break
+
+                session = self._pool.get(timeout=remaining)
+                acquired_sessions.append(session)
+                logger.debug(f"Acquired connection {i+1}/{self.pool_size}")
+
+            except queue.Empty:
+                logger.warning(
+                    f"Could not acquire connection {i+1}/{self.pool_size} - pool empty. "
+                    f"Got {len(acquired_sessions)} connections."
+                )
                 break
 
-            if (time.time() - start_time) > timeout:
-                logger.warning(f"{active_count} connections still active after timeout")
-                break
-
-            logger.debug(f"Waiting for {active_count} connections to be returned...")
-            time.sleep(0.1)
+        # At this point, we have all available connections
+        # Any connections not acquired are still in use despite timeout
+        logger.info(f"Acquired {len(acquired_sessions)}/{self.pool_size} connections")
 
         # Shutdown plugins first (only need to do this once)
         if self._plugins:
@@ -175,18 +200,13 @@ class DuckDBRuntime:
                 except Exception as e:
                     logger.error(f"Error shutting down plugin {plugin_name}: {e}")
 
-        # Close all sessions in the pool
+        # Close all acquired sessions
         closed_count = 0
-
-        while not self._pool.empty():
+        for session in acquired_sessions:
             try:
-                session = self._pool.get_nowait()
                 session.close()
                 closed_count += 1
                 logger.debug(f"Closed DuckDB connection {closed_count}")
-
-            except queue.Empty:
-                break
             except Exception as e:
                 logger.error(f"Error closing DuckDB session: {e}")
 

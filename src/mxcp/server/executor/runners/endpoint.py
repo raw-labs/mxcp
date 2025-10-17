@@ -85,6 +85,7 @@ async def execute_code_with_engine(
     site_config: SiteConfig,
     user_context: UserContext | None = None,
     server_ref: Optional["RAWMCP"] = None,
+    request_headers: dict[str, str] | None = None,
 ) -> Any:
     """Execute tool/resource endpoint using SDK execution engine.
 
@@ -108,7 +109,9 @@ async def execute_code_with_engine(
     execution_context.set("site_config", site_config)
     if server_ref:
         execution_context.set("_mxcp_server", server_ref)
-
+    # Add HTTP headers
+    if request_headers:
+        execution_context.set("request_headers", request_headers)
     # Get validation schemas - SDK executor handles input validation internally
     input_schema: list[dict[str, Any]] | None = None
     output_schema: TypeDefinition | None = None
