@@ -1,0 +1,7 @@
+mxcp
+SquirroClient
+python-docx
+pdfminer.six
+requests
+pytest
+pytest-mock

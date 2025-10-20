@@ -1,0 +1,366 @@
+{
+    "count": 3,
+    "items": [
+        {
+            "id": "YkbN022b82e230OR7auQXA",
+            "link": null,
+            "read": false,
+            "oversize": false,
+            "title": "RTGS_Technical_Operation_Manual_v4.1.docx",
+            "abstract": [
+                "Real-Time Gross Settlement (RTGS) System Technical Operation Manual - Version 4.1 1"
+            ],
+            "language": "en",
+            "created_at": "2025-10-17T10:01:08.662786",
+            "location": null,
+            "modified_at": "2025-10-17T10:01:40.807933",
+            "score": 3.799311,
+            "webshot_url": "/storage/localfile/ef/8c/1321c3421ce0bbb9/RTGS_Technical_Operation_Manual_v4.1.docx.pdf.preview.jpeg",
+            "webshot_height": 512,
+            "webshot_width": 362,
+            "keywords": {
+                "file_size": [
+                    49291
+                ],
+                "file_name": [
+                    "RTGS_Technical_Operation_Manual_v4.1.docx"
+                ],
+                "source_type": [
+                    "Document"
+                ],
+                "nlp_tag__phrases": [
+                    "critical system",
+                    "o submit payment instruction",
+                    "specific predefine rtgs system ip address",
+                    "testing connectivity switchover",
+                    "x.1 rtgs business schedule rules",
+                    "settlement",
+                    "system resilience",
+                    "system overview",
+                    "rtgs directive",
+                    "payment submission",
+                    "high priority",
+                    "liquidity save mechanism",
+                    "cbb rulebook module om",
+                    "payment",
+                    "reconciliation procedure",
+                    "ups system",
+                    "internal system",
+                    "final eod report",
+                    "operational risk management framework",
+                    "message validation testing",
+                    "regular system",
+                    "rtgs system architecture",
+                    "system opening",
+                    "indirect participants",
+                    "rtgs operation",
+                    "lease line",
+                    "system operate hour",
+                    "automate payment initiation",
+                    "rtgs system",
+                    "final settlement",
+                    "cbb",
+                    "liquidity management",
+                    "mpls network",
+                    "penetration testing",
+                    "pre - production uat system",
+                    "backup line",
+                    "payments",
+                    "connectivity and system status",
+                    "rtgs",
+                    "available liquidity",
+                    "liquidity",
+                    "basic network",
+                    "system access",
+                    "interbank settlement",
+                    "participant",
+                    "operational procedures",
+                    "mpls connection",
+                    "credit settlement account",
+                    "bahraini participant",
+                    "cbb rulebook module",
+                    "payment systems",
+                    "timecritical interbank settlement",
+                    "camt.053",
+                    "manual payment initiation",
+                    "specific rtgs directive",
+                    "interbank cover payment",
+                    "other internal network",
+                    "system",
+                    "contingency procedure"
+                ]
+            },
+            "external_id": "b78ed97cd5594daedfddecc97874a157",
+            "has_sub_items": true,
+            "files": [
+                {
+                    "mime_type": "application/pdf",
+                    "content_url": "storage://pdf_conversion/52/59/c3RvcmFnZTovL2xvY2FsZmlsZS8zYS8zYS9hYjNhZjIzNWJmMTk1MWU2L1JUR1NfVGVjaG5pY2FsX09wZXJhdGlvbl9NYW51YWxfdjQuMS5kb2N4/RTGS_Technical_Operation_Manual_v4.1.docx.pdf",
+                    "id": "5s0m5iPRVUGGFtiR5O27IQ",
+                    "representations": {
+                        "application/pdf": "/storage/pdf_conversion/52/59/c3RvcmFnZTovL2xvY2FsZmlsZS8zYS8zYS9hYjNhZjIzNWJmMTk1MWU2L1JUR1NfVGVjaG5pY2FsX09wZXJhdGlvbl9NYW51YWxfdjQuMS5kb2N4/RTGS_Technical_Operation_Manual_v4.1.docx.pdf"
+                    },
+                    "link": "/storage/pdf_conversion/52/59/c3RvcmFnZTovL2xvY2FsZmlsZS8zYS8zYS9hYjNhZjIzNWJmMTk1MWU2L1JUR1NfVGVjaG5pY2FsX09wZXJhdGlvbl9NYW51YWxfdjQuMS5kb2N4/RTGS_Technical_Operation_Manual_v4.1.docx.pdf"
+                },
+                {
+                    "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "content_url": "storage://localfile/3a/3a/ab3af235bf1951e6/RTGS_Technical_Operation_Manual_v4.1.docx",
+                    "id": "AEwC_HGzQaiVbaeOQlQndA",
+                    "original": true,
+                    "representations": {
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "/storage/localfile/3a/3a/ab3af235bf1951e6/RTGS_Technical_Operation_Manual_v4.1.docx"
+                    },
+                    "link": "/storage/localfile/3a/3a/ab3af235bf1951e6/RTGS_Technical_Operation_Manual_v4.1.docx"
+                },
+                {
+                    "mime_type": "image/jpeg",
+                    "content_url": "storage://localfile/ef/8c/1321c3421ce0bbb9/RTGS_Technical_Operation_Manual_v4.1.docx.pdf.preview.jpeg",
+                    "id": "UWHOtKNoWEqTNseT_g6eUg",
+                    "representations": {
+                        "image/jpeg": "/storage/localfile/ef/8c/1321c3421ce0bbb9/RTGS_Technical_Operation_Manual_v4.1.docx.pdf.preview.jpeg"
+                    },
+                    "link": "/storage/localfile/ef/8c/1321c3421ce0bbb9/RTGS_Technical_Operation_Manual_v4.1.docx.pdf.preview.jpeg"
+                }
+            ],
+            "has_matching_sub_items": true,
+            "communities": [],
+            "sources": [],
+            "notes": [],
+            "runtime_labels": {
+                "llm_chatable": true
+            },
+            "collections": [],
+            "starred": false
+        },
+        {
+            "id": "u8Ei0smjSH30GtrILDek0Q",
+            "link": null,
+            "read": false,
+            "oversize": false,
+            "title": "Incident Response Playbook Failed Trades.docx",
+            "abstract": [
+                "Incident Response Playbook Failed Trades 1"
+            ],
+            "language": "en",
+            "created_at": "2025-10-17T10:01:08.675785",
+            "location": null,
+            "modified_at": "2025-10-17T10:01:46.074812",
+            "score": 3.7726007,
+            "webshot_url": "/storage/localfile/92/8a/bc1158dbd0fda491/Incident%252BResponse%252BPlaybook%252BFailed%252BTrades.docx.pdf.preview.jpeg",
+            "webshot_height": 512,
+            "webshot_width": 362,
+            "keywords": {
+                "file_size": [
+                    149677
+                ],
+                "file_name": [
+                    "Incident Response Playbook Failed Trades.docx"
+                ],
+                "source_type": [
+                    "Document"
+                ],
+                "nlp_tag__phrases": [
+                    "appendix a",
+                    "reject code",
+                    "fail trade",
+                    "mt",
+                    "internal error",
+                    "member internal record",
+                    "rtgs fund",
+                    "cancellation request",
+                    "system status",
+                    "middle office",
+                    "reputational risk",
+                    "sss advice",
+                    "o sss transaction reference number",
+                    "fund",
+                    "trade submission",
+                    "insufficient fund",
+                    "sss",
+                    "common sss reject codes",
+                    "trade",
+                    "fail",
+                    "instruction",
+                    "settlement instruction",
+                    "sss helpdesk",
+                    "status"
+                ]
+            },
+            "external_id": "ec35627a5386991af2020416e8cad993",
+            "has_sub_items": true,
+            "files": [
+                {
+                    "mime_type": "application/pdf",
+                    "content_url": "storage://pdf_conversion/68/df/c3RvcmFnZTovL2xvY2FsZmlsZS84OC8wNS81ZGUyYzFhYTFkNTkxM2YwL0luY2lkZW50K1Jlc3BvbnNlK1BsYXlib29rK0ZhaWxlZCtUcmFkZXMuZG9jeA%3D%3D/Incident%2BResponse%2BPlaybook%2BFailed%2BTrades.docx.pdf",
+                    "id": "79iiaZFhX0CRs9FoCWCR5A",
+                    "representations": {
+                        "application/pdf": "/storage/pdf_conversion/68/df/c3RvcmFnZTovL2xvY2FsZmlsZS84OC8wNS81ZGUyYzFhYTFkNTkxM2YwL0luY2lkZW50K1Jlc3BvbnNlK1BsYXlib29rK0ZhaWxlZCtUcmFkZXMuZG9jeA%3D%3D/Incident%2BResponse%2BPlaybook%2BFailed%2BTrades.docx.pdf"
+                    },
+                    "link": "/storage/pdf_conversion/68/df/c3RvcmFnZTovL2xvY2FsZmlsZS84OC8wNS81ZGUyYzFhYTFkNTkxM2YwL0luY2lkZW50K1Jlc3BvbnNlK1BsYXlib29rK0ZhaWxlZCtUcmFkZXMuZG9jeA%3D%3D/Incident%2BResponse%2BPlaybook%2BFailed%2BTrades.docx.pdf"
+                },
+                {
+                    "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "content_url": "storage://localfile/88/05/5de2c1aa1d5913f0/Incident+Response+Playbook+Failed+Trades.docx",
+                    "id": "jAp6GcwNT8GmP70S3NVKHg",
+                    "original": true,
+                    "representations": {
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "/storage/localfile/88/05/5de2c1aa1d5913f0/Incident%20Response%20Playbook%20Failed%20Trades.docx"
+                    },
+                    "link": "/storage/localfile/88/05/5de2c1aa1d5913f0/Incident%20Response%20Playbook%20Failed%20Trades.docx"
+                },
+                {
+                    "mime_type": "image/jpeg",
+                    "content_url": "storage://localfile/92/8a/bc1158dbd0fda491/Incident%252BResponse%252BPlaybook%252BFailed%252BTrades.docx.pdf.preview.jpeg",
+                    "id": "RT7tiyQuUbengJ3cfBueSQ",
+                    "representations": {
+                        "image/jpeg": "/storage/localfile/92/8a/bc1158dbd0fda491/Incident%252BResponse%252BPlaybook%252BFailed%252BTrades.docx.pdf.preview.jpeg"
+                    },
+                    "link": "/storage/localfile/92/8a/bc1158dbd0fda491/Incident%252BResponse%252BPlaybook%252BFailed%252BTrades.docx.pdf.preview.jpeg"
+                }
+            ],
+            "has_matching_sub_items": true,
+            "communities": [],
+            "sources": [],
+            "notes": [],
+            "runtime_labels": {
+                "llm_chatable": true
+            },
+            "collections": [],
+            "starred": false
+        },
+        {
+            "id": "Z2tlfTPqRYwUPUoe8YB4dA",
+            "link": null,
+            "read": false,
+            "oversize": false,
+            "title": "Intraday_Liquidity_Facility_Policy.docx",
+            "abstract": [
+                "Intraday Liquidity Facility Policy 1"
+            ],
+            "language": "en",
+            "created_at": "2025-10-17T10:01:08.647785",
+            "location": null,
+            "modified_at": "2025-10-17T10:01:46.074733",
+            "score": 3.4878116,
+            "webshot_url": "/storage/localfile/af/aa/af366a75281fc391/Intraday_Liquidity_Facility_Policy.docx.pdf.preview.jpeg",
+            "webshot_height": 512,
+            "webshot_width": 362,
+            "keywords": {
+                "file_size": [
+                    213692
+                ],
+                "file_name": [
+                    "Intraday_Liquidity_Facility_Policy.docx"
+                ],
+                "source_type": [
+                    "Document"
+                ],
+                "nlp_tag__phrases": [
+                    "appendix a",
+                    "reject code",
+                    "fail trade",
+                    "mt",
+                    "internal error",
+                    "member internal record",
+                    "rtgs fund",
+                    "cancellation request",
+                    "system status",
+                    "middle office",
+                    "reputational risk",
+                    "cbb banking",
+                    "sss advice",
+                    "o sss transaction reference number",
+                    "fund",
+                    "trade submission",
+                    "insufficient fund",
+                    "sss",
+                    "common sss reject codes",
+                    "failed trades",
+                    "trade",
+                    "fail",
+                    "instruction",
+                    "settlement instruction",
+                    "sss helpdesk",
+                    "status"
+                ]
+            },
+            "external_id": "0101665118d33312897964140a6c7427",
+            "has_sub_items": true,
+            "files": [
+                {
+                    "mime_type": "application/pdf",
+                    "content_url": "storage://pdf_conversion/fe/5a/c3RvcmFnZTovL2xvY2FsZmlsZS8zNC8wZS9jNWE3N2IwZDVlODA2NmYzL0ludHJhZGF5X0xpcXVpZGl0eV9GYWNpbGl0eV9Qb2xpY3kuZG9jeA%3D%3D/Intraday_Liquidity_Facility_Policy.docx.pdf",
+                    "id": "HsbLpydsWeaIwE6WFk80nA",
+                    "representations": {
+                        "application/pdf": "/storage/pdf_conversion/fe/5a/c3RvcmFnZTovL2xvY2FsZmlsZS8zNC8wZS9jNWE3N2IwZDVlODA2NmYzL0ludHJhZGF5X0xpcXVpZGl0eV9GYWNpbGl0eV9Qb2xpY3kuZG9jeA%3D%3D/Intraday_Liquidity_Facility_Policy.docx.pdf"
+                    },
+                    "link": "/storage/pdf_conversion/fe/5a/c3RvcmFnZTovL2xvY2FsZmlsZS8zNC8wZS9jNWE3N2IwZDVlODA2NmYzL0ludHJhZGF5X0xpcXVpZGl0eV9GYWNpbGl0eV9Qb2xpY3kuZG9jeA%3D%3D/Intraday_Liquidity_Facility_Policy.docx.pdf"
+                },
+                {
+                    "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "content_url": "storage://localfile/34/0e/c5a77b0d5e8066f3/Intraday_Liquidity_Facility_Policy.docx",
+                    "id": "Brixl3H-ROq4E-_3FNCIxQ",
+                    "original": true,
+                    "representations": {
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "/storage/localfile/34/0e/c5a77b0d5e8066f3/Intraday_Liquidity_Facility_Policy.docx"
+                    },
+                    "link": "/storage/localfile/34/0e/c5a77b0d5e8066f3/Intraday_Liquidity_Facility_Policy.docx"
+                },
+                {
+                    "mime_type": "image/jpeg",
+                    "content_url": "storage://localfile/af/aa/af366a75281fc391/Intraday_Liquidity_Facility_Policy.docx.pdf.preview.jpeg",
+                    "id": "zstIaoV6XZOuPv6dwrUQiQ",
+                    "representations": {
+                        "image/jpeg": "/storage/localfile/af/aa/af366a75281fc391/Intraday_Liquidity_Facility_Policy.docx.pdf.preview.jpeg"
+                    },
+                    "link": "/storage/localfile/af/aa/af366a75281fc391/Intraday_Liquidity_Facility_Policy.docx.pdf.preview.jpeg"
+                }
+            ],
+            "has_matching_sub_items": true,
+            "communities": [],
+            "sources": [],
+            "notes": [],
+            "runtime_labels": {
+                "llm_chatable": true
+            },
+            "collections": [],
+            "starred": false
+        }
+    ],
+    "now": "2025-10-17T10:27:41.172085",
+    "eof": true,
+    "total": 3,
+    "total_relation": "eq",
+    "next_params": {
+        "expected_num_results": 3,
+        "start": 15
+    },
+    "query_executed": {
+        "searchbar_query": "What are RTGS transactions?",
+        "dashboard_filters": null,
+        "community_query": null,
+        "like": null,
+        "parsed": {
+            "facet_filters": [],
+            "language": null,
+            "pos_mutations": {},
+            "query": null,
+            "query_length": null,
+            "query_length_chars": 0,
+            "type": null,
+            "user_terms_str": null,
+            "lemma_map": {},
+            "chunks": [],
+            "pos": [],
+            "ner": [],
+            "extra_info": {},
+            "intents": null
+        },
+        "query": "What are RTGS transactions?"
+    },
+    "from_cache": false,
+    "time_ms": 28,
+    "search_profiler": {
+        "took_ms": 19
+    }
+}

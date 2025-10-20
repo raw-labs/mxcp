@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+When managing python of this project always use uv
+When running python code or mxcp, first always activate the virtual environment
+After editing python code, run pyright and black formater to make sure the code is properly formated and there are no errors.

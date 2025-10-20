@@ -1,0 +1,64 @@
+# MXCP documentation 
+## Readme file
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/README.md
+
+## Getting started
+### Overview
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/getting-started/overview.md
+
+### Quickstart
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/getting-started/quickstart.md
+
+## Features
+### Overview
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/features/overview.md
+
+### Auditing
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/features/auditing.md
+
+### Drift Detection
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/features/drift-detection.md
+
+### Policies
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/features/policies.md
+
+### Python endpoints
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/features/python-endpoints.md
+
+## Guides
+### Audit Cleanup
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/guides/audit-cleanup.md
+
+### Authentication
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/guides/authentication.md
+
+### Configuration
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/guides/configuration.md
+
+### Integrations
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/guides/integrations.md
+
+### Operational
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/guides/operational.md
+
+### Production Methodology
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/guides/production-methodology.md
+
+### Quality
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/guides/quality.md
+
+## Reference 
+### CLI
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/reference/cli.md
+
+### Plugins
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/reference/plugins.md
+
+### Python 
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/reference/python.md
+
+### SQL
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/reference/sql.md
+
+### Type system
+https://raw.githubusercontent.com/raw-labs/mxcp/refs/heads/main/docs/reference/type-system.md

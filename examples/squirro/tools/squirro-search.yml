@@ -1,0 +1,171 @@
+mxcp: 1
+tool:
+  name: search_squirro
+  language: python
+  description: |
+    Search the Squirro knowledge management system for documents and content.
+    
+    This tool searches across all documents in your Squirro project using natural language queries 
+    or keywords. It can extract and analyze full text from PDF and DOCX files, find relevant excerpts, 
+    and return detailed metadata about matching documents.
+    
+    Use this tool when you need to:
+    - Find documents by topic, keywords, or natural language questions
+    - Extract specific information from enterprise documents  
+    - Analyze document content and relevance
+    - Search with date filters to find recent or historical documents
+    - Get context around search terms in large documents
+    
+    The tool returns comprehensive results including document metadata, relevance scores, abstracts,
+    and optionally the full extracted text content with relevant excerpts highlighted.
+  
+  enabled: true
+  
+  parameters:
+  - name: query
+    type: string
+    description: |
+      The search query to find relevant documents. Use natural language questions or keywords.
+      The search understands context and finds semantically related documents.
+    examples:
+    - "RTGS payment settlement procedures"
+    - "What are the risk management policies?"
+    - "technical operation manual"
+    - "liquidity management framework"
+    - "system architecture documentation"
+  
+  - name: max_results
+    type: integer
+    description: |
+      Maximum number of search results to return (1-100). 
+      Higher values provide more comprehensive results but take longer to process,
+      especially when include_file_content is enabled.
+    default: 10
+    examples:
+    - 5
+    - 10
+    - 20
+    - 50
+  
+  - name: include_file_content
+    type: boolean
+    description: |
+      Whether to download and extract full text from document files (PDF, DOCX).
+      When true, provides full text previews and relevant excerpts but is slower.
+      When false, returns only metadata and abstracts for faster searches.
+      Set to false for quick exploratory searches, true for deep content analysis.
+  
+  - name: created_after
+    type: string
+    description: |
+      Filter to only include documents created after this date.
+      Useful for finding recent documents or changes since a specific time.
+      Format: ISO 8601 date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ).
+    examples:
+    - "2025-01-01"
+    - "2025-10-01T00:00:00Z"
+    - "2024-06-15"
+  
+  - name: created_before
+    type: string
+    description: |
+      Filter to only include documents created before this date.
+      Useful for historical searches or finding documents from a specific time period.
+      Format: ISO 8601 date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ).
+    examples:
+    - "2025-12-31"
+    - "2025-10-17T23:59:59Z"
+    - "2024-12-31"
+  
+  - name: start
+    type: integer
+    description: |
+      Pagination offset - number of results to skip before returning matches.
+      Use with max_results to paginate through large result sets.
+      Example: start=0 gets first page, start=10 gets second page (if max_results=10).
+    default: 0
+    examples:
+    - 0
+    - 10
+    - 20
+    - 50
+  
+  - name: highlight
+    type: boolean
+    description: |
+      Whether to include highlighted snippets showing where query terms appear in documents.
+      Useful for understanding why a document matched the search query.
+  
+  - name: abstract_size
+    type: integer
+    description: |
+      Maximum length of document abstracts/summaries in characters (50-1000).
+      Longer abstracts provide more context but increase response size.
+    default: 250
+    examples:
+    - 150
+    - 250
+    - 500
+  
+  - name: chunk_window
+    type: integer
+    description: |
+      When extracting file content, the number of characters to include around each query match (50-500).
+      Larger windows provide more context for understanding the match in the document.
+      Only applies when include_file_content is true.
+    default: 200
+    examples:
+    - 100
+    - 200
+    - 300
+  
+  - name: max_chunks_per_result
+    type: integer
+    description: |
+      Maximum number of relevant text excerpts to extract per document (1-10).
+      More chunks provide better coverage of document content but increase response size.
+      Only applies when include_file_content is true.
+    default: 5
+    examples:
+    - 3
+    - 5
+    - 10
+  
+  return:
+    type: object
+    description: |
+      Search results containing matching documents with metadata, scores, and optionally full content.
+      The response includes pagination information and detailed document data with the following structure:
+      
+      {
+        "query": "original search query",
+        "total_count": total number of matching documents,
+        "returned_count": number of results in this response,
+        "start": pagination offset,
+        "has_more": boolean indicating if more results are available,
+        "results": [
+          {
+            "id": "unique document ID",
+            "title": "document title",
+            "abstract": ["summary", "paragraphs"],
+            "score": relevance score (float),
+            "created_at": "ISO 8601 timestamp",
+            "modified_at": "ISO 8601 timestamp",
+            "keywords": {extracted keywords and tags},
+            "file_info": {
+              "mime_type": "file type",
+              "filename": "original filename",
+              "link": "download URL"
+            },
+            "content": {
+              "full_text_preview": "first 500 characters",
+              "relevant_chunks": ["excerpt 1", "excerpt 2"],
+              "extraction_status": "success or error"
+            },
+            "highlight": {highlighted snippets if requested}
+          }
+        ]
+      }
+  
+  source:
+    file: ../python/squirro_search.py
