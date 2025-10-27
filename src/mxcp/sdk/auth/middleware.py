@@ -82,6 +82,17 @@ class AuthenticationMiddleware:
                 self._refresh_locks[mcp_token] = asyncio.Lock()
             return self._refresh_locks[mcp_token]
 
+    async def _remove_refresh_lock(self, mcp_token: str) -> None:
+        """Remove the refresh lock for the given MCP token.
+
+        Args:
+            mcp_token: MCP token to remove lock for
+        """
+        async with self._refresh_locks_lock:
+            if mcp_token in self._refresh_locks:
+                del self._refresh_locks[mcp_token]
+                logger.debug(f"🔓 Removed refresh lock for token {mcp_token[:20]}...")
+
     async def _get_cached_user_context(self, mcp_token: str) -> UserContext | None:
         """Get user context from cache if valid and not expired.
 
@@ -91,6 +102,8 @@ class AuthenticationMiddleware:
         Returns:
             Cached user context if valid, None if expired or not found
         """
+        should_remove_lock = False
+
         async with self._cache_lock:
             cached_entry = self._user_context_cache.get(mcp_token)
             if cached_entry is None:
@@ -100,10 +113,19 @@ class AuthenticationMiddleware:
                 # Remove expired entry
                 del self._user_context_cache[mcp_token]
                 logger.debug(f"⏰ Cache EXPIRED - removed entry for token {mcp_token[:20]}...")
-                return None
+                should_remove_lock = True
 
-            logger.debug(f"🎯 Cache HIT - using cached user context for token {mcp_token[:20]}...")
-            return cached_entry.user_context
+            else:
+                logger.debug(
+                    f"🎯 Cache HIT - using cached user context for token {mcp_token[:20]}..."
+                )
+                return cached_entry.user_context
+
+        # Clean up the refresh lock outside the cache lock to avoid lock ordering issues
+        if should_remove_lock:
+            await self._remove_refresh_lock(mcp_token)
+
+        return None
 
     async def _cache_user_context(self, mcp_token: str, user_context: UserContext) -> None:
         """Store user context in cache with expiration.
@@ -122,7 +144,7 @@ class AuthenticationMiddleware:
             )
 
     async def _cleanup_expired_cache_entries(self) -> None:
-        """Clean up expired cache entries to prevent memory leaks."""
+        """Clean up expired cache entries and their refresh locks to prevent memory leaks."""
         current_time = time.time()
         expired_keys = []
 
@@ -136,6 +158,10 @@ class AuthenticationMiddleware:
 
             if expired_keys:
                 logger.debug(f"🧹 Cache CLEANUP - removed {len(expired_keys)} expired entries")
+
+        # Clean up refresh locks for expired tokens (outside cache_lock to avoid deadlock)
+        for key in expired_keys:
+            await self._remove_refresh_lock(key)
 
     async def _schedule_cleanup_if_needed(self) -> None:
         """Schedule cleanup task if one isn't already running."""
@@ -179,6 +205,8 @@ class AuthenticationMiddleware:
                     if mcp_token in self._user_context_cache:
                         del self._user_context_cache[mcp_token]
                         logger.debug(f"🗑️ Cleared expired cache entry: {mcp_token[:20]}...")
+
+                # Note: We don't remove the refresh lock here since we're currently using it
 
                 # Attempt refresh through the OAuth server
                 new_external_token = await self.oauth_server.refresh_external_token(mcp_token)
