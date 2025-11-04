@@ -11,6 +11,7 @@ import sys
 from typing import cast
 
 import duckdb
+from duckdb import func
 
 from mxcp.plugins import MXCPBasePlugin
 
@@ -102,5 +103,7 @@ def load_plugins(
         for udf in udfs:
             method_name = udf["name"]
             db_name = f"{method_name}_{name}"
-            conn.create_function(db_name, udf["method"], udf["args"], udf["return_type"])
+            conn.create_function(
+                db_name, udf["method"], udf["args"], udf["return_type"], null_handling=func.SPECIAL
+            )
     return plugins
