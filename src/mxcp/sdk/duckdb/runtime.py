@@ -85,7 +85,7 @@ class DuckDBRuntime:
         for i in range(pool_size):
             session = DuckDBSession(
                 database_config=self.database_config,
-                plugins=self.plugins_list,
+                plugins=self.plugins_list if i == 0 else [],  # Only first session registers plugin UDFs
                 plugin_config=self.plugin_config,
                 secrets=self.secrets,
             )
