@@ -1,9 +1,10 @@
 import base64
 from datetime import date, datetime, time, timedelta
-from typing import Any, TypedDict
+from typing import Any, Optional, TypedDict
 
 import duckdb
 import pytest
+from duckdb import func
 
 from mxcp.plugins import MXCPBasePlugin, udf
 
@@ -87,6 +88,10 @@ class PluginImpl(MXCPBasePlugin):
     def return_my_struct(self) -> MyStruct:
         return {"name": "test", "value": 42}
 
+    @udf
+    def null_string(self, s: Optional[str]) -> bool:
+        return s is None
+
 
 @pytest.fixture
 def db_connection(tmp_path):
@@ -102,11 +107,11 @@ def registered_udfs(db_connection):
     """Register all UDFs from the test plugin, postfixing names with _udf."""
     plugin = PluginImpl({})
     udfs = plugin.udfs()
-    assert len(udfs) == 14, "Should have 14 UDFs (all types)"
+    assert len(udfs) == 15, "Should have 15 UDFs (all types)"
     for udf_def in udfs:
         try:
             db_connection.create_function(
-                udf_def["name"] + "_udf", udf_def["method"], udf_def["args"], udf_def["return_type"]
+                udf_def["name"] + "_udf", udf_def["method"], udf_def["args"], udf_def["return_type"], null_handling=func.SPECIAL
             )
         except Exception as e:
             raise ValueError(
@@ -258,3 +263,18 @@ def test_add_days_to_datetime_udf(registered_udfs):
         "SELECT add_days_to_datetime_udf(TIMESTAMP '2024-03-30 23:59:59', 5)"
     ).fetchone()[0]
     assert result == datetime(2024, 4, 4, 23, 59, 59)
+
+
+def test_null_string_udf(registered_udfs):
+    """Test the null_string_udf UDF with NULL values."""
+    # Test with NULL - should return True
+    result = registered_udfs.execute("SELECT null_string_udf(NULL)").fetchone()[0]
+    assert result is True
+
+    # Test with non-NULL string - should return False
+    result = registered_udfs.execute("SELECT null_string_udf('hello')").fetchone()[0]
+    assert result is False
+
+    # Test with empty string - should return False
+    result = registered_udfs.execute("SELECT null_string_udf('')").fetchone()[0]
+    assert result is False
