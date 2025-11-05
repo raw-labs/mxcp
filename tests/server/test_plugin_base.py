@@ -111,7 +111,11 @@ def registered_udfs(db_connection):
     for udf_def in udfs:
         try:
             db_connection.create_function(
-                udf_def["name"] + "_udf", udf_def["method"], udf_def["args"], udf_def["return_type"], null_handling=func.SPECIAL
+                udf_def["name"] + "_udf",
+                udf_def["method"],
+                udf_def["args"],
+                udf_def["return_type"],
+                null_handling=func.SPECIAL,
             )
         except Exception as e:
             raise ValueError(
