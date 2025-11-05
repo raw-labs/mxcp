@@ -369,7 +369,7 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool) 
             )
 
             # Create session just to ensure database file exists
-            session = DuckDBSession(database_config, plugins, plugin_config, secrets)
+            session = DuckDBSession(database_config, secrets)
             session.close()  # Database file is created when session connects in constructor
             click.echo("✓ Initialized DuckDB database")
         except Exception as e:
