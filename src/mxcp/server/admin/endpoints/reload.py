@@ -10,17 +10,17 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 
 from ..models import ReloadResponse
-from ..protocol import AdminServerProtocol
+from ..service import AdminService
 
 logger = logging.getLogger(__name__)
 
 
-def create_reload_router(server: AdminServerProtocol) -> APIRouter:
+def create_reload_router(admin_service: AdminService) -> APIRouter:
     """
-    Create reload router with server dependency.
+    Create reload router with admin service dependency.
 
     Args:
-        server: The MXCP server instance
+        admin_service: The admin service wrapping RAWMCP
 
     Returns:
         Configured APIRouter
@@ -58,11 +58,12 @@ def create_reload_router(server: AdminServerProtocol) -> APIRouter:
         logger.info("[admin] Reload requested via API")
 
         try:
-            reload_request = server.reload_configuration()
+            reload_request = admin_service.reload_configuration()
 
             return ReloadResponse(
                 timestamp=datetime.now(timezone.utc),
                 reload_request_id=reload_request.id,
+                message="Reload request queued. Use GET /status to check progress.",
             )
 
         except Exception as e:
@@ -70,7 +71,6 @@ def create_reload_router(server: AdminServerProtocol) -> APIRouter:
             raise HTTPException(
                 status_code=500,
                 detail=f"Reload failed: {e}",
-            )
+            ) from e
 
     return router
-

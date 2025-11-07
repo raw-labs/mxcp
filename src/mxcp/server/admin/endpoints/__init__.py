@@ -10,4 +10,3 @@ from .reload import create_reload_router
 from .status import create_status_router
 
 __all__ = ["create_status_router", "create_reload_router", "create_config_router"]
-

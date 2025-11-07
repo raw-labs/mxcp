@@ -98,7 +98,7 @@ class ReloadManager:
         self._current_request: ReloadRequest | None = None
         self._lock = threading.Lock()
         self._processor_thread: threading.Thread | None = None
-        
+
         # Track reload history
         self._last_reload_time: datetime | None = None
         self._last_reload_status: str | None = None  # "success" or "error"
@@ -328,7 +328,7 @@ class ReloadManager:
     def get_status(self) -> dict[str, Any]:
         """Get the current status of the reload manager."""
         with self._lock:
-            status = {
+            status: dict[str, Any] = {
                 "processing": self._processing,
                 "current_request": (
                     {
@@ -344,12 +344,12 @@ class ReloadManager:
                 "draining": self.server.draining,
                 "active_requests": self._get_active_requests(),
             }
-            
+
             # Add reload history if available
             if self._last_reload_time:
                 status["last_reload"] = self._last_reload_time.isoformat()
                 status["last_reload_status"] = self._last_reload_status
                 if self._last_reload_error:
                     status["last_reload_error"] = self._last_reload_error
-            
+
             return status

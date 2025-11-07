@@ -8,18 +8,18 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from ..models import ConfigResponse, EndpointCounts, Features
-from ..protocol import AdminServerProtocol
+from ..models import ConfigResponse
+from ..service import AdminService
 
 logger = logging.getLogger(__name__)
 
 
-def create_config_router(server: AdminServerProtocol) -> APIRouter:
+def create_config_router(admin_service: AdminService) -> APIRouter:
     """
-    Create config router with server dependency.
+    Create config router with admin service dependency.
 
     Args:
-        server: The MXCP server instance
+        admin_service: The admin service wrapping RAWMCP
 
     Returns:
         Configured APIRouter
@@ -42,31 +42,12 @@ def create_config_router(server: AdminServerProtocol) -> APIRouter:
         without exposing sensitive values.
         """
         try:
-            config_info = server.get_config_info()
-            endpoint_counts_dict = server.get_endpoint_counts()
-
-            return ConfigResponse(
-                project=server.site_config.get("project"),
-                profile=server.profile_name,
-                repository_path=config_info.get("repository_path"),
-                duckdb_path=config_info.get("duckdb_path"),
-                readonly=server.readonly,
-                debug=server.debug,
-                endpoints=EndpointCounts(**endpoint_counts_dict),
-                features=Features(
-                    sql_tools=config_info.get("sql_tools_enabled", False),
-                    audit_logging=config_info.get("audit_enabled", False),
-                    telemetry=config_info.get("telemetry_enabled", False),
-                ),
-                transport=config_info.get("transport"),
-            )
-
+            return admin_service.get_config_snapshot()
         except Exception as e:
             logger.error(f"[admin] Config query failed: {e}", exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail=f"Config query failed: {e}",
-            )
+            ) from e
 
     return router
-

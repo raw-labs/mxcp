@@ -12,17 +12,17 @@ from fastapi import APIRouter, HTTPException
 from mxcp.sdk.core import PACKAGE_VERSION
 
 from ..models import AdminSocketInfo, EndpointCounts, HealthResponse, ReloadInfo, StatusResponse
-from ..protocol import AdminServerProtocol
+from ..service import AdminService
 
 logger = logging.getLogger(__name__)
 
 
-def create_status_router(server: AdminServerProtocol) -> APIRouter:
+def create_status_router(admin_service: AdminService) -> APIRouter:
     """
-    Create status router with server dependency.
+    Create status router with admin service dependency.
 
     Args:
-        server: The MXCP server instance
+        admin_service: The admin service wrapping RAWMCP
 
     Returns:
         Configured APIRouter
@@ -57,21 +57,21 @@ def create_status_router(server: AdminServerProtocol) -> APIRouter:
         """
         try:
             # Calculate uptime
-            uptime_seconds = (datetime.now(timezone.utc) - server._start_time).total_seconds()
+            uptime_seconds = (datetime.now(timezone.utc) - admin_service.start_time).total_seconds()
             hours, remainder = divmod(int(uptime_seconds), 3600)
             minutes, seconds = divmod(remainder, 60)
             uptime_str = f"{hours}h{minutes}m{seconds}s"
 
             # Get endpoint counts
             try:
-                endpoint_counts_dict = server.get_endpoint_counts()
+                endpoint_counts_dict = admin_service.get_endpoint_counts()
                 endpoint_counts = EndpointCounts(**endpoint_counts_dict)
             except Exception as e:
                 logger.warning(f"Failed to get endpoint counts: {e}")
-                endpoint_counts = EndpointCounts()
+                endpoint_counts = EndpointCounts(tools=0, prompts=0, resources=0)
 
             # Get reload status
-            reload_status_dict = server.reload_manager.get_status()
+            reload_status_dict = admin_service.get_reload_status()
             reload_info = ReloadInfo(
                 in_progress=reload_status_dict["processing"],
                 draining=reload_status_dict["draining"],
@@ -85,14 +85,14 @@ def create_status_router(server: AdminServerProtocol) -> APIRouter:
                 version=PACKAGE_VERSION,
                 uptime=uptime_str,
                 uptime_seconds=int(uptime_seconds),
-                pid=server._pid,
-                profile=server.profile_name,
-                mode="readonly" if server.readonly else "readwrite",
-                debug=server.debug,
+                pid=admin_service.pid,
+                profile=admin_service.profile_name,
+                mode="readonly" if admin_service.readonly else "readwrite",
+                debug=admin_service.debug,
                 endpoints=endpoint_counts,
                 reload=reload_info,
                 admin_socket=AdminSocketInfo(
-                    path=str(server.admin_api._socket_path),
+                    path=str(admin_service.socket_path),
                 ),
             )
 
@@ -101,7 +101,6 @@ def create_status_router(server: AdminServerProtocol) -> APIRouter:
             raise HTTPException(
                 status_code=500,
                 detail=f"Failed to retrieve status: {e}",
-            )
+            ) from e
 
     return router
-

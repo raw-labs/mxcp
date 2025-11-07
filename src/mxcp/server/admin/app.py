@@ -12,17 +12,17 @@ from fastapi.responses import JSONResponse
 from mxcp.sdk.core import PACKAGE_VERSION
 
 from .models import ErrorResponse
-from .protocol import AdminServerProtocol
+from .service import AdminService
 
 logger = logging.getLogger(__name__)
 
 
-def create_admin_app(server: AdminServerProtocol) -> FastAPI:
+def create_admin_app(admin_service: AdminService) -> FastAPI:
     """
     Create the FastAPI admin application.
 
     Args:
-        server: The MXCP server instance implementing AdminServerProtocol
+        admin_service: The admin service wrapping RAWMCP
 
     Returns:
         Configured FastAPI application with all admin endpoints
@@ -58,16 +58,16 @@ via Unix domain socket. All operations are local-only for security.
             content=ErrorResponse(
                 error="internal_error",
                 message="Internal server error",
-                detail=str(exc) if server.debug else None,
+                detail=str(exc) if admin_service.debug else None,
             ).model_dump(),
         )
 
-    # Include routers with server dependency
+    # Include routers with admin_service dependency
     from .endpoints import create_config_router, create_reload_router, create_status_router
 
-    app.include_router(create_status_router(server))
-    app.include_router(create_reload_router(server))
-    app.include_router(create_config_router(server))
+    app.include_router(create_status_router(admin_service))
+    app.include_router(create_reload_router(admin_service))
+    app.include_router(create_config_router(admin_service))
 
     @app.get("/", include_in_schema=False)
     async def root() -> dict[str, str]:
@@ -80,4 +80,3 @@ via Unix domain socket. All operations are local-only for security.
         }
 
     return app
-

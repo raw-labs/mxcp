@@ -1,5 +1,4 @@
 import signal
-from pathlib import Path
 from typing import Any
 
 import click
@@ -100,7 +99,11 @@ def serve(
         # Determine effective transport (CLI flag > user config > default)
         effective_transport = transport
         if not effective_transport:
-            effective_transport = user_config.get("transport", {}).get("provider", "streamable-http")
+            transport_config = user_config.get("transport")
+            if transport_config:
+                effective_transport = transport_config.get("provider", "streamable-http")
+            else:
+                effective_transport = "streamable-http"
 
         # Configure logging ONCE with all settings
         configure_logging_from_config(
@@ -122,35 +125,34 @@ def serve(
             debug=debug,
         )
 
-        # Get config info for display
-        config = server.get_config_info()
+        # Get endpoint counts for display
         endpoint_counts = server.get_endpoint_counts()
 
         # Show startup banner (except for stdio mode which needs clean output)
-        if config["transport"] != "stdio":
+        if server.transport != "stdio":
             click.echo("\n" + "=" * 60)
             click.echo(click.style("🚀 MXCP Server Starting", fg="green", bold=True).center(70))
             click.echo("=" * 60 + "\n")
 
             # Show configuration
             click.echo(f"{click.style('📋 Configuration:', fg='cyan', bold=True)}")
-            click.echo(f"   • Project: {click.style(config['project'], fg='yellow')}")
-            click.echo(f"   • Profile: {click.style(config['profile'], fg='yellow')}")
-            click.echo(f"   • Transport: {click.style(config['transport'], fg='yellow')}")
+            click.echo(f"   • Project: {click.style(server.site_config['project'], fg='yellow')}")
+            click.echo(f"   • Profile: {click.style(server.profile_name, fg='yellow')}")
+            click.echo(f"   • Transport: {click.style(server.transport, fg='yellow')}")
 
-            if config["transport"] in ["streamable-http", "sse"]:
-                click.echo(f"   • Host: {click.style(config['host'], fg='yellow')}")
-                click.echo(f"   • Port: {click.style(str(config['port']), fg='yellow')}")
+            if server.transport in ["streamable-http", "sse"]:
+                click.echo(f"   • Host: {click.style(server.host, fg='yellow')}")
+                click.echo(f"   • Port: {click.style(str(server.port), fg='yellow')}")
 
-            if config["readonly"]:
+            if server.readonly:
                 click.echo(f"   • Mode: {click.style('Read-only', fg='red')}")
             else:
                 click.echo(f"   • Mode: {click.style('Read-write', fg='green')}")
 
-            if config["stateless"]:
+            if server.stateless_http:
                 click.echo(f"   • HTTP Mode: {click.style('Stateless', fg='magenta')}")
 
-            if config["sql_tools_enabled"]:
+            if server.enable_sql_tools:
                 click.echo(f"   • SQL Tools: {click.style('Enabled', fg='green')}")
             else:
                 click.echo(f"   • SQL Tools: {click.style('Disabled', fg='red')}")
@@ -176,9 +178,9 @@ def serve(
 
             click.echo("\n" + "-" * 60)
 
-            if config["transport"] in ["streamable-http", "sse"]:
+            if server.transport in ["streamable-http", "sse"]:
                 click.echo(f"\n{click.style('✅ Server ready!', fg='green', bold=True)}")
-                url = f"http://{config['host']}:{config['port']}"
+                url = f"http://{server.host}:{server.port}"
                 click.echo(f"   Listening on {click.style(url, fg='cyan', underline=True)}")
                 click.echo(f"\n{click.style('Press Ctrl+C to stop', fg='yellow')}\n")
             else:
@@ -186,7 +188,7 @@ def serve(
 
         # Set up signal handler for graceful shutdown
         def signal_handler(signum: int, frame: Any) -> None:
-            if config["transport"] != "stdio":
+            if server.transport != "stdio":
                 click.echo(f"\n{click.style('🛑 Shutting down gracefully...', fg='yellow')}")
             raise KeyboardInterrupt()
 
@@ -196,11 +198,11 @@ def serve(
 
         try:
             # Start the server
-            server.run(transport=config["transport"])
+            server.run(transport=server.transport)
         except KeyboardInterrupt:
             # Gracefully shutdown the server
             server.shutdown()
-            if config["transport"] != "stdio":
+            if server.transport != "stdio":
                 click.echo(f"{click.style('👋 Server stopped', fg='cyan')}")
             raise
     except click.ClickException:

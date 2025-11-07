@@ -8,12 +8,17 @@ import asyncio
 import logging
 import os
 import socket
+from contextlib import suppress
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import uvicorn
 
 from .app import create_admin_app
-from .protocol import AdminServerProtocol
+from .service import AdminService
+
+if TYPE_CHECKING:
+    from mxcp.server.interfaces.server.mcp import RAWMCP
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +38,7 @@ class AdminAPIRunner:
 
     def __init__(
         self,
-        server: AdminServerProtocol,
+        server: "RAWMCP",
         socket_path: str | Path = "/var/run/mxcp/mxcp.sock",
         enabled: bool = True,
     ):
@@ -41,15 +46,15 @@ class AdminAPIRunner:
         Initialize the admin API runner.
 
         Args:
-            server: The MXCP server instance
+            server: The RAWMCP server instance
             socket_path: Path where Unix socket will be created
             enabled: Whether the admin API should be enabled
         """
-        self.server = server
+        self.admin_service = AdminService(server)
         self._socket_path = Path(socket_path)
         self.enabled = enabled
         self._uvicorn_server: uvicorn.Server | None = None
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """
@@ -57,7 +62,7 @@ class AdminAPIRunner:
 
         Creates the Unix socket, sets permissions, and starts uvicorn
         in the background using the current event loop.
-        
+
         Must be called from async context.
         """
         if not self.enabled:
@@ -74,7 +79,7 @@ class AdminAPIRunner:
                 self._socket_path.unlink()
 
             # Create FastAPI app
-            app = create_admin_app(self.server)
+            app = create_admin_app(self.admin_service)
 
             # Create Unix socket with restrictive permissions BEFORE passing to uvicorn
             # This ensures atomic creation with correct permissions, no race conditions
@@ -90,8 +95,8 @@ class AdminAPIRunner:
 
             # Configure uvicorn to use our pre-created socket
             # Tie log level to server debug mode
-            uvicorn_log_level = "debug" if self.server.debug else "warning"
-            
+            uvicorn_log_level = "debug" if self.admin_service.debug else "warning"
+
             config = uvicorn.Config(
                 app=app,
                 log_level=uvicorn_log_level,
@@ -134,10 +139,8 @@ class AdminAPIRunner:
                 logger.warning("[admin] Timeout waiting for API shutdown")
                 if self._task and not self._task.done():
                     self._task.cancel()
-                    try:
+                    with suppress(asyncio.CancelledError):
                         await self._task
-                    except asyncio.CancelledError:
-                        pass
 
         # Cleanup
         self._cleanup_socket()
@@ -151,4 +154,3 @@ class AdminAPIRunner:
                 logger.debug(f"Removed socket file: {self._socket_path}")
         except Exception as e:
             logger.debug(f"Error removing socket file: {e}")
-

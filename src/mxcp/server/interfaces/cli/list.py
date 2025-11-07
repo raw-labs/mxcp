@@ -89,7 +89,7 @@ def list_endpoints(profile: str, json_output: bool, debug: bool) -> None:
             user_config=user_config,
             debug=debug,
         )
-        
+
         loader = EndpointLoader(site_config)
         endpoints = loader.discover_endpoints()
 

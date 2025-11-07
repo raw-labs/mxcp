@@ -6,7 +6,6 @@ from pathlib import Path
 import click
 
 from mxcp.sdk.audit import AuditLogger
-from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.interfaces.cli.utils import (

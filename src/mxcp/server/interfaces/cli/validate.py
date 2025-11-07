@@ -175,7 +175,7 @@ def validate(
         # Get readonly flag from environment if not set
         if not readonly:
             readonly = get_env_flag("MXCP_READONLY")
-        
+
         # Create a shared RuntimeEnvironment for all validations
         runtime_env = create_runtime_environment(
             user_config, site_config, active_profile, readonly=readonly

@@ -188,9 +188,7 @@ async def _query_async(
         click.echo(f"\n{click.style('⏳ Running...', fg='yellow')}")
 
     # Create runtime environment with readonly configuration if specified
-    runtime_env = create_runtime_environment(
-        user_config, site_config, profile, readonly=readonly
-    )
+    runtime_env = create_runtime_environment(user_config, site_config, profile, readonly=readonly)
     engine = runtime_env.execution_engine
 
     try:

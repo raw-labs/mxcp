@@ -9,7 +9,12 @@ from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.services.dbt.runner import configure_dbt
 
-from .utils import check_command_available, configure_logging_from_config, resolve_profile
+from .utils import (
+    check_command_available,
+    configure_logging_from_config,
+    output_error,
+    resolve_profile,
+)
 
 
 @click.command(name="dbt-config")
@@ -18,7 +23,9 @@ from .utils import check_command_available, configure_logging_from_config, resol
 @click.option("--force", is_flag=True, help="Overwrite existing profile without confirmation")
 @click.option("--embed-secrets", is_flag=True, help="Embed secrets directly in profiles.yml")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
-def dbt_config(profile: str | None, dry_run: bool, force: bool, embed_secrets: bool, debug: bool) -> None:
+def dbt_config(
+    profile: str | None, dry_run: bool, force: bool, embed_secrets: bool, debug: bool
+) -> None:
     """Generate / patch the dbt side-car files (dbt_project.yml + profiles.yml).
 
     Default mode writes env_var() templates, so secrets stay out of YAML.
@@ -34,7 +41,9 @@ def dbt_config(profile: str | None, dry_run: bool, force: bool, embed_secrets: b
             click.echo(
                 f"\n{click.style('❌ Error:', fg='red', bold=True)} No mxcp-site.yml found in current directory or parents"
             )
-            raise click.ClickException("No mxcp-site.yml found in current directory or parents") from e
+            raise click.ClickException(
+                "No mxcp-site.yml found in current directory or parents"
+            ) from e
 
         site_config = load_site_config(repo_root)
 
@@ -71,7 +80,9 @@ def dbt_config(profile: str | None, dry_run: bool, force: bool, embed_secrets: b
             click.echo(
                 f"\n{click.style('⚠️  Warning:', fg='yellow')} dbt CLI is not installed or not available in PATH."
             )
-            click.echo(f"   Install with: {click.style('pip install dbt-core dbt-duckdb', fg='cyan')}")
+            click.echo(
+                f"   Install with: {click.style('pip install dbt-core dbt-duckdb', fg='cyan')}"
+            )
 
         click.echo()  # Empty line for spacing
 
@@ -93,7 +104,9 @@ def dbt_config(profile: str | None, dry_run: bool, force: bool, embed_secrets: b
             click.echo(f"\n{click.style('🚀 Next steps:', fg='yellow', bold=True)}")
             click.echo(f"   1. Run {click.style('dbt deps', fg='cyan')} to install dependencies")
             click.echo(f"   2. Run {click.style('dbt run', fg='cyan')} to execute your models")
-            click.echo(f"   3. Or use {click.style('mxcp dbt run', fg='cyan')} to auto-inject secrets")
+            click.echo(
+                f"   3. Or use {click.style('mxcp dbt run', fg='cyan')} to auto-inject secrets"
+            )
             click.echo()
 
     except click.ClickException:
@@ -125,7 +138,9 @@ def dbt_wrapper(ctx: click.Context, profile: str | None, debug: bool) -> None:
             click.echo(
                 f"\n{click.style('❌ Error:', fg='red', bold=True)} No mxcp-site.yml found in current directory or parents"
             )
-            raise click.ClickException("No mxcp-site.yml found in current directory or parents") from e
+            raise click.ClickException(
+                "No mxcp-site.yml found in current directory or parents"
+            ) from e
 
         site_config = load_site_config(repo_root)
 
@@ -155,7 +170,9 @@ def dbt_wrapper(ctx: click.Context, profile: str | None, debug: bool) -> None:
             click.echo(
                 f"\n{click.style('❌ Error:', fg='red', bold=True)} dbt CLI is not installed or not available in PATH."
             )
-            click.echo(f"   Install with: {click.style('pip install dbt-core dbt-duckdb', fg='cyan')}")
+            click.echo(
+                f"   Install with: {click.style('pip install dbt-core dbt-duckdb', fg='cyan')}"
+            )
             raise click.ClickException(
                 "dbt CLI is not installed. Please install dbt-core and dbt-duckdb."
             )
@@ -191,7 +208,9 @@ def dbt_wrapper(ctx: click.Context, profile: str | None, debug: bool) -> None:
                 if isinstance(param_value, dict):
                     # For map-like parameters (e.g., HTTP headers)
                     for key, value in param_value.items():
-                        var = f"MXCP_SECRET_{secret_name.upper()}_{param_name.upper()}_{key.upper()}"
+                        var = (
+                            f"MXCP_SECRET_{secret_name.upper()}_{param_name.upper()}_{key.upper()}"
+                        )
                         env[var] = str(value)
                 else:
                     # For simple string parameters

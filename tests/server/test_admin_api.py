@@ -58,7 +58,7 @@ class MockServer:
         self.reload_manager = MockReloadManager()
         self._start_time = datetime.now(timezone.utc)
         self._pid = os.getpid()
-        
+
         # Mock admin_api for status endpoint
         self.admin_api = MagicMock()
         self.admin_api._socket_path = Path("/tmp/test.sock")
@@ -106,7 +106,7 @@ class TestAdminAPI:
     def test_health_endpoint(self, client):
         """Test the /health endpoint."""
         response = client.get("/health")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ok"
@@ -117,10 +117,10 @@ class TestAdminAPI:
     def test_status_endpoint(self, client, mock_server):
         """Test the /status endpoint."""
         response = client.get("/status")
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         # Verify core fields
         assert data["status"] == "ok"
         assert "version" in data
@@ -130,19 +130,19 @@ class TestAdminAPI:
         assert "uptime" in data
         assert "uptime_seconds" in data
         assert "pid" in data
-        
+
         # Verify endpoint counts
         assert "endpoints" in data
         assert data["endpoints"]["tools"] == 5
         assert data["endpoints"]["prompts"] == 2
         assert data["endpoints"]["resources"] == 3
-        
+
         # Verify reload info
         assert "reload" in data
         assert data["reload"]["in_progress"] is False
         assert data["reload"]["draining"] is False
         assert data["reload"]["active_requests"] == 0
-        
+
         # Verify admin socket info
         assert "admin_socket" in data
         assert "path" in data["admin_socket"]
@@ -150,29 +150,29 @@ class TestAdminAPI:
     def test_reload_endpoint(self, client, mock_server):
         """Test the POST /reload endpoint."""
         response = client.post("/reload")
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         # Verify response structure
         assert data["status"] == "reload_initiated"
         assert "timestamp" in data
         assert "reload_request_id" in data
         assert "message" in data
-        
+
         # Verify timestamp is valid
         datetime.fromisoformat(data["timestamp"].replace("Z", "+00:00"))
-        
+
         # Verify reload was called on server
         assert mock_server.reload_called
 
     def test_config_endpoint(self, client, mock_server):
         """Test the /config endpoint."""
         response = client.get("/config")
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         # Verify core fields
         assert data["status"] == "ok"
         assert data["project"] == "test-project"
@@ -181,16 +181,16 @@ class TestAdminAPI:
         assert data["duckdb_path"] == "/test/test.duckdb"
         assert data["readonly"] is False
         assert data["debug"] is False
-        
+
         # Verify features
         assert "features" in data
         assert data["features"]["sql_tools"] is True
         assert data["features"]["audit_logging"] is True
         assert data["features"]["telemetry"] is False
-        
+
         # Verify transport
         assert data["transport"] == "streamable-http"
-        
+
         # Verify endpoints
         assert "endpoints" in data
         assert data["endpoints"]["tools"] == 5
@@ -200,10 +200,10 @@ class TestAdminAPI:
         # Create a new server with readonly=True
         readonly_server = MockServer()
         readonly_server.readonly = True
-        
+
         app = create_admin_app(readonly_server)
         client = TestClient(app)
-        
+
         response = client.get("/status")
         assert response.status_code == 200
         assert response.json()["mode"] == "readonly"
@@ -213,10 +213,10 @@ class TestAdminAPI:
         # Create a new server with debug=True
         debug_server = MockServer()
         debug_server.debug = True
-        
+
         app = create_admin_app(debug_server)
         client = TestClient(app)
-        
+
         response = client.get("/status")
         assert response.status_code == 200
         assert response.json()["debug"] is True
@@ -224,7 +224,7 @@ class TestAdminAPI:
     def test_root_endpoint(self, client):
         """Test the root / endpoint."""
         response = client.get("/")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["service"] == "mxcp-admin"
@@ -235,7 +235,7 @@ class TestAdminAPI:
     def test_openapi_docs_available(self, client):
         """Test that OpenAPI documentation is available."""
         response = client.get("/openapi.json")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "openapi" in data
@@ -257,13 +257,13 @@ class TestAdminAPI:
         # If Pydantic validation fails, FastAPI returns 500
         # The fact we got 200 means validation passed
         assert "status" in status_data
-        
+
         # Config endpoint
         config_response = client.get("/config")
         assert config_response.status_code == 200
         config_data = config_response.json()
         assert "status" in config_data
-        
+
         # Health endpoint
         health_response = client.get("/health")
         assert health_response.status_code == 200
@@ -287,11 +287,12 @@ class TestAdminAPIRunner:
             socket_path=socket_path,
             enabled=False,
         )
-        
+
         # Test disabled runner (start is async but returns immediately if disabled)
         import asyncio
+
         asyncio.run(runner.start())
-        
+
         # Socket should not be created
         assert not socket_path.exists()
 
@@ -299,29 +300,30 @@ class TestAdminAPIRunner:
         """Test that stale socket files are removed on startup."""
         # Use shorter path to avoid Unix socket path length limit (~104 chars)
         import tempfile
+
         socket_path = Path(tempfile.gettempdir()) / "mxcp_test.sock"
-        
+
         try:
             # Create a stale socket file
             socket_path.touch()
             assert socket_path.exists()
-            
+
             # Starting should remove the stale socket
             runner = AdminAPIRunner(
                 server=mock_server,
                 socket_path=socket_path,
                 enabled=True,
             )
-            
+
             # Run in async context since runner needs event loop
             import asyncio
-            
+
             async def test_runner():
                 await runner.start()
                 # Socket file should be removed (stale one)
                 # New socket created asynchronously by uvicorn
                 await runner.stop()
-            
+
             asyncio.run(test_runner())
         finally:
             # Cleanup
@@ -362,4 +364,3 @@ class TestAdminAPIIntegration:
             from mxcp.server.interfaces.cli.utils import get_env_admin_socket_path
 
             assert get_env_admin_socket_path() == "/var/run/mxcp/mxcp.sock"
-

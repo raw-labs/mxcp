@@ -5,12 +5,14 @@ import functools
 import hashlib
 import json
 import logging
+import os
 import re
 import signal
 import threading
 import time
 import traceback
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any, Literal, TypeVar, cast
 
@@ -53,10 +55,6 @@ from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.core.refs.external import ExternalRefTracker
 from mxcp.server.core.reload import ReloadManager, ReloadRequest
 from mxcp.server.core.telemetry import configure_telemetry_from_config, shutdown_telemetry
-from mxcp.server.interfaces.cli.utils import (
-    get_env_admin_socket_enabled,
-    get_env_admin_socket_path,
-)
 from mxcp.server.definitions.endpoints._types import (
     ParamDefinition,
     PromptDefinition,
@@ -66,14 +64,16 @@ from mxcp.server.definitions.endpoints._types import (
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.utils import EndpointType
 from mxcp.server.executor.engine import RuntimeEnvironment, create_runtime_environment
+from mxcp.server.interfaces.cli.utils import (
+    get_env_admin_socket_enabled,
+    get_env_admin_socket_path,
+)
 from mxcp.server.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
 from mxcp.server.services.endpoints import (
     execute_endpoint_with_engine,
     execute_endpoint_with_engine_and_policy,
 )
 from mxcp.server.services.endpoints.validator import validate_endpoint
-
-from ._types import ConfigInfo
 
 logger = logging.getLogger(__name__)
 
@@ -295,10 +295,14 @@ class RAWMCP:
         self.site_config_path = site_config_path or Path.cwd()
         self.debug = debug
 
+        # Server runtime metadata
+        self._start_time = datetime.now(timezone.utc)
+        self._pid = os.getpid()
+
         # Load configuration templates from disk (unresolved for external reference tracking)
         logger.info("Loading configuration templates...")
         logger.debug(f"Loading from {self.site_config_path}")
-        
+
         # Templates are loaded with resolve_refs=False, keeping external references as strings
         # e.g., "${MY_VAR}", "vault://secret/path", "file://config.json"
         # This enables:
@@ -331,6 +335,10 @@ class RAWMCP:
         # Initialize runtime environment (will be created in initialize_runtime_components)
         self.runtime_environment: RuntimeEnvironment | None = None
         self._model_cache = {}
+
+        # Public attributes for admin API
+        self.telemetry_enabled: bool = False
+        self.audit_logger: Any | None = None
 
         # Resolve configurations
         self._resolve_and_apply_configs()
@@ -374,7 +382,7 @@ class RAWMCP:
 
     def _resolve_and_apply_configs(self) -> None:
         """Resolve external references with selective interpolation and apply CLI overrides.
-        
+
         External references (${ENV_VAR}, vault://, file://) are resolved using selective
         interpolation, which only resolves references for the active profile and top-level
         config. This prevents errors from undefined environment variables in inactive profiles.
@@ -384,18 +392,22 @@ class RAWMCP:
         needs_resolution = any(pattern in config_str for pattern in ["${", "vault://", "file://"])
 
         # Determine active profile (CLI override > site config)
-        active_profile = str(self._cli_overrides["profile"] or self._site_config_template["profile"])
+        active_profile = str(
+            self._cli_overrides["profile"] or self._site_config_template["profile"]
+        )
         project_name = self._site_config_template["project"]
 
         if needs_resolution:
             # Set templates and resolve with selective interpolation
-            logger.info(f"Resolving external configuration references for project={project_name}, profile={active_profile}...")
+            logger.info(
+                f"Resolving external configuration references for project={project_name}, profile={active_profile}..."
+            )
             self.ref_tracker.set_template(
                 cast(dict[str, Any], self._site_config_template),
                 cast(dict[str, Any], self._user_config_template),
             )
             self._config_templates_loaded = True
-            
+
             # Use selective interpolation - only resolve active profile + top-level config
             resolved_site, resolved_user = self.ref_tracker.resolve_all(
                 project_name=project_name,
@@ -453,19 +465,6 @@ class RAWMCP:
             self._cli_overrides["enable_sql_tools"]
             if self._cli_overrides["enable_sql_tools"] is not None
             else site_sql_tools
-        )
-
-    def get_config_info(self) -> ConfigInfo:
-        """Get configuration information for display."""
-        return ConfigInfo(
-            project=self.site_config["project"],
-            profile=self.profile_name,
-            transport=self.transport,
-            host=self.host,
-            port=self.port,
-            readonly=self.readonly,
-            stateless=bool(self.stateless_http),
-            sql_tools_enabled=bool(self.enable_sql_tools),
         )
 
     def get_endpoint_counts(self) -> dict[str, int]:
@@ -607,6 +606,9 @@ class RAWMCP:
 
     async def _register_audit_schema(self) -> None:
         """Register the application's audit schema."""
+        if not self.audit_logger:
+            return
+
         try:
             # Check if schema already exists
             existing = await self.audit_logger.get_schema(
@@ -690,8 +692,10 @@ class RAWMCP:
         # Get project name from site config
         project_name = self.site_config["project"]
 
-        # Configure telemetry for the current profile
-        configure_telemetry_from_config(self.user_config, project_name, self.profile_name)
+        # Configure telemetry for the current profile and get enabled status
+        self.telemetry_enabled = configure_telemetry_from_config(
+            self.user_config, project_name, self.profile_name
+        )
 
         # Record system startup metrics
         record_counter(
