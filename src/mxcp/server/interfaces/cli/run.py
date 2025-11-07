@@ -7,15 +7,15 @@ import click
 
 from mxcp.sdk.auth import UserContext
 from mxcp.server.core.config.analytics import track_command_with_timing
-from mxcp.server.core.config.site_config import load_site_config
+from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.interfaces.cli.table_renderer import format_result_for_display
 from mxcp.server.interfaces.cli.utils import (
-    configure_logging,
+    configure_logging_from_config,
     get_env_flag,
-    get_env_profile,
     output_error,
     output_result,
+    resolve_profile,
 )
 from mxcp.server.services.endpoints import execute_endpoint
 
@@ -72,10 +72,34 @@ def run_endpoint(
         mxcp run tool my_tool --readonly
         mxcp run tool my_tool --user-context '{"role": "admin"}'
     """
-    # Configure logging first
-    configure_logging(debug)
-
     try:
+        # Load site config
+        try:
+            repo_root = find_repo_root()
+        except FileNotFoundError as e:
+            click.echo(
+                f"\n{click.style('❌ Error:', fg='red', bold=True)} "
+                "No mxcp-site.yml found in current directory or parents"
+            )
+            raise click.ClickException(
+                "No mxcp-site.yml found in current directory or parents"
+            ) from e
+
+        site_config = load_site_config(repo_root)
+
+        # Resolve profile
+        active_profile = resolve_profile(profile, site_config)
+
+        # Load user config with active profile
+        user_config = load_user_config(site_config, active_profile=active_profile)
+
+        # Configure logging
+        configure_logging_from_config(
+            site_config=site_config,
+            user_config=user_config,
+            debug=debug,
+        )
+
         # Run async implementation
         asyncio.run(
             _run_endpoint_impl(
@@ -84,7 +108,7 @@ def run_endpoint(
                 param=param,
                 request_headers=request_headers,
                 user_context=user_context,
-                profile=profile,
+                profile=active_profile,
                 json_output=json_output,
                 debug=debug,
                 skip_output_validation=skip_output_validation,
@@ -100,7 +124,6 @@ def run_endpoint(
             click.echo("\nOperation cancelled by user", err=True)
         raise click.Abort() from None
     except Exception as e:
-        # Only catch non-Click exceptions
         output_error(e, json_output, debug)
 
 
@@ -111,16 +134,14 @@ async def _run_endpoint_impl(
     param: tuple[str, ...],
     request_headers: str | None,
     user_context: str | None,
-    profile: str | None,
+    profile: str,
     json_output: bool,
     debug: bool,
     skip_output_validation: bool,
     readonly: bool,
 ) -> None:
     """Async implementation of the run command."""
-    # Get values from environment variables if not set by flags
-    if not profile:
-        profile = get_env_profile()
+    # Get readonly flag from environment if not set
     if not readonly:
         readonly = get_env_flag("MXCP_READONLY")
 
@@ -147,8 +168,6 @@ async def _run_endpoint_impl(
     # Load configs
     site_config = load_site_config()
     user_config = load_user_config(site_config)
-
-    profile_name = profile or site_config["profile"]
 
     # Parse user context if provided
     user_context_obj = None
@@ -239,7 +258,7 @@ async def _run_endpoint_impl(
         params,
         user_config,
         site_config,
-        profile_name,
+        profile,
         readonly,
         skip_output_validation,
         user_context_obj,

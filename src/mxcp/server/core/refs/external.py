@@ -1,20 +1,18 @@
 """
 External configuration reference tracking and resolution.
 
-This module provides functionality to track and refresh external configuration
-values (vault://, file://, environment variables) without reloading the entire
-configuration structure.
+This module provides functionality to track and resolve external configuration
+values (vault://, file://, environment variables). Configuration reloading is
+handled via SIGHUP signal, which re-reads all config files from disk.
 """
 
 import copy
 import logging
-import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
+from mxcp.server.core.config.schema_utils import should_interpolate_path
 from mxcp.server.core.refs.resolver import (
-    FILE_URL_PATTERN,
     find_references,
     resolve_value,
 )
@@ -30,7 +28,6 @@ class ExternalRef:
     source: str  # Original reference string (e.g., "vault://secret/db#password")
     ref_type: str  # Type: "vault", "file", or "env"
     last_resolved: Any | None = None
-    last_checked: float = 0.0
     last_error: str | None = None
 
     def resolve(
@@ -82,12 +79,21 @@ class ExternalRefTracker:
         self,
         vault_config: dict[str, Any] | None = None,
         op_config: dict[str, Any] | None = None,
+        project_name: str | None = None,
+        profile_name: str | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Resolve all external references and return updated configs.
+        """Resolve external references and return updated configs.
+
+        Uses selective interpolation if project_name and profile_name are provided,
+        which only resolves references for the active profile and top-level config.
+        This prevents errors from undefined environment variables in inactive profiles.
 
         Args:
             vault_config: Optional vault configuration. If not provided, will try to extract from template.
             op_config: Optional 1Password configuration. If not provided, will try to extract from template.
+            project_name: Optional project name for selective interpolation. If provided with profile_name,
+                         only resolves refs for this project/profile and top-level config.
+            profile_name: Optional profile name for selective interpolation.
 
         Returns:
             Tuple of (site_config, user_config) with resolved values
@@ -106,13 +112,24 @@ class ExternalRefTracker:
         # Deep copy the template
         resolved = copy.deepcopy(self._template_config)
 
+        # Determine which refs to resolve based on selective interpolation
+        refs_to_resolve = self.refs
+        if project_name is not None and profile_name is not None:
+            # Selective interpolation: only resolve refs for active profile + top-level
+            refs_to_resolve = self._filter_refs_for_selective_interpolation(
+                project_name, profile_name
+            )
+            logger.debug(
+                f"Selective interpolation: resolving {len(refs_to_resolve)}/{len(self.refs)} refs "
+                f"for project={project_name}, profile={profile_name}"
+            )
+
         # Resolve each reference
         resolution_errors = []
-        for ref in self.refs:
+        for ref in refs_to_resolve:
             try:
                 value = ref.resolve(vault_config, op_config)
                 ref.last_resolved = value
-                ref.last_checked = time.time()
 
                 # Apply the resolved value
                 self._apply_value(resolved, ref.path, value)
@@ -152,33 +169,27 @@ class ExternalRefTracker:
         else:
             raise TypeError(f"Invalid final key {final_key} for type {type(current)}")
 
-    def check_for_changes(self) -> list[ExternalRef]:
-        """Check if any file-based references have changed."""
-        changed = []
+    def _filter_refs_for_selective_interpolation(
+        self, project_name: str, profile_name: str
+    ) -> list[ExternalRef]:
+        """Filter refs to only include those for active profile and top-level config.
+
+        Uses should_interpolate_path() for the interpolation decision logic.
+
+        Args:
+            project_name: Active project name
+            profile_name: Active profile name
+
+        Returns:
+            List of ExternalRefs that should be resolved
+        """
+        refs_to_resolve = []
 
         for ref in self.refs:
-            if ref.ref_type == "file" and ref.last_resolved is not None:
-                try:
-                    # Extract file path from the source
-                    match = FILE_URL_PATTERN.match(ref.source)
-                    if match:
-                        file_path_str = match.group(1)
-                        if file_path_str.startswith("/"):
-                            file_path = Path(file_path_str)
-                        else:
-                            file_path = Path.cwd() / file_path_str
+            if should_interpolate_path(ref.path, project_name, profile_name):
+                refs_to_resolve.append(ref)
+            else:
+                # Skip this ref (inactive profile)
+                logger.debug(f"Skipping ref in inactive profile: {'.'.join(map(str, ref.path))}")
 
-                        if file_path.exists():
-                            mtime = file_path.stat().st_mtime
-                            # Check if file was modified since last check
-                            if mtime > ref.last_checked:
-                                changed.append(ref)
-
-                except Exception as e:
-                    logger.warning(f"Error checking file {ref.source}: {e}")
-
-        return changed
-
-    def has_changes(self, old_config: dict[str, Any], new_config: dict[str, Any]) -> bool:
-        """Check if resolved configurations are different."""
-        return old_config != new_config
+        return refs_to_resolve

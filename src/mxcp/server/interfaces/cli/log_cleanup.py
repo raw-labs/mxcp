@@ -7,8 +7,15 @@ from pathlib import Path
 import click
 
 from mxcp.sdk.audit import AuditLogger
-from mxcp.server.core.config.site_config import load_site_config
-from mxcp.server.interfaces.cli.utils import configure_logging, output_error, output_result
+from mxcp.server.core.config.analytics import track_command_with_timing
+from mxcp.server.core.config.site_config import find_repo_root, load_site_config
+from mxcp.server.core.config.user_config import load_user_config
+from mxcp.server.interfaces.cli.utils import (
+    configure_logging_from_config,
+    output_error,
+    output_result,
+    resolve_profile,
+)
 
 
 @click.command(name="log-cleanup")
@@ -38,12 +45,36 @@ def log_cleanup(profile: str | None, dry_run: bool, json_output: bool, debug: bo
         # Systemd timer example:
         See mxcp-log-cleanup.service and mxcp-log-cleanup.timer
     """
-    # Configure logging first
-    configure_logging(debug)
-
     try:
+        # Load site config
+        try:
+            repo_root = find_repo_root()
+        except FileNotFoundError as e:
+            click.echo(
+                f"\n{click.style('❌ Error:', fg='red', bold=True)} "
+                "No mxcp-site.yml found in current directory or parents"
+            )
+            raise click.ClickException(
+                "No mxcp-site.yml found in current directory or parents"
+            ) from e
+
+        site_config = load_site_config(repo_root)
+
+        # Resolve profile
+        active_profile = resolve_profile(profile, site_config)
+
+        # Load user config with active profile
+        user_config = load_user_config(site_config, active_profile=active_profile)
+
+        # Configure logging
+        configure_logging_from_config(
+            site_config=site_config,
+            user_config=user_config,
+            debug=debug,
+        )
+
         # Run async implementation
-        asyncio.run(_cleanup_async(profile, dry_run, json_output, debug))
+        asyncio.run(_cleanup_async(active_profile, dry_run, json_output, debug))
     except click.ClickException:
         # Let Click exceptions propagate - they have their own formatting
         raise
@@ -53,7 +84,6 @@ def log_cleanup(profile: str | None, dry_run: bool, json_output: bool, debug: bo
             click.echo("\nOperation cancelled by user", err=True)
         raise click.Abort() from None
     except Exception as e:
-        # Only catch non-Click exceptions
         output_error(e, json_output, debug)
 
 

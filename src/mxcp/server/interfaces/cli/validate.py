@@ -3,15 +3,15 @@ from typing import Any
 import click
 
 from mxcp.server.core.config.analytics import track_command_with_timing
-from mxcp.server.core.config.site_config import load_site_config
+from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.interfaces.cli.utils import (
-    configure_logging,
+    configure_logging_from_config,
     get_env_flag,
-    get_env_profile,
     output_error,
     output_result,
+    resolve_profile,
 )
 from mxcp.server.services.endpoints.validator import validate_all_endpoints, validate_endpoint
 
@@ -144,22 +144,41 @@ def validate(
         mxcp validate --json-output     # Output results in JSON format
         mxcp validate --readonly        # Open database connection in read-only mode
     """
-    # Get values from environment variables if not set by flags
-    if not profile:
-        profile = get_env_profile()
-    if not readonly:
-        readonly = get_env_flag("MXCP_READONLY")
-
-    # Configure logging
-    configure_logging(debug)
-
     try:
-        site_config = load_site_config()
-        user_config = load_user_config(site_config)
+        # Load site config
+        try:
+            repo_root = find_repo_root()
+        except FileNotFoundError as e:
+            click.echo(
+                f"\n{click.style('❌ Error:', fg='red', bold=True)} "
+                "No mxcp-site.yml found in current directory or parents"
+            )
+            raise click.ClickException(
+                "No mxcp-site.yml found in current directory or parents"
+            ) from e
 
+        site_config = load_site_config(repo_root)
+
+        # Resolve profile
+        active_profile = resolve_profile(profile, site_config)
+
+        # Load user config with active profile
+        user_config = load_user_config(site_config, active_profile=active_profile)
+
+        # Configure logging
+        configure_logging_from_config(
+            site_config=site_config,
+            user_config=user_config,
+            debug=debug,
+        )
+
+        # Get readonly flag from environment if not set
+        if not readonly:
+            readonly = get_env_flag("MXCP_READONLY")
+        
         # Create a shared RuntimeEnvironment for all validations
         runtime_env = create_runtime_environment(
-            user_config, site_config, profile, readonly=readonly
+            user_config, site_config, active_profile, readonly=readonly
         )
         execution_engine = runtime_env.execution_engine
 
@@ -176,5 +195,8 @@ def validate(
         finally:
             runtime_env.shutdown()
 
+    except click.ClickException:
+        # Let Click exceptions propagate - they have their own formatting
+        raise
     except Exception as e:
         output_error(e, json_output, debug)

@@ -41,6 +41,7 @@ from mxcp.sdk.telemetry import (
     record_counter,
     set_span_attribute,
 )
+from mxcp.server.admin import AdminAPIRunner
 from mxcp.server.core.config._types import (
     SiteConfig,
     UserAuthConfig,
@@ -52,6 +53,10 @@ from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.core.refs.external import ExternalRefTracker
 from mxcp.server.core.reload import ReloadManager, ReloadRequest
 from mxcp.server.core.telemetry import configure_telemetry_from_config, shutdown_telemetry
+from mxcp.server.interfaces.cli.utils import (
+    get_env_admin_socket_enabled,
+    get_env_admin_socket_path,
+)
 from mxcp.server.definitions.endpoints._types import (
     ParamDefinition,
     PromptDefinition,
@@ -264,12 +269,19 @@ class RAWMCP:
     ):
         """Initialize the MXCP MCP server.
 
-        The server loads all configurations automatically and provides methods
-        to query its state. Command-line options override config file settings.
+        The server loads configuration templates from disk to enable external reference
+        tracking and hot reloading. Configuration templates are loaded with resolve_refs=False,
+        meaning external references (${ENV_VAR}, vault://, file://) remain as strings.
+        These templates are then resolved using selective interpolation - only resolving
+        references for the active profile and top-level config, preventing errors from
+        undefined environment variables in inactive profiles.
+
+        Command-line options override config file settings.
 
         Args:
             site_config_path: Optional path to find mxcp-site.yml. Defaults to current directory.
-            profile: Optional profile name to use. Defaults to site config profile.
+                             Used for both initial load and hot reload functionality.
+            profile: Optional profile name to use. Overrides the profile from site config.
             transport: Optional transport override. Defaults to user config setting.
             host: Optional host override. Defaults to user config setting.
             port: Optional port override. Defaults to user config setting.
@@ -283,11 +295,20 @@ class RAWMCP:
         self.site_config_path = site_config_path or Path.cwd()
         self.debug = debug
 
-        # Load configurations
-        logger.info("Loading configurations...")
-
+        # Load configuration templates from disk (unresolved for external reference tracking)
+        logger.info("Loading configuration templates...")
+        logger.debug(f"Loading from {self.site_config_path}")
+        
+        # Templates are loaded with resolve_refs=False, keeping external references as strings
+        # e.g., "${MY_VAR}", "vault://secret/path", "file://config.json"
+        # This enables:
+        # 1. External reference tracking for hot reload
+        # 2. File change detection
+        # 3. Selective interpolation (only active profile + top-level)
         self._site_config_template = load_site_config(self.site_config_path)
-        self._user_config_template = load_user_config(self._site_config_template)
+        self._user_config_template = load_user_config(
+            self._site_config_template, resolve_refs=False
+        )
 
         # Store command-line overrides
         self._cli_overrides = {
@@ -341,25 +362,45 @@ class RAWMCP:
         self.requests_lock = threading.Lock()
         self.draining = False
 
+        # Initialize admin API (but don't start yet - will be started in run())
+        self.admin_api = AdminAPIRunner(
+            server=self,
+            socket_path=get_env_admin_socket_path(),
+            enabled=get_env_admin_socket_enabled(),
+        )
+
         # Register signal handlers
         self._register_signal_handlers()
 
     def _resolve_and_apply_configs(self) -> None:
-        """Resolve external references and apply CLI overrides."""
+        """Resolve external references with selective interpolation and apply CLI overrides.
+        
+        External references (${ENV_VAR}, vault://, file://) are resolved using selective
+        interpolation, which only resolves references for the active profile and top-level
+        config. This prevents errors from undefined environment variables in inactive profiles.
+        """
         # Check if configs contain unresolved references
-
         config_str = json.dumps(self._site_config_template) + json.dumps(self._user_config_template)
         needs_resolution = any(pattern in config_str for pattern in ["${", "vault://", "file://"])
 
+        # Determine active profile (CLI override > site config)
+        active_profile = str(self._cli_overrides["profile"] or self._site_config_template["profile"])
+        project_name = self._site_config_template["project"]
+
         if needs_resolution:
-            # Set templates and resolve
-            logger.info("Resolving external configuration references...")
+            # Set templates and resolve with selective interpolation
+            logger.info(f"Resolving external configuration references for project={project_name}, profile={active_profile}...")
             self.ref_tracker.set_template(
                 cast(dict[str, Any], self._site_config_template),
                 cast(dict[str, Any], self._user_config_template),
             )
             self._config_templates_loaded = True
-            resolved_site, resolved_user = self.ref_tracker.resolve_all()
+            
+            # Use selective interpolation - only resolve active profile + top-level config
+            resolved_site, resolved_user = self.ref_tracker.resolve_all(
+                project_name=project_name,
+                profile_name=active_profile,
+            )
             self.site_config = cast(SiteConfig, resolved_site)
             self.user_config = cast(UserConfig, resolved_user)
         else:
@@ -368,8 +409,8 @@ class RAWMCP:
             self.user_config = self._user_config_template
             self._config_templates_loaded = False
 
-        # Apply profile override
-        self.profile_name = str(self._cli_overrides["profile"] or self.site_config["profile"])
+        # Store resolved profile name
+        self.profile_name = active_profile
         self.active_profile = get_active_profile(
             self.user_config, self.site_config, self.profile_name
         )
@@ -801,9 +842,15 @@ class RAWMCP:
         logger.info("Shutting down MXCP server...")
 
         try:
+            # Stop the admin API first
+            self._ensure_async_completes(
+                self.admin_api.stop(),
+                timeout=5.0,
+                operation_name="Admin API shutdown",
+            )
+
             # Stop the reload manager
-            if self.reload_manager:
-                self.reload_manager.stop()
+            self.reload_manager.stop()
 
             # Gracefully shut down the reloadable runtime components first
             # This handles python runtimes, plugins, and the db session.
@@ -1898,6 +1945,13 @@ class RAWMCP:
 
             # Start the reload manager
             self.reload_manager.start()
+
+            # Start admin API (async operation from sync context)
+            self._ensure_async_completes(
+                self.admin_api.start(),
+                timeout=10.0,
+                operation_name="Admin API startup",
+            )
 
             # Register all endpoints
             self.register_endpoints()

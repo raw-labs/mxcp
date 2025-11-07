@@ -279,6 +279,10 @@ spec:
         env:
         - name: MXCP_CONFIG_PATH
           value: /config/config.yml
+        - name: MXCP_ADMIN_ENABLED
+          value: "true"
+        - name: MXCP_ADMIN_SOCKET
+          value: /run/mxcp.sock
         - name: GITHUB_CLIENT_ID
           valueFrom:
             secretKeyRef:
@@ -298,16 +302,22 @@ spec:
           readOnly: true
         - name: data
           mountPath: /app/data
+        - name: run
+          mountPath: /run
         livenessProbe:
-          httpGet:
-            path: /health
-            port: 8000
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - echo '{"action":"status"}' | nc -U /run/mxcp.sock | grep -q '"status":"ok"'
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8000
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - echo '{"action":"status"}' | nc -U /run/mxcp.sock | grep -q '"status":"ok"'
           initialDelaySeconds: 5
           periodSeconds: 5
         resources:
@@ -325,6 +335,8 @@ spec:
         configMap:
           name: mxcp-project
       - name: data
+        emptyDir: {}
+      - name: run
         emptyDir: {}
 ---
 apiVersion: v1
@@ -922,11 +934,11 @@ During shutdown:
 
 ## Monitoring & Observability
 
-MXCP provides comprehensive observability through multiple channels: audit logging, OpenTelemetry (traces and metrics), and application logs. This section covers all aspects of monitoring your MXCP deployment.
+MXCP provides comprehensive observability through multiple channels: audit logging, OpenTelemetry (traces and metrics), application logs, and a local admin socket for health checks. This section covers all aspects of monitoring your MXCP deployment.
 
 ### Overview of Observability Signals
 
-MXCP provides three complementary observability signals:
+MXCP provides four complementary observability signals:
 
 1. **Application Logs** 📝
    - Traditional text-based logs for debugging
@@ -945,6 +957,13 @@ MXCP provides three complementary observability signals:
    - **Metrics**: Performance counters and histograms
    - **Correlation**: Links traces with audit logs
    - Best for: Performance analysis, system health
+
+4. **Admin Socket** 🔌
+   - Local Unix domain socket for health checks
+   - Query server status, uptime, and reload state
+   - No network access required
+   - Best for: Local health monitoring, triggering reloads
+   - See [Admin Socket Guide](/guides/admin-socket) for details
 
 ### OpenTelemetry Integration
 
@@ -1552,44 +1571,84 @@ scrape_configs:
       - targets: ['mxcp:9090']  # If prometheus_port is configured
 ```
 
-### Monitoring Without Built-in Health Endpoints
+### Health Monitoring
 
-Since MXCP doesn't provide built-in health check endpoints, implement monitoring through:
+MXCP provides several approaches for health monitoring:
 
-1. **Create a health check tool**:
-   ```yaml
-   # tools/health.yml
-   mxcp: 1
-   tool:
-     name: health_check
-     description: "Basic health check endpoint"
-     parameters: []
-     return:
-       type: object
-       properties:
-         status: { type: string }
-         timestamp: { type: string }
-     source:
-       code: |
-         SELECT 
-           'healthy' as status,
-           CURRENT_TIMESTAMP as timestamp
-   ```
+#### 1. Admin Socket (Recommended for Local Checks)
 
-2. **Process monitoring**:
-   ```bash
-   # Check if MXCP process is running
-   pgrep -f "mxcp serve" || exit 1
-   
-   # Check if port is listening
-   nc -z localhost 8000 || exit 1
-   ```
+For local health checks and monitoring, use the admin socket:
 
-3. **Synthetic monitoring**:
-   ```bash
-   # Test endpoint availability
-   curl -f http://localhost:8000/tools/list || exit 1
-   ```
+```bash
+# Enable admin socket
+export MXCP_ADMIN_ENABLED=true
+export MXCP_ADMIN_SOCKET=/var/run/mxcp/mxcp.sock
+
+# Health check script
+echo '{"action": "status"}' | nc -U /var/run/mxcp/mxcp.sock | jq -e '.status == "ok"' || exit 1
+```
+
+The admin socket provides:
+- Server status and uptime
+- Reload state tracking
+- Configuration metadata
+- No network overhead
+
+See the [Admin Socket Guide](/guides/admin-socket) for full protocol details.
+
+**Docker/Kubernetes Example:**
+```bash
+# Liveness probe via admin socket
+exec:
+  command:
+  - /bin/sh
+  - -c
+  - echo '{"action":"status"}' | nc -U /run/mxcp.sock | grep -q '"status":"ok"'
+```
+
+#### 2. Create a Health Check Tool
+
+For HTTP-based health checks (useful for external monitoring):
+
+```yaml
+# tools/health.yml
+mxcp: 1
+tool:
+  name: health_check
+  description: "Basic health check endpoint"
+  parameters: []
+  return:
+    type: object
+    properties:
+      status: { type: string }
+      timestamp: { type: string }
+  source:
+    code: |
+      SELECT 
+        'healthy' as status,
+        CURRENT_TIMESTAMP as timestamp
+```
+
+#### 3. Process Monitoring
+
+Basic process and port checks:
+
+```bash
+# Check if MXCP process is running
+pgrep -f "mxcp serve" || exit 1
+
+# Check if port is listening
+nc -z localhost 8000 || exit 1
+```
+
+#### 4. Synthetic Monitoring
+
+Test actual endpoint functionality:
+
+```bash
+# Test endpoint availability
+curl -f http://localhost:8000/tools/list || exit 1
+```
 
 ### Audit Log Analysis
 

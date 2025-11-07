@@ -13,6 +13,8 @@ import re
 from pathlib import Path
 from typing import Any, cast
 
+from mxcp.server.core.config.schema_utils import should_interpolate_path
+
 logger = logging.getLogger(__name__)
 
 # Regular expression patterns for external references
@@ -336,6 +338,53 @@ def interpolate_all(
         return [interpolate_all(item, vault_config, op_config) for item in config]
     else:
         return config
+
+
+def interpolate_selective(
+    config: dict[str, Any],
+    project_name: str,
+    profile_name: str,
+    vault_config: dict[str, Any] | None = None,
+    op_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Selectively interpolate external references only for active profile and top-level config.
+
+    This avoids resolving environment variables for inactive profiles, preventing
+    errors when env vars for unused profiles are not set.
+    
+    Uses should_interpolate_path() for the interpolation decision logic.
+
+    Args:
+        config: User configuration structure
+        project_name: Active project name
+        profile_name: Active profile name
+        vault_config: Optional vault configuration
+        op_config: Optional 1Password configuration
+
+    Returns:
+        Configuration with references resolved only for active profile and top-level config
+    """
+    def _interpolate_recursive(value: Any, path: list[str | int]) -> Any:
+        """Recursively process config, interpolating only paths that match the active profile."""
+        # Check if this path should be interpolated
+        if should_interpolate_path(path, project_name, profile_name):
+            # Interpolate this entire subtree
+            return interpolate_all(value, vault_config, op_config)
+        
+        # Don't interpolate this path - but recurse into structure to handle nested paths
+        if isinstance(value, dict):
+            result = {}
+            for key, subvalue in value.items():
+                result[key] = _interpolate_recursive(subvalue, path + [key])
+            return result
+        elif isinstance(value, list):
+            return [_interpolate_recursive(item, path + [i]) for i, item in enumerate(value)]
+        else:
+            # Leaf value - leave as-is
+            return value
+    
+    # Start recursion with root path
+    return _interpolate_recursive(config, ["user"])
 
 
 def find_references(

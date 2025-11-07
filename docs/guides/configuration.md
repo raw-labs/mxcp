@@ -544,6 +544,8 @@ MXCP can be configured using environment variables:
 - `MXCP_PROFILE`: Set default profile
 - `MXCP_READONLY`: Enable read-only mode
 - `MXCP_DUCKDB_PATH`: Override the DuckDB file location (see below)
+- `MXCP_ADMIN_ENABLED`: Enable local admin control socket (set to "1", "true", or "yes")
+- `MXCP_ADMIN_SOCKET`: Path to admin socket (default: `/var/run/mxcp/mxcp.sock`)
 
 ### DuckDB Path Override
 

@@ -207,6 +207,16 @@ class UserTracingConfig(TypedDict, total=False):
     console_export: bool | None  # For debugging - print spans to console
 
 
+class UserLoggingConfig(TypedDict, total=False):
+    """Application logging configuration."""
+
+    enabled: bool | None  # Enable file logging
+    path: str | None  # Path to log file
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] | None  # Log level
+    max_bytes: int | None  # Max file size before rotation
+    backup_count: int | None  # Number of backup files to keep
+
+
 class UserMetricsConfig(TypedDict, total=False):
     """Metrics-specific configuration."""
 
@@ -249,3 +259,4 @@ class UserConfig(TypedDict):
     onepassword: UserOnePasswordConfig | None
     transport: UserTransportConfig | None
     models: UserModelsConfig | None
+    logging: UserLoggingConfig | None

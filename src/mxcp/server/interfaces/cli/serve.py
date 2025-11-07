@@ -5,11 +5,13 @@ from typing import Any
 import click
 
 from mxcp.server.core.config.analytics import track_command_with_timing
+from mxcp.server.core.config.site_config import find_repo_root, load_site_config
+from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.interfaces.cli.utils import (
-    configure_logging,
+    configure_logging_from_config,
     get_env_flag,
-    get_env_profile,
     output_error,
+    resolve_profile,
 )
 from mxcp.server.interfaces.server.mcp import RAWMCP
 
@@ -63,14 +65,9 @@ def serve(
         mxcp serve --readonly        # Open database connection in read-only mode
         mxcp serve --stateless       # Enable stateless HTTP mode
     """
-    # Get values from environment variables if not set by flags
-    if not profile:
-        profile = get_env_profile()
+    # Get readonly flag from environment if not set by flag
     if not readonly:
         readonly = get_env_flag("MXCP_READONLY")
-
-    # Configure logging
-    configure_logging(debug)
 
     # Convert sql-tools string to boolean
     enable_sql_tools = None
@@ -80,10 +77,43 @@ def serve(
         enable_sql_tools = False
 
     try:
-        # Create the server - it loads all configs and sets itself up
+        # Load site config
+        try:
+            repo_root = find_repo_root()
+        except FileNotFoundError as e:
+            click.echo(
+                f"\n{click.style('❌ Error:', fg='red', bold=True)} "
+                "No mxcp-site.yml found in current directory or parents"
+            )
+            raise click.ClickException(
+                "No mxcp-site.yml found in current directory or parents"
+            ) from e
+
+        site_config = load_site_config(repo_root)
+
+        # Resolve profile
+        active_profile = resolve_profile(profile, site_config)
+
+        # Load user config with active profile
+        user_config = load_user_config(site_config, active_profile=active_profile)
+
+        # Determine effective transport (CLI flag > user config > default)
+        effective_transport = transport
+        if not effective_transport:
+            effective_transport = user_config.get("transport", {}).get("provider", "streamable-http")
+
+        # Configure logging ONCE with all settings
+        configure_logging_from_config(
+            site_config=site_config,
+            user_config=user_config,
+            debug=debug,
+            transport=effective_transport,
+        )
+
+        # Create the server
         server = RAWMCP(
-            site_config_path=Path.cwd(),
-            profile=profile,
+            site_config_path=repo_root,
+            profile=active_profile,
             transport=transport,
             port=port,
             stateless_http=stateless if stateless else None,
@@ -173,6 +203,9 @@ def serve(
             if config["transport"] != "stdio":
                 click.echo(f"{click.style('👋 Server stopped', fg='cyan')}")
             raise
+    except click.ClickException:
+        # Let Click exceptions propagate - they have their own formatting
+        raise
     except KeyboardInterrupt:
         # Server was stopped gracefully
         pass

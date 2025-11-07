@@ -11,12 +11,12 @@ readme = "README.md"
 license = "BUSL-1.1"
 requires-python = ">=3.10"
 dependencies = [
-    # MCP Framework (needed by SDK)
+    # MCP Framework
     "mcp>=1.12,<1.18",  # Official MCP Python SDK
     "aiohttp>=3.8.0",  # HTTP transport for MCP
     "starlette>=0.27.0",  # HTTP server framework
     
-    # Data & Processing (needed by SDK)
+    # Data & Processing
     "duckdb>=1.4.1",  # Embedded analytics database
     "pandas>=2.0.0",  # DataFrame operations with DuckDB
     "jsonschema>=4.0.0",  # Schema validation
@@ -26,17 +26,21 @@ dependencies = [
     "cel-python>=0.2.0",  # Policy enforcement engine
     "httpx>=0.25.0",  # HTTP client for API calls
     
-    # CLI Framework (always needed since this package includes CLI)
+    # CLI
     "click>=8.1.7",  # CLI framework
     "posthog>=3.0.0",  # Usage analytics (always available)
     "dbt-core>=1.6.0",  # dbt core for data transformations
     "dbt-duckdb>=1.6.0",  # dbt DuckDB adapter
     
-    # Observability (needed by SDK telemetry)
+    # Observability
     "opentelemetry-api>=1.24.0",  # OpenTelemetry API
     "opentelemetry-sdk>=1.24.0",  # OpenTelemetry SDK
     "opentelemetry-exporter-otlp-proto-http>=1.24.0",  # OTLP HTTP exporter
     "opentelemetry-exporter-prometheus>=0.48b0",  # Prometheus metrics exporter
+
+    # Admin API
+    "fastapi>=0.110.0",  # FastAPI for admin API
+    "uvicorn[standard]>=0.27.0",  # ASGI server for admin API
 ]
 
 [project.scripts]
@@ -51,6 +55,7 @@ dev = [
     "pytest-mock",  # For better mock integration with pytest
     "pytest-timeout",  # For test timeout protection
     "aioresponses",  # For mocking HTTP requests
+    "httpx>=0.26.0",  # For FastAPI TestClient
     "black",  # For code formatting
     "ruff",  # For linting and import sorting
     "mypy",  # For type checking
@@ -98,6 +103,9 @@ packages = [
     "mxcp.plugins",  # Plugin system - kept at top-level for backward compatibility
     # Server
     "mxcp.server",
+    # Server - Admin API
+    "mxcp.server.admin",
+    "mxcp.server.admin.endpoints",
     # Server - Core modules
     "mxcp.server.core",
     "mxcp.server.core.auth",
