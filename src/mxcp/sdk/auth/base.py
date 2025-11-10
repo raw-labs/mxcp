@@ -988,7 +988,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
                 # Check if another request already refreshed the token (race condition check)
                 current_external_token = self._token_mapping.get(mcp_token)
-                if current_external_token != original_external_token:
+                if current_external_token and current_external_token != original_external_token:
                     logger.debug(
                         f"Token already refreshed by another request: {mcp_token[:10]}... "
                         f"({original_external_token[:10]}... -> {current_external_token[:10]}...)"
