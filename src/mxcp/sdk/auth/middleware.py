@@ -315,62 +315,82 @@ class AuthenticationMiddleware:
                             logger.warning("OAuth handler not configured")
                             return None
 
-                        # Try to get user context from cache first
+                        # Try to get user context from cache first (quick check without lock)
                         cached_user_context = await self._get_cached_user_context(
                             access_token.token
                         )
 
                         if cached_user_context is None:
-                            # Cache miss - call provider API
-                            provider_name = getattr(
-                                self.oauth_handler, "__class__", type(self.oauth_handler)
-                            ).__name__
-                            logger.debug(
-                                f"🔄 Cache MISS - calling {provider_name}.get_user_context() - Provider API call #{hash(external_token) % 10000}"
-                            )
-
-                            try:
-                                cached_user_context = await self.oauth_handler.get_user_context(
-                                    external_token
+                            # Cache miss - use per-token lock to prevent stampede
+                            refresh_lock = await self._get_refresh_lock(access_token.token)
+                            
+                            async with refresh_lock:
+                                # Double-check cache after acquiring lock
+                                # Another request might have filled it while we waited
+                                cached_user_context = await self._get_cached_user_context(
+                                    access_token.token
                                 )
-                                # Cache the successful result immediately
-                                await self._cache_user_context(
-                                    access_token.token, cached_user_context
-                                )
-                            except HTTPException as e:
-                                # Check if this is a 401/token expired error
-                                if e.status_code == 401:
-                                    logger.info("🔄 Access token expired, attempting refresh...")
-
-                                    # Attempt to refresh the token
-                                    refreshed_token = await self._attempt_token_refresh(
-                                        access_token.token, external_token
+                                
+                                if cached_user_context is None:
+                                    # Still a cache miss - make the API call
+                                    provider_name = getattr(
+                                        self.oauth_handler, "__class__", type(self.oauth_handler)
+                                    ).__name__
+                                    logger.debug(
+                                        f"🔄 Cache MISS - calling {provider_name}.get_user_context() - Provider API call #{hash(external_token) % 10000}"
                                     )
 
-                                    if refreshed_token:
-                                        logger.info(
-                                            "✅ Token refresh successful, retrying user context"
+                                    try:
+                                        cached_user_context = await self.oauth_handler.get_user_context(
+                                            external_token
                                         )
-                                        # Update external_token to the refreshed token
-                                        external_token = refreshed_token
-                                        # Retry with the new token
-                                        cached_user_context = (
-                                            await self.oauth_handler.get_user_context(
-                                                refreshed_token
+                                        # Cache the successful result immediately
+                                        await self._cache_user_context(
+                                            access_token.token, cached_user_context
+                                        )
+                                    except HTTPException as e:
+                                        # Check if this is a 401/token expired error
+                                        if e.status_code == 401:
+                                            logger.info("🔄 Access token expired, attempting refresh...")
+
+                                            # Attempt to refresh the token
+                                            refreshed_token = await self._attempt_token_refresh(
+                                                access_token.token, external_token
                                             )
-                                        )
-                                    else:
-                                        logger.error(
-                                            "❌ Token refresh failed, re-raising original error"
-                                        )
+
+                                            if refreshed_token:
+                                                logger.info(
+                                                    "✅ Token refresh successful, retrying user context"
+                                                )
+                                                # Update external_token to the refreshed token
+                                                external_token = refreshed_token
+                                                # Retry with the new token
+                                                cached_user_context = (
+                                                    await self.oauth_handler.get_user_context(
+                                                        refreshed_token
+                                                    )
+                                                )
+                                                # Cache the result after successful refresh
+                                                await self._cache_user_context(
+                                                    access_token.token, cached_user_context
+                                                )
+                                            else:
+                                                logger.error(
+                                                    "❌ Token refresh failed, re-raising original error"
+                                                )
+                                                raise
+                                        else:
+                                            # Not a token expiry error, re-raise
+                                            raise
+                                    except Exception as e:
+                                        # Handle non-HTTP exceptions (network errors, etc.)
+                                        logger.error(f"Non-HTTP error during get_user_context: {e}")
                                         raise
                                 else:
-                                    # Not a token expiry error, re-raise
-                                    raise
-                            except Exception as e:
-                                # Handle non-HTTP exceptions (network errors, etc.)
-                                logger.error(f"Non-HTTP error during get_user_context: {e}")
-                                raise
+                                    # Cache hit after waiting for lock
+                                    logger.debug(
+                                        f"🎯 Cache HIT (after lock wait) - another request filled cache for token {access_token.token[:20]}..."
+                                    )
 
                         # Trigger periodic cleanup of expired cache entries (non-blocking)
                         await self._schedule_cleanup_if_needed()
