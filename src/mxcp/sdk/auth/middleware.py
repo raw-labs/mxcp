@@ -369,20 +369,34 @@ class AuthenticationMiddleware:
 
                                     if refreshed_token:
                                         logger.info(
-                                            "✅ Token refresh successful, retrying user context"
+                                            "✅ Token refresh successful, retrieving user context"
                                         )
                                         # Update external_token to the refreshed token
                                         external_token = refreshed_token
-                                        # Retry with the new token
-                                        cached_user_context = (
-                                            await self.oauth_handler.get_user_context(
-                                                refreshed_token
+                                        
+                                        # Check cache first - _attempt_token_refresh already cached it
+                                        cached_user_context = await self._get_cached_user_context(
+                                            access_token.token
+                                        )
+                                        
+                                        if cached_user_context is None:
+                                            # Fallback: fetch if not cached (shouldn't happen normally)
+                                            logger.debug(
+                                                "User context not cached after refresh, fetching..."
                                             )
-                                        )
-                                        # Cache the result after successful refresh
-                                        await self._cache_user_context(
-                                            access_token.token, cached_user_context
-                                        )
+                                            cached_user_context = (
+                                                await self.oauth_handler.get_user_context(
+                                                    refreshed_token
+                                                )
+                                            )
+                                            # Cache the result
+                                            await self._cache_user_context(
+                                                access_token.token, cached_user_context
+                                            )
+                                        else:
+                                            logger.debug(
+                                                "Using cached user context after refresh"
+                                            )
                                     else:
                                         logger.error(
                                             "❌ Token refresh failed, re-raising original error"
