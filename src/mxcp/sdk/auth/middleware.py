@@ -332,14 +332,14 @@ class AuthenticationMiddleware:
                             try:
                                 # Use per-token lock to prevent stampede (but not for refresh path)
                                 refresh_lock = await self._get_refresh_lock(access_token.token)
-                                
+
                                 async with refresh_lock:
                                     # Double-check cache after acquiring lock
                                     # Another request might have filled it while we waited
                                     cached_user_context = await self._get_cached_user_context(
                                         access_token.token
                                     )
-                                    
+
                                     if cached_user_context is None:
                                         # Still a cache miss - make the API call
                                         cached_user_context = (
@@ -360,9 +360,7 @@ class AuthenticationMiddleware:
                                 # Handle 401 OUTSIDE the lock to avoid deadlock
                                 # (refresh also needs the same lock)
                                 if e.status_code == 401:
-                                    logger.info(
-                                        "🔄 Access token expired, attempting refresh..."
-                                    )
+                                    logger.info("🔄 Access token expired, attempting refresh...")
 
                                     # Attempt to refresh the token (this will acquire the lock internally)
                                     refreshed_token = await self._attempt_token_refresh(
