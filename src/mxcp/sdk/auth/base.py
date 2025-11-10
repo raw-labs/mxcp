@@ -125,7 +125,13 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         self._auth_codes: dict[str, AuthorizationCode] = {}
         self._token_mapping: dict[str, str] = {}  # MCP token -> external token
         self._refresh_token_mapping: dict[str, str] = {}  # auth code -> refresh token
+        
+        # Global lock for shared data structures (clients, auth codes, cleanup)
         self._lock = asyncio.Lock()
+        
+        # Per-token locks for token operations (prevent blocking during network I/O)
+        self._token_locks: dict[str, asyncio.Lock] = {}
+        self._token_locks_lock = asyncio.Lock()
 
         # Flag to track if persistence is initialized
         self._persistence_initialized = False
@@ -174,18 +180,64 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             await self.persistence.close()
             logger.info("OAuth persistence backend closed")
 
+    async def _get_token_lock(self, token: str) -> asyncio.Lock:
+        """Get or create a lock for the given token.
+        
+        This enables per-token locking to prevent blocking all operations
+        when one token is being refreshed (which involves network I/O).
+        
+        Args:
+            token: MCP token to get lock for
+            
+        Returns:
+            Lock specific to this token
+        """
+        async with self._token_locks_lock:
+            if token not in self._token_locks:
+                self._token_locks[token] = asyncio.Lock()
+                lock_count = len(self._token_locks)
+                logger.debug(f"Created lock for token {token[:10]}... (total locks: {lock_count})")
+                
+                # Warning if growing too large - helps detect memory leaks
+                if lock_count % 100 == 0:
+                    logger.warning(
+                        f"Token lock dictionary has grown to {lock_count} entries - "
+                        "verify cleanup is working properly"
+                    )
+            return self._token_locks[token]
+
+    async def _remove_token_lock(self, token: str) -> None:
+        """Remove the lock for the given token.
+        
+        This should be called when a token is revoked or expired to prevent
+        unbounded growth of the locks dictionary.
+        
+        Args:
+            token: MCP token to remove lock for
+        """
+        async with self._token_locks_lock:
+            if token in self._token_locks:
+                del self._token_locks[token]
+                lock_count = len(self._token_locks)
+                logger.debug(
+                    f"Removed lock for token {token[:10]}... (remaining locks: {lock_count})"
+                )
+
     async def cleanup_expired_mappings(self) -> int:
         """Clean up orphaned temporary token mappings for expired authorization codes.
 
         This method should be called periodically to prevent memory leaks from
         abandoned OAuth flows where the authorization code expired but the client
         never attempted token exchange.
+        
+        Also cleans up expired access tokens and their associated locks.
 
         Returns:
             Number of orphaned mappings cleaned up
         """
         cleaned_count = 0
         current_time = time.time()
+        expired_tokens = []
 
         async with self._lock:
             # Find auth codes that have expired
@@ -224,8 +276,32 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 self._refresh_token_mapping.pop(key, None)
                 cleaned_count += 1
 
+            # Find expired access tokens
+            for token, token_obj in list(self._tokens.items()):
+                if token_obj.expires_at and token_obj.expires_at < current_time:
+                    expired_tokens.append(token)
+
+            # Clean up expired tokens
+            for token in expired_tokens:
+                self._tokens.pop(token, None)
+                self._token_mapping.pop(token, None)
+                cleaned_count += 1
+
             if cleaned_count > 0:
-                logger.info(f"Cleaned up {cleaned_count} orphaned temporary token mappings")
+                logger.info(f"Cleaned up {cleaned_count} expired/orphaned OAuth items")
+
+        # Clean up locks for expired tokens (outside main lock to avoid lock ordering issues)
+        for token in expired_tokens:
+            await self._remove_token_lock(token)
+
+        # Log stats for monitoring
+        async with self._token_locks_lock:
+            lock_count = len(self._token_locks)
+        
+        token_count = len(self._tokens)
+        logger.debug(
+            f"OAuth stats: {token_count} active tokens, {lock_count} active locks"
+        )
 
         return cleaned_count
 
@@ -716,6 +792,8 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 raise HTTPException(400, "Client ID mismatch")
 
             mcp_token = f"mcp_{secrets.token_hex(32)}"
+            
+            # Use global lock for auth code operations (quick, no network I/O)
             async with self._lock:
                 # Get external token from mapping
                 external = self._token_mapping.pop(code_obj.code, None)
@@ -723,6 +801,13 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 # Get refresh token from mapping
                 refresh_token = self._refresh_token_mapping.pop(code_obj.code, None)
 
+                # Clean up authorization code (do this before token storage)
+                self._auth_codes.pop(code_obj.code, None)
+            
+            # Use per-token lock for storing the new token (includes DB I/O)
+            # This prevents blocking other token operations during storage
+            token_lock = await self._get_token_lock(mcp_token)
+            async with token_lock:
                 # Store MCP token with external token mapping and refresh token
                 expires_in = DEFAULT_ACCESS_TOKEN_TTL
                 await self._store_token(
@@ -743,15 +828,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     logger.info(f"Stored refresh token with MCP token: {mcp_token[:20]}...")
                 else:
                     logger.debug(f"No refresh token available for MCP token: {mcp_token[:20]}...")
-
-                # Clean up authorization code
-                self._auth_codes.pop(code_obj.code, None)
-                if self.persistence:
-                    try:
-                        await self.persistence.delete_auth_code(code_obj.code)
-                        logger.debug(f"Deleted auth code from persistence: {code_obj.code}")
-                    except Exception as e:
-                        logger.error(f"Error deleting auth code from persistence: {e}")
+            
+            # Clean up auth code from persistence (outside locks to minimize hold time)
+            if self.persistence:
+                try:
+                    await self.persistence.delete_auth_code(code_obj.code)
+                    logger.debug(f"Deleted auth code from persistence: {code_obj.code}")
+                except Exception as e:
+                    logger.error(f"Error deleting auth code from persistence: {e}")
 
             logger.info(f"Token exchange successful for client: {client.client_id}")
 
@@ -768,7 +852,11 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
     # ----- token validation / revocation -----
     async def load_access_token(self, token: str) -> AccessToken | None:
-        async with self._lock:
+        # Use per-token lock to prevent race conditions during token loading
+        token_lock = await self._get_token_lock(token)
+        should_cleanup_lock = False
+        
+        async with token_lock:
             # First check memory cache
             tkn = self._tokens.get(token)
 
@@ -781,32 +869,36 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                         if persisted_token.expires_at and persisted_token.expires_at < time.time():
                             # Clean up expired token
                             await self.persistence.delete_token(token)
-                            return None
+                            should_cleanup_lock = True
+                            tkn = None
+                        else:
+                            # Load into memory cache
+                            tkn = AccessToken(
+                                token=persisted_token.token,
+                                client_id=persisted_token.client_id,
+                                scopes=persisted_token.scopes,
+                                expires_at=(
+                                    int(persisted_token.expires_at)
+                                    if persisted_token.expires_at
+                                    else None
+                                ),
+                            )
+                            self._tokens[token] = tkn
 
-                        # Load into memory cache
-                        tkn = AccessToken(
-                            token=persisted_token.token,
-                            client_id=persisted_token.client_id,
-                            scopes=persisted_token.scopes,
-                            expires_at=(
-                                int(persisted_token.expires_at)
-                                if persisted_token.expires_at
-                                else None
-                            ),
-                        )
-                        self._tokens[token] = tkn
+                            # Load external token mapping if available
+                            if persisted_token.external_token:
+                                self._token_mapping[token] = persisted_token.external_token
 
-                        # Load external token mapping if available
-                        if persisted_token.external_token:
-                            self._token_mapping[token] = persisted_token.external_token
-
-                        logger.debug(
-                            f"Loaded token from persistence: {token[:10]}... (refresh_token: {'yes' if persisted_token.refresh_token else 'no'})"
-                        )
+                            logger.debug(
+                                f"Loaded token from persistence: {token[:10]}... (refresh_token: {'yes' if persisted_token.refresh_token else 'no'})"
+                            )
+                    else:
+                        # Token not found in persistence either
+                        should_cleanup_lock = True
                 except Exception as e:
                     logger.error(f"Error loading token from persistence: {e}")
 
-            # Check expiration
+            # Check expiration for tokens loaded from memory
             if tkn and tkn.expires_at and tkn.expires_at < time.time():
                 # Clean up expired token
                 self._tokens.pop(token, None)
@@ -816,9 +908,20 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                         await self.persistence.delete_token(token)
                     except Exception as e:
                         logger.error(f"Error deleting expired token from persistence: {e}")
-                return None
-
-            return tkn
+                should_cleanup_lock = True
+                tkn = None
+            
+            # Catch-all: if token still not found and we haven't already marked for cleanup
+            # This handles: (1) no persistence enabled, (2) exception during load
+            if not tkn and not should_cleanup_lock:
+                should_cleanup_lock = True
+        
+        # Clean up lock after releasing it if token was expired or not found
+        # This prevents unbounded growth of the locks dictionary
+        if should_cleanup_lock:
+            await self._remove_token_lock(token)
+        
+        return tkn
 
     async def load_refresh_token(self, client: Any, refresh_token: str) -> Any | None:
         return None
@@ -829,7 +932,10 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         raise NotImplementedError
 
     async def revoke_token(self, token: str, token_type_hint: str | None = None) -> None:
-        async with self._lock:
+        # Use per-token lock for the revocation operation
+        token_lock = await self._get_token_lock(token)
+        
+        async with token_lock:
             # Remove from memory cache
             self._tokens.pop(token, None)
             self._token_mapping.pop(token, None)
@@ -841,9 +947,15 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     logger.debug(f"Revoked token from persistence: {token[:10]}...")
                 except Exception as e:
                     logger.error(f"Error revoking token from persistence: {e}")
+        
+        # Clean up the token's lock after revocation (outside the lock)
+        await self._remove_token_lock(token)
 
     async def refresh_external_token(self, mcp_token: str) -> str | None:
         """Refresh an expired external token using its refresh token.
+        
+        Uses per-token locking to prevent blocking all auth operations during
+        the network I/O required for token refresh.
 
         Args:
             mcp_token: The MCP token whose external token needs refreshing
@@ -851,10 +963,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         Returns:
             New external access token if refresh successful, None if failed
         """
-        async with self._lock:
-            # Get the current external token
-            external_token = self._token_mapping.get(mcp_token)
-            if not external_token:
+        # Get the per-token lock to prevent concurrent refreshes of the same token
+        # but allow other tokens to be processed in parallel
+        token_lock = await self._get_token_lock(mcp_token)
+        
+        async with token_lock:
+            # Get the current external token to check for race conditions
+            original_external_token = self._token_mapping.get(mcp_token)
+            if not original_external_token:
                 logger.warning(
                     f"No external token mapping found for MCP token: {mcp_token[:10]}..."
                 )
@@ -872,6 +988,15 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     logger.warning(f"No refresh token available for MCP token: {mcp_token[:20]}...")
                     return None
 
+                # Check if another request already refreshed the token (race condition check)
+                current_external_token = self._token_mapping.get(mcp_token)
+                if current_external_token != original_external_token:
+                    logger.debug(
+                        f"Token already refreshed by another request: {mcp_token[:10]}... "
+                        f"({original_external_token[:10]}... -> {current_external_token[:10]}...)"
+                    )
+                    return current_external_token
+
                 # Call the provider's refresh method
                 if not hasattr(self.handler, "refresh_access_token"):
                     logger.warning(
@@ -879,6 +1004,8 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     )
                     return None
 
+                # Network I/O happens here, but only for this specific token
+                # Other tokens can be processed in parallel
                 refresh_response = await self.handler.refresh_access_token(
                     persisted_token.refresh_token
                 )
