@@ -125,10 +125,10 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         self._auth_codes: dict[str, AuthorizationCode] = {}
         self._token_mapping: dict[str, str] = {}  # MCP token -> external token
         self._refresh_token_mapping: dict[str, str] = {}  # auth code -> refresh token
-        
+
         # Global lock for shared data structures (clients, auth codes, cleanup)
         self._lock = asyncio.Lock()
-        
+
         # Per-token locks for token operations (prevent blocking during network I/O)
         self._token_locks: dict[str, asyncio.Lock] = {}
         self._token_locks_lock = asyncio.Lock()
@@ -182,13 +182,13 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
     async def _get_token_lock(self, token: str) -> asyncio.Lock:
         """Get or create a lock for the given token.
-        
+
         This enables per-token locking to prevent blocking all operations
         when one token is being refreshed (which involves network I/O).
-        
+
         Args:
             token: MCP token to get lock for
-            
+
         Returns:
             Lock specific to this token
         """
@@ -197,7 +197,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 self._token_locks[token] = asyncio.Lock()
                 lock_count = len(self._token_locks)
                 logger.debug(f"Created lock for token {token[:10]}... (total locks: {lock_count})")
-                
+
                 # Warning if growing too large - helps detect memory leaks
                 if lock_count % 100 == 0:
                     logger.warning(
@@ -208,10 +208,10 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
     async def _remove_token_lock(self, token: str) -> None:
         """Remove the lock for the given token.
-        
+
         This should be called when a token is revoked or expired to prevent
         unbounded growth of the locks dictionary.
-        
+
         Args:
             token: MCP token to remove lock for
         """
@@ -229,7 +229,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         This method should be called periodically to prevent memory leaks from
         abandoned OAuth flows where the authorization code expired but the client
         never attempted token exchange.
-        
+
         Also cleans up expired access tokens and their associated locks.
 
         Returns:
@@ -297,11 +297,9 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         # Log stats for monitoring
         async with self._token_locks_lock:
             lock_count = len(self._token_locks)
-        
+
         token_count = len(self._tokens)
-        logger.debug(
-            f"OAuth stats: {token_count} active tokens, {lock_count} active locks"
-        )
+        logger.debug(f"OAuth stats: {token_count} active tokens, {lock_count} active locks")
 
         return cleaned_count
 
@@ -792,7 +790,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 raise HTTPException(400, "Client ID mismatch")
 
             mcp_token = f"mcp_{secrets.token_hex(32)}"
-            
+
             # Use global lock for auth code operations (quick, no network I/O)
             async with self._lock:
                 # Get external token from mapping
@@ -803,7 +801,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
                 # Clean up authorization code (do this before token storage)
                 self._auth_codes.pop(code_obj.code, None)
-            
+
             # Use per-token lock for storing the new token (includes DB I/O)
             # This prevents blocking other token operations during storage
             token_lock = await self._get_token_lock(mcp_token)
@@ -828,7 +826,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     logger.info(f"Stored refresh token with MCP token: {mcp_token[:20]}...")
                 else:
                     logger.debug(f"No refresh token available for MCP token: {mcp_token[:20]}...")
-            
+
             # Clean up auth code from persistence (outside locks to minimize hold time)
             if self.persistence:
                 try:
@@ -855,7 +853,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         # Use per-token lock to prevent race conditions during token loading
         token_lock = await self._get_token_lock(token)
         should_cleanup_lock = False
-        
+
         async with token_lock:
             # First check memory cache
             tkn = self._tokens.get(token)
@@ -910,17 +908,17 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                         logger.error(f"Error deleting expired token from persistence: {e}")
                 should_cleanup_lock = True
                 tkn = None
-            
+
             # Catch-all: if token still not found and we haven't already marked for cleanup
             # This handles: (1) no persistence enabled, (2) exception during load
             if not tkn and not should_cleanup_lock:
                 should_cleanup_lock = True
-        
+
         # Clean up lock after releasing it if token was expired or not found
         # This prevents unbounded growth of the locks dictionary
         if should_cleanup_lock:
             await self._remove_token_lock(token)
-        
+
         return tkn
 
     async def load_refresh_token(self, client: Any, refresh_token: str) -> Any | None:
@@ -934,7 +932,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
     async def revoke_token(self, token: str, token_type_hint: str | None = None) -> None:
         # Use per-token lock for the revocation operation
         token_lock = await self._get_token_lock(token)
-        
+
         async with token_lock:
             # Remove from memory cache
             self._tokens.pop(token, None)
@@ -947,13 +945,13 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     logger.debug(f"Revoked token from persistence: {token[:10]}...")
                 except Exception as e:
                     logger.error(f"Error revoking token from persistence: {e}")
-        
+
         # Clean up the token's lock after revocation (outside the lock)
         await self._remove_token_lock(token)
 
     async def refresh_external_token(self, mcp_token: str) -> str | None:
         """Refresh an expired external token using its refresh token.
-        
+
         Uses per-token locking to prevent blocking all auth operations during
         the network I/O required for token refresh.
 
@@ -966,7 +964,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         # Get the per-token lock to prevent concurrent refreshes of the same token
         # but allow other tokens to be processed in parallel
         token_lock = await self._get_token_lock(mcp_token)
-        
+
         async with token_lock:
             # Get the current external token to check for race conditions
             original_external_token = self._token_mapping.get(mcp_token)

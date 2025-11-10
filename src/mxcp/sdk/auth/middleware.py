@@ -323,14 +323,14 @@ class AuthenticationMiddleware:
                         if cached_user_context is None:
                             # Cache miss - use per-token lock to prevent stampede
                             refresh_lock = await self._get_refresh_lock(access_token.token)
-                            
+
                             async with refresh_lock:
                                 # Double-check cache after acquiring lock
                                 # Another request might have filled it while we waited
                                 cached_user_context = await self._get_cached_user_context(
                                     access_token.token
                                 )
-                                
+
                                 if cached_user_context is None:
                                     # Still a cache miss - make the API call
                                     provider_name = getattr(
@@ -341,8 +341,10 @@ class AuthenticationMiddleware:
                                     )
 
                                     try:
-                                        cached_user_context = await self.oauth_handler.get_user_context(
-                                            external_token
+                                        cached_user_context = (
+                                            await self.oauth_handler.get_user_context(
+                                                external_token
+                                            )
                                         )
                                         # Cache the successful result immediately
                                         await self._cache_user_context(
@@ -351,7 +353,9 @@ class AuthenticationMiddleware:
                                     except HTTPException as e:
                                         # Check if this is a 401/token expired error
                                         if e.status_code == 401:
-                                            logger.info("🔄 Access token expired, attempting refresh...")
+                                            logger.info(
+                                                "🔄 Access token expired, attempting refresh..."
+                                            )
 
                                             # Attempt to refresh the token
                                             refreshed_token = await self._attempt_token_refresh(
