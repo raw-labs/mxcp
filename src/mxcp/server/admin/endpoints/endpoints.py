@@ -43,15 +43,15 @@ def create_endpoints_router(admin_service: AdminService) -> APIRouter:
         - Dashboard displays
         - Monitoring which endpoints are available
         - Integration with external systems
-        
+
         Note: Aggregations (counts by type/status) can be computed by the client from this list.
         """
         try:
             endpoints = []
-            
+
             # Discover all endpoints via the server's endpoint loader
             discovered = admin_service.discover_endpoints()
-            
+
             for path, endpoint_def, error in discovered:
                 if error:
                     # Include failed endpoints with error info
@@ -72,7 +72,7 @@ def create_endpoints_router(admin_service: AdminService) -> APIRouter:
                     endpoint_type: Literal["tool", "resource", "prompt"] | None = None
                     endpoint_data = None
                     enabled = True
-                    
+
                     if "tool" in endpoint_def:
                         endpoint_type = "tool"
                         endpoint_data = endpoint_def["tool"]
@@ -82,15 +82,15 @@ def create_endpoints_router(admin_service: AdminService) -> APIRouter:
                     elif "prompt" in endpoint_def:
                         endpoint_type = "prompt"
                         endpoint_data = endpoint_def["prompt"]
-                    
+
                     if endpoint_data:
                         enabled = bool(endpoint_data.get("enabled", True))
-                    
+
                     # Extract metadata
                     name = endpoint_data.get("name") if endpoint_data else None
                     description = endpoint_data.get("description") if endpoint_data else None
                     language = endpoint_data.get("language") if endpoint_data else None
-                    
+
                     endpoints.append(
                         EndpointMetadata(
                             path=str(path),
@@ -103,9 +103,9 @@ def create_endpoints_router(admin_service: AdminService) -> APIRouter:
                             error=None,
                         )
                     )
-            
+
             return EndpointListResponse(endpoints=endpoints)
-            
+
         except Exception as e:
             logger.error(f"[admin] Failed to list endpoints: {e}", exc_info=True)
             raise HTTPException(
@@ -114,5 +114,3 @@ def create_endpoints_router(admin_service: AdminService) -> APIRouter:
             ) from e
 
     return router
-
-

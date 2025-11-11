@@ -11,12 +11,12 @@ import signal
 import threading
 import time
 import traceback
-import uvicorn
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Any, Literal, TypeVar, cast        
+from typing import Annotated, Any, Literal, TypeVar, cast
 
+import uvicorn
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import Context, FastMCP
@@ -591,18 +591,16 @@ class RAWMCP:
 
     async def _run_with_admin_api(self, transport: str) -> None:
         """Run both the admin API and main server in the same event loop.
-        
+
         This method is called with asyncio.run() to create a fresh event loop
         that runs both the admin API's uvicorn server and the main MCP server.
-        
+
         Args:
             transport: The transport protocol to use
         """
-        # Start admin API in this event loop
-        logger.info("Starting admin API in shared event loop")
+        # Start admin API in this event loop (if enabled)
         await self.admin_api.start()
-        logger.info("Admin API started successfully")
-        
+
         try:
             # Now start the main MCP server based on transport
             if transport == "stdio":
@@ -659,20 +657,19 @@ class RAWMCP:
             logger.warning(f"Failed to register audit schema: {e}")
 
     def _register_signal_handlers(self) -> None:
-        """Register signal handlers for graceful shutdown and reload."""
+        """Register signal handlers for reload only.
+
+        SIGTERM/SIGINT handling is delegated to uvicorn for graceful HTTP server shutdown.
+        RAWMCP cleanup (shutdown()) is called via serve.py's KeyboardInterrupt handler.
+
+        Signal flow:
+        - SIGTERM/SIGINT: Handled by uvicorn → raises KeyboardInterrupt → serve.py cleanup
+        - SIGHUP: Custom reload logic
+        """
         if hasattr(signal, "SIGHUP"):
             # SIGHUP triggers a full system reload
             signal.signal(signal.SIGHUP, self._handle_reload_signal)
             logger.info("Registered SIGHUP handler for system reload.")
-
-        # Handle SIGTERM (e.g., from `kill`) and SIGINT (e.g., from Ctrl+C)
-        signal.signal(signal.SIGTERM, self._handle_exit_signal)
-        signal.signal(signal.SIGINT, self._handle_exit_signal)
-
-    def _handle_exit_signal(self, signum: int, frame: Any) -> None:
-        """Handle termination signals to ensure graceful shutdown."""
-        logger.info(f"Received signal {signum}, initiating graceful shutdown...")
-        self.shutdown()
 
     def _handle_reload_signal(self, signum: int, frame: Any) -> None:
         """Handle SIGHUP signal to reload the configuration."""
@@ -884,12 +881,8 @@ class RAWMCP:
         logger.info("Shutting down MXCP server...")
 
         try:
-            # Stop the admin API first
-            self._ensure_async_completes(
-                self.admin_api.stop(),
-                timeout=5.0,
-                operation_name="Admin API shutdown",
-            )
+            # Note: Admin API is stopped in _run_with_admin_api() finally block,
+            # not here, since it needs to be stopped while the event loop is still active.
 
             # Stop the reload manager
             self.reload_manager.stop()

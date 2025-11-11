@@ -1,6 +1,3 @@
-import signal
-from typing import Any
-
 import click
 
 from mxcp.server.core.config.analytics import track_command_with_timing
@@ -186,25 +183,14 @@ def serve(
             else:
                 click.echo(f"\n{click.style('✅ Server starting...', fg='green', bold=True)}\n")
 
-        # Set up signal handler for graceful shutdown
-        def signal_handler(signum: int, frame: Any) -> None:
-            if server.transport != "stdio":
-                click.echo(f"\n{click.style('🛑 Shutting down gracefully...', fg='yellow')}")
-            raise KeyboardInterrupt()
-
-        # Register signal handlers
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-
         try:
             # Start the server
             server.run(transport=server.transport)
-        except KeyboardInterrupt:
-            # Gracefully shutdown the server
+        finally:
+            # Always cleanup, whether exiting from SIGTERM, SIGINT, or error
             server.shutdown()
             if server.transport != "stdio":
                 click.echo(f"{click.style('👋 Server stopped', fg='cyan')}")
-            raise
     except click.ClickException:
         # Let Click exceptions propagate - they have their own formatting
         raise

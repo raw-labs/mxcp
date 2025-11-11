@@ -57,7 +57,7 @@ def create_audit_router(admin_service: AdminService) -> APIRouter:
 
         try:
             records = []
-            
+
             # Convert single values to lists for the query API
             operation_types = [operation_type] if operation_type else None
             operation_names = [operation_name] if operation_name else None
@@ -187,4 +187,3 @@ def create_audit_router(admin_service: AdminService) -> APIRouter:
             ) from e
 
     return router
-

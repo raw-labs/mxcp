@@ -6,7 +6,6 @@ including CPU, memory, disk, network, and process information.
 """
 
 import logging
-from typing import Literal
 
 import psutil
 from fastapi import APIRouter, HTTPException
@@ -48,7 +47,7 @@ def create_system_router(admin_service: AdminService) -> APIRouter:
             cpu_count_physical = psutil.cpu_count(logical=False) or 0
             cpu_count_logical = psutil.cpu_count(logical=True) or 0
             mem = psutil.virtual_memory()
-            
+
             return SystemInfoResponse(
                 boot_time_seconds=int(boot_time),
                 cpu_count_physical=cpu_count_physical,
@@ -70,13 +69,13 @@ def create_system_router(admin_service: AdminService) -> APIRouter:
             # Get CPU percentages
             cpu_percent = psutil.cpu_percent(interval=0.1)
             per_cpu = psutil.cpu_percent(interval=0.1, percpu=True)
-            
+
             # Get load average (Unix only, returns 0s on Windows)
             try:
                 load_1, load_5, load_15 = psutil.getloadavg()
             except (AttributeError, OSError):
                 load_1 = load_5 = load_15 = 0.0
-            
+
             return CPUStatsResponse(
                 percent=cpu_percent,
                 per_cpu_percent=per_cpu,
@@ -98,7 +97,7 @@ def create_system_router(admin_service: AdminService) -> APIRouter:
         try:
             mem = psutil.virtual_memory()
             swap = psutil.swap_memory()
-            
+
             # Get MXCP process memory
             try:
                 process = psutil.Process(admin_service.pid)
@@ -108,7 +107,7 @@ def create_system_router(admin_service: AdminService) -> APIRouter:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 mxcp_rss = 0
                 mxcp_vms = 0
-            
+
             return MemoryStatsResponse(
                 total_bytes=mem.total,
                 available_bytes=mem.available,
@@ -135,8 +134,8 @@ def create_system_router(admin_service: AdminService) -> APIRouter:
         """
         try:
             # Get disk usage for root partition
-            usage = psutil.disk_usage('/')
-            
+            usage = psutil.disk_usage("/")
+
             # Get disk I/O counters (may not be available on all systems)
             try:
                 io_counters = psutil.disk_io_counters()
@@ -146,7 +145,7 @@ def create_system_router(admin_service: AdminService) -> APIRouter:
                 write_count = io_counters.write_count if io_counters else 0
             except (AttributeError, RuntimeError):
                 read_bytes = write_bytes = read_count = write_count = 0
-            
+
             return DiskStatsResponse(
                 total_bytes=usage.total,
                 used_bytes=usage.used,
@@ -170,7 +169,7 @@ def create_system_router(admin_service: AdminService) -> APIRouter:
         """
         try:
             net_io = psutil.net_io_counters()
-            
+
             return NetworkStatsResponse(
                 bytes_sent=net_io.bytes_sent,
                 bytes_recv=net_io.bytes_recv,
@@ -185,7 +184,9 @@ def create_system_router(admin_service: AdminService) -> APIRouter:
             logger.error(f"[admin] Failed to get network stats: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Failed to get network stats: {e}") from e
 
-    @router.get("/process", response_model=ProcessStatsResponse, summary="Get MXCP process statistics")
+    @router.get(
+        "/process", response_model=ProcessStatsResponse, summary="Get MXCP process statistics"
+    )
     async def get_process_stats() -> ProcessStatsResponse:
         """
         Get detailed statistics for the MXCP process.
@@ -194,23 +195,23 @@ def create_system_router(admin_service: AdminService) -> APIRouter:
         """
         try:
             process = psutil.Process(admin_service.pid)
-            
+
             # Get process info
             cpu_percent = process.cpu_percent(interval=0.1)
             mem_info = process.memory_info()
-            
+
             # Get thread count
             num_threads = process.num_threads()
-            
+
             # Get file descriptor count (Unix only)
             try:
                 num_fds = process.num_fds()
             except (AttributeError, psutil.AccessDenied):
                 num_fds = 0
-            
+
             # Get process status
             status = process.status()
-            
+
             return ProcessStatsResponse(
                 pid=admin_service.pid,
                 status=status,
@@ -221,13 +222,13 @@ def create_system_router(admin_service: AdminService) -> APIRouter:
                 num_fds=num_fds,
             )
         except psutil.NoSuchProcess:
-            raise HTTPException(status_code=404, detail="MXCP process not found")
+            raise HTTPException(status_code=404, detail="MXCP process not found") from None
         except psutil.AccessDenied as e:
-            raise HTTPException(status_code=403, detail=f"Access denied to process info: {e}") from e
+            raise HTTPException(
+                status_code=403, detail=f"Access denied to process info: {e}"
+            ) from e
         except Exception as e:
             logger.error(f"[admin] Failed to get process stats: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Failed to get process stats: {e}") from e
 
     return router
-
-

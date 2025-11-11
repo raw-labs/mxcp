@@ -62,6 +62,7 @@ dev = [
     "mypy",  # For type checking
     "types-jsonschema",  # Type stubs for jsonschema
     "types-PyYAML",  # Type stubs for PyYAML
+    "types-psutil",  # Type stubs for psutil
     "pandas-stubs",  # Type stubs for pandas
     "build",  # For building the package
     "twine",  # For publishing to PyPI
@@ -91,6 +92,7 @@ all = [
     "ruff",
     "mypy",
     "types-jsonschema",
+    "types-psutil",
     "pandas-stubs",
     "build",
     "twine",

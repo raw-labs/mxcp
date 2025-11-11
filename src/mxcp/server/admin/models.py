@@ -146,9 +146,7 @@ class EndpointMetadata(BaseModel):
     """Metadata for a single endpoint."""
 
     path: str = Field(..., description="Relative path to endpoint file")
-    type: Literal["tool", "resource", "prompt"] | None = Field(
-        None, description="Endpoint type"
-    )
+    type: Literal["tool", "resource", "prompt"] | None = Field(None, description="Endpoint type")
     name: str | None = Field(None, description="Endpoint name")
     description: str | None = Field(None, description="Endpoint description")
     language: str | None = Field(None, description="Implementation language (sql, python)")

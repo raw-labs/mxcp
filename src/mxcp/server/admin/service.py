@@ -15,7 +15,6 @@ from mxcp.server.definitions.endpoints._types import EndpointDefinition
 from .models import ConfigResponse, EndpointCounts, Features
 
 if TYPE_CHECKING:
-    from mxcp.sdk.audit import AuditLogger
     from mxcp.sdk.audit._types import AuditRecord
     from mxcp.server.core.reload import ReloadRequest
     from mxcp.server.interfaces.server.mcp import RAWMCP
