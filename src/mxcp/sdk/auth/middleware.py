@@ -373,12 +373,12 @@ class AuthenticationMiddleware:
                                         )
                                         # Update external_token to the refreshed token
                                         external_token = refreshed_token
-                                        
+
                                         # Check cache first - _attempt_token_refresh already cached it
                                         cached_user_context = await self._get_cached_user_context(
                                             access_token.token
                                         )
-                                        
+
                                         if cached_user_context is None:
                                             # Fallback: fetch if not cached (shouldn't happen normally)
                                             logger.debug(
@@ -394,9 +394,7 @@ class AuthenticationMiddleware:
                                                 access_token.token, cached_user_context
                                             )
                                         else:
-                                            logger.debug(
-                                                "Using cached user context after refresh"
-                                            )
+                                            logger.debug("Using cached user context after refresh")
                                     else:
                                         logger.error(
                                             "❌ Token refresh failed, re-raising original error"
