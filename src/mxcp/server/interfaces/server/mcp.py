@@ -1971,8 +1971,18 @@ class RAWMCP:
         """Run the MCP server.
 
         Args:
-            transport: The transport to use ("streamable-http" or "stdio")
+            transport: The transport to use ("streamable-http", "sse", or "stdio")
+
+        Raises:
+            ValueError: If transport is not one of the supported values
         """
+        # Validate transport early
+        valid_transports = ["stdio", "sse", "streamable-http"]
+        if transport not in valid_transports:
+            raise ValueError(
+                f"Unknown transport: {transport}. Must be one of: {', '.join(valid_transports)}"
+            )
+
         try:
             logger.info("Starting MCP server...")
             # Store transport mode for use in handlers

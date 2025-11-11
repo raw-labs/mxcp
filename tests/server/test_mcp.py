@@ -146,16 +146,20 @@ def test_register_prompt(mcp_server, mock_endpoint):
 
 def test_run_http(mcp_server):
     """Test running the server with HTTP transport."""
-    with patch.object(mcp_server.mcp, "run") as mock_run:
+    # Mock asyncio.run to prevent actually starting the server
+    with patch("asyncio.run") as mock_asyncio_run:
         mcp_server.run(transport="streamable-http")
-        mock_run.assert_called_once_with(transport="streamable-http")
+        # Verify asyncio.run was called (which would run _run_with_admin_api)
+        mock_asyncio_run.assert_called_once()
 
 
 def test_run_stdio(mcp_server):
     """Test running the server with stdio transport."""
-    with patch.object(mcp_server.mcp, "run") as mock_run:
+    # Mock asyncio.run to prevent actually starting the server
+    with patch("asyncio.run") as mock_asyncio_run:
         mcp_server.run(transport="stdio")
-        mock_run.assert_called_once_with(transport="stdio")
+        # Verify asyncio.run was called (which would run _run_with_admin_api)
+        mock_asyncio_run.assert_called_once()
 
 
 def test_invalid_transport(mcp_server):
@@ -199,17 +203,16 @@ def test_endpoint_registration(mcp_server):
     assert len(mcp_server.skipped_endpoints) == 0
 
 
-@pytest.mark.asyncio
-async def test_server_transport(mcp_server):
+def test_server_transport(mcp_server):
     """Test server transport options."""
     # Test invalid transport
     with pytest.raises(ValueError, match="Unknown transport: invalid"):
         mcp_server.run(transport="invalid")
 
     # Test HTTP transport
-    with patch.object(mcp_server.mcp, "run") as mock_run:
+    with patch("asyncio.run") as mock_asyncio_run:
         mcp_server.run(transport="streamable-http")
-        mock_run.assert_called_once_with(transport="streamable-http")
+        mock_asyncio_run.assert_called_once()
 
 
 @pytest.mark.skip(
