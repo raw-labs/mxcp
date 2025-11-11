@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 
 from mxcp.sdk.core import PACKAGE_VERSION
 
-from ..models import AdminSocketInfo, EndpointCounts, HealthResponse, ReloadInfo, StatusResponse
+from ..models import AdminSocketInfo, HealthResponse, ReloadInfo, StatusResponse
 from ..service import AdminService
 
 logger = logging.getLogger(__name__)
@@ -62,14 +62,6 @@ def create_status_router(admin_service: AdminService) -> APIRouter:
             minutes, seconds = divmod(remainder, 60)
             uptime_str = f"{hours}h{minutes}m{seconds}s"
 
-            # Get endpoint counts
-            try:
-                endpoint_counts_dict = admin_service.get_endpoint_counts()
-                endpoint_counts = EndpointCounts(**endpoint_counts_dict)
-            except Exception as e:
-                logger.warning(f"Failed to get endpoint counts: {e}")
-                endpoint_counts = EndpointCounts(tools=0, prompts=0, resources=0)
-
             # Get reload status
             reload_status_dict = admin_service.get_reload_status()
             reload_info = ReloadInfo(
@@ -89,7 +81,6 @@ def create_status_router(admin_service: AdminService) -> APIRouter:
                 profile=admin_service.profile_name,
                 mode="readonly" if admin_service.readonly else "readwrite",
                 debug=admin_service.debug,
-                endpoints=endpoint_counts,
                 reload=reload_info,
                 admin_socket=AdminSocketInfo(
                     path=str(admin_service.socket_path),

@@ -11,10 +11,11 @@ import signal
 import threading
 import time
 import traceback
+import uvicorn
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Any, Literal, TypeVar, cast
+from typing import Annotated, Any, Literal, TypeVar, cast        
 
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
@@ -587,6 +588,43 @@ class RAWMCP:
         # Register OAuth routes if enabled
         if self.oauth_handler and self.oauth_server:
             self._register_oauth_routes()
+
+    async def _run_with_admin_api(self, transport: str) -> None:
+        """Run both the admin API and main server in the same event loop.
+        
+        This method is called with asyncio.run() to create a fresh event loop
+        that runs both the admin API's uvicorn server and the main MCP server.
+        
+        Args:
+            transport: The transport protocol to use
+        """
+        # Start admin API in this event loop
+        logger.info("Starting admin API in shared event loop")
+        await self.admin_api.start()
+        logger.info("Admin API started successfully")
+        
+        try:
+            # Now start the main MCP server based on transport
+            if transport == "stdio":
+                await self.mcp.run_stdio_async()
+            elif transport == "sse":
+                await self.mcp.run_sse_async(None)
+            elif transport == "streamable-http":
+                # Get the Starlette app and run with uvicorn
+                starlette_app = self.mcp.streamable_http_app()
+                config = uvicorn.Config(
+                    starlette_app,
+                    host=self.mcp.settings.host,
+                    port=self.mcp.settings.port,
+                    log_level=self.mcp.settings.log_level.lower(),
+                )
+                server = uvicorn.Server(config)
+                await server.serve()
+        finally:
+            # Cleanup: stop admin API
+            logger.info("Stopping admin API")
+            await self.admin_api.stop()
+            logger.info("Admin API stopped")
 
     def _initialize_audit_logger(self) -> None:
         """Initialize audit logger if enabled."""
@@ -1950,12 +1988,9 @@ class RAWMCP:
             # Start the reload manager
             self.reload_manager.start()
 
-            # Start admin API (async operation from sync context)
-            self._ensure_async_completes(
-                self.admin_api.start(),
-                timeout=10.0,
-                operation_name="Admin API startup",
-            )
+            # Note: Admin API will be started in the FastMCP lifespan event
+            # when the uvicorn event loop is running. This ensures the admin
+            # API's uvicorn server runs in the same event loop as the main server.
 
             # Register all endpoints
             self.register_endpoints()
@@ -1981,8 +2016,8 @@ class RAWMCP:
                     # Don't continue if OAuth is enabled but initialization failed
                     raise RuntimeError(f"OAuth server initialization failed: {e}") from e
 
-            # Start server using MCP's built-in run method
-            self.mcp.run(transport=cast(Literal["stdio", "sse", "streamable-http"], transport))
+            # Start server - use asyncio.run to create event loop and run both admin API and main server
+            asyncio.run(self._run_with_admin_api(transport))
             logger.info("MCP server started successfully.")
         except Exception as e:
             logger.error(f"Error running MCP server: {e}")

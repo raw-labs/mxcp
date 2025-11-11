@@ -41,6 +41,7 @@ dependencies = [
     # Admin API
     "fastapi>=0.110.0",  # FastAPI for admin API
     "uvicorn[standard]>=0.27.0",  # ASGI server for admin API
+    "psutil>=5.9.0",  # System metrics for admin API
 ]
 
 [project.scripts]

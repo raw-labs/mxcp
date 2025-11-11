@@ -5,13 +5,18 @@ Simple service class that receives RAWMCP and provides admin operations.
 No protocols, no abstractions - just direct, simple code.
 """
 
+from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from mxcp.server.definitions.endpoints._types import EndpointDefinition
+
 from .models import ConfigResponse, EndpointCounts, Features
 
 if TYPE_CHECKING:
+    from mxcp.sdk.audit import AuditLogger
+    from mxcp.sdk.audit._types import AuditRecord
     from mxcp.server.core.reload import ReloadRequest
     from mxcp.server.interfaces.server.mcp import RAWMCP
 
@@ -95,8 +100,75 @@ class AdminService:
             endpoints=EndpointCounts(**self.get_endpoint_counts()),
             features=Features(
                 sql_tools=bool(self._server.enable_sql_tools),
-                audit_logging=self._server.audit_logger is not None,
+                audit_logging=self.is_audit_enabled(),
                 telemetry=self._server.telemetry_enabled,
             ),
             transport=self._server.transport,
         )
+
+    def discover_endpoints(self) -> list[tuple[Path, EndpointDefinition | None, str | None]]:
+        """
+        Discover all endpoints using the server's endpoint loader.
+
+        Returns:
+            List of tuples (path, endpoint_def, error) where:
+            - path: Path to the endpoint file
+            - endpoint_def: Parsed endpoint definition (or None if error)
+            - error: Error message (or None if successful)
+        """
+        return self._server.loader.discover_endpoints()
+
+    def is_audit_enabled(self) -> bool:
+        """Check if audit logging is enabled."""
+        return self._server.audit_logger is not None
+
+    async def query_audit_records(
+        self,
+        schema_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        operation_types: list[str] | None = None,
+        operation_names: list[str] | None = None,
+        operation_status: list[str] | None = None,
+        user_ids: list[str] | None = None,
+        trace_ids: list[str] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> AsyncIterator["AuditRecord"]:
+        """
+        Query audit records with filters.
+
+        This is a convenience method that delegates to the audit logger if available.
+        Returns an async iterator of AuditRecord objects.
+
+        Args:
+            schema_name: Filter by schema name
+            start_time: Filter by start time
+            end_time: Filter by end time
+            operation_types: Filter by operation types
+            operation_names: Filter by operation names
+            operation_status: Filter by operation status
+            user_ids: Filter by user IDs
+            trace_ids: Filter by trace IDs
+            limit: Maximum number of records to return
+            offset: Number of records to skip
+
+        Yields:
+            AuditRecord objects matching the filters
+        """
+        if not self._server.audit_logger:
+            return
+
+        async for record in self._server.audit_logger.query_records(
+            schema_name=schema_name,
+            start_time=start_time,
+            end_time=end_time,
+            operation_types=operation_types,
+            operation_names=operation_names,
+            operation_status=operation_status,
+            user_ids=user_ids,
+            trace_ids=trace_ids,
+            limit=limit,
+            offset=offset,
+        ):
+            yield record

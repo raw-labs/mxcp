@@ -63,11 +63,21 @@ via Unix domain socket. All operations are local-only for security.
         )
 
     # Include routers with admin_service dependency
-    from .endpoints import create_config_router, create_reload_router, create_status_router
+    from .endpoints import (
+        create_audit_router,
+        create_config_router,
+        create_endpoints_router,
+        create_reload_router,
+        create_status_router,
+        create_system_router,
+    )
 
     app.include_router(create_status_router(admin_service))
     app.include_router(create_reload_router(admin_service))
     app.include_router(create_config_router(admin_service))
+    app.include_router(create_endpoints_router(admin_service))
+    app.include_router(create_system_router(admin_service))
+    app.include_router(create_audit_router(admin_service))
 
     @app.get("/", include_in_schema=False)
     async def root() -> dict[str, str]:
