@@ -18,6 +18,7 @@ from .._types import (
     ExternalUserInfo,
     HttpTransportConfig,
     KeycloakAuthConfig,
+    RefreshTokenResponse,
     StateMeta,
     UserContext,
 )
@@ -233,14 +234,14 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
             return cast(dict[str, Any], response.json())
 
-    async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
+    async def refresh_access_token(self, refresh_token: str) -> RefreshTokenResponse:
         """Refresh an expired access token using the refresh token.
 
         Args:
             refresh_token: The refresh token to use for getting a new access token
 
         Returns:
-            Token response containing new access_token and possibly new refresh_token
+            RefreshTokenResponse with new access_token and possibly new refresh_token
 
         Raises:
             HTTPException: If refresh fails
@@ -263,7 +264,9 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
                 logger.error(f"Token refresh failed: {response.status_code} - {response.text}")
                 raise HTTPException(400, "Failed to refresh access token")
 
-            return cast(dict[str, Any], response.json())
+            # Parse and validate response using Pydantic model
+            response_data = response.json()
+            return RefreshTokenResponse(**response_data)
 
     def _get_state_metadata(self, state: str) -> KeycloakStateMeta:
         """Return metadata stored for a given state."""

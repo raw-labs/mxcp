@@ -14,6 +14,7 @@ from .._types import (
     AtlassianAuthConfig,
     ExternalUserInfo,
     HttpTransportConfig,
+    RefreshTokenResponse,
     StateMeta,
     UserContext,
 )
@@ -260,7 +261,7 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         )
         return user_data
 
-    async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
+    async def refresh_access_token(self, refresh_token: str) -> RefreshTokenResponse:
         """Refresh an expired access token using the refresh token."""
         refresh_data = {
             "grant_type": "refresh_token",
@@ -282,4 +283,6 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
                 )
                 raise HTTPException(400, "Failed to refresh access token")
 
-            return cast(dict[str, Any], response.json())
+            # Parse and validate response using Pydantic model
+            response_data = response.json()
+            return RefreshTokenResponse(**response_data)

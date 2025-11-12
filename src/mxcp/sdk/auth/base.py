@@ -21,7 +21,7 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import Response
 
-from ._types import AuthConfig, ExternalUserInfo, StateMeta, UserContext
+from ._types import AuthConfig, ExternalUserInfo, RefreshTokenResponse, StateMeta, UserContext
 from .persistence import (
     PersistedAccessToken,
     PersistedAuthCode,
@@ -93,6 +93,33 @@ class ExternalOAuthHandler(ABC):
         Raises:
             HTTPException: If token is invalid or user info cannot be retrieved
         """
+
+    # ----- token refresh -----
+    async def refresh_access_token(self, refresh_token: str) -> RefreshTokenResponse:
+        """Refresh an expired access token using the refresh token.
+
+        Default implementation raises NotImplementedError. Override this method
+        in provider subclasses that support token refresh.
+
+        Args:
+            refresh_token: The refresh token to use for getting a new access token
+
+        Returns:
+            RefreshTokenResponse containing:
+                - access_token: New access token (required)
+                - token_type: Token type, usually "Bearer" (optional, defaults to "Bearer")
+                - expires_in: Token expiration time in seconds (optional)
+                - refresh_token: New refresh token if provider rotates them (optional)
+                - scope: Granted scopes as space-separated string (optional)
+
+        Raises:
+            NotImplementedError: If the provider does not support token refresh
+            HTTPException: If refresh fails (invalid token, network error, etc.)
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support token refresh. "
+            "Some OAuth providers (e.g., GitHub) issue non-expiring tokens."
+        )
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -996,28 +1023,23 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     return current_external_token
 
                 # Call the provider's refresh method
-                if not hasattr(self.handler, "refresh_access_token"):
+                # Network I/O happens here, but only for this specific token
+                # Other tokens can be processed in parallel
+                try:
+                    refresh_response = await self.handler.refresh_access_token(
+                        persisted_token.refresh_token
+                    )
+                except NotImplementedError:
                     logger.warning(
                         f"Provider {type(self.handler).__name__} does not support token refresh"
                     )
                     return None
 
-                # Network I/O happens here, but only for this specific token
-                # Other tokens can be processed in parallel
-                refresh_response = await self.handler.refresh_access_token(
-                    persisted_token.refresh_token
-                )
-
-                # Extract new tokens
-                new_access_token = refresh_response.get("access_token")
-                new_refresh_token = refresh_response.get(
-                    "refresh_token", persisted_token.refresh_token
-                )
-                expires_in = refresh_response.get("expires_in")
-
-                if not new_access_token or not isinstance(new_access_token, str):
-                    logger.error("No access token received from refresh")
-                    return None
+                # Extract new tokens from validated Pydantic model
+                new_access_token = refresh_response.access_token
+                # Use new refresh token if provider rotated it, otherwise keep original
+                new_refresh_token = refresh_response.refresh_token or persisted_token.refresh_token
+                expires_in = refresh_response.expires_in
 
                 # Calculate new expiration time
                 new_expires_at = None
