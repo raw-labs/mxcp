@@ -14,6 +14,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
+from .plugin_loader import load_plugins
 from .session import DuckDBSession
 from .types import DatabaseConfig, PluginConfig, PluginDefinition, SecretDefinition
 
@@ -85,8 +86,6 @@ class DuckDBRuntime:
         for i in range(pool_size):
             session = DuckDBSession(
                 database_config=self.database_config,
-                plugins=self.plugins_list,
-                plugin_config=self.plugin_config,
                 secrets=self.secrets,
             )
             if i == 0:
@@ -96,9 +95,10 @@ class DuckDBRuntime:
 
         # Store plugins reference for easy access
         self._plugins: dict[str, Any] = {}
-        if first_session and first_session.plugins:
-            self._plugins = first_session.plugins
-            plugin_names = list(first_session.plugins.keys())
+        if first_session and self.plugins_list and first_session.conn:
+            # Load plugins
+            self._plugins = load_plugins(self.plugins_list, self.plugin_config, first_session.conn)
+            plugin_names = list(self._plugins.keys())
             logger.info(f"DuckDB plugins available: {plugin_names}")
         else:
             logger.info("No DuckDB plugins available")

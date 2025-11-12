@@ -577,13 +577,6 @@ class TestDuckDBExtensionsAndPlugins:
         assert len(result) == 1
         assert result[0]["json_data"] is not None
 
-    def test_plugins_available(self, duckdb_executor, mock_context):
-        """Test that plugins are available through the runtime."""
-        # Get a connection and check plugins
-        with duckdb_executor._runtime.get_connection() as session:
-            assert hasattr(session, "plugins")
-            assert isinstance(session.plugins, dict)
-
     def test_available_plugins_logged(self, duckdb_executor, mock_context):
         """Test that available plugins are logged during startup."""
         # Should not raise error during plugin logging

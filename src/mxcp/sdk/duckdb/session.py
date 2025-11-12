@@ -13,12 +13,9 @@ from typing import Any
 import duckdb
 from pandas import NaT
 
-from mxcp.plugins import MXCPBasePlugin
-
 from .extension_loader import load_extensions
-from .plugin_loader import load_plugins
 from .secret_injection import inject_secrets
-from .types import DatabaseConfig, PluginConfig, PluginDefinition, SecretDefinition
+from .types import DatabaseConfig, SecretDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -45,16 +42,11 @@ class DuckDBSession:
     def __init__(
         self,
         database_config: DatabaseConfig,
-        plugins: list[PluginDefinition],
-        plugin_config: PluginConfig,
         secrets: list[SecretDefinition],
     ):
         self.conn: duckdb.DuckDBPyConnection | None = None
         self.database_config = database_config
-        self.plugins_definitions = plugins
-        self.plugin_config = plugin_config
         self.secrets = secrets
-        self.plugins: dict[str, MXCPBasePlugin] = {}
         self._initialized = False  # Track whether session has been fully initialized
 
         # Connect automatically on construction
@@ -108,9 +100,6 @@ class DuckDBSession:
 
         # Inject secrets
         inject_secrets(self.conn, self.secrets)
-
-        # Load plugins
-        self.plugins = load_plugins(self.plugins_definitions, self.plugin_config, self.conn)
 
         # Create user token UDFs that call get_user_context() dynamically
         self._create_user_token_udfs()
