@@ -78,7 +78,7 @@ def get_env_admin_socket_path() -> str:
     Returns:
         Path from MXCP_ADMIN_SOCKET environment variable, or default path
     """
-    return os.environ.get("MXCP_ADMIN_SOCKET", "/var/run/mxcp/mxcp.sock")
+    return os.environ.get("MXCP_ADMIN_SOCKET", "/run/mxcp/mxcp.sock")
 
 
 def check_command_available(command: str) -> bool:

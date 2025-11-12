@@ -34,8 +34,8 @@ The admin API enables:
 # Enable the admin API (default: disabled)
 export MXCP_ADMIN_ENABLED=true
 
-# Set custom socket path (default: /var/run/mxcp/mxcp.sock)
-export MXCP_ADMIN_SOCKET=/var/run/mxcp/mxcp.sock
+# Set custom socket path (default: /run/mxcp/mxcp.sock)
+export MXCP_ADMIN_SOCKET=/run/mxcp/mxcp.sock
 ```
 
 ### Docker Usage
@@ -47,14 +47,18 @@ services:
     image: mxcp:latest
     environment:
       - MXCP_ADMIN_ENABLED=true
-      - MXCP_ADMIN_SOCKET=/run/mxcp.sock
-    volumes:
-      - /var/run/mxcp:/run
+      # Optional: customize socket path
+      # - MXCP_ADMIN_SOCKET=/custom/path/mxcp.sock
+    # Default /run/mxcp/mxcp.sock works out of the box
 ```
 
 Access from host:
 ```bash
-curl --unix-socket /var/run/mxcp/mxcp.sock http://localhost/status | jq
+# Using default socket path
+docker exec mxcp curl --unix-socket /run/mxcp/mxcp.sock http://localhost/status | jq
+
+# Or with custom path
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/status | jq
 ```
 
 ## Protocol
@@ -67,14 +71,14 @@ The admin API uses **REST over HTTP** on a Unix domain socket. All responses are
 
 **curl (recommended)**:
 ```bash
-curl --unix-socket /var/run/mxcp/mxcp.sock http://localhost/status
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/status
 ```
 
 **Python with httpx**:
 ```python
 import httpx
 
-transport = httpx.HTTPTransport(uds="/var/run/mxcp/mxcp.sock")
+transport = httpx.HTTPTransport(uds="/run/mxcp/mxcp.sock")
 async with httpx.AsyncClient(transport=transport) as client:
     response = await client.get("http://localhost/status")
     print(response.json())
@@ -102,7 +106,7 @@ GET /health
 
 **Example:**
 ```bash
-curl --unix-socket /var/run/mxcp/mxcp.sock http://localhost/health | jq
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/health | jq
 ```
 
 **Response:**
@@ -126,7 +130,7 @@ GET /status
 
 **Example:**
 ```bash
-curl --unix-socket /var/run/mxcp/mxcp.sock http://localhost/status | jq
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/status | jq
 ```
 
 **Response:**
@@ -154,7 +158,7 @@ curl --unix-socket /var/run/mxcp/mxcp.sock http://localhost/status | jq
     "last_reload_error": null
   },
   "admin_socket": {
-    "path": "/var/run/mxcp/mxcp.sock"
+    "path": "/run/mxcp/mxcp.sock"
   }
 }
 ```
@@ -190,7 +194,7 @@ POST /reload
 
 **Example:**
 ```bash
-curl --unix-socket /var/run/mxcp/mxcp.sock \
+curl --unix-socket /run/mxcp/mxcp.sock \
   -X POST http://localhost/reload | jq
 ```
 
@@ -228,11 +232,11 @@ curl --unix-socket /var/run/mxcp/mxcp.sock \
 **Monitoring reload progress:**
 ```bash
 # Trigger reload
-curl --unix-socket /var/run/mxcp/mxcp.sock -X POST http://localhost/reload
+curl --unix-socket /run/mxcp/mxcp.sock -X POST http://localhost/reload
 
 # Wait and check status
 sleep 5
-curl --unix-socket /var/run/mxcp/mxcp.sock http://localhost/status | jq '.reload'
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/status | jq '.reload'
 ```
 
 ---
@@ -248,7 +252,7 @@ GET /config
 
 **Example:**
 ```bash
-curl --unix-socket /var/run/mxcp/mxcp.sock http://localhost/config | jq
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/config | jq
 ```
 
 **Response:**
@@ -296,7 +300,7 @@ The admin API provides auto-generated OpenAPI documentation.
 
 **Get OpenAPI JSON:**
 ```bash
-curl --unix-socket /var/run/mxcp/mxcp.sock \
+curl --unix-socket /run/mxcp/mxcp.sock \
   http://localhost/openapi.json | jq
 ```
 
@@ -307,7 +311,7 @@ The API includes Swagger UI and ReDoc interfaces. To access them:
 **Option 1: SSH Port Forwarding**
 ```bash
 # On your local machine
-ssh -L 8080:/var/run/mxcp/mxcp.sock production-server
+ssh -L 8080:/run/mxcp/mxcp.sock production-server
 
 # Then open in browser:
 # http://localhost:8080/docs      (Swagger UI)
@@ -317,7 +321,7 @@ ssh -L 8080:/var/run/mxcp/mxcp.sock production-server
 **Option 2: socat Proxy** (if SSH forwarding doesn't work)
 ```bash
 # On the server
-socat TCP-LISTEN:8080,reuseaddr,fork UNIX-CONNECT:/var/run/mxcp/mxcp.sock
+socat TCP-LISTEN:8080,reuseaddr,fork UNIX-CONNECT:/run/mxcp/mxcp.sock
 
 # Then SSH tunnel:
 ssh -L 8080:localhost:8080 production-server
@@ -368,7 +372,7 @@ All error responses follow a consistent format:
 #!/bin/bash
 # check-mxcp-health.sh
 
-SOCKET="/var/run/mxcp/mxcp.sock"
+SOCKET="/run/mxcp/mxcp.sock"
 
 # Check health
 echo "Checking MXCP health..."
@@ -397,7 +401,7 @@ fi
 
 import httpx
 
-SOCKET_PATH = "/var/run/mxcp/mxcp.sock"
+SOCKET_PATH = "/run/mxcp/mxcp.sock"
 
 def main():
     # Create client with Unix socket transport
@@ -442,7 +446,7 @@ from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-SOCKET_PATH = "/var/run/mxcp/mxcp.sock"
+SOCKET_PATH = "/run/mxcp/mxcp.sock"
 CONFIG_PATH = "/app/config/mxcp-site.yml"
 
 class ConfigChangeHandler(FileSystemEventHandler):
@@ -497,8 +501,13 @@ If the socket file doesn't exist:
 # Look for this in server logs: "Admin API disabled, skipping"
 
 # 2. Verify directory exists and is writable
-mkdir -p /var/run/mxcp
-chown mxcp:mxcp /var/run/mxcp
+# Create /run/mxcp directory with proper permissions:
+sudo mkdir -p /run/mxcp
+sudo chown mxcp:mxcp /run/mxcp
+
+# For custom paths, ensure directory exists and is writable:
+# mkdir -p /custom/path
+# chown mxcp:mxcp /custom/path
 
 # 3. Check MXCP logs for errors
 grep admin /var/log/mxcp/server.log
@@ -509,7 +518,7 @@ grep admin /var/log/mxcp/server.log
 Socket permissions should be `0600` (owner read/write only):
 
 ```bash
-ls -l /var/run/mxcp/mxcp.sock
+ls -l /run/mxcp/mxcp.sock
 # Should show: srw------- (0600)
 ```
 
@@ -518,7 +527,7 @@ ls -l /var/run/mxcp/mxcp.sock
 MXCP automatically removes stale sockets on startup. If needed, manually remove:
 
 ```bash
-rm /var/run/mxcp/mxcp.sock
+rm /run/mxcp/mxcp.sock
 systemctl restart mxcp
 ```
 
@@ -528,14 +537,14 @@ Verify MXCP is running and socket exists:
 
 ```bash
 ps aux | grep mxcp
-stat /var/run/mxcp/mxcp.sock
+stat /run/mxcp/mxcp.sock
 ```
 
 ### Testing Connectivity
 
 ```bash
 # Test if socket is responding
-curl -v --unix-socket /var/run/mxcp/mxcp.sock http://localhost/health
+curl -v --unix-socket /run/mxcp/mxcp.sock http://localhost/health
 ```
 
 ---

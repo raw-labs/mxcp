@@ -39,7 +39,7 @@ class AdminAPIRunner:
     def __init__(
         self,
         server: "RAWMCP",
-        socket_path: str | Path = "/var/run/mxcp/mxcp.sock",
+        socket_path: str | Path = "/run/mxcp/mxcp.sock",
         enabled: bool = True,
     ):
         """

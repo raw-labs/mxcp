@@ -357,4 +357,4 @@ class TestAdminAPIIntegration:
     def test_default_socket_path(self):
         """Test the default socket path."""
         with patch.dict(os.environ, {}, clear=True):
-            assert get_env_admin_socket_path() == "/var/run/mxcp/mxcp.sock"
+            assert get_env_admin_socket_path() == "/run/mxcp/mxcp.sock"
