@@ -470,10 +470,131 @@ uv run pytest -k "test_format"
 
 ## Release Process
 
-1. Version bump in `pyproject.toml`
-2. Update CHANGELOG.md
-3. Create release tag
-4. Build and publish to PyPI
+MXCP uses automated CD via GitHub Actions. When you push a version tag, it automatically builds and publishes to PyPI.
+
+### Version Format
+
+MXCP follows [PEP 440](https://peps.python.org/pep-0440/) for version numbers:
+
+- **Git tags**: Include `v` prefix → `v0.9.0`, `v1.0.0`, `v1.0.0rc1`
+- **Python package** (in `pyproject.toml`): No `v` prefix → `0.9.0`, `1.0.0`, `1.0.0rc1`
+
+The CD workflow automatically strips the `v` prefix when comparing versions.
+
+#### Supported Version Types
+
+| Type | Format | Git Tag | pyproject.toml | User Install |
+|------|--------|---------|----------------|--------------|
+| **Stable** | `X.Y.Z` | `v1.0.0` | `1.0.0` | `pip install mxcp` |
+| **Release Candidate** | `X.Y.ZrcN` | `v1.0.0rc1` | `1.0.0rc1` | `pip install --pre mxcp` |
+| **Beta** | `X.Y.ZbN` | `v1.0.0b1` | `1.0.0b1` | `pip install --pre mxcp` |
+| **Alpha** | `X.Y.ZaN` | `v1.0.0a1` | `1.0.0a1` | `pip install --pre mxcp` |
+
+**Notes**:
+- Users must use `--pre` flag to install pre-release versions (alpha, beta, RC)
+- Or specify exact version: `pip install mxcp==1.0.0rc1`
+- This prevents accidental installation of pre-release versions in production
+
+### Releasing a New Version
+
+#### Stable Release
+
+1. **Update version** in `pyproject.toml`:
+   ```toml
+   [project]
+   version = "1.0.0"
+   ```
+
+2. **Commit and push** your changes:
+   ```bash
+   git add pyproject.toml
+   git commit -m "Release v1.0.0"
+   git push
+   ```
+
+3. **Create and push a tag**:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+#### Pre-release (RC/Beta/Alpha)
+
+Same process, just use pre-release version format:
+
+1. **Update version** in `pyproject.toml`:
+   ```toml
+   [project]
+   version = "1.0.0rc1"  # or 1.0.0b1, or 1.0.0a1
+   ```
+
+2. **Commit and push**:
+   ```bash
+   git add pyproject.toml
+   git commit -m "Release v1.0.0rc1"
+   git push
+   ```
+
+3. **Create and push tag**:
+   ```bash
+   git tag v1.0.0rc1
+   git push origin v1.0.0rc1
+   ```
+
+#### What Happens Automatically
+
+GitHub Actions automatically:
+- Verifies tag version matches `pyproject.toml` version (strips `v` prefix for comparison)
+- Builds the package with `python -m build`
+- Validates package metadata with `twine check`
+- Publishes to PyPI using trusted publishing
+
+### What the CD Workflow Checks
+
+The automated workflow (`.github/workflows/publish.yml`) includes safety checks:
+
+- ✅ **Version validation**: Ensures tag version matches package version
+- ✅ **Package validation**: Runs `twine check` to verify metadata
+- ✅ **Build verification**: Lists all built artifacts
+- ✅ **Secure publishing**: Uses PyPI trusted publishing (no tokens)
+
+### Monitoring the Release
+
+1. Watch the GitHub Actions run at: `https://github.com/raw-labs/mxcp/actions`
+2. Once complete, verify on PyPI: `https://pypi.org/project/mxcp/`
+3. Test installation:
+   ```bash
+   # For stable releases
+   pip install --upgrade mxcp
+   mxcp --version
+   
+   # For pre-releases
+   pip install --pre --upgrade mxcp
+   mxcp --version
+   ```
+
+### Typical Release Workflow
+
+A common pattern for major releases:
+
+1. **Alpha** (`1.0.0a1`, `1.0.0a2`) - Early testing, API may change
+2. **Beta** (`1.0.0b1`, `1.0.0b2`) - Feature complete, stabilizing
+3. **Release Candidate** (`1.0.0rc1`, `1.0.0rc2`) - Final testing before stable
+4. **Stable** (`1.0.0`) - Production ready
+
+For minor/patch releases, you can skip pre-releases and go straight to stable.
+
+**Example**:
+```bash
+# Test new major version with users
+git tag v1.0.0rc1 && git push origin v1.0.0rc1
+
+# After testing, found a bug, fix it
+git tag v1.0.0rc2 && git push origin v1.0.0rc2
+
+# Everything works, release stable
+git tag v1.0.0 && git push origin v1.0.0
+```
 
 ## Getting Help
 
