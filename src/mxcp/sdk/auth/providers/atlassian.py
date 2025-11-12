@@ -277,8 +277,8 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
         async with create_mcp_http_client() as client:
             response = await client.post(
                 self.token_url,
-                json=refresh_data,
-                headers={"Content-Type": "application/json"},
+                data=refresh_data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
             if response.status_code != 200:
