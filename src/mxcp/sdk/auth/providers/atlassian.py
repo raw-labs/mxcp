@@ -227,6 +227,9 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
                 raw_profile=user_profile,
                 external_token=token,
             )
+        except HTTPException:
+            # Re-raise HTTP exceptions (e.g., 401 for token refresh) with original status code
+            raise
         except Exception as e:
             logger.error(f"Failed to get Atlassian user context: {e}")
             raise HTTPException(500, f"Failed to retrieve user information: {e}") from e
@@ -253,7 +256,8 @@ class AtlassianOAuthHandler(ExternalOAuthHandler):
                 logger.error(
                     f"Atlassian User Identity API error {resp.status_code}: Unable to read response body"
                 )
-            raise ValueError(f"Atlassian API error: {resp.status_code} - {error_body}")
+            # Preserve the original status code (e.g., 401 for expired tokens)
+            raise HTTPException(resp.status_code, f"Atlassian API error: {error_body}")
 
         user_data = cast(dict[str, Any], resp.json())
         logger.info(

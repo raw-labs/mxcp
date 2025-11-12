@@ -230,7 +230,8 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
             if response.status_code != 200:
                 logger.error(f"Failed to get user info: {response.status_code}")
-                raise HTTPException(400, "Failed to get user information")
+                # Preserve the original status code (e.g., 401 for expired tokens)
+                raise HTTPException(response.status_code, "Failed to get user information")
 
             return cast(dict[str, Any], response.json())
 
@@ -347,6 +348,9 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
                 raw_profile=user_profile,
                 external_token=token,
             )
+        except HTTPException:
+            # Re-raise HTTP exceptions (e.g., 401 for token refresh) with original status code
+            raise
         except Exception as e:
             logger.error(f"Failed to get user context: {e}")
-            raise HTTPException(401, "Failed to get user information") from e
+            raise HTTPException(500, f"Failed to get user information: {e}") from e
