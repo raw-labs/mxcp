@@ -4,14 +4,14 @@ from typing import Any
 import click
 
 from mxcp.server.core.config.analytics import track_command_with_timing
-from mxcp.server.core.config.site_config import load_site_config
+from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.interfaces.cli.utils import (
-    configure_logging,
+    configure_logging_from_config,
     get_env_flag,
-    get_env_profile,
     output_error,
     output_result,
+    resolve_profile,
 )
 from mxcp.server.services.drift.checker import check_drift
 
@@ -152,14 +152,37 @@ def drift_check(
         mxcp drift-check --debug                    # Show detailed change information
         mxcp drift-check --readonly                 # Open database in read-only mode
     """
-    # Configure logging first
-    configure_logging(debug)
-
     try:
+        # Load site config
+        try:
+            repo_root = find_repo_root()
+        except FileNotFoundError as e:
+            click.echo(
+                f"\n{click.style('❌ Error:', fg='red', bold=True)} "
+                "No mxcp-site.yml found in current directory or parents"
+            )
+            raise click.ClickException(
+                "No mxcp-site.yml found in current directory or parents"
+            ) from e
+
+        site_config = load_site_config(repo_root)
+
+        # Resolve profile
+        active_profile = resolve_profile(profile, site_config)
+
+        # Load user config with active profile
+        user_config = load_user_config(site_config, active_profile=active_profile)
+
+        # Configure logging
+        configure_logging_from_config(
+            site_config=site_config,
+            user_config=user_config,
+            debug=debug,
+        )
         # Run async implementation
         asyncio.run(
             _drift_check_impl(
-                profile=profile,
+                profile=active_profile,
                 baseline=baseline,
                 json_output=json_output,
                 debug=debug,
@@ -175,22 +198,19 @@ def drift_check(
             click.echo("\nOperation cancelled by user", err=True)
         raise click.Abort() from None
     except Exception as e:
-        # Only catch non-Click exceptions
         output_error(e, json_output, debug)
 
 
 async def _drift_check_impl(
     *,
-    profile: str | None,
+    profile: str,
     baseline: str | None,
     json_output: bool,
     debug: bool,
     readonly: bool,
 ) -> None:
     """Async implementation of the drift-check command."""
-    # Get values from environment variables if not set by flags
-    if not profile:
-        profile = get_env_profile()
+    # Get readonly flag from environment if not set
     if not readonly:
         readonly = get_env_flag("MXCP_READONLY")
 

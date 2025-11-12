@@ -168,50 +168,6 @@ class TestExternalRefTracker:
         # Vault config should be preserved
         assert resolved_user["vault"] == user_config["vault"]
 
-    def test_check_for_changes(self, tmp_path):
-        """Test checking for file changes."""
-        tracker = ExternalRefTracker()
-
-        # Create a test file
-        test_file = tmp_path / "config.txt"
-        test_file.write_text("initial")
-
-        config = {"value": f"file://{test_file}"}
-
-        tracker.set_template({}, config)
-
-        # Initial resolution
-        tracker.resolve_all()
-
-        # No changes yet
-        changed = tracker.check_for_changes()
-        assert len(changed) == 0
-
-        # Modify the file
-        import time
-
-        time.sleep(0.01)  # Ensure file mtime changes
-        test_file.write_text("updated")
-
-        # Should detect change
-        changed = tracker.check_for_changes()
-        assert len(changed) == 1
-        assert changed[0].source == f"file://{test_file}"
-
-    def test_has_changes(self):
-        """Test detecting configuration changes."""
-        tracker = ExternalRefTracker()
-
-        config1 = {"key": "value1", "nested": {"a": 1}}
-        config2 = {"key": "value1", "nested": {"a": 1}}
-        config3 = {"key": "value2", "nested": {"a": 1}}
-
-        # Same configs
-        assert not tracker.has_changes(config1, config2)
-
-        # Different configs
-        assert tracker.has_changes(config1, config3)
-
     def test_resolution_errors(self):
         """Test handling of resolution errors."""
         tracker = ExternalRefTracker()

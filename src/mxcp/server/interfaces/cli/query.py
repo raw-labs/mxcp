@@ -7,16 +7,16 @@ import click
 
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.server.core.config.analytics import track_command_with_timing
-from mxcp.server.core.config.site_config import load_site_config
+from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.interfaces.cli.table_renderer import render_table
 from mxcp.server.interfaces.cli.utils import (
-    configure_logging,
+    configure_logging_from_config,
     get_env_flag,
-    get_env_profile,
     output_error,
     output_result,
+    resolve_profile,
 )
 
 
@@ -58,12 +58,36 @@ def query(
         mxcp query "SELECT * FROM sales" --profile production --json-output
         mxcp query "SELECT * FROM users" --readonly
     """
-    # Configure logging first
-    configure_logging(debug)
-
     try:
+        # Load site config
+        try:
+            repo_root = find_repo_root()
+        except FileNotFoundError as e:
+            click.echo(
+                f"\n{click.style('❌ Error:', fg='red', bold=True)} "
+                "No mxcp-site.yml found in current directory or parents"
+            )
+            raise click.ClickException(
+                "No mxcp-site.yml found in current directory or parents"
+            ) from e
+
+        site_config = load_site_config(repo_root)
+
+        # Resolve profile
+        active_profile = resolve_profile(profile, site_config)
+
+        # Load user config with active profile
+        user_config = load_user_config(site_config, active_profile=active_profile)
+
+        # Configure logging
+        configure_logging_from_config(
+            site_config=site_config,
+            user_config=user_config,
+            debug=debug,
+        )
+
         # Run async implementation
-        asyncio.run(_query_async(sql, file, param, profile, json_output, debug, readonly))
+        asyncio.run(_query_async(sql, file, param, active_profile, json_output, debug, readonly))
     except click.ClickException:
         # Let Click exceptions propagate - they have their own formatting
         raise
@@ -73,7 +97,6 @@ def query(
             click.echo("\nOperation cancelled by user", err=True)
         raise click.Abort() from None
     except Exception as e:
-        # Only catch non-Click exceptions
         output_error(e, json_output, debug)
 
 
@@ -81,15 +104,13 @@ async def _query_async(
     sql: str | None,
     file: str | None,
     param: tuple[str, ...],
-    profile: str | None,
+    profile: str,
     json_output: bool,
     debug: bool,
     readonly: bool,
 ) -> None:
     """Async implementation of the query command."""
-    # Get values from environment variables if not set by flags
-    if not profile:
-        profile = get_env_profile()
+    # Get readonly flag from environment if not set
     if not readonly:
         readonly = get_env_flag("MXCP_READONLY")
 
@@ -102,8 +123,6 @@ async def _query_async(
     # Load configs
     site_config = load_site_config()
     user_config = load_user_config(site_config)
-
-    profile_name = profile or site_config["profile"]
 
     # Parse parameters
     params: dict[str, Any] = {}
@@ -169,9 +188,7 @@ async def _query_async(
         click.echo(f"\n{click.style('⏳ Running...', fg='yellow')}")
 
     # Create runtime environment with readonly configuration if specified
-    runtime_env = create_runtime_environment(
-        user_config, site_config, profile_name, readonly=readonly
-    )
+    runtime_env = create_runtime_environment(user_config, site_config, profile, readonly=readonly)
     engine = runtime_env.execution_engine
 
     try:

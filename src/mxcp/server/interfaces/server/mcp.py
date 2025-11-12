@@ -5,15 +5,18 @@ import functools
 import hashlib
 import json
 import logging
+import os
 import re
 import signal
 import threading
 import time
 import traceback
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any, Literal, TypeVar, cast
 
+import uvicorn
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import Context, FastMCP
@@ -41,6 +44,7 @@ from mxcp.sdk.telemetry import (
     record_counter,
     set_span_attribute,
 )
+from mxcp.server.admin import AdminAPIRunner
 from mxcp.server.core.config._types import (
     SiteConfig,
     UserAuthConfig,
@@ -61,14 +65,16 @@ from mxcp.server.definitions.endpoints._types import (
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.utils import EndpointType
 from mxcp.server.executor.engine import RuntimeEnvironment, create_runtime_environment
+from mxcp.server.interfaces.cli.utils import (
+    get_env_admin_socket_enabled,
+    get_env_admin_socket_path,
+)
 from mxcp.server.schemas.audit import ENDPOINT_EXECUTION_SCHEMA
 from mxcp.server.services.endpoints import (
     execute_endpoint_with_engine,
     execute_endpoint_with_engine_and_policy,
 )
 from mxcp.server.services.endpoints.validator import validate_endpoint
-
-from ._types import ConfigInfo
 
 logger = logging.getLogger(__name__)
 
@@ -264,12 +270,19 @@ class RAWMCP:
     ):
         """Initialize the MXCP MCP server.
 
-        The server loads all configurations automatically and provides methods
-        to query its state. Command-line options override config file settings.
+        The server loads configuration templates from disk to enable external reference
+        tracking and hot reloading. Configuration templates are loaded with resolve_refs=False,
+        meaning external references (${ENV_VAR}, vault://, file://) remain as strings.
+        These templates are then resolved using selective interpolation - only resolving
+        references for the active profile and top-level config, preventing errors from
+        undefined environment variables in inactive profiles.
+
+        Command-line options override config file settings.
 
         Args:
             site_config_path: Optional path to find mxcp-site.yml. Defaults to current directory.
-            profile: Optional profile name to use. Defaults to site config profile.
+                             Used for both initial load and hot reload functionality.
+            profile: Optional profile name to use. Overrides the profile from site config.
             transport: Optional transport override. Defaults to user config setting.
             host: Optional host override. Defaults to user config setting.
             port: Optional port override. Defaults to user config setting.
@@ -283,11 +296,24 @@ class RAWMCP:
         self.site_config_path = site_config_path or Path.cwd()
         self.debug = debug
 
-        # Load configurations
-        logger.info("Loading configurations...")
+        # Server runtime metadata
+        self._start_time = datetime.now(timezone.utc)
+        self._pid = os.getpid()
 
+        # Load configuration templates from disk (unresolved for external reference tracking)
+        logger.info("Loading configuration templates...")
+        logger.debug(f"Loading from {self.site_config_path}")
+
+        # Templates are loaded with resolve_refs=False, keeping external references as strings
+        # e.g., "${MY_VAR}", "vault://secret/path", "file://config.json"
+        # This enables:
+        # 1. External reference tracking for hot reload
+        # 2. File change detection
+        # 3. Selective interpolation (only active profile + top-level)
         self._site_config_template = load_site_config(self.site_config_path)
-        self._user_config_template = load_user_config(self._site_config_template)
+        self._user_config_template = load_user_config(
+            self._site_config_template, resolve_refs=False
+        )
 
         # Store command-line overrides
         self._cli_overrides = {
@@ -310,6 +336,10 @@ class RAWMCP:
         # Initialize runtime environment (will be created in initialize_runtime_components)
         self.runtime_environment: RuntimeEnvironment | None = None
         self._model_cache = {}
+
+        # Public attributes for admin API
+        self.telemetry_enabled: bool = False
+        self.audit_logger: Any | None = None
 
         # Resolve configurations
         self._resolve_and_apply_configs()
@@ -341,25 +371,49 @@ class RAWMCP:
         self.requests_lock = threading.Lock()
         self.draining = False
 
+        # Initialize admin API (but don't start yet - will be started in run())
+        self.admin_api = AdminAPIRunner(
+            server=self,
+            socket_path=get_env_admin_socket_path(),
+            enabled=get_env_admin_socket_enabled(),
+        )
+
         # Register signal handlers
         self._register_signal_handlers()
 
     def _resolve_and_apply_configs(self) -> None:
-        """Resolve external references and apply CLI overrides."""
-        # Check if configs contain unresolved references
+        """Resolve external references with selective interpolation and apply CLI overrides.
 
+        External references (${ENV_VAR}, vault://, file://) are resolved using selective
+        interpolation, which only resolves references for the active profile and top-level
+        config. This prevents errors from undefined environment variables in inactive profiles.
+        """
+        # Check if configs contain unresolved references
         config_str = json.dumps(self._site_config_template) + json.dumps(self._user_config_template)
         needs_resolution = any(pattern in config_str for pattern in ["${", "vault://", "file://"])
 
+        # Determine active profile (CLI override > site config)
+        active_profile = str(
+            self._cli_overrides["profile"] or self._site_config_template["profile"]
+        )
+        project_name = self._site_config_template["project"]
+
         if needs_resolution:
-            # Set templates and resolve
-            logger.info("Resolving external configuration references...")
+            # Set templates and resolve with selective interpolation
+            logger.info(
+                f"Resolving external configuration references for project={project_name}, profile={active_profile}..."
+            )
             self.ref_tracker.set_template(
                 cast(dict[str, Any], self._site_config_template),
                 cast(dict[str, Any], self._user_config_template),
             )
             self._config_templates_loaded = True
-            resolved_site, resolved_user = self.ref_tracker.resolve_all()
+
+            # Use selective interpolation - only resolve active profile + top-level config
+            resolved_site, resolved_user = self.ref_tracker.resolve_all(
+                project_name=project_name,
+                profile_name=active_profile,
+            )
             self.site_config = cast(SiteConfig, resolved_site)
             self.user_config = cast(UserConfig, resolved_user)
         else:
@@ -368,8 +422,8 @@ class RAWMCP:
             self.user_config = self._user_config_template
             self._config_templates_loaded = False
 
-        # Apply profile override
-        self.profile_name = str(self._cli_overrides["profile"] or self.site_config["profile"])
+        # Store resolved profile name
+        self.profile_name = active_profile
         self.active_profile = get_active_profile(
             self.user_config, self.site_config, self.profile_name
         )
@@ -412,19 +466,6 @@ class RAWMCP:
             self._cli_overrides["enable_sql_tools"]
             if self._cli_overrides["enable_sql_tools"] is not None
             else site_sql_tools
-        )
-
-    def get_config_info(self) -> ConfigInfo:
-        """Get configuration information for display."""
-        return ConfigInfo(
-            project=self.site_config["project"],
-            profile=self.profile_name,
-            transport=self.transport,
-            host=self.host,
-            port=self.port,
-            readonly=self.readonly,
-            stateless=bool(self.stateless_http),
-            sql_tools_enabled=bool(self.enable_sql_tools),
         )
 
     def get_endpoint_counts(self) -> dict[str, int]:
@@ -548,6 +589,41 @@ class RAWMCP:
         if self.oauth_handler and self.oauth_server:
             self._register_oauth_routes()
 
+    async def _run_with_admin_api(self, transport: str) -> None:
+        """Run both the admin API and main server in the same event loop.
+
+        This method is called with asyncio.run() to create a fresh event loop
+        that runs both the admin API's uvicorn server and the main MCP server.
+
+        Args:
+            transport: The transport protocol to use
+        """
+        # Start admin API in this event loop (if enabled)
+        await self.admin_api.start()
+
+        try:
+            # Now start the main MCP server based on transport
+            if transport == "stdio":
+                await self.mcp.run_stdio_async()
+            elif transport == "sse":
+                await self.mcp.run_sse_async(None)
+            elif transport == "streamable-http":
+                # Get the Starlette app and run with uvicorn
+                starlette_app = self.mcp.streamable_http_app()
+                config = uvicorn.Config(
+                    starlette_app,
+                    host=self.mcp.settings.host,
+                    port=self.mcp.settings.port,
+                    log_level=self.mcp.settings.log_level.lower(),
+                )
+                server = uvicorn.Server(config)
+                await server.serve()
+        finally:
+            # Cleanup: stop admin API
+            logger.info("Stopping admin API")
+            await self.admin_api.stop()
+            logger.info("Admin API stopped")
+
     def _initialize_audit_logger(self) -> None:
         """Initialize audit logger if enabled."""
 
@@ -566,6 +642,9 @@ class RAWMCP:
 
     async def _register_audit_schema(self) -> None:
         """Register the application's audit schema."""
+        if not self.audit_logger:
+            return
+
         try:
             # Check if schema already exists
             existing = await self.audit_logger.get_schema(
@@ -578,20 +657,19 @@ class RAWMCP:
             logger.warning(f"Failed to register audit schema: {e}")
 
     def _register_signal_handlers(self) -> None:
-        """Register signal handlers for graceful shutdown and reload."""
+        """Register signal handlers for reload only.
+
+        SIGTERM/SIGINT handling is delegated to uvicorn for graceful HTTP server shutdown.
+        RAWMCP cleanup (shutdown()) is called via serve.py's KeyboardInterrupt handler.
+
+        Signal flow:
+        - SIGTERM/SIGINT: Handled by uvicorn → raises KeyboardInterrupt → serve.py cleanup
+        - SIGHUP: Custom reload logic
+        """
         if hasattr(signal, "SIGHUP"):
             # SIGHUP triggers a full system reload
             signal.signal(signal.SIGHUP, self._handle_reload_signal)
             logger.info("Registered SIGHUP handler for system reload.")
-
-        # Handle SIGTERM (e.g., from `kill`) and SIGINT (e.g., from Ctrl+C)
-        signal.signal(signal.SIGTERM, self._handle_exit_signal)
-        signal.signal(signal.SIGINT, self._handle_exit_signal)
-
-    def _handle_exit_signal(self, signum: int, frame: Any) -> None:
-        """Handle termination signals to ensure graceful shutdown."""
-        logger.info(f"Received signal {signum}, initiating graceful shutdown...")
-        self.shutdown()
 
     def _handle_reload_signal(self, signum: int, frame: Any) -> None:
         """Handle SIGHUP signal to reload the configuration."""
@@ -649,8 +727,10 @@ class RAWMCP:
         # Get project name from site config
         project_name = self.site_config["project"]
 
-        # Configure telemetry for the current profile
-        configure_telemetry_from_config(self.user_config, project_name, self.profile_name)
+        # Configure telemetry for the current profile and get enabled status
+        self.telemetry_enabled = configure_telemetry_from_config(
+            self.user_config, project_name, self.profile_name
+        )
 
         # Record system startup metrics
         record_counter(
@@ -801,9 +881,11 @@ class RAWMCP:
         logger.info("Shutting down MXCP server...")
 
         try:
+            # Note: Admin API is stopped in _run_with_admin_api() finally block,
+            # not here, since it needs to be stopped while the event loop is still active.
+
             # Stop the reload manager
-            if self.reload_manager:
-                self.reload_manager.stop()
+            self.reload_manager.stop()
 
             # Gracefully shut down the reloadable runtime components first
             # This handles python runtimes, plugins, and the db session.
@@ -1889,8 +1971,18 @@ class RAWMCP:
         """Run the MCP server.
 
         Args:
-            transport: The transport to use ("streamable-http" or "stdio")
+            transport: The transport to use ("streamable-http", "sse", or "stdio")
+
+        Raises:
+            ValueError: If transport is not one of the supported values
         """
+        # Validate transport early
+        valid_transports = ["stdio", "sse", "streamable-http"]
+        if transport not in valid_transports:
+            raise ValueError(
+                f"Unknown transport: {transport}. Must be one of: {', '.join(valid_transports)}"
+            )
+
         try:
             logger.info("Starting MCP server...")
             # Store transport mode for use in handlers
@@ -1898,6 +1990,10 @@ class RAWMCP:
 
             # Start the reload manager
             self.reload_manager.start()
+
+            # Note: Admin API will be started in the FastMCP lifespan event
+            # when the uvicorn event loop is running. This ensures the admin
+            # API's uvicorn server runs in the same event loop as the main server.
 
             # Register all endpoints
             self.register_endpoints()
@@ -1923,8 +2019,8 @@ class RAWMCP:
                     # Don't continue if OAuth is enabled but initialization failed
                     raise RuntimeError(f"OAuth server initialization failed: {e}") from e
 
-            # Start server using MCP's built-in run method
-            self.mcp.run(transport=cast(Literal["stdio", "sse", "streamable-http"], transport))
+            # Start server - use asyncio.run to create event loop and run both admin API and main server
+            asyncio.run(self._run_with_admin_api(transport))
             logger.info("MCP server started successfully.")
         except Exception as e:
             logger.error(f"Error running MCP server: {e}")

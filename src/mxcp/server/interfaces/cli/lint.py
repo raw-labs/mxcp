@@ -4,7 +4,8 @@ from typing import Any
 import click
 
 from mxcp.server.core.config.analytics import track_command_with_timing
-from mxcp.server.core.config.site_config import load_site_config
+from mxcp.server.core.config.site_config import find_repo_root, load_site_config
+from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.definitions.endpoints._types import (
     EndpointDefinition,
     ParamDefinition,
@@ -14,7 +15,12 @@ from mxcp.server.definitions.endpoints._types import (
     TypeDefinition,
 )
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
-from mxcp.server.interfaces.cli.utils import configure_logging, output_error, output_result
+from mxcp.server.interfaces.cli.utils import (
+    configure_logging_from_config,
+    output_error,
+    output_result,
+    resolve_profile,
+)
 
 
 class LintIssue:
@@ -436,11 +442,33 @@ def lint(profile: str, json_output: bool, debug: bool, severity: str) -> None:
         mxcp lint --severity warning # Show only warnings
         mxcp lint --json-output      # Output in JSON format
     """
-    # Configure logging
-    configure_logging(debug)
-
     try:
-        site_config = load_site_config()
+        # Load site config
+        try:
+            repo_root = find_repo_root()
+        except FileNotFoundError as e:
+            click.echo(
+                f"\n{click.style('❌ Error:', fg='red', bold=True)} "
+                "No mxcp-site.yml found in current directory or parents"
+            )
+            raise click.ClickException(
+                "No mxcp-site.yml found in current directory or parents"
+            ) from e
+
+        site_config = load_site_config(repo_root)
+
+        # Resolve profile
+        active_profile = resolve_profile(profile, site_config)
+
+        # Load user config with active profile
+        user_config = load_user_config(site_config, active_profile=active_profile)
+
+        # Configure logging
+        configure_logging_from_config(
+            site_config=site_config,
+            user_config=user_config,
+            debug=debug,
+        )
         loader = EndpointLoader(site_config)
         endpoints = loader.discover_endpoints()
 
@@ -471,5 +499,8 @@ def lint(profile: str, json_output: bool, debug: bool, severity: str) -> None:
             output = format_lint_results_as_text(all_issues)
             click.echo(output)
 
+    except click.ClickException:
+        # Let Click exceptions propagate - they have their own formatting
+        raise
     except Exception as e:
         output_error(e, json_output, debug)

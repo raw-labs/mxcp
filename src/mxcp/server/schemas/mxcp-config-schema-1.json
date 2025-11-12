@@ -579,6 +579,41 @@
         }
       },
       "additionalProperties": false
+    },
+    "logging": {
+      "type": "object",
+      "description": "Application logging configuration (top-level, applies to all projects).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable file logging. If false, logs only to stderr (unless stdio mode).",
+          "default": true
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the log file. Supports file rotation.",
+          "default": "logs/mxcp.log"
+        },
+        "level": {
+          "type": "string",
+          "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+          "description": "Minimum log level to capture.",
+          "default": "WARNING"
+        },
+        "max_bytes": {
+          "type": "integer",
+          "description": "Maximum log file size in bytes before rotation.",
+          "default": 10485760,
+          "minimum": 1024
+        },
+        "backup_count": {
+          "type": "integer",
+          "description": "Number of rotated log files to keep.",
+          "default": 5,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

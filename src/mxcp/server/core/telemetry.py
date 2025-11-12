@@ -23,7 +23,7 @@ def configure_telemetry_from_config(
     user_config: UserConfig,
     project: str,
     profile: str,
-) -> None:
+) -> bool:
     """Configure telemetry based on user config settings.
 
     This reads telemetry configuration from the user config at the profile level
@@ -33,6 +33,9 @@ def configure_telemetry_from_config(
         user_config: The loaded user configuration
         project: The current project name
         profile: The current profile name
+
+    Returns:
+        Whether telemetry is enabled
     """
     # Get telemetry config for the current profile
     telemetry_config = _get_telemetry_config(user_config, project, profile)
@@ -41,7 +44,7 @@ def configure_telemetry_from_config(
         logger.debug(f"No telemetry configuration found for {project}/{profile}")
         # Disable all telemetry
         configure_all(enabled=False)
-        return
+        return False
 
     # Create unified SDK telemetry config from user config
     # Build a proper dict from the TypedDict
@@ -95,6 +98,9 @@ def configure_telemetry_from_config(
 
     # Configure all telemetry signals
     configure_all(config)
+
+    # Return whether telemetry is actually enabled
+    return config.enabled
 
 
 def _get_telemetry_config(

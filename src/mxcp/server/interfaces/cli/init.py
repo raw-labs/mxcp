@@ -288,7 +288,9 @@ def show_next_steps(
 @click.option("--bootstrap", is_flag=True, help="Create example hello world endpoint")
 @click.option("--debug", is_flag=True, help="Show detailed debug information")
 @track_command_with_timing("init")  # type: ignore[misc]
-def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool) -> None:
+def init(
+    folder: str, project: str | None, profile: str | None, bootstrap: bool, debug: bool
+) -> None:
     """Initialize a new MXCP repository.
 
     \b
@@ -304,12 +306,13 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool) 
         mxcp init --project=test    # Initialize with specific project name
         mxcp init --bootstrap       # Initialize with example endpoint
     """
-    # Get values from environment variables if not set by flags
+    # NOTE: init is special - we create the mxcp-site.yml, so we can't load it first
+    # Use basic logging setup (not config-based) since no config exists yet
+    configure_logging(debug=debug)
+
+    # Resolve profile with fallback chain: CLI > ENV > "default"
     if not profile:
         profile = get_env_profile() or "default"
-
-    # Configure logging
-    configure_logging(debug)
 
     try:
         target_dir = Path(folder).resolve()
@@ -357,15 +360,15 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool) 
             create_hello_world_files(target_dir)
             click.echo("✓ Created example hello world endpoint")
 
-        # Load configs (this will handle migration checks)
+        # Load the newly created configs (this will handle migration and create user config if needed)
         site_config = load_site_config(target_dir)
-        new_user_config = load_user_config(site_config)
+        user_config = load_user_config(site_config, active_profile=profile)
 
         # Initialize DuckDB session to create .duckdb file
         try:
             # Get DuckDB configuration
             database_config, plugins, plugin_config, secrets = create_duckdb_session_config(
-                site_config, new_user_config, site_config["profile"], readonly=False
+                site_config, user_config, profile, readonly=False
             )
 
             # Create session just to ensure database file exists
@@ -401,5 +404,8 @@ def init(folder: str, project: str, profile: str, bootstrap: bool, debug: bool) 
         # Show next steps
         show_next_steps(target_dir, project, bootstrap, config_generated)
 
+    except click.ClickException:
+        # Let Click exceptions propagate - they have their own formatting
+        raise
     except Exception as e:
         output_error(e, json_output=False, debug=debug)

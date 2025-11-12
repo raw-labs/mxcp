@@ -6,8 +6,14 @@ from pathlib import Path
 import click
 
 from mxcp.sdk.audit import AuditLogger
-from mxcp.server.core.config.site_config import load_site_config
-from mxcp.server.interfaces.cli.utils import configure_logging, output_error, output_result
+from mxcp.server.core.config.site_config import find_repo_root, load_site_config
+from mxcp.server.core.config.user_config import load_user_config
+from mxcp.server.interfaces.cli.utils import (
+    configure_logging_from_config,
+    output_error,
+    output_result,
+    resolve_profile,
+)
 from mxcp.server.services.audit import format_audit_record, parse_time_since
 from mxcp.server.services.audit.exporters import export_to_csv, export_to_duckdb
 from mxcp.server.services.audit.utils import map_legacy_query_params
@@ -86,14 +92,38 @@ def log(
     Note: Audit logs are stored in JSONL format for concurrent access.
     The log file can be read while the server is running.
     """
-    # Configure logging first
-    configure_logging(debug)
-
     try:
+        # Load site config
+        try:
+            repo_root = find_repo_root()
+        except FileNotFoundError as e:
+            click.echo(
+                f"\n{click.style('❌ Error:', fg='red', bold=True)} "
+                "No mxcp-site.yml found in current directory or parents"
+            )
+            raise click.ClickException(
+                "No mxcp-site.yml found in current directory or parents"
+            ) from e
+
+        site_config = load_site_config(repo_root)
+
+        # Resolve profile
+        active_profile = resolve_profile(profile, site_config)
+
+        # Load user config with active profile
+        user_config = load_user_config(site_config, active_profile=active_profile)
+
+        # Configure logging
+        configure_logging_from_config(
+            site_config=site_config,
+            user_config=user_config,
+            debug=debug,
+        )
+
         # Run async implementation
         asyncio.run(
             _log_async(
-                profile,
+                active_profile,
                 tool,
                 resource,
                 prompt,
@@ -117,7 +147,6 @@ def log(
             click.echo("\nOperation cancelled by user", err=True)
         raise click.Abort() from None
     except Exception as e:
-        # Only catch non-Click exceptions
         output_error(e, json_output, debug)
 
 

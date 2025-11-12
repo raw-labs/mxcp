@@ -99,6 +99,11 @@ class ReloadManager:
         self._lock = threading.Lock()
         self._processor_thread: threading.Thread | None = None
 
+        # Track reload history
+        self._last_reload_time: datetime | None = None
+        self._last_reload_status: str | None = None  # "success" or "error"
+        self._last_reload_error: str | None = None
+
     def start(self) -> None:
         """Start the reload processor thread."""
         if self._processor_thread is None or not self._processor_thread.is_alive():
@@ -184,6 +189,12 @@ class ReloadManager:
                     self._execute_reload(request)
                     logger.info(f"Reload request completed: {request.id}")
 
+                    # Update reload history
+                    with self._lock:
+                        self._last_reload_time = datetime.now()
+                        self._last_reload_status = "success"
+                        self._last_reload_error = None
+
                     # Record success metric
                     record_counter(
                         "mxcp.reloads_total",
@@ -196,6 +207,12 @@ class ReloadManager:
 
                 except Exception as e:
                     logger.error(f"Reload request failed: {request.id} - {e}", exc_info=True)
+
+                    # Update reload history
+                    with self._lock:
+                        self._last_reload_time = datetime.now()
+                        self._last_reload_status = "error"
+                        self._last_reload_error = str(e)
 
                     # Record failure metric
                     record_counter(
@@ -311,7 +328,7 @@ class ReloadManager:
     def get_status(self) -> dict[str, Any]:
         """Get the current status of the reload manager."""
         with self._lock:
-            return {
+            status: dict[str, Any] = {
                 "processing": self._processing,
                 "current_request": (
                     {
@@ -327,3 +344,12 @@ class ReloadManager:
                 "draining": self.server.draining,
                 "active_requests": self._get_active_requests(),
             }
+
+            # Add reload history if available
+            if self._last_reload_time:
+                status["last_reload"] = self._last_reload_time.isoformat()
+                status["last_reload_status"] = self._last_reload_status
+                if self._last_reload_error:
+                    status["last_reload_error"] = self._last_reload_error
+
+            return status
