@@ -1,0 +1,8 @@
+mxcp: 1
+project: mxcp-docker
+profile: default
+profiles:
+  default:
+    duckdb:
+      path: "data/db-default.duckdb"
+

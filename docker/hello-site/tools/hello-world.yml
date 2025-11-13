@@ -1,0 +1,19 @@
+mxcp: 1
+tool:
+  name: hello_world
+  description: A simple hello world tool
+  enabled: true
+  parameters:
+  - name: name
+    type: string
+    description: Name to greet
+    default: World
+    examples:
+    - World
+    - Alice
+    - Bob
+  return:
+    type: string
+    description: Greeting message
+  source:
+    file: ../sql/hello-world.sql
