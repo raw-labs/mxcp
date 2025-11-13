@@ -14,6 +14,7 @@ from .._types import (
     ExternalUserInfo,
     GoogleAuthConfig,
     HttpTransportConfig,
+    RefreshTokenResponse,
     StateMeta,
     UserContext,
 )
@@ -154,6 +155,7 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
 
         # Get user info to extract the actual user ID
         access_token = payload["access_token"]
+        refresh_token = payload.get("refresh_token")  # May be None if not requested
         user_profile = await self._fetch_user_profile(access_token)
 
         # Use either 'sub' (OpenID Connect) or 'id' (OAuth2) as the unique identifier
@@ -170,6 +172,7 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
             scopes=[],
             raw_token=access_token,
             provider="google",
+            refresh_token=refresh_token,
         )
 
         return user_info, state_meta
@@ -233,6 +236,9 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
                 raw_profile=user_profile,
                 external_token=token,
             )
+        except HTTPException:
+            # Re-raise HTTP exceptions (e.g., 401 for token refresh) with original status code
+            raise
         except Exception as e:
             logger.error(f"Failed to get Google user context: {e}")
             raise HTTPException(500, f"Failed to retrieve user information: {e}") from e
@@ -259,10 +265,37 @@ class GoogleOAuthHandler(ExternalOAuthHandler):
                 logger.error(
                     f"Google UserInfo API error {resp.status_code}: Unable to read response body"
                 )
-            raise ValueError(f"Google API error: {resp.status_code} - {error_body}")
+            # Preserve the original status code (e.g., 401 for expired tokens)
+            raise HTTPException(resp.status_code, f"Google API error: {error_body}")
 
         user_data = cast(dict[str, Any], resp.json())
         logger.info(
             f"Successfully fetched Google user profile for sub: {user_data.get('sub', 'unknown')}"
         )
         return user_data
+
+    async def refresh_access_token(self, refresh_token: str) -> RefreshTokenResponse:
+        """Refresh an expired access token using the refresh token."""
+        refresh_data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+        }
+
+        async with create_mcp_http_client() as client:
+            response = await client.post(
+                self.token_url,
+                data=refresh_data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+            if response.status_code != 200:
+                logger.error(
+                    f"Google token refresh failed: {response.status_code} - {response.text}"
+                )
+                raise HTTPException(400, "Failed to refresh access token")
+
+            # Parse and validate response using Pydantic model
+            response_data = response.json()
+            return RefreshTokenResponse(**response_data)

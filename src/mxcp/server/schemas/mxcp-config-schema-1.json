@@ -301,6 +301,20 @@
                           "default": "none",
                           "description": "OAuth provider to use for authentication"
                         },
+                        "cache_ttl": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 86400,
+                          "default": 300,
+                          "description": "Cache duration in seconds for user context information. Reduces API calls to OAuth providers."
+                        },
+                        "cleanup_interval": {
+                          "type": "integer",
+                          "minimum": 60,
+                          "maximum": 86400,
+                          "default": 300,
+                          "description": "How often to run OAuth cleanup in seconds. Removes expired authorization codes and orphaned token mappings to prevent memory leaks."
+                        },
                         "authorization": {
                           "type": "object",
                           "description": "Authorization settings for controlling access to MCP functionality",

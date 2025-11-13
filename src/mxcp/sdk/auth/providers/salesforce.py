@@ -13,6 +13,7 @@ from starlette.responses import HTMLResponse, RedirectResponse, Response
 from .._types import (
     ExternalUserInfo,
     HttpTransportConfig,
+    RefreshTokenResponse,
     SalesforceAuthConfig,
     StateMeta,
     UserContext,
@@ -148,6 +149,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
 
         # Get user info to extract the actual user ID
         access_token = payload["access_token"]
+        refresh_token = payload.get("refresh_token")  # May be None if not requested
         user_profile = await self._fetch_user_profile(access_token)
 
         # Use Salesforce's 'user_id' field as the unique identifier
@@ -164,6 +166,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
             scopes=[],
             raw_token=access_token,
             provider="salesforce",
+            refresh_token=refresh_token,
         )
 
         return user_info, meta
@@ -218,6 +221,9 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
                 raw_profile=user_profile,
                 external_token=token,
             )
+        except HTTPException:
+            # Re-raise HTTP exceptions (e.g., 401 for token refresh) with original status code
+            raise
         except Exception as e:
             logger.error(f"Failed to get Salesforce user context: {e}")
             raise HTTPException(500, f"Failed to retrieve user information: {e}") from e
@@ -252,10 +258,37 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
                 logger.error(
                     f"Salesforce UserInfo API error {resp.status_code}: Unable to read response body"
                 )
-            raise ValueError(f"Salesforce API error: {resp.status_code} - {error_body}")
+            # Preserve the original status code (e.g., 401 for expired tokens)
+            raise HTTPException(resp.status_code, f"Salesforce API error: {error_body}")
 
         user_data = cast(dict[str, Any], resp.json())
         logger.info(
             f"Successfully fetched Salesforce user profile for user_id: {user_data.get('user_id', 'unknown')}"
         )
         return user_data
+
+    async def refresh_access_token(self, refresh_token: str) -> RefreshTokenResponse:
+        """Refresh an expired access token using the refresh token."""
+        refresh_data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+        }
+
+        async with create_mcp_http_client() as client:
+            response = await client.post(
+                self.token_url,
+                data=refresh_data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+            if response.status_code != 200:
+                logger.error(
+                    f"Salesforce token refresh failed: {response.status_code} - {response.text}"
+                )
+                raise HTTPException(400, "Failed to refresh access token")
+
+            # Parse and validate response using Pydantic model
+            response_data = response.json()
+            return RefreshTokenResponse(**response_data)

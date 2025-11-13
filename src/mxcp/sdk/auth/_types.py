@@ -7,6 +7,8 @@ Callers need to translate their config types to these auth-specific types.
 from dataclasses import dataclass
 from typing import Any, Literal, TypedDict
 
+from pydantic import BaseModel, Field
+
 
 class HttpTransportConfig(TypedDict, total=False):
     """HTTP transport configuration for OAuth callbacks and URL building.
@@ -133,6 +135,8 @@ class AuthConfig(TypedDict, total=False):
     """
 
     provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google"] | None
+    cache_ttl: int | None  # Cache TTL in seconds for user context caching
+    cleanup_interval: int | None  # Cleanup interval in seconds for OAuth mappings (default: 300)
     clients: list[OAuthClientConfig] | None  # Pre-configured OAuth clients
     authorization: AuthorizationConfig | None  # Authorization policies
     persistence: AuthPersistenceConfig | None  # Token/client persistence
@@ -144,8 +148,43 @@ class ExternalUserInfo:
 
     id: str
     scopes: list[str]
-    raw_token: str  # original token from the IdP (JWT or opaque)
+    raw_token: str  # original access token from the IdP (JWT or opaque)
     provider: str
+    refresh_token: str | None = None  # refresh token for renewing access tokens
+
+
+class RefreshTokenResponse(BaseModel):
+    """Standardized response from OAuth provider token refresh.
+
+    This model ensures consistent handling of token refresh responses across
+    all OAuth providers, with proper validation and type safety.
+    """
+
+    access_token: str = Field(
+        ...,
+        description="New access token from the OAuth provider",
+    )
+    token_type: str = Field(
+        default="Bearer",
+        description="Token type (typically 'Bearer')",
+    )
+    expires_in: int | None = Field(
+        default=None,
+        description="Token expiration time in seconds from now",
+    )
+    refresh_token: str | None = Field(
+        default=None,
+        description=(
+            "New refresh token. Some providers rotate refresh tokens, "
+            "others return the same one. If None, use the original refresh token."
+        ),
+    )
+    scope: str | None = Field(
+        default=None,
+        description="Space-separated list of scopes granted (optional)",
+    )
+
+    model_config = {"extra": "allow"}  # Allow additional provider-specific fields
 
 
 @dataclass

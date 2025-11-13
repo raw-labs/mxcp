@@ -18,6 +18,7 @@ from .._types import (
     ExternalUserInfo,
     HttpTransportConfig,
     KeycloakAuthConfig,
+    RefreshTokenResponse,
     StateMeta,
     UserContext,
 )
@@ -75,7 +76,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         self.client_secret = keycloak_config["client_secret"]
         self.realm = keycloak_config["realm"]
         self.server_url = keycloak_config["server_url"].rstrip("/")
-        self.scope = keycloak_config.get("scope", "openid profile email")
+        self.scope = keycloak_config.get("scope", "openid profile email offline_access")
         self._callback_path = keycloak_config["callback_path"]
 
         # Construct Keycloak OAuth endpoints
@@ -191,12 +192,14 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
             token_response = response.json()
 
-        # Extract the access token
+        # Extract the access token and refresh token
         access_token = token_response.get("access_token")
         if not access_token:
             raise HTTPException(400, "No access token received")
 
-            # Get user info using the access token
+        refresh_token = token_response.get("refresh_token")  # May be None if not requested
+
+        # Get user info using the access token
         user_profile = await self._get_user_info(access_token)
 
         # Map Keycloak claims to ExternalUserInfo
@@ -209,7 +212,11 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         logger.info(f"Keycloak OAuth token exchange successful for user: {user_id}")
 
         user_info = ExternalUserInfo(
-            id=user_id, scopes=scopes, raw_token=access_token, provider="keycloak"
+            id=user_id,
+            scopes=scopes,
+            raw_token=access_token,
+            provider="keycloak",
+            refresh_token=refresh_token,
         )
 
         return user_info, state_meta
@@ -223,9 +230,44 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
             if response.status_code != 200:
                 logger.error(f"Failed to get user info: {response.status_code}")
-                raise HTTPException(400, "Failed to get user information")
+                # Preserve the original status code (e.g., 401 for expired tokens)
+                raise HTTPException(response.status_code, "Failed to get user information")
 
             return cast(dict[str, Any], response.json())
+
+    async def refresh_access_token(self, refresh_token: str) -> RefreshTokenResponse:
+        """Refresh an expired access token using the refresh token.
+
+        Args:
+            refresh_token: The refresh token to use for getting a new access token
+
+        Returns:
+            RefreshTokenResponse with new access_token and possibly new refresh_token
+
+        Raises:
+            HTTPException: If refresh fails
+        """
+        refresh_data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+        }
+
+        async with create_mcp_http_client() as client:
+            response = await client.post(
+                self.token_url,
+                data=refresh_data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Token refresh failed: {response.status_code} - {response.text}")
+                raise HTTPException(400, "Failed to refresh access token")
+
+            # Parse and validate response using Pydantic model
+            response_data = response.json()
+            return RefreshTokenResponse(**response_data)
 
     def _get_state_metadata(self, state: str) -> KeycloakStateMeta:
         """Return metadata stored for a given state."""
@@ -306,6 +348,9 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
                 raw_profile=user_profile,
                 external_token=token,
             )
+        except HTTPException:
+            # Re-raise HTTP exceptions (e.g., 401 for token refresh) with original status code
+            raise
         except Exception as e:
             logger.error(f"Failed to get user context: {e}")
-            raise HTTPException(401, "Failed to get user information") from e
+            raise HTTPException(500, f"Failed to get user information: {e}") from e
