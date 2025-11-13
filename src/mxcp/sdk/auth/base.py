@@ -159,6 +159,8 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         # Per-token locks for token operations (prevent blocking during network I/O)
         self._token_locks: dict[str, asyncio.Lock] = {}
         self._token_locks_lock = asyncio.Lock()
+        # Locks marked for deferred removal (to avoid race conditions)
+        self._locks_to_remove: set[str] = set()
 
         # Flag to track if persistence is initialized
         self._persistence_initialized = False
@@ -220,6 +222,9 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             Lock specific to this token
         """
         async with self._token_locks_lock:
+            # Remove from deletion set if it exists (token was recreated)
+            self._locks_to_remove.discard(token)
+
             if token not in self._token_locks:
                 self._token_locks[token] = asyncio.Lock()
                 lock_count = len(self._token_locks)
@@ -233,22 +238,48 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     )
             return self._token_locks[token]
 
-    async def _remove_token_lock(self, token: str) -> None:
-        """Remove the lock for the given token.
+    async def _mark_token_lock_for_removal(self, token: str) -> None:
+        """Mark a lock for deferred removal instead of removing immediately.
 
-        This should be called when a token is revoked or expired to prevent
-        unbounded growth of the locks dictionary.
+        This prevents race conditions where a lock is removed while other
+        requests are waiting to acquire it. The lock will be cleaned up
+        later when it's safe to remove (not currently locked).
 
         Args:
-            token: MCP token to remove lock for
+            token: MCP token to mark lock for removal
         """
         async with self._token_locks_lock:
             if token in self._token_locks:
+                self._locks_to_remove.add(token)
+                logger.debug(f"Marked lock for removal: {token[:10]}...")
+
+    async def _cleanup_marked_locks(self) -> int:
+        """Remove locks that are marked for deletion and not currently in use.
+
+        This method should be called periodically to clean up locks that
+        were marked for removal but couldn't be removed immediately due to
+        concurrent access.
+
+        Returns:
+            Number of locks removed
+        """
+        async with self._token_locks_lock:
+            to_remove = []
+            for token in list(self._locks_to_remove):
+                lock = self._token_locks.get(token)
+                if lock and not lock.locked():
+                    # Lock is not currently in use, safe to remove
+                    to_remove.append(token)
+
+            for token in to_remove:
                 del self._token_locks[token]
+                self._locks_to_remove.discard(token)
+
+            if to_remove:
                 lock_count = len(self._token_locks)
-                logger.debug(
-                    f"Removed lock for token {token[:10]}... (remaining locks: {lock_count})"
-                )
+                logger.debug(f"Cleaned up {len(to_remove)} token locks (remaining: {lock_count})")
+
+            return len(to_remove)
 
     async def cleanup_expired_mappings(self) -> int:
         """Clean up orphaned temporary token mappings for expired authorization codes.
@@ -317,16 +348,22 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             if cleaned_count > 0:
                 logger.info(f"Cleaned up {cleaned_count} expired/orphaned OAuth items")
 
-        # Clean up locks for expired tokens (outside main lock to avoid lock ordering issues)
+        # Mark locks for deferred removal (outside main lock to avoid lock ordering issues)
         for token in expired_tokens:
-            await self._remove_token_lock(token)
+            await self._mark_token_lock_for_removal(token)
+
+        # Clean up marked locks that are safe to remove
+        locks_removed = await self._cleanup_marked_locks()
 
         # Log stats for monitoring
         async with self._token_locks_lock:
             lock_count = len(self._token_locks)
 
         token_count = len(self._tokens)
-        logger.debug(f"OAuth stats: {token_count} active tokens, {lock_count} active locks")
+        logger.debug(
+            f"OAuth stats: {token_count} active tokens, {lock_count} active locks, "
+            f"{locks_removed} locks cleaned up"
+        )
 
         return cleaned_count
 
@@ -941,10 +978,10 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
             if not tkn and not should_cleanup_lock:
                 should_cleanup_lock = True
 
-        # Clean up lock after releasing it if token was expired or not found
+        # Mark lock for deferred removal if token was expired or not found
         # This prevents unbounded growth of the locks dictionary
         if should_cleanup_lock:
-            await self._remove_token_lock(token)
+            await self._mark_token_lock_for_removal(token)
 
         return tkn
 
@@ -973,8 +1010,8 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                 except Exception as e:
                     logger.error(f"Error revoking token from persistence: {e}")
 
-        # Clean up the token's lock after revocation (outside the lock)
-        await self._remove_token_lock(token)
+        # Mark the token's lock for deferred removal after revocation (outside the lock)
+        await self._mark_token_lock_for_removal(token)
 
     async def refresh_external_token(self, mcp_token: str) -> str | None:
         """Refresh an expired external token using its refresh token.

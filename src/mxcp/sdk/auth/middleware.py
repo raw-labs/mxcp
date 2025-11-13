@@ -67,6 +67,8 @@ class AuthenticationMiddleware:
         # Per-MCP-token locks for refresh operations to prevent race conditions
         self._refresh_locks: dict[str, asyncio.Lock] = {}
         self._refresh_locks_lock = asyncio.Lock()
+        # Locks marked for deferred removal (to avoid race conditions)
+        self._refresh_locks_to_remove: set[str] = set()
 
     async def _get_refresh_lock(self, mcp_token: str) -> asyncio.Lock:
         """Get or create a refresh lock for the given MCP token.
@@ -78,20 +80,57 @@ class AuthenticationMiddleware:
             Lock specific to this MCP token
         """
         async with self._refresh_locks_lock:
+            # Remove from deletion set if it exists (token was recreated)
+            self._refresh_locks_to_remove.discard(mcp_token)
+
             if mcp_token not in self._refresh_locks:
                 self._refresh_locks[mcp_token] = asyncio.Lock()
             return self._refresh_locks[mcp_token]
 
-    async def _remove_refresh_lock(self, mcp_token: str) -> None:
-        """Remove the refresh lock for the given MCP token.
+    async def _mark_refresh_lock_for_removal(self, mcp_token: str) -> None:
+        """Mark a refresh lock for deferred removal instead of removing immediately.
+
+        This prevents race conditions where a lock is removed while other
+        requests are waiting to acquire it. The lock will be cleaned up
+        later when it's safe to remove (not currently locked).
 
         Args:
-            mcp_token: MCP token to remove lock for
+            mcp_token: MCP token to mark lock for removal
         """
         async with self._refresh_locks_lock:
             if mcp_token in self._refresh_locks:
+                self._refresh_locks_to_remove.add(mcp_token)
+                logger.debug(f"🔓 Marked refresh lock for removal: {mcp_token[:20]}...")
+
+    async def _cleanup_marked_refresh_locks(self) -> int:
+        """Remove refresh locks that are marked for deletion and not currently in use.
+
+        This method should be called periodically to clean up locks that
+        were marked for removal but couldn't be removed immediately due to
+        concurrent access.
+
+        Returns:
+            Number of locks removed
+        """
+        async with self._refresh_locks_lock:
+            to_remove = []
+            for mcp_token in list(self._refresh_locks_to_remove):
+                lock = self._refresh_locks.get(mcp_token)
+                if lock and not lock.locked():
+                    # Lock is not currently in use, safe to remove
+                    to_remove.append(mcp_token)
+
+            for mcp_token in to_remove:
                 del self._refresh_locks[mcp_token]
-                logger.debug(f"🔓 Removed refresh lock for token {mcp_token[:20]}...")
+                self._refresh_locks_to_remove.discard(mcp_token)
+
+            if to_remove:
+                lock_count = len(self._refresh_locks)
+                logger.debug(
+                    f"🧹 Cleaned up {len(to_remove)} refresh locks (remaining: {lock_count})"
+                )
+
+            return len(to_remove)
 
     async def _get_cached_user_context(self, mcp_token: str) -> UserContext | None:
         """Get user context from cache if valid and not expired.
@@ -121,9 +160,9 @@ class AuthenticationMiddleware:
                 )
                 return cached_entry.user_context
 
-        # Clean up the refresh lock outside the cache lock to avoid lock ordering issues
+        # Mark refresh lock for deferred removal outside the cache lock to avoid lock ordering issues
         if should_remove_lock:
-            await self._remove_refresh_lock(mcp_token)
+            await self._mark_refresh_lock_for_removal(mcp_token)
 
         return None
 
@@ -159,9 +198,12 @@ class AuthenticationMiddleware:
             if expired_keys:
                 logger.debug(f"🧹 Cache CLEANUP - removed {len(expired_keys)} expired entries")
 
-        # Clean up refresh locks for expired tokens (outside cache_lock to avoid deadlock)
+        # Mark refresh locks for deferred removal (outside cache_lock to avoid deadlock)
         for key in expired_keys:
-            await self._remove_refresh_lock(key)
+            await self._mark_refresh_lock_for_removal(key)
+
+        # Clean up marked locks that are safe to remove
+        await self._cleanup_marked_refresh_locks()
 
     async def _schedule_cleanup_if_needed(self) -> None:
         """Schedule cleanup task if one isn't already running."""
