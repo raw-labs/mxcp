@@ -404,7 +404,21 @@ mxcp/
 
 ### Code Quality
 
-MXCP uses several tools to maintain code quality. All commands should be run with `uv run` to ensure they use the project's virtual environment:
+MXCP uses several tools to maintain code quality. All commands should be run with `uv run` to ensure they use the project's virtual environment.
+
+#### Quick Commands (Recommended)
+
+Use these convenient scripts for everyday development:
+
+```bash
+# Check code quality (runs ruff, black, mypy)
+./check-all.sh
+
+# Auto-fix formatting issues
+./format-all.sh
+```
+
+#### Individual Tools
 
 - **Ruff**: Fast Python linter (replaces isort and adds additional checks)
   ```bash
@@ -429,14 +443,6 @@ MXCP uses several tools to maintain code quality. All commands should be run wit
   ```bash
   uv run mypy .
   ```
-
-Run all checks (same as CI):
-```bash
-# Run all code quality checks
-uv run ruff check . && \
-uv run black --check --diff . && \
-uv run mypy .
-```
 
 ### Testing
 
@@ -497,7 +503,40 @@ The CD workflow automatically strips the `v` prefix when comparing versions.
 
 ### Releasing a New Version
 
-#### Stable Release
+#### Using the Release Script (Recommended)
+
+The easiest way to create a release is using the `release.sh` script:
+
+```bash
+# Stable release
+./release.sh 1.0.0
+
+# Pre-release (RC/Beta/Alpha)
+./release.sh 1.0.0rc1  # or 1.0.0b1, or 1.0.0a1
+
+# The script accepts versions with or without 'v' prefix
+./release.sh v1.0.0  # Same as ./release.sh 1.0.0
+```
+
+The script will:
+- ✅ Validate version format
+- ✅ Check if tag already exists
+- ✅ Check for uncommitted changes
+- ✅ Update `pyproject.toml`
+- ✅ Create commit and tag
+- ✅ Show instructions for pushing
+
+Then push to trigger the automated release:
+```bash
+git push origin main
+git push origin v1.0.0
+```
+
+#### Manual Release (Alternative)
+
+If you prefer to do it manually:
+
+**Stable Release:**
 
 1. **Update version** in `pyproject.toml`:
    ```toml
@@ -518,28 +557,9 @@ The CD workflow automatically strips the `v` prefix when comparing versions.
    git push origin v1.0.0
    ```
 
-#### Pre-release (RC/Beta/Alpha)
+**Pre-release (RC/Beta/Alpha):**
 
-Same process, just use pre-release version format:
-
-1. **Update version** in `pyproject.toml`:
-   ```toml
-   [project]
-   version = "1.0.0rc1"  # or 1.0.0b1, or 1.0.0a1
-   ```
-
-2. **Commit and push**:
-   ```bash
-   git add pyproject.toml
-   git commit -m "Release v1.0.0rc1"
-   git push
-   ```
-
-3. **Create and push tag**:
-   ```bash
-   git tag v1.0.0rc1
-   git push origin v1.0.0rc1
-   ```
+Same process, just use pre-release version format in `pyproject.toml` (e.g., `1.0.0rc1`, `1.0.0b1`, or `1.0.0a1`) and corresponding tag (e.g., `v1.0.0rc1`)
 
 #### What Happens Automatically
 
@@ -548,6 +568,8 @@ GitHub Actions automatically:
 - Builds the package with `python -m build`
 - Validates package metadata with `twine check`
 - Publishes to PyPI using trusted publishing
+- Waits for PyPI CDN propagation (up to 10 minutes)
+- Builds and pushes multi-platform Docker images to `ghcr.io/raw-labs/mxcp`
 
 ### What the CD Workflow Checks
 
@@ -557,6 +579,7 @@ The automated workflow (`.github/workflows/publish.yml`) includes safety checks:
 - ✅ **Package validation**: Runs `twine check` to verify metadata
 - ✅ **Build verification**: Lists all built artifacts
 - ✅ **Secure publishing**: Uses PyPI trusted publishing (no tokens)
+- ✅ **CDN propagation**: Waits for package to be available on PyPI before Docker build
 
 ### Monitoring the Release
 

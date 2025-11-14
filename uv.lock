@@ -1440,7 +1440,7 @@ wheels = [
 
 [[package]]
 name = "mxcp"
-version = "0.10.0rc2"
+version = "0.10.0rc3"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -1490,7 +1490,6 @@ dev = [
     { name = "aioresponses" },
     { name = "black" },
     { name = "build" },
-    { name = "httpx" },
     { name = "mypy" },
     { name = "pandas-stubs" },
     { name = "pytest" },
@@ -1533,8 +1532,7 @@ requires-dist = [
     { name = "dbt-duckdb", specifier = ">=1.6.0" },
     { name = "duckdb", specifier = ">=1.4.1" },
     { name = "fastapi", specifier = ">=0.110.0" },
-    { name = "httpx", specifier = ">=0.25.0" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.26.0" },
+    { name = "httpx", specifier = ">=0.28.0" },
     { name = "hvac", marker = "extra == 'all'", specifier = ">=2.0.0" },
     { name = "hvac", marker = "extra == 'vault'", specifier = ">=2.0.0" },
     { name = "jinja2", specifier = ">=3.1.3" },
