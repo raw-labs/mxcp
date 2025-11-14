@@ -36,7 +36,7 @@ RUN python -m venv /mxcp-site/.venv && \
 # Add venv to PATH
 ENV PATH="/mxcp-site/.venv/bin:$PATH"
 
-# Copy default/hello-world MXCP site
+# Copy minimal MXCP site structure
 COPY --chown=mxcp:mxcp docker/hello-site/ /mxcp-site/
 
 # Create runtime directories and set ownership

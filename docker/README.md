@@ -5,11 +5,13 @@ Official Docker image for MXCP - Enterprise MCP framework.
 ## Quick Start
 
 ```bash
-# Run with default hello-world site
-docker run -p 8000:8000 ghcr.io/raw-labs/mxcp:latest
+# Run with minimal MXCP site (mount your own content)
+docker run -p 8000:8000 \
+  -v $(pwd)/my-mxcp-site:/mxcp-site:ro \
+  ghcr.io/raw-labs/mxcp:latest
 ```
 
-The container will start an MXCP server with example tools. Connect using an MCP client (like Claude Desktop) or test the admin API endpoints.
+The container will start an MXCP server. Mount your MXCP site or extend the image with your own content.
 
 ## Usage
 
@@ -94,10 +96,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 ## What's Included
 
 - **Base**: Python 3.11 slim
-- **MXCP**: Latest version with all optional dependencies
+- **MXCP**: Latest version with all optional dependencies (Vault, 1Password)
 - **User**: Non-root user `mxcp` (UID 1000)
 - **Tools**: curl for health checks
-- **Default Site**: Hello-world MXCP site with example tools
+- **Structure**: Minimal MXCP site structure ready for your content
 
 ## Security
 
