@@ -1,0 +1,9 @@
+mxcp: 1
+projects:
+  mxcp-docker:
+    profiles:
+      default: {}
+transport:
+  http:
+    port: 8000
+    host: 0.0.0.0
