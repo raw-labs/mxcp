@@ -144,11 +144,12 @@ MXCP automatically instruments:
 
 **Trace hierarchy example:**
 ```
-mxcp.execution_engine.execute (150ms)
+mxcp.endpoint.execute (155ms) — Root span with endpoint context
 ├── mxcp.policy.enforce_input (5ms)
 ├── mxcp.validation.input (2ms)
-├── mxcp.duckdb.execute (120ms)
-├── mxcp.validation.output (3ms)
+├── mxcp.execution_engine.execute (138ms)
+│   ├── mxcp.duckdb.execute (120ms)
+│   └── mxcp.validation.output (3ms)
 └── mxcp.policy.enforce_output (20ms)
 ```
 
@@ -156,25 +157,29 @@ mxcp.execution_engine.execute (150ms)
 
 MXCP adds these attributes to spans:
 
-**Endpoint attributes:**
+**Endpoint attributes (on `mxcp.endpoint.execute` span):**
 - `mxcp.endpoint.name` - Tool/resource/prompt name
 - `mxcp.endpoint.type` - "tool", "resource", or "prompt"
-- `mxcp.execution.language` - "sql" or "python"
-- `mxcp.result.count` - Number of rows/items returned
-
-**Authentication attributes:**
-- `mxcp.auth.authenticated` - true/false
-- `mxcp.auth.provider` - OAuth provider name
+- `mxcp.auth.authenticated` - true/false (whether user is authenticated)
+- `mxcp.auth.provider` - OAuth provider name (e.g., "google", "github")
 - `mxcp.session.id` - MCP session ID
-
-**Policy attributes:**
-- `mxcp.policy.decision` - "allow", "deny", "filter", "mask"
+- `mxcp.policy.decision` - "allow", "deny", "filter", "mask" (set after execution)
 - `mxcp.policy.rules_evaluated` - Number of policy rules checked
 
-**Database attributes:**
-- `mxcp.duckdb.operation` - "SELECT", "INSERT", "UPDATE", etc.
-- `mxcp.duckdb.query_hash` - SHA256 hash of query (privacy)
-- `mxcp.duckdb.rows_returned` - Result row count
+**Execution attributes (on `mxcp.execution_engine.execute` span):**
+- `mxcp.execution.language` - "sql" or "python"
+- `mxcp.params.count` - Number of parameters passed
+- `mxcp.has_input_schema` - Whether input validation was performed
+- `mxcp.has_output_schema` - Whether output validation was performed
+- `mxcp.result.count` - Number of rows/items returned
+
+**Database attributes (on `mxcp.duckdb.execute` span):**
+- `db.system` - "duckdb"
+- `db.statement.hash` - SHA256 hash of query (privacy)
+- `db.operation` - "SELECT", "INSERT", "UPDATE", etc.
+- `db.parameters.count` - Number of parameters
+- `db.readonly` - Whether connection is readonly
+- `db.rows_affected` - Result row count
 
 ## Metrics
 
@@ -232,6 +237,9 @@ This generates:
 - Automatic percentile calculations
 - Perfect correlation between traces and metrics
 - Consistent across all operations
+
+**How it works:**
+The spanmetrics processor extracts metrics from the `mxcp.endpoint.execute` root span, which contains all endpoint-level attributes (name, type, auth provider, policy decision). This gives you endpoint latency metrics with full business context. Child spans like `mxcp.execution_engine.execute` and `mxcp.duckdb.execute` also generate metrics for more granular analysis.
 
 See [OpenTelemetry spanmetrics docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/spanmetricsprocessor) for details.
 

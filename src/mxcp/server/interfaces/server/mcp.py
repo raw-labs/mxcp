@@ -42,7 +42,7 @@ from mxcp.sdk.telemetry import (
     get_current_trace_id,
     increment_gauge,
     record_counter,
-    set_span_attribute,
+    traced_operation,
 )
 from mxcp.server.admin import AdminAPIRunner
 from mxcp.server.core.config._types import (
@@ -1373,133 +1373,156 @@ class RAWMCP:
                         with contextlib.suppress(Exception):
                             request_headers = dict(request_context.request.headers)
 
-            try:
-                # Get the user context from the context variable (set by auth middleware)
-                user_context = get_user_context()
+            # Get the user context from the context variable (set by auth middleware)
+            user_context = get_user_context()
 
-                logger.info(
-                    f"Calling {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))} with: {kwargs}"
-                )
-                if user_context:
+            # Determine endpoint name early for use in span and metrics
+            name: str
+            if endpoint_key == "resource":
+                name = cast(str, endpoint_def.get("uri", "unknown"))
+            else:
+                name = cast(str, endpoint_def.get("name", "unnamed"))
+
+            # Create root span for endpoint execution with all MXCP-specific attributes
+            with traced_operation(
+                "mxcp.endpoint.execute",
+                attributes={
+                    "mxcp.endpoint.name": name,
+                    "mxcp.endpoint.type": endpoint_key,
+                },
+            ) as span:
+                try:
                     logger.info(
-                        f"Authenticated user: {user_context.username} (provider: {user_context.provider})"
+                        f"Calling {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))} with: {kwargs}"
+                    )
+                    if user_context:
+                        logger.info(
+                            f"Authenticated user: {user_context.username} (provider: {user_context.provider})"
+                        )
+                        # Add auth attributes to span
+                        if span:
+                            span.set_attribute("mxcp.auth.authenticated", True)
+                            span.set_attribute("mxcp.auth.provider", user_context.provider)
+                    else:
+                        if span:
+                            span.set_attribute("mxcp.auth.authenticated", False)
+
+                    # Add session ID to span if available
+                    if span and mcp_session_id:
+                        span.set_attribute("mxcp.session.id", mcp_session_id)
+
+                    # run through new SDK executor (handles type conversion automatically)
+                    if self.runtime_environment is None:
+                        raise RuntimeError("Execution engine not initialized")
+
+                    # Increment concurrent executions gauge
+                    increment_gauge(
+                        "mxcp.endpoint.concurrent_executions",
+                        attributes={"endpoint": name, "type": endpoint_key},
+                        description="Currently running endpoint executions",
                     )
 
-                # run through new SDK executor (handles type conversion automatically)
-                if self.runtime_environment is None:
-                    raise RuntimeError("Execution engine not initialized")
-                name: str
-                if endpoint_key == "resource":
-                    name = cast(str, endpoint_def.get("uri", "unknown"))
-                else:
-                    name = cast(str, endpoint_def.get("name", "unnamed"))
+                    # Use the common execution wrapper with policy info
+                    result, policy_info = await self._execute(
+                        endpoint_type=endpoint_type.value,
+                        name=name,
+                        params=kwargs,  # No manual conversion needed - SDK handles it
+                        user_context=user_context,
+                        with_policy_info=True,
+                        request_headers=request_headers,  # Pass the FastMCP request headers
+                    )
 
-                # Increment concurrent executions gauge
-                increment_gauge(
-                    "mxcp.endpoint.concurrent_executions",
-                    attributes={"endpoint": name, "type": endpoint_key},
-                    description="Currently running endpoint executions",
-                )
+                    # Add policy decision to span after execution
+                    if span and policy_info.get("policy_decision"):
+                        span.set_attribute("mxcp.policy.decision", policy_info["policy_decision"])
+                        if policy_info.get("policies_evaluated"):
+                            span.set_attribute(
+                                "mxcp.policy.rules_evaluated", len(policy_info["policies_evaluated"])
+                            )
 
-                # Add session ID to current span if telemetry is enabled
-                trace_id = get_current_trace_id()
-                if trace_id:
-                    # Add both MCP session ID and trace ID to span
-                    if mcp_session_id:
-                        set_span_attribute("mxcp.session.id", mcp_session_id)
-                    set_span_attribute("mxcp.trace.id", trace_id)
-                # Use the common execution wrapper with policy info
-                result, policy_info = await self._execute(
-                    endpoint_type=endpoint_type.value,
-                    name=name,
-                    params=kwargs,  # No manual conversion needed - SDK handles it
-                    user_context=user_context,
-                    with_policy_info=True,
-                    request_headers=request_headers,  # Pass the FastMCP request headers
-                )
-                logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
-                return result
+                    logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
+                    return result
 
-            except Exception as e:
-                status = "error"
-                error_msg = str(e)
-                logger.error(
-                    f"Error executing {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))}:\n{traceback.format_exc()}"
-                )
-                raise
-            finally:
-                # Calculate duration
-                duration_ms = int((time.time() - start_time) * 1000)
+                except Exception as e:
+                    status = "error"
+                    error_msg = str(e)
+                    logger.error(
+                        f"Error executing {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))}:\n{traceback.format_exc()}"
+                    )
+                    raise
+                finally:
+                    # Calculate duration
+                    duration_ms = int((time.time() - start_time) * 1000)
 
-                # Determine caller type based on transport
-                if self.transport_mode:
-                    if self.transport_mode == "stdio":
-                        caller = "stdio"
+                    # Determine caller type based on transport
+                    if self.transport_mode:
+                        if self.transport_mode == "stdio":
+                            caller = "stdio"
+                        else:
+                            caller = "http"  # streamable-http or other HTTP transports
                     else:
-                        caller = "http"  # streamable-http or other HTTP transports
-                else:
-                    # Fallback to http if transport mode not set
-                    caller = "http"
+                        # Fallback to http if transport mode not set
+                        caller = "http"
 
-                # Record metrics
-                # Decrement concurrent executions
-                decrement_gauge(
-                    "mxcp.endpoint.concurrent_executions",
-                    attributes={"endpoint": name, "type": endpoint_key},
-                    description="Currently running endpoint executions",
-                )
+                    # Record metrics
+                    # Decrement concurrent executions
+                    decrement_gauge(
+                        "mxcp.endpoint.concurrent_executions",
+                        attributes={"endpoint": name, "type": endpoint_key},
+                        description="Currently running endpoint executions",
+                    )
 
-                # Record request counter
-                record_counter(
-                    "mxcp.endpoint.requests_total",
-                    attributes={
-                        "endpoint": name,
-                        "type": endpoint_key,
-                        "status": status,
-                        "caller": caller,
-                        "policy_decision": policy_info.get("policy_decision", "none"),
-                    },
-                    description="Total endpoint requests",
-                )
-
-                # Record error counter if error occurred
-                if status == "error":
+                    # Record request counter
                     record_counter(
-                        "mxcp.endpoint.errors_total",
+                        "mxcp.endpoint.requests_total",
                         attributes={
                             "endpoint": name,
                             "type": endpoint_key,
+                            "status": status,
                             "caller": caller,
-                            "error_type": type(error_msg).__name__ if error_msg else "unknown",
+                            "policy_decision": policy_info.get("policy_decision", "none"),
                         },
-                        description="Total endpoint errors",
+                        description="Total endpoint requests",
                     )
 
-                # Log the audit event
-                if self.audit_logger:
-                    await self.audit_logger.log_event(
-                        caller_type=cast(
-                            Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
-                        ),
-                        event_type=cast(
-                            Literal["tool", "resource", "prompt"], endpoint_key
-                        ),  # "tool", "resource", or "prompt"
-                        name=name,
-                        input_params=kwargs,
-                        duration_ms=duration_ms,
-                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                        policy_decision=policy_info["policy_decision"],
-                        reason=policy_info["policy_reason"],
-                        status=cast(Literal["success", "error"], status),
-                        error=error_msg,
-                        output_data=result,  # Return the result as output_data
-                        policies_evaluated=policy_info["policies_evaluated"],
-                        # Add user context if available
-                        user_id=user_context.user_id if user_context else None,
-                        session_id=mcp_session_id,  # MCP session ID
-                        # Add trace ID for correlation with telemetry
-                        trace_id=get_current_trace_id(),
-                    )
+                    # Record error counter if error occurred
+                    if status == "error":
+                        record_counter(
+                            "mxcp.endpoint.errors_total",
+                            attributes={
+                                "endpoint": name,
+                                "type": endpoint_key,
+                                "caller": caller,
+                                "error_type": type(error_msg).__name__ if error_msg else "unknown",
+                            },
+                            description="Total endpoint errors",
+                        )
+
+                    # Log the audit event
+                    if self.audit_logger:
+                        await self.audit_logger.log_event(
+                            caller_type=cast(
+                                Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
+                            ),
+                            event_type=cast(
+                                Literal["tool", "resource", "prompt"], endpoint_key
+                            ),  # "tool", "resource", or "prompt"
+                            name=name,
+                            input_params=kwargs,
+                            duration_ms=duration_ms,
+                            schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
+                            policy_decision=policy_info["policy_decision"],
+                            reason=policy_info["policy_reason"],
+                            status=cast(Literal["success", "error"], status),
+                            error=error_msg,
+                            output_data=result,  # Return the result as output_data
+                            policies_evaluated=policy_info["policies_evaluated"],
+                            # Add user context if available
+                            user_id=user_context.user_id if user_context else None,
+                            session_id=mcp_session_id,  # MCP session ID
+                            # Add trace ID for correlation with telemetry
+                            trace_id=get_current_trace_id(),
+                        )
 
         # -------------------------------------------------------------------
         # Wrap with authentication middleware
