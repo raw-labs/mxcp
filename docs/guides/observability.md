@@ -53,7 +53,7 @@ Structured logs of every request:
 
 Enable audit logging via environment variable or config:
 ```bash
-# Via environment variable
+# Via environment variable (overrides mxcp-site.yml)
 export MXCP_AUDIT_ENABLED=true
 
 # Or in mxcp-site.yml

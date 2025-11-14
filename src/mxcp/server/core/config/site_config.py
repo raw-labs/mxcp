@@ -149,23 +149,24 @@ def _apply_defaults(config: dict[str, Any], repo_root: Path) -> SiteConfig:
     if "audit" not in config["profiles"][profile]:
         config["profiles"][profile]["audit"] = {}
 
-    # Set default audit enabled state for the profile if not specified
-    # Check environment variable first, then use config, then default to False
-    if "enabled" not in config["profiles"][profile]["audit"]:
-        audit_enabled_env = os.getenv("MXCP_AUDIT_ENABLED", "").lower()
-        if audit_enabled_env in ("true", "1", "yes"):
-            config["profiles"][profile]["audit"]["enabled"] = True
-        elif audit_enabled_env in ("false", "0", "no"):
-            config["profiles"][profile]["audit"]["enabled"] = False
-        else:
-            # No env var set, use default
-            config["profiles"][profile]["audit"]["enabled"] = False
-
     # Set default audit log path for the profile if not specified (now uses audit directory)
     if "path" not in config["profiles"][profile]["audit"]:
         config["profiles"][profile]["audit"]["path"] = str(
             repo_root / paths_config["audit"] / f"logs-{profile}.jsonl"
         )
+
+    # Environment variable overrides for audit config
+    # Following same pattern as telemetry: env vars ALWAYS override file config
+    audit_enabled_env = os.getenv("MXCP_AUDIT_ENABLED", "").lower()
+    if audit_enabled_env in ("true", "1", "yes"):
+        # Env var explicitly enables audit - override any file setting
+        config["profiles"][profile]["audit"]["enabled"] = True
+    elif audit_enabled_env in ("false", "0", "no"):
+        # Env var explicitly disables audit - override any file setting
+        config["profiles"][profile]["audit"]["enabled"] = False
+    elif "enabled" not in config["profiles"][profile]["audit"]:
+        # No env var and no file config - use default
+        config["profiles"][profile]["audit"]["enabled"] = False
 
     return cast(SiteConfig, config)
 
