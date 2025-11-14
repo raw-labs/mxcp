@@ -76,7 +76,26 @@ Local REST API for health checks:
 
 ## Configuring OpenTelemetry
 
-Configure in your user config (`~/.mxcp/config.yml`):
+Telemetry can be configured via **environment variables** (recommended for deployments) or **user config file** (`~/.mxcp/config.yml`).
+
+### Environment Variables (Recommended for Docker/K8s)
+
+```bash
+# Standard OpenTelemetry variables
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+export OTEL_SERVICE_NAME=mxcp-prod
+export OTEL_RESOURCE_ATTRIBUTES="environment=production,team=platform"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer token"
+
+# MXCP-specific controls
+export MXCP_TELEMETRY_ENABLED=true
+export MXCP_TELEMETRY_TRACING_CONSOLE=false  # true for debugging
+export MXCP_TELEMETRY_METRICS_INTERVAL=60   # seconds
+```
+
+**Precedence:** Environment variables override user config file settings.
+
+### User Config File
 
 ```yaml
 mxcp: 1
@@ -96,7 +115,6 @@ projects:
           metrics:
             enabled: true
             export_interval: 60
-            prometheus_port: 9090  # Optional direct export
 
       # Production - send to collector
       production:
@@ -288,14 +306,20 @@ services:
       - jaeger
 ```
 
-Configure MXCP to send to Jaeger:
+Configure MXCP to send to Jaeger (using environment variables):
+```bash
+export MXCP_TELEMETRY_ENABLED=true
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+export OTEL_SERVICE_NAME=mxcp-dev
+```
+
+Or in docker-compose.yml:
 ```yaml
-telemetry:
-  enabled: true
-  endpoint: http://jaeger:4318
-  service_name: mxcp-dev
-  tracing:
-    enabled: true
+mxcp:
+  environment:
+    MXCP_TELEMETRY_ENABLED: "true"
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+    OTEL_SERVICE_NAME: "mxcp-dev"
 ```
 
 View traces at http://localhost:16686
@@ -305,16 +329,17 @@ View traces at http://localhost:16686
 MXCP works with any OpenTelemetry-compatible backend:
 
 **Grafana Cloud:**
-```yaml
-telemetry:
-  endpoint: https://otlp-gateway-prod-us-central-0.grafana.net/otlp
-  headers:
-    Authorization: Basic <base64-encoded-creds>
+```bash
+export MXCP_TELEMETRY_ENABLED=true
+export OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-us-central-0.grafana.net/otlp
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64-encoded-creds>"
+export OTEL_SERVICE_NAME=mxcp-prod
+export OTEL_RESOURCE_ATTRIBUTES="environment=production"
 ```
 
 **AWS X-Ray:** Use AWS Distro for OpenTelemetry
 **Azure Monitor:** Standard OpenTelemetry endpoint
-**Self-hosted:** Tempo + Prometheus + Grafana
+**Self-hosted:** Tempo + Grafana
 
 See your observability platform's OpenTelemetry documentation for endpoint details.
 

@@ -73,7 +73,9 @@ The image uses these conventions:
 /run/mxcp/mxcp.sock      # Admin socket for health checks
 ```
 
-## Pre-Defined Environment Variables
+## Environment Variables
+
+### MXCP Core
 
 - `MXCP_CONFIG` - Path to mxcp-config.yml (default: `/mxcp-site/mxcp-config.yml`)
 - `MXCP_PROFILE` - Profile to use (default: from mxcp-site.yml)
@@ -82,7 +84,22 @@ The image uses these conventions:
 - `MXCP_DEBUG` - Enable debug logging (default: `false`)
 - `MXCP_READONLY` - Read-only database mode (default: `false`)
 
-See [Configuration Guide](../docs/guides/configuration.md) for all options.
+### Telemetry (OpenTelemetry)
+
+Configure telemetry via standard OpenTelemetry and MXCP-specific environment variables:
+
+**Standard OTEL variables:**
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - OTLP collector endpoint (e.g., `http://otel-collector:4318`)
+- `OTEL_SERVICE_NAME` - Service name for telemetry (default: `mxcp`)
+- `OTEL_RESOURCE_ATTRIBUTES` - Resource attributes (format: `key1=value1,key2=value2`)
+- `OTEL_EXPORTER_OTLP_HEADERS` - Headers for OTLP exporter (format: `key1=value1,key2=value2`)
+
+**MXCP-specific variables:**
+- `MXCP_TELEMETRY_ENABLED` - Enable/disable telemetry (`true`/`false`)
+- `MXCP_TELEMETRY_TRACING_CONSOLE` - Enable console trace export for debugging (`true`/`false`)
+- `MXCP_TELEMETRY_METRICS_INTERVAL` - Metrics export interval in seconds (default: `60`)
+
+See [Observability Guide](../docs/guides/observability.md) for full telemetry configuration options.
 
 ## Health Checks
 

@@ -11,7 +11,6 @@ from typing import Any
 
 from opentelemetry import metrics
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
-from opentelemetry.exporter.prometheus import PrometheusMetricReader
 from opentelemetry.metrics import Counter, Histogram, UpDownCounter
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
@@ -98,7 +97,6 @@ def configure_metrics(
     enabled: bool = True,
     endpoint: str | None = None,
     export_interval: int = 60,
-    prometheus_port: int | None = None,
     resource_attributes: dict[str, Any] | None = None,
 ) -> None:
     """Configure metrics collection.
@@ -107,7 +105,6 @@ def configure_metrics(
         enabled: Whether metrics are enabled
         endpoint: OTLP endpoint for metrics export
         export_interval: Export interval in seconds
-        prometheus_port: Optional port for Prometheus scraping
         resource_attributes: Additional resource attributes
     """
     global _metrics_manager
@@ -145,16 +142,9 @@ def configure_metrics(
             )
         )
         logger.info(f"Configured OTLP metrics export to {endpoint}")
-
-    # Prometheus exporter if port provided
-    if prometheus_port:
-        # PrometheusMetricReader starts its own HTTP server internally
-        # We need to start the prometheus HTTP server separately
-        from prometheus_client import start_http_server
-
-        start_http_server(prometheus_port, addr="0.0.0.0")
-        readers.append(PrometheusMetricReader())
-        logger.info(f"Started Prometheus metrics endpoint on port {prometheus_port}")
+    else:
+        logger.warning("No OTLP endpoint configured for metrics")
+        return
 
     if not readers:
         logger.warning("No metrics exporters configured")
