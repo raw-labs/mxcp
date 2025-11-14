@@ -90,6 +90,14 @@ jobs:
         VERSION="${GITHUB_REF#refs/tags/v}"
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         
+        # Convert PEP 440 format to semver for Docker
+        # 0.10.0rc5 -> 0.10.0-rc5
+        # 0.10.0a1 -> 0.10.0-a1
+        # 0.10.0b2 -> 0.10.0-b2
+        # 1.0.0 -> 1.0.0 (stable versions unchanged)
+        DOCKER_VERSION=$(echo "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)(rc|a|b)([0-9]+)$/\1-\2\3/')
+        echo "docker_version=$DOCKER_VERSION" >> $GITHUB_OUTPUT
+        
         # Determine if this is a pre-release (for tagging)
         if [[ $VERSION =~ (rc|a|b) ]]; then
           echo "is_latest=false" >> $GITHUB_OUTPUT
@@ -97,7 +105,7 @@ jobs:
           echo "is_latest=true" >> $GITHUB_OUTPUT
         fi
         
-        echo "Building Docker image for MXCP version: $VERSION"
+        echo "Building Docker image for MXCP version: $VERSION (Docker: $DOCKER_VERSION)"
     
     - name: Wait for PyPI CDN propagation
       run: |
@@ -137,7 +145,9 @@ jobs:
         images: |
           ghcr.io/raw-labs/mxcp
         tags: |
-          type=raw,value=${{ steps.version.outputs.version }}
+          type=semver,pattern={{version}},value=v${{ steps.version.outputs.docker_version }}
+          type=semver,pattern={{major}}.{{minor}},value=v${{ steps.version.outputs.docker_version }}
+          type=semver,pattern={{major}},value=v${{ steps.version.outputs.docker_version }},enable=${{ steps.version.outputs.is_latest }}
           type=raw,value=latest,enable=${{ steps.version.outputs.is_latest }}
     
     - name: Build and push
