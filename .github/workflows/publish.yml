@@ -137,9 +137,9 @@ jobs:
         images: |
           ghcr.io/raw-labs/mxcp
         tags: |
-          type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
-          type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
-          type=semver,pattern={{major}},value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.is_latest }}
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
           type=raw,value=latest,enable=${{ steps.version.outputs.is_latest }}
     
     - name: Build and push
