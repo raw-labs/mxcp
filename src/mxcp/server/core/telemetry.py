@@ -6,7 +6,7 @@ using the SDK telemetry module for the actual implementation.
 
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 from mxcp.sdk.core import PACKAGE_NAME, PACKAGE_VERSION
 from mxcp.sdk.telemetry import (
@@ -207,7 +207,7 @@ def _get_telemetry_from_env() -> dict[str, Any] | None:
 
 def _merge_telemetry_configs(
     file_config: UserTelemetryConfig | None, env_config: dict[str, Any] | None
-) -> dict[str, Any] | None:
+) -> UserTelemetryConfig | None:
     """Merge telemetry configuration from file and environment.
 
     Environment variables take precedence over file configuration.
@@ -237,12 +237,12 @@ def _merge_telemetry_configs(
                 # Override top-level keys
                 merged[key] = value
 
-    return merged
+    return cast(UserTelemetryConfig, merged)
 
 
 def _get_telemetry_config(
     user_config: UserConfig, project: str, profile: str
-) -> dict[str, Any] | None:
+) -> UserTelemetryConfig | None:
     """Get telemetry configuration for a specific profile.
 
     Merges configuration from user config file and environment variables,
