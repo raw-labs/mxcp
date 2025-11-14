@@ -1437,7 +1437,8 @@ class RAWMCP:
                         span.set_attribute("mxcp.policy.decision", policy_info["policy_decision"])
                         if policy_info.get("policies_evaluated"):
                             span.set_attribute(
-                                "mxcp.policy.rules_evaluated", len(policy_info["policies_evaluated"])
+                                "mxcp.policy.rules_evaluated",
+                                len(policy_info["policies_evaluated"]),
                             )
 
                     logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
