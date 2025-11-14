@@ -266,7 +266,7 @@ class ExecutionEngine:
             with traced_operation(
                 "mxcp.execution_engine.execute",
                 attributes={
-                    "mxcp.language": language,
+                    "mxcp.execution.language": language,
                     "mxcp.params.count": len(params) if params else 0,
                     "mxcp.has_input_schema": input_schema is not None,
                     "mxcp.has_output_schema": output_schema is not None,
