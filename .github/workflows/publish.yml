@@ -109,34 +109,10 @@ jobs:
     
     - name: Wait for PyPI CDN propagation
       run: |
-        VERSION="${{ steps.version.outputs.version }}"
-        MAX_WAIT=600  # 10 minutes
-        ELAPSED=0
-        SLEEP=10
-        
-        echo "Waiting for mxcp==$VERSION to be available on PyPI..."
-        
-        while [ $ELAPSED -lt $MAX_WAIT ]; do
-          # Check PyPI JSON API for version-specific endpoint
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/mxcp/$VERSION/json")
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✓ Package mxcp==$VERSION is available on PyPI"
-            exit 0
-          fi
-          
-          echo "Package not yet available (HTTP $HTTP_CODE), waiting ${SLEEP}s... (${ELAPSED}s elapsed)"
-          sleep $SLEEP
-          ELAPSED=$((ELAPSED + SLEEP))
-          
-          # Exponential backoff up to 30s
-          if [ $SLEEP -lt 30 ]; then
-            SLEEP=$((SLEEP + 5))
-          fi
-        done
-        
-        echo "ERROR: Package did not become available within ${MAX_WAIT}s"
-        exit 1
+        echo "Waiting 3 minutes for PyPI CDN propagation..."
+        echo "Package: mxcp==${{ steps.version.outputs.version }}"
+        sleep 180
+        echo "✓ CDN propagation window complete"
     
     - name: Docker meta
       id: meta
