@@ -27,15 +27,10 @@ WORKDIR /mxcp-site
 
 # Create venv and install MXCP with ALL optional dependencies (minus dev)
 ARG MXCP_VERSION
-ARG MXCP_PRERELEASE=false
 RUN python -m venv /mxcp-site/.venv && \
     . /mxcp-site/.venv/bin/activate && \
     pip install --upgrade pip && \
-    if [ "$MXCP_PRERELEASE" = "true" ]; then \
-        pip install --pre "mxcp[vault,onepassword]==${MXCP_VERSION}"; \
-    else \
-        pip install "mxcp[vault,onepassword]==${MXCP_VERSION}"; \
-    fi && \
+    pip install "mxcp[vault,onepassword]==${MXCP_VERSION}" && \
     pip cache purge
 
 # Add venv to PATH

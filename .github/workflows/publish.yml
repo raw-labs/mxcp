@@ -90,12 +90,10 @@ jobs:
         VERSION="${GITHUB_REF#refs/tags/v}"
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         
-        # Determine if this is a pre-release
+        # Determine if this is a pre-release (for tagging)
         if [[ $VERSION =~ (rc|a|b) ]]; then
-          echo "prerelease=true" >> $GITHUB_OUTPUT
           echo "is_latest=false" >> $GITHUB_OUTPUT
         else
-          echo "prerelease=false" >> $GITHUB_OUTPUT
           echo "is_latest=true" >> $GITHUB_OUTPUT
         fi
         
@@ -120,7 +118,6 @@ jobs:
         file: docker/Dockerfile
         build-args: |
           MXCP_VERSION=${{ steps.version.outputs.version }}
-          MXCP_PRERELEASE=${{ steps.version.outputs.prerelease }}
         platforms: linux/amd64,linux/arm64
         push: true
         tags: ${{ steps.meta.outputs.tags }}

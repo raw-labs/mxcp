@@ -24,7 +24,7 @@ dependencies = [
     "jinja2>=3.1.3",  # Template engine for SQL/Python generation
     "makefun",  # Dynamic function creation
     "cel-python>=0.2.0",  # Policy enforcement engine
-    "httpx>=0.25.0",  # HTTP client for API calls
+    "httpx>=0.28.0",  # HTTP client for API calls
     
     # CLI
     "click>=8.1.7",  # CLI framework
@@ -56,7 +56,6 @@ dev = [
     "pytest-mock",  # For better mock integration with pytest
     "pytest-timeout",  # For test timeout protection
     "aioresponses",  # For mocking HTTP requests
-    "httpx>=0.26.0",  # For FastAPI TestClient
     "black",  # For code formatting
     "ruff",  # For linting and import sorting
     "mypy",  # For type checking
