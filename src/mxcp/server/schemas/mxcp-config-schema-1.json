@@ -257,12 +257,6 @@
                               "description": "Export interval in seconds.",
                               "default": 60,
                               "minimum": 1
-                            },
-                            "prometheus_port": {
-                              "type": "integer",
-                              "description": "Optional port for Prometheus scraping endpoint.",
-                              "minimum": 1024,
-                              "maximum": 65535
                             }
                           },
                           "additionalProperties": false

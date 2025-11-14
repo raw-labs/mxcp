@@ -602,9 +602,26 @@ All commands handle errors consistently:
 
 The following environment variables can be used to configure MXCP:
 
+### Core Configuration
 - `MXCP_DEBUG`: Enable debug logging (equivalent to --debug)
 - `MXCP_PROFILE`: Set default profile (equivalent to --profile)
 - `MXCP_READONLY`: Enable read-only mode (equivalent to --readonly)
 - `MXCP_DUCKDB_PATH`: Override the DuckDB file location from configuration
+- `MXCP_CONFIG_PATH`: Path to user config file (default: `~/.mxcp/config.yml`)
+- `MXCP_ADMIN_ENABLED`: Enable admin socket (default: true)
+- `MXCP_ADMIN_SOCKET`: Admin socket path
 
-For more details on environment variables and their usage, see the [Configuration Guide](../guides/configuration.md#environment-variables). 
+### Telemetry (OpenTelemetry)
+
+**Standard OTEL variables:**
+- `OTEL_EXPORTER_OTLP_ENDPOINT`: OTLP collector endpoint (e.g., `http://otel-collector:4318`)
+- `OTEL_SERVICE_NAME`: Service name for telemetry (default: `mxcp`)
+- `OTEL_RESOURCE_ATTRIBUTES`: Resource attributes (format: `key1=value1,key2=value2`)
+- `OTEL_EXPORTER_OTLP_HEADERS`: Headers for OTLP exporter (format: `key1=value1,key2=value2`)
+
+**MXCP-specific variables:**
+- `MXCP_TELEMETRY_ENABLED`: Enable/disable telemetry (`true`/`false`)
+- `MXCP_TELEMETRY_TRACING_CONSOLE`: Enable console trace export for debugging (`true`/`false`)
+- `MXCP_TELEMETRY_METRICS_INTERVAL`: Metrics export interval in seconds (default: `60`)
+
+For more details on environment variables and their usage, see the [Configuration Guide](../guides/configuration.md) and [Observability Guide](../guides/observability.md). 

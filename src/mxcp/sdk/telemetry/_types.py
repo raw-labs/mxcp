@@ -84,14 +84,12 @@ class MetricsConfig:
 
     enabled: bool = True
     export_interval: int = 60  # How often to export metrics (seconds)
-    prometheus_port: int | None = None  # Optional Prometheus scraping endpoint
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "enabled": self.enabled,
             "export_interval": self.export_interval,
-            "prometheus_port": self.prometheus_port,
         }
 
 

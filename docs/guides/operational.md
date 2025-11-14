@@ -365,10 +365,24 @@ MXCP supports configuration via environment variables:
 ```bash
 # Server configuration
 export MXCP_CONFIG_PATH="/path/to/config.yml"
+export MXCP_PROFILE="production"
+export MXCP_DEBUG=false
+export MXCP_READONLY=false
 
 # Admin socket (for monitoring)
 export MXCP_ADMIN_ENABLED=true
 export MXCP_ADMIN_SOCKET=/tmp/mxcp.sock
+
+# Telemetry (OpenTelemetry) - Standard OTEL variables
+export MXCP_TELEMETRY_ENABLED=true
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+export OTEL_SERVICE_NAME=mxcp-prod
+export OTEL_RESOURCE_ATTRIBUTES="environment=production,team=platform"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer token"
+
+# Telemetry - MXCP-specific variables
+export MXCP_TELEMETRY_TRACING_CONSOLE=false
+export MXCP_TELEMETRY_METRICS_INTERVAL=60
 
 # OAuth credentials
 export GITHUB_CLIENT_ID="your-client-id"
@@ -385,7 +399,7 @@ export VAULT_TOKEN="your-vault-token"
 export OP_SERVICE_ACCOUNT_TOKEN="your-op-token"
 ```
 
-See [Configuration Guide](configuration.md) for complete details.
+See [Configuration Guide](configuration.md) and [Observability Guide](observability.md) for complete details.
 
 ### Volume Mounts
 
@@ -501,7 +515,7 @@ MXCP provides comprehensive observability through:
 3. **OpenTelemetry** - Distributed tracing and metrics
 4. **Admin Socket** - Local monitoring and health checks
 
-For complete observability setup including OpenTelemetry, Prometheus, Grafana, and log shipping, see the [Observability Guide](observability.md).
+For complete observability setup including OpenTelemetry, Grafana, and log shipping, see the [Observability Guide](observability.md).
 
 ### Basic Audit Log Analysis
 

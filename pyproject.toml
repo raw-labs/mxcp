@@ -36,7 +36,6 @@ dependencies = [
     "opentelemetry-api>=1.24.0",  # OpenTelemetry API
     "opentelemetry-sdk>=1.24.0",  # OpenTelemetry SDK
     "opentelemetry-exporter-otlp-proto-http>=1.24.0",  # OTLP HTTP exporter
-    "opentelemetry-exporter-prometheus>=0.48b0",  # Prometheus metrics exporter
 
     # Admin API
     "fastapi>=0.110.0",  # FastAPI for admin API

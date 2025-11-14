@@ -158,7 +158,6 @@ def _configure_metrics_from_config(config: TelemetryConfig) -> None:
         enabled=True,
         endpoint=config.endpoint,
         export_interval=config.metrics.export_interval,
-        prometheus_port=config.metrics.prometheus_port,
         resource_attributes=resource_attrs,
     )
 

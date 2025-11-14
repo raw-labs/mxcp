@@ -222,7 +222,6 @@ class UserMetricsConfig(TypedDict, total=False):
 
     enabled: bool | None
     export_interval: int | None  # Export interval in seconds
-    prometheus_port: int | None  # Optional Prometheus scrape endpoint
 
 
 class UserTelemetryConfig(TypedDict, total=False):
