@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from mxcp.sdk.audit.backends.noop import NoOpAuditBackend
 from mxcp.server.definitions.endpoints._types import EndpointDefinition
 
 from .models import ConfigResponse, EndpointCounts, Features
@@ -119,7 +120,11 @@ class AdminService:
 
     def is_audit_enabled(self) -> bool:
         """Check if audit logging is enabled."""
-        return self._server.audit_logger is not None
+        # Check if audit logger exists AND is not a no-op backend
+        if self._server.audit_logger is None:
+            return False
+        # Check if it's a no-op backend by checking the backend type
+        return not isinstance(self._server.audit_logger.backend, NoOpAuditBackend)
 
     async def query_audit_records(
         self,

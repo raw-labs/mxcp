@@ -81,6 +81,7 @@ The image uses these conventions:
 - `MXCP_PROFILE` - Profile to use (default: from mxcp-site.yml)
 - `MXCP_ADMIN_ENABLED` - Enable admin socket (default: `true`)
 - `MXCP_ADMIN_SOCKET` - Admin socket path (default: `/run/mxcp/mxcp.sock`)
+- `MXCP_AUDIT_ENABLED` - Enable audit logging (overrides mxcp-site.yml if set)
 - `MXCP_DEBUG` - Enable debug logging (default: `false`)
 - `MXCP_READONLY` - Read-only database mode (default: `false`)
 

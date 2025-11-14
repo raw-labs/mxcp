@@ -1501,29 +1501,37 @@ class RAWMCP:
 
                     # Log the audit event
                     if self.audit_logger:
-                        await self.audit_logger.log_event(
-                            caller_type=cast(
-                                Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
-                            ),
-                            event_type=cast(
-                                Literal["tool", "resource", "prompt"], endpoint_key
-                            ),  # "tool", "resource", or "prompt"
-                            name=name,
-                            input_params=kwargs,
-                            duration_ms=duration_ms,
-                            schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                            policy_decision=policy_info["policy_decision"],
-                            reason=policy_info["policy_reason"],
-                            status=cast(Literal["success", "error"], status),
-                            error=error_msg,
-                            output_data=result,  # Return the result as output_data
-                            policies_evaluated=policy_info["policies_evaluated"],
-                            # Add user context if available
-                            user_id=user_context.user_id if user_context else None,
-                            session_id=mcp_session_id,  # MCP session ID
-                            # Add trace ID for correlation with telemetry
-                            trace_id=get_current_trace_id(),
-                        )
+                        try:
+                            await self.audit_logger.log_event(
+                                caller_type=cast(
+                                    Literal["cli", "http", "stdio", "api", "system", "unknown"],
+                                    caller,
+                                ),
+                                event_type=cast(
+                                    Literal["tool", "resource", "prompt"], endpoint_key
+                                ),  # "tool", "resource", or "prompt"
+                                name=name,
+                                input_params=kwargs,
+                                duration_ms=duration_ms,
+                                schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
+                                policy_decision=policy_info["policy_decision"],
+                                reason=policy_info["policy_reason"],
+                                status=cast(Literal["success", "error"], status),
+                                error=error_msg,
+                                output_data=result,  # Return the result as output_data
+                                policies_evaluated=policy_info["policies_evaluated"],
+                                # Add user context if available
+                                user_id=user_context.user_id if user_context else None,
+                                session_id=mcp_session_id,  # MCP session ID
+                                # Add trace ID for correlation with telemetry
+                                trace_id=get_current_trace_id(),
+                            )
+                        except Exception as audit_error:
+                            # Log audit failure prominently - this should never be silent
+                            logger.error(
+                                f"CRITICAL: Audit logging failed for endpoint '{name}': {audit_error}",
+                                exc_info=True,
+                            )
 
         # -------------------------------------------------------------------
         # Wrap with authentication middleware
