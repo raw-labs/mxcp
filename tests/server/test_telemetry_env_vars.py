@@ -198,4 +198,3 @@ def test_merge_telemetry_configs_nested_merge():
     assert result["tracing"]["console_export"] is True  # from env (overrides)
     assert result["metrics"]["enabled"] is True  # from file
     assert result["metrics"]["export_interval"] == 30  # from env (overrides)
-
