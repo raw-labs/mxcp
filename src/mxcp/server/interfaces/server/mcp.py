@@ -1501,7 +1501,8 @@ class RAWMCP:
 
                     # Log the audit event
                     if self.audit_logger:
-                        await self.audit_logger.log_event(
+                        try:
+                            await self.audit_logger.log_event(
                             caller_type=cast(
                                 Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
                             ),
@@ -1524,6 +1525,12 @@ class RAWMCP:
                             # Add trace ID for correlation with telemetry
                             trace_id=get_current_trace_id(),
                         )
+                        except Exception as audit_error:
+                            # Log audit failure prominently - this should never be silent
+                            logger.error(
+                                f"CRITICAL: Audit logging failed for endpoint '{name}': {audit_error}",
+                                exc_info=True,
+                            )
 
         # -------------------------------------------------------------------
         # Wrap with authentication middleware

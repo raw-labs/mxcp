@@ -51,6 +51,19 @@ Structured logs of every request:
 }
 ```
 
+Enable audit logging via environment variable or config:
+```bash
+# Via environment variable
+export MXCP_AUDIT_ENABLED=true
+
+# Or in mxcp-site.yml
+profiles:
+  production:
+    audit:
+      enabled: true
+      path: audit/logs.jsonl
+```
+
 Query audit logs:
 ```bash
 mxcp log --since 1h --status error

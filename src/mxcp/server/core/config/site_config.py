@@ -150,8 +150,16 @@ def _apply_defaults(config: dict[str, Any], repo_root: Path) -> SiteConfig:
         config["profiles"][profile]["audit"] = {}
 
     # Set default audit enabled state for the profile if not specified
+    # Check environment variable first, then use config, then default to False
     if "enabled" not in config["profiles"][profile]["audit"]:
-        config["profiles"][profile]["audit"]["enabled"] = False
+        audit_enabled_env = os.getenv("MXCP_AUDIT_ENABLED", "").lower()
+        if audit_enabled_env in ("true", "1", "yes"):
+            config["profiles"][profile]["audit"]["enabled"] = True
+        elif audit_enabled_env in ("false", "0", "no"):
+            config["profiles"][profile]["audit"]["enabled"] = False
+        else:
+            # No env var set, use default
+            config["profiles"][profile]["audit"]["enabled"] = False
 
     # Set default audit log path for the profile if not specified (now uses audit directory)
     if "path" not in config["profiles"][profile]["audit"]:
