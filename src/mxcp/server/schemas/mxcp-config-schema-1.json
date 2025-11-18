@@ -87,6 +87,10 @@
               "type": "boolean",
               "default": false,
               "description": "Enable stateless HTTP mode for serverless deployments. In stateless mode, no session state is maintained between requests."
+            },
+            "expected_bearer_token": {
+              "type": "string",
+              "description": "Expected bearer token for authentication. If not specified, any bearer token will be accepted."
             }
           },
           "additionalProperties": false

@@ -18,6 +18,7 @@ from typing import Annotated, Any, Literal, TypeVar, cast
 
 import uvicorn
 from makefun import create_function
+from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
@@ -239,6 +240,52 @@ def create_url_builder(user_config: UserConfig) -> URLBuilder:
     return URLBuilder(transport_config)
 
 
+class BearerTokenVerifier:
+    """Token verifier that validates bearer tokens against an expected value.
+
+    If no expected token is configured, any token is accepted.
+    If an expected token is configured, only matching tokens are accepted.
+    """
+
+    def __init__(self, expected_token: str | None = None):
+        """Initialize the bearer token verifier.
+
+        Args:
+            expected_token: The expected bearer token value. If None, any token is accepted.
+        """
+        self.expected_token = expected_token
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        """Verify a bearer token and return access info if valid.
+
+        Args:
+            token: The bearer token to verify
+
+        Returns:
+            AccessToken if the token is valid, None otherwise
+        """
+        # If no expected token is configured, accept any token
+        if self.expected_token is None:
+            return AccessToken(
+                token=token,
+                client_id="bearer-token",
+                scopes=[],
+                expires_at=None,
+            )
+
+        # Otherwise, check if the token matches the expected value
+        if token == self.expected_token:
+            return AccessToken(
+                token=token,
+                client_id="bearer-token",
+                scopes=[],
+                expires_at=None,
+            )
+
+        # Token doesn't match
+        return None
+
+
 class RAWMCP:
     """MXCP MCP Server implementation that bridges MXCP endpoints with MCP protocol."""
 
@@ -456,6 +503,11 @@ class RAWMCP:
             else config_stateless
         )
 
+        # Extract bearer token configuration
+        self.expected_bearer_token = (
+            http_config.get("expected_bearer_token") if http_config else None
+        )
+
         self.json_response = self._cli_overrides["json_response"]
         self.readonly = bool(self._cli_overrides["readonly"])
 
@@ -530,6 +582,7 @@ class RAWMCP:
         )
         self.oauth_server = None
         self.auth_settings = None
+        self.token_verifier = None
 
         if self.oauth_handler:
             self.oauth_server = GeneralOAuthAuthorizationServer(
@@ -563,6 +616,25 @@ class RAWMCP:
             )
         else:
             logger.info("OAuth authentication disabled")
+            # Initialize bearer token verifier when OAuth is not configured
+            self.token_verifier = BearerTokenVerifier(self.expected_bearer_token)
+            if self.expected_bearer_token:
+                logger.info("Bearer token authentication enabled")
+
+                # Create minimal auth settings required by FastMCP for token verifier
+                url_builder = create_url_builder(self.user_config)
+                base_url = url_builder.get_base_url(host=self.host, port=self.port)
+
+                self.auth_settings = AuthSettings(
+                    issuer_url=cast(AnyHttpUrl, base_url),
+                    resource_server_url=cast(AnyHttpUrl, base_url),
+                    client_registration_options=ClientRegistrationOptions(
+                        enabled=False,  # No client registration for bearer tokens
+                    ),
+                    required_scopes=None,  # No scopes required
+                )
+            else:
+                logger.info("Bearer token authentication disabled (accepting any token)")
 
     def _initialize_fastmcp(self) -> None:
         """Initialize the FastMCP server."""
@@ -576,9 +648,13 @@ class RAWMCP:
 
         logger.info(f"Initializing FastMCP with host={self.host}, port={self.port}")
 
-        if self.auth_settings and self.oauth_server:
+        if self.auth_settings:
             fastmcp_kwargs["auth"] = self.auth_settings
-            fastmcp_kwargs["auth_server_provider"] = self.oauth_server
+
+            if self.oauth_server:
+                fastmcp_kwargs["auth_server_provider"] = self.oauth_server
+            elif self.token_verifier:
+                fastmcp_kwargs["token_verifier"] = self.token_verifier
 
         self.mcp = FastMCP(**fastmcp_kwargs)
 
