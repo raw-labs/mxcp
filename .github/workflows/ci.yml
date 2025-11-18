@@ -49,6 +49,9 @@ jobs:
   # Run security checks on a single Python version to save CI time
   security:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # Required for uploading Trivy SARIF results
     steps:
     - uses: actions/checkout@v5
     
@@ -62,11 +65,27 @@ jobs:
       run: |
         uv sync --all-extras --dev
     
-    - name: Check for security vulnerabilities
+    - name: Check for security vulnerabilities (Python dependencies)
       run: |
         uv add --dev safety
         uv run safety check
       continue-on-error: true  # Don't fail CI, just warn
+    
+    - name: Scan Dockerfile for vulnerabilities
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'config'
+        scan-ref: 'docker/Dockerfile'
+        format: 'sarif'
+        output: 'trivy-dockerfile.sarif'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '1'  # Fail on critical/high vulnerabilities
+    
+    - name: Upload Dockerfile scan results
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-dockerfile.sarif'
 
   # Verify the package can be built (useful even if you release manually)
   build:

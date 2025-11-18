@@ -69,6 +69,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # Required for uploading Trivy SARIF results
     
     steps:
     - name: Check out code
@@ -126,7 +127,36 @@ jobs:
           type=semver,pattern={{major}},value=v${{ steps.version.outputs.docker_version }},enable=${{ steps.version.outputs.is_latest }}
           type=raw,value=latest,enable=${{ steps.version.outputs.is_latest }}
     
-    - name: Build and push
+    - name: Build Docker image for scanning (amd64 only)
+      uses: docker/build-push-action@v6
+      id: build-scan
+      with:
+        context: .
+        file: docker/Dockerfile
+        build-args: |
+          MXCP_VERSION=${{ steps.version.outputs.version }}
+        platforms: linux/amd64
+        push: false
+        tags: ghcr.io/raw-labs/mxcp:scan-test
+        outputs: type=docker,dest=/tmp/mxcp-image.tar
+    
+    - name: Scan Docker image for vulnerabilities
+      uses: aquasecurity/trivy-action@master
+      with:
+        input: /tmp/mxcp-image.tar
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '1'  # Fail build on critical/high vulnerabilities
+        scanners: 'vuln,secret'
+    
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+    
+    - name: Build and push Docker image (multi-arch)
       uses: docker/build-push-action@v6
       with:
         context: .
