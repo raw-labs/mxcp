@@ -121,10 +121,17 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 ## Security
 
-- Runs as non-root user (`mxcp`, UID 1000)
-- Admin socket with owner-only permissions (0600)
-- Writable directories limited to data, audit, drift
-- No secrets in image (use environment variables or mounted configs)
+### Image Security
+
+- **Vulnerability Scanning**: All images are automatically scanned with [Trivy](https://github.com/aquasecurity/trivy) before release
+  - Scans OS packages, Python dependencies, and Dockerfile configuration
+  - Builds fail on CRITICAL or HIGH severity vulnerabilities
+  - Results are uploaded to GitHub Security tab
+- **Non-root execution**: Runs as non-root user (`mxcp`, UID 1000)
+- **Minimal base image**: Uses `python:3.11-slim` for smaller attack surface
+- **Admin socket**: Owner-only permissions (0600)
+- **Limited writable directories**: Only data, audit, drift directories are writable
+- **No secrets in image**: Use environment variables or mounted configs
 
 ## Available Tags
 
