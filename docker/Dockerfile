@@ -20,7 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Create non-root user (UID/GID 1000 for compatibility)
 RUN groupadd -r mxcp -g 1000 && \
-    useradd -r -u 1000 -g mxcp mxcp
+    useradd -r -u 1000 -g mxcp -m -d /home/mxcp mxcp
+
+# Set HOME environment variable
+ENV HOME=/home/mxcp
 
 # Set working directory
 WORKDIR /mxcp-site
