@@ -28,6 +28,13 @@ ENV HOME=/home/mxcp
 # Set working directory
 WORKDIR /mxcp-site
 
+# Create runtime directories and set ownership before switching users
+RUN mkdir -p /run/mxcp && \
+    chown -R mxcp:mxcp /mxcp-site /run/mxcp
+
+# Switch to non-root user for package installation
+USER 1000:1000
+
 # Create venv and install MXCP with ALL optional dependencies (minus dev)
 ARG MXCP_VERSION
 RUN python -m venv /mxcp-site/.venv && \
@@ -41,13 +48,6 @@ ENV PATH="/mxcp-site/.venv/bin:$PATH"
 
 # Copy minimal MXCP site structure
 COPY --chown=mxcp:mxcp docker/hello-site/ /mxcp-site/
-
-# Create runtime directories and set ownership
-RUN mkdir -p /run/mxcp /mxcp-site/data /mxcp-site/audit /mxcp-site/drift && \
-    chown -R mxcp:mxcp /mxcp-site /run/mxcp
-
-# Switch to non-root user
-USER 1000:1000
 
 # Expose default port
 EXPOSE 8000
