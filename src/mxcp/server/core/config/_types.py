@@ -105,6 +105,7 @@ class UserHttpTransportConfig(TypedDict, total=False):
     base_url: str | None
     trust_proxy: bool | None
     stateless: bool | None
+    expected_bearer_token: str | None
 
 
 class UserTransportConfig(TypedDict, total=False):
