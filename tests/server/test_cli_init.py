@@ -275,18 +275,12 @@ def test_user_config_generation_uses_integer_version():
     user_config = _generate_default_config(site_config)
 
     # Verify the generated user config has integer version
-    assert (
-        user_config["mxcp"] == 1
-    ), f"User config should have integer version 1, got {user_config['mxcp']} ({type(user_config['mxcp'])})"
-    assert isinstance(
-        user_config["mxcp"], int
-    ), f"User config version should be int, got {type(user_config['mxcp'])}"
+    assert user_config.mxcp == 1
+    assert isinstance(user_config.mxcp, int)
 
     # Verify structure is correct
-    assert "projects" in user_config
-    assert "test-new-project" in user_config["projects"]
-    assert "profiles" in user_config["projects"]["test-new-project"]
-    assert "default" in user_config["projects"]["test-new-project"]["profiles"]
+    assert "test-new-project" in user_config.projects
+    assert "default" in user_config.projects["test-new-project"].profiles
 
 
 def test_init_custom_project_name(tmp_path):
@@ -510,8 +504,8 @@ def test_user_config_generation_uses_integer_version():
     config = _generate_default_config(site_config)
 
     # Version should be integer 1, not string "1.0.0"
-    assert config["mxcp"] == 1, f"Expected integer 1, got {repr(config['mxcp'])}"
-    assert isinstance(config["mxcp"], int), f"Expected int type, got {type(config['mxcp'])}"
+    assert config.mxcp == 1
+    assert isinstance(config.mxcp, int)
 
 
 def test_migration_exception_handling():

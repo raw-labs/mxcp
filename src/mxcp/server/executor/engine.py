@@ -51,8 +51,7 @@ from pathlib import Path
 from mxcp.sdk.duckdb import DuckDBRuntime
 from mxcp.sdk.executor import ExecutionEngine
 from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
-from mxcp.server.core.config._types import UserConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.parsers import (
     create_duckdb_session_config,
     execution_context_for_init_hooks,
@@ -93,7 +92,7 @@ class RuntimeEnvironment:
 
 
 def create_runtime_environment(
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     site_config: SiteConfigModel,
     profile: str | None = None,
     repo_root: Path | None = None,

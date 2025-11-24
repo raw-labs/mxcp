@@ -7,8 +7,7 @@ from typing import cast
 import duckdb
 
 from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
-from mxcp.server.core.config._types import UserConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.executor.engine import create_runtime_environment
@@ -47,7 +46,7 @@ def get_duckdb_tables(conn: duckdb.DuckDBPyConnection) -> list[Table]:
 
 async def generate_snapshot(
     site_config: SiteConfigModel,
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     profile: str | None = None,
     force: bool = False,
     dry_run: bool = False,

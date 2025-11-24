@@ -2,18 +2,16 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import click
 import yaml
 
-from mxcp.server.core.config._types import (
-    UserConfig,
-    UserProfileConfig,
-    UserProjectConfig,
-    UserSecretDefinition,
+from mxcp.server.core.config.models import (
+    SiteConfigModel,
+    UserConfigModel,
+    UserProfileConfigModel,
 )
-from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 
 
@@ -306,7 +304,7 @@ def _merge_dbt_project(existing: dict[str, Any], new: dict[str, Any]) -> dict[st
 
 def configure_dbt(
     site_config: SiteConfigModel,
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     profile: str | None = None,
     dry_run: bool = False,
     force: bool = False,
@@ -359,27 +357,29 @@ def configure_dbt(
         duckdb_path = str(repo_root / duckdb_path)
 
     # 5. Get secrets from user config
-    projects = user_config.get("projects", {})
-    project_config: UserProjectConfig | None = projects.get(project) if projects else None
+    project_config = user_config.projects.get(project)
     if not project_config:
         click.echo(
             f"Warning: Project '{project}' not found in user config, assuming empty configuration",
             err=True,
         )
-        project_config = None
-
-    profiles = project_config.get("profiles", {}) if project_config else {}
-    user_profile_config: UserProfileConfig | None = profiles.get(profile_name) if profiles else None
+        user_profile_config: UserProfileConfigModel | None = None
+    else:
+        user_profile_config = project_config.profiles.get(profile_name)
 
     if not user_profile_config:
         click.echo(
             f"Warning: Profile '{profile_name}' not found in project '{project}', assuming empty configuration",
             err=True,
         )
-        user_profile_config = {}
+        secrets_models = []
+    else:
+        secrets_models = user_profile_config.secrets
 
-    secrets: list[UserSecretDefinition] | None = (
-        user_profile_config.get("secrets") if user_profile_config else None
+    secrets_dict: list[dict[str, Any]] | None = (
+        [secret.parameters for secret in secrets_models if secret.parameters]
+        if secrets_models
+        else None
     )
 
     # 6. Load existing profiles and project config
@@ -388,9 +388,6 @@ def configure_dbt(
 
     # 7. Build new profile block
     # Cast secrets to Dict[str, Any] for _build_profile_block
-    secrets_dict: list[dict[str, Any]] | None = (
-        cast(list[dict[str, Any]] | None, secrets) if secrets else None
-    )
     new_profile_block = _build_profile_block(
         project=project,
         profile=profile_name,

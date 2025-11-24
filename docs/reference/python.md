@@ -83,11 +83,14 @@ extensions = config.get_setting("extensions", default=[])
 ```
 
 ### `config.user_config`
-Access full user configuration dictionary.
+Access the full `UserConfigModel` instance. Use attributes or `model_dump()` to inspect nested data.
 
 ```python
 user_cfg = config.user_config
-projects = user_cfg["projects"] if user_cfg else {}
+if user_cfg:
+    active_project = user_cfg.projects[user_cfg_site]
+    active_profile = active_project.profiles[user_cfg.profile]
+    secret_names = [secret.name for secret in active_profile.secrets]
 ```
 
 ### `config.site_config`

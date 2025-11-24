@@ -19,8 +19,7 @@ from mxcp.sdk.policy import (
     PolicyEnforcer,
     PolicySet,
 )
-from mxcp.server.core.config._types import UserConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import PromptDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
@@ -115,7 +114,7 @@ async def execute_endpoint(
     endpoint_type: str,
     name: str,
     params: dict[str, Any],
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     site_config: SiteConfigModel,
     profile_name: str,
     readonly: bool = False,
@@ -173,7 +172,7 @@ async def execute_endpoint_with_engine_and_policy(
     name: str,
     params: dict[str, Any],
     request_headers: dict[str, str] | None,
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     site_config: SiteConfigModel,
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
@@ -327,7 +326,7 @@ async def execute_endpoint_with_engine(
     endpoint_type: str,
     name: str,
     params: dict[str, Any],
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     site_config: SiteConfigModel,
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,

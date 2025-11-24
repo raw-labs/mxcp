@@ -20,7 +20,7 @@ from collections.abc import Callable
 from typing import Any, cast
 
 from mxcp.sdk.executor.context import get_execution_context
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 
 logger = logging.getLogger(__name__)
 
@@ -77,17 +77,22 @@ class ConfigProxy:
         if not project or not profile:
             return None
 
+        if isinstance(user_config, UserConfigModel):
+            project_config = user_config.projects.get(project)
+            profile_config = project_config.profiles.get(profile) if project_config else None
+            secrets = profile_config.secrets if profile_config else []
+            for secret in secrets:
+                if secret.name == name:
+                    return secret.parameters
+            return None
+
         try:
-            # Navigate to the secrets in user config: projects -> project -> profiles -> profile -> secrets
             project_config = user_config["projects"][project]
             profile_config = project_config["profiles"][profile]
             secrets = profile_config.get("secrets", [])
-
-            # Find secret by name and return its parameters
             for secret in secrets:
                 if secret.get("name") == name:
                     return cast(dict[str, Any], secret.get("parameters", {}))
-
             return None
         except (KeyError, TypeError):
             return None
@@ -124,13 +129,18 @@ class ConfigProxy:
             return raw_config.get(key, default)
 
     @property
-    def user_config(self) -> dict[str, Any] | None:
+    def user_config(self) -> UserConfigModel | None:
         """Access full user configuration."""
         context = get_execution_context()
         if not context:
             return None
 
-        return cast(dict[str, Any] | None, context.get("user_config"))
+        user_config = context.get("user_config")
+        if isinstance(user_config, UserConfigModel):
+            return user_config
+        if user_config is None:
+            return None
+        return UserConfigModel.model_validate(user_config)
 
     @property
     def site_config(self) -> Any | None:

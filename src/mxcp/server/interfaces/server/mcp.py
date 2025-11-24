@@ -25,16 +25,9 @@ from pydantic import AnyHttpUrl, Field, create_model
 from starlette.responses import JSONResponse
 
 from mxcp.sdk.audit import AuditLogger
-from mxcp.sdk.auth import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
-from mxcp.sdk.auth._types import HttpTransportConfig
+from mxcp.sdk.auth import GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth.context import get_user_context
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
-from mxcp.sdk.auth.providers.atlassian import AtlassianOAuthHandler
-from mxcp.sdk.auth.providers.github import GitHubOAuthHandler
-from mxcp.sdk.auth.providers.google import GoogleOAuthHandler
-from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
-from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
-from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.core import PACKAGE_VERSION
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.telemetry import (
@@ -45,12 +38,12 @@ from mxcp.sdk.telemetry import (
     traced_operation,
 )
 from mxcp.server.admin import AdminAPIRunner
-from mxcp.server.core.config._types import (
-    UserAuthConfig,
-    UserConfig,
-    UserHttpTransportConfig,
+from mxcp.server.core.auth.helpers import (
+    create_oauth_handler,
+    create_url_builder,
+    translate_auth_config,
 )
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import get_active_profile, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.core.refs.external import ExternalRefTracker
@@ -130,123 +123,14 @@ def with_draining_and_request_tracking(func: T) -> T:
     return cast(T, wrapper)
 
 
-def translate_transport_config(
-    user_transport_config: UserHttpTransportConfig | None,
-) -> HttpTransportConfig | None:
-    """Translate user HTTP transport config to SDK transport config.
-
-    Args:
-        user_transport_config: User configuration transport section
-
-    Returns:
-        SDK-compatible HTTP transport configuration
-    """
-    if not user_transport_config:
-        return None
-
-    return {
-        "port": user_transport_config.get("port"),
-        "host": user_transport_config.get("host"),
-        "scheme": user_transport_config.get("scheme"),
-        "base_url": user_transport_config.get("base_url"),
-        "trust_proxy": user_transport_config.get("trust_proxy"),
-        "stateless": user_transport_config.get("stateless"),
-    }
-
-
-def create_oauth_handler(
-    user_auth_config: UserAuthConfig,
-    host: str = "localhost",
-    port: int = 8000,
-    user_config: UserConfig | None = None,
-) -> ExternalOAuthHandler | None:
-    """Create an OAuth handler from user configuration.
-
-    This helper translates user config to SDK types and instantiates the appropriate handler.
-
-    Args:
-        user_auth_config: User authentication configuration
-        host: The server host to use for callback URLs
-        port: The server port to use for callback URLs
-        user_config: Full user configuration for transport settings (optional)
-
-    Returns:
-        OAuth handler instance or None if provider is 'none'
-    """
-    provider = user_auth_config.get("provider", "none")
-
-    if provider == "none":
-        return None
-
-    # Extract transport config if available
-    transport_config = None
-    if user_config and "transport" in user_config:
-        transport = user_config["transport"]
-        user_transport = transport.get("http") if transport else None
-        transport_config = translate_transport_config(user_transport)
-
-    if provider == "github":
-
-        github_config = user_auth_config.get("github")
-        if not github_config:
-            raise ValueError("GitHub provider selected but no GitHub configuration found")
-        return GitHubOAuthHandler(github_config, transport_config, host=host, port=port)
-
-    elif provider == "atlassian":
-
-        atlassian_config = user_auth_config.get("atlassian")
-        if not atlassian_config:
-            raise ValueError("Atlassian provider selected but no Atlassian configuration found")
-        return AtlassianOAuthHandler(atlassian_config, transport_config, host=host, port=port)
-
-    elif provider == "salesforce":
-
-        salesforce_config = user_auth_config.get("salesforce")
-        if not salesforce_config:
-            raise ValueError("Salesforce provider selected but no Salesforce configuration found")
-        return SalesforceOAuthHandler(salesforce_config, transport_config, host=host, port=port)
-
-    elif provider == "keycloak":
-
-        keycloak_config = user_auth_config.get("keycloak")
-        if not keycloak_config:
-            raise ValueError("Keycloak provider selected but no Keycloak configuration found")
-        return KeycloakOAuthHandler(keycloak_config, transport_config, host=host, port=port)
-
-    elif provider == "google":
-
-        google_config = user_auth_config.get("google")
-        if not google_config:
-            raise ValueError("Google provider selected but no Google configuration found")
-        return GoogleOAuthHandler(google_config, transport_config, host=host, port=port)
-
-    else:
-        raise ValueError(f"Unsupported auth provider: {provider}")
-
-
-def create_url_builder(user_config: UserConfig) -> URLBuilder:
-    """Create a URL builder from user configuration.
-
-    Args:
-        user_config: User configuration dictionary
-
-    Returns:
-        Configured URLBuilder instance
-    """
-    transport = user_config.get("transport", {})
-    user_transport_config = transport.get("http", {}) if transport else {}
-    transport_config = translate_transport_config(user_transport_config)
-    return URLBuilder(transport_config)
-
-
 class RAWMCP:
     """MXCP MCP Server implementation that bridges MXCP endpoints with MCP protocol."""
 
     # Type annotations for instance attributes
     site_config: SiteConfigModel
-    user_config: UserConfig
+    user_config: UserConfigModel
     _site_config_template: SiteConfigModel
-    _user_config_template: UserConfig
+    _user_config_template: UserConfigModel
     host: str
     port: int
     profile_name: str
@@ -389,7 +273,7 @@ class RAWMCP:
         config. This prevents errors from undefined environment variables in inactive profiles.
         """
         site_template_dict = self._site_config_template.model_dump(mode="python")
-        user_template_dict = cast(dict[str, Any], self._user_config_template)
+        user_template_dict = self._user_config_template.model_dump(mode="python")
 
         # Check if configs contain unresolved references
         config_str = json.dumps(site_template_dict) + json.dumps(user_template_dict)
@@ -418,7 +302,7 @@ class RAWMCP:
             self.site_config = SiteConfigModel.model_validate(
                 resolved_site, context={"repo_root": self.site_config_path}
             )
-            self.user_config = cast(UserConfig, resolved_user)
+            self.user_config = UserConfigModel.model_validate(resolved_user)
         else:
             # Already resolved
             self.site_config = self._site_config_template
@@ -432,27 +316,18 @@ class RAWMCP:
         )
 
         # Extract transport config with overrides
-        transport_config = self.user_config.get("transport") or {}
+        transport_model = self.user_config.transport
+        http_config = transport_model.http
+
         self.transport = str(
-            self._cli_overrides["transport"]
-            or (transport_config.get("provider") if transport_config else "streamable-http")
-            or "streamable-http"
+            self._cli_overrides["transport"] or transport_model.provider or "streamable-http"
         )
 
-        http_config = transport_config.get("http") if transport_config else {}
-        self.host = str(
-            self._cli_overrides["host"]
-            or (http_config.get("host") if http_config else "localhost")
-            or "localhost"
-        )
-        port_value = (
-            self._cli_overrides["port"]
-            or (http_config.get("port") if http_config else 8000)
-            or 8000
-        )
+        self.host = str(self._cli_overrides["host"] or http_config.host or "localhost")
+        port_value = self._cli_overrides["port"] or http_config.port or 8000
         self.port = int(port_value)
 
-        config_stateless = http_config.get("stateless", False) if http_config else False
+        config_stateless = http_config.stateless or False
         self.stateless_http = (
             self._cli_overrides["stateless_http"]
             if self._cli_overrides["stateless_http"] is not None
@@ -524,7 +399,7 @@ class RAWMCP:
 
     def _initialize_oauth(self) -> None:
         """Initialize OAuth authentication using profile-specific auth config."""
-        auth_config = self.active_profile.get("auth", {})
+        auth_config = self.active_profile.auth
         self.oauth_handler = create_oauth_handler(
             auth_config,
             host=self.host,
@@ -535,8 +410,10 @@ class RAWMCP:
         self.auth_settings = None
 
         if self.oauth_handler:
+            auth_config_dict = translate_auth_config(auth_config)
+            user_config_dict = self.user_config.model_dump(mode="python")
             self.oauth_server = GeneralOAuthAuthorizationServer(
-                self.oauth_handler, auth_config, cast(dict[str, Any], self.user_config)
+                self.oauth_handler, auth_config_dict, user_config_dict
             )
 
             # Use URL builder for OAuth endpoints
@@ -544,8 +421,8 @@ class RAWMCP:
             base_url = url_builder.get_base_url(host=self.host, port=self.port)
 
             # Get authorization configuration
-            auth_authorization = auth_config.get("authorization", {})
-            required_scopes = auth_authorization.get("required_scopes", [])
+            auth_authorization = auth_config.authorization
+            required_scopes = auth_authorization.required_scopes if auth_authorization else []
 
             logger.info(
                 f"Authorization configured - required scopes: {required_scopes or 'none (authentication only)'}"
@@ -561,9 +438,7 @@ class RAWMCP:
                 ),
                 required_scopes=required_scopes if required_scopes else None,
             )
-            logger.info(
-                f"OAuth authentication enabled with provider: {auth_config.get('provider')}"
-            )
+            logger.info(f"OAuth authentication enabled with provider: {auth_config.provider}")
         else:
             logger.info("OAuth authentication disabled")
 
@@ -773,7 +648,7 @@ class RAWMCP:
             # Set templates in tracker
             self.ref_tracker.set_template(
                 site_template.model_dump(mode="python"),
-                cast(dict[str, Any], user_template),
+                user_template.model_dump(mode="python"),
             )
             self._config_templates_loaded = True
             logger.info("Raw configuration templates loaded.")
@@ -791,7 +666,7 @@ class RAWMCP:
             # Update templates in tracker
             self.ref_tracker.set_template(
                 new_site_template.model_dump(mode="python"),
-                cast(dict[str, Any], new_user_template),
+                new_user_template.model_dump(mode="python"),
             )
 
             # Resolve and update configs
@@ -799,7 +674,7 @@ class RAWMCP:
             self.site_config = SiteConfigModel.model_validate(
                 new_site_config, context={"repo_root": self.site_config_path}
             )
-            self.user_config = cast(UserConfig, new_user_config)
+            self.user_config = UserConfigModel.model_validate(new_user_config)
 
             logger.info("Configuration files reloaded")
 
@@ -2091,9 +1966,9 @@ class RAWMCP:
             base_url = url_builder.get_base_url(request)
 
             # Get supported scopes from configuration
-            auth_config = self.active_profile.get("auth", {})
-            auth_authorization = auth_config.get("authorization", {})
-            supported_scopes = auth_authorization.get("required_scopes", [])
+            auth_config = self.active_profile.auth
+            auth_authorization = auth_config.authorization
+            supported_scopes = auth_authorization.required_scopes if auth_authorization else []
 
             metadata = {
                 "resource": base_url,

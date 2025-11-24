@@ -6,7 +6,7 @@ using the SDK telemetry module for the actual implementation.
 
 import logging
 import os
-from typing import Any, cast
+from typing import Any
 
 from mxcp.sdk.core import PACKAGE_NAME, PACKAGE_VERSION
 from mxcp.sdk.telemetry import (
@@ -15,13 +15,16 @@ from mxcp.sdk.telemetry import (
     get_current_trace_id,
     shutdown_telemetry,
 )
-from mxcp.server.core.config._types import UserConfig, UserTelemetryConfig
+from mxcp.server.core.config.models import (
+    UserConfigModel,
+    UserTelemetryConfigModel,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def configure_telemetry_from_config(
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     project: str,
     profile: str,
 ) -> bool:
@@ -47,30 +50,25 @@ def configure_telemetry_from_config(
         configure_all(enabled=False)
         return False
 
-    # Create unified SDK telemetry config from user config
-    # Build a proper dict from the TypedDict
+    data = telemetry_config.model_dump(mode="python", exclude_none=True)
     config_dict: dict[str, Any] = {
-        "enabled": telemetry_config.get("enabled", False),
-        "endpoint": telemetry_config.get("endpoint"),
-        "headers": telemetry_config.get("headers"),
-        "service_name": telemetry_config.get("service_name", PACKAGE_NAME),
-        "service_version": telemetry_config.get("service_version", PACKAGE_VERSION),
-        "environment": telemetry_config.get("environment", profile),
+        "enabled": data.get("enabled", False),
+        "endpoint": data.get("endpoint"),
+        "headers": data.get("headers"),
+        "service_name": data.get("service_name", PACKAGE_NAME),
+        "service_version": data.get("service_version", PACKAGE_VERSION),
+        "environment": data.get("environment", profile),
         "resource_attributes": {
             "mxcp.project": project,
             "mxcp.profile": profile,
+            **(data.get("resource_attributes") or {}),
         },
     }
 
-    # Add any additional resource attributes from config
-    if telemetry_config.get("resource_attributes"):
-        config_dict["resource_attributes"].update(telemetry_config["resource_attributes"])
-
-    # Handle signal-specific configs
-    if "tracing" in telemetry_config:
-        config_dict["tracing"] = telemetry_config["tracing"]
-    if "metrics" in telemetry_config:
-        config_dict["metrics"] = telemetry_config["metrics"]
+    if tracing := data.get("tracing"):
+        config_dict["tracing"] = tracing
+    if metrics := data.get("metrics"):
+        config_dict["metrics"] = metrics
 
     # Create config object
     config = TelemetryConfig.from_dict(config_dict)
@@ -206,8 +204,8 @@ def _get_telemetry_from_env() -> dict[str, Any] | None:
 
 
 def _merge_telemetry_configs(
-    file_config: UserTelemetryConfig | None, env_config: dict[str, Any] | None
-) -> UserTelemetryConfig | None:
+    file_config: UserTelemetryConfigModel | None, env_config: dict[str, Any] | None
+) -> UserTelemetryConfigModel | None:
     """Merge telemetry configuration from file and environment.
 
     Environment variables take precedence over file configuration.
@@ -222,8 +220,9 @@ def _merge_telemetry_configs(
     if not file_config and not env_config:
         return None
 
-    # Start with file config or empty dict
-    merged: dict[str, Any] = dict(file_config) if file_config else {}
+    merged: dict[str, Any] = (
+        file_config.model_dump(mode="python", exclude_none=True) if file_config else {}
+    )
 
     # Apply env overrides
     if env_config:
@@ -237,12 +236,15 @@ def _merge_telemetry_configs(
                 # Override top-level keys
                 merged[key] = value
 
-    return cast(UserTelemetryConfig, merged)
+    if not merged:
+        return None
+
+    return UserTelemetryConfigModel.model_validate(merged)
 
 
 def _get_telemetry_config(
-    user_config: UserConfig, project: str, profile: str
-) -> UserTelemetryConfig | None:
+    user_config: UserConfigModel, project: str, profile: str
+) -> UserTelemetryConfigModel | None:
     """Get telemetry configuration for a specific profile.
 
     Merges configuration from user config file and environment variables,
@@ -257,10 +259,9 @@ def _get_telemetry_config(
         Telemetry configuration dict or None if not found
     """
     # Get config from file
-    try:
-        file_config = user_config["projects"][project]["profiles"][profile].get("telemetry")
-    except KeyError:
-        file_config = None
+    project_config = user_config.projects.get(project)
+    profile_config = project_config.profiles.get(profile) if project_config else None
+    file_config = profile_config.telemetry if profile_config else None
 
     # Get config from environment
     env_config = _get_telemetry_from_env()

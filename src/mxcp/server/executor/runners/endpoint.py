@@ -18,8 +18,7 @@ from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
 from mxcp.sdk.validator import TypeValidator
-from mxcp.server.core.config._types import UserConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.definitions.endpoints._types import (
     EndpointDefinition,
     PromptDefinition,
@@ -82,7 +81,7 @@ async def execute_code_with_engine(
     params: dict[str, Any],
     execution_engine: ExecutionEngine,
     skip_output_validation: bool,
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     site_config: SiteConfigModel,
     user_context: UserContext | None = None,
     server_ref: Optional["RAWMCP"] = None,

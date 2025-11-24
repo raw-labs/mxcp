@@ -43,7 +43,7 @@ def test_env_var_interpolation(tmp_path):
     site_config = make_site_config("test_project", "dev")
 
     # Load and verify config
-    config = load_user_config(site_config)
+    config = load_user_config(site_config).model_dump(mode="python")
     assert (
         config["projects"]["test_project"]["profiles"]["dev"]["secrets"][0]["parameters"]["simple"]
         == "simple_value"
@@ -126,7 +126,7 @@ def test_env_var_in_nested_structures(tmp_path):
     site_config = make_site_config("test_project", "dev")
 
     # Load and verify config
-    config = load_user_config(site_config)
+    config = load_user_config(site_config).model_dump(mode="python")
     params = config["projects"]["test_project"]["profiles"]["dev"]["secrets"][0]["parameters"]
     assert params["nested"]["key1"] == "nested_value1"
     assert params["nested"]["key2"] == "nested_value2"
@@ -178,7 +178,7 @@ def test_file_url_interpolation(tmp_path):
     site_config = make_site_config("test_project", "dev")
 
     # Load and verify config
-    config = load_user_config(site_config)
+    config = load_user_config(site_config).model_dump(mode="python")
     api_params = config["projects"]["test_project"]["profiles"]["dev"]["secrets"][0]["parameters"]
     db_params = config["projects"]["test_project"]["profiles"]["dev"]["secrets"][1]["parameters"]
 
@@ -224,7 +224,7 @@ def test_file_url_relative_path(tmp_path):
         site_config = make_site_config("test_project", "dev")
 
         # Load and verify config
-        config = load_user_config(site_config)
+        config = load_user_config(site_config).model_dump(mode="python")
         params = config["projects"]["test_project"]["profiles"]["dev"]["secrets"][0]["parameters"]
         assert params["value"] == "relative-secret-value"
 
@@ -331,7 +331,7 @@ def test_mixed_interpolation_with_files(tmp_path):
     site_config = make_site_config("test", "default")
 
     # Load and verify
-    config = load_user_config(site_config)
+    config = load_user_config(site_config).model_dump(mode="python")
     params = config["projects"]["test"]["profiles"]["default"]["secrets"][0]["parameters"]
 
     assert params["env_var"] == "from_env"
@@ -378,7 +378,7 @@ def test_load_without_resolving_refs(tmp_path):
     site_config = make_site_config("test", "default")
 
     # Load without resolving references
-    config = load_user_config(site_config, resolve_refs=False)
+    config = load_user_config(site_config, resolve_refs=False).model_dump(mode="python")
     secret_params = config["projects"]["test"]["profiles"]["default"]["secrets"][0]["parameters"]
     plugin_config = config["projects"]["test"]["profiles"]["default"]["plugin"]["config"][
         "test_plugin"

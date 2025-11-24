@@ -2,8 +2,7 @@ import logging
 from typing import Any
 
 from mxcp.sdk.auth import UserContext
-from mxcp.server.core.config._types import UserConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.executor.engine import create_runtime_environment
@@ -15,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 async def run_all_tests(
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     site_config: SiteConfigModel,
     profile: str | None,
     readonly: bool | None = None,
@@ -138,7 +137,7 @@ async def run_all_tests(
 async def run_tests(
     endpoint_type: str,
     name: str,
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     site_config: SiteConfigModel,
     profile: str | None,
     readonly: bool | None = None,

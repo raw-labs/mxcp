@@ -137,8 +137,14 @@ def test_config_properties() -> dict:
     # Verify we can access nested values
     try:
         # From user config
-        project_name = list(user_cfg["projects"].keys())[0]
-        secrets_count = len(user_cfg["projects"]["runtime_test"]["profiles"]["default"]["secrets"])
+        if hasattr(user_cfg, "model_dump"):
+            user_cfg_dict = user_cfg.model_dump(mode="python")
+        else:
+            user_cfg_dict = user_cfg
+        project_name = list(user_cfg_dict["projects"].keys())[0]
+        secrets_count = len(
+            user_cfg_dict["projects"]["runtime_test"]["profiles"]["default"]["secrets"]
+        )
 
         # From site config
         if hasattr(site_cfg, "model_dump"):

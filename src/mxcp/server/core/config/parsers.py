@@ -9,7 +9,7 @@ import logging
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from mxcp.sdk.duckdb import (
     DatabaseConfig,
@@ -23,15 +23,14 @@ from mxcp.sdk.executor import (
     reset_execution_context,
     set_execution_context,
 )
-from mxcp.server.core.config._types import UserConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 
 logger = logging.getLogger(__name__)
 
 
 def create_duckdb_session_config(
     site_config: SiteConfigModel,
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     profile_name: str,
     readonly: bool = False,
 ) -> tuple[DatabaseConfig, list[PluginDefinition], PluginConfig, list[SecretDefinition]]:
@@ -72,12 +71,9 @@ def create_duckdb_session_config(
     ]
 
     # Get plugin configuration from user config
-    user_projects = user_config.get("projects") or {}
-    user_project = cast(dict[str, Any], user_projects.get(project_name) or {})
-    user_profiles = user_project.get("profiles") or {}
-    user_profile = user_profiles.get(profile_name) or {}
-    user_plugin_section = user_profile.get("plugin") or {}
-    user_plugin_configs = user_plugin_section.get("config") or {}
+    user_project = user_config.projects.get(project_name)
+    user_profile = user_project.profiles.get(profile_name) if user_project else None
+    user_plugin_configs = user_profile.plugin.config if user_profile else {}
 
     # Get plugins path from site config
     plugins_path = site_config.paths.plugins
@@ -86,14 +82,15 @@ def create_duckdb_session_config(
 
     # Get secrets from user config profile
     secrets = []
-    user_secrets = user_profile.get("secrets") or []
+    user_secrets = user_profile.secrets if user_profile else []
     for secret in user_secrets:
-        secret_name = secret.get("name")
-        secret_type = secret.get("type")
-        secret_params = secret.get("parameters")
-        if secret_name and secret_type and secret_params:
+        if secret.parameters:
             secrets.append(
-                SecretDefinition(name=secret_name, type=secret_type, parameters=secret_params)
+                SecretDefinition(
+                    name=secret.name,
+                    type=secret.type,
+                    parameters=secret.parameters,
+                )
             )
 
     return database_config, plugins, plugin_config, secrets
@@ -101,7 +98,7 @@ def create_duckdb_session_config(
 
 @contextmanager
 def execution_context_for_init_hooks(
-    user_config: UserConfig | None = None,
+    user_config: UserConfigModel | None = None,
     site_config: SiteConfigModel | None = None,
     duckdb_runtime: Any | None = None,
 ) -> Generator[ExecutionContext | None, None, None]:
@@ -113,8 +110,8 @@ def execution_context_for_init_hooks(
     cleans it up when done.
 
     Args:
-        user_config: UserConfig object containing user configuration for runtime context
-        site_config: SiteConfig object containing site configuration for runtime context
+        user_config: UserConfigModel instance containing runtime configuration
+        site_config: SiteConfigModel instance containing site configuration
         duckdb_runtime: DuckDB runtime instance for database access
 
     Yields:

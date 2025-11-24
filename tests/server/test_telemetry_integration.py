@@ -9,8 +9,7 @@ import pytest
 
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.telemetry import is_telemetry_enabled, shutdown_telemetry
-from mxcp.server.core.config._types import UserConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.telemetry import configure_telemetry_from_config
 from mxcp.server.executor.engine import create_runtime_environment
 
@@ -44,22 +43,25 @@ def reset_telemetry():
 def test_telemetry_with_execution_engine(tmp_path):
     """Test that telemetry properly traces execution engine operations."""
     # Configure telemetry
-    user_config: UserConfig = {
-        "mxcp": "1",
-        "projects": {
-            "test": {
-                "profiles": {
-                    "dev": {
-                        "telemetry": {
-                            "enabled": True,
-                            "console_export": True,
-                            "service_name": "test-service",
+    user_config = UserConfigModel.model_validate(
+        {
+            "mxcp": 1,
+            "projects": {
+                "test": {
+                    "profiles": {
+                        "dev": {
+                            "telemetry": {
+                                "enabled": True,
+                                "endpoint": "http://localhost:4318",
+                                "service_name": "test-service",
+                                "tracing": {"enabled": True, "console_export": True},
+                            }
                         }
                     }
                 }
-            }
-        },
-    }
+            },
+        }
+    )
 
     configure_telemetry_from_config(user_config, "test", "dev")
     assert is_telemetry_enabled()
@@ -134,21 +136,24 @@ def test_telemetry_with_execution_engine(tmp_path):
 def test_nested_telemetry_spans(tmp_path):
     """Test that nested operations create proper parent-child span relationships."""
     # Configure telemetry
-    user_config: UserConfig = {
-        "mxcp": "1",
-        "projects": {
-            "test": {
-                "profiles": {
-                    "dev": {
-                        "telemetry": {
-                            "enabled": True,
-                            "console_export": True,
+    user_config = UserConfigModel.model_validate(
+        {
+            "mxcp": 1,
+            "projects": {
+                "test": {
+                    "profiles": {
+                        "dev": {
+                            "telemetry": {
+                                "enabled": True,
+                                "endpoint": "http://localhost:4318",
+                                "tracing": {"enabled": True, "console_export": True},
+                            }
                         }
                     }
                 }
-            }
-        },
-    }
+            },
+        }
+    )
 
     configure_telemetry_from_config(user_config, "test", "dev")
 

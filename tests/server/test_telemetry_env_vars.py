@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 
+from mxcp.server.core.config.models import UserTelemetryConfigModel
 from mxcp.server.core.telemetry import (
     _get_telemetry_from_env,
     _merge_telemetry_configs,
@@ -135,8 +136,12 @@ def test_merge_telemetry_configs_only_file():
         "endpoint": "http://localhost:4318",
         "service_name": "mxcp-file",
     }
-    result = _merge_telemetry_configs(file_config, None)
-    assert result == file_config
+    file_model = UserTelemetryConfigModel.model_validate(file_config)
+    result = _merge_telemetry_configs(file_model, None)
+    assert result is not None
+    assert result.model_dump(mode="python", exclude_none=True) == file_model.model_dump(
+        mode="python", exclude_none=True
+    )
 
 
 def test_merge_telemetry_configs_only_env():
@@ -147,7 +152,8 @@ def test_merge_telemetry_configs_only_env():
         "service_name": "mxcp-env",
     }
     result = _merge_telemetry_configs(None, env_config)
-    assert result == env_config
+    assert result is not None
+    assert result.model_dump(mode="python", exclude_none=True) == env_config
 
 
 def test_merge_telemetry_configs_env_overrides():
@@ -163,18 +169,20 @@ def test_merge_telemetry_configs_env_overrides():
         "endpoint": "http://env-endpoint:4318",
         "tracing": {"console_export": True},
     }
-    result = _merge_telemetry_configs(file_config, env_config)
+    file_model = UserTelemetryConfigModel.model_validate(file_config)
+    result = _merge_telemetry_configs(file_model, env_config)
 
     # Env should override top-level keys
-    assert result["enabled"] is True
-    assert result["endpoint"] == "http://env-endpoint:4318"
+    assert result.enabled is True
+    assert result.endpoint == "http://env-endpoint:4318"
 
     # File config value should remain if not overridden
-    assert result["service_name"] == "mxcp-file"
+    assert result.service_name == "mxcp-file"
 
     # Nested configs should merge
-    assert result["tracing"]["enabled"] is True  # from file
-    assert result["tracing"]["console_export"] is True  # from env
+    assert result.tracing is not None
+    assert result.tracing.enabled is True  # from file
+    assert result.tracing.console_export is True  # from env
 
 
 def test_merge_telemetry_configs_nested_merge():
@@ -188,13 +196,16 @@ def test_merge_telemetry_configs_nested_merge():
         "tracing": {"console_export": True},
         "metrics": {"export_interval": 30},
     }
-    result = _merge_telemetry_configs(file_config, env_config)
+    file_model = UserTelemetryConfigModel.model_validate(file_config)
+    result = _merge_telemetry_configs(file_model, env_config)
 
     # Top level should remain
-    assert result["enabled"] is True
+    assert result.enabled is True
 
     # Nested configs should merge
-    assert result["tracing"]["enabled"] is True  # from file
-    assert result["tracing"]["console_export"] is True  # from env (overrides)
-    assert result["metrics"]["enabled"] is True  # from file
-    assert result["metrics"]["export_interval"] == 30  # from env (overrides)
+    assert result.tracing is not None
+    assert result.tracing.enabled is True  # from file
+    assert result.tracing.console_export is True  # from env (overrides)
+    assert result.metrics is not None
+    assert result.metrics.enabled is True  # from file
+    assert result.metrics.export_interval == 30  # from env (overrides)

@@ -11,10 +11,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
-
-if TYPE_CHECKING:
-    from mxcp.server.core.config._types import UserConfig
+from typing import Any, cast
 
 from mxcp.server.core.config.schema_utils import should_interpolate_path
 
@@ -344,12 +341,12 @@ def interpolate_all(
 
 
 def interpolate_selective(
-    config: "UserConfig",
+    config: dict[str, Any],
     project_name: str,
     profile_name: str,
     vault_config: dict[str, Any] | None = None,
     op_config: dict[str, Any] | None = None,
-) -> "UserConfig":
+) -> dict[str, Any]:
     """Selectively interpolate external references only for active profile and top-level config.
 
     This avoids resolving environment variables for inactive profiles, preventing
@@ -389,7 +386,7 @@ def interpolate_selective(
 
     # Start recursion with root path
     result = _interpolate_recursive(config, ["user"])
-    return cast("UserConfig", result)
+    return cast(dict[str, Any], result)
 
 
 def find_references(

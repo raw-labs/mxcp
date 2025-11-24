@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
 
 import yaml
 from pydantic import ValidationError
 
-from mxcp.server.core.config._types import UserConfig, UserProfileConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import (
+    SiteConfigModel,
+    UserConfigModel,
+    UserProfileConfigModel,
+)
 from mxcp.server.core.refs.migration import check_and_migrate_legacy_version
 
 logger = logging.getLogger(__name__)
@@ -68,8 +70,8 @@ def load_site_config(repo_path: Path | None = None) -> SiteConfigModel:
 
 
 def get_active_profile(
-    user_config: UserConfig, site_config: SiteConfigModel, profile: str | None = None
-) -> UserProfileConfig:
+    user_config: UserConfigModel, site_config: SiteConfigModel, profile: str | None = None
+) -> UserProfileConfigModel:
     """Get the active profile from the user config based on site configuration.
 
     Args:
@@ -83,11 +85,12 @@ def get_active_profile(
     project_name = site_config.project
     profile_name = profile or site_config.profile
 
-    if project_name not in user_config["projects"]:
+    project = user_config.projects.get(project_name)
+    if not project:
         raise ValueError(f"Project '{project_name}' not found in user config")
 
-    project = user_config["projects"][project_name]
-    if profile_name not in project["profiles"]:
+    profile_config = project.profiles.get(profile_name)
+    if not profile_config:
         raise ValueError(f"Profile '{profile_name}' not found in project '{project_name}'")
 
-    return project["profiles"][profile_name]
+    return profile_config

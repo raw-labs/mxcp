@@ -94,13 +94,7 @@ def serve(
         user_config = load_user_config(site_config, active_profile=active_profile)
 
         # Determine effective transport (CLI flag > user config > default)
-        effective_transport = transport
-        if not effective_transport:
-            transport_config = user_config.get("transport")
-            if transport_config:
-                effective_transport = transport_config.get("provider", "streamable-http")
-            else:
-                effective_transport = "streamable-http"
+        effective_transport = transport or user_config.transport.provider or "streamable-http"
 
         # Configure logging ONCE with all settings
         configure_logging_from_config(

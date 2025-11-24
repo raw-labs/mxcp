@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.interfaces.server.mcp import RAWMCP
 from mxcp.server.core.reload import ReloadManager
 
@@ -60,7 +60,10 @@ class TestReloadFunctionality:
             "mxcp.server.interfaces.server.mcp.load_site_config",
             return_value=self._minimal_site_config(),
         ):
-            with patch("mxcp.server.interfaces.server.mcp.load_user_config", return_value={}):
+            with patch(
+                "mxcp.server.interfaces.server.mcp.load_user_config",
+                return_value=UserConfigModel.model_validate({}),
+            ):
                 # Simulate SIGHUP
                 server._handle_reload_signal(signal.SIGHUP, None)
 
@@ -143,7 +146,10 @@ class TestReloadFunctionality:
             "mxcp.server.interfaces.server.mcp.load_site_config",
             return_value=self._minimal_site_config(),
         ):
-            with patch("mxcp.server.interfaces.server.mcp.load_user_config", return_value={}):
+            with patch(
+                "mxcp.server.interfaces.server.mcp.load_user_config",
+                return_value=UserConfigModel.model_validate({}),
+            ):
                 server.reload_configuration()
 
                 # Verify reload was requested

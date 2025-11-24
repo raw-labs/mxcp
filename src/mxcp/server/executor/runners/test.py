@@ -14,8 +14,7 @@ import numpy as np
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionEngine
-from mxcp.server.core.config._types import UserConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.definitions.endpoints._types import EndpointDefinition, TestDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
@@ -28,7 +27,7 @@ class TestRunner:
 
     def __init__(
         self,
-        user_config: UserConfig,
+        user_config: UserConfigModel,
         site_config: SiteConfigModel,
         execution_engine: ExecutionEngine,
     ):

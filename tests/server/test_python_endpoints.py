@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from mxcp.runtime import _init_hooks, _shutdown_hooks
+from mxcp.server.core.config.models import UserConfigModel
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.executor.engine import create_runtime_environment
@@ -660,7 +661,8 @@ async def test_python_endpoint_with_non_duckdb_secret_type(
     user_config, site_config = test_configs
 
     # Add custom secrets to user config
-    user_config["projects"]["test-project"]["profiles"]["test"]["secrets"].extend(
+    user_config_data = user_config.model_dump(mode="python")
+    user_config_data["projects"]["test-project"]["profiles"]["test"]["secrets"].extend(
         [
             {
                 "name": "custom_api",
@@ -678,6 +680,7 @@ async def test_python_endpoint_with_non_duckdb_secret_type(
             },
         ]
     )
+    user_config = UserConfigModel.model_validate(user_config_data)
 
     # Update site config to reference our secrets
     site_config = site_config.model_copy(

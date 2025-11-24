@@ -10,8 +10,7 @@ from typing import Any
 
 import click
 
-from mxcp.server.core.config._types import UserConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 
 
 def get_env_flag(env_var: str, default: bool = False) -> bool:
@@ -235,7 +234,7 @@ def output_error(error: Exception, json_output: bool = False, debug: bool = Fals
 
 def configure_logging_from_config(
     site_config: SiteConfigModel,
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     debug: bool = False,
     transport: str | None = None,
 ) -> None:
@@ -254,20 +253,20 @@ def configure_logging_from_config(
                    If "stdio", stderr logging is disabled to avoid protocol corruption
     """
     # Get top-level logging config
-    logging_config = user_config.get("logging")
+    logging_config = user_config.logging
 
     # If logging config is not set or disabled, use basic logging
-    if not logging_config or not logging_config.get("enabled", True):
+    if not logging_config.enabled:
         # Logging disabled - only configure basic stderr (unless stdio)
         configure_logging(debug=debug, transport=transport)
         return
 
     # Get logging settings
-    log_path_str = logging_config.get("path")
+    log_path_str = logging_config.path
     log_file = Path(log_path_str) if log_path_str else None
-    log_level = logging_config.get("level", "WARNING")
-    max_bytes = logging_config.get("max_bytes") or 10 * 1024 * 1024
-    backup_count = logging_config.get("backup_count") or 5
+    log_level = logging_config.level
+    max_bytes = logging_config.max_bytes
+    backup_count = logging_config.backup_count
 
     # Configure logging with all settings
     configure_logging(

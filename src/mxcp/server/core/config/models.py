@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -229,3 +230,233 @@ class SiteConfigModel(BaseModel):
 
 # Ensure forward references are resolved for helper usages.
 SiteConfigModel.model_rebuild(_types_namespace={"Literal": Literal})
+
+
+class UserSecretDefinitionModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    type: str
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class UserPluginConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    config: dict[str, dict[str, str]] = Field(default_factory=dict)
+
+
+class UserVaultConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = False
+    address: str | None = None
+    token_env: str | None = None
+
+
+class UserOnePasswordConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = False
+    token_env: str | None = None
+
+
+class UserHttpTransportConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    port: int = 8000
+    host: str = "localhost"
+    scheme: Literal["http", "https"] = "http"
+    base_url: str | None = None
+    trust_proxy: bool = False
+    stateless: bool = False
+
+
+class UserTransportConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: Literal["streamable-http", "sse", "stdio"] = "streamable-http"
+    http: UserHttpTransportConfigModel = Field(default_factory=UserHttpTransportConfigModel)
+
+
+class UserOAuthClientModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    client_id: str
+    name: str
+    client_secret: str | None = None
+    redirect_uris: list[str] = Field(default_factory=list)
+    grant_types: list[Literal["authorization_code", "refresh_token"]] = Field(default_factory=list)
+    scopes: list[str] = Field(default_factory=list)
+
+
+class UserAuthPersistenceConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    type: Literal["sqlite"] = "sqlite"
+    path: str = Field(default_factory=lambda: str(Path.home() / ".mxcp" / "oauth.db"))
+
+
+class UserAuthorizationConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    required_scopes: list[str] = Field(default_factory=list)
+
+
+class UserGitHubAuthConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    client_id: str
+    client_secret: str
+    scope: str | None = None
+    callback_path: str
+    auth_url: str
+    token_url: str
+
+
+class UserAtlassianAuthConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    client_id: str
+    client_secret: str
+    scope: str | None = None
+    callback_path: str
+    auth_url: str
+    token_url: str
+
+
+class UserSalesforceAuthConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    client_id: str
+    client_secret: str
+    scope: str | None = None
+    callback_path: str
+    auth_url: str
+    token_url: str
+
+
+class UserKeycloakAuthConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    client_id: str
+    client_secret: str
+    realm: str
+    server_url: str
+    scope: str | None = None
+    callback_path: str
+
+
+class UserGoogleAuthConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    client_id: str
+    client_secret: str
+    scope: str | None = None
+    callback_path: str
+    auth_url: str
+    token_url: str
+
+
+class UserAuthConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google"] = "none"
+    clients: list[UserOAuthClientModel] = Field(default_factory=list)
+    github: UserGitHubAuthConfigModel | None = None
+    atlassian: UserAtlassianAuthConfigModel | None = None
+    salesforce: UserSalesforceAuthConfigModel | None = None
+    keycloak: UserKeycloakAuthConfigModel | None = None
+    google: UserGoogleAuthConfigModel | None = None
+    authorization: UserAuthorizationConfigModel | None = None
+    persistence: UserAuthPersistenceConfigModel | None = None
+
+    @model_validator(mode="after")
+    def _apply_defaults(self) -> UserAuthConfigModel:
+        provider = self.provider or "none"
+        persistence = self.persistence
+        if provider != "none" and persistence is None:
+            persistence = UserAuthPersistenceConfigModel()
+        return self.model_copy(update={"provider": provider, "persistence": persistence})
+
+
+class UserModelConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    type: Literal["claude", "openai"]
+    api_key: str | None = None
+    base_url: str | None = None
+    timeout: int | None = None
+    max_retries: int | None = None
+
+
+class UserModelsConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    default: str | None = None
+    models: dict[str, UserModelConfigModel] = Field(default_factory=dict)
+
+
+class UserTracingConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = False
+    console_export: bool = False
+
+
+class UserMetricsConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = False
+    export_interval: int = 60
+
+
+class UserTelemetryConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = False
+    endpoint: str | None = None
+    headers: dict[str, str] | None = None
+    service_name: str | None = None
+    service_version: str | None = None
+    environment: str | None = None
+    resource_attributes: dict[str, Any] | None = None
+    tracing: UserTracingConfigModel | None = None
+    metrics: UserMetricsConfigModel | None = None
+
+
+class UserLoggingConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = True
+    path: str | None = None
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "WARNING"
+    max_bytes: int = 10_485_760
+    backup_count: int = 5
+
+
+class UserProfileConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    secrets: list[UserSecretDefinitionModel] = Field(default_factory=list)
+    plugin: UserPluginConfigModel = Field(default_factory=UserPluginConfigModel)
+    auth: UserAuthConfigModel = Field(default_factory=UserAuthConfigModel)
+    telemetry: UserTelemetryConfigModel | None = None
+
+
+class UserProjectConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    profiles: dict[str, UserProfileConfigModel] = Field(default_factory=dict)
+
+
+class UserConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    mxcp: Literal[1] = 1
+    projects: dict[str, UserProjectConfigModel] = Field(default_factory=dict)
+    vault: UserVaultConfigModel | None = None
+    onepassword: UserOnePasswordConfigModel | None = None
+    transport: UserTransportConfigModel = Field(default_factory=UserTransportConfigModel)
+    models: UserModelsConfigModel | None = None
+    logging: UserLoggingConfigModel = Field(default_factory=UserLoggingConfigModel)

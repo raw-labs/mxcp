@@ -122,7 +122,7 @@ debug_mode = config.get_setting("debug", default=False)
 # Access full configs
 user_config = config.user_config
 site_config = config.site_config
-# site_config is a SiteConfigModel, so use attribute access
+# Both configs are Pydantic models (UserConfigModel / SiteConfigModel), so use attribute access
 ```
 
 ### Plugin Access

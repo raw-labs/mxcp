@@ -12,8 +12,7 @@ from mxcp.sdk.evals import (
     ToolDefinition,
 )
 from mxcp.sdk.validator import TypeSchema
-from mxcp.server.core.config._types import UserConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
@@ -24,7 +23,7 @@ from mxcp.server.executor.runners.tool import EndpointToolExecutor
 logger = logging.getLogger(__name__)
 
 
-def _create_model_config(model: str, user_config: UserConfig) -> ModelConfigType:
+def _create_model_config(model: str, user_config: UserConfigModel) -> ModelConfigType:
     """Create a model configuration from user config.
 
     Args:
@@ -37,31 +36,27 @@ def _create_model_config(model: str, user_config: UserConfig) -> ModelConfigType
     Raises:
         ValueError: If model is not configured or has invalid type
     """
-    models_config = user_config.get("models", {})
-    if not models_config:
+    models_config = user_config.models
+    if not models_config or not models_config.models:
         raise ValueError("No models configuration found in user config")
 
-    models_dict = models_config.get("models", {})
-    if not models_dict:
-        raise ValueError("No models defined in models configuration")
-
-    model_config: dict[str, Any] = cast(dict[str, Any], models_dict.get(model, {}))
+    model_config = models_config.models.get(model)
     if not model_config:
         raise ValueError(f"Model '{model}' not configured in user config")
 
-    model_type = model_config.get("type")
-    api_key = model_config.get("api_key")
+    model_type = model_config.type
+    api_key = model_config.api_key
 
     if not api_key:
         raise ValueError(f"No API key configured for model '{model}'")
 
     if model_type == "claude":
-        base_url = model_config.get("base_url") or "https://api.anthropic.com"
-        timeout = model_config.get("timeout") or 30
+        base_url = model_config.base_url or "https://api.anthropic.com"
+        timeout = model_config.timeout or 30
         return ClaudeConfig(name=model, api_key=api_key, base_url=base_url, timeout=timeout)
     elif model_type == "openai":
-        base_url = model_config.get("base_url") or "https://api.openai.com/v1"
-        timeout = model_config.get("timeout") or 30
+        base_url = model_config.base_url or "https://api.openai.com/v1"
+        timeout = model_config.timeout or 30
         return OpenAIConfig(name=model, api_key=api_key, base_url=base_url, timeout=timeout)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
@@ -177,7 +172,7 @@ def _convert_endpoints_to_tool_definitions(
 
 async def run_eval_suite(
     suite_name: str,
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     site_config: SiteConfigModel,
     profile: str | None,
     cli_user_context: UserContext | None = None,
@@ -206,9 +201,8 @@ async def run_eval_suite(
     # Determine which model to use
     model = override_model or eval_suite.get("model")
     if not model:
-        # Try to get default model from user config
-        models_config = user_config.get("models") or {}
-        model = models_config.get("default") if models_config else None
+        models_config = user_config.models
+        model = models_config.default if models_config else None
 
     if not model:
         return {
@@ -377,7 +371,7 @@ async def run_eval_suite(
 
 
 async def run_all_evals(
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     site_config: SiteConfigModel,
     profile: str | None,
     cli_user_context: UserContext | None = None,
@@ -446,7 +440,7 @@ async def run_all_evals(
 
 
 def get_model_config(
-    user_config: UserConfig, model_name: str | None = None
+    user_config: UserConfigModel, model_name: str | None = None
 ) -> dict[str, Any] | None:
     """Get model configuration from user config.
 
@@ -457,18 +451,17 @@ def get_model_config(
     Returns:
         Model configuration if found, None otherwise
     """
-    models_config = user_config.get("models", {})
-    if not models_config:
+    models_config = user_config.models
+    if not models_config or not models_config.models:
         return None
 
     # If no model name provided, try to get default
     if not model_name:
-        model_name = models_config.get("default")
+        model_name = models_config.default
         if not model_name:
             return None
 
-    # Get specific model config
-    model_configs = models_config.get("models", {})
-    if not model_configs:
+    model_config = models_config.models.get(model_name)
+    if not model_config:
         return None
-    return cast(dict[str, Any] | None, model_configs.get(model_name))
+    return model_config.model_dump(exclude_none=True)

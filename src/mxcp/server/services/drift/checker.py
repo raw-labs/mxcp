@@ -4,8 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
-from mxcp.server.core.config._types import UserConfig
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.services.drift._types import (
     DriftReport,
     DriftSnapshot,
@@ -303,7 +302,7 @@ def _compare_definitions(baseline: Any | None, current: Any | None) -> bool:
 
 async def check_drift(
     site_config: SiteConfigModel,
-    user_config: UserConfig,
+    user_config: UserConfigModel,
     profile: str | None = None,
     baseline_path: str | None = None,
 ) -> DriftReport:

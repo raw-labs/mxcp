@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mxcp.server.core.config.models import SiteConfigModel
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
 
@@ -158,8 +158,9 @@ tool:
                 site_config_data, context={"repo_root": project_dir}
             )
 
+            user_config_model = UserConfigModel.model_validate(user_config)
             runtime_env = create_runtime_environment(
-                user_config, site_config, repo_root=project_dir
+                user_config_model, site_config, repo_root=project_dir
             )
 
             # Check if init hook succeeded
