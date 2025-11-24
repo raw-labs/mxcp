@@ -6,16 +6,37 @@ not internal implementation details.
 """
 
 import signal
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.interfaces.server.mcp import RAWMCP
 from mxcp.server.core.reload import ReloadManager
 
 
 class TestReloadFunctionality:
     """Test reload functionality for both SIGHUP and DuckDB reloads."""
+
+    @staticmethod
+    def _minimal_site_config() -> SiteConfigModel:
+        return SiteConfigModel.model_validate(
+            {
+                "mxcp": 1,
+                "project": "test",
+                "profile": "default",
+                "profiles": {
+                    "default": {
+                        "duckdb": {
+                            "path": str(Path("/tmp") / "db-default.duckdb"),
+                            "readonly": False,
+                        }
+                    }
+                },
+            },
+            context={"repo_root": Path("/tmp")},
+        )
 
     def test_sighup_triggers_full_reload(self):
         """Test that SIGHUP signal triggers full system reload."""
@@ -35,7 +56,10 @@ class TestReloadFunctionality:
         server._handle_reload_signal = RAWMCP._handle_reload_signal.__get__(server, RAWMCP)
 
         # Mock load_site_config and load_user_config
-        with patch("mxcp.server.interfaces.server.mcp.load_site_config", return_value={}):
+        with patch(
+            "mxcp.server.interfaces.server.mcp.load_site_config",
+            return_value=self._minimal_site_config(),
+        ):
             with patch("mxcp.server.interfaces.server.mcp.load_user_config", return_value={}):
                 # Simulate SIGHUP
                 server._handle_reload_signal(signal.SIGHUP, None)
@@ -115,7 +139,10 @@ class TestReloadFunctionality:
         server.site_config_path = None
 
         # Test that reload_configuration requests a reload
-        with patch("mxcp.server.interfaces.server.mcp.load_site_config", return_value={}):
+        with patch(
+            "mxcp.server.interfaces.server.mcp.load_site_config",
+            return_value=self._minimal_site_config(),
+        ):
             with patch("mxcp.server.interfaces.server.mcp.load_user_config", return_value={}):
                 server.reload_configuration()
 

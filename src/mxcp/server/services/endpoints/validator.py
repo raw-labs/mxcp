@@ -8,7 +8,7 @@ from jsonschema import validate as jsonschema_validate
 from referencing import Registry, Resource
 
 from mxcp.sdk.executor import ExecutionEngine
-from mxcp.server.core.config._types import SiteConfig
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition, ResourceDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
@@ -39,7 +39,7 @@ def _validate_resource_uri_vs_params(
 
 
 def validate_all_endpoints(
-    site_config: SiteConfig, execution_engine: ExecutionEngine
+    site_config: SiteConfigModel, execution_engine: ExecutionEngine
 ) -> dict[str, Any]:
     """Validate all endpoints in the repository.
 
@@ -359,7 +359,7 @@ def validate_endpoint_payload(
 
 
 def validate_endpoint(
-    path: str, site_config: SiteConfig, execution_engine: ExecutionEngine
+    path: str, site_config: SiteConfigModel, execution_engine: ExecutionEngine
 ) -> dict[str, Any]:
     """Validate a single endpoint file."""
     try:

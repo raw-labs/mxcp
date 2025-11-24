@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from mxcp.server.admin.app import create_admin_app
 from mxcp.server.admin.service import AdminService
 from mxcp.server.admin.runner import AdminAPIRunner
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.reload import ReloadRequest
 from mxcp.server.interfaces.cli.utils import (
     get_env_admin_socket_enabled,
@@ -58,7 +59,9 @@ class MockServer:
         self.profile_name = "test-profile"
         self.debug = False
         self.readonly = False
-        self.site_config = {"project": "test-project"}
+        self.site_config = SiteConfigModel.model_validate(
+            {"mxcp": 1, "project": "test-project", "profile": self.profile_name}
+        )
         self.user_config = {}
         self.reload_called = False
         self.reload_request = ReloadRequest(description="test-reload")

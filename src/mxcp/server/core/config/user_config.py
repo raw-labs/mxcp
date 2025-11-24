@@ -6,7 +6,8 @@ from typing import Any, cast
 import yaml
 from jsonschema import ValidationError, validate
 
-from mxcp.server.core.config._types import SiteConfig, UserConfig
+from mxcp.server.core.config._types import UserConfig
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.refs.migration import check_and_migrate_legacy_version
 from mxcp.server.core.refs.resolver import interpolate_all, interpolate_selective
 
@@ -87,10 +88,10 @@ def _apply_defaults(config: dict[str, Any]) -> UserConfig:
     return cast(UserConfig, config)
 
 
-def _generate_default_config(site_config: SiteConfig) -> UserConfig:
+def _generate_default_config(site_config: SiteConfigModel) -> UserConfig:
     """Generate a default user config based on site config"""
-    project_name = site_config["project"]
-    profile_name = site_config["profile"]
+    project_name = site_config.project
+    profile_name = site_config.profile
 
     config = {
         "mxcp": 1,
@@ -102,7 +103,7 @@ def _generate_default_config(site_config: SiteConfig) -> UserConfig:
 
 
 def load_user_config(
-    site_config: SiteConfig,
+    site_config: SiteConfigModel,
     active_profile: str | None = None,
     generate_default: bool = True,
     resolve_refs: bool = True,
@@ -161,8 +162,8 @@ def load_user_config(
         check_and_migrate_legacy_version(config, "user", str(path))
 
         # Determine which profile to use for selective interpolation
-        project_name = site_config["project"]
-        profile_name = active_profile or site_config["profile"]
+        project_name = site_config.project
+        profile_name = active_profile or site_config.profile
 
         # Interpolate environment variables and vault URLs in the config if requested
         if resolve_refs:

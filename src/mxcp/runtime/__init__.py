@@ -20,6 +20,7 @@ from collections.abc import Callable
 from typing import Any, cast
 
 from mxcp.sdk.executor.context import get_execution_context
+from mxcp.server.core.config.models import SiteConfigModel
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +67,12 @@ class ConfigProxy:
             return None
 
         # Get project and profile from site config
-        project = site_config.get("project")
-        profile = site_config.get("profile")
+        if isinstance(site_config, SiteConfigModel):
+            project = site_config.project
+            profile = site_config.profile
+        else:
+            project = site_config.get("project")
+            profile = site_config.get("profile")
 
         if not project or not profile:
             return None
@@ -99,10 +104,16 @@ class ConfigProxy:
         if not site_config:
             return default
 
+        raw_config = (
+            site_config.model_dump(mode="python")
+            if isinstance(site_config, SiteConfigModel)
+            else site_config
+        )
+
         # Support nested key access (e.g., "dbt.enabled")
         if "." in key:
             keys = key.split(".")
-            value = site_config
+            value: Any = raw_config
             for k in keys:
                 if isinstance(value, dict) and k in value:
                     value = value[k]
@@ -110,7 +121,7 @@ class ConfigProxy:
                     return default
             return value
         else:
-            return site_config.get(key, default)
+            return raw_config.get(key, default)
 
     @property
     def user_config(self) -> dict[str, Any] | None:
@@ -122,13 +133,16 @@ class ConfigProxy:
         return cast(dict[str, Any] | None, context.get("user_config"))
 
     @property
-    def site_config(self) -> dict[str, Any] | None:
-        """Access full site configuration."""
+    def site_config(self) -> Any | None:
+        """Access full site configuration (typically a SiteConfigModel)."""
         context = get_execution_context()
         if not context:
             return None
 
-        return cast(dict[str, Any] | None, context.get("site_config"))
+        site_config = context.get("site_config")
+        if site_config is None:
+            return None
+        return site_config
 
 
 class PluginsProxy:

@@ -6,7 +6,7 @@ from typing import cast
 import yaml
 from jsonschema import validate
 
-from mxcp.server.core.config._types import SiteConfig
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.evals._types import EvalSuite
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def discover_eval_files(
-    site_config: SiteConfig | None = None,
+    site_config: SiteConfigModel | None = None,
 ) -> list[tuple[Path, EvalSuite | None, str | None]]:
     """Discover all eval files in the configured evals directory.
 
@@ -31,16 +31,8 @@ def discover_eval_files(
     results: list[tuple[Path, EvalSuite | None, str | None]] = []
 
     # Determine the evals directory
-    if site_config and "paths" in site_config:
-        paths_config = site_config.get("paths", {})
-        if paths_config and "evals" in paths_config:
-            evals_path = paths_config.get("evals")
-            if evals_path:
-                evals_dir = base_path / evals_path
-            else:
-                evals_dir = base_path / "evals"
-        else:
-            evals_dir = base_path / "evals"
+    if site_config:
+        evals_dir = base_path / str(site_config.paths.evals)
     else:
         # Fallback to default
         evals_dir = base_path / "evals"
@@ -79,7 +71,7 @@ def discover_eval_files(
 
 
 def load_eval_suite(
-    suite_name: str, site_config: SiteConfig | None = None
+    suite_name: str, site_config: SiteConfigModel | None = None
 ) -> tuple[Path, EvalSuite] | None:
     """Load a specific eval suite by name.
 

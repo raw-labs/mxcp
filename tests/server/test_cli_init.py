@@ -9,6 +9,7 @@ import pytest
 import yaml
 from click.testing import CliRunner
 
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.interfaces.cli.init import init
 
@@ -154,7 +155,7 @@ def test_init_bootstrap_complete_directory_structure(tmp_path):
 
         from mxcp.server.core.config.site_config import load_site_config
 
-        loaded_config = load_site_config()
+        loaded_config = load_site_config().model_dump(mode="python")
 
         # Verify organized paths are configured correctly
         paths = loaded_config["paths"]
@@ -266,7 +267,9 @@ def test_user_config_generation_uses_integer_version():
     from mxcp.server.core.config.user_config import _generate_default_config
 
     # Create a mock site config (as would be created by mxcp init)
-    site_config = {"mxcp": 1, "project": "test-new-project", "profile": "default"}
+    site_config = SiteConfigModel.model_validate(
+        {"mxcp": 1, "project": "test-new-project", "profile": "default"}
+    )
 
     # Generate default user config (this is what happens when user config doesn't exist)
     user_config = _generate_default_config(site_config)
@@ -464,7 +467,7 @@ def test_init_bootstrap_complete_directory_structure():
         assert tool_config["tool"]["source"]["file"] == "../sql/hello-world.sql"
 
         # Check site config can be loaded (validates schema)
-        site_config = load_site_config(project_dir)
+        site_config = load_site_config(project_dir).model_dump(mode="python")
         assert site_config["project"] == "test-project"
         assert site_config["profile"] == "default"
 
@@ -500,7 +503,9 @@ def test_user_config_generation_uses_integer_version():
     from mxcp.server.core.config.user_config import _generate_default_config
 
     # Create a mock site config
-    site_config = {"mxcp": 1, "project": "test-project", "profile": "default"}
+    site_config = SiteConfigModel.model_validate(
+        {"mxcp": 1, "project": "test-project", "profile": "default"}
+    )
 
     config = _generate_default_config(site_config)
 

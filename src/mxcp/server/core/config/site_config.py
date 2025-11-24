@@ -1,13 +1,14 @@
-import json
+from __future__ import annotations
+
 import logging
-import os
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import yaml
-from jsonschema import ValidationError, validate
+from pydantic import ValidationError
 
-from mxcp.server.core.config._types import SiteConfig, UserConfig
+from mxcp.server.core.config._types import UserConfig, UserProfileConfig
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.refs.migration import check_and_migrate_legacy_version
 
 logger = logging.getLogger(__name__)
@@ -31,147 +32,7 @@ def find_repo_root() -> Path:
     raise FileNotFoundError("mxcp-site.yml not found in current directory or any parent directory")
 
 
-def _apply_defaults(config: dict[str, Any], repo_root: Path) -> SiteConfig:
-    """Apply default values to the config"""
-    # Create a copy to avoid modifying the input
-    config = config.copy()
-
-    # Apply defaults for optional sections
-    if "dbt" not in config:
-        config["dbt"] = {"enabled": True}
-    elif "enabled" not in config["dbt"]:
-        config["dbt"]["enabled"] = True
-
-    # Apply defaults for dbt configuration paths
-    dbt_config = config["dbt"]
-    if "model_paths" not in dbt_config:
-        dbt_config["model_paths"] = ["models"]
-
-    if "analysis_paths" not in dbt_config:
-        dbt_config["analysis_paths"] = ["analyses"]
-
-    if "test_paths" not in dbt_config:
-        dbt_config["test_paths"] = ["tests"]
-
-    if "seed_paths" not in dbt_config:
-        dbt_config["seed_paths"] = ["seeds"]
-
-    if "macro_paths" not in dbt_config:
-        dbt_config["macro_paths"] = ["macros"]
-
-    if "snapshot_paths" not in dbt_config:
-        dbt_config["snapshot_paths"] = ["snapshots"]
-
-    if "target_path" not in dbt_config:
-        dbt_config["target_path"] = "target"
-
-    if "clean_targets" not in dbt_config:
-        dbt_config["clean_targets"] = ["target", "dbt_packages"]
-
-    # Initialize extensions section if not present
-    if "extensions" not in config:
-        config["extensions"] = []
-
-    # Initialize paths section if not present (do this early so we can use paths in profile defaults)
-    if "paths" not in config:
-        config["paths"] = {}
-
-    # Apply defaults for paths configuration
-    paths_config = config["paths"]
-    if "tools" not in paths_config:
-        paths_config["tools"] = "tools"
-
-    if "resources" not in paths_config:
-        paths_config["resources"] = "resources"
-
-    if "prompts" not in paths_config:
-        paths_config["prompts"] = "prompts"
-
-    if "evals" not in paths_config:
-        paths_config["evals"] = "evals"
-
-    if "python" not in paths_config:
-        paths_config["python"] = "python"
-
-    if "sql" not in paths_config:
-        paths_config["sql"] = "sql"
-
-    if "plugins" not in paths_config:
-        paths_config["plugins"] = "plugins"
-
-    if "drift" not in paths_config:
-        paths_config["drift"] = "drift"
-
-    if "audit" not in paths_config:
-        paths_config["audit"] = "audit"
-
-    if "data" not in paths_config:
-        paths_config["data"] = "data"
-
-    # Initialize profiles section if not present
-    if "profiles" not in config:
-        config["profiles"] = {}
-
-    # Get the current profile
-    profile = config.get("profile", "default")
-
-    # Initialize profile config if not present
-    if profile not in config["profiles"]:
-        config["profiles"][profile] = {}
-
-    # Initialize duckdb config for the profile if not present
-    if "duckdb" not in config["profiles"][profile]:
-        config["profiles"][profile]["duckdb"] = {}
-
-    # Set default DuckDB path for the profile if not specified (now uses data directory)
-    if "path" not in config["profiles"][profile]["duckdb"]:
-        config["profiles"][profile]["duckdb"]["path"] = str(
-            repo_root / paths_config["data"] / f"db-{profile}.duckdb"
-        )
-
-    # Check for environment variable override
-    env_duckdb_path = os.environ.get("MXCP_DUCKDB_PATH")
-    if env_duckdb_path:
-        logger.info(f"Overriding DuckDB path with MXCP_DUCKDB_PATH: {env_duckdb_path}")
-        config["profiles"][profile]["duckdb"]["path"] = env_duckdb_path
-
-    # Initialize drift config for the profile if not present
-    if "drift" not in config["profiles"][profile]:
-        config["profiles"][profile]["drift"] = {}
-
-    # Set default drift manifest path for the profile if not specified (now uses drift directory)
-    if "path" not in config["profiles"][profile]["drift"]:
-        config["profiles"][profile]["drift"]["path"] = str(
-            repo_root / paths_config["drift"] / f"drift-{profile}.json"
-        )
-
-    # Initialize audit config for the profile if not present
-    if "audit" not in config["profiles"][profile]:
-        config["profiles"][profile]["audit"] = {}
-
-    # Set default audit log path for the profile if not specified (now uses audit directory)
-    if "path" not in config["profiles"][profile]["audit"]:
-        config["profiles"][profile]["audit"]["path"] = str(
-            repo_root / paths_config["audit"] / f"logs-{profile}.jsonl"
-        )
-
-    # Environment variable overrides for audit config
-    # Following same pattern as telemetry: env vars ALWAYS override file config
-    audit_enabled_env = os.getenv("MXCP_AUDIT_ENABLED", "").lower()
-    if audit_enabled_env in ("true", "1", "yes"):
-        # Env var explicitly enables audit - override any file setting
-        config["profiles"][profile]["audit"]["enabled"] = True
-    elif audit_enabled_env in ("false", "0", "no"):
-        # Env var explicitly disables audit - override any file setting
-        config["profiles"][profile]["audit"]["enabled"] = False
-    elif "enabled" not in config["profiles"][profile]["audit"]:
-        # No env var and no file config - use default
-        config["profiles"][profile]["audit"]["enabled"] = False
-
-    return cast(SiteConfig, config)
-
-
-def load_site_config(repo_path: Path | None = None) -> SiteConfig:
+def load_site_config(repo_path: Path | None = None) -> SiteConfigModel:
     """Load and validate the mxcp-site.yml configuration from the repository.
 
     Args:
@@ -182,6 +43,7 @@ def load_site_config(repo_path: Path | None = None) -> SiteConfig:
 
     Raises:
         FileNotFoundError: If mxcp-site.yml is not found
+        ValueError: If validation fails
     """
     if repo_path is None:
         repo_path = Path.cwd()
@@ -191,28 +53,23 @@ def load_site_config(repo_path: Path | None = None) -> SiteConfig:
         raise FileNotFoundError(f"mxcp-site.yml not found at {config_path}")
 
     with open(config_path) as f:
-        config = yaml.safe_load(f)
+        config = yaml.safe_load(f) or {}
 
     # Check for legacy version format and provide migration guidance (stops execution)
     check_and_migrate_legacy_version(config, "site", str(config_path))
 
-    # Load and apply JSON Schema validation
-    schema_path = Path(__file__).parent.parent.parent / "schemas" / "mxcp-site-schema-1.json"
-    with open(schema_path) as schema_file:
-        schema = json.load(schema_file)
-
     try:
-        validate(instance=config, schema=schema)
-    except ValidationError as e:
-        raise ValueError(f"Site config validation error: {e.message}") from e
-
-    # Apply defaults (e.g., duckdb.path)
-    return _apply_defaults(config, repo_path)
+        return SiteConfigModel.model_validate(
+            config,
+            context={"repo_root": config_path.parent},
+        )
+    except ValidationError as exc:
+        raise ValueError(f"Site config validation error: {exc}") from exc
 
 
 def get_active_profile(
-    user_config: UserConfig, site_config: SiteConfig, profile: str | None = None
-) -> dict[str, Any]:
+    user_config: UserConfig, site_config: SiteConfigModel, profile: str | None = None
+) -> UserProfileConfig:
     """Get the active profile from the user config based on site configuration.
 
     Args:
@@ -223,8 +80,8 @@ def get_active_profile(
     Returns:
         The active profile configuration
     """
-    project_name = site_config["project"]
-    profile_name = profile or site_config["profile"]
+    project_name = site_config.project
+    profile_name = profile or site_config.profile
 
     if project_name not in user_config["projects"]:
         raise ValueError(f"Project '{project_name}' not found in user config")
@@ -233,4 +90,4 @@ def get_active_profile(
     if profile_name not in project["profiles"]:
         raise ValueError(f"Profile '{profile_name}' not found in project '{project_name}'")
 
-    return cast(dict[str, Any], project["profiles"][profile_name])
+    return project["profiles"][profile_name]

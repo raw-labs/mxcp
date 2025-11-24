@@ -680,7 +680,9 @@ async def test_python_endpoint_with_non_duckdb_secret_type(
     )
 
     # Update site config to reference our secrets
-    site_config["secrets"] = ["duckdb_test", "api_test", "custom_api", "python_only"]
+    site_config = site_config.model_copy(
+        update={"secrets": ["duckdb_test", "api_test", "custom_api", "python_only"]}
+    )
 
     # Create Python endpoint file
     python_file = temp_project_dir / "python" / "custom_secrets.py"

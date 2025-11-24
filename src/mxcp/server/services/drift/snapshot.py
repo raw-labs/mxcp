@@ -7,7 +7,8 @@ from typing import cast
 import duckdb
 
 from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
-from mxcp.server.core.config._types import SiteConfig, UserConfig
+from mxcp.server.core.config._types import UserConfig
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.executor.engine import create_runtime_environment
@@ -45,7 +46,7 @@ def get_duckdb_tables(conn: duckdb.DuckDBPyConnection) -> list[Table]:
 
 
 async def generate_snapshot(
-    site_config: SiteConfig,
+    site_config: SiteConfigModel,
     user_config: UserConfig,
     profile: str | None = None,
     force: bool = False,
@@ -63,15 +64,14 @@ async def generate_snapshot(
     Returns:
         Tuple of (snapshot data, snapshot file path)
     """
-    profile_name = profile or site_config["profile"]
+    profile_name = profile or site_config.profile
 
     # Get drift path with safe access
-    profiles = site_config.get("profiles", {})
-    profile_config = profiles.get(profile_name, {})
-    drift_config = profile_config.get("drift") or {}
-    drift_path_str = drift_config.get("path", f"drift-{profile_name}.json")
-    if not drift_path_str:
-        drift_path_str = f"drift-{profile_name}.json"
+    profile_config = site_config.profiles.get(profile_name)
+    drift_config = profile_config.drift if profile_config else None
+    drift_path_str = (
+        drift_config.path if drift_config and drift_config.path else f"drift-{profile_name}.json"
+    )
     drift_path = Path(drift_path_str)
     if not drift_path.parent.exists():
         drift_path.parent.mkdir(parents=True)

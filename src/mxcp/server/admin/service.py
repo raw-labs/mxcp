@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mxcp.sdk.audit.backends.noop import NoOpAuditBackend
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.definitions.endpoints._types import EndpointDefinition
 
 from .models import ConfigResponse, EndpointCounts, Features
@@ -82,8 +83,13 @@ class AdminService:
 
         Reads public fields directly - no intermediate types needed.
         """
+        site_config_obj = self._server.site_config
+        if isinstance(site_config_obj, SiteConfigModel):
+            project_name = site_config_obj.project
+        else:
+            project_name = site_config_obj.get("project")
         return ConfigResponse(
-            project=self._server.site_config.get("project"),
+            project=project_name,
             profile=self._server.profile_name,
             repository_path=(
                 str(self._server.runtime_environment.duckdb_runtime.database_config.path)

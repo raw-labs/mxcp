@@ -541,7 +541,7 @@ def trigger_reload(message: str = "test") -> dict:
 
     # Get DuckDB file path
     site_config = config.site_config
-    db_path = Path(site_config["profiles"]["default"]["duckdb"]["path"])
+    db_path = Path(site_config.profiles["default"].duckdb.path)
     if not db_path.is_absolute():
         db_path = Path.cwd() / db_path
 
@@ -783,12 +783,12 @@ def verify_reload(expected_count: int, expected_message: str, expected_timestamp
         # Update site config to reference new secrets
         site_config_path = integration_fixture_dir / "mxcp-site.yml"
         with open(site_config_path) as f:
-            site_config = yaml.safe_load(f)
+            site_config_data = yaml.safe_load(f) or {}
 
-        site_config["secrets"] = ["custom_secret", "python_secret"]
+        site_config_data["secrets"] = ["custom_secret", "python_secret"]
 
         with open(site_config_path, "w") as f:
-            yaml.dump(site_config, f)
+            yaml.dump(site_config_data, f)
 
         # Create endpoint to test these secrets
         python_code = '''
@@ -1226,12 +1226,13 @@ def check_all_secrets() -> dict:
         # Update site config to enable SQL tools
         site_config_path = integration_fixture_dir / "mxcp-site.yml"
         with open(site_config_path) as f:
-            site_config = yaml.safe_load(f)
+            site_config_data = yaml.safe_load(f) or {}
 
-        site_config["sql_tools"] = {"enabled": True}
+        sql_tools_cfg = site_config_data.setdefault("sql_tools", {})
+        sql_tools_cfg["enabled"] = True
 
         with open(site_config_path, "w") as f:
-            yaml.dump(site_config, f)
+            yaml.dump(site_config_data, f)
 
         with ServerProcess(integration_fixture_dir) as server:
             server.start(extra_args=["--sql-tools", "true"])
@@ -1358,12 +1359,13 @@ def check_all_secrets() -> dict:
         # Update site config to enable SQL tools (dbt already enabled in fixture)
         site_config_path = integration_fixture_dir / "mxcp-site.yml"
         with open(site_config_path) as f:
-            site_config = yaml.safe_load(f)
+            site_config_data = yaml.safe_load(f) or {}
 
-        site_config["sql_tools"] = {"enabled": True}
+        sql_tools_cfg = site_config_data.setdefault("sql_tools", {})
+        sql_tools_cfg["enabled"] = True
 
         with open(site_config_path, "w") as f:
-            yaml.dump(site_config, f)
+            yaml.dump(site_config_data, f)
 
         # Run the proper dbt workflow first
         original_dir = os.getcwd()

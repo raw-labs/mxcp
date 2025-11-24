@@ -46,11 +46,11 @@ from mxcp.sdk.telemetry import (
 )
 from mxcp.server.admin import AdminAPIRunner
 from mxcp.server.core.config._types import (
-    SiteConfig,
     UserAuthConfig,
     UserConfig,
     UserHttpTransportConfig,
 )
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.site_config import get_active_profile, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.core.refs.external import ExternalRefTracker
@@ -243,9 +243,9 @@ class RAWMCP:
     """MXCP MCP Server implementation that bridges MXCP endpoints with MCP protocol."""
 
     # Type annotations for instance attributes
-    site_config: SiteConfig
+    site_config: SiteConfigModel
     user_config: UserConfig
-    _site_config_template: SiteConfig
+    _site_config_template: SiteConfigModel
     _user_config_template: UserConfig
     host: str
     port: int
@@ -388,15 +388,16 @@ class RAWMCP:
         interpolation, which only resolves references for the active profile and top-level
         config. This prevents errors from undefined environment variables in inactive profiles.
         """
+        site_template_dict = self._site_config_template.model_dump(mode="python")
+        user_template_dict = cast(dict[str, Any], self._user_config_template)
+
         # Check if configs contain unresolved references
-        config_str = json.dumps(self._site_config_template) + json.dumps(self._user_config_template)
+        config_str = json.dumps(site_template_dict) + json.dumps(user_template_dict)
         needs_resolution = any(pattern in config_str for pattern in ["${", "vault://", "file://"])
 
         # Determine active profile (CLI override > site config)
-        active_profile = str(
-            self._cli_overrides["profile"] or self._site_config_template["profile"]
-        )
-        project_name = self._site_config_template["project"]
+        active_profile = str(self._cli_overrides["profile"] or self._site_config_template.profile)
+        project_name = self._site_config_template.project
 
         if needs_resolution:
             # Set templates and resolve with selective interpolation
@@ -404,8 +405,8 @@ class RAWMCP:
                 f"Resolving external configuration references for project={project_name}, profile={active_profile}..."
             )
             self.ref_tracker.set_template(
-                cast(dict[str, Any], self._site_config_template),
-                cast(dict[str, Any], self._user_config_template),
+                site_template_dict,
+                user_template_dict,
             )
             self._config_templates_loaded = True
 
@@ -414,7 +415,9 @@ class RAWMCP:
                 project_name=project_name,
                 profile_name=active_profile,
             )
-            self.site_config = cast(SiteConfig, resolved_site)
+            self.site_config = SiteConfigModel.model_validate(
+                resolved_site, context={"repo_root": self.site_config_path}
+            )
             self.user_config = cast(UserConfig, resolved_user)
         else:
             # Already resolved
@@ -460,8 +463,8 @@ class RAWMCP:
         self.readonly = bool(self._cli_overrides["readonly"])
 
         # SQL tools setting
-        sql_tools_config = self.site_config.get("sql_tools") or {}
-        site_sql_tools = sql_tools_config.get("enabled", False) if sql_tools_config else False
+        sql_tools_config = self.site_config.sql_tools
+        site_sql_tools = bool(sql_tools_config.enabled)
         self.enable_sql_tools = (
             self._cli_overrides["enable_sql_tools"]
             if self._cli_overrides["enable_sql_tools"] is not None
@@ -627,10 +630,10 @@ class RAWMCP:
     def _initialize_audit_logger(self) -> None:
         """Initialize audit logger if enabled."""
 
-        profile_config = self.site_config["profiles"][self.profile_name]
-        audit_config = profile_config.get("audit") or {}
-        if audit_config and audit_config.get("enabled", False):
-            log_path_str = audit_config.get("path", "")
+        profile_config = self.site_config.profiles.get(self.profile_name)
+        audit_config = profile_config.audit if profile_config else None
+        if audit_config and audit_config.enabled:
+            log_path_str = audit_config.path or ""
             log_path = Path(log_path_str) if log_path_str else Path("audit.log")
             # Ensure parent directory exists
             log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -725,7 +728,7 @@ class RAWMCP:
         logger.info("Initializing telemetry...")
 
         # Get project name from site config
-        project_name = self.site_config["project"]
+        project_name = self.site_config.project
 
         # Configure telemetry for the current profile and get enabled status
         self.telemetry_enabled = configure_telemetry_from_config(
@@ -769,7 +772,8 @@ class RAWMCP:
 
             # Set templates in tracker
             self.ref_tracker.set_template(
-                cast(dict[str, Any], site_template), cast(dict[str, Any], user_template)
+                site_template.model_dump(mode="python"),
+                cast(dict[str, Any], user_template),
             )
             self._config_templates_loaded = True
             logger.info("Raw configuration templates loaded.")
@@ -786,12 +790,15 @@ class RAWMCP:
 
             # Update templates in tracker
             self.ref_tracker.set_template(
-                cast(dict[str, Any], new_site_template), cast(dict[str, Any], new_user_template)
+                new_site_template.model_dump(mode="python"),
+                cast(dict[str, Any], new_user_template),
             )
 
             # Resolve and update configs
             new_site_config, new_user_config = self.ref_tracker.resolve_all()
-            self.site_config = cast(SiteConfig, new_site_config)
+            self.site_config = SiteConfigModel.model_validate(
+                new_site_config, context={"repo_root": self.site_config_path}
+            )
             self.user_config = cast(UserConfig, new_user_config)
 
             logger.info("Configuration files reloaded")

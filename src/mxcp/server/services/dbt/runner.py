@@ -8,12 +8,12 @@ import click
 import yaml
 
 from mxcp.server.core.config._types import (
-    SiteConfig,
     UserConfig,
     UserProfileConfig,
     UserProjectConfig,
     UserSecretDefinition,
 )
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 
 
@@ -211,7 +211,7 @@ def _build_profile_block(
     return block
 
 
-def _build_dbt_project(project: str, profile: str, site_config: SiteConfig) -> dict[str, Any]:
+def _build_dbt_project(project: str, profile: str, site_config: SiteConfigModel) -> dict[str, Any]:
     """Build dbt_project.yml configuration.
 
     Args:
@@ -230,21 +230,21 @@ def _build_dbt_project(project: str, profile: str, site_config: SiteConfig) -> d
     dbt_profile = f"{sanitized_project}_{sanitized_profile}"
 
     # Get dbt configuration from site config (defaults already applied)
-    dbt_config = site_config.get("dbt") or {}
+    dbt_config = site_config.dbt
 
     # Build the configuration using values from site config
     return {
         "name": sanitized_project,  # Use sanitized project name
         "profile": dbt_profile,  # Use combined profile name
         "config-version": 2,
-        "model-paths": dbt_config.get("model_paths", ["models"]),
-        "analysis-paths": dbt_config.get("analysis_paths", ["analyses"]),
-        "test-paths": dbt_config.get("test_paths", ["tests"]),
-        "seed-paths": dbt_config.get("seed_paths", ["seeds"]),
-        "macro-paths": dbt_config.get("macro_paths", ["macros"]),
-        "snapshot-paths": dbt_config.get("snapshot_paths", ["snapshots"]),
-        "target-path": dbt_config.get("target_path", "target"),
-        "clean-targets": dbt_config.get("clean_targets", ["target", "dbt_packages"]),
+        "model-paths": dbt_config.model_paths,
+        "analysis-paths": dbt_config.analysis_paths,
+        "test-paths": dbt_config.test_paths,
+        "seed-paths": dbt_config.seed_paths,
+        "macro-paths": dbt_config.macro_paths,
+        "snapshot-paths": dbt_config.snapshot_paths,
+        "target-path": dbt_config.target_path,
+        "clean-targets": dbt_config.clean_targets,
     }
 
 
@@ -305,7 +305,7 @@ def _merge_dbt_project(existing: dict[str, Any], new: dict[str, Any]) -> dict[st
 
 
 def configure_dbt(
-    site_config: SiteConfig,
+    site_config: SiteConfigModel,
     user_config: UserConfig,
     profile: str | None = None,
     dry_run: bool = False,
@@ -323,8 +323,8 @@ def configure_dbt(
         embed_secrets: If True, embed secrets directly in profiles.yml
     """
     # 1. Check dbt is enabled
-    dbt_config = site_config.get("dbt") or {}
-    if not dbt_config.get("enabled", True):
+    dbt_config = site_config.dbt
+    if not dbt_config.enabled:
         raise click.ClickException("dbt integration is disabled in mxcp-site.yml")
 
     # 2. Handle embed_secrets requirement
@@ -341,17 +341,17 @@ def configure_dbt(
         click.echo("\nContinuing...")
 
     # 3. Get project and profile names
-    project = site_config["project"]
-    profile_name = profile or site_config["profile"]
+    project = site_config.project
+    profile_name = profile or site_config.profile
 
     # Create dbt profile name as <project>_<profile>
     dbt_profile = f"{project}_{profile_name}"
 
     # 4. Get DuckDB path using the same convention as the rest of the codebase
     repo_root = find_repo_root()
-    profile_config = site_config.get("profiles", {}).get(profile_name, {})
-    duckdb_config = profile_config.get("duckdb")
-    duckdb_path = duckdb_config.get("path") if duckdb_config else None
+    profile_config = site_config.profiles.get(profile_name)
+    duckdb_config = profile_config.duckdb if profile_config else None
+    duckdb_path = duckdb_config.path if duckdb_config else None
     if not duckdb_path:
         raise click.ClickException(f"No DuckDB path configured for profile '{profile_name}'")
     if not os.path.isabs(duckdb_path):

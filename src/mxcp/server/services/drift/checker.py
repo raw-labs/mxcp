@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
-from mxcp.server.core.config._types import SiteConfig, UserConfig
+from mxcp.server.core.config._types import UserConfig
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.services.drift._types import (
     DriftReport,
     DriftSnapshot,
@@ -301,7 +302,7 @@ def _compare_definitions(baseline: Any | None, current: Any | None) -> bool:
 
 
 async def check_drift(
-    site_config: SiteConfig,
+    site_config: SiteConfigModel,
     user_config: UserConfig,
     profile: str | None = None,
     baseline_path: str | None = None,
@@ -317,19 +318,19 @@ async def check_drift(
     Returns:
         DriftReport with comparison results
     """
-    profile_name = profile or site_config["profile"]
+    profile_name = profile or site_config.profile
 
     # Determine baseline snapshot path
     if baseline_path:
         baseline_snapshot_path = Path(baseline_path)
     else:
-        drift_config = site_config["profiles"][profile_name].get("drift")
-        if not drift_config or "path" not in drift_config:
+        profile_config = site_config.profiles.get(profile_name)
+        if not profile_config:
+            raise ValueError(f"No profile '{profile_name}' found in site config")
+        drift_config = profile_config.drift
+        if not drift_config or not drift_config.path:
             raise ValueError(f"No drift configuration found for profile '{profile_name}'")
-        drift_path = drift_config.get("path")
-        if not drift_path:
-            raise ValueError(f"No drift path configured for profile '{profile_name}'")
-        baseline_snapshot_path = Path(drift_path)
+        baseline_snapshot_path = Path(drift_config.path)
 
     # Load baseline snapshot
     try:

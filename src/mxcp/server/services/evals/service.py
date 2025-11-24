@@ -12,7 +12,8 @@ from mxcp.sdk.evals import (
     ToolDefinition,
 )
 from mxcp.sdk.validator import TypeSchema
-from mxcp.server.core.config._types import SiteConfig, UserConfig
+from mxcp.server.core.config._types import UserConfig
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
@@ -66,7 +67,7 @@ def _create_model_config(model: str, user_config: UserConfig) -> ModelConfigType
         raise ValueError(f"Unknown model type: {model_type}")
 
 
-def _load_endpoints(site_config: SiteConfig) -> list[EndpointDefinition]:
+def _load_endpoints(site_config: SiteConfigModel) -> list[EndpointDefinition]:
     """Load all available endpoints.
 
     Args:
@@ -177,7 +178,7 @@ def _convert_endpoints_to_tool_definitions(
 async def run_eval_suite(
     suite_name: str,
     user_config: UserConfig,
-    site_config: SiteConfig,
+    site_config: SiteConfigModel,
     profile: str | None,
     cli_user_context: UserContext | None = None,
     override_model: str | None = None,
@@ -377,7 +378,7 @@ async def run_eval_suite(
 
 async def run_all_evals(
     user_config: UserConfig,
-    site_config: SiteConfig,
+    site_config: SiteConfigModel,
     profile: str | None,
     cli_user_context: UserContext | None = None,
     override_model: str | None = None,

@@ -133,7 +133,7 @@ def serve(
 
             # Show configuration
             click.echo(f"{click.style('📋 Configuration:', fg='cyan', bold=True)}")
-            click.echo(f"   • Project: {click.style(server.site_config['project'], fg='yellow')}")
+            click.echo(f"   • Project: {click.style(server.site_config.project, fg='yellow')}")
             click.echo(f"   • Profile: {click.style(server.profile_name, fg='yellow')}")
             click.echo(f"   • Transport: {click.style(server.transport, fg='yellow')}")
 

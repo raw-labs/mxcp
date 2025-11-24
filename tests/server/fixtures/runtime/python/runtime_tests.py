@@ -141,8 +141,12 @@ def test_config_properties() -> dict:
         secrets_count = len(user_cfg["projects"]["runtime_test"]["profiles"]["default"]["secrets"])
 
         # From site config
-        site_project = site_cfg["project"]
-        site_secrets = site_cfg["secrets"]
+        if hasattr(site_cfg, "model_dump"):
+            site_cfg_dict = site_cfg.model_dump(mode="python")
+        else:
+            site_cfg_dict = site_cfg
+        site_project = site_cfg_dict["project"]
+        site_secrets = site_cfg_dict["secrets"]
 
         access_works = True
     except Exception:

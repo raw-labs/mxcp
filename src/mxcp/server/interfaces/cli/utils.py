@@ -10,7 +10,8 @@ from typing import Any
 
 import click
 
-from mxcp.server.core.config._types import SiteConfig, UserConfig
+from mxcp.server.core.config._types import UserConfig
+from mxcp.server.core.config.models import SiteConfigModel
 
 
 def get_env_flag(env_var: str, default: bool = False) -> bool:
@@ -37,7 +38,7 @@ def get_env_profile() -> str | None:
     return os.environ.get("MXCP_PROFILE")
 
 
-def resolve_profile(cli_profile: str | None, site_config: SiteConfig) -> str:
+def resolve_profile(cli_profile: str | None, site_config: SiteConfigModel) -> str:
     """Resolve the active profile with clear priority.
 
     Priority order:
@@ -59,7 +60,7 @@ def resolve_profile(cli_profile: str | None, site_config: SiteConfig) -> str:
     if env_profile:
         return env_profile
 
-    return str(site_config["profile"])
+    return site_config.profile
 
 
 def get_env_admin_socket_enabled() -> bool:
@@ -233,7 +234,7 @@ def output_error(error: Exception, json_output: bool = False, debug: bool = Fals
 
 
 def configure_logging_from_config(
-    site_config: SiteConfig,
+    site_config: SiteConfigModel,
     user_config: UserConfig,
     debug: bool = False,
     transport: str | None = None,

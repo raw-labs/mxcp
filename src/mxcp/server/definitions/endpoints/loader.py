@@ -8,7 +8,7 @@ import yaml
 from jsonschema import ValidationError, validate
 from referencing import Registry, Resource
 
-from mxcp.server.core.config._types import SiteConfig
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints._types import EndpointDefinition
 from mxcp.server.definitions.endpoints.utils import get_endpoint_name_or_uri
@@ -62,10 +62,10 @@ def extract_validation_error(error: ValidationError | Exception | str) -> str:
 @dataclass
 class EndpointLoader:
     _endpoints: dict[str, EndpointDefinition]
-    _site_config: SiteConfig
+    _site_config: SiteConfigModel
     _repo_root: Path
 
-    def __init__(self, site_config: SiteConfig):
+    def __init__(self, site_config: SiteConfigModel):
         self._site_config = site_config
         self._endpoints = {}
         self._repo_root = find_repo_root()
@@ -235,22 +235,19 @@ class EndpointLoader:
 
     def discover_tools(self) -> list[tuple[Path, EndpointDefinition | None, str | None]]:
         """Discover all tool definition files"""
-        paths_config = self._site_config.get("paths", {})
-        tools_path = paths_config.get("tools", "tools") if paths_config else "tools"
+        tools_path = self._site_config.paths.tools
         tools_dir = self._repo_root / str(tools_path)
         return self._discover_in_directory(tools_dir, "tool-schema-1.json", "tool")
 
     def discover_resources(self) -> list[tuple[Path, EndpointDefinition | None, str | None]]:
         """Discover all resource definition files"""
-        paths_config = self._site_config.get("paths", {})
-        resources_path = paths_config.get("resources", "resources") if paths_config else "resources"
+        resources_path = self._site_config.paths.resources
         resources_dir = self._repo_root / str(resources_path)
         return self._discover_in_directory(resources_dir, "resource-schema-1.json", "resource")
 
     def discover_prompts(self) -> list[tuple[Path, EndpointDefinition | None, str | None]]:
         """Discover all prompt definition files"""
-        paths_config = self._site_config.get("paths", {})
-        prompts_path = paths_config.get("prompts", "prompts") if paths_config else "prompts"
+        prompts_path = self._site_config.paths.prompts
         prompts_dir = self._repo_root / str(prompts_path)
         return self._discover_in_directory(prompts_dir, "prompt-schema-1.json", "prompt")
 
@@ -303,19 +300,16 @@ class EndpointLoader:
             logger.debug(f"Looking for endpoint type: {endpoint_type}, name: {name}")
 
             # Determine which directory to search based on endpoint type
-            paths_config = self._site_config.get("paths", {})
             if endpoint_type == "tool":
-                tools_path = paths_config.get("tools", "tools") if paths_config else "tools"
+                tools_path = self._site_config.paths.tools
                 search_dir = self._repo_root / str(tools_path)
                 schema_name = "tool-schema-1.json"
             elif endpoint_type == "resource":
-                resources_path = (
-                    paths_config.get("resources", "resources") if paths_config else "resources"
-                )
+                resources_path = self._site_config.paths.resources
                 search_dir = self._repo_root / str(resources_path)
                 schema_name = "resource-schema-1.json"
             elif endpoint_type == "prompt":
-                prompts_path = paths_config.get("prompts", "prompts") if paths_config else "prompts"
+                prompts_path = self._site_config.paths.prompts
                 search_dir = self._repo_root / str(prompts_path)
                 schema_name = "prompt-schema-1.json"
             else:

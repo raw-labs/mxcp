@@ -91,11 +91,13 @@ projects = user_cfg["projects"] if user_cfg else {}
 ```
 
 ### `config.site_config`
-Access full site configuration dictionary.
+Access the full `SiteConfigModel` instance. Use attribute access or `model_dump()` if you need a dictionary.
 
 ```python
 site_cfg = config.site_config
-secrets_list = site_cfg.get("secrets", [])
+if site_cfg:
+    secrets_list = site_cfg.secrets
+    default_duckdb = site_cfg.profiles[site_cfg.profile].duckdb.path
 ```
 
 ## Plugin Access

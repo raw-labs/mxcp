@@ -8,6 +8,7 @@ This module provides utilities to:
 import logging
 from collections.abc import Generator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, cast
 
 from mxcp.sdk.duckdb import (
@@ -22,13 +23,17 @@ from mxcp.sdk.executor import (
     reset_execution_context,
     set_execution_context,
 )
-from mxcp.server.core.config._types import SiteConfig, UserConfig
+from mxcp.server.core.config._types import UserConfig
+from mxcp.server.core.config.models import SiteConfigModel
 
 logger = logging.getLogger(__name__)
 
 
 def create_duckdb_session_config(
-    site_config: SiteConfig, user_config: UserConfig, profile_name: str, readonly: bool = False
+    site_config: SiteConfigModel,
+    user_config: UserConfig,
+    profile_name: str,
+    readonly: bool = False,
 ) -> tuple[DatabaseConfig, list[PluginDefinition], PluginConfig, list[SecretDefinition]]:
     """Convert MXCP configs to SDK session configuration objects.
 
@@ -42,47 +47,29 @@ def create_duckdb_session_config(
         Tuple of (database_config, plugins, plugin_config, secrets)
     """
     # Get project name from site config
-    project_name = site_config["project"]
+    project_name = site_config.project
 
     # Get database configuration from site config profiles section
-    site_profiles = site_config.get("profiles") or {}
-    site_profile_config = site_profiles.get(profile_name) or {}
-    duckdb_config = site_profile_config.get("duckdb") or {}
+    site_profile_config = site_config.profiles.get(profile_name)
+    duckdb_config = site_profile_config.duckdb if site_profile_config else None
 
     # Get database path from site config (with fallback)
-    db_path = duckdb_config.get("path") if duckdb_config else None
+    db_path = duckdb_config.path if duckdb_config and duckdb_config.path else None
     if not db_path:
-        db_path = f"data/db-{profile_name}.duckdb"
+        db_path = str(Path(site_config.paths.data) / f"db-{profile_name}.duckdb")
 
     # Get extensions from site config (root level)
-    extensions_config = site_config.get("extensions") or []
-    extensions = []
-    for ext in extensions_config:
-        if isinstance(ext, str):
-            # Simple string extension name
-            extensions.append(ExtensionDefinition(name=ext))
-        elif isinstance(ext, dict):
-            # Extension with repo specification
-            ext_name = ext.get("name")
-            if ext_name:
-                extensions.append(ExtensionDefinition(name=ext_name, repo=ext.get("repo")))
+    extensions = [
+        ExtensionDefinition(name=ext.name, repo=ext.repo) for ext in site_config.extensions
+    ]
 
     database_config = DatabaseConfig(path=db_path, readonly=readonly, extensions=extensions)
 
     # Get plugins from site config plugin array
-    plugins = []
-    site_plugins = site_config.get("plugin") or []
-    for plugin_def in site_plugins:
-        plugin_name = plugin_def.get("name")
-        plugin_module = plugin_def.get("module")
-        if plugin_name and plugin_module:
-            plugins.append(
-                PluginDefinition(
-                    name=plugin_name,
-                    module=plugin_module,
-                    config=plugin_def.get("config"),  # References config key in user config
-                )
-            )
+    plugins = [
+        PluginDefinition(name=plugin_def.name, module=plugin_def.module, config=plugin_def.config)
+        for plugin_def in site_config.plugin
+    ]
 
     # Get plugin configuration from user config
     user_projects = user_config.get("projects") or {}
@@ -93,8 +80,7 @@ def create_duckdb_session_config(
     user_plugin_configs = user_plugin_section.get("config") or {}
 
     # Get plugins path from site config
-    site_paths = site_config.get("paths") or {}
-    plugins_path = site_paths.get("plugins") or "plugins"
+    plugins_path = site_config.paths.plugins
 
     plugin_config = PluginConfig(plugins_path=plugins_path, config=user_plugin_configs)
 
@@ -116,7 +102,7 @@ def create_duckdb_session_config(
 @contextmanager
 def execution_context_for_init_hooks(
     user_config: UserConfig | None = None,
-    site_config: SiteConfig | None = None,
+    site_config: SiteConfigModel | None = None,
     duckdb_runtime: Any | None = None,
 ) -> Generator[ExecutionContext | None, None, None]:
     """

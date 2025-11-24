@@ -60,7 +60,7 @@ def dbt_config(
             debug=debug,
         )
 
-        click.echo(f"   • Project: {click.style(site_config['project'], fg='yellow')}")
+        click.echo(f"   • Project: {click.style(site_config.project, fg='yellow')}")
         click.echo(f"   • Profile: {click.style(active_profile, fg='yellow')}")
 
         if embed_secrets:
@@ -158,8 +158,8 @@ def dbt_wrapper(ctx: click.Context, profile: str | None, debug: bool) -> None:
         )
 
         # Check dbt is enabled
-        dbt_config = site_config.get("dbt", {})
-        if not dbt_config or not dbt_config.get("enabled", True):
+        dbt_config = site_config.dbt
+        if not dbt_config.enabled:
             click.echo(
                 f"\n{click.style('❌ Error:', fg='red', bold=True)} dbt integration is disabled in mxcp-site.yml"
             )
@@ -178,7 +178,7 @@ def dbt_wrapper(ctx: click.Context, profile: str | None, debug: bool) -> None:
             )
 
         # Get project name
-        project = site_config["project"]
+        project = site_config.project
 
         # Show what we're doing
         dbt_command = " ".join(ctx.args)
