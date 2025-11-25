@@ -97,12 +97,12 @@ def test_load_and_validate_snapshot_valid(no_changes_repo_path):
     snapshot_path = no_changes_repo_path / "drift-default.json"
     snapshot = load_and_validate_snapshot(snapshot_path)
 
-    assert snapshot["version"] == 1
-    assert "generated_at" in snapshot
-    assert "tables" in snapshot
-    assert "resources" in snapshot
-    assert len(snapshot["resources"]) == 1
-    assert snapshot["resources"][0]["validation_results"]["path"] == "tools/hello-world.yml"
+    assert snapshot.version == 1
+    assert snapshot.generated_at
+    assert snapshot.tables is not None
+    assert snapshot.resources
+    assert len(snapshot.resources) == 1
+    assert snapshot.resources[0].validation_results.path == "tools/hello-world.yml"
 
 
 def test_load_and_validate_snapshot_missing_file():
@@ -146,11 +146,8 @@ def test_load_and_validate_snapshot_missing_required_field(tmp_path):
 
         json.dump(invalid_snapshot, f)
 
-    # The current implementation doesn't validate schema strictly, so this test
-    # just verifies the snapshot loads without error. In a future version,
-    # we could add strict schema validation.
-    snapshot = load_and_validate_snapshot(snapshot_path)
-    assert snapshot["version"] == 1
+    with pytest.raises(ValueError, match="Invalid drift snapshot"):
+        load_and_validate_snapshot(snapshot_path)
 
 
 @pytest.mark.asyncio
@@ -170,15 +167,15 @@ async def test_drift_check_no_changes(
         )
 
         # Verify no drift detected
-        assert report["has_drift"] is False
-        assert report["version"] == 1
-        assert "generated_at" in report
-        assert "baseline_snapshot_path" in report
-        assert "current_snapshot_generated_at" in report
-        assert "baseline_snapshot_generated_at" in report
+        assert report.has_drift is False
+        assert report.version == 1
+        assert report.generated_at
+        assert report.baseline_snapshot_path
+        assert report.current_snapshot_generated_at
+        assert report.baseline_snapshot_generated_at
 
         # Verify summary shows no changes
-        summary = report["summary"]
+        summary = report.summary
         assert summary["tables_added"] == 0
         assert summary["tables_removed"] == 0
         assert summary["tables_modified"] == 0
@@ -187,8 +184,8 @@ async def test_drift_check_no_changes(
         assert summary["resources_modified"] == 0
 
         # Verify no changes in details
-        assert len(report["table_changes"]) == 0
-        assert len(report["resource_changes"]) == 0
+        assert len(report.table_changes) == 0
+        assert len(report.resource_changes) == 0
 
     finally:
         os.chdir(original_dir)
@@ -215,15 +212,15 @@ async def test_drift_check_has_changes(
         )
 
         # Verify drift detected
-        assert report["has_drift"] is True
-        assert report["version"] == 1
-        assert "generated_at" in report
-        assert "baseline_snapshot_path" in report
-        assert "current_snapshot_generated_at" in report
-        assert "baseline_snapshot_generated_at" in report
+        assert report.has_drift is True
+        assert report.version == 1
+        assert report.generated_at
+        assert report.baseline_snapshot_path
+        assert report.current_snapshot_generated_at
+        assert report.baseline_snapshot_generated_at
 
         # Verify summary shows changes
-        summary = report["summary"]
+        summary = report.summary
         assert summary["tables_added"] == 0  # No table changes in this test
         assert summary["tables_removed"] == 0
         assert summary["tables_modified"] == 0
@@ -232,33 +229,31 @@ async def test_drift_check_has_changes(
         assert summary["resources_modified"] == 1  # hello-world.yml modified
 
         # Verify no table changes
-        assert len(report["table_changes"]) == 0
+        assert len(report.table_changes) == 0
 
         # Verify resource changes
-        assert len(report["resource_changes"]) == 2
+        assert len(report.resource_changes) == 2
 
         # Find the added and modified resources
-        added_resources = [r for r in report["resource_changes"] if r["change_type"] == "added"]
-        modified_resources = [
-            r for r in report["resource_changes"] if r["change_type"] == "modified"
-        ]
+        added_resources = [r for r in report.resource_changes if r.change_type == "added"]
+        modified_resources = [r for r in report.resource_changes if r.change_type == "modified"]
 
         assert len(added_resources) == 1
         assert len(modified_resources) == 1
 
         # Check added resource (there should be one with bye-world)
-        bye_world_resources = [r for r in added_resources if "bye-world" in r["path"]]
+        bye_world_resources = [r for r in added_resources if "bye-world" in r.path]
         assert len(bye_world_resources) == 1
         added_resource = bye_world_resources[0]
-        assert added_resource["path"] == "tools/bye-world.yml"
-        assert added_resource["endpoint"] == "tool/bye_world"
-        assert added_resource["change_type"] == "added"
+        assert added_resource.path == "tools/bye-world.yml"
+        assert added_resource.endpoint == "tool/bye_world"
+        assert added_resource.change_type == "added"
 
         # Check modified resource
         modified_resource = modified_resources[0]
-        assert modified_resource["path"] == "tools/hello-world.yml"
-        assert modified_resource["endpoint"] == "tool/hello_world_changed"
-        assert modified_resource["change_type"] == "modified"
+        assert modified_resource.path == "tools/hello-world.yml"
+        assert modified_resource.endpoint == "tool/hello_world_changed"
+        assert modified_resource.change_type == "modified"
 
     finally:
         os.chdir(original_dir)
@@ -291,11 +286,11 @@ async def test_drift_check_with_custom_baseline(
         )
 
         # Should detect drift since we're comparing has-changes against no-changes baseline
-        assert report["has_drift"] is True
-        assert report["baseline_snapshot_path"] == custom_baseline_path
+        assert report.has_drift is True
+        assert report.baseline_snapshot_path == custom_baseline_path
 
         # Should show resource changes
-        summary = report["summary"]
+        summary = report.summary
         assert summary["resources_added"] == 1  # bye-world.yml added
         assert summary["resources_modified"] == 1  # hello-world.yml modified
 
@@ -348,23 +343,24 @@ def test_drift_report_structure(no_changes_repo_path):
     snapshot = load_and_validate_snapshot(snapshot_path)
 
     # Verify the snapshot has the expected structure for drift comparison
-    assert "version" in snapshot
-    assert "generated_at" in snapshot
-    assert "tables" in snapshot
-    assert "resources" in snapshot
+    assert snapshot.version == 1
+    assert snapshot.generated_at
+    assert snapshot.tables is not None
+    assert snapshot.resources
 
     # Verify resource structure
-    for resource in snapshot["resources"]:
-        assert "validation_results" in resource
-        assert "test_results" in resource
-        assert "definition" in resource
+    for resource in snapshot.resources:
+        assert resource.validation_results
+        assert resource.test_results is not None
+        assert resource.definition is not None
 
         # Verify validation_results structure
-        validation = resource["validation_results"]
-        assert "status" in validation
-        assert "path" in validation
+        validation = resource.validation_results
+        assert validation.status
+        assert validation.path
 
         # Verify test_results structure
-        test_results = resource["test_results"]
-        assert "status" in test_results
-        assert "tests_run" in test_results
+        test_results = resource.test_results
+        assert test_results is not None
+        assert test_results.status
+        assert test_results.tests_run is not None

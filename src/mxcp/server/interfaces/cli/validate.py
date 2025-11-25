@@ -1,5 +1,3 @@
-from typing import Any
-
 import click
 
 from mxcp.server.core.config.analytics import track_command_with_timing
@@ -13,10 +11,16 @@ from mxcp.server.interfaces.cli.utils import (
     output_result,
     resolve_profile,
 )
+from mxcp.server.services.endpoints.models import (
+    EndpointValidationResultModel,
+    EndpointValidationSummaryModel,
+)
 from mxcp.server.services.endpoints.validator import validate_all_endpoints, validate_endpoint
 
 
-def format_validation_results(results: Any) -> str:
+def format_validation_results(
+    results: EndpointValidationResultModel | EndpointValidationSummaryModel | str,
+) -> str:
     """Format validation results for human-readable output"""
     if isinstance(results, str):
         return results
@@ -24,12 +28,10 @@ def format_validation_results(results: Any) -> str:
     output = []
 
     # Overall status
-    status = results.get("status", "unknown")
-
-    # Single endpoint validation
-    if "path" in results:
-        path = results["path"]
-        message = results.get("message", "")
+    if isinstance(results, EndpointValidationResultModel):
+        status = results.status
+        path = results.path
+        message = results.message or ""
 
         if status == "ok":
             output.append(f"{click.style('✅ Validation passed!', fg='green', bold=True)}")
@@ -49,7 +51,8 @@ def format_validation_results(results: Any) -> str:
         return "\n".join(output)
 
     # Multiple endpoint validation
-    validated = results.get("validated", [])
+    assert isinstance(results, EndpointValidationSummaryModel)
+    validated = results.validated
     if not validated:
         output.append(click.style("ℹ️  No endpoints found to validate", fg="blue"))
         output.append(
@@ -58,7 +61,7 @@ def format_validation_results(results: Any) -> str:
         return "\n".join(output)
 
     # Count valid and failed endpoints
-    valid_count = sum(1 for r in validated if r.get("status") == "ok")
+    valid_count = sum(1 for r in validated if r.status == "ok")
     failed_count = len(validated) - valid_count
 
     # Header
@@ -75,11 +78,10 @@ def format_validation_results(results: Any) -> str:
     failed_endpoints = []
 
     for result in validated:
-        path = result.get("path", "unknown")
-        message = result.get("message", "")
-        result_status = result.get("status", "unknown")
+        path = result.path
+        message = result.message or ""
 
-        if result_status == "ok":
+        if result.status == "ok":
             valid_endpoints.append((path, message))
         else:
             failed_endpoints.append((path, message))
@@ -189,7 +191,12 @@ def validate(
                 result = validate_all_endpoints(site_config, execution_engine)
 
             if json_output:
-                output_result(result, json_output, debug)
+                payload = (
+                    result
+                    if isinstance(result, str)
+                    else result.model_dump(mode="json", exclude_none=True)
+                )
+                output_result(payload, json_output, debug)
             else:
                 click.echo(format_validation_results(result))
         finally:

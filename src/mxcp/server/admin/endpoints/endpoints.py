@@ -70,26 +70,34 @@ def create_endpoints_router(admin_service: AdminService) -> APIRouter:
                 elif endpoint_def:
                     # Extract endpoint data from definition
                     endpoint_type: Literal["tool", "resource", "prompt"] | None = None
-                    endpoint_data = None
                     enabled = True
 
-                    if "tool" in endpoint_def:
+                    if endpoint_def.tool is not None:
                         endpoint_type = "tool"
-                        endpoint_data = endpoint_def["tool"]
-                    elif "resource" in endpoint_def:
+                        endpoint_data = endpoint_def.tool
+                        name = endpoint_data.name
+                        description = endpoint_data.description
+                        language = endpoint_data.language
+                        enabled = endpoint_data.enabled
+                    elif endpoint_def.resource is not None:
                         endpoint_type = "resource"
-                        endpoint_data = endpoint_def["resource"]
-                    elif "prompt" in endpoint_def:
+                        endpoint_data = endpoint_def.resource
+                        name = endpoint_data.name or endpoint_data.uri
+                        description = endpoint_data.description
+                        language = endpoint_data.language
+                        enabled = endpoint_data.enabled
+                    elif endpoint_def.prompt is not None:
                         endpoint_type = "prompt"
-                        endpoint_data = endpoint_def["prompt"]
-
-                    if endpoint_data:
-                        enabled = bool(endpoint_data.get("enabled", True))
-
-                    # Extract metadata
-                    name = endpoint_data.get("name") if endpoint_data else None
-                    description = endpoint_data.get("description") if endpoint_data else None
-                    language = endpoint_data.get("language") if endpoint_data else None
+                        endpoint_data = endpoint_def.prompt
+                        name = endpoint_data.name
+                        description = endpoint_data.description
+                        language = None
+                        enabled = endpoint_data.enabled
+                    else:
+                        endpoint_data = None
+                        name = None
+                        description = None
+                        language = None
 
                     endpoints.append(
                         EndpointMetadata(

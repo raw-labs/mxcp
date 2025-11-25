@@ -20,25 +20,27 @@ def format_drift_report(report: Any, debug: bool = False) -> str:
     """Format drift report for human-readable output"""
     if isinstance(report, str):
         return report
-
+    payload = (
+        report if isinstance(report, dict) else report.model_dump(mode="python", exclude_none=True)
+    )
     output = []
 
     # Header
-    output.append(f"Drift Report (Generated: {report['generated_at']})")
-    output.append(f"Baseline: {report['baseline_snapshot_path']}")
-    output.append(f"Baseline Generated: {report['baseline_snapshot_generated_at']}")
-    output.append(f"Current Generated: {report['current_snapshot_generated_at']}")
+    output.append(f"Drift Report (Generated: {payload['generated_at']})")
+    output.append(f"Baseline: {payload['baseline_snapshot_path']}")
+    output.append(f"Baseline Generated: {payload['baseline_snapshot_generated_at']}")
+    output.append(f"Current Generated: {payload['current_snapshot_generated_at']}")
     output.append("")
 
     # Summary
-    if report["has_drift"]:
+    if payload["has_drift"]:
         output.append("🔴 DRIFT DETECTED")
     else:
         output.append("✅ NO DRIFT DETECTED")
 
     output.append("")
     output.append("Summary:")
-    summary = report["summary"]
+    summary = payload["summary"]
     output.append(
         f"  Tables: {summary['tables_added']} added, {summary['tables_removed']} removed, {summary['tables_modified']} modified"
     )
@@ -48,9 +50,9 @@ def format_drift_report(report: Any, debug: bool = False) -> str:
     output.append("")
 
     # Table changes
-    if report["table_changes"]:
+    if payload["table_changes"]:
         output.append("Table Changes:")
-        for change in report["table_changes"]:
+        for change in payload["table_changes"]:
             change_type = change["change_type"]
             table_name = change["name"]
 
@@ -86,9 +88,9 @@ def format_drift_report(report: Any, debug: bool = False) -> str:
         output.append("")
 
     # Resource changes
-    if report["resource_changes"]:
+    if payload["resource_changes"]:
         output.append("Resource Changes:")
-        for change in report["resource_changes"]:
+        for change in payload["resource_changes"]:
             change_type = change["change_type"]
             path = change["path"]
             endpoint = change.get("endpoint", "unknown")
@@ -221,10 +223,10 @@ async def _drift_check_impl(
     report = await check_drift(site_config, user_config, profile=profile, baseline_path=baseline)
 
     if json_output:
-        output_result(report, json_output, debug)
+        output_result(report.model_dump(mode="json", exclude_none=True), json_output, debug)
     else:
         click.echo(format_drift_report(report, debug))
 
     # Exit with non-zero code if drift detected
-    if report["has_drift"]:
+    if report.has_drift:
         raise SystemExit(1)

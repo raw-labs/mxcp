@@ -60,56 +60,55 @@ def test_list_endpoints(test_repo_path, test_config):
         tool1_path = test_repo_path / "tools" / "tool1.yml"
         assert str(tool1_path) in endpoint_dict
         tool1_data = endpoint_dict[str(tool1_path)]
-        assert "tool" in tool1_data
-        assert tool1_data["tool"]["name"] == "tool1"
+        assert tool1_data.tool is not None
+        assert tool1_data.tool.name == "tool1"
 
         # Verify resources directory endpoints
         resource1_path = test_repo_path / "resources" / "resource1.yml"
         assert str(resource1_path) in endpoint_dict
         resource1_data = endpoint_dict[str(resource1_path)]
-        assert "resource" in resource1_data
-        assert resource1_data["resource"]["name"] == "resource1"
+        assert resource1_data.resource is not None
+        assert resource1_data.resource.name == "resource1"
 
         # Verify prompts directory endpoints
         prompt1_path = test_repo_path / "prompts" / "prompt1.yml"
         assert str(prompt1_path) in endpoint_dict
         prompt1_data = endpoint_dict[str(prompt1_path)]
-        assert "prompt" in prompt1_data
-        assert prompt1_data["prompt"]["name"] == "prompt1"
+        assert prompt1_data.prompt is not None
+        assert prompt1_data.prompt.name == "prompt1"
 
         # Verify prompt1 has proper message structure
-        messages = prompt1_data["prompt"]["messages"]
+        messages = prompt1_data.prompt.messages
         assert len(messages) == 2
-        assert messages[0]["role"] == "system"
-        assert messages[0]["type"] == "text"
-        assert messages[1]["role"] == "user"
-        assert messages[1]["type"] == "text"
+        assert messages[0].role == "system"
+        assert messages[0].type == "text"
+        assert messages[1].role == "user"
+        assert messages[1].type == "text"
 
         # Verify additional tools
         tool2_path = test_repo_path / "tools" / "tool2.yml"
         assert str(tool2_path) in endpoint_dict
         tool2_data = endpoint_dict[str(tool2_path)]
-        assert "tool" in tool2_data
-        assert tool2_data["tool"]["name"] == "tool2"
-        assert "source" in tool2_data["tool"]
-        assert "code" in tool2_data["tool"]["source"]
+        assert tool2_data.tool is not None
+        assert tool2_data.tool.name == "tool2"
+        assert tool2_data.tool.source.code is not None
 
         # Verify additional prompts
         prompt2_path = test_repo_path / "prompts" / "prompt2.yml"
         assert str(prompt2_path) in endpoint_dict
         prompt2_data = endpoint_dict[str(prompt2_path)]
-        assert "prompt" in prompt2_data
-        assert prompt2_data["prompt"]["name"] == "prompt2"
+        assert prompt2_data.prompt is not None
+        assert prompt2_data.prompt.name == "prompt2"
 
         # Verify prompt2 has proper message structure
-        messages = prompt2_data["prompt"]["messages"]
+        messages = prompt2_data.prompt.messages
         assert len(messages) == 2
-        assert messages[0]["role"] == "system"
-        assert messages[0]["type"] == "text"
-        assert messages[0]["prompt"] == "You are a helpful assistant in a subfolder."
-        assert messages[1]["role"] == "user"
-        assert messages[1]["type"] == "text"
-        assert messages[1]["prompt"] == "{{message}}"
+        assert messages[0].role == "system"
+        assert messages[0].type == "text"
+        assert messages[0].prompt == "You are a helpful assistant in a subfolder."
+        assert messages[1].role == "user"
+        assert messages[1].type == "text"
+        assert messages[1].prompt == "{{message}}"
 
         # Verify disabled endpoint is filtered out during discovery
         disabled_tool_path = test_repo_path / "tools" / "disabled_tool.yml"
@@ -146,34 +145,33 @@ def test_list_endpoints_from_subfolder(test_repo_path, test_config):
         tool1_path = test_repo_path / "tools" / "tool1.yml"
         assert str(tool1_path) in endpoint_dict
         tool1_data = endpoint_dict[str(tool1_path)]
-        assert "tool" in tool1_data
-        assert tool1_data["tool"]["name"] == "tool1"
+        assert tool1_data.tool is not None
+        assert tool1_data.tool.name == "tool1"
 
         # Verify additional tools
         tool2_path = test_repo_path / "tools" / "tool2.yml"
         assert str(tool2_path) in endpoint_dict
         tool2_data = endpoint_dict[str(tool2_path)]
-        assert "tool" in tool2_data
-        assert tool2_data["tool"]["name"] == "tool2"
-        assert "source" in tool2_data["tool"]
-        assert "code" in tool2_data["tool"]["source"]
+        assert tool2_data.tool is not None
+        assert tool2_data.tool.name == "tool2"
+        assert tool2_data.tool.source.code is not None
 
         # Verify additional prompts
         prompt2_path = test_repo_path / "prompts" / "prompt2.yml"
         assert str(prompt2_path) in endpoint_dict
         prompt2_data = endpoint_dict[str(prompt2_path)]
-        assert "prompt" in prompt2_data
-        assert prompt2_data["prompt"]["name"] == "prompt2"
+        assert prompt2_data.prompt is not None
+        assert prompt2_data.prompt.name == "prompt2"
 
         # Verify prompt2 has proper message structure
-        messages = prompt2_data["prompt"]["messages"]
+        messages = prompt2_data.prompt.messages
         assert len(messages) == 2
-        assert messages[0]["role"] == "system"
-        assert messages[0]["type"] == "text"
-        assert messages[0]["prompt"] == "You are a helpful assistant in a subfolder."
-        assert messages[1]["role"] == "user"
-        assert messages[1]["type"] == "text"
-        assert messages[1]["prompt"] == "{{message}}"
+        assert messages[0].role == "system"
+        assert messages[0].type == "text"
+        assert messages[0].prompt == "You are a helpful assistant in a subfolder."
+        assert messages[1].role == "user"
+        assert messages[1].type == "text"
+        assert messages[1].prompt == "{{message}}"
     finally:
         os.chdir(original_dir)
 

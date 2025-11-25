@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from mxcp.sdk.audit.backends.noop import NoOpAuditBackend
 from mxcp.server.core.config.models import SiteConfigModel
-from mxcp.server.definitions.endpoints._types import EndpointDefinition
+from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 
 from .models import ConfigResponse, EndpointCounts, Features
 
@@ -112,7 +112,7 @@ class AdminService:
             transport=self._server.transport,
         )
 
-    def discover_endpoints(self) -> list[tuple[Path, EndpointDefinition | None, str | None]]:
+    def discover_endpoints(self) -> list[tuple[Path, EndpointDefinitionModel | None, str | None]]:
         """
         Discover all endpoints using the server's endpoint loader.
 

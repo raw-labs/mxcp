@@ -120,3 +120,13 @@ Create one epic per phase with child tasks for:
 
 Progress through the phases only after the previous phase meets its exit criteria to avoid overlapping risk areas. This ensures we maintain a fully typed, immutable configuration surface before tackling downstream definitions.
 
+---
+
+## Post-Migration Cleanup (Completed)
+
+- **Structured outputs everywhere** – Test runner, endpoint validation, and CLI lint now emit dedicated Pydantic models. Sanitizers such as `_sanitize_test_results` were removed, and JSON output is derived via `model_dump()` only at the final serialization boundary.
+- **No more dict↔model unions in server code** – Inputs are validated upfront (e.g., policy parsing, schema helpers), and a regression test (`tests/misc/test_no_dict_model_unions.py`) guards against reintroducing `dict[str, Any] | Model` type hints. Union uses remain only in SDK-facing code where dicts are part of the public contract.
+- **Metadata remains optional by design** – The models preserve existing semantics, while lint rules continue to warn when authors omit descriptions/tests/examples. This matches the long-standing behavior without forcing breaking schema changes.
+
+With these tightening steps and the automated guard in place, the Pydantic migration is fully complete.
+

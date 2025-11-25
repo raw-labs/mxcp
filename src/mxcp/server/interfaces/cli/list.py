@@ -6,7 +6,7 @@ import click
 from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.definitions.endpoints._types import EndpointDefinition
+from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.interfaces.cli.utils import (
     configure_logging_from_config,
@@ -16,33 +16,26 @@ from mxcp.server.interfaces.cli.utils import (
 )
 
 
-def parse_endpoint(path: Path, endpoint: EndpointDefinition) -> tuple[str, str, str | None]:
+def parse_endpoint(path: Path, endpoint: EndpointDefinitionModel) -> tuple[str, str, str | None]:
     """Parse an endpoint definition to determine its type, name, and any error.
 
     Returns:
         Tuple of (kind, name, error_message)
     """
-    if endpoint.get("tool") is not None:
-        tool = endpoint["tool"]
-        if tool:
-            return "tool", tool.get("name", "unnamed"), None
-        return "tool", "unnamed", None
-    elif endpoint.get("resource") is not None:
-        resource = endpoint["resource"]
-        if resource:
-            return "resource", resource.get("uri", "unknown"), None
-        return "resource", "unknown", None
-    elif endpoint.get("prompt") is not None:
-        prompt = endpoint["prompt"]
-        if prompt:
-            return "prompt", prompt.get("name", "unnamed"), None
-        return "prompt", "unnamed", None
-    else:
-        return (
-            "unknown",
-            "unknown",
-            f"Invalid endpoint structure in {path}: missing tool/resource/prompt key",
-        )
+    if endpoint.tool is not None:
+        return "tool", endpoint.tool.name, None
+
+    if endpoint.resource is not None:
+        return "resource", endpoint.resource.uri, None
+
+    if endpoint.prompt is not None:
+        return "prompt", endpoint.prompt.name, None
+
+    return (
+        "unknown",
+        "unknown",
+        f"Invalid endpoint structure in {path}: missing tool/resource/prompt key",
+    )
 
 
 @click.command(name="list")

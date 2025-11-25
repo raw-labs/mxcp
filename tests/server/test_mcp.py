@@ -8,6 +8,11 @@ from unittest.mock import patch
 import aiohttp
 import pytest
 
+from mxcp.server.definitions.endpoints.models import (
+    PromptDefinitionModel,
+    ResourceDefinitionModel,
+    ToolDefinitionModel,
+)
 from mxcp.server.interfaces.server.mcp import RAWMCP
 
 
@@ -78,6 +83,7 @@ def mock_endpoint():
             {"name": "array_param", "type": "array"},
             {"name": "object_param", "type": "object"},
         ],
+        "source": {"code": "SELECT 1"},
     }
 
 
@@ -124,8 +130,9 @@ def test_convert_param_type_object(mcp_server):
 
 def test_register_tool(mcp_server, mock_endpoint):
     """Test registering a tool endpoint."""
+    tool_model = ToolDefinitionModel.model_validate(mock_endpoint)
     with patch.object(mcp_server.mcp, "tool", return_value=lambda f: f):
-        mcp_server._register_tool(mock_endpoint)
+        mcp_server._register_tool(tool_model)
 
 
 def test_register_resource(mcp_server):
@@ -133,15 +140,26 @@ def test_register_resource(mcp_server):
     resource_def = {
         "uri": "resource://test/resource",
         "parameters": [{"name": "param1", "type": "string"}],
+        "source": {"code": "select 1"},
     }
+    resource_model = ResourceDefinitionModel.model_validate(resource_def)
     with patch.object(mcp_server.mcp, "resource", return_value=lambda f: f):
-        mcp_server._register_resource(resource_def)
+        mcp_server._register_resource(resource_model)
 
 
 def test_register_prompt(mcp_server, mock_endpoint):
     """Test registering a prompt endpoint."""
+    prompt_def = {
+        "name": "test_prompt",
+        "parameters": [{"name": "name", "type": "string"}],
+        "messages": [
+            {"role": "system", "type": "text", "prompt": "Say hi"},
+            {"role": "user", "type": "text", "prompt": "{{name}}"},
+        ],
+    }
+    prompt_model = PromptDefinitionModel.model_validate(prompt_def)
     with patch.object(mcp_server.mcp, "prompt", return_value=lambda f: f):
-        mcp_server._register_prompt(mock_endpoint)
+        mcp_server._register_prompt(prompt_model)
 
 
 def test_run_http(mcp_server):

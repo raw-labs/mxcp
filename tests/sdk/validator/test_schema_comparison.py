@@ -3,6 +3,19 @@
 import json
 from pathlib import Path
 
+from mxcp.server.definitions.endpoints.models import ParamDefinitionModel, TypeDefinitionModel
+
+
+def _extract_enum(schema_fragment: dict) -> list[str]:
+    """Return enum values from schema fragment that may use anyOf wrappers."""
+    if "enum" in schema_fragment:
+        return schema_fragment["enum"]
+    if "anyOf" in schema_fragment:
+        for option in schema_fragment["anyOf"]:
+            if isinstance(option, dict) and "enum" in option:
+                return option["enum"]
+    raise KeyError("enum")
+
 
 class TestSchemaComparison:
     """Compare validation schema with common-types schema to ensure compatibility."""
@@ -20,24 +33,14 @@ class TestSchemaComparison:
             / "schemas"
             / "validation-schema-1.json"
         )
-        common_types_path = (
-            Path(__file__).parent.parent.parent.parent
-            / "src"
-            / "mxcp"
-            / "server"
-            / "schemas"
-            / "common-types-schema-1.json"
-        )
 
         with open(validation_schema_path) as f:
             validation_schema = json.load(f)
 
-        with open(common_types_path) as f:
-            common_types_schema = json.load(f)
-
         # Get type definitions
         validation_base_type = validation_schema["definitions"]["baseTypeDefinition"]["properties"]
-        common_type = common_types_schema["definitions"]["typeDefinition"]["properties"]
+        type_schema = TypeDefinitionModel.model_json_schema()
+        common_type = type_schema["$defs"]["TypeDefinitionModel"]["properties"]
 
         # Check type enum values
         validation_types = validation_schema["definitions"]["typeEnum"]["enum"]
@@ -48,7 +51,7 @@ class TestSchemaComparison:
 
         # Check format enum values
         validation_formats = validation_schema["definitions"]["formatEnum"]["enum"]
-        common_formats = common_type["format"]["enum"]
+        common_formats = _extract_enum(common_type["format"])
         assert set(validation_formats) == set(
             common_formats
         ), f"Format enums differ: {validation_formats} vs {common_formats}"
@@ -78,7 +81,7 @@ class TestSchemaComparison:
         # Compare parameter definitions
         print("\n=== Parameter Definition Comparison ===")
         validation_param = validation_schema["definitions"]["parameterSchema"]
-        common_param = common_types_schema["definitions"]["paramDefinition"]
+        param_schema = ParamDefinitionModel.model_json_schema()
 
         # Extract parameter-specific properties from validation schema
         validation_param_props = set()
@@ -87,7 +90,7 @@ class TestSchemaComparison:
                 validation_param_props.update(item["properties"].keys())
 
         # Get common param properties (excluding type properties already compared)
-        common_param_props = set(common_param["properties"].keys())
+        common_param_props = set(param_schema["properties"].keys())
 
         print(f"Validation parameter properties: {sorted(validation_param_props)}")
         print(f"Common parameter properties: {sorted(common_param_props)}")
@@ -98,7 +101,7 @@ class TestSchemaComparison:
             if "required" in item:
                 validation_param_required.extend(item["required"])
 
-        common_param_required = common_param.get("required", [])
+        common_param_required = param_schema.get("required", [])
         print(f"\nValidation param required: {validation_param_required}")
         print(f"Common param required: {common_param_required}")
 
@@ -181,33 +184,20 @@ class TestSchemaComparison:
             / "schemas"
             / "validation-schema-1.json"
         )
-        common_types_path = (
-            Path(__file__).parent.parent.parent.parent
-            / "src"
-            / "mxcp"
-            / "server"
-            / "schemas"
-            / "common-types-schema-1.json"
-        )
-
         with open(validation_schema_path) as f:
             validation_schema = json.load(f)
 
-        with open(common_types_path) as f:
-            common_types_schema = json.load(f)
+        type_schema = TypeDefinitionModel.model_json_schema()
+        type_props = type_schema["$defs"]["TypeDefinitionModel"]["properties"]
 
         # Verify type enums match exactly
         validation_types = validation_schema["definitions"]["typeEnum"]["enum"]
-        common_types = common_types_schema["definitions"]["typeDefinition"]["properties"]["type"][
-            "enum"
-        ]
+        common_types = type_props["type"]["enum"]
         assert validation_types == common_types
 
         # Verify format enums match exactly
         validation_formats = validation_schema["definitions"]["formatEnum"]["enum"]
-        common_formats = common_types_schema["definitions"]["typeDefinition"]["properties"][
-            "format"
-        ]["enum"]
+        common_formats = _extract_enum(type_props["format"])
         assert validation_formats == common_formats
 
         print("\n✅ All critical type system components are aligned!")

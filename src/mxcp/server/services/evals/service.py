@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Any, cast
+from typing import Any
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.evals import (
@@ -14,9 +14,10 @@ from mxcp.sdk.evals import (
 from mxcp.sdk.validator import TypeSchema
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
-from mxcp.server.definitions.endpoints._types import EndpointDefinition
+from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.evals.loader import discover_eval_files, load_eval_suite
+from mxcp.server.definitions.evals.models import EvalSuiteModel
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.tool import EndpointToolExecutor
 
@@ -62,7 +63,7 @@ def _create_model_config(model: str, user_config: UserConfigModel) -> ModelConfi
         raise ValueError(f"Unknown model type: {model_type}")
 
 
-def _load_endpoints(site_config: SiteConfigModel) -> list[EndpointDefinition]:
+def _load_endpoints(site_config: SiteConfigModel) -> list[EndpointDefinitionModel]:
     """Load all available endpoints.
 
     Args:
@@ -72,15 +73,11 @@ def _load_endpoints(site_config: SiteConfigModel) -> list[EndpointDefinition]:
         List of endpoint definitions
     """
     loader = EndpointLoader(site_config)
-    endpoints: list[EndpointDefinition] = []
+    endpoints: list[EndpointDefinitionModel] = []
     discovered = loader.discover_endpoints()
 
     for _path, endpoint_def, error in discovered:
-        if (
-            error is None
-            and endpoint_def
-            and (endpoint_def.get("tool") or endpoint_def.get("resource"))
-        ):
+        if error is None and endpoint_def and (endpoint_def.tool or endpoint_def.resource):
             # Only include endpoints that have a tool or resource definition
             endpoints.append(endpoint_def)
 
@@ -88,7 +85,7 @@ def _load_endpoints(site_config: SiteConfigModel) -> list[EndpointDefinition]:
 
 
 def _convert_endpoints_to_tool_definitions(
-    endpoints: list[EndpointDefinition],
+    endpoints: list[EndpointDefinitionModel],
 ) -> list[ToolDefinition]:
     """Convert endpoint definitions to ToolDefinition objects for the LLM.
 
@@ -101,71 +98,76 @@ def _convert_endpoints_to_tool_definitions(
     tool_definitions = []
 
     for endpoint_def in endpoints:
-        if "tool" in endpoint_def:
-            tool = endpoint_def["tool"]
-            if tool:
-                # Convert parameters
-                parameters = []
-                tool_params = tool.get("parameters") or []
-                for param in tool_params:
-                    parameters.append(
-                        ParameterDefinition(
-                            name=param.get("name", ""),
-                            type=param.get("type", "string"),
-                            description=param.get("description", ""),
-                            default=param.get("default"),
-                            required="default" not in param,
-                        )
-                    )
+        if endpoint_def.tool:
+            tool = endpoint_def.tool
 
-                # Convert return TypeDefinition to TypeSchema if present
-                return_type = None
-                if tool.get("return_"):
-                    return_type = TypeSchema.from_dict(cast(dict[str, Any], tool["return_"]))
-
-                tool_definitions.append(
-                    ToolDefinition(
-                        name=tool["name"],
-                        description=tool.get("description") or "",
-                        parameters=parameters,
-                        return_type=return_type,
-                        annotations=tool.get("annotations") or {},
-                        tags=tool.get("tags") or [],
+            tool_parameters = []
+            for param in tool.parameters or []:
+                has_default = "default" in param.model_fields_set
+                tool_parameters.append(
+                    ParameterDefinition(
+                        name=param.name,
+                        type=param.type,
+                        description=param.description or "",
+                        default=param.default if has_default else None,
+                        required=not has_default,
                     )
                 )
 
-        elif "resource" in endpoint_def:
-            resource = endpoint_def["resource"]
-            if resource:
-                # Convert parameters
-                parameters = []
-                resource_params = resource.get("parameters") or []
-                for param in resource_params:
-                    parameters.append(
-                        ParameterDefinition(
-                            name=param.get("name", ""),
-                            type=param.get("type", "string"),
-                            description=param.get("description", ""),
-                            default=param.get("default"),
-                            required="default" not in param,
-                        )
-                    )
+            return_type = None
+            if tool.return_:
+                return_type = TypeSchema.from_dict(
+                    tool.return_.model_dump(mode="python", exclude_unset=True, by_alias=True)
+                )
 
-                # Convert return TypeDefinition to TypeSchema if present
-                return_type = None
-                if resource.get("return"):
-                    return_type = TypeSchema.from_dict(cast(dict[str, Any], resource["return"]))
+            annotations = (
+                tool.annotations.model_dump(mode="python", exclude_unset=True)
+                if tool.annotations
+                else {}
+            )
 
-                tool_definitions.append(
-                    ToolDefinition(
-                        name=resource["uri"],
-                        description=resource.get("description") or "",
-                        parameters=parameters,
-                        return_type=return_type,
-                        annotations={},
-                        tags=resource.get("tags") or [],
+            tool_definitions.append(
+                ToolDefinition(
+                    name=tool.name,
+                    description=tool.description or "",
+                    parameters=tool_parameters,
+                    return_type=return_type,
+                    annotations=annotations,
+                    tags=tool.tags or [],
+                )
+            )
+
+        elif endpoint_def.resource:
+            resource = endpoint_def.resource
+            resource_parameters = []
+            for param in resource.parameters or []:
+                has_default = "default" in param.model_fields_set
+                resource_parameters.append(
+                    ParameterDefinition(
+                        name=param.name,
+                        type=param.type,
+                        description=param.description or "",
+                        default=param.default if has_default else None,
+                        required=not has_default,
                     )
                 )
+
+            return_type = None
+            if resource.return_:
+                return_type = TypeSchema.from_dict(
+                    resource.return_.model_dump(mode="python", exclude_unset=True, by_alias=True)
+                )
+
+            tool_definitions.append(
+                ToolDefinition(
+                    name=resource.uri,
+                    description=resource.description or "",
+                    parameters=resource_parameters,
+                    return_type=return_type,
+                    annotations={},
+                    tags=resource.tags or [],
+                )
+            )
 
     return tool_definitions
 
@@ -199,7 +201,7 @@ async def run_eval_suite(
     file_path, eval_suite = result
 
     # Determine which model to use
-    model = override_model or eval_suite.get("model")
+    model = override_model or eval_suite.model
     if not model:
         models_config = user_config.models
         model = models_config.default if models_config else None
@@ -227,11 +229,9 @@ async def run_eval_suite(
     tool_executor = EndpointToolExecutor(engine, endpoints)
 
     logger.info(f"Running eval suite: {suite_name} from {file_path}")
-    logger.info(
-        f"Suite description: {eval_suite.get('description', 'No description') if eval_suite else 'No description'}"
-    )
+    logger.info(f"Suite description: {eval_suite.description or 'No description'}")
     logger.info(f"Model: {model}")
-    logger.info(f"Number of tests: {len(eval_suite.get('tests', []) if eval_suite else [])}")
+    logger.info(f"Number of tests: {len(eval_suite.tests)}")
 
     try:
         # Create LLM executor with model config, tool definitions, and tool executor
@@ -239,103 +239,82 @@ async def run_eval_suite(
 
         # Run each test
         tests = []
-        for test in eval_suite.get("tests", []) if eval_suite else []:
+        for test in eval_suite.tests:
             test_start = time.time()
 
             # Determine user context for this test
             test_user_context = cli_user_context
-            if test_user_context is None and "user_context" in test:
-                # Create UserContext from test definition
-                test_context_data = test["user_context"]
+            if test_user_context is None and test.user_context is not None:
+                test_context_data = test.user_context
                 test_user_context = UserContext(
                     provider="test",
-                    user_id=(
-                        test_context_data.get("user_id", "test_user")
-                        if test_context_data
-                        else "test_user"
-                    ),
-                    username=(
-                        test_context_data.get("username", "test_user")
-                        if test_context_data
-                        else "test_user"
-                    ),
-                    email=test_context_data.get("email") if test_context_data else None,
-                    name=test_context_data.get("name") if test_context_data else None,
-                    avatar_url=test_context_data.get("avatar_url") if test_context_data else None,
-                    raw_profile=test_context_data if test_context_data else {},
+                    user_id=test_context_data.get("user_id", "test_user"),
+                    username=test_context_data.get("username", "test_user"),
+                    email=test_context_data.get("email"),
+                    name=test_context_data.get("name"),
+                    avatar_url=test_context_data.get("avatar_url"),
+                    raw_profile=test_context_data,
                 )
 
             try:
                 # Execute the prompt
                 response, tool_calls = await executor.execute_prompt(
-                    test["prompt"], user_context=test_user_context
+                    test.prompt, user_context=test_user_context
                 )
 
                 # Evaluate assertions
                 failures = []
-                assertions = test.get("assertions", {})
+                assertions = test.assertions
 
                 # Check must_call assertions
-                if assertions and "must_call" in assertions:
-                    must_calls = assertions.get("must_call")
-                    if must_calls:
-                        for expected_call in must_calls:
-                            expected_tool = expected_call["tool"]
-                            expected_args = expected_call.get("args", {})
+                if assertions.must_call:
+                    for expected_call in assertions.must_call:
+                        expected_tool = expected_call.tool
+                        expected_args = expected_call.args or {}
 
-                            # Check if tool was called with expected args
-                            found = False
-                            for call in tool_calls:
-                                if call["tool"] == expected_tool:
-                                    # Check arguments match
-                                    actual_args = call.get("arguments", {})
-                                    if all(
-                                        actual_args.get(k) == v for k, v in expected_args.items()
-                                    ):
-                                        found = True
-                                        break
+                        found = False
+                        for call in tool_calls:
+                            if call["tool"] == expected_tool:
+                                actual_args = call.get("arguments", {})
+                                if all(actual_args.get(k) == v for k, v in expected_args.items()):
+                                    found = True
+                                    break
 
-                            if not found:
-                                failures.append(
-                                    f"Expected call to '{expected_tool}' with args {expected_args} not found"
-                                )
+                        if not found:
+                            failures.append(
+                                f"Expected call to '{expected_tool}' with args {expected_args} not found"
+                            )
 
                 # Check must_not_call assertions
-                if assertions and "must_not_call" in assertions:
-                    must_not_calls = assertions.get("must_not_call")
-                    if must_not_calls:
-                        for forbidden_tool in must_not_calls:
-                            if any(call["tool"] == forbidden_tool for call in tool_calls):
-                                failures.append(
-                                    f"Tool '{forbidden_tool}' was called but should not have been"
-                                )
+                if assertions.must_not_call:
+                    for forbidden_tool in assertions.must_not_call:
+                        if any(call["tool"] == forbidden_tool for call in tool_calls):
+                            failures.append(
+                                f"Tool '{forbidden_tool}' was called but should not have been"
+                            )
 
                 # Check answer_contains assertions
-                if assertions and "answer_contains" in assertions:
-                    contains = assertions.get("answer_contains")
-                    if contains:
-                        for expected_text in contains:
-                            if expected_text.lower() not in response.lower():
-                                failures.append(
-                                    f"Expected text '{expected_text}' not found in response"
-                                )
+                if assertions.answer_contains:
+                    for expected_text in assertions.answer_contains:
+                        if expected_text.lower() not in response.lower():
+                            failures.append(
+                                f"Expected text '{expected_text}' not found in response"
+                            )
 
                 # Check answer_not_contains assertions
-                if assertions and "answer_not_contains" in assertions:
-                    not_contains = assertions.get("answer_not_contains")
-                    if not_contains:
-                        for forbidden_text in not_contains:
-                            if forbidden_text.lower() in response.lower():
-                                failures.append(
-                                    f"Forbidden text '{forbidden_text}' found in response"
-                                )
+                if assertions.answer_not_contains:
+                    for forbidden_text in assertions.answer_not_contains:
+                        if forbidden_text.lower() in response.lower():
+                            failures.append(
+                                f"Forbidden text '{forbidden_text}' found in response"
+                            )
 
                 test_time = time.time() - test_start
 
                 tests.append(
                     {
-                        "name": test["name"],
-                        "description": test.get("description"),
+                        "name": test.name,
+                        "description": test.description,
                         "passed": len(failures) == 0,
                         "failures": failures,
                         "time": test_time,
@@ -347,8 +326,8 @@ async def run_eval_suite(
                 test_time = time.time() - test_start
                 tests.append(
                     {
-                        "name": test["name"],
-                        "description": test.get("description"),
+                        "name": test.name,
+                        "description": test.description,
                         "passed": False,
                         "error": str(e),
                         "time": test_time,
@@ -363,7 +342,7 @@ async def run_eval_suite(
 
     return {
         "suite": suite_name,
-        "description": eval_suite.get("description"),
+        "description": eval_suite.description,
         "model": model,
         "tests": tests,
         "all_passed": all_passed,

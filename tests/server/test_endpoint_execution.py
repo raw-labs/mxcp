@@ -65,11 +65,11 @@ def test_endpoint_loading(site_config, test_repo_path):
         assert result is not None
         endpoint_file_path, endpoint_definition = result
         assert endpoint_definition is not None
-        assert "tool" in endpoint_definition
-        tool_def = endpoint_definition["tool"]
-        assert tool_def["name"] == "example"
-        assert "parameters" in tool_def
-        assert "return" in tool_def
+        assert endpoint_definition.tool is not None
+        tool_def = endpoint_definition.tool
+        assert tool_def.name == "example"
+        assert tool_def.parameters is not None
+        assert tool_def.return_ is not None
     finally:
         os.chdir(original_dir)
 
@@ -88,14 +88,14 @@ def test_parameter_validation(site_config, test_repo_path):
         assert result is not None
         endpoint_file_path, endpoint_definition = result
         assert endpoint_definition is not None
-        assert "tool" in endpoint_definition
-        tool_def = endpoint_definition["tool"]
+        assert endpoint_definition.tool is not None
+        tool_def = endpoint_definition.tool
         assert tool_def is not None
 
         # Verify the schema has the expected parameter definitions
-        parameters = tool_def["parameters"]
+        parameters = tool_def.parameters or []
         assert parameters is not None
-        param_names = [p["name"] for p in parameters]
+        param_names = [p.name for p in parameters]
         assert "name" in param_names
         assert "age" in param_names
         assert "is_active" in param_names
