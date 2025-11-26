@@ -49,15 +49,14 @@ from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.core.refs.external import ExternalRefTracker
 from mxcp.server.core.reload import ReloadManager, ReloadRequest
 from mxcp.server.core.telemetry import configure_telemetry_from_config, shutdown_telemetry
+from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.models import (
-    EndpointDefinitionModel,
     ParamDefinitionModel,
     PromptDefinitionModel,
     ResourceDefinitionModel,
     ToolDefinitionModel,
     TypeDefinitionModel,
 )
-from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.utils import EndpointType
 from mxcp.server.executor.engine import RuntimeEnvironment, create_runtime_environment
 from mxcp.server.interfaces.cli.utils import (
@@ -1424,7 +1423,7 @@ class RAWMCP:
         # Add return type annotation if return schema is defined
         return_schema = (
             endpoint_def.return_
-            if isinstance(endpoint_def, (ToolDefinitionModel, ResourceDefinitionModel))
+            if isinstance(endpoint_def, ToolDefinitionModel | ResourceDefinitionModel)
             else None
         )
         if return_schema:
@@ -1488,9 +1487,7 @@ class RAWMCP:
             EndpointType.PROMPT,
             "prompt",
             prompt_def,
-            decorator=self.mcp.prompt(
-                name=prompt_def.name, description=prompt_def.description
-            ),
+            decorator=self.mcp.prompt(name=prompt_def.name, description=prompt_def.description),
             log_name="prompt",
         )
 
@@ -1825,9 +1822,7 @@ class RAWMCP:
 
                 if endpoint_def.tool is not None:
                     self._register_tool(endpoint_def.tool)
-                    logger.info(
-                        f"Registered tool endpoint from {path}: {endpoint_def.tool.name}"
-                    )
+                    logger.info(f"Registered tool endpoint from {path}: {endpoint_def.tool.name}")
                 elif endpoint_def.resource is not None:
                     self._register_resource(endpoint_def.resource)
                     logger.info(

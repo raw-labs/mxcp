@@ -8,18 +8,20 @@ normalization, and assertion checking.
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionEngine
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
+from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.models import (
     EndpointDefinitionModel,
+    ResourceDefinitionModel,
     TestDefinitionModel,
+    ToolDefinitionModel,
 )
-from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
 from mxcp.server.services.tests.models import (
     TestCaseResultModel,
@@ -116,11 +118,13 @@ class TestRunner:
                     has_failed = True
 
             # Determine overall status
-            status = "ok"
+            status: Literal["ok", "failed", "error"]
             if has_error:
                 status = "error"
             elif has_failed:
                 status = "failed"
+            else:
+                status = "ok"
 
             logger.info(f"Final test status: {status}")
             return TestSuiteResultModel(
@@ -195,7 +199,7 @@ class TestRunner:
             # Compare with expected results
             passed, error_msg = compare_results(normalized_result, test_def)
 
-            status = "passed" if passed else "failed"
+            status: Literal["passed", "failed"] = "passed" if passed else "failed"
             error = error_msg if not passed else None
 
             if not passed:
@@ -239,7 +243,7 @@ class TestRunner:
         """Extract column names from endpoint return schema."""
         columns: list[str] = []
 
-        component = None
+        component: ToolDefinitionModel | ResourceDefinitionModel | None = None
         if endpoint_type == "tool":
             component = endpoint_def.tool
         elif endpoint_type == "resource":

@@ -1,15 +1,19 @@
 import re
 from pathlib import Path
+from typing import cast
+
 from jinja2 import Environment, meta
 
 from mxcp.sdk.executor import ExecutionEngine
 from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
+from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.models import (
     EndpointDefinitionModel,
+    PromptDefinitionModel,
     ResourceDefinitionModel,
+    ToolDefinitionModel,
 )
-from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.utils import get_endpoint_source_code
 from mxcp.server.services.endpoints.models import (
     EndpointValidationResultModel,
@@ -128,7 +132,9 @@ def validate_endpoint_payload(
 
     try:
         endpoint_type: str | None = None
-        component = None
+        component: ToolDefinitionModel | ResourceDefinitionModel | PromptDefinitionModel | None = (
+            None
+        )
         name: str | None = None
 
         if endpoint.tool is not None:
@@ -152,7 +158,8 @@ def validate_endpoint_payload(
             )
 
         if endpoint_type == "prompt":
-            messages = component.messages or []
+            prompt_def = cast(PromptDefinitionModel, component)
+            messages = prompt_def.messages or []
             if not messages:
                 return EndpointValidationResultModel(
                     status="error",
@@ -160,7 +167,7 @@ def validate_endpoint_payload(
                     message="No messages found in prompt definition",
                 )
 
-            parameters = component.parameters or []
+            parameters = prompt_def.parameters or []
             defined_params = {p.name for p in parameters}
 
             for i, msg in enumerate(messages):
@@ -178,15 +185,20 @@ def validate_endpoint_payload(
 
             return EndpointValidationResultModel(status="ok", path=relative_path)
 
+        executable_component: ToolDefinitionModel | ResourceDefinitionModel
         if endpoint_type == "resource":
-            err = _validate_resource_uri_vs_params(component, Path(relative_path))
+            resource_def = cast(ResourceDefinitionModel, component)
+            err = _validate_resource_uri_vs_params(resource_def, Path(relative_path))
             if err:
                 return err
+            executable_component = resource_def
+        else:
+            executable_component = cast(ToolDefinitionModel, component)
 
-        language = component.language or "sql"
+        language = executable_component.language or "sql"
 
         if language == "python":
-            source = component.source
+            source = executable_component.source
             if not source or source.file is None:
                 return EndpointValidationResultModel(
                     status="error",
@@ -245,7 +257,7 @@ def validate_endpoint_payload(
             if not isinstance(sql_param_names, list):
                 sql_param_names = list(sql_param_names)
 
-            yaml_params = component.parameters or []
+            yaml_params = executable_component.parameters or []
             yaml_param_names = [p.name for p in yaml_params]
 
             missing_params = set(sql_param_names) - set(yaml_param_names)

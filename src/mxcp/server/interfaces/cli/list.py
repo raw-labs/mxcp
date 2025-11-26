@@ -6,8 +6,8 @@ import click
 from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
+from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.interfaces.cli.utils import (
     configure_logging_from_config,
     output_error,

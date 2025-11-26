@@ -1,7 +1,6 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import yaml
 from pydantic import ValidationError
@@ -276,7 +275,9 @@ class EndpointLoader:
                     if endpoint_obj is None:
                         continue
 
-                    identifier = endpoint_obj.uri if endpoint_type == "resource" else endpoint_obj.name
+                    identifier = (
+                        endpoint_obj.uri if endpoint_type == "resource" else endpoint_obj.name
+                    )
                     if identifier != name:
                         continue
 

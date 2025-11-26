@@ -23,4 +23,3 @@ class EndpointValidationSummaryModel(BaseModel):
     status: Literal["ok", "error"]
     validated: list[EndpointValidationResultModel]
     message: str | None = None
-

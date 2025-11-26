@@ -227,7 +227,10 @@ class TestEndpointToolExecutor:
             EndpointDefinitionModel.model_validate(
                 {
                     "mxcp": 1,
-                    "tool": {"name": "explicit_override_tool", "source": {"file": "script.py", "language": "sql"}},
+                    "tool": {
+                        "name": "explicit_override_tool",
+                        "source": {"file": "script.py", "language": "sql"},
+                    },
                 }
             ),
             EndpointDefinitionModel.model_validate(

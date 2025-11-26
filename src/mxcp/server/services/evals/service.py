@@ -14,10 +14,9 @@ from mxcp.sdk.evals import (
 from mxcp.sdk.validator import TypeSchema
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
-from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
+from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.definitions.evals.loader import discover_eval_files, load_eval_suite
-from mxcp.server.definitions.evals.models import EvalSuiteModel
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.tool import EndpointToolExecutor
 
@@ -305,9 +304,7 @@ async def run_eval_suite(
                 if assertions.answer_not_contains:
                     for forbidden_text in assertions.answer_not_contains:
                         if forbidden_text.lower() in response.lower():
-                            failures.append(
-                                f"Forbidden text '{forbidden_text}' found in response"
-                            )
+                            failures.append(f"Forbidden text '{forbidden_text}' found in response")
 
                 test_time = time.time() - test_start
 
@@ -390,7 +387,7 @@ async def run_all_evals(
         else:
             if eval_suite is None:
                 continue
-            suite_name = eval_suite.get("suite", "unnamed")
+            suite_name = eval_suite.suite or "unnamed"
             # Run the suite
             result = await run_eval_suite(
                 suite_name, user_config, site_config, profile, cli_user_context, override_model

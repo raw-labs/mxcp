@@ -93,4 +93,3 @@ class DriftReport(_DriftBaseModel):
     summary: dict[str, int]
     table_changes: list[TableChange]
     resource_changes: list[ResourceChange]
-

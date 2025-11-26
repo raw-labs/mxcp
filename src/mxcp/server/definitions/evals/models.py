@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
 class EvalBaseModel(BaseModel):
@@ -38,7 +39,9 @@ class EvalTestModel(EvalBaseModel):
         if not value[0].isalpha() and value[0] != "_":
             raise ValueError("Eval test name must start with a letter or underscore")
         if not all(ch.isalnum() or ch == "_" for ch in value):
-            raise ValueError("Eval test name must contain only alphanumeric characters or underscores")
+            raise ValueError(
+                "Eval test name must contain only alphanumeric characters or underscores"
+            )
         return value
 
 
@@ -57,7 +60,9 @@ class EvalSuiteModel(EvalBaseModel):
         if not value[0].isalpha() and value[0] != "_":
             raise ValueError("Eval suite name must start with a letter or underscore")
         if not all(ch.isalnum() or ch == "_" for ch in value):
-            raise ValueError("Eval suite name must contain only alphanumeric characters or underscores")
+            raise ValueError(
+                "Eval suite name must contain only alphanumeric characters or underscores"
+            )
         return value
 
     @model_validator(mode="before")
@@ -66,9 +71,6 @@ class EvalSuiteModel(EvalBaseModel):
         if isinstance(data, dict) and "mxcp" in data:
             value = data["mxcp"]
             if isinstance(value, str):
-                try:
+                with suppress(ValueError):
                     data["mxcp"] = int(float(value))
-                except ValueError:
-                    pass
         return data
-

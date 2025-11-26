@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -14,9 +15,9 @@ class DefinitionModel(BaseModel):
 class TypeDefinitionModel(DefinitionModel):
     name: str | None = None
     type: Literal["string", "number", "integer", "boolean", "array", "object"]
-    format: (
-        Literal["email", "uri", "date", "time", "date-time", "duration", "timestamp"] | None
-    ) = None
+    format: Literal["email", "uri", "date", "time", "date-time", "duration", "timestamp"] | None = (
+        None
+    )
     description: str | None = None
     default: Any | None = None
     examples: list[Any] | None = None
@@ -51,7 +52,9 @@ class ParamDefinitionModel(TypeDefinitionModel):
         if not value[0].isalpha() and value[0] != "_":
             raise ValueError("Parameter name must start with a letter or underscore")
         if not all(ch.isalnum() or ch == "_" for ch in value):
-            raise ValueError("Parameter name must contain only alphanumeric characters or underscores")
+            raise ValueError(
+                "Parameter name must contain only alphanumeric characters or underscores"
+            )
         return value
 
 
@@ -61,7 +64,7 @@ class SourceDefinitionModel(DefinitionModel):
     language: Literal["sql", "python"] | None = None
 
     @model_validator(mode="after")
-    def validate_source(self) -> "SourceDefinitionModel":
+    def validate_source(self) -> SourceDefinitionModel:
         if bool(self.code) == bool(self.file):
             raise ValueError("Source must provide exactly one of 'code' or 'file'")
         return self
@@ -166,25 +169,24 @@ class EndpointDefinitionModel(DefinitionModel):
         if isinstance(data, dict) and "mxcp" in data:
             value = data["mxcp"]
             if isinstance(value, str):
-                try:
+                with suppress(ValueError):
                     data["mxcp"] = int(float(value))
-                except ValueError:
-                    pass
         return data
 
     @model_validator(mode="after")
-    def ensure_endpoint_type(self) -> "EndpointDefinitionModel":
+    def ensure_endpoint_type(self) -> EndpointDefinitionModel:
         present = [
             bool(self.tool),
             bool(self.resource),
             bool(self.prompt),
         ]
         if not any(present):
-            raise ValueError("Endpoint definition must include a tool, resource, or prompt definition")
+            raise ValueError(
+                "Endpoint definition must include a tool, resource, or prompt definition"
+            )
         if sum(1 for flag in present if flag) > 1:
             raise ValueError("Endpoint definition must contain exactly one endpoint type")
         return self
 
 
 TypeDefinitionModel.model_rebuild()
-

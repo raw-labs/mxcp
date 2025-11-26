@@ -21,12 +21,13 @@ from mxcp.sdk.policy import (
 )
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
+from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.models import (
-    EndpointDefinitionModel,
     PoliciesDefinitionModel,
     PromptDefinitionModel,
+    ResourceDefinitionModel,
+    ToolDefinitionModel,
 )
-from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.endpoint import (
     execute_code_with_engine,
@@ -222,6 +223,7 @@ async def execute_endpoint_with_engine_and_policy(
 
     policy_enforcer = None
     component_dict: dict[str, Any] | None = None
+    component: ToolDefinitionModel | ResourceDefinitionModel | PromptDefinitionModel | None = None
 
     if endpoint_type == "tool":
         component = endpoint_definition.tool
@@ -252,8 +254,7 @@ async def execute_endpoint_with_engine_and_policy(
 
     # Dispatch to appropriate execution method based on endpoint type
     if endpoint_type == "prompt":
-        # We already verified prompt_def exists above
-        prompt_def = cast(PromptDefinitionModel, endpoint_definition.prompt)
+        prompt_def = cast(PromptDefinitionModel, component)
         result = await execute_prompt_with_validation(prompt_def, params, skip_output_validation)
     else:
         result = await execute_code_with_engine(

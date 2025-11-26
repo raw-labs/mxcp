@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mxcp.sdk.audit.backends.noop import NoOpAuditBackend
-from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 
 from .models import ConfigResponse, EndpointCounts, Features
@@ -84,10 +83,7 @@ class AdminService:
         Reads public fields directly - no intermediate types needed.
         """
         site_config_obj = self._server.site_config
-        if isinstance(site_config_obj, SiteConfigModel):
-            project_name = site_config_obj.project
-        else:
-            project_name = site_config_obj.get("project")
+        project_name = site_config_obj.project
         return ConfigResponse(
             project=project_name,
             profile=self._server.profile_name,

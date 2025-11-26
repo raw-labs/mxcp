@@ -129,7 +129,9 @@ def resolve_file_path(file_path: str, endpoint_file_path: Path, repo_root: Path)
         return endpoint_file_path.parent / source_path
 
 
-def get_endpoint_name_or_uri(endpoint_definition: EndpointDefinitionModel, endpoint_type: str) -> str:
+def get_endpoint_name_or_uri(
+    endpoint_definition: EndpointDefinitionModel, endpoint_type: str
+) -> str:
     """Get the name or URI identifier for an endpoint.
 
     Args:

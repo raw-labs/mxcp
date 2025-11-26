@@ -60,42 +60,25 @@ class ConfigProxy:
                 "No execution context available - function not called from MXCP executor"
             )
 
-        site_config = context.get("site_config")
-        user_config = context.get("user_config")
+        site_config = cast(SiteConfigModel | None, context.get("site_config"))
+        user_config = cast(UserConfigModel | None, context.get("user_config"))
 
         if not user_config or not site_config:
             return None
 
-        # Get project and profile from site config
-        if isinstance(site_config, SiteConfigModel):
-            project = site_config.project
-            profile = site_config.profile
-        else:
-            project = site_config.get("project")
-            profile = site_config.get("profile")
+        project = site_config.project
+        profile = site_config.profile
 
         if not project or not profile:
             return None
 
-        if isinstance(user_config, UserConfigModel):
-            project_config = user_config.projects.get(project)
-            profile_config = project_config.profiles.get(profile) if project_config else None
-            secrets = profile_config.secrets if profile_config else []
-            for secret in secrets:
-                if secret.name == name:
-                    return secret.parameters
-            return None
-
-        try:
-            project_config = user_config["projects"][project]
-            profile_config = project_config["profiles"][profile]
-            secrets = profile_config.get("secrets", [])
-            for secret in secrets:
-                if secret.get("name") == name:
-                    return cast(dict[str, Any], secret.get("parameters", {}))
-            return None
-        except (KeyError, TypeError):
-            return None
+        project_config = user_config.projects.get(project)
+        profile_config = project_config.profiles.get(profile) if project_config else None
+        secrets = profile_config.secrets if profile_config else []
+        for secret in secrets:
+            if secret.name == name:
+                return secret.parameters
+        return None
 
     def get_setting(self, key: str, default: Any = None) -> Any:
         """Get configuration setting from site config."""
@@ -105,15 +88,11 @@ class ConfigProxy:
                 "No execution context available - function not called from MXCP executor"
             )
 
-        site_config = context.get("site_config")
+        site_config = cast(SiteConfigModel | None, context.get("site_config"))
         if not site_config:
             return default
 
-        raw_config = (
-            site_config.model_dump(mode="python")
-            if isinstance(site_config, SiteConfigModel)
-            else site_config
-        )
+        raw_config = site_config.model_dump(mode="python")
 
         # Support nested key access (e.g., "dbt.enabled")
         if "." in key:
@@ -135,24 +114,16 @@ class ConfigProxy:
         if not context:
             return None
 
-        user_config = context.get("user_config")
-        if isinstance(user_config, UserConfigModel):
-            return user_config
-        if user_config is None:
-            return None
-        return UserConfigModel.model_validate(user_config)
+        return cast(UserConfigModel | None, context.get("user_config"))
 
     @property
-    def site_config(self) -> Any | None:
+    def site_config(self) -> SiteConfigModel | None:
         """Access full site configuration (typically a SiteConfigModel)."""
         context = get_execution_context()
         if not context:
             return None
 
-        site_config = context.get("site_config")
-        if site_config is None:
-            return None
-        return site_config
+        return cast(SiteConfigModel | None, context.get("site_config"))
 
 
 class PluginsProxy:

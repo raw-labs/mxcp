@@ -186,51 +186,44 @@ async def test_result_contains_error_messages(user_config, site_config):
 
     # Test 1: Array missing primitive
     assert test_names["Array missing primitive value"].status == "failed"
-    assert (
-        "Array does not contain expected value: grape"
-        in (test_names["Array missing primitive value"].error or "")
+    assert "Array does not contain expected value: grape" in (
+        test_names["Array missing primitive value"].error or ""
     )
 
     # Test 2: Dict missing field
     assert test_names["Dict missing field"].status == "failed"
-    assert (
-        "Expected field 'email' not found in result"
-        in (test_names["Dict missing field"].error or "")
+    assert "Expected field 'email' not found in result" in (
+        test_names["Dict missing field"].error or ""
     )
 
     # Test 3: Dict field wrong value
     assert test_names["Dict field wrong value"].status == "failed"
-    assert (
-        "Field 'age' has value 25, expected 30"
-        in (test_names["Dict field wrong value"].error or "")
+    assert "Field 'age' has value 25, expected 30" in (
+        test_names["Dict field wrong value"].error or ""
     )
 
     # Test 4: Array of dicts no match
     assert test_names["Array of dicts no match"].status == "failed"
-    assert (
-        "No item in array contains the expected fields"
-        in (test_names["Array of dicts no match"].error or "")
+    assert "No item in array contains the expected fields" in (
+        test_names["Array of dicts no match"].error or ""
     )
 
     # Test 5: Wrong result type
     assert test_names["String result with dict pattern"].status == "failed"
-    assert (
-        "result_contains assertion requires dict or array result"
-        in (test_names["String result with dict pattern"].error or "")
+    assert "result_contains assertion requires dict or array result" in (
+        test_names["String result with dict pattern"].error or ""
     )
 
     # Test 6: Empty array
     assert test_names["Empty array check"].status == "failed"
-    assert (
-        "Array does not contain expected value: anything"
-        in (test_names["Empty array check"].error or "")
+    assert "Array does not contain expected value: anything" in (
+        test_names["Empty array check"].error or ""
     )
 
     # Test 7: Number array missing value
     assert test_names["Number array missing value"].status == "failed"
-    assert (
-        "Array does not contain expected value: 10"
-        in (test_names["Number array missing value"].error or "")
+    assert "Array does not contain expected value: 10" in (
+        test_names["Number array missing value"].error or ""
     )
 
 

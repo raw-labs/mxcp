@@ -38,7 +38,7 @@ def discover_eval_files(
         - error_message: Error message if loading failed, None if successful
     """
     base_path = find_repo_root()
-    results: list[tuple[Path, EvalSuite | None, str | None]] = []
+    results: list[tuple[Path, EvalSuiteModel | None, str | None]] = []
 
     # Determine the evals directory
     if site_config:

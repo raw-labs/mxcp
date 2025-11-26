@@ -17,7 +17,6 @@ def test_no_dict_model_unions_in_server_code() -> None:
         for match in pattern.finditer(text):
             violations.append(f"{path.relative_to(repo_root)}: {match.group(0)}")
 
-    assert (
-        not violations
-    ), "Disallowed dict|Model unions found:\n" + "\n".join(f"- {entry}" for entry in violations)
-
+    assert not violations, "Disallowed dict|Model unions found:\n" + "\n".join(
+        f"- {entry}" for entry in violations
+    )

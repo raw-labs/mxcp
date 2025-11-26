@@ -7,7 +7,7 @@ logic used by higher-level endpoint orchestration code.
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional
 
 from jinja2 import Template
 
@@ -58,10 +58,7 @@ async def execute_prompt_with_validation(
         validated_params = params.copy()
         for param_def in param_defs:
             name = param_def.name
-            if (
-                name not in validated_params
-                and "default" in param_def.model_fields_set
-            ):
+            if name not in validated_params and "default" in param_def.model_fields_set:
                 validated_params[name] = param_def.default
 
     # Template rendering with validated parameters

@@ -7,14 +7,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
+from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.models import (
     EndpointDefinitionModel,
     ParamDefinitionModel,
-    TestDefinitionModel,
+    PromptDefinitionModel,
+    ResourceDefinitionModel,
     ToolDefinitionModel,
     TypeDefinitionModel,
 )
-from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.interfaces.cli.utils import (
     configure_logging_from_config,
     output_error,
@@ -155,7 +156,9 @@ def lint_return_type(
     if return_def.type == "array" and return_def.items is not None:
         lint_nested_type(return_def.items, f"{endpoint_type}.return.items", issues, path)
     elif return_def.type == "object" and return_def.properties:
-        lint_object_properties(return_def.properties, f"{endpoint_type}.return.properties", issues, path)
+        lint_object_properties(
+            return_def.properties, f"{endpoint_type}.return.properties", issues, path
+        )
 
 
 def lint_nested_type(
@@ -210,7 +213,7 @@ def lint_endpoint(path: Path, endpoint: EndpointDefinitionModel) -> list[LintIss
     """Lint a single endpoint for missing metadata."""
     issues: list[LintIssueModel] = []
 
-    definition = None
+    definition: ToolDefinitionModel | ResourceDefinitionModel | PromptDefinitionModel | None = None
     endpoint_type: str | None = None
 
     if endpoint.tool is not None:
@@ -285,15 +288,15 @@ def lint_endpoint(path: Path, endpoint: EndpointDefinitionModel) -> list[LintIss
         annotations = tool_def.annotations
         has_annotations = bool(annotations and annotations.model_fields_set)
         if not has_annotations:
-                issues.append(
-                    LintIssueModel(
-                        severity="info",
-                        path=str(path),
-                        location=f"{endpoint_type}.annotations",
-                        message="Tool has no behavioral annotations",
-                        suggestion="Consider adding annotations like readOnlyHint, idempotentHint to help LLMs use the tool safely",
-                    )
+            issues.append(
+                LintIssueModel(
+                    severity="info",
+                    path=str(path),
+                    location=f"{endpoint_type}.annotations",
+                    message="Tool has no behavioral annotations",
+                    suggestion="Consider adding annotations like readOnlyHint, idempotentHint to help LLMs use the tool safely",
                 )
+            )
 
     return issues
 
@@ -317,7 +320,8 @@ def format_lint_results_as_text(report: LintReportModel) -> str:
         sum(1 for i in file_report.issues if i.severity == "error") for file_report in report.files
     )
     warning_count = sum(
-        sum(1 for i in file_report.issues if i.severity == "warning") for file_report in report.files
+        sum(1 for i in file_report.issues if i.severity == "warning")
+        for file_report in report.files
     )
     info_count = sum(
         sum(1 for i in file_report.issues if i.severity == "info") for file_report in report.files
@@ -485,9 +489,7 @@ def lint(profile: str, json_output: bool, debug: bool, severity: str) -> None:
                 issues = [i for i in issues if i.severity == "info"]
 
             if issues:
-                file_reports.append(
-                    LintFileReportModel(path=str(path), issues=issues)
-                )
+                file_reports.append(LintFileReportModel(path=str(path), issues=issues))
             else:
                 clean_paths.append(str(path))
 

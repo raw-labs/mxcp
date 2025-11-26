@@ -49,4 +49,3 @@ class MultiEndpointTestResultsModel(BaseModel):
     tests_run: int
     endpoints: list[EndpointTestResultModel]
     message: str | None = None
-

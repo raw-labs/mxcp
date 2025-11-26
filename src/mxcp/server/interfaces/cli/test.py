@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import Path
+
 import click
 
 from mxcp.sdk.auth import UserContext
@@ -15,13 +16,12 @@ from mxcp.server.interfaces.cli.utils import (
     output_result,
     resolve_profile,
 )
-from mxcp.server.services.tests.service import run_all_tests, run_tests
 from mxcp.server.services.tests.models import (
     EndpointTestResultModel,
     MultiEndpointTestResultsModel,
-    TestCaseResultModel,
     TestSuiteResultModel,
 )
+from mxcp.server.services.tests.service import run_all_tests, run_tests
 
 
 def _format_single_test_result(result: TestSuiteResultModel, debug: bool) -> str:
@@ -363,6 +363,8 @@ async def _test_impl(
         # Validate it's a dictionary
         if not isinstance(headers, dict):
             raise click.BadParameter("Request headers must be a JSON object")
+
+    results: TestSuiteResultModel | MultiEndpointTestResultsModel | str
 
     if endpoint_type and name:
         results = await run_tests(

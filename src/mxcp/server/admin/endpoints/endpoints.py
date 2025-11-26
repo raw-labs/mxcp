@@ -10,6 +10,12 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 
+from mxcp.server.definitions.endpoints.models import (
+    PromptDefinitionModel,
+    ResourceDefinitionModel,
+    ToolDefinitionModel,
+)
+
 from ..models import EndpointListResponse, EndpointMetadata
 from ..service import AdminService
 
@@ -72,29 +78,33 @@ def create_endpoints_router(admin_service: AdminService) -> APIRouter:
                     endpoint_type: Literal["tool", "resource", "prompt"] | None = None
                     enabled = True
 
+                    name: str | None
+                    description: str | None
+                    language: str | None
+
                     if endpoint_def.tool is not None:
+                        tool_def: ToolDefinitionModel = endpoint_def.tool
                         endpoint_type = "tool"
-                        endpoint_data = endpoint_def.tool
-                        name = endpoint_data.name
-                        description = endpoint_data.description
-                        language = endpoint_data.language
-                        enabled = endpoint_data.enabled
+                        name = tool_def.name
+                        description = tool_def.description
+                        language = tool_def.language
+                        enabled = tool_def.enabled
                     elif endpoint_def.resource is not None:
+                        resource_def: ResourceDefinitionModel = endpoint_def.resource
                         endpoint_type = "resource"
-                        endpoint_data = endpoint_def.resource
-                        name = endpoint_data.name or endpoint_data.uri
-                        description = endpoint_data.description
-                        language = endpoint_data.language
-                        enabled = endpoint_data.enabled
+                        name = resource_def.name or resource_def.uri
+                        description = resource_def.description
+                        language = resource_def.language
+                        enabled = resource_def.enabled
                     elif endpoint_def.prompt is not None:
+                        prompt_def: PromptDefinitionModel = endpoint_def.prompt
                         endpoint_type = "prompt"
-                        endpoint_data = endpoint_def.prompt
-                        name = endpoint_data.name
-                        description = endpoint_data.description
+                        name = prompt_def.name
+                        description = prompt_def.description
                         language = None
-                        enabled = endpoint_data.enabled
+                        enabled = prompt_def.enabled
                     else:
-                        endpoint_data = None
+                        endpoint_type = None
                         name = None
                         description = None
                         language = None

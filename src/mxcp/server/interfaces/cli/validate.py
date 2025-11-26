@@ -175,6 +175,7 @@ def validate(
         execution_engine = runtime_env.execution_engine
 
         try:
+            result: EndpointValidationResultModel | EndpointValidationSummaryModel | str
             if endpoint:
                 result = validate_endpoint(endpoint, site_config, execution_engine)
             else:

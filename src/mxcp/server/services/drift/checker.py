@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.services.drift.models import (
+    Column,
     ColumnModification,
     DriftReport,
     DriftSnapshot,
@@ -195,7 +196,7 @@ def compare_resources(
             # If any changes, add to changes list
             if validation_changed or test_results_changed or definition_changed:
                 endpoint = _extract_endpoint_identifier(current_res.definition)
-                details = {}
+                details: dict[str, Any] = {}
                 if validation_changed:
                     details["validation_changes"] = {
                         "old_status": baseline_res.validation_results.status,
@@ -329,9 +330,7 @@ async def check_drift(
 
     # Compare snapshots
     table_changes = compare_tables(baseline_snapshot.tables, current_snapshot.tables)
-    resource_changes = compare_resources(
-        baseline_snapshot.resources, current_snapshot.resources
-    )
+    resource_changes = compare_resources(baseline_snapshot.resources, current_snapshot.resources)
 
     # Calculate summary
     summary = {

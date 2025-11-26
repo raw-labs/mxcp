@@ -93,9 +93,7 @@ async def test_run_valid_resource(tester_repo_path, site_config, user_config):
         assert any(
             test.status == "passed" for test in result.tests
         )  # valid filter test should pass
-        assert any(
-            test.status == "error" for test in result.tests
-        )  # no filter test should error
+        assert any(test.status == "error" for test in result.tests)  # no filter test should error
         # Check error cause for the error test
         error_msgs = [test.error for test in result.tests if test.status == "error"]
         assert any("Required parameter missing: filter" in str(msg) for msg in error_msgs)
