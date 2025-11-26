@@ -18,41 +18,34 @@ from mxcp.server.services.endpoints.models import (
 from mxcp.server.services.endpoints.validator import validate_all_endpoints, validate_endpoint
 
 
-def format_validation_results(
-    results: EndpointValidationResultModel | EndpointValidationSummaryModel | str,
-) -> str:
-    """Format validation results for human-readable output"""
-    if isinstance(results, str):
-        return results
-
+def _format_validation_result(result: EndpointValidationResultModel) -> str:
     output = []
 
-    # Overall status
-    if isinstance(results, EndpointValidationResultModel):
-        status = results.status
-        path = results.path
-        message = results.message or ""
+    status = result.status
+    path = result.path
+    message = result.message or ""
 
-        if status == "ok":
-            output.append(f"{click.style('✅ Validation passed!', fg='green', bold=True)}")
-            output.append(f"\n{click.style('📄 File:', fg='cyan')} {path}")
-        else:
-            output.append(f"{click.style('❌ Validation failed!', fg='red', bold=True)}")
-            output.append(f"\n{click.style('📄 File:', fg='cyan')} {path}")
-            if message:
-                # Handle multi-line error messages with proper indentation
-                lines = message.split("\n")
-                first_line = lines[0]
-                output.append(f"{click.style('Error:', fg='red')} {first_line}")
-                # Indent subsequent lines to align under the error message
-                for line in lines[1:]:
-                    if line.strip():  # Only add non-empty lines
-                        output.append(f"{line}")
-        return "\n".join(output)
+    if status == "ok":
+        output.append(f"{click.style('✅ Validation passed!', fg='green', bold=True)}")
+        output.append(f"\n{click.style('📄 File:', fg='cyan')} {path}")
+    else:
+        output.append(f"{click.style('❌ Validation failed!', fg='red', bold=True)}")
+        output.append(f"\n{click.style('📄 File:', fg='cyan')} {path}")
+        if message:
+            lines = message.split("\n")
+            first_line = lines[0]
+            output.append(f"{click.style('Error:', fg='red')} {first_line}")
+            for line in lines[1:]:
+                if line.strip():
+                    output.append(line)
 
-    # Multiple endpoint validation
-    assert isinstance(results, EndpointValidationSummaryModel)
-    validated = results.validated
+    return "\n".join(output)
+
+
+def _format_validation_summary(summary: EndpointValidationSummaryModel) -> str:
+    output = []
+
+    validated = summary.validated
     if not validated:
         output.append(click.style("ℹ️  No endpoints found to validate", fg="blue"))
         output.append(
@@ -60,11 +53,9 @@ def format_validation_results(
         )
         return "\n".join(output)
 
-    # Count valid and failed endpoints
     valid_count = sum(1 for r in validated if r.status == "ok")
     failed_count = len(validated) - valid_count
 
-    # Header
     output.append(f"\n{click.style('🔍 Validation Results', fg='cyan', bold=True)}")
     output.append(f"   Validated {click.style(str(len(validated)), fg='yellow')} endpoint files")
 
@@ -73,47 +64,38 @@ def format_validation_results(
     if failed_count > 0:
         output.append(f"   • {click.style(f'{failed_count} failed', fg='red')}")
 
-    # Group by status
     valid_endpoints = []
     failed_endpoints = []
 
     for result in validated:
         path = result.path
         message = result.message or ""
-
         if result.status == "ok":
             valid_endpoints.append((path, message))
         else:
             failed_endpoints.append((path, message))
 
-    # Show failed endpoints first
     if failed_endpoints:
         output.append(f"\n{click.style('❌ Failed validation:', fg='red', bold=True)}")
         sorted_failed = sorted(failed_endpoints)
         for i, (path, message) in enumerate(sorted_failed):
             output.append(f"  {click.style('✗', fg='red')} {path}")
             if message:
-                # Handle multi-line error messages with proper indentation
-                # Strip trailing whitespace to ensure consistent spacing
                 clean_message = message.rstrip()
                 lines = clean_message.split("\n")
                 first_line = lines[0]
                 output.append(f"    {click.style('Error:', fg='red')} {first_line}")
-                # Indent subsequent lines to align under the error message
                 for line in lines[1:]:
-                    if line.strip():  # Only add non-empty lines
+                    if line.strip():
                         output.append(f"    {line}")
-            # Add consistent blank line between errors (except after the last one)
             if i < len(sorted_failed) - 1:
                 output.append("")
 
-    # Then show valid endpoints
     if valid_endpoints:
         output.append(f"\n{click.style('✅ Passed validation:', fg='green', bold=True)}")
         for path, _ in sorted(valid_endpoints):
             output.append(f"  {click.style('✓', fg='green')} {path}")
 
-    # Summary message
     if failed_count == 0:
         output.append(f"\n{click.style('🎉 All endpoints are valid!', fg='green', bold=True)}")
     else:
@@ -122,6 +104,14 @@ def format_validation_results(
         )
 
     return "\n".join(output)
+
+
+def format_validation_result(result: EndpointValidationResultModel) -> str:
+    return _format_validation_result(result)
+
+
+def format_validation_summary(summary: EndpointValidationSummaryModel) -> str:
+    return _format_validation_summary(summary)
 
 
 @click.command(name="validate")
@@ -198,7 +188,12 @@ def validate(
                 )
                 output_result(payload, json_output, debug)
             else:
-                click.echo(format_validation_results(result))
+                if isinstance(result, EndpointValidationResultModel):
+                    click.echo(format_validation_result(result))
+                elif isinstance(result, EndpointValidationSummaryModel):
+                    click.echo(format_validation_summary(result))
+                else:
+                    click.echo(result)
         finally:
             runtime_env.shutdown()
 

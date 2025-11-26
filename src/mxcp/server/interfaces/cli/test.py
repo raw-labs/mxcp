@@ -24,57 +24,48 @@ from mxcp.server.services.tests.models import (
 )
 
 
-def format_test_results(
-    results: TestSuiteResultModel | MultiEndpointTestResultsModel | str, debug: bool = False
-) -> str:
-    """Format test results for human-readable output"""
-    if isinstance(results, str):
-        return results
-
+def _format_single_test_result(result: TestSuiteResultModel, debug: bool) -> str:
     output = []
 
-    # Single-endpoint test suite
-    if isinstance(results, TestSuiteResultModel):
-        endpoint_status = results.status
+    status = result.status
+    if status == "ok":
+        output.append(f"{click.style('✅ All tests passed!', fg='green', bold=True)}")
+    else:
+        output.append(f"{click.style('❌ Some tests failed!', fg='red', bold=True)}")
 
-        if endpoint_status == "ok":
-            output.append(f"{click.style('✅ All tests passed!', fg='green', bold=True)}")
-        else:
-            output.append(f"{click.style('❌ Some tests failed!', fg='red', bold=True)}")
+    if result.message:
+        output.append(f"{click.style('Error:', fg='red')} {result.message}")
 
-        if results.message:
-            output.append(f"{click.style('Error:', fg='red')} {results.message}")
+    if result.tests:
+        output.append(f"\n{click.style('📋 Test Results:', fg='cyan', bold=True)}")
+        for test in result.tests:
+            test_name = test.name or "Unnamed test"
+            test_status = test.status
+            test_time = test.time or 0.0
 
-        # Test results
-        if results.tests:
-            output.append(f"\n{click.style('📋 Test Results:', fg='cyan', bold=True)}")
-            for test in results.tests:
-                test_name = test.name or "Unnamed test"
-                test_status = test.status
-                test_time = test.time or 0.0
+            if test_status == "passed":
+                output.append(
+                    f"  {click.style('✓', fg='green')} {click.style(test_name, fg='cyan')} {click.style(f'({test_time:.2f}s)', fg='bright_black')}"
+                )
+            else:
+                output.append(
+                    f"  {click.style('✗', fg='red')} {click.style(test_name, fg='cyan')} {click.style(f'({test_time:.2f}s)', fg='bright_black')}"
+                )
+                if test.error:
+                    output.append(f"    {click.style('Error:', fg='red')} {test.error}")
+                if debug and test.error_cause:
+                    output.append(f"    {click.style('Cause:', fg='yellow')} {test.error_cause}")
 
-                if test_status == "passed":
-                    output.append(
-                        f"  {click.style('✓', fg='green')} {click.style(test_name, fg='cyan')} {click.style(f'({test_time:.2f}s)', fg='bright_black')}"
-                    )
-                else:
-                    output.append(
-                        f"  {click.style('✗', fg='red')} {click.style(test_name, fg='cyan')} {click.style(f'({test_time:.2f}s)', fg='bright_black')}"
-                    )
-                    if test.error:
-                        output.append(f"    {click.style('Error:', fg='red')} {test.error}")
-                    if debug and test.error_cause:
-                        output.append(
-                            f"    {click.style('Cause:', fg='yellow')} {test.error_cause}"
-                        )
+    if result.no_tests:
+        output.append(f"\n{click.style('ℹ️  No tests defined for this endpoint', fg='blue')}")
 
-        if results.no_tests:
-            output.append(f"\n{click.style('ℹ️  No tests defined for this endpoint', fg='blue')}")
+    return "\n".join(output)
 
-        return "\n".join(output)
 
-    # Multiple endpoint tests - new structure with test_results nested
-    endpoints: list[EndpointTestResultModel] = results.endpoints
+def _format_multi_endpoint_results(report: MultiEndpointTestResultsModel, debug: bool) -> str:
+    output = []
+
+    endpoints: list[EndpointTestResultModel] = report.endpoints
     if not endpoints:
         output.append(click.style("ℹ️  No endpoints found to test", fg="blue"))
         output.append("   Create test cases in your endpoint YAML files")
@@ -186,6 +177,18 @@ def format_test_results(
     output.append(f"\n{click.style('⏱️  Total time:', fg='cyan')} {total_time:.2f}s")
 
     return "\n".join(output)
+
+
+def format_test_suite_result(result: TestSuiteResultModel, debug: bool = False) -> str:
+    """Public helper for formatting a single test suite result."""
+    return _format_single_test_result(result, debug)
+
+
+def format_multi_endpoint_results(
+    report: MultiEndpointTestResultsModel, debug: bool = False
+) -> str:
+    """Public helper for formatting multi-endpoint test reports."""
+    return _format_multi_endpoint_results(report, debug)
 
 
 @click.command(name="test")
@@ -383,11 +386,15 @@ async def _test_impl(
         )
 
     if json_output:
-        payload = (
-            results
-            if isinstance(results, str)
-            else results.model_dump(mode="json", exclude_none=True)
-        )
+        if isinstance(results, str):
+            payload = results
+        else:
+            payload = results.model_dump(mode="json", exclude_none=True)
         output_result(payload, json_output, debug)
     else:
-        click.echo(format_test_results(results, debug))
+        if isinstance(results, TestSuiteResultModel):
+            click.echo(format_test_suite_result(results, debug))
+        elif isinstance(results, MultiEndpointTestResultsModel):
+            click.echo(format_multi_endpoint_results(results, debug))
+        else:
+            click.echo(results)
