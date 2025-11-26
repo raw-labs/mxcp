@@ -5,6 +5,7 @@ replacing the legacy DuckDBSession-based execution. This is used by CLI commands
 """
 
 import logging
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Optional, cast
 
 if TYPE_CHECKING:
@@ -169,13 +170,29 @@ async def execute_endpoint(
         runtime_env.shutdown()
 
 
+def _ensure_user_config_model(
+    user_config: UserConfigModel | Mapping[str, Any],
+) -> UserConfigModel:
+    if isinstance(user_config, UserConfigModel):
+        return user_config
+    return UserConfigModel.model_validate(user_config)
+
+
+def _ensure_site_config_model(
+    site_config: SiteConfigModel | Mapping[str, Any],
+) -> SiteConfigModel:
+    if isinstance(site_config, SiteConfigModel):
+        return site_config
+    return SiteConfigModel.model_validate(site_config)
+
+
 async def execute_endpoint_with_engine_and_policy(
     endpoint_type: str,
     name: str,
     params: dict[str, Any],
     request_headers: dict[str, str] | None,
-    user_config: UserConfigModel,
-    site_config: SiteConfigModel,
+    user_config: UserConfigModel | Mapping[str, Any],
+    site_config: SiteConfigModel | Mapping[str, Any],
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
@@ -207,13 +224,17 @@ async def execute_endpoint_with_engine_and_policy(
         RuntimeError: If execution fails
     """
 
+    # Normalize configs (callers may pass dicts)
+    site_config_model = _ensure_site_config_model(site_config)
+    user_config_model = _ensure_user_config_model(user_config)
+
     # Find repository root
     repo_root = find_repo_root()
     if not repo_root:
         raise ValueError("Could not find repository root (no mxcp-site.yml found)")
 
     # Load the endpoint using EndpointLoader
-    loader = EndpointLoader(site_config)
+    loader = EndpointLoader(site_config_model)
     endpoint_result = loader.load_endpoint(endpoint_type, name)
 
     if not endpoint_result:
@@ -265,8 +286,8 @@ async def execute_endpoint_with_engine_and_policy(
             params,
             execution_engine,
             skip_output_validation,
-            user_config,
-            site_config,
+            user_config_model,
+            site_config_model,
             user_context,
             server_ref,
             request_headers,

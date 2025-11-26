@@ -213,7 +213,11 @@ class SiteConfigModel(BaseModel):
             update={"duckdb": duckdb, "drift": drift, "audit": audit}
         )
 
-        return self.model_copy(update={"profiles": profiles})
+        object.__setattr__(self, "profiles", profiles)
+        updated_fields = set(getattr(self, "__pydantic_fields_set__", set()))
+        updated_fields.add("profiles")
+        object.__setattr__(self, "__pydantic_fields_set__", updated_fields)
+        return self
 
     @field_serializer("extensions")
     def _serialize_extensions(
@@ -377,7 +381,12 @@ class UserAuthConfigModel(BaseModel):
         persistence = self.persistence
         if provider != "none" and persistence is None:
             persistence = UserAuthPersistenceConfigModel()
-        return self.model_copy(update={"provider": provider, "persistence": persistence})
+        object.__setattr__(self, "provider", provider)
+        object.__setattr__(self, "persistence", persistence)
+        updated_fields = set(getattr(self, "__pydantic_fields_set__", set()))
+        updated_fields.update({"provider", "persistence"})
+        object.__setattr__(self, "__pydantic_fields_set__", updated_fields)
+        return self
 
 
 class UserModelConfigModel(BaseModel):

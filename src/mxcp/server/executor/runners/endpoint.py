@@ -111,8 +111,8 @@ async def execute_code_with_engine(
     execution_context = ExecutionContext(user_context=user_context)
 
     # Populate context with data that runtime module expects
-    execution_context.set("user_config", user_config)
-    execution_context.set("site_config", site_config)
+    execution_context.set("user_config", user_config.model_dump(mode="python", exclude_unset=True))
+    execution_context.set("site_config", site_config.model_dump(mode="python", exclude_unset=True))
     if server_ref:
         execution_context.set("_mxcp_server", server_ref)
     # Add HTTP headers

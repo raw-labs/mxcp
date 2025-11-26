@@ -13,6 +13,11 @@ Key APIs:
 Internal APIs (not for user code):
 - _set_global_runtime(): Set the global DuckDB runtime for init hooks
 - _get_global_runtime(): Get the global DuckDB runtime
+Runtime compatibility note:
+    The public ``config.site_config`` and ``config.user_config`` accessors continue
+    to expose plain ``dict`` objects for backward compatibility. Internally we
+    convert those dictionaries to Pydantic models as needed, but user code can
+    keep using the legacy dictionary-style access without changes.
 """
 
 import logging
@@ -20,7 +25,6 @@ from collections.abc import Callable
 from typing import Any, cast
 
 from mxcp.sdk.executor.context import get_execution_context
-from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 
 logger = logging.getLogger(__name__)
 
@@ -60,24 +64,44 @@ class ConfigProxy:
                 "No execution context available - function not called from MXCP executor"
             )
 
-        site_config = cast(SiteConfigModel | None, context.get("site_config"))
-        user_config = cast(UserConfigModel | None, context.get("user_config"))
+        site_config = cast(dict[str, Any] | None, context.get("site_config"))
+        user_config = cast(dict[str, Any] | None, context.get("user_config"))
 
         if not user_config or not site_config:
             return None
 
-        project = site_config.project
-        profile = site_config.profile
+        project = site_config.get("project")
+        profile = site_config.get("profile")
 
         if not project or not profile:
             return None
 
-        project_config = user_config.projects.get(project)
-        profile_config = project_config.profiles.get(profile) if project_config else None
-        secrets = profile_config.secrets if profile_config else []
+        projects = user_config.get("projects")
+        if not isinstance(projects, dict):
+            return None
+
+        project_config = projects.get(project)
+        if not isinstance(project_config, dict):
+            return None
+
+        profiles = project_config.get("profiles")
+        if not isinstance(profiles, dict):
+            return None
+
+        profile_config = profiles.get(profile)
+        if not isinstance(profile_config, dict):
+            return None
+
+        secrets = profile_config.get("secrets", [])
+        if not isinstance(secrets, list):
+            return None
+
         for secret in secrets:
-            if secret.name == name:
-                return secret.parameters
+            if not isinstance(secret, dict):
+                continue
+            if secret.get("name") == name:
+                params = secret.get("parameters")
+                return params if isinstance(params, dict) else {}
         return None
 
     def get_setting(self, key: str, default: Any = None) -> Any:
@@ -88,11 +112,11 @@ class ConfigProxy:
                 "No execution context available - function not called from MXCP executor"
             )
 
-        site_config = cast(SiteConfigModel | None, context.get("site_config"))
+        site_config = cast(dict[str, Any] | None, context.get("site_config"))
         if not site_config:
             return default
 
-        raw_config = site_config.model_dump(mode="python")
+        raw_config = site_config
 
         # Support nested key access (e.g., "dbt.enabled")
         if "." in key:
@@ -108,22 +132,22 @@ class ConfigProxy:
             return raw_config.get(key, default)
 
     @property
-    def user_config(self) -> UserConfigModel | None:
-        """Access full user configuration."""
+    def user_config(self) -> dict[str, Any] | None:
+        """Access full user configuration as the legacy dictionary structure."""
         context = get_execution_context()
         if not context:
             return None
 
-        return cast(UserConfigModel | None, context.get("user_config"))
+        return cast(dict[str, Any] | None, context.get("user_config"))
 
     @property
-    def site_config(self) -> SiteConfigModel | None:
-        """Access full site configuration (typically a SiteConfigModel)."""
+    def site_config(self) -> dict[str, Any] | None:
+        """Access full site configuration as the legacy dictionary structure."""
         context = get_execution_context()
         if not context:
             return None
 
-        return cast(SiteConfigModel | None, context.get("site_config"))
+        return cast(dict[str, Any] | None, context.get("site_config"))
 
 
 class PluginsProxy:

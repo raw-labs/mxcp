@@ -1783,8 +1783,12 @@ class RAWMCP:
             raise RuntimeError("Execution engine not initialized")
 
         execution_context = ExecutionContext(user_context=user_context)
-        execution_context.set("user_config", self.user_config)
-        execution_context.set("site_config", self.site_config)
+        execution_context.set(
+            "user_config", self.user_config.model_dump(mode="python", exclude_unset=True)
+        )
+        execution_context.set(
+            "site_config", self.site_config.model_dump(mode="python", exclude_unset=True)
+        )
 
         return await self.runtime_environment.execution_engine.execute(
             language="sql",

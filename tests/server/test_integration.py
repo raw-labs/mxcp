@@ -541,7 +541,9 @@ def trigger_reload(message: str = "test") -> dict:
 
     # Get DuckDB file path
     site_config = config.site_config
-    db_path = Path(site_config.profiles["default"].duckdb.path)
+    profile = site_config["profiles"]["default"]
+    duckdb_cfg = profile["duckdb"]
+    db_path = Path(duckdb_cfg["path"])
     if not db_path.is_absolute():
         db_path = Path.cwd() / db_path
 

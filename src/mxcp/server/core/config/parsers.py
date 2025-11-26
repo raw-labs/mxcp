@@ -127,8 +127,8 @@ def execution_context_for_init_hooks(
     try:
         if user_config and site_config:
             context = ExecutionContext()
-            context.set("user_config", user_config)
-            context.set("site_config", site_config)
+            context.set("user_config", user_config.model_dump(mode="python", exclude_unset=True))
+            context.set("site_config", site_config.model_dump(mode="python", exclude_unset=True))
             if duckdb_runtime:
                 context.set("duckdb_runtime", duckdb_runtime)
             token = set_execution_context(context)
