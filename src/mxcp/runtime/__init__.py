@@ -133,7 +133,7 @@ class ConfigProxy:
 
     @property
     def user_config(self) -> dict[str, Any] | None:
-        """Access full user configuration as the legacy dictionary structure."""
+        """Access full user configuration."""
         context = get_execution_context()
         if not context:
             return None
@@ -142,7 +142,7 @@ class ConfigProxy:
 
     @property
     def site_config(self) -> dict[str, Any] | None:
-        """Access full site configuration as the legacy dictionary structure."""
+        """Access full site configuration."""
         context = get_execution_context()
         if not context:
             return None

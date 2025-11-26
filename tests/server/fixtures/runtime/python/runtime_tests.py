@@ -134,25 +134,16 @@ def test_config_properties() -> dict:
     user_cfg = config.user_config
     site_cfg = config.site_config
 
-    # Verify we can access nested values
-    try:
-        # From user config
-        if hasattr(user_cfg, "model_dump"):
-            user_cfg_dict = user_cfg.model_dump(mode="python")
-        else:
-            user_cfg_dict = user_cfg
-        project_name = list(user_cfg_dict["projects"].keys())[0]
-        secrets_count = len(
-            user_cfg_dict["projects"]["runtime_test"]["profiles"]["default"]["secrets"]
-        )
+    # Runtime proxies should return plain dicts for backward compatibility
+    assert isinstance(user_cfg, dict)
+    assert isinstance(site_cfg, dict)
 
-        # From site config
-        if hasattr(site_cfg, "model_dump"):
-            site_cfg_dict = site_cfg.model_dump(mode="python")
-        else:
-            site_cfg_dict = site_cfg
-        site_project = site_cfg_dict["project"]
-        site_secrets = site_cfg_dict["secrets"]
+    try:
+        project_name = list(user_cfg["projects"].keys())[0]
+        secrets_count = len(user_cfg["projects"]["runtime_test"]["profiles"]["default"]["secrets"])
+
+        site_project = site_cfg["project"]
+        site_secrets = site_cfg["secrets"]
 
         access_works = True
     except Exception:
