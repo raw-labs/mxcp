@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -393,5 +394,60 @@ async def test_headers_tool_without_headers(
         )
         # When no headers are provided, the result should be None
         assert result is None
+    finally:
+        os.chdir(original_dir)
+
+
+@pytest.mark.asyncio
+async def test_headers_tool_via_sql(
+    test_repo_path, test_user_config, test_site_config, test_profile
+):
+    """Headers should be visible inside DuckDB via helper UDFs."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        endpoint_type = "tool"
+        name = "headers_sql"
+        args = {}
+        request_headers = {
+            "Authorization": "Bearer sql-token",
+            "X-Trace-Id": "trace-123",
+        }
+        result = await execute_endpoint(
+            endpoint_type,
+            name,
+            args,
+            test_user_config,
+            test_site_config,
+            test_profile,
+            request_headers=request_headers,
+        )
+        assert result["auth"] == "Bearer sql-token"
+        headers_payload = json.loads(result["headers_json"])
+        assert headers_payload["X-Trace-Id"] == "trace-123"
+    finally:
+        os.chdir(original_dir)
+
+
+@pytest.mark.asyncio
+async def test_mcp_logging_demo_tool(
+    test_repo_path, test_user_config, test_site_config, test_profile
+):
+    """Ensure runtime MCP proxy is available even during CLI execution."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        endpoint_type = "tool"
+        name = "mcp_logging_demo"
+        args = {}
+        result = await execute_endpoint(
+            endpoint_type,
+            name,
+            args,
+            test_user_config,
+            test_site_config,
+            test_profile,
+        )
+        assert result["ok"] is True
     finally:
         os.chdir(original_dir)

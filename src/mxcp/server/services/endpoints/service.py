@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from mxcp.server.interfaces.server.mcp import RAWMCP
 
 from mxcp.sdk.auth import UserContext
+from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
 from mxcp.sdk.policy import (
     PolicyAction,
@@ -29,6 +30,7 @@ from mxcp.server.definitions.endpoints.models import (
     ResourceDefinitionModel,
     ToolDefinitionModel,
 )
+from mxcp.server.executor.context_utils import build_execution_context
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.endpoint import (
     execute_code_with_engine,
@@ -152,17 +154,25 @@ async def execute_endpoint(
     )
 
     try:
-        # Delegate to the with_engine variant to avoid code duplication
-        return await execute_endpoint_with_engine(
-            endpoint_type=endpoint_type,
-            name=name,
-            params=params,
+        execution_context = build_execution_context(
+            user_context=user_context,
             user_config=user_config,
             site_config=site_config,
-            execution_engine=runtime_env.execution_engine,
+            request_headers=request_headers,
+            transport="cli",
+        )
+
+        # Delegate to the core implementation
+        return await execute_endpoint_with_engine(
+            endpoint_type,
+            name,
+            params,
+            user_config,
+            site_config,
+            runtime_env.execution_engine,
+            execution_context=execution_context,
             skip_output_validation=skip_output_validation,
             user_context=user_context,
-            request_headers=request_headers,
         )
 
     finally:
@@ -190,10 +200,11 @@ async def execute_endpoint_with_engine_and_policy(
     endpoint_type: str,
     name: str,
     params: dict[str, Any],
-    request_headers: dict[str, str] | None,
     user_config: UserConfigModel | Mapping[str, Any],
     site_config: SiteConfigModel | Mapping[str, Any],
     execution_engine: ExecutionEngine,
+    execution_context: ExecutionContext,
+    *,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
     server_ref: Optional["RAWMCP"] = None,
@@ -207,9 +218,9 @@ async def execute_endpoint_with_engine_and_policy(
         endpoint_type: Type of endpoint ("tool", "resource", "prompt")
         name: Name of the endpoint to execute
         params: Parameters to pass to the endpoint
-        request_headers: Request headers from FastMCP
         site_config: Site configuration (needed for EndpointLoader)
         execution_engine: Pre-created execution engine to reuse
+        execution_context: Fully populated execution context for this request
         skip_output_validation: Whether to skip output schema validation
         user_context: User context for authentication/authorization
 
@@ -227,6 +238,8 @@ async def execute_endpoint_with_engine_and_policy(
     # Normalize configs (callers may pass dicts)
     site_config_model = _ensure_site_config_model(site_config)
     user_config_model = _ensure_user_config_model(user_config)
+
+    context = execution_context
 
     # Find repository root
     repo_root = find_repo_root()
@@ -286,11 +299,7 @@ async def execute_endpoint_with_engine_and_policy(
             params,
             execution_engine,
             skip_output_validation,
-            user_config_model,
-            site_config_model,
-            user_context,
-            server_ref,
-            request_headers,
+            context,
         )
 
     # Enforce output policies (symmetry with input policy enforcement above)
@@ -328,10 +337,11 @@ async def execute_endpoint_with_engine(
     user_config: UserConfigModel,
     site_config: SiteConfigModel,
     execution_engine: ExecutionEngine,
+    execution_context: ExecutionContext,
+    *,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
     server_ref: Optional["RAWMCP"] = None,
-    request_headers: dict[str, str] | None = None,
 ) -> Any:
     """Execute endpoint using an existing SDK execution engine.
 
@@ -344,9 +354,9 @@ async def execute_endpoint_with_engine(
         name: Name of the endpoint to execute
         params: Parameters to pass to the endpoint
         user_config: User configuration
-        request_headers: Request headers from FastMCP
         site_config: Site configuration (needed for EndpointLoader)
         execution_engine: Pre-created execution engine to reuse
+        execution_context: ExecutionContext populated for this request
         skip_output_validation: Whether to skip output schema validation
         user_context: User context for authentication/authorization
         server_ref: Optional reference to the server (for runtime access)
@@ -362,10 +372,10 @@ async def execute_endpoint_with_engine(
         endpoint_type=endpoint_type,
         name=name,
         params=params,
-        request_headers=request_headers,
         user_config=user_config,
         site_config=site_config,
         execution_engine=execution_engine,
+        execution_context=execution_context,
         skip_output_validation=skip_output_validation,
         user_context=user_context,
         server_ref=server_ref,

@@ -122,6 +122,22 @@ available = plugins.list()
 # Returns: ["plugin1", "plugin2", ...]
 ```
 
+## MCP Logging & Progress
+
+The `mxcp.runtime.mcp` proxy exposes the same async APIs that FastMCP tools receive (`debug`, `info`, `warning`, `error`, `progress`). When your endpoint runs inside FastMCP the calls are forwarded to the client; during CLI/tests they fall back to regular server logging so you can use one API everywhere.
+
+```python
+from mxcp.runtime import mcp
+
+async def run_job() -> None:
+    await mcp.info("Starting ingestion")
+    await mcp.progress(1, 4, "Fetched source metadata")
+    await mcp.warning("External API is slow today")
+    await mcp.progress(4, 4, "Done ✅")
+```
+
+> **Tip:** synchronous endpoints can wrap calls with `asyncio.run(mcp.info(...))` if they need to emit MCP logs from a regular function.
+
 ## Lifecycle Hooks
 
 ### `@on_init`

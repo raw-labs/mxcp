@@ -26,6 +26,8 @@ from typing import Any, cast
 
 from mxcp.sdk.executor.context import get_execution_context
 
+from mxcp.sdk.mcp import MCPLogProxy, NullMCPProxy
+
 logger = logging.getLogger(__name__)
 
 
@@ -182,10 +184,49 @@ class PluginsProxy:
         return list(duckdb_runtime.plugins.keys())
 
 
+# ---------------------------------------------------------------------------
+# MCP proxy
+# ---------------------------------------------------------------------------
+
+_DEFAULT_MCP_INTERFACE: MCPLogProxy = NullMCPProxy()
+
+
+def _get_mcp_interface() -> MCPLogProxy:
+    """Return the MCP interface stored in the execution context, if any."""
+    context = get_execution_context()
+    if context:
+        interface = context.get("mcp")
+        if interface:
+            return cast(MCPLogProxy, interface)
+    return _DEFAULT_MCP_INTERFACE
+
+
+class _RuntimeMCPProxy:
+    """Runtime helper that mirrors FastMCP logging/progress APIs."""
+
+    async def debug(self, message: str, **extra: Any) -> None:
+        await _get_mcp_interface().debug(message, **extra)
+
+    async def info(self, message: str, **extra: Any) -> None:
+        await _get_mcp_interface().info(message, **extra)
+
+    async def warning(self, message: str, **extra: Any) -> None:
+        await _get_mcp_interface().warning(message, **extra)
+
+    async def error(self, message: str, **extra: Any) -> None:
+        await _get_mcp_interface().error(message, **extra)
+
+    async def progress(
+        self, progress: float, total: float | None = None, message: str | None = None
+    ) -> None:
+        await _get_mcp_interface().progress(progress, total, message)
+
+
 # Create singleton proxies
 db = DatabaseProxy()
 config = ConfigProxy()
 plugins = PluginsProxy()
+mcp = _RuntimeMCPProxy()
 
 # Lifecycle hooks
 _init_hooks: list[Callable[[], None]] = []

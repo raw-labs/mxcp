@@ -63,6 +63,28 @@ INSERT INTO audit_log (user, action, timestamp)
 VALUES (get_username(), 'query_executed', NOW());
 ```
 
+### Request Header Functions
+
+Requests coming through FastMCP or the HTTP transports expose their headers to DuckDB so you can audit or forward them without extra plumbing.
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `get_request_header(text name)` | VARCHAR | Value of the specified HTTP request header (empty string if missing) |
+| `get_request_headers_json()` | VARCHAR | JSON object containing all request headers |
+
+```sql
+-- Attach the incoming Authorization header to an outbound API call
+SELECT http_post(
+    'https://example.internal/audit',
+    headers := map {'Authorization': get_request_header('Authorization')},
+    body := json('{"status": "ok"}')
+);
+
+-- Persist full header payload
+INSERT INTO request_log(headers_json)
+VALUES (get_request_headers_json());
+```
+
 ## Common DuckDB Extensions
 
 MXCP typically loads these DuckDB extensions:

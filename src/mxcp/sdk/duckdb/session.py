@@ -5,6 +5,7 @@ This module handles DuckDB connection management and query execution.
 """
 
 import contextlib
+import json
 import logging
 from collections.abc import Hashable
 from pathlib import Path
@@ -151,21 +152,44 @@ class DuckDBSession:
                 return context.email
             return ""
 
+        def get_request_header(header_name: str) -> str:
+            """Return a specific HTTP request header value."""
+            from mxcp.sdk.executor.context import get_execution_context
+
+            context = get_execution_context()
+            headers = context.get("request_headers") if context else None
+            if isinstance(headers, dict):
+                value = headers.get(header_name)
+                return "" if value is None else str(value)
+            return ""
+
+        def get_request_headers_json() -> str:
+            """Return all request headers as a JSON object."""
+            from mxcp.sdk.executor.context import get_execution_context
+
+            context = get_execution_context()
+            headers = context.get("request_headers") if context else None
+            if isinstance(headers, dict):
+                return json.dumps(headers)
+            return "{}"
+
         # Register the UDFs with DuckDB
         if self.conn:
             # Try to create each UDF, ignore if already exists
             # UDFs are per database, so another connection may have already created them
             udfs = [
-                ("get_user_external_token", get_user_external_token),
-                ("get_username", get_username),
-                ("get_user_provider", get_user_provider),
-                ("get_user_email", get_user_email),
+                ("get_user_external_token", get_user_external_token, [], None),
+                ("get_username", get_username, [], None),
+                ("get_user_provider", get_user_provider, [], None),
+                ("get_user_email", get_user_email, [], None),
+                ("get_request_header", get_request_header, [str], str),
+                ("get_request_headers_json", get_request_headers_json, [], str),
             ]
 
             created_udfs = []
-            for name, func in udfs:
+            for name, func, parameters, return_type in udfs:
                 try:
-                    self.conn.create_function(name, func, [], None)
+                    self.conn.create_function(name, func, parameters, return_type)
                     created_udfs.append(name)
                 except duckdb.CatalogException as e:
                     if "already exists" in str(e):

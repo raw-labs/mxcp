@@ -14,7 +14,8 @@ import yaml
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.executor.engine import create_runtime_environment
-from mxcp.server.services.endpoints import execute_endpoint_with_engine
+
+from .helpers import execute_endpoint_with_engine
 
 # Global shared state for testing thread safety
 shared_counter = 0

@@ -1,0 +1,20 @@
+mxcp: 1
+
+tool:
+  name: headers_sql
+  description: Returns request headers via DuckDB helper UDFs
+  parameters: []
+  return:
+    type: object
+    properties:
+      auth:
+        type: string
+      headers_json:
+        type: string
+  language: python
+  source:
+    file: ../python/context_tools.py
+  tests:
+    - name: just_run
+      arguments: []
+

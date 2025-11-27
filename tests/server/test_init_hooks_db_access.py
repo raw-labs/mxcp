@@ -11,7 +11,8 @@ import yaml
 
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.executor.engine import create_runtime_environment
-from mxcp.server.services.endpoints import execute_endpoint_with_engine
+
+from .helpers import execute_endpoint_with_engine
 
 
 @pytest.mark.asyncio
