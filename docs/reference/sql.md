@@ -65,7 +65,7 @@ VALUES (get_username(), 'query_executed', NOW());
 
 ### Request Header Functions
 
-Requests coming through FastMCP or the HTTP transports expose their headers to DuckDB so you can audit or forward them without extra plumbing.
+Requests coming through HTTP transport expose their headers to DuckDB so you can audit or forward them without extra plumbing.
 
 | Function | Returns | Description |
 |----------|---------|-------------|
@@ -79,10 +79,6 @@ SELECT http_post(
     headers := map {'Authorization': get_request_header('Authorization')},
     body := json('{"status": "ok"}')
 );
-
--- Persist full header payload
-INSERT INTO request_log(headers_json)
-VALUES (get_request_headers_json());
 ```
 
 ## Common DuckDB Extensions
