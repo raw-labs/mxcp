@@ -4,12 +4,11 @@ Utilities for constructing ExecutionContext instances consistently.
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from mxcp.sdk.mcp import LoggingMCPProxy, MCPLogProxy
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
-
+from mxcp.sdk.mcp import LoggingMCPProxy, MCPLogProxy
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 
 if TYPE_CHECKING:
@@ -21,7 +20,7 @@ def build_execution_context(
     user_context: UserContext | None,
     user_config: UserConfigModel,
     site_config: SiteConfigModel,
-    server_ref: "RAWMCP | None" = None,
+    server_ref: RAWMCP | None = None,
     request_headers: dict[str, str] | None = None,
     transport: str | None = None,
     mcp_interface: MCPLogProxy | None = None,
@@ -49,4 +48,3 @@ def build_execution_context(
             context.set(key, value)
 
     return context
-

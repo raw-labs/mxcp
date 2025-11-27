@@ -5,13 +5,14 @@ MCP logging/progress proxy implementations for ExecutionContext.
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from mcp.server.fastmcp import Context as FastMCPContextBase
 
-try:  # Optional dependency when not running server side
-    from mcp.server.fastmcp import Context as FastMCPContext
-except Exception:  # pragma: no cover
-    FastMCPContext = Any  # type: ignore[assignment]
+if TYPE_CHECKING:
+    FastMCPContext = FastMCPContextBase[Any, Any, Any]
+else:  # pragma: no cover - runtime fallback for type-only aliasing
+    FastMCPContext = FastMCPContextBase
 
 
 @runtime_checkable
@@ -101,4 +102,3 @@ class FastMCPLogProxy:
         self, progress: float, total: float | None = None, message: str | None = None
     ) -> None:
         await self._context.report_progress(progress, total, message)
-

@@ -25,7 +25,6 @@ from collections.abc import Callable
 from typing import Any, cast
 
 from mxcp.sdk.executor.context import get_execution_context
-
 from mxcp.sdk.mcp import MCPLogProxy, NullMCPProxy
 
 logger = logging.getLogger(__name__)

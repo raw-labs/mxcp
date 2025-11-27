@@ -7,7 +7,7 @@ This module handles DuckDB connection management and query execution.
 import contextlib
 import json
 import logging
-from collections.abc import Hashable
+from collections.abc import Callable, Hashable
 from pathlib import Path
 from typing import Any
 
@@ -177,19 +177,19 @@ class DuckDBSession:
         if self.conn:
             # Try to create each UDF, ignore if already exists
             # UDFs are per database, so another connection may have already created them
-            udfs = [
-                ("get_user_external_token", get_user_external_token, [], None),
-                ("get_username", get_username, [], None),
-                ("get_user_provider", get_user_provider, [], None),
-                ("get_user_email", get_user_email, [], None),
-                ("get_request_header", get_request_header, [str], str),
-                ("get_request_headers_json", get_request_headers_json, [], str),
+            udfs: list[tuple[str, Callable[..., Any]]] = [
+                ("get_user_external_token", get_user_external_token),
+                ("get_username", get_username),
+                ("get_user_provider", get_user_provider),
+                ("get_user_email", get_user_email),
+                ("get_request_header", get_request_header),
+                ("get_request_headers_json", get_request_headers_json),
             ]
 
             created_udfs = []
-            for name, func, parameters, return_type in udfs:
+            for name, func in udfs:
                 try:
-                    self.conn.create_function(name, func, parameters, return_type)
+                    self.conn.create_function(name, func)
                     created_udfs.append(name)
                 except duckdb.CatalogException as e:
                     if "already exists" in str(e):

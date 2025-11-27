@@ -14,12 +14,13 @@ import traceback
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Any, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeVar, cast
 
 import uvicorn
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp import Context as FastMCPContextRuntime
+from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, Field, create_model
 from starlette.responses import JSONResponse
@@ -70,6 +71,14 @@ from mxcp.server.services.endpoints import (
     execute_endpoint_with_engine_and_policy,
 )
 from mxcp.server.services.endpoints.validator import validate_endpoint
+
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import Context as FastMCPContextGeneric
+
+    FastMCPContext = FastMCPContextGeneric[Any, Any, Any]
+else:  # pragma: no cover
+    FastMCPContext = FastMCPContextRuntime
+
 
 logger = logging.getLogger(__name__)
 
@@ -1184,7 +1193,7 @@ class RAWMCP:
 
         # Create function signature with proper Pydantic type annotations
         # Include Context as the first parameter for accessing session_id
-        param_annotations = {"ctx": Context}
+        param_annotations = {"ctx": FastMCPContext}
         param_signatures = ["ctx"]
 
         # Sort parameters so required (no default) come before optional (with default)
@@ -1717,7 +1726,7 @@ class RAWMCP:
         user_context: Any = None,
         with_policy_info: bool = False,
         request_headers: dict[str, str] | None = None,
-        mcp_ctx: Context | None = None,
+        mcp_ctx: FastMCPContext | None = None,
     ) -> Any:
         """Execute endpoint with execution lock.
 

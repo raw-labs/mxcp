@@ -12,9 +12,8 @@ from typing import TYPE_CHECKING, Any
 from jinja2 import Template
 
 if TYPE_CHECKING:
-    from mxcp.server.interfaces.server.mcp import RAWMCP
+    pass
 
-from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
 from mxcp.sdk.validator import TypeValidator
