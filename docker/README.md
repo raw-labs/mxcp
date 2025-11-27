@@ -38,7 +38,7 @@ FROM ghcr.io/raw-labs/mxcp:latest
 COPY --chown=mxcp:mxcp . /mxcp-site/
 
 # Install additional Python dependencies (optional)
-COPY requirements.txt /tmp/
+COPY --chown=mxcp:mxcp requirements.txt /tmp/
 RUN /mxcp-site/.venv/bin/pip install -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 ```
