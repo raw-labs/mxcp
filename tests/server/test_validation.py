@@ -68,8 +68,8 @@ def test_validate_valid_endpoint(validation_repo_path, site_config, test_executi
     try:
         endpoint_path = "tools/valid_endpoint.yml"
         result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
-        assert result["status"] == "ok"
-        assert result["path"] == endpoint_path
+        assert result.status == "ok"
+        assert result.path == endpoint_path
     finally:
         os.chdir(original_dir)
 
@@ -81,8 +81,8 @@ def test_validate_valid_prompt(validation_repo_path, site_config, test_execution
     try:
         endpoint_path = "prompts/valid_prompt.yml"
         result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
-        assert result["status"] == "ok"
-        assert result["path"] == endpoint_path
+        assert result.status == "ok"
+        assert result.path == endpoint_path
     finally:
         os.chdir(original_dir)
 
@@ -94,12 +94,13 @@ def test_validate_invalid_prompt(validation_repo_path, site_config, test_executi
     try:
         endpoint_path = "prompts/invalid_prompt.yml"
         result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
-        assert result["status"] == "error"
-        assert "undefined template variables" in result["message"].lower()
+        assert result.status == "error"
+        assert result.message is not None
+        assert "undefined template variables" in result.message.lower()
         # Check that all undefined variables are mentioned
-        assert "expertise_level" in result["message"]
-        assert "complexity" in result["message"]
-        assert "extra_info" in result["message"]
+        assert "expertise_level" in result.message
+        assert "complexity" in result.message
+        assert "extra_info" in result.message
     finally:
         os.chdir(original_dir)
 
@@ -114,9 +115,10 @@ def test_validate_invalid_type(validation_repo_path, site_config, test_execution
     try:
         endpoint_path = "endpoints/invalid_type.yml"
         result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
-        assert result["status"] == "error"
-        assert "type mismatches" in result["message"].lower()
-        assert "user_id" in result["message"]
+        assert result.status == "error"
+        assert result.message is not None
+        assert "type mismatches" in result.message.lower()
+        assert "user_id" in result.message
     finally:
         os.chdir(original_dir)
 
@@ -128,8 +130,12 @@ def test_validate_invalid_parameter_name(validation_repo_path, site_config, test
     try:
         endpoint_path = "tools/invalid_parameter_name.yml"
         result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
-        assert result["status"] == "error"
-        assert "'user/id' does not match" in result["message"].lower()
+        assert result.status == "error"
+        assert result.message is not None
+        assert (
+            "parameter name must contain only alphanumeric characters or underscores"
+            in result.message.lower()
+        )
     finally:
         os.chdir(original_dir)
 
@@ -141,9 +147,10 @@ def test_validate_missing_param(validation_repo_path, site_config, test_executio
     try:
         endpoint_path = "tools/missing_param.yml"
         result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
-        assert result["status"] == "error"
-        assert "parameter mismatch" in result["message"].lower()
-        assert "extra_param" in result["message"]
+        assert result.status == "error"
+        assert result.message is not None
+        assert "parameter mismatch" in result.message.lower()
+        assert "extra_param" in result.message
     finally:
         os.chdir(original_dir)
 
@@ -155,9 +162,9 @@ def test_validate_all_endpoints(validation_repo_path, site_config, test_executio
     try:
         result = validate_all_endpoints(site_config, test_execution_engine)
         # We expect at least one error due to intentionally invalid endpoints
-        assert result["status"] == "error"
+        assert result.status == "error"
         # Check that we have both valid and invalid results
-        statuses = [r["status"] for r in result["validated"]]
+        statuses = [r.status for r in result.validated]
         assert "ok" in statuses
         assert "error" in statuses
     finally:
@@ -173,8 +180,8 @@ def test_validate_complex_jinja_prompt_valid(
     try:
         endpoint_path = "prompts/complex_jinja_prompt.yml"
         result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
-        assert result["status"] == "ok"
-        assert result["path"] == endpoint_path
+        assert result.status == "ok"
+        assert result.path == endpoint_path
     finally:
         os.chdir(original_dir)
 
@@ -188,13 +195,14 @@ def test_validate_complex_jinja_prompt_invalid(
     try:
         endpoint_path = "prompts/invalid_complex_jinja_prompt.yml"
         result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
-        assert result["status"] == "error"
-        assert "undefined template variables" in result["message"].lower()
+        assert result.status == "error"
+        assert result.message is not None
+        assert "undefined template variables" in result.message.lower()
         # Check that all undefined variables are mentioned
-        assert "user_type" in result["message"]
-        assert "username" in result["message"]
-        assert "items" in result["message"]
-        assert "item" in result["message"]
+        assert "user_type" in result.message
+        assert "username" in result.message
+        assert "items" in result.message
+        assert "item" in result.message
     finally:
         os.chdir(original_dir)
 
@@ -208,13 +216,14 @@ def test_validate_duplicate_tool_names(validation_repo_path, site_config, test_e
         result = validate_all_endpoints(site_config, test_execution_engine)
 
         # The validation should fail due to duplicate tool names
-        assert result["status"] == "error"
+        assert result.status == "error"
 
         # Check that the error message mentions duplicate names
         # Look through all validation results for duplicate name errors
         duplicate_error_found = False
-        for validated_result in result.get("validated", []):
-            if "duplicate" in validated_result.get("message", "").lower():
+        for validated_result in result.validated:
+            message = (validated_result.message or "").lower()
+            if "duplicate" in message:
                 duplicate_error_found = True
                 break
 
@@ -234,13 +243,13 @@ def test_validate_duplicate_resource_uris(validation_repo_path, site_config, tes
         result = validate_all_endpoints(site_config, test_execution_engine)
 
         # The validation should fail due to duplicate resource URIs
-        assert result["status"] == "error"
+        assert result.status == "error"
 
         # Check that the error message mentions duplicate URIs
         # Look through all validation results for duplicate URI errors
         duplicate_error_found = False
-        for validated_result in result.get("validated", []):
-            message = validated_result.get("message", "").lower()
+        for validated_result in result.validated:
+            message = (validated_result.message or "").lower()
             if "duplicate" in message and (
                 "uri" in message or "test://duplicate.resource" in message
             ):

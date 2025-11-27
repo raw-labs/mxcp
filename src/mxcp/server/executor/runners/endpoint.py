@@ -7,7 +7,7 @@ logic used by higher-level endpoint orchestration code.
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional
 
 from jinja2 import Template
 
@@ -18,11 +18,11 @@ from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
 from mxcp.sdk.validator import TypeValidator
-from mxcp.server.core.config._types import SiteConfig, UserConfig
-from mxcp.server.definitions.endpoints._types import (
-    EndpointDefinition,
-    PromptDefinition,
-    TypeDefinition,
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
+from mxcp.server.definitions.endpoints.models import (
+    EndpointDefinitionModel,
+    PromptDefinitionModel,
+    TypeDefinitionModel,
 )
 from mxcp.server.definitions.endpoints.utils import prepare_source_for_execution
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 async def execute_prompt_with_validation(
-    prompt_def: PromptDefinition, params: dict[str, Any], skip_output_validation: bool
+    prompt_def: PromptDefinitionModel, params: dict[str, Any], skip_output_validation: bool
 ) -> Any:
     """Execute prompt endpoint with proper validation and template rendering.
 
@@ -40,33 +40,39 @@ async def execute_prompt_with_validation(
 
     validated_params = params
     if not skip_output_validation:
-        input_schema = prompt_def.get("parameters")
-        if input_schema:
-            # Use correct validator and schema structure (same as SDK executor)
-            schema_dict = {"input": {"parameters": input_schema}}
+        input_schema_models = prompt_def.parameters or []
+        if input_schema_models:
+            schema_dict = {
+                "input": {
+                    "parameters": [
+                        param.model_dump(mode="python", exclude_unset=True, by_alias=True)
+                        for param in input_schema_models
+                    ]
+                }
+            }
             validator = TypeValidator.from_dict(schema_dict)
             validated_params = validator.validate_input(params)
     else:
         # Apply defaults even when skipping validation (for template rendering)
-        param_defs = prompt_def.get("parameters") or []
+        param_defs = prompt_def.parameters or []
         validated_params = params.copy()
         for param_def in param_defs:
-            name = param_def["name"]
-            if name not in validated_params and "default" in param_def:
-                validated_params[name] = param_def["default"]
+            name = param_def.name
+            if name not in validated_params and "default" in param_def.model_fields_set:
+                validated_params[name] = param_def.default
 
     # Template rendering with validated parameters
-    messages = prompt_def.get("messages", [])
+    messages = prompt_def.messages or []
     processed_messages = []
 
     for msg in messages:
-        template = Template(msg["prompt"])
+        template = Template(msg.prompt)
         processed_prompt = template.render(**validated_params)
 
         processed_msg = {
             "prompt": processed_prompt,
-            "role": msg.get("role"),
-            "type": msg.get("type"),
+            "role": msg.role,
+            "type": msg.type,
         }
         processed_messages.append(processed_msg)
 
@@ -74,15 +80,15 @@ async def execute_prompt_with_validation(
 
 
 async def execute_code_with_engine(
-    endpoint_definition: EndpointDefinition,
+    endpoint_definition: EndpointDefinitionModel,
     endpoint_type: str,
     endpoint_file_path: Path,
     repo_root: Path,
     params: dict[str, Any],
     execution_engine: ExecutionEngine,
     skip_output_validation: bool,
-    user_config: UserConfig,
-    site_config: SiteConfig,
+    user_config: UserConfigModel,
+    site_config: SiteConfigModel,
     user_context: UserContext | None = None,
     server_ref: Optional["RAWMCP"] = None,
     request_headers: dict[str, str] | None = None,
@@ -105,8 +111,8 @@ async def execute_code_with_engine(
     execution_context = ExecutionContext(user_context=user_context)
 
     # Populate context with data that runtime module expects
-    execution_context.set("user_config", user_config)
-    execution_context.set("site_config", site_config)
+    execution_context.set("user_config", user_config.model_dump(mode="python", exclude_unset=True))
+    execution_context.set("site_config", site_config.model_dump(mode="python", exclude_unset=True))
     if server_ref:
         execution_context.set("_mxcp_server", server_ref)
     # Add HTTP headers
@@ -114,31 +120,34 @@ async def execute_code_with_engine(
         execution_context.set("request_headers", request_headers)
     # Get validation schemas - SDK executor handles input validation internally
     input_schema: list[dict[str, Any]] | None = None
-    output_schema: TypeDefinition | None = None
-    return_def: TypeDefinition | None = None
+    output_schema: TypeDefinitionModel | None = None
+    return_def: TypeDefinitionModel | None = None
 
     if endpoint_type == "tool":
-        tool_def = endpoint_definition.get("tool")
+        tool_def = endpoint_definition.tool
         if not tool_def:
             raise ValueError("No tool definition found")
-        params_raw = tool_def.get("parameters")
-        # Cast to List[Dict[str, Any]] for SDK executor compatibility
-        input_schema = (
-            cast(list[dict[str, Any]] | None, params_raw) if isinstance(params_raw, list) else None
-        )
-        # Tools use "return" not "return_" in the YAML
-        return_def = cast(TypeDefinition | None, tool_def.get("return"))
+        if tool_def.parameters:
+            input_schema = [
+                param.model_dump(mode="python", exclude_unset=True, by_alias=True)
+                for param in tool_def.parameters
+            ]
+        else:
+            input_schema = None
+        return_def = tool_def.return_
         output_schema = return_def if not skip_output_validation else None
     else:  # resource
-        resource_def = endpoint_definition.get("resource")
+        resource_def = endpoint_definition.resource
         if not resource_def:
             raise ValueError("No resource definition found")
-        params_raw = resource_def.get("parameters")
-        # Cast to List[Dict[str, Any]] for SDK executor compatibility
-        input_schema = (
-            cast(list[dict[str, Any]] | None, params_raw) if isinstance(params_raw, list) else None
-        )
-        return_def = cast(TypeDefinition | None, resource_def.get("return"))
+        if resource_def.parameters:
+            input_schema = [
+                param.model_dump(mode="python", exclude_unset=True, by_alias=True)
+                for param in resource_def.parameters
+            ]
+        else:
+            input_schema = None
+        return_def = resource_def.return_
         output_schema = return_def if not skip_output_validation else None
 
     # Execute using the provided SDK engine
@@ -181,14 +190,16 @@ async def execute_code_with_engine(
     # Now validate the transformed result
     if output_schema and not skip_output_validation:
 
-        schema_dict = {"output": output_schema}
+        schema_dict = {
+            "output": output_schema.model_dump(mode="python", exclude_unset=True, by_alias=True)
+        }
         validator = TypeValidator.from_dict(schema_dict)
         result = validator.validate_output(result)
 
     return result
 
 
-def transform_result_for_return_type(result: Any, return_def: TypeDefinition) -> Any:
+def transform_result_for_return_type(result: Any, return_def: TypeDefinitionModel) -> Any:
     """Transform result based on return type definition.
 
     This replicates the exact logic from the old EndpointExecutor to maintain
@@ -207,7 +218,7 @@ def transform_result_for_return_type(result: Any, return_def: TypeDefinition) ->
     Raises:
         ValueError: If result shape doesn't match return type expectations
     """
-    return_type = return_def.get("type")
+    return_type = return_def.type
 
     # If return type is array or not specified, don't transform
     if return_type == "array" or not return_type:

@@ -1,7 +1,6 @@
 import os
 import subprocess
 import sys
-from typing import Any
 
 import click
 
@@ -60,7 +59,7 @@ def dbt_config(
             debug=debug,
         )
 
-        click.echo(f"   • Project: {click.style(site_config['project'], fg='yellow')}")
+        click.echo(f"   • Project: {click.style(site_config.project, fg='yellow')}")
         click.echo(f"   • Profile: {click.style(active_profile, fg='yellow')}")
 
         if embed_secrets:
@@ -158,8 +157,8 @@ def dbt_wrapper(ctx: click.Context, profile: str | None, debug: bool) -> None:
         )
 
         # Check dbt is enabled
-        dbt_config = site_config.get("dbt", {})
-        if not dbt_config or not dbt_config.get("enabled", True):
+        dbt_config = site_config.dbt
+        if not dbt_config.enabled:
             click.echo(
                 f"\n{click.style('❌ Error:', fg='red', bold=True)} dbt integration is disabled in mxcp-site.yml"
             )
@@ -178,7 +177,7 @@ def dbt_wrapper(ctx: click.Context, profile: str | None, debug: bool) -> None:
             )
 
         # Get project name
-        project = site_config["project"]
+        project = site_config.project
 
         # Show what we're doing
         dbt_command = " ".join(ctx.args)
@@ -190,18 +189,15 @@ def dbt_wrapper(ctx: click.Context, profile: str | None, debug: bool) -> None:
         click.echo(f"   • Command: {click.style(f'dbt {dbt_command}', fg='green')}")
 
         # Get secrets from user config
-        project_config: Any = user_config.get("projects", {}).get(project, {})
-        profile_config = project_config.get("profiles", {}).get(active_profile, {})
-        secrets = profile_config.get("secrets", [])
+        project_config = user_config.projects.get(project)
+        profile_config = project_config.profiles.get(active_profile) if project_config else None
+        secrets = profile_config.secrets if profile_config else []
 
         # Prepare environment
         env = os.environ.copy()
-        for secret in secrets or []:
-            if not isinstance(secret, dict) or "name" not in secret or "parameters" not in secret:
-                continue
-
-            secret_name = secret["name"]
-            parameters = secret["parameters"]
+        for secret in secrets:
+            secret_name = secret.name
+            parameters = secret.parameters or {}
 
             # Handle both string and object parameters
             for param_name, param_value in parameters.items():

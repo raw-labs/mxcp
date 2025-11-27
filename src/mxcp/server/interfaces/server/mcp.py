@@ -25,16 +25,9 @@ from pydantic import AnyHttpUrl, Field, create_model
 from starlette.responses import JSONResponse
 
 from mxcp.sdk.audit import AuditLogger
-from mxcp.sdk.auth import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
-from mxcp.sdk.auth._types import HttpTransportConfig
+from mxcp.sdk.auth import GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth.context import get_user_context
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
-from mxcp.sdk.auth.providers.atlassian import AtlassianOAuthHandler
-from mxcp.sdk.auth.providers.github import GitHubOAuthHandler
-from mxcp.sdk.auth.providers.google import GoogleOAuthHandler
-from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
-from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
-from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.sdk.core import PACKAGE_VERSION
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.telemetry import (
@@ -45,24 +38,25 @@ from mxcp.sdk.telemetry import (
     traced_operation,
 )
 from mxcp.server.admin import AdminAPIRunner
-from mxcp.server.core.config._types import (
-    SiteConfig,
-    UserAuthConfig,
-    UserConfig,
-    UserHttpTransportConfig,
+from mxcp.server.core.auth.helpers import (
+    create_oauth_handler,
+    create_url_builder,
+    translate_auth_config,
 )
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import get_active_profile, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.core.refs.external import ExternalRefTracker
 from mxcp.server.core.reload import ReloadManager, ReloadRequest
 from mxcp.server.core.telemetry import configure_telemetry_from_config, shutdown_telemetry
-from mxcp.server.definitions.endpoints._types import (
-    ParamDefinition,
-    PromptDefinition,
-    ResourceDefinition,
-    ToolDefinition,
-)
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
+from mxcp.server.definitions.endpoints.models import (
+    ParamDefinitionModel,
+    PromptDefinitionModel,
+    ResourceDefinitionModel,
+    ToolDefinitionModel,
+    TypeDefinitionModel,
+)
 from mxcp.server.definitions.endpoints.utils import EndpointType
 from mxcp.server.executor.engine import RuntimeEnvironment, create_runtime_environment
 from mxcp.server.interfaces.cli.utils import (
@@ -130,123 +124,14 @@ def with_draining_and_request_tracking(func: T) -> T:
     return cast(T, wrapper)
 
 
-def translate_transport_config(
-    user_transport_config: UserHttpTransportConfig | None,
-) -> HttpTransportConfig | None:
-    """Translate user HTTP transport config to SDK transport config.
-
-    Args:
-        user_transport_config: User configuration transport section
-
-    Returns:
-        SDK-compatible HTTP transport configuration
-    """
-    if not user_transport_config:
-        return None
-
-    return {
-        "port": user_transport_config.get("port"),
-        "host": user_transport_config.get("host"),
-        "scheme": user_transport_config.get("scheme"),
-        "base_url": user_transport_config.get("base_url"),
-        "trust_proxy": user_transport_config.get("trust_proxy"),
-        "stateless": user_transport_config.get("stateless"),
-    }
-
-
-def create_oauth_handler(
-    user_auth_config: UserAuthConfig,
-    host: str = "localhost",
-    port: int = 8000,
-    user_config: UserConfig | None = None,
-) -> ExternalOAuthHandler | None:
-    """Create an OAuth handler from user configuration.
-
-    This helper translates user config to SDK types and instantiates the appropriate handler.
-
-    Args:
-        user_auth_config: User authentication configuration
-        host: The server host to use for callback URLs
-        port: The server port to use for callback URLs
-        user_config: Full user configuration for transport settings (optional)
-
-    Returns:
-        OAuth handler instance or None if provider is 'none'
-    """
-    provider = user_auth_config.get("provider", "none")
-
-    if provider == "none":
-        return None
-
-    # Extract transport config if available
-    transport_config = None
-    if user_config and "transport" in user_config:
-        transport = user_config["transport"]
-        user_transport = transport.get("http") if transport else None
-        transport_config = translate_transport_config(user_transport)
-
-    if provider == "github":
-
-        github_config = user_auth_config.get("github")
-        if not github_config:
-            raise ValueError("GitHub provider selected but no GitHub configuration found")
-        return GitHubOAuthHandler(github_config, transport_config, host=host, port=port)
-
-    elif provider == "atlassian":
-
-        atlassian_config = user_auth_config.get("atlassian")
-        if not atlassian_config:
-            raise ValueError("Atlassian provider selected but no Atlassian configuration found")
-        return AtlassianOAuthHandler(atlassian_config, transport_config, host=host, port=port)
-
-    elif provider == "salesforce":
-
-        salesforce_config = user_auth_config.get("salesforce")
-        if not salesforce_config:
-            raise ValueError("Salesforce provider selected but no Salesforce configuration found")
-        return SalesforceOAuthHandler(salesforce_config, transport_config, host=host, port=port)
-
-    elif provider == "keycloak":
-
-        keycloak_config = user_auth_config.get("keycloak")
-        if not keycloak_config:
-            raise ValueError("Keycloak provider selected but no Keycloak configuration found")
-        return KeycloakOAuthHandler(keycloak_config, transport_config, host=host, port=port)
-
-    elif provider == "google":
-
-        google_config = user_auth_config.get("google")
-        if not google_config:
-            raise ValueError("Google provider selected but no Google configuration found")
-        return GoogleOAuthHandler(google_config, transport_config, host=host, port=port)
-
-    else:
-        raise ValueError(f"Unsupported auth provider: {provider}")
-
-
-def create_url_builder(user_config: UserConfig) -> URLBuilder:
-    """Create a URL builder from user configuration.
-
-    Args:
-        user_config: User configuration dictionary
-
-    Returns:
-        Configured URLBuilder instance
-    """
-    transport = user_config.get("transport", {})
-    user_transport_config = transport.get("http", {}) if transport else {}
-    transport_config = translate_transport_config(user_transport_config)
-    return URLBuilder(transport_config)
-
-
 class RAWMCP:
     """MXCP MCP Server implementation that bridges MXCP endpoints with MCP protocol."""
 
     # Type annotations for instance attributes
-    site_config: SiteConfig
-    user_config: UserConfig
-    _site_config_template: SiteConfig
-    _user_config_template: UserConfig
+    site_config: SiteConfigModel
+    user_config: UserConfigModel
+    _site_config_template: SiteConfigModel
+    _user_config_template: UserConfigModel
     host: str
     port: int
     profile_name: str
@@ -388,15 +273,16 @@ class RAWMCP:
         interpolation, which only resolves references for the active profile and top-level
         config. This prevents errors from undefined environment variables in inactive profiles.
         """
+        site_template_dict = self._site_config_template.model_dump(mode="python")
+        user_template_dict = self._user_config_template.model_dump(mode="python")
+
         # Check if configs contain unresolved references
-        config_str = json.dumps(self._site_config_template) + json.dumps(self._user_config_template)
+        config_str = json.dumps(site_template_dict) + json.dumps(user_template_dict)
         needs_resolution = any(pattern in config_str for pattern in ["${", "vault://", "file://"])
 
         # Determine active profile (CLI override > site config)
-        active_profile = str(
-            self._cli_overrides["profile"] or self._site_config_template["profile"]
-        )
-        project_name = self._site_config_template["project"]
+        active_profile = str(self._cli_overrides["profile"] or self._site_config_template.profile)
+        project_name = self._site_config_template.project
 
         if needs_resolution:
             # Set templates and resolve with selective interpolation
@@ -404,8 +290,8 @@ class RAWMCP:
                 f"Resolving external configuration references for project={project_name}, profile={active_profile}..."
             )
             self.ref_tracker.set_template(
-                cast(dict[str, Any], self._site_config_template),
-                cast(dict[str, Any], self._user_config_template),
+                site_template_dict,
+                user_template_dict,
             )
             self._config_templates_loaded = True
 
@@ -414,8 +300,10 @@ class RAWMCP:
                 project_name=project_name,
                 profile_name=active_profile,
             )
-            self.site_config = cast(SiteConfig, resolved_site)
-            self.user_config = cast(UserConfig, resolved_user)
+            self.site_config = SiteConfigModel.model_validate(
+                resolved_site, context={"repo_root": self.site_config_path}
+            )
+            self.user_config = UserConfigModel.model_validate(resolved_user)
         else:
             # Already resolved
             self.site_config = self._site_config_template
@@ -429,27 +317,18 @@ class RAWMCP:
         )
 
         # Extract transport config with overrides
-        transport_config = self.user_config.get("transport") or {}
+        transport_model = self.user_config.transport
+        http_config = transport_model.http
+
         self.transport = str(
-            self._cli_overrides["transport"]
-            or (transport_config.get("provider") if transport_config else "streamable-http")
-            or "streamable-http"
+            self._cli_overrides["transport"] or transport_model.provider or "streamable-http"
         )
 
-        http_config = transport_config.get("http") if transport_config else {}
-        self.host = str(
-            self._cli_overrides["host"]
-            or (http_config.get("host") if http_config else "localhost")
-            or "localhost"
-        )
-        port_value = (
-            self._cli_overrides["port"]
-            or (http_config.get("port") if http_config else 8000)
-            or 8000
-        )
+        self.host = str(self._cli_overrides["host"] or http_config.host or "localhost")
+        port_value = self._cli_overrides["port"] or http_config.port or 8000
         self.port = int(port_value)
 
-        config_stateless = http_config.get("stateless", False) if http_config else False
+        config_stateless = http_config.stateless or False
         self.stateless_http = (
             self._cli_overrides["stateless_http"]
             if self._cli_overrides["stateless_http"] is not None
@@ -460,8 +339,8 @@ class RAWMCP:
         self.readonly = bool(self._cli_overrides["readonly"])
 
         # SQL tools setting
-        sql_tools_config = self.site_config.get("sql_tools") or {}
-        site_sql_tools = sql_tools_config.get("enabled", False) if sql_tools_config else False
+        sql_tools_config = self.site_config.sql_tools
+        site_sql_tools = bool(sql_tools_config.enabled)
         self.enable_sql_tools = (
             self._cli_overrides["enable_sql_tools"]
             if self._cli_overrides["enable_sql_tools"] is not None
@@ -473,17 +352,17 @@ class RAWMCP:
         tool_count = sum(
             1
             for _, endpoint, error in self._all_endpoints
-            if error is None and endpoint is not None and "tool" in endpoint
+            if error is None and endpoint is not None and endpoint.tool is not None
         )
         resource_count = sum(
             1
             for _, endpoint, error in self._all_endpoints
-            if error is None and endpoint is not None and "resource" in endpoint
+            if error is None and endpoint is not None and endpoint.resource is not None
         )
         prompt_count = sum(
             1
             for _, endpoint, error in self._all_endpoints
-            if error is None and endpoint is not None and "prompt" in endpoint
+            if error is None and endpoint is not None and endpoint.prompt is not None
         )
 
         return {
@@ -521,7 +400,7 @@ class RAWMCP:
 
     def _initialize_oauth(self) -> None:
         """Initialize OAuth authentication using profile-specific auth config."""
-        auth_config = self.active_profile.get("auth", {})
+        auth_config = self.active_profile.auth
         self.oauth_handler = create_oauth_handler(
             auth_config,
             host=self.host,
@@ -532,8 +411,10 @@ class RAWMCP:
         self.auth_settings = None
 
         if self.oauth_handler:
+            auth_config_dict = translate_auth_config(auth_config)
+            user_config_dict = self.user_config.model_dump(mode="python")
             self.oauth_server = GeneralOAuthAuthorizationServer(
-                self.oauth_handler, auth_config, cast(dict[str, Any], self.user_config)
+                self.oauth_handler, auth_config_dict, user_config_dict
             )
 
             # Use URL builder for OAuth endpoints
@@ -541,8 +422,8 @@ class RAWMCP:
             base_url = url_builder.get_base_url(host=self.host, port=self.port)
 
             # Get authorization configuration
-            auth_authorization = auth_config.get("authorization", {})
-            required_scopes = auth_authorization.get("required_scopes", [])
+            auth_authorization = auth_config.authorization
+            required_scopes = auth_authorization.required_scopes if auth_authorization else []
 
             logger.info(
                 f"Authorization configured - required scopes: {required_scopes or 'none (authentication only)'}"
@@ -558,9 +439,7 @@ class RAWMCP:
                 ),
                 required_scopes=required_scopes if required_scopes else None,
             )
-            logger.info(
-                f"OAuth authentication enabled with provider: {auth_config.get('provider')}"
-            )
+            logger.info(f"OAuth authentication enabled with provider: {auth_config.provider}")
         else:
             logger.info("OAuth authentication disabled")
 
@@ -627,10 +506,10 @@ class RAWMCP:
     def _initialize_audit_logger(self) -> None:
         """Initialize audit logger if enabled."""
 
-        profile_config = self.site_config["profiles"][self.profile_name]
-        audit_config = profile_config.get("audit") or {}
-        if audit_config and audit_config.get("enabled", False):
-            log_path_str = audit_config.get("path", "")
+        profile_config = self.site_config.profiles.get(self.profile_name)
+        audit_config = profile_config.audit if profile_config else None
+        if audit_config and audit_config.enabled:
+            log_path_str = audit_config.path or ""
             log_path = Path(log_path_str) if log_path_str else Path("audit.log")
             # Ensure parent directory exists
             log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -725,7 +604,7 @@ class RAWMCP:
         logger.info("Initializing telemetry...")
 
         # Get project name from site config
-        project_name = self.site_config["project"]
+        project_name = self.site_config.project
 
         # Configure telemetry for the current profile and get enabled status
         self.telemetry_enabled = configure_telemetry_from_config(
@@ -769,7 +648,8 @@ class RAWMCP:
 
             # Set templates in tracker
             self.ref_tracker.set_template(
-                cast(dict[str, Any], site_template), cast(dict[str, Any], user_template)
+                site_template.model_dump(mode="python"),
+                user_template.model_dump(mode="python"),
             )
             self._config_templates_loaded = True
             logger.info("Raw configuration templates loaded.")
@@ -786,13 +666,16 @@ class RAWMCP:
 
             # Update templates in tracker
             self.ref_tracker.set_template(
-                cast(dict[str, Any], new_site_template), cast(dict[str, Any], new_user_template)
+                new_site_template.model_dump(mode="python"),
+                new_user_template.model_dump(mode="python"),
             )
 
             # Resolve and update configs
             new_site_config, new_user_config = self.ref_tracker.resolve_all()
-            self.site_config = cast(SiteConfig, new_site_config)
-            self.user_config = cast(UserConfig, new_user_config)
+            self.site_config = SiteConfigModel.model_validate(
+                new_site_config, context={"repo_root": self.site_config_path}
+            )
+            self.user_config = UserConfigModel.model_validate(new_user_config)
 
             logger.info("Configuration files reloaded")
 
@@ -933,9 +816,13 @@ class RAWMCP:
         # Capitalize first letter for class name convention
         return name.title().replace("_", "")
 
+    def _schema_dict(self, schema: TypeDefinitionModel) -> dict[str, Any]:
+        """Convert a schema model to a plain dictionary representation."""
+        return schema.model_dump(mode="python", exclude_unset=True, by_alias=True)
+
     def _create_pydantic_model_from_schema(
         self,
-        schema_def: dict[str, Any],
+        schema_def: TypeDefinitionModel,
         model_name: str,
         endpoint_type: EndpointType | None = None,
     ) -> Any:  # Returns types that can be used in type annotations
@@ -949,12 +836,13 @@ class RAWMCP:
         Returns:
             Pydantic model class or type annotation
         """
-        # Cache key for this schema (include endpoint_type to avoid conflicts)
-        cache_key = f"{model_name}_{hash(json.dumps(schema_def, sort_keys=True))}_{endpoint_type}"
+        schema_dict = self._schema_dict(schema_def)
+
+        cache_key = f"{model_name}_{hash(json.dumps(schema_dict, sort_keys=True))}_{endpoint_type}"
         if cache_key in self._model_cache:
             return self._model_cache[cache_key]
 
-        json_type = schema_def.get("type", "string")
+        json_type = schema_def.type
 
         # Declare variable with explicit type annotation
         final_type: Any
@@ -965,18 +853,13 @@ class RAWMCP:
 
         # Handle primitive types
         if json_type == "string":
-            # Handle enums
-            if "enum" in schema_def:
-                enum_values = schema_def["enum"]
-                if all(isinstance(v, str) for v in enum_values):
-                    # For enums, we'll use a simple str type with validation
-                    # Since we can't dynamically create Literal unions in a type-safe way
-                    if make_nullable:
-                        final_type = str | None
-                    else:
-                        final_type = str
-                    self._model_cache[cache_key] = final_type
-                    return final_type
+            if schema_def.enum and all(isinstance(v, str) for v in schema_def.enum):
+                if make_nullable:
+                    final_type = str | None
+                else:
+                    final_type = str
+                self._model_cache[cache_key] = final_type
+                return final_type
 
             # Create Field with constraints
             field_kwargs = self._extract_field_constraints(schema_def)
@@ -1039,7 +922,7 @@ class RAWMCP:
             return final_type
 
         elif json_type == "array":
-            items_schema = schema_def.get("items")
+            items_schema = schema_def.items
             if items_schema is not None:
                 item_type = self._create_pydantic_model_from_schema(
                     items_schema, f"{model_name}Item", endpoint_type
@@ -1059,10 +942,8 @@ class RAWMCP:
             return final_type
 
         elif json_type == "object":
-            # Handle complex objects with properties
-            properties = schema_def.get("properties", {})
-            required_fields = set(schema_def.get("required", []))
-            # additional_properties = schema_def.get("additionalProperties", True)
+            properties = schema_def.properties or {}
+            required_fields = set(schema_def.required or [])
 
             if not properties:
                 # Generic object
@@ -1102,8 +983,6 @@ class RAWMCP:
 
             # Create the model with proper configuration
 
-            # model_config = ConfigDict(extra="allow" if additional_properties else "forbid")
-
             # Create model with fields and config
             # Note: In Pydantic v2, __config__ is not supported in create_model
             # Instead, we create the model and then set the config
@@ -1119,52 +998,46 @@ class RAWMCP:
         self._model_cache[cache_key] = final_type
         return final_type
 
-    def _extract_field_constraints(self, schema_def: dict[str, Any]) -> dict[str, Any]:
-        """Extract Pydantic Field constraints from JSON Schema definition."""
-        field_kwargs = {}
+    def _extract_field_constraints(self, schema_def: TypeDefinitionModel) -> dict[str, Any]:
+        """Extract Pydantic Field constraints from a type definition."""
+        field_kwargs: dict[str, Any] = {}
 
-        # Description
-        if "description" in schema_def:
-            field_kwargs["description"] = schema_def["description"]
+        if schema_def.description:
+            field_kwargs["description"] = schema_def.description
 
-        # Default value
-        if "default" in schema_def:
-            field_kwargs["default"] = schema_def["default"]
+        if "default" in schema_def.model_fields_set:
+            field_kwargs["default"] = schema_def.default
 
-        # Examples
-        if "examples" in schema_def and schema_def["examples"]:
-            field_kwargs["examples"] = schema_def["examples"]
+        if schema_def.examples:
+            field_kwargs["examples"] = schema_def.examples
 
-        # String constraints
-        if "minLength" in schema_def:
-            field_kwargs["min_length"] = schema_def["minLength"]
-        if "maxLength" in schema_def:
-            field_kwargs["max_length"] = schema_def["maxLength"]
-        if "pattern" in schema_def:
-            field_kwargs["pattern"] = schema_def["pattern"]
+        if schema_def.minLength is not None:
+            field_kwargs["min_length"] = schema_def.minLength
+        if schema_def.maxLength is not None:
+            field_kwargs["max_length"] = schema_def.maxLength
+        if schema_def.pattern is not None:
+            field_kwargs["pattern"] = schema_def.pattern
 
-        # Numeric constraints
-        if "minimum" in schema_def:
-            field_kwargs["ge"] = schema_def["minimum"]
-        if "maximum" in schema_def:
-            field_kwargs["le"] = schema_def["maximum"]
-        if "exclusiveMinimum" in schema_def:
-            field_kwargs["gt"] = schema_def["exclusiveMinimum"]
-        if "exclusiveMaximum" in schema_def:
-            field_kwargs["lt"] = schema_def["exclusiveMaximum"]
-        if "multipleOf" in schema_def:
-            field_kwargs["multiple_of"] = schema_def["multipleOf"]
+        if schema_def.minimum is not None:
+            field_kwargs["ge"] = schema_def.minimum
+        if schema_def.maximum is not None:
+            field_kwargs["le"] = schema_def.maximum
+        if schema_def.exclusiveMinimum is not None:
+            field_kwargs["gt"] = schema_def.exclusiveMinimum
+        if schema_def.exclusiveMaximum is not None:
+            field_kwargs["lt"] = schema_def.exclusiveMaximum
+        if schema_def.multipleOf is not None:
+            field_kwargs["multiple_of"] = schema_def.multipleOf
 
-        # Array constraints
-        if "minItems" in schema_def:
-            field_kwargs["min_length"] = schema_def["minItems"]
-        if "maxItems" in schema_def:
-            field_kwargs["max_length"] = schema_def["maxItems"]
+        if schema_def.minItems is not None:
+            field_kwargs["min_length"] = schema_def.minItems
+        if schema_def.maxItems is not None:
+            field_kwargs["max_length"] = schema_def.maxItems
 
         return field_kwargs
 
     def _create_pydantic_field_annotation(
-        self, param_def: ParamDefinition, endpoint_type: EndpointType | None = None
+        self, param_def: TypeDefinitionModel, endpoint_type: EndpointType | None = None
     ) -> Any:
         """Create a Pydantic type annotation from parameter definition.
 
@@ -1175,13 +1048,11 @@ class RAWMCP:
         Returns:
             Pydantic type annotation (class or Annotated type)
         """
-        param_name = param_def.get("name", "param")
-        return self._create_pydantic_model_from_schema(
-            cast(dict[str, Any], param_def), param_name, endpoint_type
-        )
+        param_name = getattr(param_def, "name", None) or "param"
+        return self._create_pydantic_model_from_schema(param_def, param_name, endpoint_type)
 
     def _json_schema_to_python_type(
-        self, param_def: ParamDefinition, endpoint_type: EndpointType | None = None
+        self, param_def: TypeDefinitionModel, endpoint_type: EndpointType | None = None
     ) -> Any:
         """Convert JSON Schema type to Python type annotation.
 
@@ -1194,7 +1065,7 @@ class RAWMCP:
         """
         return self._create_pydantic_field_annotation(param_def, endpoint_type)
 
-    def _create_tool_annotations(self, tool_def: ToolDefinition) -> ToolAnnotations | None:
+    def _create_tool_annotations(self, tool_def: ToolDefinitionModel) -> ToolAnnotations | None:
         """Create ToolAnnotations from tool definition.
 
         Args:
@@ -1203,17 +1074,12 @@ class RAWMCP:
         Returns:
             ToolAnnotations object if annotations are present, None otherwise
         """
-        annotations_data = tool_def.get("annotations", {})
-        if not annotations_data:
+        annotations_model = tool_def.annotations
+        if not annotations_model:
             return None
 
-        return ToolAnnotations(
-            title=annotations_data.get("title"),
-            readOnlyHint=annotations_data.get("readOnlyHint"),
-            destructiveHint=annotations_data.get("destructiveHint"),
-            idempotentHint=annotations_data.get("idempotentHint"),
-            openWorldHint=annotations_data.get("openWorldHint"),
-        )
+        annotations_data = annotations_model.model_dump(mode="python", exclude_unset=True)
+        return ToolAnnotations(**annotations_data)
 
     def _convert_param_type(self, value: Any, param_type: str) -> Any:
         """Convert parameter value to the correct type based on JSON Schema type.
@@ -1308,12 +1174,12 @@ class RAWMCP:
         self,
         endpoint_type: EndpointType,
         endpoint_key: str,  # "tool" | "resource" | "prompt"
-        endpoint_def: ToolDefinition | ResourceDefinition | PromptDefinition,
+        endpoint_def: ToolDefinitionModel | ResourceDefinitionModel | PromptDefinitionModel,
         decorator: Any,  # self.mcp.tool() | self.mcp.resource(uri) | self.mcp.prompt()
         log_name: str,  # for nice logging
     ) -> None:
         # Get parameter definitions
-        parameters = endpoint_def.get("parameters") or []
+        parameters = endpoint_def.parameters or []
 
         # Create function signature with proper Pydantic type annotations
         # Include Context as the first parameter for accessing session_id
@@ -1322,19 +1188,24 @@ class RAWMCP:
 
         # Sort parameters so required (no default) come before optional (with default)
         # This is necessary for valid Python function signatures
-        required_params = [p for p in parameters if "default" not in p]
-        optional_params = [p for p in parameters if "default" in p]
-        sorted_parameters = required_params + optional_params
+        def has_default(param_model: ParamDefinitionModel) -> bool:
+            param_dump = param_model.model_dump(mode="python", exclude_unset=True, by_alias=True)
+            return "default" in param_dump
+
+        sorted_parameters = [p for p in parameters if not has_default(p)] + [
+            p for p in parameters if has_default(p)
+        ]
 
         for param in sorted_parameters:
-            param_name = param["name"]
+            param_schema = param.model_dump(mode="python", exclude_unset=True, by_alias=True)
+            param_name = param.name
             param_type = self._json_schema_to_python_type(param, endpoint_type)
             param_annotations[param_name] = param_type
 
             # Create string representation for makefun with default values
-            if "default" in param:
+            if "default" in param_schema:
                 # Parameter has a default value, make it optional in signature
-                default_value = repr(param["default"])
+                default_value = repr(param_schema["default"])
                 param_signatures.append(f"{param_name}={default_value}")
             else:
                 # Required parameter
@@ -1380,9 +1251,9 @@ class RAWMCP:
             # Determine endpoint name early for use in span and metrics
             name: str
             if endpoint_key == "resource":
-                name = cast(str, endpoint_def.get("uri", "unknown"))
+                name = cast(str, getattr(endpoint_def, "uri", "unknown"))
             else:
-                name = cast(str, endpoint_def.get("name", "unnamed"))
+                name = cast(str, getattr(endpoint_def, "name", "unnamed"))
 
             # Create root span for endpoint execution with all MXCP-specific attributes
             with traced_operation(
@@ -1393,9 +1264,7 @@ class RAWMCP:
                 },
             ) as span:
                 try:
-                    logger.info(
-                        f"Calling {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))} with: {kwargs}"
-                    )
+                    logger.info(f"Calling {log_name} {name} with: {kwargs}")
                     if user_context:
                         logger.info(
                             f"Authenticated user: {user_context.username} (provider: {user_context.provider})"
@@ -1448,9 +1317,7 @@ class RAWMCP:
                 except Exception as e:
                     status = "error"
                     error_msg = str(e)
-                    logger.error(
-                        f"Error executing {log_name} {endpoint_def.get('name', endpoint_def.get('uri'))}:\n{traceback.format_exc()}"
-                    )
+                    logger.error(f"Error executing {log_name} {name}:\n{traceback.format_exc()}")
                     raise
                 finally:
                     # Calculate duration
@@ -1543,9 +1410,9 @@ class RAWMCP:
         # Create function with proper signature and annotations using makefun
         # -------------------------------------------------------------------
         if endpoint_key == "resource":
-            original_name = cast(str, endpoint_def.get("uri", "unknown"))
+            original_name = cast(str, getattr(endpoint_def, "uri", "unknown"))
         else:
-            original_name = cast(str, endpoint_def.get("name", "unnamed"))
+            original_name = cast(str, getattr(endpoint_def, "name", "unnamed"))
         func_name = self.mcp_name_to_py(original_name)
 
         # Create the function with proper signature
@@ -1555,10 +1422,14 @@ class RAWMCP:
         handler.__annotations__ = param_annotations
 
         # Add return type annotation if return schema is defined
-        return_schema = endpoint_def.get("return")
+        return_schema = (
+            endpoint_def.return_
+            if isinstance(endpoint_def, ToolDefinitionModel | ResourceDefinitionModel)
+            else None
+        )
         if return_schema:
             return_type = self._create_pydantic_model_from_schema(
-                cast(dict[str, Any], return_schema), f"{original_name}Return", endpoint_type
+                return_schema, f"{original_name}Return", endpoint_type
             )
             handler.__annotations__["return"] = return_type
 
@@ -1567,7 +1438,7 @@ class RAWMCP:
         decorator(handler)
         logger.info(f"Registered {log_name}: {original_name} (function: {func_name})")
 
-    def _register_tool(self, tool_def: ToolDefinition) -> None:
+    def _register_tool(self, tool_def: ToolDefinitionModel) -> None:
         """Register a tool endpoint with MCP.
 
         Args:
@@ -1581,14 +1452,14 @@ class RAWMCP:
             "tool",
             tool_def,
             decorator=self.mcp.tool(
-                name=tool_def.get("name"),
-                description=tool_def.get("description"),
+                name=tool_def.name,
+                description=tool_def.description,
                 annotations=annotations,
             ),
             log_name="tool",
         )
 
-    def _register_resource(self, resource_def: ResourceDefinition) -> None:
+    def _register_resource(self, resource_def: ResourceDefinitionModel) -> None:
         """Register a resource endpoint with MCP.
 
         Args:
@@ -1599,15 +1470,15 @@ class RAWMCP:
             "resource",
             resource_def,
             decorator=self.mcp.resource(
-                resource_def["uri"],
-                name=cast(str | None, resource_def.get("name")),
-                description=resource_def.get("description"),
-                mime_type=resource_def.get("mime_type"),
+                resource_def.uri,
+                name=resource_def.name,
+                description=resource_def.description,
+                mime_type=resource_def.mime_type,
             ),
             log_name="resource",
         )
 
-    def _register_prompt(self, prompt_def: PromptDefinition) -> None:
+    def _register_prompt(self, prompt_def: PromptDefinitionModel) -> None:
         """Register a prompt endpoint with MCP.
 
         Args:
@@ -1617,9 +1488,7 @@ class RAWMCP:
             EndpointType.PROMPT,
             "prompt",
             prompt_def,
-            decorator=self.mcp.prompt(
-                name=prompt_def.get("name"), description=prompt_def.get("description")
-            ),
+            decorator=self.mcp.prompt(name=prompt_def.name, description=prompt_def.description),
             log_name="prompt",
         )
 
@@ -1915,8 +1784,12 @@ class RAWMCP:
             raise RuntimeError("Execution engine not initialized")
 
         execution_context = ExecutionContext(user_context=user_context)
-        execution_context.set("user_config", self.user_config)
-        execution_context.set("site_config", self.site_config)
+        execution_context.set(
+            "user_config", self.user_config.model_dump(mode="python", exclude_unset=True)
+        )
+        execution_context.set(
+            "site_config", self.site_config.model_dump(mode="python", exclude_unset=True)
+        )
 
         return await self.runtime_environment.execution_engine.execute(
             language="sql",
@@ -1936,14 +1809,14 @@ class RAWMCP:
                     str(path), self.site_config, self.runtime_environment.execution_engine
                 )
 
-                if validation_result["status"] != "ok":
+                if validation_result.status != "ok":
                     logger.warning(
-                        f"Skipping invalid endpoint {path}: {validation_result.get('message', 'Unknown error')}"
+                        f"Skipping invalid endpoint {path}: {validation_result.message or 'Unknown error'}"
                     )
                     self.skipped_endpoints.append(
                         {
                             "path": str(path),
-                            "error": validation_result.get("message", "Unknown error"),
+                            "error": validation_result.message or "Unknown error",
                         }
                     )
                     continue
@@ -1952,27 +1825,19 @@ class RAWMCP:
                     logger.warning(f"Endpoint definition is None for {path}")
                     continue
 
-                if "tool" in endpoint_def:
-                    tool_def = endpoint_def.get("tool")
-                    if tool_def:
-                        self._register_tool(tool_def)
-                        logger.info(
-                            f"Registered tool endpoint from {path}: {tool_def.get('name', 'unnamed')}"
-                        )
-                elif "resource" in endpoint_def:
-                    resource_def = endpoint_def.get("resource")
-                    if resource_def:
-                        self._register_resource(resource_def)
-                        logger.info(
-                            f"Registered resource endpoint from {path}: {resource_def.get('uri', 'unknown')}"
-                        )
-                elif "prompt" in endpoint_def:
-                    prompt_def = endpoint_def.get("prompt")
-                    if prompt_def:
-                        self._register_prompt(prompt_def)
-                        logger.info(
-                            f"Registered prompt endpoint from {path}: {prompt_def.get('name', 'unnamed')}"
-                        )
+                if endpoint_def.tool is not None:
+                    self._register_tool(endpoint_def.tool)
+                    logger.info(f"Registered tool endpoint from {path}: {endpoint_def.tool.name}")
+                elif endpoint_def.resource is not None:
+                    self._register_resource(endpoint_def.resource)
+                    logger.info(
+                        f"Registered resource endpoint from {path}: {endpoint_def.resource.uri}"
+                    )
+                elif endpoint_def.prompt is not None:
+                    self._register_prompt(endpoint_def.prompt)
+                    logger.info(
+                        f"Registered prompt endpoint from {path}: {endpoint_def.prompt.name}"
+                    )
                 else:
                     logger.warning(f"Unknown endpoint type in {path}: {endpoint_def}")
             except Exception as e:
@@ -2085,9 +1950,9 @@ class RAWMCP:
             base_url = url_builder.get_base_url(request)
 
             # Get supported scopes from configuration
-            auth_config = self.active_profile.get("auth", {})
-            auth_authorization = auth_config.get("authorization", {})
-            supported_scopes = auth_authorization.get("required_scopes", [])
+            auth_config = self.active_profile.auth
+            auth_authorization = auth_config.authorization
+            supported_scopes = auth_authorization.required_scopes if auth_authorization else []
 
             metadata = {
                 "resource": base_url,

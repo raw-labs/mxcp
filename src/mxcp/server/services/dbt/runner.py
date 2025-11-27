@@ -2,17 +2,15 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import click
 import yaml
 
-from mxcp.server.core.config._types import (
-    SiteConfig,
-    UserConfig,
-    UserProfileConfig,
-    UserProjectConfig,
-    UserSecretDefinition,
+from mxcp.server.core.config.models import (
+    SiteConfigModel,
+    UserConfigModel,
+    UserProfileConfigModel,
 )
 from mxcp.server.core.config.site_config import find_repo_root
 
@@ -211,7 +209,7 @@ def _build_profile_block(
     return block
 
 
-def _build_dbt_project(project: str, profile: str, site_config: SiteConfig) -> dict[str, Any]:
+def _build_dbt_project(project: str, profile: str, site_config: SiteConfigModel) -> dict[str, Any]:
     """Build dbt_project.yml configuration.
 
     Args:
@@ -230,21 +228,21 @@ def _build_dbt_project(project: str, profile: str, site_config: SiteConfig) -> d
     dbt_profile = f"{sanitized_project}_{sanitized_profile}"
 
     # Get dbt configuration from site config (defaults already applied)
-    dbt_config = site_config.get("dbt") or {}
+    dbt_config = site_config.dbt
 
     # Build the configuration using values from site config
     return {
         "name": sanitized_project,  # Use sanitized project name
         "profile": dbt_profile,  # Use combined profile name
         "config-version": 2,
-        "model-paths": dbt_config.get("model_paths", ["models"]),
-        "analysis-paths": dbt_config.get("analysis_paths", ["analyses"]),
-        "test-paths": dbt_config.get("test_paths", ["tests"]),
-        "seed-paths": dbt_config.get("seed_paths", ["seeds"]),
-        "macro-paths": dbt_config.get("macro_paths", ["macros"]),
-        "snapshot-paths": dbt_config.get("snapshot_paths", ["snapshots"]),
-        "target-path": dbt_config.get("target_path", "target"),
-        "clean-targets": dbt_config.get("clean_targets", ["target", "dbt_packages"]),
+        "model-paths": dbt_config.model_paths,
+        "analysis-paths": dbt_config.analysis_paths,
+        "test-paths": dbt_config.test_paths,
+        "seed-paths": dbt_config.seed_paths,
+        "macro-paths": dbt_config.macro_paths,
+        "snapshot-paths": dbt_config.snapshot_paths,
+        "target-path": dbt_config.target_path,
+        "clean-targets": dbt_config.clean_targets,
     }
 
 
@@ -305,8 +303,8 @@ def _merge_dbt_project(existing: dict[str, Any], new: dict[str, Any]) -> dict[st
 
 
 def configure_dbt(
-    site_config: SiteConfig,
-    user_config: UserConfig,
+    site_config: SiteConfigModel,
+    user_config: UserConfigModel,
     profile: str | None = None,
     dry_run: bool = False,
     force: bool = False,
@@ -323,8 +321,8 @@ def configure_dbt(
         embed_secrets: If True, embed secrets directly in profiles.yml
     """
     # 1. Check dbt is enabled
-    dbt_config = site_config.get("dbt") or {}
-    if not dbt_config.get("enabled", True):
+    dbt_config = site_config.dbt
+    if not dbt_config.enabled:
         raise click.ClickException("dbt integration is disabled in mxcp-site.yml")
 
     # 2. Handle embed_secrets requirement
@@ -341,17 +339,17 @@ def configure_dbt(
         click.echo("\nContinuing...")
 
     # 3. Get project and profile names
-    project = site_config["project"]
-    profile_name = profile or site_config["profile"]
+    project = site_config.project
+    profile_name = profile or site_config.profile
 
     # Create dbt profile name as <project>_<profile>
     dbt_profile = f"{project}_{profile_name}"
 
     # 4. Get DuckDB path using the same convention as the rest of the codebase
     repo_root = find_repo_root()
-    profile_config = site_config.get("profiles", {}).get(profile_name, {})
-    duckdb_config = profile_config.get("duckdb")
-    duckdb_path = duckdb_config.get("path") if duckdb_config else None
+    profile_config = site_config.profiles.get(profile_name)
+    duckdb_config = profile_config.duckdb if profile_config else None
+    duckdb_path = duckdb_config.path if duckdb_config else None
     if not duckdb_path:
         raise click.ClickException(f"No DuckDB path configured for profile '{profile_name}'")
     if not os.path.isabs(duckdb_path):
@@ -359,27 +357,29 @@ def configure_dbt(
         duckdb_path = str(repo_root / duckdb_path)
 
     # 5. Get secrets from user config
-    projects = user_config.get("projects", {})
-    project_config: UserProjectConfig | None = projects.get(project) if projects else None
+    project_config = user_config.projects.get(project)
     if not project_config:
         click.echo(
             f"Warning: Project '{project}' not found in user config, assuming empty configuration",
             err=True,
         )
-        project_config = None
-
-    profiles = project_config.get("profiles", {}) if project_config else {}
-    user_profile_config: UserProfileConfig | None = profiles.get(profile_name) if profiles else None
+        user_profile_config: UserProfileConfigModel | None = None
+    else:
+        user_profile_config = project_config.profiles.get(profile_name)
 
     if not user_profile_config:
         click.echo(
             f"Warning: Profile '{profile_name}' not found in project '{project}', assuming empty configuration",
             err=True,
         )
-        user_profile_config = {}
+        secrets_models = []
+    else:
+        secrets_models = user_profile_config.secrets
 
-    secrets: list[UserSecretDefinition] | None = (
-        user_profile_config.get("secrets") if user_profile_config else None
+    secrets_dict: list[dict[str, Any]] | None = (
+        [secret.parameters for secret in secrets_models if secret.parameters]
+        if secrets_models
+        else None
     )
 
     # 6. Load existing profiles and project config
@@ -388,9 +388,6 @@ def configure_dbt(
 
     # 7. Build new profile block
     # Cast secrets to Dict[str, Any] for _build_profile_block
-    secrets_dict: list[dict[str, Any]] | None = (
-        cast(list[dict[str, Any]] | None, secrets) if secrets else None
-    )
     new_profile_block = _build_profile_block(
         project=project,
         profile=profile_name,

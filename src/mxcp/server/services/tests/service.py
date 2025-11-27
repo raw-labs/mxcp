@@ -1,12 +1,16 @@
 import logging
-from typing import Any
 
 from mxcp.sdk.auth import UserContext
-from mxcp.server.core.config._types import SiteConfig, UserConfig
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.test import TestRunner
+from mxcp.server.services.tests.models import (
+    EndpointTestResultModel,
+    MultiEndpointTestResultsModel,
+    TestSuiteResultModel,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -14,13 +18,13 @@ logger = logging.getLogger(__name__)
 
 
 async def run_all_tests(
-    user_config: UserConfig,
-    site_config: SiteConfig,
+    user_config: UserConfigModel,
+    site_config: SiteConfigModel,
     profile: str | None,
     readonly: bool | None = None,
     cli_user_context: UserContext | None = None,
     request_headers: dict[str, str] | None = None,
-) -> dict[str, Any]:
+) -> MultiEndpointTestResultsModel:
     """Run tests for all endpoints in the repository (async)"""
     repo_root = find_repo_root()
     logger.debug(f"Repository root: {repo_root}")
@@ -30,13 +34,16 @@ async def run_all_tests(
     endpoints = loader.discover_endpoints()
     logger.debug(f"Found {len(endpoints)} YAML files")
 
-    results: dict[str, Any] = {"status": "ok", "tests_run": 0, "endpoints": []}
+    endpoint_results: list[EndpointTestResultModel] = []
+    overall_status: str = "ok"
+    total_tests_run = 0
 
     # Create runtime environment once for all tests
     runtime_env = create_runtime_environment(user_config, site_config, profile, readonly=readonly)
     execution_engine = runtime_env.execution_engine
 
     try:
+        test_runner = TestRunner(user_config, site_config, execution_engine)
         for file_path, endpoint, error_msg in endpoints:
             if file_path.name in ["mxcp-site.yml", "mxcp-config.yml"]:
                 continue
@@ -50,15 +57,19 @@ async def run_all_tests(
                 relative_path = file_path.name
 
             if error_msg is not None:
-                # This endpoint failed to load
-                results["endpoints"].append(
-                    {
-                        "endpoint": str(file_path),
-                        "path": relative_path,
-                        "test_results": {"status": "error", "message": error_msg},
-                    }
+                endpoint_results.append(
+                    EndpointTestResultModel(
+                        endpoint=str(file_path),
+                        path=relative_path,
+                        test_results=TestSuiteResultModel(
+                            status="error",
+                            tests_run=0,
+                            tests=[],
+                            message=error_msg,
+                        ),
+                    )
                 )
-                results["status"] = "error"
+                overall_status = "error"
                 continue
 
             try:
@@ -67,35 +78,20 @@ async def run_all_tests(
                     logger.debug(f"Skipping file {file_path}: endpoint is None")
                     continue
 
-                # Determine endpoint type and name
-                if "tool" in endpoint:
+                if endpoint.tool is not None:
                     kind = "tool"
-                    tool_def: Any = endpoint.get("tool", {})
-                    name = (
-                        tool_def.get("name", "unknown") if isinstance(tool_def, dict) else "unknown"
-                    )
-                elif "resource" in endpoint:
+                    name = endpoint.tool.name
+                elif endpoint.resource is not None:
                     kind = "resource"
-                    resource_def = endpoint.get("resource", {})
-                    name = (
-                        resource_def.get("uri", "unknown")
-                        if isinstance(resource_def, dict)
-                        else "unknown"
-                    )
-                elif "prompt" in endpoint:
+                    name = endpoint.resource.uri
+                elif endpoint.prompt is not None:
                     kind = "prompt"
-                    prompt_def = endpoint.get("prompt", {})
-                    name = (
-                        prompt_def.get("name", "unknown")
-                        if isinstance(prompt_def, dict)
-                        else "unknown"
-                    )
+                    name = endpoint.prompt.name
                 else:
                     logger.debug(f"Skipping file {file_path}: not a valid endpoint")
                     continue
 
                 # Run tests for this endpoint using TestRunner
-                test_runner = TestRunner(user_config, site_config, execution_engine)
                 test_results = await test_runner.run_tests_for_endpoint(
                     kind,
                     name,
@@ -103,47 +99,55 @@ async def run_all_tests(
                     request_headers,
                 )
 
-                # Wrap test results with endpoint context
-                endpoint_result = {
-                    "endpoint": f"{kind}/{name}",
-                    "path": relative_path,
-                    "test_results": test_results,
-                }
-
-                results["endpoints"].append(endpoint_result)
-                results["tests_run"] += test_results.get("tests_run", 0)
+                endpoint_results.append(
+                    EndpointTestResultModel(
+                        endpoint=f"{kind}/{name}",
+                        path=relative_path,
+                        test_results=test_results,
+                    )
+                )
+                total_tests_run += test_results.tests_run
 
                 # Update overall status
-                if test_results.get("status") == "error":
-                    results["status"] = "error"
-                elif test_results.get("status") == "failed" and results["status"] != "error":
-                    results["status"] = "failed"
+                if test_results.status == "error":
+                    overall_status = "error"
+                elif test_results.status == "failed" and overall_status != "error":
+                    overall_status = "failed"
             except Exception as e:
                 logger.error(f"Error processing file {file_path}: {str(e)}")
-                results["endpoints"].append(
-                    {
-                        "endpoint": str(file_path),
-                        "path": relative_path,
-                        "test_results": {"status": "error", "message": str(e)},
-                    }
+                endpoint_results.append(
+                    EndpointTestResultModel(
+                        endpoint=str(file_path),
+                        path=relative_path,
+                        test_results=TestSuiteResultModel(
+                            status="error",
+                            tests_run=0,
+                            tests=[],
+                            message=str(e),
+                        ),
+                    )
                 )
-                results["status"] = "error"
+                overall_status = "error"
     finally:
         runtime_env.shutdown()
 
-    return results
+    return MultiEndpointTestResultsModel(
+        status=overall_status,
+        tests_run=total_tests_run,
+        endpoints=endpoint_results,
+    )
 
 
 async def run_tests(
     endpoint_type: str,
     name: str,
-    user_config: UserConfig,
-    site_config: SiteConfig,
+    user_config: UserConfigModel,
+    site_config: SiteConfigModel,
     profile: str | None,
     readonly: bool | None = None,
     cli_user_context: UserContext | None = None,
     request_headers: dict[str, str] | None = None,
-) -> dict[str, Any]:
+) -> TestSuiteResultModel:
     """Run tests for a specific endpoint type and name."""
     # Create runtime environment for this single test run
     runtime_env = create_runtime_environment(user_config, site_config, profile, readonly=readonly)

@@ -1,20 +1,21 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 import click
+from pydantic import BaseModel, ConfigDict, Field
 
 from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.definitions.endpoints._types import (
-    EndpointDefinition,
-    ParamDefinition,
-    PromptDefinition,
-    ResourceDefinition,
-    ToolDefinition,
-    TypeDefinition,
-)
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
+from mxcp.server.definitions.endpoints.models import (
+    EndpointDefinitionModel,
+    ParamDefinitionModel,
+    PromptDefinitionModel,
+    ResourceDefinitionModel,
+    ToolDefinitionModel,
+    TypeDefinitionModel,
+)
 from mxcp.server.interfaces.cli.utils import (
     configure_logging_from_config,
     output_error,
@@ -23,26 +24,43 @@ from mxcp.server.interfaces.cli.utils import (
 )
 
 
-class LintIssue:
+class LintIssueModel(BaseModel):
     """Represents a single lint issue found in an endpoint."""
 
-    def __init__(
-        self,
-        severity: str,
-        path: str,
-        location: str,
-        message: str,
-        suggestion: str | None = None,
-    ):
-        self.severity = severity  # "warning" or "error"
-        self.path = path
-        self.location = location  # e.g., "tool.description", "parameter[0].examples"
-        self.message = message
-        self.suggestion = suggestion
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    severity: Literal["error", "warning", "info"]
+    path: str
+    location: str
+    message: str
+    suggestion: str | None = None
+
+
+class LintFileReportModel(BaseModel):
+    """Grouping of lint issues for a single file."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str
+    issues: list[LintIssueModel]
+
+
+class LintReportModel(BaseModel):
+    """Aggregated lint command results."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    total_files: int
+    files: list[LintFileReportModel]
+    clean_paths: list[str] = Field(default_factory=list)
 
 
 def lint_parameter(
-    param: ParamDefinition, index: int, endpoint_type: str, issues: list[LintIssue], path: str
+    param: ParamDefinitionModel,
+    index: int,
+    endpoint_type: str,
+    issues: list[LintIssueModel],
+    path: str,
 ) -> None:
     """Lint a parameter definition for missing metadata.
 
@@ -53,67 +71,66 @@ def lint_parameter(
         issues: List to append found issues to
         path: File path for error reporting
     """
-    param_name = param.get("name", f"parameter[{index}]")
+    param_name = param.name or f"parameter[{index}]"
 
     # Check for description (parameters must have descriptions)
-    if "description" not in param:
+    if "description" not in param.model_fields_set or not param.description:
         issues.append(
-            LintIssue(
-                "error",
-                path,
-                f"{endpoint_type}.parameters[{index}].description",
-                f"Parameter '{param_name}' is missing a description",
-                "Add a 'description' field to explain what this parameter does",
+            LintIssueModel(
+                severity="error",
+                path=path,
+                location=f"{endpoint_type}.parameters[{index}].description",
+                message=f"Parameter '{param_name}' is missing a description",
+                suggestion="Add a 'description' field to explain what this parameter does",
             )
         )
 
     # Check for examples
-    if "examples" not in param:
+    if "examples" not in param.model_fields_set or not param.examples:
         issues.append(
-            LintIssue(
-                "info",
-                path,
-                f"{endpoint_type}.parameters[{index}].examples",
-                f"Parameter '{param_name}' has no examples",
-                "Consider adding an 'examples' array to help LLMs understand valid inputs",
+            LintIssueModel(
+                severity="info",
+                path=path,
+                location=f"{endpoint_type}.parameters[{index}].examples",
+                message=f"Parameter '{param_name}' has no examples",
+                suggestion="Consider adding an 'examples' array to help LLMs understand valid inputs",
             )
         )
 
     # Check for default value on optional parameters
-    if "default" not in param:
+    if "default" not in param.model_fields_set:
         issues.append(
-            LintIssue(
-                "info",
-                path,
-                f"{endpoint_type}.parameters[{index}].default",
-                f"Parameter '{param_name}' has no default value",
-                "Consider adding a 'default' value for optional parameters",
+            LintIssueModel(
+                severity="info",
+                path=path,
+                location=f"{endpoint_type}.parameters[{index}].default",
+                message=f"Parameter '{param_name}' has no default value",
+                suggestion="Consider adding a 'default' value for optional parameters",
             )
         )
 
     # Lint nested type structures within the parameter
-    if param.get("type") == "array" and "items" in param:
-        items = param.get("items")
-        if items is not None:
-            lint_nested_type(
-                items,
-                f"{endpoint_type}.parameters[{index}].items",
-                issues,
-                path,
-            )
-    elif param.get("type") == "object" and "properties" in param:
-        properties = param.get("properties")
-        if properties is not None:
-            lint_object_properties(
-                properties,
-                f"{endpoint_type}.parameters[{index}].properties",
-                issues,
-                path,
-            )
+    if param.type == "array" and param.items is not None:
+        lint_nested_type(
+            param.items,
+            f"{endpoint_type}.parameters[{index}].items",
+            issues,
+            path,
+        )
+    elif param.type == "object" and param.properties:
+        lint_object_properties(
+            param.properties,
+            f"{endpoint_type}.parameters[{index}].properties",
+            issues,
+            path,
+        )
 
 
 def lint_return_type(
-    return_def: TypeDefinition, endpoint_type: str, issues: list[LintIssue], path: str
+    return_def: TypeDefinitionModel,
+    endpoint_type: str,
+    issues: list[LintIssueModel],
+    path: str,
 ) -> None:
     """Lint a return type definition for missing description.
 
@@ -124,236 +141,195 @@ def lint_return_type(
         path: File path for error reporting
     """
     # Return types should have descriptions
-    if "description" not in return_def:
+    if "description" not in return_def.model_fields_set or not return_def.description:
         issues.append(
-            LintIssue(
-                "warning",
-                path,
-                f"{endpoint_type}.return.description",
-                "Return type is missing a description",
-                "Add a 'description' field to help LLMs understand the output format",
+            LintIssueModel(
+                severity="warning",
+                path=path,
+                location=f"{endpoint_type}.return.description",
+                message="Return type is missing a description",
+                suggestion="Add a 'description' field to help LLMs understand the output format",
             )
         )
 
     # Lint nested structures
-    if return_def.get("type") == "array" and "items" in return_def:
-        items = return_def.get("items")
-        if items is not None:
-            lint_nested_type(items, f"{endpoint_type}.return.items", issues, path)
-    elif return_def.get("type") == "object" and "properties" in return_def:
-        properties = return_def.get("properties")
-        if properties is not None:
-            lint_object_properties(properties, f"{endpoint_type}.return.properties", issues, path)
+    if return_def.type == "array" and return_def.items is not None:
+        lint_nested_type(return_def.items, f"{endpoint_type}.return.items", issues, path)
+    elif return_def.type == "object" and return_def.properties:
+        lint_object_properties(
+            return_def.properties, f"{endpoint_type}.return.properties", issues, path
+        )
 
 
 def lint_nested_type(
-    type_def: TypeDefinition, location: str, issues: list[LintIssue], path: str
+    type_def: TypeDefinitionModel,
+    location: str,
+    issues: list[LintIssueModel],
+    path: str,
 ) -> None:
-    """Lint nested type definitions (used within parameters or return types).
+    """Lint nested type definitions (used within parameters or return types)."""
+    type_name = type_def.type
 
-    Args:
-        type_def: A nested type definition (e.g., array items, object properties)
-        location: The path to this definition in the endpoint
-        issues: List to append found issues to
-        path: File path for error reporting
-    """
-    if not isinstance(type_def, dict):
-        return
-
-    type_name = type_def.get("type", "unknown")
-
-    # Nested types should have descriptions
-    if "description" not in type_def:
+    if "description" not in type_def.model_fields_set or not type_def.description:
         issues.append(
-            LintIssue(
-                "warning",
-                path,
-                location,
-                f"Type '{type_name}' is missing a description",
-                "Add a 'description' field to help LLMs understand this type",
+            LintIssueModel(
+                severity="warning",
+                path=path,
+                location=location,
+                message=f"Type '{type_name}' is missing a description",
+                suggestion="Add a 'description' field to help LLMs understand this type",
             )
         )
 
-    # Recursively check nested structures
-    if type_name == "array" and "items" in type_def:
-        items = type_def.get("items")
-        if items is not None:
-            lint_nested_type(items, f"{location}.items", issues, path)
-    elif type_name == "object" and "properties" in type_def:
-        properties = type_def.get("properties")
-        if properties is not None:
-            lint_object_properties(properties, f"{location}.properties", issues, path)
+    if type_def.type == "array" and type_def.items is not None:
+        lint_nested_type(type_def.items, f"{location}.items", issues, path)
+    elif type_def.type == "object" and type_def.properties:
+        lint_object_properties(type_def.properties, f"{location}.properties", issues, path)
 
 
 def lint_object_properties(
-    properties: dict[str, TypeDefinition], location: str, issues: list[LintIssue], path: str
+    properties: dict[str, TypeDefinitionModel],
+    location: str,
+    issues: list[LintIssueModel],
+    path: str,
 ) -> None:
-    """Lint object properties for missing descriptions.
-
-    Args:
-        properties: The properties dictionary of an object type
-        location: The path to this properties section in the endpoint
-        issues: List to append found issues to
-        path: File path for error reporting
-    """
+    """Lint object properties for missing descriptions."""
     for prop_name, prop_def in properties.items():
-        if isinstance(prop_def, dict) and "description" not in prop_def:
+        if "description" not in prop_def.model_fields_set or not prop_def.description:
             issues.append(
-                LintIssue(
-                    "warning",
-                    path,
-                    f"{location}.{prop_name}",
-                    f"Property '{prop_name}' is missing a description",
-                    "Add a 'description' field to help LLMs understand this property",
+                LintIssueModel(
+                    severity="warning",
+                    path=path,
+                    location=f"{location}.{prop_name}",
+                    message=f"Property '{prop_name}' is missing a description",
+                    suggestion="Add a 'description' field to help LLMs understand this property",
                 )
             )
 
-        # Recursively lint nested structures within properties
-        if isinstance(prop_def, dict):
-            lint_nested_type(prop_def, f"{location}.{prop_name}", issues, path)
+        lint_nested_type(prop_def, f"{location}.{prop_name}", issues, path)
 
 
-def lint_endpoint(path: Path, endpoint: EndpointDefinition) -> list[LintIssue]:
+def lint_endpoint(path: Path, endpoint: EndpointDefinitionModel) -> list[LintIssueModel]:
     """Lint a single endpoint for missing metadata."""
-    issues: list[LintIssue] = []
+    issues: list[LintIssueModel] = []
 
-    # Determine endpoint type and get the specific definition
+    definition: ToolDefinitionModel | ResourceDefinitionModel | PromptDefinitionModel | None = None
     endpoint_type: str | None = None
-    endpoint_def: ToolDefinition | ResourceDefinition | PromptDefinition | None = None
 
-    if endpoint.get("tool") is not None:
+    if endpoint.tool is not None:
         endpoint_type = "tool"
-        endpoint_def = endpoint["tool"]
-    elif endpoint.get("resource") is not None:
+        definition = endpoint.tool
+    elif endpoint.resource is not None:
         endpoint_type = "resource"
-        endpoint_def = endpoint["resource"]
-    elif endpoint.get("prompt") is not None:
+        definition = endpoint.resource
+    elif endpoint.prompt is not None:
         endpoint_type = "prompt"
-        endpoint_def = endpoint["prompt"]
+        definition = endpoint.prompt
     else:
-        return issues  # Invalid endpoint structure, validation will catch this
+        return issues
 
-    # Check for description
-    if endpoint_def and not endpoint_def.get("description"):
+    assert definition is not None
+
+    if "description" not in definition.model_fields_set or not definition.description:
         issues.append(
-            LintIssue(
-                "warning",
-                str(path),
-                f"{endpoint_type}.description",
-                f"{endpoint_type.capitalize()} is missing a description",
-                "Add a 'description' field to help LLMs understand what this endpoint does",
+            LintIssueModel(
+                severity="warning",
+                path=str(path),
+                location=f"{endpoint_type}.description",
+                message=f"{endpoint_type.capitalize()} is missing a description",
+                suggestion="Add a 'description' field to help LLMs understand what this endpoint does",
             )
         )
 
-    # Check for tests (except prompts which don't have tests)
-    if endpoint_type != "prompt" and endpoint_def and not endpoint_def.get("tests"):
+    if "tags" not in definition.model_fields_set or not definition.tags:
         issues.append(
-            LintIssue(
-                "warning",
-                str(path),
-                f"{endpoint_type}.tests",
-                f"{endpoint_type.capitalize()} has no tests defined",
-                "Add at least one test case to ensure the endpoint works correctly",
-            )
-        )
-    elif endpoint_type != "prompt" and endpoint_def and endpoint_def.get("tests") == []:
-        issues.append(
-            LintIssue(
-                "warning",
-                str(path),
-                f"{endpoint_type}.tests",
-                f"{endpoint_type.capitalize()} has an empty tests array",
-                "Add at least one test case to ensure the endpoint works correctly",
+            LintIssueModel(
+                severity="info",
+                path=str(path),
+                location=f"{endpoint_type}.tags",
+                message=f"{endpoint_type.capitalize()} has no tags",
+                suggestion="Consider adding tags to help categorize and discover this endpoint",
             )
         )
 
-    # Check test descriptions if tests exist
-    if endpoint_def and endpoint_def.get("tests"):
-        tests = endpoint_def.get("tests") or []
-        for i, test in enumerate(tests):
-            if "description" not in test:
-                issues.append(
-                    LintIssue(
-                        "info",
-                        str(path),
-                        f"{endpoint_type}.tests[{i}].description",
-                        f"Test '{test.get('name', 'unnamed')}' is missing a description",
-                        "Add a 'description' field to explain what this test validates",
-                    )
+    if endpoint_type != "prompt":
+        tests = definition.tests or []
+        if not tests:
+            issues.append(
+                LintIssueModel(
+                    severity="warning",
+                    path=str(path),
+                    location=f"{endpoint_type}.tests",
+                    message=f"{endpoint_type.capitalize()} has no tests defined",
+                    suggestion="Add at least one test case to ensure the endpoint works correctly",
                 )
-
-    # Check parameters
-    if endpoint_def and endpoint_def.get("parameters"):
-        parameters = endpoint_def.get("parameters") or []
-        for i, param in enumerate(parameters):
-            # Use the focused lint_parameter function
-            lint_parameter(param, i, endpoint_type, issues, str(path))
-
-    # Check return type
-    if endpoint_def and endpoint_def.get("return_"):
-        return_def = endpoint_def.get("return_")
-        if return_def is not None:
-            # Use the focused lint_return_type function
-            lint_return_type(return_def, endpoint_type, issues, str(path))
-
-    # Check for tags (info level)
-    if endpoint_def and not endpoint_def.get("tags"):
-        issues.append(
-            LintIssue(
-                "info",
-                str(path),
-                f"{endpoint_type}.tags",
-                f"{endpoint_type.capitalize()} has no tags",
-                "Consider adding tags to help categorize and discover this endpoint",
             )
-        )
+        else:
+            for i, test in enumerate(tests):
+                if "description" not in test.model_fields_set or not test.description:
+                    issues.append(
+                        LintIssueModel(
+                            severity="info",
+                            path=str(path),
+                            location=f"{endpoint_type}.tests[{i}].description",
+                            message=f"Test '{test.name}' is missing a description",
+                            suggestion="Add a 'description' field to explain what this test validates",
+                        )
+                    )
 
-    # For tools, check annotations
-    if endpoint_type == "tool" and endpoint_def and not endpoint_def.get("annotations"):
-        issues.append(
-            LintIssue(
-                "info",
-                str(path),
-                f"{endpoint_type}.annotations",
-                "Tool has no behavioral annotations",
-                "Consider adding annotations like readOnlyHint, idempotentHint to help LLMs use the tool safely",
+    for i, param in enumerate(definition.parameters or []):
+        lint_parameter(param, i, endpoint_type, issues, str(path))
+
+    if definition.return_ is not None:
+        lint_return_type(definition.return_, endpoint_type, issues, str(path))
+
+    if endpoint_type == "tool":
+        tool_def = cast(ToolDefinitionModel, definition)
+        annotations = tool_def.annotations
+        has_annotations = bool(annotations and annotations.model_fields_set)
+        if not has_annotations:
+            issues.append(
+                LintIssueModel(
+                    severity="info",
+                    path=str(path),
+                    location=f"{endpoint_type}.annotations",
+                    message="Tool has no behavioral annotations",
+                    suggestion="Consider adding annotations like readOnlyHint, idempotentHint to help LLMs use the tool safely",
+                )
             )
-        )
 
     return issues
 
 
-def format_lint_results_as_json(
-    all_issues: list[tuple[Path, list[LintIssue]]],
-) -> list[dict[str, Any]]:
+def format_lint_results_as_json(report: LintReportModel) -> list[dict[str, Any]]:
     """Format lint results as JSON-serializable data structure."""
     results = []
-    for path, issues in all_issues:
-        for issue in issues:
-            results.append(
-                {
-                    "severity": issue.severity,
-                    "path": str(path),
-                    "location": issue.location,
-                    "message": issue.message,
-                    "suggestion": issue.suggestion,
-                }
-            )
+    for file_report in report.files:
+        for issue in file_report.issues:
+            results.append(issue.model_dump(mode="python", exclude_none=True))
     return results
 
 
-def format_lint_results_as_text(all_issues: list[tuple[Path, list[LintIssue]]]) -> str:
+def format_lint_results_as_text(report: LintReportModel) -> str:
     """Format lint results as human-readable text with colors and formatting."""
-    # Human-readable format
     output = []
 
-    # Count issues by severity
-    total_files = len(all_issues)
-    files_with_issues = sum(1 for _, issues in all_issues if issues)
-    warning_count = sum(
-        sum(1 for i in issues if i.severity == "warning") for _, issues in all_issues
+    total_files = report.total_files
+    files_with_issues = len(report.files)
+    error_count = sum(
+        sum(1 for i in file_report.issues if i.severity == "error") for file_report in report.files
     )
-    info_count = sum(sum(1 for i in issues if i.severity == "info") for _, issues in all_issues)
+    warning_count = sum(
+        sum(1 for i in file_report.issues if i.severity == "warning")
+        for file_report in report.files
+    )
+    info_count = sum(
+        sum(1 for i in file_report.issues if i.severity == "info") for file_report in report.files
+    )
+
+    if total_files == 0:
+        output.append(click.style("ℹ️  No endpoints were linted", fg="blue"))
+        return "\n".join(output)
 
     # Header
     output.append(f"\n{click.style('🔍 Lint Results', fg='cyan', bold=True)}")
@@ -366,23 +342,31 @@ def format_lint_results_as_text(all_issues: list[tuple[Path, list[LintIssue]]]) 
         return "\n".join(output)
 
     output.append(f"   • {click.style(str(files_with_issues), fg='yellow')} files with suggestions")
+    if error_count > 0:
+        output.append(f"   • {click.style(f'{error_count} errors', fg='red')}")
     if warning_count > 0:
         output.append(f"   • {click.style(f'{warning_count} warnings', fg='yellow')}")
     if info_count > 0:
         output.append(f"   • {click.style(f'{info_count} suggestions', fg='blue')}")
 
-    # Group by file
-    for path, issues in all_issues:
-        if not issues:
-            continue
-
+    for file_report in report.files:
+        path = file_report.path
+        issues = file_report.issues
         output.append(
             f"\n{click.style('📄', fg='cyan')} {click.style(str(path), fg='cyan', bold=True)}"
         )
 
-        # Group issues by severity
         warnings = [i for i in issues if i.severity == "warning"]
         infos = [i for i in issues if i.severity == "info"]
+        errors = [i for i in issues if i.severity == "error"]
+
+        for issue in errors:
+            output.append(
+                f"  {click.style('❌', fg='red')}  {click.style(issue.location, fg='red')}"
+            )
+            output.append(f"     {issue.message}")
+            if issue.suggestion:
+                output.append(f"     {click.style('💡', fg='cyan')} {issue.suggestion}")
 
         if warnings:
             for issue in warnings:
@@ -402,7 +386,20 @@ def format_lint_results_as_text(all_issues: list[tuple[Path, list[LintIssue]]]) 
                 if issue.suggestion:
                     output.append(f"     {click.style('💡', fg='cyan')} {issue.suggestion}")
 
-    # Summary advice
+        if infos:
+            for issue in infos:
+                output.append(
+                    f"  {click.style('ℹ️', fg='blue')}  {click.style(issue.location, fg='blue')}"
+                )
+                output.append(f"     {issue.message}")
+                if issue.suggestion:
+                    output.append(f"     {click.style('💡', fg='cyan')} {issue.suggestion}")
+
+    if report.clean_paths:
+        output.append(f"\n{click.style('✅ Passed linting:', fg='green', bold=True)}")
+        for clean_path in sorted(report.clean_paths):
+            output.append(f"  {click.style('✓', fg='green')} {clean_path}")
+
     output.append(f"\n{click.style('📚 Why this matters:', fg='cyan', bold=True)}")
     output.append("   • Descriptions help LLMs understand your endpoints better")
     output.append("   • Examples show LLMs how to use parameters correctly")
@@ -472,7 +469,9 @@ def lint(profile: str, json_output: bool, debug: bool, severity: str) -> None:
         loader = EndpointLoader(site_config)
         endpoints = loader.discover_endpoints()
 
-        all_issues = []
+        file_reports: list[LintFileReportModel] = []
+        clean_paths: list[str] = []
+        linted_files = 0
 
         # Lint each endpoint
         for path, endpoint, error_msg in endpoints:
@@ -480,6 +479,7 @@ def lint(profile: str, json_output: bool, debug: bool, severity: str) -> None:
                 # Skip files with parsing errors
                 continue
 
+            linted_files += 1
             issues = lint_endpoint(path, endpoint)
 
             # Filter by severity
@@ -489,14 +489,22 @@ def lint(profile: str, json_output: bool, debug: bool, severity: str) -> None:
                 issues = [i for i in issues if i.severity == "info"]
 
             if issues:
-                all_issues.append((path, issues))
+                file_reports.append(LintFileReportModel(path=str(path), issues=issues))
+            else:
+                clean_paths.append(str(path))
+
+        report = LintReportModel(
+            total_files=linted_files,
+            files=file_reports,
+            clean_paths=clean_paths,
+        )
 
         # Format and output results
         if json_output:
-            results = format_lint_results_as_json(all_issues)
+            results = format_lint_results_as_json(report)
             output_result(results, json_output, debug)
         else:
-            output = format_lint_results_as_text(all_issues)
+            output = format_lint_results_as_text(report)
             click.echo(output)
 
     except click.ClickException:

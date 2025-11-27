@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
 
@@ -118,7 +119,7 @@ tool:
         )
 
         # Create site config
-        site_config = {
+        site_config_data = {
             "mxcp": 1,
             "project": "init-test",
             "profile": "test",
@@ -129,7 +130,7 @@ tool:
         }
 
         with open(project_dir / "mxcp-site.yml", "w") as f:
-            yaml.dump(site_config, f)
+            yaml.dump(site_config_data, f)
 
         # Create user config
         user_config = {
@@ -153,8 +154,13 @@ tool:
 
         try:
             # Create runtime environment - this will run init hooks
+            site_config = SiteConfigModel.model_validate(
+                site_config_data, context={"repo_root": project_dir}
+            )
+
+            user_config_model = UserConfigModel.model_validate(user_config)
             runtime_env = create_runtime_environment(
-                user_config, site_config, repo_root=project_dir
+                user_config_model, site_config, repo_root=project_dir
             )
 
             # Check if init hook succeeded

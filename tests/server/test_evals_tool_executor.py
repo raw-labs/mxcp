@@ -6,7 +6,7 @@ import pytest
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
-from mxcp.server.definitions.endpoints._types import EndpointDefinition
+from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel, SourceDefinitionModel
 from mxcp.server.executor.runners.tool import EndpointToolExecutor
 
 
@@ -48,55 +48,51 @@ class TestEndpointToolExecutor:
             }
         )
 
-        self.endpoints: list[EndpointDefinition] = [
-            {
-                "mxcp": "1",
-                "tool": {
-                    "name": "get_date",
-                    "description": "Get current date",
-                    "parameters": [],
-                    "source": {"code": "SELECT current_date()"},
-                },
-                "resource": None,
-                "prompt": None,
-                "metadata": None,
-            },
-            {
-                "mxcp": "1",
-                "tool": {
-                    "name": "calculate",
-                    "description": "Calculate expression",
-                    "parameters": [{"name": "expr", "type": "string"}],
-                    "source": {"code": "return 2 + 2", "language": "python"},
-                },
-                "resource": None,
-                "prompt": None,
-                "metadata": None,
-            },
-            {
-                "mxcp": "1",
-                "tool": {
-                    "name": "get_weather",
-                    "description": "Get weather info",
-                    "parameters": [{"name": "location", "type": "string"}],
-                    "source": {"file": "weather.py", "language": "python"},
-                },
-                "resource": None,
-                "prompt": None,
-                "metadata": None,
-            },
-            {
-                "mxcp": "1",
-                "tool": None,
-                "resource": {
-                    "uri": "data://users",
-                    "description": "User data resource",
-                    "parameters": [{"name": "limit", "type": "integer"}],
-                    "source": {"code": "SELECT * FROM users LIMIT $limit"},
-                },
-                "prompt": None,
-                "metadata": None,
-            },
+        self.endpoints: list[EndpointDefinitionModel] = [
+            EndpointDefinitionModel.model_validate(
+                {
+                    "mxcp": 1,
+                    "tool": {
+                        "name": "get_date",
+                        "description": "Get current date",
+                        "parameters": [],
+                        "source": {"code": "SELECT current_date()"},
+                    },
+                }
+            ),
+            EndpointDefinitionModel.model_validate(
+                {
+                    "mxcp": 1,
+                    "tool": {
+                        "name": "calculate",
+                        "description": "Calculate expression",
+                        "parameters": [{"name": "expr", "type": "string"}],
+                        "source": {"code": "return 2 + 2", "language": "python"},
+                    },
+                }
+            ),
+            EndpointDefinitionModel.model_validate(
+                {
+                    "mxcp": 1,
+                    "tool": {
+                        "name": "get_weather",
+                        "description": "Get weather info",
+                        "parameters": [{"name": "location", "type": "string"}],
+                        "source": {"file": "weather.py", "language": "python"},
+                    },
+                }
+            ),
+            EndpointDefinitionModel.model_validate(
+                {
+                    "mxcp": 1,
+                    "resource": {
+                        "uri": "data://users",
+                        "description": "User data resource",
+                        "parameters": [{"name": "limit", "type": "integer"}],
+                        "source": {"code": "SELECT * FROM users LIMIT $limit"},
+                    },
+                }
+            ),
         ]
 
         self.executor = EndpointToolExecutor(self.engine, self.endpoints)
@@ -191,72 +187,55 @@ class TestEndpointToolExecutor:
     @pytest.mark.asyncio
     async def test_execute_tool_no_source(self):
         """Test error when endpoint has no source."""
-        endpoints_no_source: list[EndpointDefinition] = [
+        endpoint = EndpointDefinitionModel.model_validate(
             {
-                "mxcp": "1",
+                "mxcp": 1,
                 "tool": {
                     "name": "broken_tool",
                     "description": "Tool with no source",
                     "parameters": [],
-                    "source": {},  # Empty source
+                    "source": {"code": "SELECT 1"},
                 },
-                "resource": None,
-                "prompt": None,
-                "metadata": None,
             }
-        ]
+        )
+        # Force the source to be invalid to simulate missing configuration
+        assert endpoint.tool is not None
+        object.__setattr__(
+            endpoint.tool,
+            "source",
+            SourceDefinitionModel.model_construct(code=None, file=None),
+        )
+        endpoints_no_source: list[EndpointDefinitionModel] = [endpoint]
 
         executor = EndpointToolExecutor(self.engine, endpoints_no_source)
 
         with pytest.raises(ValueError) as exc_info:
             await executor.execute_tool("broken_tool", {})
 
-        assert "No source found for endpoint" in str(exc_info.value)
+        assert "No source code or file found in source definition" in str(exc_info.value)
 
     def test_get_language_inference(self):
         """Test language inference via endpoint execution."""
         # Create endpoints with different language sources
-        test_endpoints: list[EndpointDefinition] = [
-            {
-                "mxcp": "1",
-                "tool": {
-                    "name": "python_file_tool",
-                    "source": {"file": "script.py"},
-                },
-                "resource": None,
-                "prompt": None,
-                "metadata": None,
-            },
-            {
-                "mxcp": "1",
-                "tool": {
-                    "name": "sql_file_tool",
-                    "source": {"file": "query.sql"},
-                },
-                "resource": None,
-                "prompt": None,
-                "metadata": None,
-            },
-            {
-                "mxcp": "1",
-                "tool": {
-                    "name": "explicit_override_tool",
-                    "source": {"file": "script.py", "language": "sql"},
-                },
-                "resource": None,
-                "prompt": None,
-                "metadata": None,
-            },
-            {
-                "mxcp": "1",
-                "tool": {
-                    "name": "default_sql_tool",
-                    "source": {"code": "some code"},
-                },
-                "resource": None,
-                "prompt": None,
-                "metadata": None,
-            },
+        test_endpoints: list[EndpointDefinitionModel] = [
+            EndpointDefinitionModel.model_validate(
+                {"mxcp": 1, "tool": {"name": "python_file_tool", "source": {"file": "script.py"}}}
+            ),
+            EndpointDefinitionModel.model_validate(
+                {"mxcp": 1, "tool": {"name": "sql_file_tool", "source": {"file": "query.sql"}}}
+            ),
+            EndpointDefinitionModel.model_validate(
+                {
+                    "mxcp": 1,
+                    "tool": {
+                        "name": "explicit_override_tool",
+                        "source": {"file": "script.py", "language": "sql"},
+                    },
+                }
+            ),
+            EndpointDefinitionModel.model_validate(
+                {"mxcp": 1, "tool": {"name": "default_sql_tool", "source": {"code": "some code"}}}
+            ),
         ]
 
         test_executor = EndpointToolExecutor(self.engine, test_endpoints)

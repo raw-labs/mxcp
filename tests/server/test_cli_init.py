@@ -9,6 +9,7 @@ import pytest
 import yaml
 from click.testing import CliRunner
 
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.interfaces.cli.init import init
 
@@ -154,7 +155,7 @@ def test_init_bootstrap_complete_directory_structure(tmp_path):
 
         from mxcp.server.core.config.site_config import load_site_config
 
-        loaded_config = load_site_config()
+        loaded_config = load_site_config().model_dump(mode="python")
 
         # Verify organized paths are configured correctly
         paths = loaded_config["paths"]
@@ -266,24 +267,20 @@ def test_user_config_generation_uses_integer_version():
     from mxcp.server.core.config.user_config import _generate_default_config
 
     # Create a mock site config (as would be created by mxcp init)
-    site_config = {"mxcp": 1, "project": "test-new-project", "profile": "default"}
+    site_config = SiteConfigModel.model_validate(
+        {"mxcp": 1, "project": "test-new-project", "profile": "default"}
+    )
 
     # Generate default user config (this is what happens when user config doesn't exist)
     user_config = _generate_default_config(site_config)
 
     # Verify the generated user config has integer version
-    assert (
-        user_config["mxcp"] == 1
-    ), f"User config should have integer version 1, got {user_config['mxcp']} ({type(user_config['mxcp'])})"
-    assert isinstance(
-        user_config["mxcp"], int
-    ), f"User config version should be int, got {type(user_config['mxcp'])}"
+    assert user_config.mxcp == 1
+    assert isinstance(user_config.mxcp, int)
 
     # Verify structure is correct
-    assert "projects" in user_config
-    assert "test-new-project" in user_config["projects"]
-    assert "profiles" in user_config["projects"]["test-new-project"]
-    assert "default" in user_config["projects"]["test-new-project"]["profiles"]
+    assert "test-new-project" in user_config.projects
+    assert "default" in user_config.projects["test-new-project"].profiles
 
 
 def test_init_custom_project_name(tmp_path):
@@ -464,7 +461,7 @@ def test_init_bootstrap_complete_directory_structure():
         assert tool_config["tool"]["source"]["file"] == "../sql/hello-world.sql"
 
         # Check site config can be loaded (validates schema)
-        site_config = load_site_config(project_dir)
+        site_config = load_site_config(project_dir).model_dump(mode="python")
         assert site_config["project"] == "test-project"
         assert site_config["profile"] == "default"
 
@@ -500,13 +497,15 @@ def test_user_config_generation_uses_integer_version():
     from mxcp.server.core.config.user_config import _generate_default_config
 
     # Create a mock site config
-    site_config = {"mxcp": 1, "project": "test-project", "profile": "default"}
+    site_config = SiteConfigModel.model_validate(
+        {"mxcp": 1, "project": "test-project", "profile": "default"}
+    )
 
     config = _generate_default_config(site_config)
 
     # Version should be integer 1, not string "1.0.0"
-    assert config["mxcp"] == 1, f"Expected integer 1, got {repr(config['mxcp'])}"
-    assert isinstance(config["mxcp"], int), f"Expected int type, got {type(config['mxcp'])}"
+    assert config.mxcp == 1
+    assert isinstance(config.mxcp, int)
 
 
 def test_migration_exception_handling():

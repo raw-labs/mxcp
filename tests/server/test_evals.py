@@ -3,6 +3,7 @@ import os
 import yaml
 
 from mxcp.server.definitions.evals.loader import discover_eval_files, load_eval_suite
+from mxcp.server.definitions.evals.models import EvalSuiteModel
 
 
 def test_discover_eval_files(tmp_path):
@@ -66,7 +67,7 @@ def test_load_eval_suite():
 mxcp: 1
 suite: test_suite
 description: "Test suite description"
-model: gpt-3.5-turbo
+model: gpt-4o
 tests:
   - name: test_with_assertions
     description: "Test with all assertion types"
@@ -87,25 +88,26 @@ tests:
 """
 
     # Parse YAML
-    suite = yaml.safe_load(content)
+    suite_data = yaml.safe_load(content)
+    suite = EvalSuiteModel.model_validate(suite_data)
 
     # Validate structure
-    assert suite["suite"] == "test_suite"
-    assert suite["description"] == "Test suite description"
-    assert suite["model"] == "gpt-3.5-turbo"
-    assert len(suite["tests"]) == 1
+    assert suite.suite == "test_suite"
+    assert suite.description == "Test suite description"
+    assert suite.model == "gpt-4o"
+    assert len(suite.tests) == 1
 
-    test = suite["tests"][0]
-    assert test["name"] == "test_with_assertions"
-    assert test["prompt"] == "Test prompt"
-    assert test["user_context"]["role"] == "admin"
+    test = suite.tests[0]
+    assert test.name == "test_with_assertions"
+    assert test.prompt == "Test prompt"
+    assert test.user_context is not None and test.user_context.get("role") == "admin"
 
-    assertions = test["assertions"]
-    assert len(assertions["must_call"]) == 1
-    assert assertions["must_call"][0]["tool"] == "my_tool"
-    assert assertions["must_not_call"] == ["dangerous_tool"]
-    assert assertions["answer_contains"] == ["success"]
-    assert assertions["answer_not_contains"] == ["error"]
+    assertions = test.assertions
+    assert assertions.must_call and len(assertions.must_call) == 1
+    assert assertions.must_call[0].tool == "my_tool"
+    assert assertions.must_not_call == ["dangerous_tool"]
+    assert assertions.answer_contains == ["success"]
+    assert assertions.answer_not_contains == ["error"]
 
 
 def test_eval_file_validation(tmp_path):
@@ -152,7 +154,7 @@ tests:
     try:
         result = load_eval_suite("valid_suite")
         assert result is not None
-        assert result[1]["suite"] == "valid_suite"
+        assert result[1].suite == "valid_suite"
 
         # Load invalid file should fail
         result = load_eval_suite("invalid_suite")

@@ -1,42 +1,65 @@
-"""Authentication helper functions for translating between user config and SDK auth types.
+"""Authentication helper functions for translating between MXCP config models and SDK auth types."""
 
-These functions help bridge the gap between MXCP's configuration format and the
-standalone SDK auth types. They don't belong in the SDK itself since they're
-specific to MXCP's config structure.
-"""
+from typing import cast
 
 from mxcp.sdk.auth import ExternalOAuthHandler
-from mxcp.sdk.auth._types import AuthConfig, HttpTransportConfig
+from mxcp.sdk.auth._types import (
+    AtlassianAuthConfig,
+    AuthConfig,
+    AuthorizationConfig,
+    AuthPersistenceConfig,
+    GitHubAuthConfig,
+    GoogleAuthConfig,
+    HttpTransportConfig,
+    KeycloakAuthConfig,
+    OAuthClientConfig,
+    SalesforceAuthConfig,
+)
 from mxcp.sdk.auth.providers.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.providers.github import GitHubOAuthHandler
+from mxcp.sdk.auth.providers.google import GoogleOAuthHandler
 from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
-from mxcp.server.core.config._types import UserAuthConfig, UserConfig, UserHttpTransportConfig
+from mxcp.server.core.config.models import (
+    UserAuthConfigModel,
+    UserConfigModel,
+    UserHttpTransportConfigModel,
+)
 
 
-def translate_auth_config(user_auth_config: UserAuthConfig) -> AuthConfig:
-    """Translate user auth config to minimal SDK auth config.
+def translate_auth_config(user_auth_config: UserAuthConfigModel) -> AuthConfig:
+    """Translate user auth config to minimal SDK auth config."""
+    clients: list[OAuthClientConfig] | None = None
+    if user_auth_config.clients:
+        clients = [
+            cast(OAuthClientConfig, client.model_dump(exclude_none=True))
+            for client in user_auth_config.clients
+        ]
 
-    Only extracts fields needed by GeneralOAuthAuthorizationServer.
-    Provider-specific configs are handled separately.
+    authorization: AuthorizationConfig | None = None
+    if user_auth_config.authorization:
+        authorization = cast(
+            AuthorizationConfig, user_auth_config.authorization.model_dump(exclude_none=True)
+        )
 
-    Args:
-        user_auth_config: User configuration auth section
+    persistence: AuthPersistenceConfig | None = None
+    if user_auth_config.persistence:
+        persistence = cast(
+            AuthPersistenceConfig, user_auth_config.persistence.model_dump(exclude_none=True)
+        )
 
-    Returns:
-        Minimal SDK-compatible auth configuration
-    """
-    return {
-        "provider": user_auth_config.get("provider"),
-        "clients": user_auth_config.get("clients"),
-        "authorization": user_auth_config.get("authorization"),
-        "persistence": user_auth_config.get("persistence"),
+    config: AuthConfig = {
+        "provider": user_auth_config.provider,
+        "clients": clients,
+        "authorization": authorization,
+        "persistence": persistence,
     }
+    return config
 
 
 def translate_transport_config(
-    user_transport_config: UserHttpTransportConfig | None,
+    user_transport_config: UserHttpTransportConfigModel | None,
 ) -> HttpTransportConfig | None:
     """Translate user HTTP transport config to SDK transport config.
 
@@ -49,21 +72,14 @@ def translate_transport_config(
     if not user_transport_config:
         return None
 
-    return {
-        "port": user_transport_config.get("port"),
-        "host": user_transport_config.get("host"),
-        "scheme": user_transport_config.get("scheme"),
-        "base_url": user_transport_config.get("base_url"),
-        "trust_proxy": user_transport_config.get("trust_proxy"),
-        "stateless": user_transport_config.get("stateless"),
-    }
+    return cast(HttpTransportConfig, user_transport_config.model_dump(exclude_none=True))
 
 
 def create_oauth_handler(
-    user_auth_config: UserAuthConfig,
+    user_auth_config: UserAuthConfigModel,
     host: str = "localhost",
     port: int = 8000,
-    user_config: UserConfig | None = None,
+    user_config: UserConfigModel | None = None,
 ) -> ExternalOAuthHandler | None:
     """Create an OAuth handler from user configuration.
 
@@ -78,51 +94,59 @@ def create_oauth_handler(
     Returns:
         OAuth handler instance or None if provider is 'none'
     """
-    provider = user_auth_config.get("provider", "none")
+    provider = user_auth_config.provider
 
     if provider == "none":
         return None
 
     # Extract transport config if available
     transport_config = None
-    if user_config and "transport" in user_config:
-        transport = user_config["transport"]
-        user_transport = transport.get("http") if transport else None
-        transport_config = translate_transport_config(user_transport)
+    if user_config:
+        transport_config = translate_transport_config(
+            user_config.transport.http if user_config.transport else None
+        )
 
     if provider == "github":
-
-        github_config = user_auth_config.get("github")
+        github_config = user_auth_config.github
         if not github_config:
             raise ValueError("GitHub provider selected but no GitHub configuration found")
-        return GitHubOAuthHandler(github_config, transport_config, host=host, port=port)
+        github_dict = cast(GitHubAuthConfig, github_config.model_dump(exclude_none=True))
+        return GitHubOAuthHandler(github_dict, transport_config, host=host, port=port)
 
-    elif provider == "atlassian":
-
-        atlassian_config = user_auth_config.get("atlassian")
+    if provider == "atlassian":
+        atlassian_config = user_auth_config.atlassian
         if not atlassian_config:
             raise ValueError("Atlassian provider selected but no Atlassian configuration found")
-        return AtlassianOAuthHandler(atlassian_config, transport_config, host=host, port=port)
+        atlassian_dict = cast(AtlassianAuthConfig, atlassian_config.model_dump(exclude_none=True))
+        return AtlassianOAuthHandler(atlassian_dict, transport_config, host=host, port=port)
 
-    elif provider == "salesforce":
-
-        salesforce_config = user_auth_config.get("salesforce")
+    if provider == "salesforce":
+        salesforce_config = user_auth_config.salesforce
         if not salesforce_config:
             raise ValueError("Salesforce provider selected but no Salesforce configuration found")
-        return SalesforceOAuthHandler(salesforce_config, transport_config, host=host, port=port)
+        salesforce_dict = cast(
+            SalesforceAuthConfig, salesforce_config.model_dump(exclude_none=True)
+        )
+        return SalesforceOAuthHandler(salesforce_dict, transport_config, host=host, port=port)
 
-    elif provider == "keycloak":
-
-        keycloak_config = user_auth_config.get("keycloak")
+    if provider == "keycloak":
+        keycloak_config = user_auth_config.keycloak
         if not keycloak_config:
             raise ValueError("Keycloak provider selected but no Keycloak configuration found")
-        return KeycloakOAuthHandler(keycloak_config, transport_config, host=host, port=port)
+        keycloak_dict = cast(KeycloakAuthConfig, keycloak_config.model_dump(exclude_none=True))
+        return KeycloakOAuthHandler(keycloak_dict, transport_config, host=host, port=port)
 
-    else:
-        raise ValueError(f"Unsupported auth provider: {provider}")
+    if provider == "google":
+        google_config = user_auth_config.google
+        if not google_config:
+            raise ValueError("Google provider selected but no Google configuration found")
+        google_dict = cast(GoogleAuthConfig, google_config.model_dump(exclude_none=True))
+        return GoogleOAuthHandler(google_dict, transport_config, host=host, port=port)
+
+    raise ValueError(f"Unsupported auth provider: {provider}")
 
 
-def create_url_builder(user_config: UserConfig) -> URLBuilder:
+def create_url_builder(user_config: UserConfigModel) -> URLBuilder:
     """Create a URL builder from user configuration.
 
     Args:
@@ -131,7 +155,5 @@ def create_url_builder(user_config: UserConfig) -> URLBuilder:
     Returns:
         Configured URLBuilder instance
     """
-    transport = user_config.get("transport", {})
-    user_transport_config = transport.get("http", {}) if transport else {}
-    transport_config = translate_transport_config(user_transport_config)
+    transport_config = translate_transport_config(user_config.transport.http)
     return URLBuilder(transport_config)

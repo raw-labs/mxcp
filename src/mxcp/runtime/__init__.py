@@ -13,6 +13,11 @@ Key APIs:
 Internal APIs (not for user code):
 - _set_global_runtime(): Set the global DuckDB runtime for init hooks
 - _get_global_runtime(): Get the global DuckDB runtime
+Runtime compatibility note:
+    The public ``config.site_config`` and ``config.user_config`` accessors continue
+    to expose plain ``dict`` objects for backward compatibility. Internally we
+    convert those dictionaries to Pydantic models as needed, but user code can
+    keep using the legacy dictionary-style access without changes.
 """
 
 import logging
@@ -59,33 +64,45 @@ class ConfigProxy:
                 "No execution context available - function not called from MXCP executor"
             )
 
-        site_config = context.get("site_config")
-        user_config = context.get("user_config")
+        site_config = cast(dict[str, Any] | None, context.get("site_config"))
+        user_config = cast(dict[str, Any] | None, context.get("user_config"))
 
         if not user_config or not site_config:
             return None
 
-        # Get project and profile from site config
         project = site_config.get("project")
         profile = site_config.get("profile")
 
         if not project or not profile:
             return None
 
-        try:
-            # Navigate to the secrets in user config: projects -> project -> profiles -> profile -> secrets
-            project_config = user_config["projects"][project]
-            profile_config = project_config["profiles"][profile]
-            secrets = profile_config.get("secrets", [])
-
-            # Find secret by name and return its parameters
-            for secret in secrets:
-                if secret.get("name") == name:
-                    return cast(dict[str, Any], secret.get("parameters", {}))
-
+        projects = user_config.get("projects")
+        if not isinstance(projects, dict):
             return None
-        except (KeyError, TypeError):
+
+        project_config = projects.get(project)
+        if not isinstance(project_config, dict):
             return None
+
+        profiles = project_config.get("profiles")
+        if not isinstance(profiles, dict):
+            return None
+
+        profile_config = profiles.get(profile)
+        if not isinstance(profile_config, dict):
+            return None
+
+        secrets = profile_config.get("secrets", [])
+        if not isinstance(secrets, list):
+            return None
+
+        for secret in secrets:
+            if not isinstance(secret, dict):
+                continue
+            if secret.get("name") == name:
+                params = secret.get("parameters")
+                return params if isinstance(params, dict) else {}
+        return None
 
     def get_setting(self, key: str, default: Any = None) -> Any:
         """Get configuration setting from site config."""
@@ -95,14 +112,16 @@ class ConfigProxy:
                 "No execution context available - function not called from MXCP executor"
             )
 
-        site_config = context.get("site_config")
+        site_config = cast(dict[str, Any] | None, context.get("site_config"))
         if not site_config:
             return default
+
+        raw_config = site_config
 
         # Support nested key access (e.g., "dbt.enabled")
         if "." in key:
             keys = key.split(".")
-            value = site_config
+            value: Any = raw_config
             for k in keys:
                 if isinstance(value, dict) and k in value:
                     value = value[k]
@@ -110,7 +129,7 @@ class ConfigProxy:
                     return default
             return value
         else:
-            return site_config.get(key, default)
+            return raw_config.get(key, default)
 
     @property
     def user_config(self) -> dict[str, Any] | None:

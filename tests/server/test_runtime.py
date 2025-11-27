@@ -17,7 +17,7 @@ import pytest
 
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
-from mxcp.server.services.tests import run_tests
+from mxcp.server.services.tests.service import run_tests
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -64,9 +64,9 @@ async def test_runtime_db_execute(runtime_repo_path, site_config, user_config):
     os.chdir(runtime_repo_path)
     try:
         result = await run_tests("tool", "test_db_execute", user_config, site_config, None)
-        assert result["status"] == "ok"
-        assert result["tests_run"] == 1
-        assert result["tests"][0]["status"] == "passed"
+        assert result.status == "ok"
+        assert result.tests_run == 1
+        assert result.tests[0].status == "passed"
     finally:
         os.chdir(original_dir)
 
@@ -78,9 +78,9 @@ async def test_runtime_config_get_secret(runtime_repo_path, site_config, user_co
     os.chdir(runtime_repo_path)
     try:
         result = await run_tests("tool", "test_get_secret", user_config, site_config, None)
-        assert result["status"] == "ok"
-        assert result["tests_run"] == 1
-        assert result["tests"][0]["status"] == "passed"
+        assert result.status == "ok"
+        assert result.tests_run == 1
+        assert result.tests[0].status == "passed"
     finally:
         os.chdir(original_dir)
 
@@ -92,9 +92,9 @@ async def test_runtime_config_get_setting(runtime_repo_path, site_config, user_c
     os.chdir(runtime_repo_path)
     try:
         result = await run_tests("tool", "test_get_setting", user_config, site_config, None)
-        assert result["status"] == "ok"
-        assert result["tests_run"] == 1
-        assert result["tests"][0]["status"] == "passed"
+        assert result.status == "ok"
+        assert result.tests_run == 1
+        assert result.tests[0].status == "passed"
     finally:
         os.chdir(original_dir)
 
@@ -106,9 +106,9 @@ async def test_runtime_config_properties(runtime_repo_path, site_config, user_co
     os.chdir(runtime_repo_path)
     try:
         result = await run_tests("tool", "test_config_properties", user_config, site_config, None)
-        assert result["status"] == "ok"
-        assert result["tests_run"] == 1
-        assert result["tests"][0]["status"] == "passed"
+        assert result.status == "ok"
+        assert result.tests_run == 1
+        assert result.tests[0].status == "passed"
     finally:
         os.chdir(original_dir)
 
@@ -120,9 +120,9 @@ async def test_runtime_plugins(runtime_repo_path, site_config, user_config):
     os.chdir(runtime_repo_path)
     try:
         result = await run_tests("tool", "test_plugins", user_config, site_config, None)
-        assert result["status"] == "ok"
-        assert result["tests_run"] == 1
-        assert result["tests"][0]["status"] == "passed"
+        assert result.status == "ok"
+        assert result.tests_run == 1
+        assert result.tests[0].status == "passed"
     finally:
         os.chdir(original_dir)
 
@@ -135,9 +135,9 @@ async def test_runtime_lifecycle_hooks(runtime_repo_path, site_config, user_conf
     try:
         # This test verifies that init hooks were called by checking a side effect
         result = await run_tests("tool", "test_lifecycle_hooks", user_config, site_config, None)
-        assert result["status"] == "ok"
-        assert result["tests_run"] == 1
-        assert result["tests"][0]["status"] == "passed"
+        assert result.status == "ok"
+        assert result.tests_run == 1
+        assert result.tests[0].status == "passed"
     finally:
         os.chdir(original_dir)
 
@@ -150,8 +150,8 @@ async def test_runtime_error_handling(runtime_repo_path, site_config, user_confi
     try:
         # This test should verify proper error messages
         result = await run_tests("tool", "test_error_handling", user_config, site_config, None)
-        assert result["status"] == "ok"
-        assert result["tests_run"] == 1
-        assert result["tests"][0]["status"] == "passed"
+        assert result.status == "ok"
+        assert result.tests_run == 1
+        assert result.tests[0].status == "passed"
     finally:
         os.chdir(original_dir)

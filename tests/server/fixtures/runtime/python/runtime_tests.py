@@ -134,13 +134,14 @@ def test_config_properties() -> dict:
     user_cfg = config.user_config
     site_cfg = config.site_config
 
-    # Verify we can access nested values
+    # Runtime proxies should return plain dicts for backward compatibility
+    assert isinstance(user_cfg, dict)
+    assert isinstance(site_cfg, dict)
+
     try:
-        # From user config
         project_name = list(user_cfg["projects"].keys())[0]
         secrets_count = len(user_cfg["projects"]["runtime_test"]["profiles"]["default"]["secrets"])
 
-        # From site config
         site_project = site_cfg["project"]
         site_secrets = site_cfg["secrets"]
 

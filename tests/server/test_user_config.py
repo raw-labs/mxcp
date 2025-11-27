@@ -4,7 +4,12 @@ from pathlib import Path
 import pytest
 import yaml
 
+from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.core.config.user_config import load_user_config
+
+
+def make_site_config(project: str = "test_project", profile: str = "dev") -> SiteConfigModel:
+    return SiteConfigModel.model_validate({"mxcp": 1, "project": project, "profile": profile})
 
 
 def test_env_var_interpolation(tmp_path):
@@ -35,10 +40,10 @@ def test_env_var_interpolation(tmp_path):
     os.environ["ANOTHER_VAR"] = "another_value"
 
     # Create a minimal site config
-    site_config = {"project": "test_project", "profile": "dev"}
+    site_config = make_site_config("test_project", "dev")
 
     # Load and verify config
-    config = load_user_config(site_config)
+    config = load_user_config(site_config).model_dump(mode="python")
     assert (
         config["projects"]["test_project"]["profiles"]["dev"]["secrets"][0]["parameters"]["simple"]
         == "simple_value"
@@ -82,7 +87,7 @@ def test_missing_env_var(tmp_path):
     os.environ["MXCP_CONFIG"] = str(config_path)
 
     # Create a minimal site config
-    site_config = {"project": "test_project", "profile": "dev"}
+    site_config = make_site_config("test_project", "dev")
 
     # Verify that loading fails with appropriate error
     with pytest.raises(ValueError, match="Environment variable MISSING_VAR is not set"):
@@ -118,10 +123,10 @@ def test_env_var_in_nested_structures(tmp_path):
     os.environ["NESTED_VAR2"] = "nested_value2"
 
     # Create a minimal site config
-    site_config = {"project": "test_project", "profile": "dev"}
+    site_config = make_site_config("test_project", "dev")
 
     # Load and verify config
-    config = load_user_config(site_config)
+    config = load_user_config(site_config).model_dump(mode="python")
     params = config["projects"]["test_project"]["profiles"]["dev"]["secrets"][0]["parameters"]
     assert params["nested"]["key1"] == "nested_value1"
     assert params["nested"]["key2"] == "nested_value2"
@@ -170,10 +175,10 @@ def test_file_url_interpolation(tmp_path):
     os.environ["MXCP_CONFIG"] = str(config_path)
 
     # Create a minimal site config
-    site_config = {"project": "test_project", "profile": "dev"}
+    site_config = make_site_config("test_project", "dev")
 
     # Load and verify config
-    config = load_user_config(site_config)
+    config = load_user_config(site_config).model_dump(mode="python")
     api_params = config["projects"]["test_project"]["profiles"]["dev"]["secrets"][0]["parameters"]
     db_params = config["projects"]["test_project"]["profiles"]["dev"]["secrets"][1]["parameters"]
 
@@ -216,10 +221,10 @@ def test_file_url_relative_path(tmp_path):
         os.environ["MXCP_CONFIG"] = str(config_path)
 
         # Create a minimal site config
-        site_config = {"project": "test_project", "profile": "dev"}
+        site_config = make_site_config("test_project", "dev")
 
         # Load and verify config
-        config = load_user_config(site_config)
+        config = load_user_config(site_config).model_dump(mode="python")
         params = config["projects"]["test_project"]["profiles"]["dev"]["secrets"][0]["parameters"]
         assert params["value"] == "relative-secret-value"
 
@@ -250,7 +255,7 @@ def test_file_url_errors(tmp_path):
 
     os.environ["MXCP_CONFIG"] = str(config_path)
 
-    site_config = {"project": "test_project", "profile": "dev"}
+    site_config = make_site_config("test_project", "dev")
 
     # Should raise FileNotFoundError
     with pytest.raises(FileNotFoundError, match="File not found"):
@@ -323,10 +328,10 @@ def test_mixed_interpolation_with_files(tmp_path):
     with open(tmp_path / "config.yml", "w") as f:
         yaml.dump(user_config_data, f)
 
-    site_config = {"project": "test", "profile": "default"}
+    site_config = make_site_config("test", "default")
 
     # Load and verify
-    config = load_user_config(site_config)
+    config = load_user_config(site_config).model_dump(mode="python")
     params = config["projects"]["test"]["profiles"]["default"]["secrets"][0]["parameters"]
 
     assert params["env_var"] == "from_env"
@@ -370,10 +375,10 @@ def test_load_without_resolving_refs(tmp_path):
     with open(tmp_path / "config.yml", "w") as f:
         yaml.dump(user_config_data, f)
 
-    site_config = {"project": "test", "profile": "default"}
+    site_config = make_site_config("test", "default")
 
     # Load without resolving references
-    config = load_user_config(site_config, resolve_refs=False)
+    config = load_user_config(site_config, resolve_refs=False).model_dump(mode="python")
     secret_params = config["projects"]["test"]["profiles"]["default"]["secrets"][0]["parameters"]
     plugin_config = config["projects"]["test"]["profiles"]["default"]["plugin"]["config"][
         "test_plugin"

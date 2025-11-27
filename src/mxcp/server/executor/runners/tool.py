@@ -10,7 +10,7 @@ from typing import Any
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
-from mxcp.server.definitions.endpoints._types import EndpointDefinition
+from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.definitions.endpoints.utils import detect_language_from_source, extract_source_info
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class EndpointToolExecutor:
         >>> llm_executor = LLMExecutor(model_config, tool_definitions, tool_executor)
     """
 
-    def __init__(self, engine: ExecutionEngine, endpoints: list[EndpointDefinition]):
+    def __init__(self, engine: ExecutionEngine, endpoints: list[EndpointDefinitionModel]):
         """Initialize the endpoint tool executor.
 
         Args:
@@ -52,14 +52,12 @@ class EndpointToolExecutor:
         self.endpoints = endpoints
 
         # Create lookup map for faster tool resolution
-        self._tool_map: dict[str, EndpointDefinition] = {}
+        self._tool_map: dict[str, EndpointDefinitionModel] = {}
         for endpoint_def in endpoints:
-            if "tool" in endpoint_def and endpoint_def["tool"]:
-                tool = endpoint_def["tool"]
-                self._tool_map[tool["name"]] = endpoint_def
-            elif "resource" in endpoint_def and endpoint_def["resource"]:
-                resource = endpoint_def["resource"]
-                self._tool_map[resource["uri"]] = endpoint_def
+            if endpoint_def.tool:
+                self._tool_map[endpoint_def.tool.name] = endpoint_def
+            elif endpoint_def.resource:
+                self._tool_map[endpoint_def.resource.uri] = endpoint_def
 
         logger.info(f"EndpointToolExecutor initialized with {len(endpoints)} endpoints")
 
@@ -108,14 +106,14 @@ class EndpointToolExecutor:
             logger.error(f"Tool '{tool_name}' execution failed: {e}")
             raise
 
-    def _get_source_code(self, endpoint_def: EndpointDefinition, tool_name: str) -> str:
+    def _get_source_code(self, endpoint_def: EndpointDefinitionModel, tool_name: str) -> str:
         """Extract source code from endpoint definition."""
         # Get the tool or resource definition
         source = None
-        if "tool" in endpoint_def and endpoint_def["tool"]:
-            source = endpoint_def["tool"].get("source", {})
-        elif "resource" in endpoint_def and endpoint_def["resource"]:
-            source = endpoint_def["resource"].get("source", {})
+        if endpoint_def.tool:
+            source = endpoint_def.tool.source
+        elif endpoint_def.resource:
+            source = endpoint_def.resource.source
 
         if not source:
             raise ValueError(f"No source found for endpoint '{tool_name}'")
@@ -124,15 +122,15 @@ class EndpointToolExecutor:
         return source_value
 
     def _get_language(
-        self, endpoint_def: EndpointDefinition, tool_name: str, source_info: str
+        self, endpoint_def: EndpointDefinitionModel, tool_name: str, source_info: str
     ) -> str:
         """Determine the programming language for the endpoint."""
         # Get the tool or resource definition
         source = None
-        if "tool" in endpoint_def and endpoint_def["tool"]:
-            source = endpoint_def["tool"].get("source", {})
-        elif "resource" in endpoint_def and endpoint_def["resource"]:
-            source = endpoint_def["resource"].get("source", {})
+        if endpoint_def.tool:
+            source = endpoint_def.tool.source
+        elif endpoint_def.resource:
+            source = endpoint_def.resource.source
 
         if not source:
             raise ValueError(f"No source found for endpoint '{tool_name}'")

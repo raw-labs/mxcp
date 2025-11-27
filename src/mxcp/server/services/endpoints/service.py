@@ -5,6 +5,7 @@ replacing the legacy DuckDBSession-based execution. This is used by CLI commands
 """
 
 import logging
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Optional, cast
 
 if TYPE_CHECKING:
@@ -19,10 +20,15 @@ from mxcp.sdk.policy import (
     PolicyEnforcer,
     PolicySet,
 )
-from mxcp.server.core.config._types import SiteConfig, UserConfig
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
-from mxcp.server.definitions.endpoints._types import PromptDefinition
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
+from mxcp.server.definitions.endpoints.models import (
+    PoliciesDefinitionModel,
+    PromptDefinitionModel,
+    ResourceDefinitionModel,
+    ToolDefinitionModel,
+)
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.endpoint import (
     execute_code_with_engine,
@@ -32,7 +38,7 @@ from mxcp.server.executor.runners.endpoint import (
 logger = logging.getLogger(__name__)
 
 
-def parse_policies_from_config(policies_config: dict[str, Any] | None) -> PolicySet | None:
+def parse_policies_from_config(policies_config: PoliciesDefinitionModel | None) -> PolicySet | None:
     """Parse policy configuration into PolicySet.
 
     This function handles parsing of policy configuration from YAML/JSON format
@@ -84,29 +90,26 @@ def parse_policies_from_config(policies_config: dict[str, Any] | None) -> Policy
     input_policies = []
     output_policies = []
 
-    # Parse input policies
-    for policy_dict in policies_config.get("input", []):
-        action = PolicyAction(policy_dict["action"])
-        policy = PolicyDefinition(
-            condition=policy_dict["condition"],
-            action=action,
-            reason=policy_dict.get("reason"),
-            fields=policy_dict.get("fields"),
+    for rule in policies_config.input or []:
+        input_policies.append(
+            PolicyDefinition(
+                condition=rule.condition,
+                action=PolicyAction(rule.action),
+                reason=rule.reason,
+                fields=rule.fields,
+            )
         )
-        input_policies.append(policy)
 
-    # Parse output policies
-    for policy_dict in policies_config.get("output", []):
-        action = PolicyAction(policy_dict["action"])
-        policy = PolicyDefinition(
-            condition=policy_dict["condition"],
-            action=action,
-            reason=policy_dict.get("reason"),
-            fields=policy_dict.get("fields"),
+    for rule in policies_config.output or []:
+        output_policies.append(
+            PolicyDefinition(
+                condition=rule.condition,
+                action=PolicyAction(rule.action),
+                reason=rule.reason,
+                fields=rule.fields,
+            )
         )
-        output_policies.append(policy)
 
-    # Return PolicySet even for empty dict (this allows for explicit empty config)
     return PolicySet(input_policies=input_policies, output_policies=output_policies)
 
 
@@ -114,8 +117,8 @@ async def execute_endpoint(
     endpoint_type: str,
     name: str,
     params: dict[str, Any],
-    user_config: UserConfig,
-    site_config: SiteConfig,
+    user_config: UserConfigModel,
+    site_config: SiteConfigModel,
     profile_name: str,
     readonly: bool = False,
     skip_output_validation: bool = False,
@@ -167,13 +170,29 @@ async def execute_endpoint(
         runtime_env.shutdown()
 
 
+def _ensure_user_config_model(
+    user_config: UserConfigModel | Mapping[str, Any],
+) -> UserConfigModel:
+    if isinstance(user_config, UserConfigModel):
+        return user_config
+    return UserConfigModel.model_validate(user_config)
+
+
+def _ensure_site_config_model(
+    site_config: SiteConfigModel | Mapping[str, Any],
+) -> SiteConfigModel:
+    if isinstance(site_config, SiteConfigModel):
+        return site_config
+    return SiteConfigModel.model_validate(site_config)
+
+
 async def execute_endpoint_with_engine_and_policy(
     endpoint_type: str,
     name: str,
     params: dict[str, Any],
     request_headers: dict[str, str] | None,
-    user_config: UserConfig,
-    site_config: SiteConfig,
+    user_config: UserConfigModel | Mapping[str, Any],
+    site_config: SiteConfigModel | Mapping[str, Any],
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,
@@ -205,13 +224,17 @@ async def execute_endpoint_with_engine_and_policy(
         RuntimeError: If execution fails
     """
 
+    # Normalize configs (callers may pass dicts)
+    site_config_model = _ensure_site_config_model(site_config)
+    user_config_model = _ensure_user_config_model(user_config)
+
     # Find repository root
     repo_root = find_repo_root()
     if not repo_root:
         raise ValueError("Could not find repository root (no mxcp-site.yml found)")
 
     # Load the endpoint using EndpointLoader
-    loader = EndpointLoader(site_config)
+    loader = EndpointLoader(site_config_model)
     endpoint_result = loader.load_endpoint(endpoint_type, name)
 
     if not endpoint_result:
@@ -219,45 +242,29 @@ async def execute_endpoint_with_engine_and_policy(
 
     endpoint_file_path, endpoint_definition = endpoint_result
 
-    # endpoint_definition is the raw dict containing the full endpoint structure
-    # Extract the type-specific data with proper typing
     policy_enforcer = None
+    component_dict: dict[str, Any] | None = None
+    component: ToolDefinitionModel | ResourceDefinitionModel | PromptDefinitionModel | None = None
 
     if endpoint_type == "tool":
-        tool_def = endpoint_definition.get("tool")
-        if not tool_def:
-            raise ValueError("No tool definition found in endpoint")
-
-        policies_config = tool_def.get("policies")
-        if policies_config:
-            policy_set = parse_policies_from_config(cast(dict[str, Any], policies_config))
-            if policy_set:
-                policy_enforcer = PolicyEnforcer(policy_set)
-
+        component = endpoint_definition.tool
     elif endpoint_type == "resource":
-        resource_def = endpoint_definition.get("resource")
-        if not resource_def:
-            raise ValueError("No resource definition found in endpoint")
-
-        policies_config = resource_def.get("policies")
-        if policies_config:
-            policy_set = parse_policies_from_config(cast(dict[str, Any], policies_config))
-            if policy_set:
-                policy_enforcer = PolicyEnforcer(policy_set)
-
+        component = endpoint_definition.resource
     elif endpoint_type == "prompt":
-        prompt_def = endpoint_definition.get("prompt")
-        if not prompt_def:
-            raise ValueError("No prompt definition found in endpoint")
-
-        policies_config = prompt_def.get("policies")
-        if policies_config:
-            policy_set = parse_policies_from_config(cast(dict[str, Any], policies_config))
-            if policy_set:
-                policy_enforcer = PolicyEnforcer(policy_set)
-
+        component = endpoint_definition.prompt
     else:
-        raise ValueError(f"Unknown endpoint type: {endpoint_type}")
+        component = None
+
+    if component is None:
+        raise ValueError(f"No {endpoint_type} definition found in endpoint")
+
+    component_dict = component.model_dump(mode="python", exclude_unset=True)
+
+    policies_config = getattr(component, "policies", None)
+    if policies_config:
+        policy_set = parse_policies_from_config(policies_config)
+        if policy_set:
+            policy_enforcer = PolicyEnforcer(policy_set)
 
     # Enforce input policies if policy enforcer exists
     if policy_enforcer:
@@ -268,8 +275,7 @@ async def execute_endpoint_with_engine_and_policy(
 
     # Dispatch to appropriate execution method based on endpoint type
     if endpoint_type == "prompt":
-        # We already verified prompt_def exists above
-        prompt_def = cast(PromptDefinition, endpoint_definition.get("prompt"))
+        prompt_def = cast(PromptDefinitionModel, component)
         result = await execute_prompt_with_validation(prompt_def, params, skip_output_validation)
     else:
         result = await execute_code_with_engine(
@@ -280,8 +286,8 @@ async def execute_endpoint_with_engine_and_policy(
             params,
             execution_engine,
             skip_output_validation,
-            user_config,
-            site_config,
+            user_config_model,
+            site_config_model,
             user_context,
             server_ref,
             request_headers,
@@ -291,15 +297,8 @@ async def execute_endpoint_with_engine_and_policy(
     if policy_enforcer:
         try:
             # Get the appropriate definition for policy enforcement
-            if endpoint_type == "tool":
-                endpoint_def = cast(dict[str, Any], endpoint_definition.get("tool"))
-            elif endpoint_type == "resource":
-                endpoint_def = cast(dict[str, Any], endpoint_definition.get("resource"))
-            else:  # prompt
-                endpoint_def = cast(dict[str, Any], endpoint_definition.get("prompt"))
-
             result, action = policy_enforcer.enforce_output_policies(
-                user_context, result, endpoint_def
+                user_context, result, component_dict
             )
         except PolicyEnforcementError as e:
             raise ValueError(f"Output policy enforcement failed: {e.reason}") from e
@@ -326,8 +325,8 @@ async def execute_endpoint_with_engine(
     endpoint_type: str,
     name: str,
     params: dict[str, Any],
-    user_config: UserConfig,
-    site_config: SiteConfig,
+    user_config: UserConfigModel,
+    site_config: SiteConfigModel,
     execution_engine: ExecutionEngine,
     skip_output_validation: bool = False,
     user_context: UserContext | None = None,

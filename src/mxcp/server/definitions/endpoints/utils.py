@@ -8,7 +8,7 @@ import logging
 from enum import Enum
 from pathlib import Path
 
-from ._types import EndpointDefinition, SourceDefinition
+from .models import EndpointDefinitionModel, SourceDefinitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class EndpointType(Enum):
 
 
 def get_endpoint_source_code(
-    endpoint_definition: EndpointDefinition,
+    endpoint_definition: EndpointDefinitionModel,
     endpoint_type: str,
     endpoint_file_path: Path,
     repo_root: Path,
@@ -41,38 +41,33 @@ def get_endpoint_source_code(
     Raises:
         ValueError: If no source code found in endpoint definition
     """
-    # Get source based on endpoint type
-    source: SourceDefinition | None = None
-
     if endpoint_type == "tool":
-        tool_def = endpoint_definition.get("tool")
+        tool_def = endpoint_definition.tool
         if not tool_def:
             raise ValueError("No tool definition found")
-        source = tool_def.get("source")
+        source = tool_def.source
     elif endpoint_type == "resource":
-        resource_def = endpoint_definition.get("resource")
+        resource_def = endpoint_definition.resource
         if not resource_def:
             raise ValueError("No resource definition found")
-        source = resource_def.get("source")
+        source = resource_def.source
     else:
         raise ValueError("Prompts don't have source code")
 
-    if not source:
-        raise ValueError(f"No source definition found in {endpoint_type}")
-    if "code" in source:
-        return source["code"]
-    elif "file" in source:
-        source_path = Path(source["file"])
+    if source.code is not None:
+        return source.code
+
+    if source.file is not None:
+        source_path = Path(source.file)
         if source_path.is_absolute():
             full_path = repo_root / source_path.relative_to("/")
         else:
             full_path = endpoint_file_path.parent / source_path
         return full_path.read_text()
-    else:
-        raise ValueError("No source code found in endpoint definition")
+    raise ValueError("No source code found in endpoint definition")
 
 
-def extract_source_info(source: SourceDefinition) -> tuple[str, str]:
+def extract_source_info(source: SourceDefinitionModel) -> tuple[str, str]:
     """Extract source code and determine if it's inline code or file reference.
 
     Args:
@@ -86,15 +81,14 @@ def extract_source_info(source: SourceDefinition) -> tuple[str, str]:
     Raises:
         ValueError: If no source code or file found
     """
-    if "code" in source:
-        return ("code", source["code"])
-    elif "file" in source:
-        return ("file", source["file"])
-    else:
-        raise ValueError("No source code or file found in source definition")
+    if source.code is not None:
+        return ("code", source.code)
+    if source.file is not None:
+        return ("file", source.file)
+    raise ValueError("No source code or file found in source definition")
 
 
-def detect_language_from_source(source: SourceDefinition, file_path: str | None = None) -> str:
+def detect_language_from_source(source: SourceDefinitionModel, file_path: str | None = None) -> str:
     """Detect programming language from source definition.
 
     Args:
@@ -105,10 +99,10 @@ def detect_language_from_source(source: SourceDefinition, file_path: str | None 
         Language string ("python", "sql", etc.)
     """
     # Check if language is explicitly specified
-    if "language" in source:
-        return source["language"]
+    if source.language:
+        return source.language
     # Try to infer from file extension
-    path_to_check = file_path or source.get("file")
+    path_to_check = file_path or source.file
     if path_to_check:
         if path_to_check.endswith((".py", ".python")):
             return "python"
@@ -135,7 +129,9 @@ def resolve_file_path(file_path: str, endpoint_file_path: Path, repo_root: Path)
         return endpoint_file_path.parent / source_path
 
 
-def get_endpoint_name_or_uri(endpoint_definition: EndpointDefinition, endpoint_type: str) -> str:
+def get_endpoint_name_or_uri(
+    endpoint_definition: EndpointDefinitionModel, endpoint_type: str
+) -> str:
     """Get the name or URI identifier for an endpoint.
 
     Args:
@@ -149,29 +145,25 @@ def get_endpoint_name_or_uri(endpoint_definition: EndpointDefinition, endpoint_t
         ValueError: If endpoint type not found in definition
     """
     if endpoint_type == "tool":
-        tool_def = endpoint_definition.get("tool")
+        tool_def = endpoint_definition.tool
         if not tool_def:
             raise ValueError("No tool definition found")
-        name = tool_def.get("name", "unnamed")
-        return name
-    elif endpoint_type == "resource":
-        resource_def = endpoint_definition.get("resource")
+        return tool_def.name
+    if endpoint_type == "resource":
+        resource_def = endpoint_definition.resource
         if not resource_def:
             raise ValueError("No resource definition found")
-        uri = resource_def.get("uri", "unknown")
-        return uri
-    elif endpoint_type == "prompt":
-        prompt_def = endpoint_definition.get("prompt")
+        return resource_def.uri
+    if endpoint_type == "prompt":
+        prompt_def = endpoint_definition.prompt
         if not prompt_def:
             raise ValueError("No prompt definition found")
-        name = prompt_def.get("name", "unnamed")
-        return name
-    else:
-        raise ValueError(f"Unknown endpoint type: {endpoint_type}")
+        return prompt_def.name
+    raise ValueError(f"Unknown endpoint type: {endpoint_type}")
 
 
 def prepare_source_for_execution(
-    endpoint_definition: EndpointDefinition,
+    endpoint_definition: EndpointDefinitionModel,
     endpoint_type: str,
     endpoint_file_path: Path,
     repo_root: Path,
@@ -192,23 +184,23 @@ def prepare_source_for_execution(
         Tuple of (language, source_code_or_path) ready for execution
     """
     # Get source and language based on endpoint type
-    source: SourceDefinition | None = None
+    source: SourceDefinitionModel | None = None
     language: str | None = None
     function_name: str | None = None
 
     if endpoint_type == "tool":
-        tool_def = endpoint_definition.get("tool")
+        tool_def = endpoint_definition.tool
         if not tool_def:
             raise ValueError("No tool definition found")
-        source = tool_def.get("source")
-        language = tool_def.get("language")
-        function_name = tool_def.get("name")
+        source = tool_def.source
+        language = tool_def.language
+        function_name = tool_def.name
     elif endpoint_type == "resource":
-        resource_def = endpoint_definition.get("resource")
+        resource_def = endpoint_definition.resource
         if not resource_def:
             raise ValueError("No resource definition found")
-        source = resource_def.get("source")
-        language = resource_def.get("language")
+        source = resource_def.source
+        language = resource_def.language
     else:
         raise ValueError("Prompts don't have source code")
 
@@ -220,11 +212,10 @@ def prepare_source_for_execution(
         language = detect_language_from_source(source)
 
     # Handle source code vs file path
-    if "code" in source:
-        # Inline code - return as-is
-        return (language, source["code"])
-    elif "file" in source:
-        file_path = source["file"]
+    if source.code is not None:
+        return (language, source.code)
+    if source.file is not None:
+        file_path = source.file
         if language == "python":
             # For Python files, return file path for module loading
             resolved_path = resolve_file_path(file_path, endpoint_file_path, repo_root)
@@ -245,5 +236,4 @@ def prepare_source_for_execution(
                 endpoint_definition, endpoint_type, endpoint_file_path, repo_root
             )
             return (language, source_code)
-    else:
-        raise ValueError("No source code or file specified in endpoint definition")
+    raise ValueError("No source code or file specified in endpoint definition")

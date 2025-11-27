@@ -95,15 +95,15 @@ async def _cleanup_async(
     try:
         # Load site config and extract audit settings
         site_config = load_site_config()
-        profile_name = profile or site_config["profile"]
+        profile_name = profile or site_config.profile
 
-        if profile_name not in site_config["profiles"]:
+        profile_config = site_config.profiles.get(profile_name)
+        if not profile_config:
             raise ValueError(f"Profile '{profile_name}' not found in configuration")
 
-        profile_config = site_config["profiles"][profile_name]
-        audit_config = profile_config.get("audit", {})
+        audit_config = profile_config.audit
 
-        if not audit_config or not audit_config.get("enabled", False):
+        if not audit_config or not audit_config.enabled:
             message = f"Audit logging is not enabled for profile '{profile_name}'"
             if json_output:
                 output_result(
@@ -115,10 +115,7 @@ async def _cleanup_async(
                 click.echo(message)
             return
 
-        if audit_config and "path" not in audit_config:
-            raise ValueError("Audit configuration missing required 'path' field")
-
-        log_path_str = audit_config.get("path") if audit_config else None
+        log_path_str = audit_config.path if audit_config else None
         if not log_path_str:
             raise ValueError("Audit configuration missing required 'path' field")
         log_path = Path(log_path_str)

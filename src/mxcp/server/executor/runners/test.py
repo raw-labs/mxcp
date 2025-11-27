@@ -8,16 +8,25 @@ normalization, and assertion checking.
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionEngine
-from mxcp.server.core.config._types import SiteConfig, UserConfig
-from mxcp.server.definitions.endpoints._types import EndpointDefinition, TestDefinition
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
+from mxcp.server.definitions.endpoints.models import (
+    EndpointDefinitionModel,
+    ResourceDefinitionModel,
+    TestDefinitionModel,
+    ToolDefinitionModel,
+)
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
+from mxcp.server.services.tests.models import (
+    TestCaseResultModel,
+    TestSuiteResultModel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +36,8 @@ class TestRunner:
 
     def __init__(
         self,
-        user_config: UserConfig,
-        site_config: SiteConfig,
+        user_config: UserConfigModel,
+        site_config: SiteConfigModel,
         execution_engine: ExecutionEngine,
     ):
         """Initialize the test runner.
@@ -49,7 +58,7 @@ class TestRunner:
         name: str,
         cli_user_context: UserContext | None = None,
         request_headers: dict[str, str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> TestSuiteResultModel:
         """Run tests for a specific endpoint.
 
         Args:
@@ -67,7 +76,12 @@ class TestRunner:
             result = self.loader.load_endpoint(endpoint_type, name)
             if result is None:
                 logger.error(f"Endpoint not found: {endpoint_type}/{name}")
-                return {"status": "error", "message": f"Endpoint not found: {endpoint_type}/{name}"}
+                return TestSuiteResultModel(
+                    status="error",
+                    tests_run=0,
+                    tests=[],
+                    message=f"Endpoint not found: {endpoint_type}/{name}",
+                )
 
             endpoint_file_path, endpoint_def = result
 
@@ -76,7 +90,12 @@ class TestRunner:
             logger.info(f"Found {len(tests)} tests")
 
             if not tests:
-                return {"status": "ok", "tests_run": 0, "no_tests": True, "tests": []}
+                return TestSuiteResultModel(
+                    status="ok",
+                    tests_run=0,
+                    tests=[],
+                    no_tests=True,
+                )
 
             # Extract column names from return schema
             column_names = self._extract_column_names(endpoint_def, endpoint_type)
@@ -93,34 +112,45 @@ class TestRunner:
                 )
                 test_results.append(test_result)
 
-                if test_result["status"] == "error":
+                if test_result.status == "error":
                     has_error = True
-                elif test_result["status"] == "failed":
+                elif test_result.status == "failed":
                     has_failed = True
 
             # Determine overall status
-            status = "ok"
+            status: Literal["ok", "failed", "error"]
             if has_error:
                 status = "error"
             elif has_failed:
                 status = "failed"
+            else:
+                status = "ok"
 
             logger.info(f"Final test status: {status}")
-            return {"status": status, "tests_run": len(tests), "tests": test_results}
+            return TestSuiteResultModel(
+                status=status,
+                tests_run=len(tests),
+                tests=test_results,
+            )
 
         except Exception as e:
             logger.error(f"Error in run_tests_for_endpoint: {str(e)}")
-            return {"status": "error", "message": str(e)}
+            return TestSuiteResultModel(
+                status="error",
+                tests_run=0,
+                tests=[],
+                message=str(e),
+            )
 
     async def _run_single_test(
         self,
         endpoint_type: str,
         endpoint_name: str,
-        test_def: TestDefinition,
+        test_def: TestDefinitionModel,
         column_names: list[str],
         cli_user_context: UserContext | None,
         request_headers: dict[str, str] | None,
-    ) -> dict[str, Any]:
+    ) -> TestCaseResultModel:
         """Run a single test.
 
         Args:
@@ -134,14 +164,14 @@ class TestRunner:
             Test result dictionary
         """
         start_time = time.time()
-        test_name = test_def.get("name", "Unnamed test")
+        test_name = test_def.name
         logger.info(f"Running test: {test_name}")
 
         try:
             # Convert test arguments to parameters
             params = {}
-            for arg in test_def.get("arguments", []):
-                params[arg["key"]] = arg["value"]
+            for arg in test_def.arguments:
+                params[arg.key] = arg.value
             logger.info(f"Test parameters: {params}")
 
             # Determine user context
@@ -169,68 +199,67 @@ class TestRunner:
             # Compare with expected results
             passed, error_msg = compare_results(normalized_result, test_def)
 
-            status = "passed" if passed else "failed"
+            status: Literal["passed", "failed"] = "passed" if passed else "failed"
             error = error_msg if not passed else None
 
             if not passed:
                 logger.error(f"Test failed: {error}")
 
-            return {
-                "name": test_name,
-                "description": test_def.get("description", ""),
-                "status": status,
-                "error": error,
-                "time": time.time() - start_time,
-            }
+            return TestCaseResultModel(
+                name=test_name,
+                description=test_def.description or "",
+                status=status,
+                error=error,
+                time=time.time() - start_time,
+            )
 
         except Exception as e:
             logger.error(f"Error during test execution: {str(e)}")
-            return {
-                "name": test_name,
-                "description": test_def.get("description", ""),
-                "status": "error",
-                "error": e,  # Pass the actual exception object
-                "time": time.time() - start_time,
-            }
+            cause = getattr(e, "__cause__", None)
+            return TestCaseResultModel(
+                name=test_name,
+                description=test_def.description or "",
+                status="error",
+                error=str(e),
+                error_cause=str(cause) if cause else None,
+                time=time.time() - start_time,
+            )
 
-    def _extract_tests(self, endpoint_def: EndpointDefinition, endpoint_type: str) -> list[Any]:
+    def _extract_tests(
+        self, endpoint_def: EndpointDefinitionModel, endpoint_type: str
+    ) -> list[TestDefinitionModel]:
         """Extract test definitions from endpoint definition."""
-        if endpoint_def is None or not isinstance(endpoint_def, dict):
-            return []
-
-        type_key = endpoint_type  # "tool", "resource", or "prompt"
-        type_def = endpoint_def.get(type_key)
-        if type_def is None or not isinstance(type_def, dict):
-            return []
-
-        tests = type_def.get("tests")
-        return tests if tests is not None else []
+        if endpoint_type == "tool" and endpoint_def.tool:
+            return endpoint_def.tool.tests or []
+        if endpoint_type == "resource" and endpoint_def.resource:
+            return endpoint_def.resource.tests or []
+        if endpoint_type == "prompt" and endpoint_def.prompt:
+            return endpoint_def.prompt.tests or []
+        return []
 
     def _extract_column_names(
-        self, endpoint_def: EndpointDefinition, endpoint_type: str
+        self, endpoint_def: EndpointDefinitionModel, endpoint_type: str
     ) -> list[str]:
         """Extract column names from endpoint return schema."""
-        columns = []
+        columns: list[str] = []
 
-        if endpoint_type in ["tool", "resource"]:
-            type_def = endpoint_def.get(endpoint_type)
-            if type_def and isinstance(type_def, dict) and type_def.get("return"):
-                return_def = type_def["return"]
-                if return_def and return_def.get("type") == "array" and "items" in return_def:
-                    items = return_def["items"]
-                    if (
-                        isinstance(items, dict)
-                        and items.get("type") == "object"
-                        and "properties" in items
-                    ):
-                        properties = items.get("properties", {})
-                        if isinstance(properties, dict):
-                            columns = list(properties.keys())
+        component: ToolDefinitionModel | ResourceDefinitionModel | None = None
+        if endpoint_type == "tool":
+            component = endpoint_def.tool
+        elif endpoint_type == "resource":
+            component = endpoint_def.resource
+
+        if component and component.return_:
+            return_def = component.return_
+            if return_def.type == "array" and return_def.items:
+                items = return_def.items
+                if items.type == "object" and items.properties:
+                    columns = list(items.properties.keys())
 
         return columns
 
     def _get_test_user_context(
-        self, test_def: TestDefinition, cli_user_context: UserContext | None
+        self, test_def: TestDefinitionModel, cli_user_context: UserContext | None
     ) -> UserContext | None:
         """Determine user context for test execution."""
         # CLI user context takes precedence
@@ -239,20 +268,19 @@ class TestRunner:
             return cli_user_context
 
         # Check for test-defined context
-        if "user_context" in test_def:
-            test_context_data = test_def["user_context"]
-            if test_context_data is not None:
-                test_user_context = UserContext(
-                    provider="test",  # Special provider for test-defined contexts
-                    user_id=test_context_data.get("user_id", "test_user"),
-                    username=test_context_data.get("username", "test_user"),
-                    email=test_context_data.get("email"),
-                    name=test_context_data.get("name"),
-                    avatar_url=test_context_data.get("avatar_url"),
-                    raw_profile=test_context_data,  # Store full context for policy access
-                )
-                logger.info(f"Using test-defined user context: {test_context_data}")
-                return test_user_context
+        if test_def.user_context is not None:
+            test_context_data = test_def.user_context
+            test_user_context = UserContext(
+                provider="test",  # Special provider for test-defined contexts
+                user_id=test_context_data.get("user_id", "test_user"),
+                username=test_context_data.get("username", "test_user"),
+                email=test_context_data.get("email"),
+                name=test_context_data.get("name"),
+                avatar_url=test_context_data.get("avatar_url"),
+                raw_profile=test_context_data,  # Store full context for policy access
+            )
+            logger.info(f"Using test-defined user context: {test_context_data}")
+            return test_user_context
 
         return None
 
@@ -333,7 +361,7 @@ def normalize_result(result: Any, column_names: list[str], endpoint_type: str) -
     return result
 
 
-def compare_results(result: Any, test_def: TestDefinition) -> tuple[bool, str | None]:
+def compare_results(result: Any, test_def: TestDefinitionModel) -> tuple[bool, str | None]:
     """Compare result with various assertion types in test definition.
 
     Args:
@@ -344,8 +372,8 @@ def compare_results(result: Any, test_def: TestDefinition) -> tuple[bool, str | 
         Tuple of (passed, error_message)
     """
     # Exact match with 'result' field
-    if "result" in test_def:
-        expected = test_def["result"]
+    if test_def.result is not None:
+        expected = test_def.result
         if expected is not None:
             # Convert complex objects for comparison
             def make_serializable(obj: Any) -> Any:
@@ -378,8 +406,8 @@ def compare_results(result: Any, test_def: TestDefinition) -> tuple[bool, str | 
                     )
 
     # Partial object match with 'result_contains'
-    if "result_contains" in test_def:
-        expected_contains = test_def["result_contains"]
+    if test_def.result_contains is not None:
+        expected_contains = test_def.result_contains
         if isinstance(result, dict) and isinstance(expected_contains, dict):
             for key, expected_value in expected_contains.items():
                 if key not in result:
@@ -417,8 +445,8 @@ def compare_results(result: Any, test_def: TestDefinition) -> tuple[bool, str | 
             )
 
     # Field exclusion with 'result_not_contains'
-    if "result_not_contains" in test_def:
-        excluded_fields = test_def["result_not_contains"]
+    if test_def.result_not_contains:
+        excluded_fields = test_def.result_not_contains
         if isinstance(result, dict) and excluded_fields:
             for field in excluded_fields:
                 if field in result:
@@ -427,8 +455,8 @@ def compare_results(result: Any, test_def: TestDefinition) -> tuple[bool, str | 
             return False, f"result_not_contains assertion requires dict result, got {type(result)}"
 
     # Array contains specific item with 'result_contains_item'
-    if "result_contains_item" in test_def:
-        expected_item = test_def["result_contains_item"]
+    if test_def.result_contains_item is not None:
+        expected_item = test_def.result_contains_item
         if not isinstance(result, list):
             return (
                 False,
@@ -454,8 +482,8 @@ def compare_results(result: Any, test_def: TestDefinition) -> tuple[bool, str | 
             return False, f"Array does not contain expected item: {expected_item}"
 
     # Array contains all items with 'result_contains_all'
-    if "result_contains_all" in test_def:
-        expected_items = test_def["result_contains_all"]
+    if test_def.result_contains_all:
+        expected_items = test_def.result_contains_all
         if not isinstance(result, list):
             return False, f"result_contains_all assertion requires array result, got {type(result)}"
 
@@ -478,16 +506,16 @@ def compare_results(result: Any, test_def: TestDefinition) -> tuple[bool, str | 
                 return False, f"Array does not contain expected item: {expected_item}"
 
     # Array length check with 'result_length'
-    if "result_length" in test_def:
-        expected_length = test_def["result_length"]
+    if test_def.result_length is not None:
+        expected_length = test_def.result_length
         if not isinstance(result, list):
             return False, f"result_length assertion requires array result, got {type(result)}"
         if len(result) != expected_length:
             return False, f"Array has {len(result)} items, expected {expected_length}"
 
     # String contains with 'result_contains_text'
-    if "result_contains_text" in test_def:
-        expected_text = test_def["result_contains_text"]
+    if test_def.result_contains_text is not None:
+        expected_text = test_def.result_contains_text
         if not isinstance(result, str):
             result_str = str(result)
         else:

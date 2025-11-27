@@ -1,9 +1,9 @@
-"""Utilities for working with MXCP JSON schemas."""
+"""Utilities for working with MXCP configuration schema metadata."""
 
-import json
 from collections.abc import Sequence
 from functools import lru_cache
-from pathlib import Path
+
+from mxcp.server.core.config.models import UserConfigModel
 
 
 @lru_cache(maxsize=1)
@@ -21,17 +21,9 @@ def get_user_config_top_level_keys() -> set[str]:
     Note:
         This is cached since the schema doesn't change at runtime.
     """
-    schema_path = Path(__file__).parent.parent.parent / "schemas" / "mxcp-config-schema-1.json"
-    with open(schema_path) as f:
-        schema = json.load(f)
-
-    # Get all top-level properties except 'projects' (which needs special handling)
-    all_props = set(schema.get("properties", {}).keys())
-
-    # Remove 'projects' - it's handled specially in selective interpolation
-    all_props.discard("projects")
-
-    return all_props
+    fields = set(UserConfigModel.model_fields.keys())
+    fields.discard("projects")
+    return fields
 
 
 def should_interpolate_path(

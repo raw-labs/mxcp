@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mxcp.sdk.audit.backends.noop import NoOpAuditBackend
-from mxcp.server.definitions.endpoints._types import EndpointDefinition
+from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 
 from .models import ConfigResponse, EndpointCounts, Features
 
@@ -82,8 +82,10 @@ class AdminService:
 
         Reads public fields directly - no intermediate types needed.
         """
+        site_config_obj = self._server.site_config
+        project_name = site_config_obj.project
         return ConfigResponse(
-            project=self._server.site_config.get("project"),
+            project=project_name,
             profile=self._server.profile_name,
             repository_path=(
                 str(self._server.runtime_environment.duckdb_runtime.database_config.path)
@@ -106,7 +108,7 @@ class AdminService:
             transport=self._server.transport,
         )
 
-    def discover_endpoints(self) -> list[tuple[Path, EndpointDefinition | None, str | None]]:
+    def discover_endpoints(self) -> list[tuple[Path, EndpointDefinitionModel | None, str | None]]:
         """
         Discover all endpoints using the server's endpoint loader.
 

@@ -13,7 +13,7 @@ from mxcp.server.interfaces.cli.utils import (
     output_result,
     resolve_profile,
 )
-from mxcp.server.services.drift._types import DriftSnapshot
+from mxcp.server.services.drift.models import DriftSnapshot
 from mxcp.server.services.drift.snapshot import generate_snapshot
 
 
@@ -26,7 +26,8 @@ def _compute_snapshot_hash(snapshot: DriftSnapshot) -> tuple[str, str]:
     Returns:
         Tuple of (snapshot_json_string, drift_hash)
     """
-    snapshot_str = json.dumps(snapshot, sort_keys=True)
+    snapshot_payload = snapshot.model_dump(mode="json", exclude_none=True)
+    snapshot_str = json.dumps(snapshot_payload, sort_keys=True)
     drift_hash = hashlib.sha256(snapshot_str.encode()).hexdigest()
     return snapshot_str, drift_hash
 
@@ -146,7 +147,7 @@ async def _drift_snapshot_impl(
                 {
                     "path": str(path),
                     "drift_hash": drift_hash,
-                    "generated_at": snapshot["generated_at"],
+                    "generated_at": snapshot.generated_at,
                 },
                 json_output,
                 debug,
@@ -161,16 +162,14 @@ async def _drift_snapshot_impl(
                 # Compute a simple hash for the snapshot
                 snapshot_str, drift_hash = _compute_snapshot_hash(snapshot)
                 click.echo(f"   • Hash: {click.style(drift_hash[:12] + '...', fg='yellow')}")
-                click.echo(f"   • Generated: {click.style(snapshot['generated_at'], fg='yellow')}")
+                click.echo(f"   • Generated: {click.style(snapshot.generated_at, fg='yellow')}")
 
                 # Show what was captured
                 click.echo(f"\n{click.style('📊 Captured State:', fg='cyan', bold=True)}")
-                if "tables" in snapshot:
-                    table_count = len(snapshot["tables"])
-                    click.echo(f"   • Tables: {click.style(str(table_count), fg='green')}")
-                if "resources" in snapshot:
-                    resource_count = len(snapshot["resources"])
-                    click.echo(f"   • Resources: {click.style(str(resource_count), fg='green')}")
+                table_count = len(snapshot.tables)
+                click.echo(f"   • Tables: {click.style(str(table_count), fg='green')}")
+                resource_count = len(snapshot.resources)
+                click.echo(f"   • Resources: {click.style(str(resource_count), fg='green')}")
 
                 click.echo(f"\n{click.style('💡 Next Steps:', fg='yellow')}")
                 click.echo(
@@ -181,7 +180,8 @@ async def _drift_snapshot_impl(
                 click.echo(
                     f"\n{click.style('🔍 Dry Run - Snapshot Preview:', fg='yellow', bold=True)}\n"
                 )
-                click.echo(json.dumps(snapshot, indent=2))
+                snapshot_payload = snapshot.model_dump(mode="json", exclude_none=True)
+                click.echo(json.dumps(snapshot_payload, indent=2))
                 click.echo(
                     f"\n{click.style('ℹ️  No files were written (dry run mode)', fg='blue')}\n"
                 )

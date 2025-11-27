@@ -5,6 +5,10 @@ The main entry point is the service module.
 """
 
 # Import main functions from service module
+from .models import (
+    EndpointValidationResultModel,
+    EndpointValidationSummaryModel,
+)
 from .service import (
     execute_endpoint,
     execute_endpoint_with_engine,
@@ -24,4 +28,7 @@ __all__ = [
     # Validation functions
     "validate_all_endpoints",
     "validate_endpoint",
+    # Models
+    "EndpointValidationResultModel",
+    "EndpointValidationSummaryModel",
 ]

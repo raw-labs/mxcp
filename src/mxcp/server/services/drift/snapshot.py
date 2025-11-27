@@ -2,40 +2,38 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import cast
 
 import duckdb
 
 from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
-from mxcp.server.core.config._types import SiteConfig, UserConfig
+from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.test import TestRunner
-from mxcp.server.services.drift._types import (
+from mxcp.server.services.drift.models import (
     Column,
     DriftSnapshot,
-    Prompt,
-    Resource,
     ResourceDefinition,
     Table,
+    TestResult,
     TestResults,
-    Tool,
     ValidationResults,
 )
 from mxcp.server.services.endpoints.validator import validate_endpoint_payload
+from mxcp.server.services.tests.models import TestSuiteResultModel
 
 logger = logging.getLogger(__name__)
 
 
 def get_duckdb_tables(conn: duckdb.DuckDBPyConnection) -> list[Table]:
     """Get list of tables and their columns from DuckDB catalog."""
-    tables = []
+    tables: list[Table] = []
     for table in conn.execute(
         "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
     ).fetchall():
         table_name = table[0]
-        columns = []
+        columns: list[Column] = []
         for col in conn.execute(
             f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table_name}'"
         ).fetchall():
@@ -45,8 +43,8 @@ def get_duckdb_tables(conn: duckdb.DuckDBPyConnection) -> list[Table]:
 
 
 async def generate_snapshot(
-    site_config: SiteConfig,
-    user_config: UserConfig,
+    site_config: SiteConfigModel,
+    user_config: UserConfigModel,
     profile: str | None = None,
     force: bool = False,
     dry_run: bool = False,
@@ -63,15 +61,14 @@ async def generate_snapshot(
     Returns:
         Tuple of (snapshot data, snapshot file path)
     """
-    profile_name = profile or site_config["profile"]
+    profile_name = profile or site_config.profile
 
     # Get drift path with safe access
-    profiles = site_config.get("profiles", {})
-    profile_config = profiles.get(profile_name, {})
-    drift_config = profile_config.get("drift") or {}
-    drift_path_str = drift_config.get("path", f"drift-{profile_name}.json")
-    if not drift_path_str:
-        drift_path_str = f"drift-{profile_name}.json"
+    profile_config = site_config.profiles.get(profile_name)
+    drift_config = profile_config.drift if profile_config else None
+    drift_path_str = (
+        drift_config.path if drift_config and drift_config.path else f"drift-{profile_name}.json"
+    )
     drift_path = Path(drift_path_str)
     if not drift_path.parent.exists():
         drift_path.parent.mkdir(parents=True)
@@ -88,8 +85,6 @@ async def generate_snapshot(
     duckdb_executor = execution_engine._executors.get("sql")
     if not duckdb_executor:
         raise RuntimeError("DuckDB executor not found in execution engine")
-
-    # Check the type for accessing .session
 
     if not isinstance(duckdb_executor, DuckDBExecutor):
         raise RuntimeError("SQL executor is not a DuckDB executor")
@@ -114,16 +109,16 @@ async def generate_snapshot(
                     relative_path = path.name
 
                 if error:
-                    error_resource: ResourceDefinition = {
-                        "validation_results": {
-                            "status": "error",
-                            "path": relative_path,
-                            "message": error,
-                        },
-                        "test_results": None,
-                        "definition": None,
-                        "metadata": None,
-                    }
+                    error_resource = ResourceDefinition(
+                        validation_results=ValidationResults(
+                            status="error",
+                            path=relative_path,
+                            message=error,
+                        ),
+                        test_results=None,
+                        definition=None,
+                        metadata=None,
+                    )
                     resources.append(error_resource)
                 else:
                     # Determine endpoint type and name
@@ -131,18 +126,18 @@ async def generate_snapshot(
                         logger.warning(f"Skipping file {path}: endpoint is None")
                         continue
 
-                    if endpoint.get("tool") is not None:
+                    if endpoint.tool is not None:
                         endpoint_type = "tool"
-                        tool = endpoint["tool"]
-                        name = tool.get("name", "unnamed") if tool else "unnamed"
-                    elif endpoint.get("resource") is not None:
+                        tool = endpoint.tool
+                        name = tool.name if tool else "unnamed"
+                    elif endpoint.resource is not None:
                         endpoint_type = "resource"
-                        resource = endpoint["resource"]
-                        name = resource.get("uri", "unknown") if resource else "unknown"
-                    elif endpoint.get("prompt") is not None:
+                        resource = endpoint.resource
+                        name = resource.uri if resource else "unknown"
+                    elif endpoint.prompt is not None:
                         endpoint_type = "prompt"
-                        prompt = endpoint["prompt"]
-                        name = prompt.get("name", "unnamed") if prompt else "unnamed"
+                        prompt = endpoint.prompt
+                        name = prompt.name if prompt else "unnamed"
                     else:
                         logger.warning(f"Skipping file {path}: not a valid endpoint")
                         continue
@@ -157,14 +152,16 @@ async def generate_snapshot(
                         endpoint_type, name, None
                     )
                     # Add to snapshot
-                    resource_data: ResourceDefinition = {
-                        "validation_results": cast(ValidationResults, validation_result),
-                        "test_results": cast(TestResults, test_result),
-                        "definition": cast(
-                            Tool | Resource | Prompt | None, endpoint
-                        ),  # Store the full endpoint structure
-                        "metadata": endpoint.get("metadata") if endpoint else None,
-                    }
+                    validation_model = ValidationResults.model_validate(
+                        validation_result.model_dump(mode="python", exclude_unset=True)
+                    )
+                    test_results_model = _convert_suite_to_test_results(test_result)
+                    resource_data = ResourceDefinition(
+                        validation_results=validation_model,
+                        test_results=test_results_model,
+                        definition=endpoint,
+                        metadata=endpoint.metadata if endpoint else None,
+                    )
                     resources.append(resource_data)
             if conn is None:
                 raise RuntimeError("DuckDB connection is not available")
@@ -177,10 +174,35 @@ async def generate_snapshot(
             )
             if not dry_run:
                 with open(drift_path, "w") as f:
-                    json.dump(snapshot, f, indent=2)
+                    json.dump(snapshot.model_dump(mode="json", exclude_none=True), f, indent=2)
                 logger.info(f"Wrote drift snapshot to {drift_path}")
             else:
-                logger.info(f"Would write drift snapshot as {snapshot}")
+                logger.info(
+                    "Would write drift snapshot as %s",
+                    json.dumps(snapshot.model_dump(mode="json", exclude_none=True)),
+                )
             return snapshot, drift_path
     finally:
         runtime_env.shutdown()
+
+
+def _convert_suite_to_test_results(test_suite: TestSuiteResultModel) -> TestResults:
+    """Convert internal test suite results to the drift snapshot schema."""
+    tests = [
+        TestResult(
+            name=test.name,
+            description=test.description or None,
+            status=test.status,
+            error=test.error,
+            time=test.time,
+        )
+        for test in (test_suite.tests or [])
+    ]
+
+    return TestResults(
+        status=test_suite.status,
+        tests_run=test_suite.tests_run,
+        tests=tests or None,
+        message=test_suite.message,
+        no_tests=test_suite.no_tests or None,
+    )
