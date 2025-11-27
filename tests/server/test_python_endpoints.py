@@ -3,6 +3,7 @@
 import os
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -11,9 +12,50 @@ from mxcp.runtime import _init_hooks, _shutdown_hooks
 from mxcp.server.core.config.models import UserConfigModel
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
+from mxcp.server.executor.context_utils import build_execution_context
 from mxcp.server.executor.engine import create_runtime_environment
+from mxcp.server.services.endpoints import (
+    execute_endpoint_with_engine as _execute_endpoint_with_engine,
+)
 
-from .helpers import execute_endpoint_with_engine
+
+async def execute_endpoint_with_engine(
+    *,
+    endpoint_type: str,
+    name: str,
+    params: dict[str, Any],
+    user_config: UserConfigModel,
+    site_config: Any,
+    execution_engine: Any,
+    skip_output_validation: bool = False,
+    user_context: Any = None,
+    server_ref: Any = None,
+    request_headers: dict[str, str] | None = None,
+    transport: str = "test",
+) -> Any:
+    """Build an execution context tailored for the tests."""
+
+    context = build_execution_context(
+        user_context=user_context,
+        user_config=user_config,
+        site_config=site_config,
+        server_ref=server_ref,
+        request_headers=request_headers,
+        transport=transport,
+    )
+
+    return await _execute_endpoint_with_engine(
+        endpoint_type,
+        name,
+        params,
+        user_config,
+        site_config,
+        execution_engine,
+        context,
+        skip_output_validation=skip_output_validation,
+        user_context=user_context,
+        server_ref=server_ref,
+    )
 
 
 @pytest.fixture
