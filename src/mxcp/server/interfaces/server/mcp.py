@@ -270,8 +270,8 @@ class RAWMCP:
             enabled=get_env_admin_socket_enabled(),
         )
 
-        # Register signal handlers
-        self._register_signal_handlers()
+        # Note: Signal handlers are registered in run() when the system is ready
+        # to handle them, not here in __init__.
 
         self._initialize_audit_config()
 
@@ -575,12 +575,7 @@ class RAWMCP:
 
     async def _handle_reload_signal_async(self) -> None:
         """Async handler that waits for reload completion without blocking the loop."""
-        try:
-            request = self.reload_configuration()
-        except RuntimeError as exc:
-            # This can happen if reload manager isn't fully started yet
-            logger.error(f"SIGHUP reload request failed: {exc}")
-            return
+        request = self.reload_configuration()
 
         try:
             completed = await asyncio.to_thread(request.wait_for_completion, 60.0)
@@ -1889,12 +1884,14 @@ class RAWMCP:
                     raise RuntimeError(f"OAuth server initialization failed: {exc}") from exc
 
             loop = asyncio.get_running_loop()
-            # Start reload manager BEFORE setting _signal_loop to avoid race condition.
-            # Signal handlers check _signal_loop first, so we ensure the reload manager
-            # is fully initialized before signals can trigger reload requests.
+            self._signal_loop = loop
+
+            # Start reload manager, then register signal handlers.
+            # Order matters: reload_manager must be started before signals can trigger reloads.
             self.reload_manager.start()
             reload_started = True
-            self._signal_loop = loop
+            self._register_signal_handlers()
+
             await self._initialize_audit_logger()
 
             # Start server

@@ -132,7 +132,7 @@ class ReloadManager:
             server: The server instance implementing ReloadableServer protocol
         """
         self.server = server
-        self._queue: asyncio.Queue[ReloadRequest] | None = None
+        self._queue: asyncio.Queue[ReloadRequest] = asyncio.Queue()
         self._processing = False
         self._shutdown = False
         self._current_request: ReloadRequest | None = None
@@ -147,10 +147,11 @@ class ReloadManager:
         self._last_reload_error: str | None = None
 
     def start(self) -> None:
-        """Start the reload processor task."""
-        if self._queue is None:
-            self._queue = asyncio.Queue()
+        """Start the reload processor task.
 
+        Must be called from within a running event loop. This captures the loop
+        reference and starts the background processor task.
+        """
         loop = asyncio.get_running_loop()
 
         if self._processor_task is None or self._processor_task.done():
@@ -165,9 +166,7 @@ class ReloadManager:
             return
 
         self._shutdown = True
-
-        if self._queue is not None:
-            await self._queue.put(self._shutdown_sentinel)
+        await self._queue.put(self._shutdown_sentinel)
 
         self._processor_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -191,7 +190,8 @@ class ReloadManager:
             metadata: Optional metadata for the reload request
 
         Returns:
-            The created reload request
+            The created reload request. If the reload manager is not yet started,
+            returns a no-op request that is already marked complete.
         """
         request = ReloadRequest(
             payload_func=payload_func,
@@ -199,15 +199,21 @@ class ReloadManager:
             metadata=metadata or {},
         )
 
-        queue = self._queue
         loop = self._loop
-        if queue is None or loop is None:
-            raise RuntimeError("Reload manager is not running")
+        if loop is None:
+            # Not started yet - return a no-op request that's already "complete"
+            # This allows callers (like signal handlers) to work safely before
+            # the server is fully running.
+            logger.warning(
+                f"Reload request ignored (manager not started): {request.id} - {description}"
+            )
+            request._completion_event.set()  # Mark as "complete" immediately
+            return request
 
         def enqueue() -> None:
             if self._shutdown:
                 return
-            queue.put_nowait(request)
+            self._queue.put_nowait(request)
 
         try:
             running_loop = asyncio.get_running_loop()
@@ -227,14 +233,9 @@ class ReloadManager:
         """Process reload requests from the queue."""
         logger.info("Reload processor started")
 
-        queue = self._queue
-        if queue is None:
-            logger.error("Reload queue not initialized")
-            return
-
         while not self._shutdown:
             try:
-                request = await asyncio.wait_for(queue.get(), timeout=1.0)
+                request = await asyncio.wait_for(self._queue.get(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
             except Exception as exc:  # pragma: no cover - defensive
@@ -257,7 +258,7 @@ class ReloadManager:
                     self._current_request = request
 
             if should_requeue:
-                await queue.put(request)
+                await self._queue.put(request)
                 await asyncio.sleep(1)
                 continue
 
@@ -401,7 +402,7 @@ class ReloadManager:
                     if self._current_request
                     else None
                 ),
-                "queue_size": self._queue.qsize() if self._queue else 0,
+                "queue_size": self._queue.qsize(),
                 "shutdown": self._shutdown,
                 "draining": self.server.draining,
                 "active_requests": self.server.active_requests,
