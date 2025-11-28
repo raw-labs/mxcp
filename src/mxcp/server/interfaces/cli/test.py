@@ -1,4 +1,3 @@
-import asyncio
 import json
 from pathlib import Path
 
@@ -15,6 +14,7 @@ from mxcp.server.interfaces.cli.utils import (
     output_error,
     output_result,
     resolve_profile,
+    run_async_cli,
 )
 from mxcp.server.services.tests.models import (
     EndpointTestResultModel,
@@ -255,14 +255,10 @@ def test(
         user_config = load_user_config(site_config, active_profile=active_profile)
 
         # Configure logging
-        configure_logging_from_config(
-            site_config=site_config,
-            user_config=user_config,
-            debug=debug,
-        )
+        configure_logging_from_config(user_config=user_config, debug=debug)
 
         # Run async implementation
-        asyncio.run(
+        run_async_cli(
             _test_impl(
                 endpoint_type=endpoint_type,
                 name=name,

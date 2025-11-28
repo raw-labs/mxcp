@@ -11,13 +11,15 @@ The payload function runs when the system is safely shut down, allowing
 operations like config file updates or database file replacement.
 """
 
+import asyncio
+import contextlib
 import logging
-import queue
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from types import TracebackType
 from typing import Any, Protocol
 from uuid import uuid4
 
@@ -26,12 +28,50 @@ from mxcp.sdk.telemetry import record_counter
 logger = logging.getLogger(__name__)
 
 
+class AsyncServerLock:
+    """Lazy asyncio lock that binds to the running loop on first use."""
+
+    def __init__(self) -> None:
+        self._lock: asyncio.Lock | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def _ensure_lock(self) -> asyncio.Lock:
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._loop is not loop:
+            self._lock = asyncio.Lock()
+            self._loop = loop
+        return self._lock
+
+    async def __aenter__(self) -> None:
+        lock = self._ensure_lock()
+        await lock.acquire()
+        return None
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        lock = self._ensure_lock()
+        lock.release()
+
+    async def acquire(self) -> None:
+        lock = self._ensure_lock()
+        await lock.acquire()
+
+    def release(self) -> None:
+        if self._lock is None:
+            return
+        self._lock.release()
+
+
 class ReloadableServer(Protocol):
     """Protocol defining what the ReloadManager needs from a server."""
 
     # Request tracking
     active_requests: int
-    requests_lock: threading.Lock
+    requests_lock: AsyncServerLock
     draining: bool
     profile_name: str
 
@@ -92,12 +132,14 @@ class ReloadManager:
             server: The server instance implementing ReloadableServer protocol
         """
         self.server = server
-        self._queue: queue.Queue[ReloadRequest] = queue.Queue()
+        self._queue: asyncio.Queue[ReloadRequest] | None = None
         self._processing = False
         self._shutdown = False
         self._current_request: ReloadRequest | None = None
         self._lock = threading.Lock()
-        self._processor_thread: threading.Thread | None = None
+        self._processor_task: asyncio.Task[None] | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._shutdown_sentinel = ReloadRequest(description="Reload manager shutdown sentinel")
 
         # Track reload history
         self._last_reload_time: datetime | None = None
@@ -105,25 +147,33 @@ class ReloadManager:
         self._last_reload_error: str | None = None
 
     def start(self) -> None:
-        """Start the reload processor thread."""
-        if self._processor_thread is None or not self._processor_thread.is_alive():
-            self._processor_thread = threading.Thread(
-                target=self._process_reload_queue, name="ReloadManager", daemon=True
-            )
-            self._processor_thread.start()
+        """Start the reload processor task."""
+        if self._queue is None:
+            self._queue = asyncio.Queue()
+
+        loop = asyncio.get_running_loop()
+
+        if self._processor_task is None or self._processor_task.done():
+            self._loop = loop
+            self._shutdown = False
+            self._processor_task = loop.create_task(self._process_reload_queue())
             logger.info("Reload manager started")
 
-    def stop(self) -> None:
-        """Stop the reload processor and clean up."""
+    async def stop(self) -> None:
+        """Stop the reload processor task."""
+        if self._processor_task is None:
+            return
+
         self._shutdown = True
 
-        # Add a sentinel to wake up the processor
-        self._queue.put(ReloadRequest(description="Shutdown sentinel"))
+        if self._queue is not None:
+            await self._queue.put(self._shutdown_sentinel)
 
-        # Wait for processor to finish
-        if self._processor_thread and self._processor_thread.is_alive():
-            self._processor_thread.join(timeout=5.0)
+        self._processor_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await self._processor_task
 
+        self._processor_task = None
         logger.info("Reload manager stopped")
 
     def request_reload(
@@ -149,96 +199,115 @@ class ReloadManager:
             metadata=metadata or {},
         )
 
-        # Add to queue
-        self._queue.put(request)
+        queue = self._queue
+        loop = self._loop
+        if queue is None or loop is None:
+            raise RuntimeError("Reload manager is not running")
+
+        def enqueue() -> None:
+            if self._shutdown:
+                return
+            queue.put_nowait(request)
+
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+
+        if running_loop is loop:
+            enqueue()
+        else:
+            loop.call_soon_threadsafe(enqueue)
 
         logger.info(f"Reload request queued: {request.id} - {request.description}")
 
         return request
 
-    def _process_reload_queue(self) -> None:
+    async def _process_reload_queue(self) -> None:
         """Process reload requests from the queue."""
         logger.info("Reload processor started")
 
+        queue = self._queue
+        if queue is None:
+            logger.error("Reload queue not initialized")
+            return
+
         while not self._shutdown:
             try:
-                # Wait for a reload request with timeout
-                try:
-                    request = self._queue.get(timeout=1.0)
-                except queue.Empty:
-                    continue
+                request = await asyncio.wait_for(queue.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error(f"Error retrieving reload request: {exc}", exc_info=True)
+                await asyncio.sleep(1)
+                continue
 
-                # Check if this is a shutdown sentinel
-                if self._shutdown:
-                    break
+            if request is self._shutdown_sentinel:
+                break
 
-                with self._lock:
-                    if self._processing:
-                        # Already processing a reload, re-queue this one
-                        self._queue.put(request)
-                        time.sleep(1)  # Brief delay to avoid tight loop
-                        continue
+            if self._shutdown:
+                break
 
+            should_requeue = False
+            with self._lock:
+                if self._processing:
+                    should_requeue = True
+                else:
                     self._processing = True
                     self._current_request = request
 
-                logger.info(f"Processing reload request: {request.id} - {request.description}")
+            if should_requeue:
+                await queue.put(request)
+                await asyncio.sleep(1)
+                continue
 
-                try:
-                    # Execute the reload
-                    self._execute_reload(request)
-                    logger.info(f"Reload request completed: {request.id}")
+            logger.info(f"Processing reload request: {request.id} - {request.description}")
 
-                    # Update reload history
-                    with self._lock:
-                        self._last_reload_time = datetime.now()
-                        self._last_reload_status = "success"
-                        self._last_reload_error = None
+            try:
+                await self._execute_reload(request)
+                logger.info(f"Reload request completed: {request.id}")
 
-                    # Record success metric
-                    record_counter(
-                        "mxcp.reloads_total",
-                        attributes={
-                            "status": "success",
-                            "profile": self.server.profile_name,
-                        },
-                        description="Total reload operations",
-                    )
+                with self._lock:
+                    self._last_reload_time = datetime.now()
+                    self._last_reload_status = "success"
+                    self._last_reload_error = None
 
-                except Exception as e:
-                    logger.error(f"Reload request failed: {request.id} - {e}", exc_info=True)
+                record_counter(
+                    "mxcp.reloads_total",
+                    attributes={
+                        "status": "success",
+                        "profile": self.server.profile_name,
+                    },
+                    description="Total reload operations",
+                )
 
-                    # Update reload history
-                    with self._lock:
-                        self._last_reload_time = datetime.now()
-                        self._last_reload_status = "error"
-                        self._last_reload_error = str(e)
+            except Exception as e:  # pragma: no cover - error path logging
+                logger.error(f"Reload request failed: {request.id} - {e}", exc_info=True)
 
-                    # Record failure metric
-                    record_counter(
-                        "mxcp.reloads_total",
-                        attributes={
-                            "status": "error",
-                            "profile": self.server.profile_name,
-                        },
-                        description="Total reload operations",
-                    )
+                with self._lock:
+                    self._last_reload_time = datetime.now()
+                    self._last_reload_status = "error"
+                    self._last_reload_error = str(e)
 
-                finally:
-                    # Always mark request as complete to unblock waiters
-                    request._completion_event.set()
+                record_counter(
+                    "mxcp.reloads_total",
+                    attributes={
+                        "status": "error",
+                        "profile": self.server.profile_name,
+                    },
+                    description="Total reload operations",
+                )
 
-                    with self._lock:
-                        self._processing = False
-                        self._current_request = None
+            finally:
+                request._completion_event.set()
 
-            except Exception as e:
-                logger.error(f"Error in reload processor: {e}", exc_info=True)
-                time.sleep(1)  # Avoid tight error loop
+                with self._lock:
+                    self._processing = False
+                    self._current_request = None
 
         logger.info("Reload processor stopped")
 
-    def _execute_reload(self, request: ReloadRequest) -> None:
+    async def _execute_reload(self, request: ReloadRequest) -> None:
         """
         Execute a reload request.
 
@@ -252,38 +321,32 @@ class ReloadManager:
         logger.info("Starting system reload")
 
         try:
-            # Phase 1: Drain requests
-            self._drain_requests()
+            await self._drain_requests()
             logger.info("Draining requests completed")
 
-            # Phase 2: Shutdown
             logger.info("Shutting down runtime components...")
-            self.server.shutdown_runtime_components()
+            await asyncio.to_thread(self.server.shutdown_runtime_components)
 
-            # Phase 3: Execute payload
             if request.payload_func:
                 logger.info(f"Executing reload payload: {request.description}")
                 try:
-                    request.payload_func()
+                    await asyncio.to_thread(request.payload_func)
                     logger.info("Payload execution completed")
                 except Exception as e:
                     logger.error(f"Error in reload payload: {e}", exc_info=True)
-                    # Continue with reload despite payload errors
 
-            # Phase 4: Restart
             logger.info("Restarting runtime components...")
-            self.server.initialize_runtime_components()
+            await asyncio.to_thread(self.server.initialize_runtime_components)
 
             logger.info("System reload completed")
 
         finally:
-            # Always clear draining flag atomically
-            with self.server.requests_lock:
+            async with self.server.requests_lock:
                 if self.server.draining:
                     self.server.draining = False
                     logger.info("Draining mode cleared")
 
-    def _drain_requests(self, timeout: int = 90) -> None:
+    async def _drain_requests(self, timeout: int = 90) -> None:
         """
         Drain active requests (wait for zero).
 
@@ -292,17 +355,16 @@ class ReloadManager:
         """
         logger.info("Starting request draining...")
 
-        # Set draining flag atomically to prevent race with request registration
-        with self.server.requests_lock:
+        async with self.server.requests_lock:
             self.server.draining = True
 
         start_time = time.time()
-        initial_count = self._get_active_requests()
+        initial_count = await self._get_active_requests()
 
         logger.info(f"Initial active requests: {initial_count}")
 
         while time.time() - start_time < timeout:
-            current_count = self._get_active_requests()
+            current_count = await self._get_active_requests()
 
             if current_count == 0:
                 logger.info("All requests drained")
@@ -313,16 +375,16 @@ class ReloadManager:
             if elapsed % 5 == 0:  # Every 5 seconds
                 logger.info(f"Draining: {current_count} requests active after {elapsed}s")
 
-            time.sleep(0.1)  # Small sleep to avoid busy waiting
+            await asyncio.sleep(0.1)
 
         # Final status
-        final_count = self._get_active_requests()
+        final_count = await self._get_active_requests()
         if final_count > 0:
             logger.warning(f"Drain timeout after {timeout}s with {final_count} active requests")
 
-    def _get_active_requests(self) -> int:
+    async def _get_active_requests(self) -> int:
         """Get active request count safely."""
-        with self.server.requests_lock:
+        async with self.server.requests_lock:
             return self.server.active_requests
 
     def get_status(self) -> dict[str, Any]:
@@ -339,7 +401,7 @@ class ReloadManager:
                     if self._current_request
                     else None
                 ),
-                "queue_size": self._queue.qsize(),
+                "queue_size": self._queue.qsize() if self._queue else 0,
                 "shutdown": self._shutdown,
                 "draining": self.server.draining,
                 "active_requests": self._get_active_requests(),

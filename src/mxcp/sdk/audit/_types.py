@@ -197,7 +197,7 @@ class AuditBackend(Protocol):
         ...
 
     # Query methods
-    async def query_records(
+    def query_records(
         self,
         schema_name: str | None = None,
         start_time: datetime | None = None,
@@ -235,8 +235,4 @@ class AuditBackend(Protocol):
 
     async def close(self) -> None:
         """Close backend and release resources."""
-        ...
-
-    def shutdown(self) -> None:
-        """Synchronously shutdown the backend and flush any pending operations."""
         ...

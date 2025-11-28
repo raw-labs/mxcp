@@ -146,7 +146,7 @@ async def test_complete_audit_workflow():
 
         # Wait for async operations to complete and flush writes
         await asyncio.sleep(0.1)
-        logger.backend.shutdown()  # Ensure all records are flushed to disk
+        await logger.backend.close()  # Ensure all records are flushed to disk
 
         # Query and verify the logged events
 
@@ -203,9 +203,9 @@ async def test_complete_audit_workflow():
         assert auth_schema_retrieved.schema_name == "auth_operations"
         assert auth_schema_retrieved.evidence_level == EvidenceLevel.REGULATORY
 
-        # Cleanup - ensure background threads are fully stopped
-        logger.shutdown()
-        await asyncio.sleep(0.1)  # Give threads time to clean up
+        # Cleanup - ensure background tasks are fully stopped
+        await logger.close()
+        await asyncio.sleep(0.1)  # Give tasks time to clean up
 
 
 @pytest.mark.asyncio
@@ -285,8 +285,8 @@ async def test_schema_evolution():
             status="success",
         )
 
-        await asyncio.sleep(0.2)  # Give more time for background thread
-        logger.backend.shutdown()  # Ensure all records are flushed to disk
+        await asyncio.sleep(0.2)  # Give more time for background task
+        await logger.backend.close()  # Ensure all records are flushed to disk
 
         # Query all events
         all_events = [r async for r in logger.query_records(schema_name="evolving_schema")]
@@ -320,9 +320,9 @@ async def test_schema_evolution():
         assert len(retrieved_v2.fields) == 3
         assert len(retrieved_v2.field_redactions) == 1
 
-        # Cleanup - ensure background threads are fully stopped
-        logger.shutdown()
-        await asyncio.sleep(0.1)  # Give threads time to clean up
+        # Cleanup - ensure background tasks are fully stopped
+        await logger.close()
+        await asyncio.sleep(0.1)  # Give tasks time to clean up
 
 
 @pytest.mark.asyncio
@@ -366,7 +366,7 @@ async def test_high_volume_logging():
 
         # Give time for async writes to complete
         await asyncio.sleep(1.5)  # Even more time for high volume writes
-        logger.backend.shutdown()
+        await logger.backend.close()
 
         # Verify all events were logged
         all_events = [r async for r in logger.query_records(schema_name="volume_test")]
@@ -389,7 +389,7 @@ async def test_high_volume_logging():
         assert len(user_0_events) == 10  # user_0 appears every 10 events
 
         # Aggressive cleanup - high volume test needs extra cleanup time
-        logger.shutdown()
+        await logger.close()
         await asyncio.sleep(0.5)  # Give extra time for high-volume cleanup
 
         # Force cleanup of any remaining async tasks

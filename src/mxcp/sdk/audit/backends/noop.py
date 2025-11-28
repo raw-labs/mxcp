@@ -42,7 +42,7 @@ class NoOpAuditBackend:
         """No-op record writing."""
         return record.record_id
 
-    async def query_records(
+    def query_records(
         self,
         schema_name: str | None = None,
         start_time: datetime | None = None,
@@ -59,9 +59,13 @@ class NoOpAuditBackend:
         offset: int = 0,
     ) -> AsyncIterator[AuditRecord]:
         """No-op record querying - yields nothing."""
-        return
-        # This is a generator that yields nothing
-        yield
+
+        async def _empty() -> AsyncIterator[AuditRecord]:
+            if False:  # pragma: no cover - intentional no-op
+                yield AuditRecord(schema_name="noop")
+            return
+
+        return _empty()
 
     async def get_record(self, record_id: str) -> AuditRecord | None:
         """No-op record retrieval."""
@@ -73,8 +77,4 @@ class NoOpAuditBackend:
 
     async def close(self) -> None:
         """No-op close."""
-        pass
-
-    def shutdown(self) -> None:
-        """No-op shutdown."""
         pass

@@ -5,13 +5,14 @@ This module provides the shared DuckDB runtime that manages connection pooling
 and database lifecycle independently of executors.
 """
 
+import asyncio
 import logging
 import os
 import queue
 import threading
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from typing import Any
 
 from .plugin_loader import load_plugins
@@ -126,20 +127,39 @@ class DuckDBRuntime:
         if self._shutdown:
             raise RuntimeError("DuckDB runtime is shutting down")
 
-        # Get a connection from the pool (blocks if none available)
-        session = self._pool.get()
-
-        # Track active session
-        with self._lock:
-            self._active_sessions.add(session)
-
+        session = self._checkout_session()
         try:
             yield session
         finally:
-            # Return to pool and remove from active set
-            with self._lock:
-                self._active_sessions.discard(session)
-            self._pool.put(session)
+            self._release_session(session)
+
+    def _checkout_session(self) -> DuckDBSession:
+        """Checkout a session from the pool."""
+        if self._shutdown:
+            raise RuntimeError("DuckDB runtime is shutting down")
+
+        session = self._pool.get()
+        with self._lock:
+            self._active_sessions.add(session)
+        return session
+
+    def _release_session(self, session: DuckDBSession) -> None:
+        """Return a session to the pool."""
+        with self._lock:
+            self._active_sessions.discard(session)
+        self._pool.put(session)
+
+    @asynccontextmanager
+    async def acquire_connection(self) -> AsyncIterator[DuckDBSession]:
+        """Async context manager for acquiring a connection."""
+        if self._shutdown:
+            raise RuntimeError("DuckDB runtime is shutting down")
+
+        session = await asyncio.to_thread(self._checkout_session)
+        try:
+            yield session
+        finally:
+            await asyncio.to_thread(self._release_session, session)
 
     def shutdown(self) -> None:
         """Shutdown all connections in the runtime.

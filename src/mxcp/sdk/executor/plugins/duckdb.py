@@ -38,6 +38,7 @@ Example usage:
     ... )
 """
 
+import asyncio
 import hashlib
 import logging
 from typing import TYPE_CHECKING, Any
@@ -198,9 +199,9 @@ class DuckDBExecutor(ExecutorPlugin):
                     "db.readonly": self._runtime.database_config.readonly,
                 },
             ):
-                try:
-                    # Get a connection from the pool
-                    with self._runtime.get_connection() as session:
+                async with self._runtime.acquire_connection() as session:
+
+                    def _run_query() -> Any:
                         # Set execution context for this execution, which is used for dynamic UDFs
                         context_token = set_execution_context(context)
 
@@ -224,15 +225,18 @@ class DuckDBExecutor(ExecutorPlugin):
                             # Always reset the context when done
                             reset_execution_context(context_token)
 
-                except Exception as e:
-                    logger.error(f"SQL execution failed: {e}")
-                    # Record failure metrics
-                    record_counter(
-                        "mxcp.duckdb.queries_total",
-                        attributes={"operation": operation, "status": "error"},
-                        description="Total DuckDB queries executed",
-                    )
-                    raise RuntimeError(f"Failed to execute SQL: {e}") from e
+                    try:
+                        result = await asyncio.to_thread(_run_query)
+                        return result
+                    except Exception as e:
+                        logger.error(f"SQL execution failed: {e}")
+                        # Record failure metrics
+                        record_counter(
+                            "mxcp.duckdb.queries_total",
+                            attributes={"operation": operation, "status": "error"},
+                            description="Total DuckDB queries executed",
+                        )
+                        raise RuntimeError(f"Failed to execute SQL: {e}") from e
         finally:
             # Always decrement concurrent executions
             decrement_gauge(

@@ -44,7 +44,7 @@ async def test_exporters_with_jsonl_backend():
 
         # Flush writes
         await asyncio.sleep(0.1)
-        logger.backend.shutdown()
+        await logger.backend.close()
 
         # Test CSV export
         count = await export_to_csv(logger, csv_path)
@@ -83,7 +83,7 @@ async def test_exporters_with_jsonl_backend():
             assert len(data) == 5
             assert all("operation_name" in record for record in data)
 
-        logger.shutdown()
+        await logger.close()
 
 
 @pytest.mark.asyncio
@@ -132,7 +132,7 @@ async def test_exporters_with_noop_backend():
             data = json.load(f)
             assert data == []
 
-        logger.shutdown()
+        await logger.close()
 
 
 @pytest.mark.asyncio
@@ -169,7 +169,7 @@ async def test_exporters_with_filters():
 
         # Flush writes
         await asyncio.sleep(0.1)
-        logger.backend.shutdown()
+        await logger.backend.close()
 
         # Export only user_0 records
         filters = {"user_id": "user_0"}
@@ -194,7 +194,7 @@ async def test_exporters_with_filters():
         count = await export_to_csv(logger, csv_path3, filters=filters)
         assert count == 5  # Records 5-9
 
-        logger.shutdown()
+        await logger.close()
 
 
 @pytest.mark.asyncio
@@ -231,7 +231,7 @@ async def test_exporters_memory_efficiency():
 
         # Flush writes
         await asyncio.sleep(0.5)
-        logger.backend.shutdown()
+        await logger.backend.close()
 
         # Export to CSV - should handle streaming efficiently
         count = await export_to_csv(logger, csv_path)
@@ -246,4 +246,4 @@ async def test_exporters_memory_efficiency():
 
         assert line_count == num_events
 
-        logger.shutdown()
+        await logger.close()

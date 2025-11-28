@@ -3,7 +3,7 @@ import contextlib
 import json
 import os
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import aiohttp
 import pytest
@@ -52,6 +52,12 @@ def mcp_server(mcp_repo_path):
         )
         os.chdir(original_dir)
         yield server
+        with contextlib.suppress(Exception):
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(server.shutdown())
+            finally:
+                loop.close()
         # Clean up - close the DuckDB session
         if hasattr(server, "db_session") and server.db_session:
             server.db_session.close()
@@ -162,28 +168,35 @@ def test_register_prompt(mcp_server, mock_endpoint):
         mcp_server._register_prompt(prompt_model)
 
 
-def test_run_http(mcp_server):
+@pytest.mark.asyncio
+async def test_run_http(mcp_server):
     """Test running the server with HTTP transport."""
-    # Mock asyncio.run to prevent actually starting the server
-    with patch("asyncio.run") as mock_asyncio_run:
-        mcp_server.run(transport="streamable-http")
-        # Verify asyncio.run was called (which would run _run_with_admin_api)
-        mock_asyncio_run.assert_called_once()
+    with patch.object(
+        mcp_server,
+        "_run_admin_api_and_transport",
+        new_callable=AsyncMock,
+    ) as mock_run:
+        await mcp_server.run(transport="streamable-http")
+        mock_run.assert_awaited_once_with("streamable-http")
 
 
-def test_run_stdio(mcp_server):
+@pytest.mark.asyncio
+async def test_run_stdio(mcp_server):
     """Test running the server with stdio transport."""
-    # Mock asyncio.run to prevent actually starting the server
-    with patch("asyncio.run") as mock_asyncio_run:
-        mcp_server.run(transport="stdio")
-        # Verify asyncio.run was called (which would run _run_with_admin_api)
-        mock_asyncio_run.assert_called_once()
+    with patch.object(
+        mcp_server,
+        "_run_admin_api_and_transport",
+        new_callable=AsyncMock,
+    ) as mock_run:
+        await mcp_server.run(transport="stdio")
+        mock_run.assert_awaited_once_with("stdio")
 
 
-def test_invalid_transport(mcp_server):
+@pytest.mark.asyncio
+async def test_invalid_transport(mcp_server):
     """Test running with invalid transport."""
     with pytest.raises(ValueError, match="Unknown transport: invalid"):
-        mcp_server.run(transport="invalid")
+        await mcp_server.run(transport="invalid")
 
 
 def test_parameter_conversion(mcp_server):
@@ -221,16 +234,21 @@ def test_endpoint_registration(mcp_server):
     assert len(mcp_server.skipped_endpoints) == 0
 
 
-def test_server_transport(mcp_server):
+@pytest.mark.asyncio
+async def test_server_transport(mcp_server):
     """Test server transport options."""
     # Test invalid transport
     with pytest.raises(ValueError, match="Unknown transport: invalid"):
-        mcp_server.run(transport="invalid")
+        await mcp_server.run(transport="invalid")
 
     # Test HTTP transport
-    with patch("asyncio.run") as mock_asyncio_run:
-        mcp_server.run(transport="streamable-http")
-        mock_asyncio_run.assert_called_once()
+    with patch.object(
+        mcp_server,
+        "_run_admin_api_and_transport",
+        new_callable=AsyncMock,
+    ) as mock_run:
+        await mcp_server.run(transport="streamable-http")
+        mock_run.assert_awaited_once_with("streamable-http")
 
 
 @pytest.mark.skip(

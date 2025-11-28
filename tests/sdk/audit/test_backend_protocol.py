@@ -130,8 +130,7 @@ async def test_backend_record_querying(backend):
         record_ids.append(record_id)
 
     # Ensure writes are committed
-    if hasattr(backend, "shutdown"):
-        backend.shutdown()
+    await backend.close()
 
     # Query all records
     all_records = [r async for r in backend.query_records()]
@@ -192,8 +191,7 @@ async def test_backend_record_retrieval(backend):
     record_id = await backend.write_record(original_record)
 
     # Ensure write is committed
-    if hasattr(backend, "shutdown"):
-        backend.shutdown()
+    await backend.close()
 
     # Retrieve the record
     retrieved_record = await backend.get_record(record_id)
@@ -279,8 +277,7 @@ async def test_backend_time_filtering(backend):
         record_ids.append(record_id)
 
     # Ensure writes are committed
-    if hasattr(backend, "shutdown"):
-        backend.shutdown()
+    await backend.close()
 
     # Query with time filters
     start_time = base_time - timedelta(minutes=30)
@@ -324,8 +321,7 @@ async def test_backend_integrity_verification(backend):
         record_ids.append(record_id)
 
     # Ensure writes are committed
-    if hasattr(backend, "shutdown"):
-        backend.shutdown()
+    await backend.close()
 
     # Verify integrity between records
     integrity_result = await backend.verify_integrity(record_ids[0], record_ids[2])
@@ -383,8 +379,7 @@ async def test_backend_retention_policies(backend):
     await backend.write_record(new_record)
 
     # Ensure writes are committed
-    if hasattr(backend, "shutdown"):
-        backend.shutdown()
+    await backend.close()
 
     # Apply retention policies
     deleted_counts = await backend.apply_retention_policies()

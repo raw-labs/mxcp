@@ -53,11 +53,7 @@ def dbt_config(
         user_config = load_user_config(site_config, active_profile=active_profile)
 
         # Configure logging
-        configure_logging_from_config(
-            site_config=site_config,
-            user_config=user_config,
-            debug=debug,
-        )
+        configure_logging_from_config(user_config=user_config, debug=debug)
 
         click.echo(f"   • Project: {click.style(site_config.project, fg='yellow')}")
         click.echo(f"   • Profile: {click.style(active_profile, fg='yellow')}")
@@ -150,11 +146,7 @@ def dbt_wrapper(ctx: click.Context, profile: str | None, debug: bool) -> None:
         user_config = load_user_config(site_config, active_profile=active_profile)
 
         # Configure logging
-        configure_logging_from_config(
-            site_config=site_config,
-            user_config=user_config,
-            debug=debug,
-        )
+        configure_logging_from_config(user_config=user_config, debug=debug)
 
         # Check dbt is enabled
         dbt_config = site_config.dbt
