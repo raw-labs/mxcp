@@ -1,0 +1,19 @@
+mxcp: 1
+
+tool:
+  name: headers_sql
+  description: Returns request headers via DuckDB helper UDFs
+  parameters: []
+  return:
+    type: object
+    properties:
+      auth:
+        type: string
+      headers_json:
+        type: string
+  source:
+    code: |
+      SELECT 
+        get_request_header('Authorization') AS auth,
+        get_request_headers_json() AS headers_json
+

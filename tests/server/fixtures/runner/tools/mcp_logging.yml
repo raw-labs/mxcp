@@ -1,0 +1,18 @@
+mxcp: 1
+
+tool:
+  name: mcp_logging_demo
+  description: Demonstrates runtime MCP logging and progress APIs
+  parameters: []
+  return:
+    type: object
+    properties:
+      ok:
+        type: boolean
+  language: python
+  source:
+    file: ../python/context_tools.py
+  tests:
+    - name: log_and_progress
+      arguments: []
+

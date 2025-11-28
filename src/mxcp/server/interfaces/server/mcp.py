@@ -14,12 +14,13 @@ import traceback
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Any, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeVar, cast
 
 import uvicorn
 from makefun import create_function
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp import Context as FastMCPContextRuntime
+from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, Field, create_model
 from starlette.responses import JSONResponse
@@ -29,7 +30,7 @@ from mxcp.sdk.auth import GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth.context import get_user_context
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.core import PACKAGE_VERSION
-from mxcp.sdk.executor import ExecutionContext
+from mxcp.sdk.mcp import FastMCPLogProxy
 from mxcp.sdk.telemetry import (
     decrement_gauge,
     get_current_trace_id,
@@ -58,6 +59,7 @@ from mxcp.server.definitions.endpoints.models import (
     TypeDefinitionModel,
 )
 from mxcp.server.definitions.endpoints.utils import EndpointType
+from mxcp.server.executor.context_utils import build_execution_context
 from mxcp.server.executor.engine import RuntimeEnvironment, create_runtime_environment
 from mxcp.server.interfaces.cli.utils import (
     get_env_admin_socket_enabled,
@@ -69,6 +71,14 @@ from mxcp.server.services.endpoints import (
     execute_endpoint_with_engine_and_policy,
 )
 from mxcp.server.services.endpoints.validator import validate_endpoint
+
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import Context as FastMCPContextGeneric
+
+    FastMCPContext = FastMCPContextGeneric[Any, Any, Any]
+else:  # pragma: no cover
+    FastMCPContext = FastMCPContextRuntime
+
 
 logger = logging.getLogger(__name__)
 
@@ -1183,7 +1193,7 @@ class RAWMCP:
 
         # Create function signature with proper Pydantic type annotations
         # Include Context as the first parameter for accessing session_id
-        param_annotations = {"ctx": Context}
+        param_annotations = {"ctx": FastMCPContext}
         param_signatures = ["ctx"]
 
         # Sort parameters so required (no default) come before optional (with default)
@@ -1300,6 +1310,7 @@ class RAWMCP:
                         user_context=user_context,
                         with_policy_info=True,
                         request_headers=request_headers,  # Pass the FastMCP request headers
+                        mcp_ctx=ctx,
                     )
 
                     # Add policy decision to span after execution
@@ -1715,6 +1726,7 @@ class RAWMCP:
         user_context: Any = None,
         with_policy_info: bool = False,
         request_headers: dict[str, str] | None = None,
+        mcp_ctx: FastMCPContext | None = None,
     ) -> Any:
         """Execute endpoint with execution lock.
 
@@ -1735,6 +1747,18 @@ class RAWMCP:
         if self.runtime_environment is None:
             raise RuntimeError("Execution engine not initialized")
 
+        transport = self.transport_mode or "server"
+        mcp_interface = FastMCPLogProxy(mcp_ctx) if mcp_ctx else None
+        execution_context = build_execution_context(
+            user_context=user_context,
+            user_config=self.user_config,
+            site_config=self.site_config,
+            server_ref=self,
+            request_headers=request_headers,
+            transport=transport,
+            mcp_interface=mcp_interface,
+        )
+
         if with_policy_info:
             return await execute_endpoint_with_engine_and_policy(
                 endpoint_type=endpoint_type,
@@ -1743,20 +1767,22 @@ class RAWMCP:
                 user_config=self.user_config,
                 site_config=self.site_config,
                 execution_engine=self.runtime_environment.execution_engine,
+                execution_context=execution_context,
+                skip_output_validation=False,
                 user_context=user_context,
-                request_headers=request_headers,
                 server_ref=self,
             )
         else:
             return await execute_endpoint_with_engine(
-                endpoint_type=endpoint_type,
-                name=name,
-                params=params,
-                user_config=self.user_config,
-                site_config=self.site_config,
-                execution_engine=self.runtime_environment.execution_engine,
+                endpoint_type,
+                name,
+                params,
+                self.user_config,
+                self.site_config,
+                self.runtime_environment.execution_engine,
+                execution_context=execution_context,
+                skip_output_validation=False,
                 user_context=user_context,
-                request_headers=request_headers,
                 server_ref=self,
             )
 
@@ -1783,12 +1809,12 @@ class RAWMCP:
         if self.runtime_environment is None:
             raise RuntimeError("Execution engine not initialized")
 
-        execution_context = ExecutionContext(user_context=user_context)
-        execution_context.set(
-            "user_config", self.user_config.model_dump(mode="python", exclude_unset=True)
-        )
-        execution_context.set(
-            "site_config", self.site_config.model_dump(mode="python", exclude_unset=True)
+        execution_context = build_execution_context(
+            user_context=user_context,
+            user_config=self.user_config,
+            site_config=self.site_config,
+            server_ref=self,
+            transport=self.transport_mode or "server",
         )
 
         return await self.runtime_environment.execution_engine.execute(
