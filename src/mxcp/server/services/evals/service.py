@@ -280,7 +280,7 @@ async def run_eval_suite(
                 tool_calls = agent_result.tool_calls
 
                 # Evaluate assertions
-                failures = []
+                failures: list[str] = []
                 assertions = test.assertions
                 evaluation: dict[str, Any] | None = None
 

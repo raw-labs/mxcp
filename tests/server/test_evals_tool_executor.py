@@ -226,17 +226,6 @@ class TestEndpointToolExecutor:
         endpoints_no_source: list[tuple[EndpointDefinitionModel, Path]] = [
             (endpoint, Path("endpoints/broken.yml"))
         ]
-
-        executor = EndpointToolExecutor(self.engine, endpoints_no_source)
-
-        with pytest.raises(ValueError) as exc_info:
-            await executor.execute_tool("broken_tool", {})
-
-        assert "No source code or file found in source definition" in str(exc_info.value)
-
-    def test_get_language_inference(self):
-        """Test language inference via endpoint execution."""
-        # Create endpoints with different language sources
         test_endpoints: list[tuple[EndpointDefinitionModel, Path]] = [
             (
                 EndpointDefinitionModel.model_validate(

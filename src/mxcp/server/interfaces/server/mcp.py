@@ -976,7 +976,8 @@ class RAWMCP:
                 else:
                     # Optional field
                     if field_kwargs:
-                        model_fields[prop_name] = (prop_type | None, Field(None, **field_kwargs))
+                        default = field_kwargs.pop("default", None)
+                        model_fields[prop_name] = (prop_type | None, Field(default, **field_kwargs))
                     else:
                         model_fields[prop_name] = (prop_type | None, None)
 
@@ -1840,7 +1841,7 @@ class RAWMCP:
                 else:
                     logger.warning(f"Unknown endpoint type in {path}: {endpoint_def}")
             except Exception as e:
-                logger.error(f"Error registering endpoint {path}: {e}")
+                logger.error(f"Error registering endpoint {path}: {e}", exc_info=True)
                 self.skipped_endpoints.append({"path": str(path), "error": str(e)})
                 continue
 
