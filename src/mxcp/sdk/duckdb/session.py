@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import duckdb
+from duckdb import func
 from pandas import NaT
 
 from .extension_loader import load_extensions
@@ -112,7 +113,7 @@ class DuckDBSession:
         """Create UDFs for accessing user tokens that dynamically read from context."""
         logger.info("Creating user token UDFs")
 
-        def get_user_external_token() -> str:
+        def get_user_external_token() -> str | None:
             """Return the current user's OAuth provider token (e.g., GitHub token)."""
             # Get the execution context dynamically when the function is called
             from mxcp.sdk.executor.context import get_execution_context
@@ -120,9 +121,9 @@ class DuckDBSession:
             context = get_execution_context()
             if context and context.external_token:
                 return context.external_token
-            return ""
+            return None
 
-        def get_username() -> str:
+        def get_username() -> str | None:
             """Return the current user's username."""
             # Get the execution context dynamically when the function is called
             from mxcp.sdk.executor.context import get_execution_context
@@ -130,9 +131,9 @@ class DuckDBSession:
             context = get_execution_context()
             if context and context.username:
                 return context.username
-            return ""
+            return None
 
-        def get_user_provider() -> str:
+        def get_user_provider() -> str | None:
             """Return the current user's OAuth provider (e.g., 'github', 'atlassian')."""
             # Get the execution context dynamically when the function is called
             from mxcp.sdk.executor.context import get_execution_context
@@ -140,9 +141,9 @@ class DuckDBSession:
             context = get_execution_context()
             if context and context.provider:
                 return context.provider
-            return ""
+            return None
 
-        def get_user_email() -> str:
+        def get_user_email() -> str | None:
             """Return the current user's email address."""
             # Get the execution context dynamically when the function is called
             from mxcp.sdk.executor.context import get_execution_context
@@ -150,20 +151,23 @@ class DuckDBSession:
             context = get_execution_context()
             if context and context.email:
                 return context.email
-            return ""
+            return None
 
-        def get_request_header(header_name: str) -> str:
+        def get_request_header(header_name: str | None) -> str | None:
             """Return a specific HTTP request header value."""
             from mxcp.sdk.executor.context import get_execution_context
+
+            if header_name is None:
+                return None
 
             context = get_execution_context()
             headers = context.get("request_headers") if context else None
             if isinstance(headers, dict):
                 value = headers.get(header_name)
-                return "" if value is None else str(value)
-            return ""
+                return None if value is None else str(value)
+            return None
 
-        def get_request_headers_json() -> str:
+        def get_request_headers_json() -> str | None:
             """Return all request headers as a JSON object."""
             from mxcp.sdk.executor.context import get_execution_context
 
@@ -171,7 +175,7 @@ class DuckDBSession:
             headers = context.get("request_headers") if context else None
             if isinstance(headers, dict):
                 return json.dumps(headers)
-            return "{}"
+            return None
 
         # Register the UDFs with DuckDB
         if self.conn:
@@ -187,9 +191,9 @@ class DuckDBSession:
             ]
 
             created_udfs = []
-            for name, func in udfs:
+            for name, udf_func in udfs:
                 try:
-                    self.conn.create_function(name, func)
+                    self.conn.create_function(name, udf_func, null_handling=func.SPECIAL)
                     created_udfs.append(name)
                 except duckdb.CatalogException as e:
                     if "already exists" in str(e):
