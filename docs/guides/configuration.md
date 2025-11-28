@@ -609,18 +609,13 @@ Add model configuration to your user config file (`~/.mxcp/config.yml`):
 
 ```yaml
 models:
-  default: "claude-4-sonnet"  # Default model to use for evals
+  default: "claude-3-5-sonnet-20240620"  # Default model to use for evals (update to a valid ID)
   models:
-    claude-4-opus:
-      type: "claude"
+    claude-3-5-sonnet-20240620:
+      type: "anthropic"
       api_key: "${ANTHROPIC_API_KEY}"  # Environment variable containing API key
-      timeout: 60  # Request timeout in seconds
+      timeout: 30  # Anthropic Messages model ID; ensure your account has access
       max_retries: 3  # Number of retries on failure
-    
-    claude-4-sonnet:
-      type: "claude"
-      api_key: "${ANTHROPIC_API_KEY}"
-      timeout: 30
     
     gpt-4o:
       type: "openai"
@@ -638,7 +633,7 @@ models:
 
 - **default**: The model to use when not specified in eval suite or CLI
 - **models**: Dictionary of model configurations
-  - **type**: Either "claude" or "openai"
+- **type**: Either "anthropic" or "openai"
   - **api_key**: API key (you can use environment variables references)
 - **base_url**: Custom API endpoint (optional, for OpenAI-compatible services)
 - **timeout**: Request timeout in seconds
@@ -657,8 +652,8 @@ models:
       timeout: 45
       options:
         reasoning: "fast"
-    claude-4-sonnet:
-      type: "claude"
+    claude-3-5-sonnet-20240620:
+      type: "anthropic"
       api_key: "${ANTHROPIC_API_KEY}"
       timeout: 30
       options:

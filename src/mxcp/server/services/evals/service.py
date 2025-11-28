@@ -3,15 +3,10 @@ import time
 from pathlib import Path
 from typing import Any
 
+from pydantic_ai import ModelSettings
+
 from mxcp.sdk.auth import UserContext
-from mxcp.sdk.evals import (
-    ClaudeConfig,
-    LLMExecutor,
-    ModelConfigType,
-    OpenAIConfig,
-    ParameterDefinition,
-    ToolDefinition,
-)
+from mxcp.sdk.evals import LLMExecutor, ParameterDefinition, ProviderConfig, ToolDefinition
 from mxcp.sdk.validator import TypeSchema
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
@@ -24,15 +19,17 @@ from mxcp.server.executor.runners.tool import EndpointToolExecutor
 logger = logging.getLogger(__name__)
 
 
-def _create_model_config(model: str, user_config: UserConfigModel) -> ModelConfigType:
-    """Create a model configuration from user config.
+def _create_model_config(
+    model: str, user_config: UserConfigModel
+) -> tuple[str, str, dict[str, Any], ProviderConfig]:
+    """Create a model configuration tuple from user config.
 
     Args:
         model: Model name to use
         user_config: User configuration containing model settings
 
     Returns:
-        Configured model object
+        Tuple of (model_name, model_type, options, api_key, base_url, timeout)
 
     Raises:
         ValueError: If model is not configured or has invalid type
@@ -47,25 +44,24 @@ def _create_model_config(model: str, user_config: UserConfigModel) -> ModelConfi
 
     model_type = model_config.type
     api_key = model_config.api_key
-    options = model_config.options or {}
+    options = dict(model_config.options or {})
 
     if not api_key:
         raise ValueError(f"No API key configured for model '{model}'")
 
-    if model_type == "claude":
-        base_url = model_config.base_url or "https://api.anthropic.com"
-        timeout = model_config.timeout or 30
-        return ClaudeConfig(
-            name=model, api_key=api_key, base_url=base_url, timeout=timeout, options=options
-        )
-    elif model_type == "openai":
-        base_url = model_config.base_url or "https://api.openai.com/v1"
-        timeout = model_config.timeout or 30
-        return OpenAIConfig(
-            name=model, api_key=api_key, base_url=base_url, timeout=timeout, options=options
-        )
-    else:
+    if model_type not in {"anthropic", "openai"}:
         raise ValueError(f"Unknown model type: {model_type}")
+
+    base_url = model_config.base_url
+    timeout = model_config.timeout
+
+    # Ensure timeout also flows through options if present
+    if timeout and "timeout" not in options:
+        options["timeout"] = timeout
+
+    provider_config = ProviderConfig(api_key=api_key, base_url=base_url, timeout=timeout)
+
+    return model, model_type, options, provider_config
 
 
 def _load_endpoints(site_config: SiteConfigModel) -> list[tuple[EndpointDefinitionModel, Path]]:
@@ -227,7 +223,16 @@ async def run_eval_suite(
         }
 
     # Create model configuration
-    model_config = _create_model_config(model, user_config)
+    model_name, model_type, model_options, provider_config = _create_model_config(
+        model, user_config
+    )
+    allowed_keys = set(ModelSettings.__annotations__.keys())
+    unknown_keys = set(model_options.keys()) - allowed_keys
+    if unknown_keys:
+        raise ValueError(
+            f"Invalid model options keys: {sorted(unknown_keys)}. Allowed: {sorted(allowed_keys)}"
+        )
+    model_settings = ModelSettings(**model_options)  # type: ignore[typeddict-item]
 
     # Load endpoints
     endpoints = _load_endpoints(site_config)
@@ -249,7 +254,14 @@ async def run_eval_suite(
 
     try:
         # Create LLM executor with model config, tool definitions, and tool executor
-        executor = LLMExecutor(model_config, tool_definitions, tool_executor)
+        executor = LLMExecutor(
+            model_name,
+            model_type,
+            model_settings,
+            tool_definitions,
+            tool_executor,
+            provider_config=provider_config,
+        )
 
         # Run each test
         tests = []

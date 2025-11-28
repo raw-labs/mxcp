@@ -340,7 +340,7 @@ The evals command executes evaluation tests that verify LLM behavior. Unlike reg
 
 1. Send prompts to an LLM
 2. Verify the LLM calls appropriate tools
-3. Check that responses contain expected information (including `expected_answer` grading)
+3. Check that responses contain expected information
 4. Ensure safety by verifying destructive operations aren't called inappropriately
 
 Eval files should have the suffix `-evals.yml` or `.evals.yml` and are automatically discovered in your repository.

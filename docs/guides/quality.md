@@ -805,7 +805,7 @@ Create eval files with the suffix `-evals.yml` or `.evals.yml`:
 mxcp: 1
 suite: customer_analysis
 description: "Test LLM's ability to analyze customer data"
-model: claude-3-opus  # Optional: specify model for this suite
+model: claude-3-5-sonnet-20240620  # Optional: specify model for this suite (ensure valid ID)
 
 tests:
   - name: churn_risk_assessment
@@ -924,10 +924,10 @@ Add models to your user config (`~/.mxcp/config.yml`) so evals know which provid
 
 ```yaml
 models:
-  default: "claude-4-sonnet"
+  default: "claude-3-5-sonnet-20240620"
   models:
-    claude-4-sonnet:
-      type: "claude"
+    claude-3-5-sonnet-20240620:
+      type: "anthropic"
       api_key: "${ANTHROPIC_API_KEY}"
       timeout: 30
     gpt-4o:
@@ -969,7 +969,7 @@ models:
   default: claude-3-opus
   models:
     claude-3-opus:
-      type: claude
+      type: anthropic
       api_key: ${ANTHROPIC_API_KEY}
       timeout: 60
       max_retries: 3

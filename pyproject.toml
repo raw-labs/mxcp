@@ -41,6 +41,7 @@ dependencies = [
     "fastapi>=0.110.0",  # FastAPI for admin API
     "uvicorn[standard]>=0.27.0",  # ASGI server for admin API
     "psutil>=5.9.0",  # System metrics for admin API
+    "pydantic-ai-slim[anthropic,openai]>=1.25.0",
 ]
 
 [project.scripts]

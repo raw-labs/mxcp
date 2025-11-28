@@ -392,7 +392,7 @@ class UserAuthConfigModel(BaseModel):
 class UserModelConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    type: Literal["claude", "openai"]
+    type: Literal["anthropic", "openai"]
     api_key: str | None = None
     base_url: str | None = None
     timeout: int | None = None
