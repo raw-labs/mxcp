@@ -559,31 +559,28 @@ class RAWMCP:
             logger.info("Registered SIGHUP handler for system reload.")
 
     def _handle_reload_signal(self, signum: int, frame: Any) -> None:
-        """Handle SIGHUP signal to reload the configuration."""
+        """Handle SIGHUP signal to reload the configuration.
+
+        Signal handlers run in the main thread but outside the event loop context.
+        We use call_soon_threadsafe to schedule the async reload task on the loop.
+        """
         logger.info("Received SIGHUP signal, scheduling configuration reload...")
 
         loop = self._signal_loop
-        if isinstance(loop, asyncio.AbstractEventLoop) and loop.is_running():
-            loop.call_soon_threadsafe(
-                lambda: asyncio.create_task(self._handle_reload_signal_async())
-            )
-        else:
-            logger.warning("Event loop not ready for async reload; running blocking reload handler")
-            RAWMCP._handle_reload_signal_blocking(self)
+        if loop is None:
+            logger.error("SIGHUP received but event loop not initialized - ignoring")
+            return
 
-    def _handle_reload_signal_blocking(self) -> None:
-        """Fallback blocking handler used when no event loop is available."""
-        request = self.reload_configuration()
-        completed = request.wait_for_completion(timeout=60.0)
-
-        if completed:
-            logger.info("SIGHUP reload completed successfully (blocking handler)")
-        else:
-            logger.error("SIGHUP reload timed out after 60 seconds (blocking handler)")
+        loop.call_soon_threadsafe(lambda: asyncio.create_task(self._handle_reload_signal_async()))
 
     async def _handle_reload_signal_async(self) -> None:
         """Async handler that waits for reload completion without blocking the loop."""
-        request = self.reload_configuration()
+        try:
+            request = self.reload_configuration()
+        except RuntimeError as exc:
+            # This can happen if reload manager isn't fully started yet
+            logger.error(f"SIGHUP reload request failed: {exc}")
+            return
 
         try:
             completed = await asyncio.to_thread(request.wait_for_completion, 60.0)
@@ -1892,9 +1889,12 @@ class RAWMCP:
                     raise RuntimeError(f"OAuth server initialization failed: {exc}") from exc
 
             loop = asyncio.get_running_loop()
-            self._signal_loop = loop
+            # Start reload manager BEFORE setting _signal_loop to avoid race condition.
+            # Signal handlers check _signal_loop first, so we ensure the reload manager
+            # is fully initialized before signals can trigger reload requests.
             self.reload_manager.start()
             reload_started = True
+            self._signal_loop = loop
             await self._initialize_audit_logger()
 
             # Start server

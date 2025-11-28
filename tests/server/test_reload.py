@@ -5,6 +5,7 @@ These tests focus on the public API and observable behavior,
 not internal implementation details.
 """
 
+import asyncio
 import signal
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -51,9 +52,16 @@ class TestReloadFunctionality:
         # Mock the reload manager
         server.reload_manager = MagicMock(spec=ReloadManager)
 
+        # Set up the event loop for signal handling
+        loop = asyncio.new_event_loop()
+        server._signal_loop = loop
+
         # Set up the methods we need
         server.reload_configuration = RAWMCP.reload_configuration.__get__(server, RAWMCP)
         server._handle_reload_signal = RAWMCP._handle_reload_signal.__get__(server, RAWMCP)
+        server._handle_reload_signal_async = RAWMCP._handle_reload_signal_async.__get__(
+            server, RAWMCP
+        )
 
         # Mock load_site_config and load_user_config
         with patch(
@@ -64,11 +72,17 @@ class TestReloadFunctionality:
                 "mxcp.server.interfaces.server.mcp.load_user_config",
                 return_value=UserConfigModel.model_validate({}),
             ):
-                # Simulate SIGHUP
-                server._handle_reload_signal(signal.SIGHUP, None)
+                try:
+                    # Simulate SIGHUP - this schedules the async handler
+                    server._handle_reload_signal(signal.SIGHUP, None)
 
-                # Verify reload_manager.request_reload was called
-                server.reload_manager.request_reload.assert_called_once()
+                    # Run the loop briefly to execute the scheduled task
+                    loop.run_until_complete(asyncio.sleep(0.1))
+
+                    # Verify reload_manager.request_reload was called
+                    server.reload_manager.request_reload.assert_called_once()
+                finally:
+                    loop.close()
 
     def test_reload_with_payload_function(self):
         """Test that reload with a payload function works correctly."""
