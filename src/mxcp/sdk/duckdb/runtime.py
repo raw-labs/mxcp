@@ -5,14 +5,13 @@ This module provides the shared DuckDB runtime that manages connection pooling
 and database lifecycle independently of executors.
 """
 
-import asyncio
 import logging
 import os
 import queue
 import threading
 import time
-from collections.abc import AsyncIterator, Iterator
-from contextlib import asynccontextmanager, contextmanager
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from .plugin_loader import load_plugins
@@ -148,18 +147,6 @@ class DuckDBRuntime:
         with self._lock:
             self._active_sessions.discard(session)
         self._pool.put(session)
-
-    @asynccontextmanager
-    async def acquire_connection(self) -> AsyncIterator[DuckDBSession]:
-        """Async context manager for acquiring a connection."""
-        if self._shutdown:
-            raise RuntimeError("DuckDB runtime is shutting down")
-
-        session = await asyncio.to_thread(self._checkout_session)
-        try:
-            yield session
-        finally:
-            await asyncio.to_thread(self._release_session, session)
 
     def shutdown(self) -> None:
         """Shutdown all connections in the runtime.

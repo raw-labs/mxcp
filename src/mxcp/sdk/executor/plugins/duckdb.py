@@ -199,12 +199,13 @@ class DuckDBExecutor(ExecutorPlugin):
                     "db.readonly": self._runtime.database_config.readonly,
                 },
             ):
-                async with self._runtime.acquire_connection() as session:
 
-                    def _run_query() -> Any:
-                        # Set execution context for this execution, which is used for dynamic UDFs
+                def _run_query_with_connection() -> Any:
+                    """Run query in a single thread with connection checkout/release."""
+                    # Use sync context manager - entire lifecycle in one thread
+                    with self._runtime.get_connection() as session:
+                        # Set execution context for dynamic UDFs
                         context_token = set_execution_context(context)
-
                         try:
                             result = session.execute_query_to_dict(source_code, params)
 
@@ -222,21 +223,20 @@ class DuckDBExecutor(ExecutorPlugin):
 
                             return result
                         finally:
-                            # Always reset the context when done
                             reset_execution_context(context_token)
 
-                    try:
-                        result = await asyncio.to_thread(_run_query)
-                        return result
-                    except Exception as e:
-                        logger.error(f"SQL execution failed: {e}")
-                        # Record failure metrics
-                        record_counter(
-                            "mxcp.duckdb.queries_total",
-                            attributes={"operation": operation, "status": "error"},
-                            description="Total DuckDB queries executed",
-                        )
-                        raise RuntimeError(f"Failed to execute SQL: {e}") from e
+                try:
+                    result = await asyncio.to_thread(_run_query_with_connection)
+                    return result
+                except Exception as e:
+                    logger.error(f"SQL execution failed: {e}")
+                    # Record failure metrics
+                    record_counter(
+                        "mxcp.duckdb.queries_total",
+                        attributes={"operation": operation, "status": "error"},
+                        description="Total DuckDB queries executed",
+                    )
+                    raise RuntimeError(f"Failed to execute SQL: {e}") from e
         finally:
             # Always decrement concurrent executions
             decrement_gauge(

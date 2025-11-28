@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
@@ -14,7 +15,7 @@ from mxcp.sdk.duckdb import DatabaseConfig, PluginConfig, DuckDBRuntime
 
 
 @pytest.fixture
-def duckdb_executor(tmp_path: Path) -> DuckDBExecutor:
+def duckdb_executor(tmp_path: Path) -> Iterator[DuckDBExecutor]:
     """Create a DuckDB executor with test database."""
     db_path = tmp_path / "test.db"
 
@@ -36,15 +37,19 @@ def duckdb_executor(tmp_path: Path) -> DuckDBExecutor:
         secrets=[],
     )
 
-    return DuckDBExecutor(runtime)
+    executor = DuckDBExecutor(runtime)
+    yield executor
+    # Clean up the runtime to release connections
+    runtime.shutdown()
 
 
 @pytest.fixture
-def execution_engine(duckdb_executor: DuckDBExecutor) -> ExecutionEngine:
+def execution_engine(duckdb_executor: DuckDBExecutor) -> Iterator[ExecutionEngine]:
     """Create an execution engine with DuckDB executor."""
     engine = ExecutionEngine()
     engine.register_executor(duckdb_executor)
-    return engine
+    yield engine
+    engine.shutdown()
 
 
 async def execute_query(engine: ExecutionEngine, query_id: int, value: int) -> tuple[int, float]:
