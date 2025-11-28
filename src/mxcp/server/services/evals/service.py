@@ -1,5 +1,6 @@
 import logging
 import time
+from pathlib import Path
 from typing import Any
 
 from mxcp.sdk.auth import UserContext
@@ -46,6 +47,7 @@ def _create_model_config(model: str, user_config: UserConfigModel) -> ModelConfi
 
     model_type = model_config.type
     api_key = model_config.api_key
+    options = model_config.options or {}
 
     if not api_key:
         raise ValueError(f"No API key configured for model '{model}'")
@@ -53,38 +55,42 @@ def _create_model_config(model: str, user_config: UserConfigModel) -> ModelConfi
     if model_type == "claude":
         base_url = model_config.base_url or "https://api.anthropic.com"
         timeout = model_config.timeout or 30
-        return ClaudeConfig(name=model, api_key=api_key, base_url=base_url, timeout=timeout)
+        return ClaudeConfig(
+            name=model, api_key=api_key, base_url=base_url, timeout=timeout, options=options
+        )
     elif model_type == "openai":
         base_url = model_config.base_url or "https://api.openai.com/v1"
         timeout = model_config.timeout or 30
-        return OpenAIConfig(name=model, api_key=api_key, base_url=base_url, timeout=timeout)
+        return OpenAIConfig(
+            name=model, api_key=api_key, base_url=base_url, timeout=timeout, options=options
+        )
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
 
-def _load_endpoints(site_config: SiteConfigModel) -> list[EndpointDefinitionModel]:
+def _load_endpoints(site_config: SiteConfigModel) -> list[tuple[EndpointDefinitionModel, Path]]:
     """Load all available endpoints.
 
     Args:
         site_config: Site configuration for endpoint discovery
 
     Returns:
-        List of endpoint definitions
+        List of (endpoint definition, file path)
     """
     loader = EndpointLoader(site_config)
-    endpoints: list[EndpointDefinitionModel] = []
+    endpoints: list[tuple[EndpointDefinitionModel, Path]] = []
     discovered = loader.discover_endpoints()
 
-    for _path, endpoint_def, error in discovered:
+    for path, endpoint_def, error in discovered:
         if error is None and endpoint_def and (endpoint_def.tool or endpoint_def.resource):
             # Only include endpoints that have a tool or resource definition
-            endpoints.append(endpoint_def)
+            endpoints.append((endpoint_def, path))
 
     return endpoints
 
 
 def _convert_endpoints_to_tool_definitions(
-    endpoints: list[EndpointDefinitionModel],
+    endpoints: list[tuple[EndpointDefinitionModel, Path]],
 ) -> list[ToolDefinition]:
     """Convert endpoint definitions to ToolDefinition objects for the LLM.
 
@@ -96,7 +102,7 @@ def _convert_endpoints_to_tool_definitions(
     """
     tool_definitions = []
 
-    for endpoint_def in endpoints:
+    for endpoint_def, _endpoint_path in endpoints:
         if endpoint_def.tool:
             tool = endpoint_def.tool
 
@@ -169,6 +175,15 @@ def _convert_endpoints_to_tool_definitions(
             )
 
     return tool_definitions
+
+
+def _compact_text(*parts: str, max_length: int | None = 240) -> str:
+    """Join parts, collapse whitespace, and optionally truncate for display."""
+    text = " ".join(p.strip() for p in parts if p).strip()
+    text = " ".join(text.split())
+    if max_length and len(text) > max_length:
+        return text[: max_length - 3] + "..."
+    return text
 
 
 async def run_eval_suite(
@@ -257,13 +272,26 @@ async def run_eval_suite(
 
             try:
                 # Execute the prompt
-                response, tool_calls = await executor.execute_prompt(
+                agent_result = await executor.execute_prompt(
                     test.prompt, user_context=test_user_context
                 )
+
+                response = agent_result.answer
+                tool_calls = agent_result.tool_calls
 
                 # Evaluate assertions
                 failures = []
                 assertions = test.assertions
+                evaluation: dict[str, Any] | None = None
+
+                # Surface tool execution errors directly
+                for call in tool_calls:
+                    if call.error:
+                        failures.append(
+                            _compact_text(
+                                f"Tool '{call.tool}' failed: {call.error}", max_length=None
+                            )
+                        )
 
                 # Check must_call assertions
                 if assertions.must_call:
@@ -273,8 +301,8 @@ async def run_eval_suite(
 
                         found = False
                         for call in tool_calls:
-                            if call["tool"] == expected_tool:
-                                actual_args = call.get("arguments", {})
+                            if call.tool == expected_tool:
+                                actual_args = call.arguments or {}
                                 if all(actual_args.get(k) == v for k, v in expected_args.items()):
                                     found = True
                                     break
@@ -287,7 +315,7 @@ async def run_eval_suite(
                 # Check must_not_call assertions
                 if assertions.must_not_call:
                     for forbidden_tool in assertions.must_not_call:
-                        if any(call["tool"] == forbidden_tool for call in tool_calls):
+                        if any(call.tool == forbidden_tool for call in tool_calls):
                             failures.append(
                                 f"Tool '{forbidden_tool}' was called but should not have been"
                             )
@@ -306,6 +334,24 @@ async def run_eval_suite(
                         if forbidden_text.lower() in response.lower():
                             failures.append(f"Forbidden text '{forbidden_text}' found in response")
 
+                if assertions.expected_answer:
+                    evaluation = await executor.evaluate_expected_answer(
+                        response, assertions.expected_answer
+                    )
+                    grade = (evaluation.get("result") or "").lower()
+                    comment = evaluation.get("comment") or "Model answer did not match expected"
+                    reasoning = evaluation.get("reasoning") or ""
+                    detail = _compact_text(
+                        f"LLM answer: {response}",
+                        f"Expected: {assertions.expected_answer}",
+                        f"Grade: {grade or 'unknown'}",
+                        f"Comment: {comment}",
+                        f"Reasoning: {reasoning or 'n/a'}",
+                        max_length=None,  # show the full detail in output
+                    )
+                    if grade != "correct":
+                        failures.append(detail)
+
                 test_time = time.time() - test_start
 
                 tests.append(
@@ -315,7 +361,21 @@ async def run_eval_suite(
                         "passed": len(failures) == 0,
                         "failures": failures,
                         "time": test_time,
-                        "details": {"response": response, "tool_calls": tool_calls},
+                        "details": {
+                            "response": response,
+                            "tool_calls": [
+                                {
+                                    "id": call.id,
+                                    "tool": call.tool,
+                                    "arguments": call.arguments,
+                                    "result": call.result,
+                                    "error": call.error,
+                                }
+                                for call in tool_calls
+                            ],
+                            "expected_answer": assertions.expected_answer,
+                            "expected_answer_evaluation": evaluation,
+                        },
                     }
                 )
 
@@ -399,8 +459,10 @@ async def run_all_evals(
             except Exception:
                 relative_path = str(file_path)
 
-            # Map new result structure to old structure for backward compatibility
-            all_passed = result.get("summary", {}).get("failed", 1) == 0 if result else False
+            # Determine pass/fail
+            all_passed = bool(result.get("all_passed"))
+            if not all_passed and result.get("summary"):
+                all_passed = result["summary"].get("failed", 1) == 0
 
             suites.append(
                 {

@@ -18,6 +18,7 @@ class ModelConfig(ABC):
 
     name: str
     api_key: str
+    options: dict[str, Any] = field(default_factory=dict)
 
     @abstractmethod
     def get_type(self) -> str:

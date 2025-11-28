@@ -22,6 +22,7 @@ class EvalAssertionsModel(EvalBaseModel):
     must_not_call: list[str] | None = None
     answer_contains: list[str] | None = None
     answer_not_contains: list[str] | None = None
+    expected_answer: str | None = None
 
 
 class EvalTestModel(EvalBaseModel):

@@ -640,9 +640,30 @@ models:
 - **models**: Dictionary of model configurations
   - **type**: Either "claude" or "openai"
   - **api_key**: API key (you can use environment variables references)
-  - **base_url**: Custom API endpoint (optional, for OpenAI-compatible services)
-  - **timeout**: Request timeout in seconds
-  - **max_retries**: Number of retries on failure
+- **base_url**: Custom API endpoint (optional, for OpenAI-compatible services)
+- **timeout**: Request timeout in seconds
+- **max_retries**: Number of retries on failure
+- **options**: Extra provider-specific options forwarded to the model (e.g. `thinking: false`)
+
+Example with mixed providers and options:
+
+```yaml
+models:
+  default: "gpt-4o"
+  models:
+    gpt-4o:
+      type: "openai"
+      api_key: "${OPENAI_API_KEY}"
+      timeout: 45
+      options:
+        reasoning: "fast"
+    claude-4-sonnet:
+      type: "claude"
+      api_key: "${ANTHROPIC_API_KEY}"
+      timeout: 30
+      options:
+        thinking: false
+```
 
 For more information on using evals, see the [LLM Evaluation section](quality.md#llm-evaluation-evals) in the Quality & Testing Guide.
 

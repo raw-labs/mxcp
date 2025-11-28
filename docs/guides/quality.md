@@ -819,6 +819,7 @@ tests:
         - tool: get_churn_score
           args:
             customer_id: "ABC"
+      expected_answer: "The customer is high risk of churn"
       answer_contains:
         - "risk"
         - "churn"
@@ -878,6 +879,64 @@ answer_not_contains:
   - "error"
   - "failed"
   - "unauthorized"
+```
+
+#### `expected_answer`
+Checks the model's final answer against an expected answer using the LLM as a grader. The grader
+returns `correct`, `wrong`, or `partially correct` plus a short comment.
+
+```yaml
+expected_answer: "The customer is high risk of churn"
+```
+
+### Complete Eval Example
+
+```yaml
+# faq-evals.yml
+mxcp: 1
+suite: faq_checks
+description: "Make sure the assistant answers FAQs accurately and uses tools when needed"
+model: gpt-4o
+
+tests:
+  - name: tool_usage_for_price_lookup
+    prompt: "What's the current price for SKU-1234?"
+    assertions:
+      must_call:
+        - tool: get_product_price
+          args:
+            sku: "SKU-1234"
+      answer_contains:
+        - "price"
+
+  - name: expected_answer_grading
+    prompt: "What are your support hours?"
+    assertions:
+      expected_answer: "Our support team is available Monday to Friday, 9am-5pm local time."
+      answer_contains:
+        - "Monday"
+        - "Friday"
+```
+
+### Model Configuration Example
+
+Add models to your user config (`~/.mxcp/config.yml`) so evals know which providers to call:
+
+```yaml
+models:
+  default: "claude-4-sonnet"
+  models:
+    claude-4-sonnet:
+      type: "claude"
+      api_key: "${ANTHROPIC_API_KEY}"
+      timeout: 30
+    gpt-4o:
+      type: "openai"
+      api_key: "${OPENAI_API_KEY}"
+      base_url: "https://api.openai.com/v1"
+      timeout: 45
+      options:
+        reasoning: "fast"  # forwarded to the provider as-is
 ```
 
 ### Running Evals

@@ -1,4 +1,4 @@
-"""Tests for mxcp.sdk.evals.executor module."""
+"""Tests for the agent-style LLM executor."""
 
 from typing import Any
 from unittest.mock import AsyncMock
@@ -6,14 +6,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from mxcp.sdk.auth import UserContext
-from mxcp.sdk.evals import (
-    ClaudeConfig,
-    LLMExecutor,
-    OpenAIConfig,
-    ParameterDefinition,
-    ToolDefinition,
-)
-from mxcp.sdk.validator import TypeSchema
+from mxcp.sdk.evals import ClaudeConfig, ParameterDefinition, ToolDefinition
+from mxcp.sdk.evals.executor import AgentResult, LLMExecutor, LLMResponse, LLMToolCall
+import httpx
 
 
 class MockToolExecutor:
@@ -21,280 +16,147 @@ class MockToolExecutor:
 
     def __init__(self, responses: dict[str, Any] | None = None):
         self.responses = responses or {}
-        self.calls = []
+        self.calls: list[dict[str, Any]] = []
 
     async def execute_tool(
         self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
     ) -> Any:
-        """Mock tool execution that records calls and returns predefined responses."""
         self.calls.append(
             {"tool_name": tool_name, "arguments": arguments, "user_context": user_context}
         )
 
         if tool_name in self.responses:
-            result = self.responses[tool_name]
-            if isinstance(result, Exception):
-                raise result
-            return result
+            value = self.responses[tool_name]
+            if isinstance(value, Exception):
+                raise value
+            return value
 
-        return f"Mock result for {tool_name}"
+        return {"echo": arguments}
 
 
 class TestLLMExecutor:
-    """Test cases for LLMExecutor."""
-
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.model_config = ClaudeConfig(name="claude-3-haiku", api_key="test-key")
-
+    def setup_method(self) -> None:
+        self.model_config = ClaudeConfig(name="claude-test", api_key="key")
         self.tools = [
             ToolDefinition(
                 name="get_weather",
-                description="Get current weather for a location",
-                parameters=[
-                    ParameterDefinition(name="location", type="string", description="City name")
-                ],
-            ),
-            ToolDefinition(
-                name="calculate",
-                description="Perform mathematical calculations",
-                parameters=[
-                    ParameterDefinition(
-                        name="expression",
-                        type="string",
-                        description="Mathematical expression to evaluate",
-                    )
-                ],
-            ),
+                description="Weather lookup",
+                parameters=[ParameterDefinition(name="location", type="string", required=True)],
+            )
         ]
-
-        self.tool_executor = MockToolExecutor(
-            {"get_weather": {"temperature": 22, "condition": "sunny"}, "calculate": 42}
-        )
-
+        self.tool_executor = MockToolExecutor({"get_weather": {"temperature": 20}})
         self.executor = LLMExecutor(self.model_config, self.tools, self.tool_executor)
 
-    def test_initialization(self):
-        """Test LLMExecutor initialization."""
-        assert self.executor.model_config == self.model_config
-        assert self.executor.available_tools == self.tools
-        assert self.executor.tool_executor == self.tool_executor
-
-    def test_format_tools_for_prompt(self):
-        """Test tool formatting for prompts."""
-        formatted = self.executor._format_tools_for_prompt()
-
-        assert "=== AVAILABLE TOOLS ===" in formatted
-        assert "Tool: get_weather" in formatted
-        assert "Tool: calculate" in formatted
-        assert "Description: Get current weather for a location" in formatted
-        assert "location (string): City name" in formatted
-
-    def test_format_tools_for_prompt_empty(self):
-        """Test tool formatting with no tools."""
-        executor = LLMExecutor(self.model_config, [], self.tool_executor)
-        formatted = executor._format_tools_for_prompt()
-        assert formatted == "No tools available."
-
-    def test_get_claude_prompt(self):
-        """Test Claude-specific prompt formatting."""
-        prompt = self.executor._get_claude_prompt(
-            "What's the weather in Paris?", "Mock tools", None
+    @pytest.mark.asyncio
+    async def test_execute_prompt_no_tools(self) -> None:
+        """Returns final answer when no tool calls are present."""
+        self.executor._call_llm = AsyncMock(  # type: ignore[assignment]
+            return_value=LLMResponse(content="Hello!", tool_calls=[])
         )
 
-        assert "You are a helpful assistant" in prompt
-        assert "Mock tools" in prompt
-        assert "Human: What's the weather in Paris?" in prompt
-        assert '{"tool": "tool_name"' in prompt
+        result = await self.executor.execute_prompt("Hi")
 
-    def test_get_openai_prompt(self):
-        """Test OpenAI-specific prompt formatting."""
-        prompt = self.executor._get_openai_prompt("Calculate 2+2", "Mock tools", None)
-
-        assert "You are a helpful assistant" in prompt
-        assert "Mock tools" in prompt
-        assert "User: Calculate 2+2" in prompt
-        assert '{"tool": "tool_name"' in prompt
-
-    def test_extract_tool_calls_single(self):
-        """Test extraction of single tool call."""
-        response = '{"tool": "get_weather", "arguments": {"location": "Paris"}}'
-        calls = self.executor._extract_tool_calls(response)
-
-        assert len(calls) == 1
-        assert calls[0]["tool"] == "get_weather"
-        assert calls[0]["arguments"]["location"] == "Paris"
-
-    def test_extract_tool_calls_multiple(self):
-        """Test extraction of multiple tool calls."""
-        response = '[{"tool": "get_weather", "arguments": {"location": "Paris"}}, {"tool": "calculate", "arguments": {"expression": "2+2"}}]'
-        calls = self.executor._extract_tool_calls(response)
-
-        assert len(calls) == 2
-        assert calls[0]["tool"] == "get_weather"
-        assert calls[1]["tool"] == "calculate"
-
-    def test_extract_tool_calls_none(self):
-        """Test extraction when no tool calls present."""
-        response = "The weather in Paris is sunny and 22 degrees."
-        calls = self.executor._extract_tool_calls(response)
-
-        assert len(calls) == 0
-
-    def test_extract_tool_calls_invalid_json(self):
-        """Test extraction with invalid JSON."""
-        response = "Invalid JSON {tool: get_weather}"
-        calls = self.executor._extract_tool_calls(response)
-
-        assert len(calls) == 0
+        assert isinstance(result, AgentResult)
+        assert result.answer == "Hello!"
+        assert result.tool_calls == []
+        assert self.tool_executor.calls == []
 
     @pytest.mark.asyncio
-    async def test_execute_prompt_no_tools(self):
-        """Test prompt execution without tool calls."""
-        # Mock the LLM call to return a simple response
-        self.executor._call_llm = AsyncMock(return_value="Hello! I'm a helpful assistant.")
+    async def test_execute_prompt_with_tool_call(self) -> None:
+        """Executes tool calls and returns final answer."""
+        first = LLMResponse(
+            content="",
+            tool_calls=[LLMToolCall(id="1", tool="get_weather", arguments={"location": "Paris"})],
+        )
+        second = LLMResponse(content="Sunny", tool_calls=[])
+        self.executor._call_llm = AsyncMock(side_effect=[first, second])  # type: ignore[assignment]
 
-        response, tool_calls = await self.executor.execute_prompt("Hello")
+        user_ctx = UserContext(provider="test", user_id="u1", username="user")
 
-        assert response == "Hello! I'm a helpful assistant."
-        assert len(tool_calls) == 0
-        assert len(self.tool_executor.calls) == 0
+        result = await self.executor.execute_prompt("Weather?", user_context=user_ctx)
+
+        assert result.answer == "Sunny"
+        assert len(result.tool_calls) == 1
+        call = result.tool_calls[0]
+        assert call.tool == "get_weather"
+        assert call.arguments["location"] == "Paris"
+        assert call.result == {"temperature": 20}
+        assert call.error is None
+        assert self.tool_executor.calls[0]["user_context"] == user_ctx
 
     @pytest.mark.asyncio
-    async def test_execute_prompt_with_tools(self):
-        """Test prompt execution with tool calls."""
-        # Mock LLM to first return tool call, then final response
-        self.executor._call_llm = AsyncMock(
-            side_effect=[
-                '{"tool": "get_weather", "arguments": {"location": "Paris"}}',
-                "The weather in Paris is sunny and 22 degrees.",
-            ]
+    async def test_execute_prompt_tool_error(self) -> None:
+        """Records tool errors without failing the loop."""
+        self.tool_executor.responses["get_weather"] = ValueError("boom")
+        first = LLMResponse(
+            content="",
+            tool_calls=[LLMToolCall(id="t1", tool="get_weather", arguments={"location": "Rome"})],
         )
+        second = LLMResponse(content="Could not fetch", tool_calls=[])
+        self.executor._call_llm = AsyncMock(side_effect=[first, second])  # type: ignore[assignment]
 
-        user_context = UserContext(provider="test", user_id="test-user", username="testuser")
+        result = await self.executor.execute_prompt("Weather?")
 
-        response, tool_calls = await self.executor.execute_prompt(
-            "What's the weather in Paris?", user_context=user_context
-        )
-
-        assert response == "The weather in Paris is sunny and 22 degrees."
-        assert len(tool_calls) == 1
-        assert tool_calls[0]["tool"] == "get_weather"
-        assert tool_calls[0]["arguments"]["location"] == "Paris"
-
-        # Verify tool executor was called correctly
-        assert len(self.tool_executor.calls) == 1
-        call = self.tool_executor.calls[0]
-        assert call["tool_name"] == "get_weather"
-        assert call["arguments"]["location"] == "Paris"
-        assert call["user_context"] == user_context
+        assert result.answer == "Could not fetch"
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0].error == "boom"
 
     @pytest.mark.asyncio
-    async def test_execute_prompt_tool_error(self):
-        """Test prompt execution when tool execution fails."""
-        # Configure tool executor to raise an error
-        self.tool_executor.responses["get_weather"] = ValueError("Tool failed")
+    async def test_execute_prompt_max_turns(self) -> None:
+        """Stops after max turns when the model keeps calling tools."""
 
-        # Mock LLM to return tool call, then final response
-        self.executor._call_llm = AsyncMock(
-            side_effect=[
-                '{"tool": "get_weather", "arguments": {"location": "Paris"}}',
-                "I'm sorry, I couldn't get the weather information.",
-            ]
+        async def _loop_response(*_: Any, **__: Any) -> LLMResponse:
+            return LLMResponse(
+                content="",
+                tool_calls=[
+                    LLMToolCall(id=None, tool="get_weather", arguments={"location": "Paris"})
+                ],
+            )
+
+        self.executor._call_llm = AsyncMock(side_effect=_loop_response)  # type: ignore[assignment]
+
+        result = await self.executor.execute_prompt("Weather?")
+
+        assert len(result.tool_calls) == 10
+        assert result.answer == ""
+
+    def test_parse_grade_response(self) -> None:
+        """Parses grading JSON with fallbacks."""
+        parsed = self.executor._parse_grade_response(  # type: ignore[attr-defined]
+            '{"result":"correct","comment":"ok","reasoning":"short"}'
         )
+        assert parsed["result"] == "correct"
+        assert parsed["comment"] == "ok"
 
-        response, tool_calls = await self.executor.execute_prompt("What's the weather in Paris?")
-
-        assert response == "I'm sorry, I couldn't get the weather information."
-        assert len(tool_calls) == 1
-
-        # Verify the LLM received the tool error in the conversation
-        assert self.executor._call_llm.call_count == 2
+        fallback = self.executor._parse_grade_response("not json")  # type: ignore[attr-defined]
+        assert fallback["result"] == "unknown"
 
     @pytest.mark.asyncio
-    async def test_execute_prompt_max_iterations(self):
-        """Test that max iterations prevents infinite loops."""
-        # Mock LLM to always return tool calls
-        self.executor._call_llm = AsyncMock(
-            return_value='{"tool": "get_weather", "arguments": {"location": "Paris"}}'
-        )
+    async def test_openai_http_error_includes_body(self, monkeypatch) -> None:
+        """HTTP errors should include status and body for easier debugging."""
 
-        response, tool_calls = await self.executor.execute_prompt("Weather?")
+        async def fake_post(*args: Any, **kwargs: Any):  # noqa: ANN401
+            return httpx.Response(
+                status_code=400,
+                request=httpx.Request("POST", "https://api.openai.com/v1/chat/completions"),
+                text="bad request details",
+            )
 
-        # Should hit max iterations (10) and return the last response
-        assert len(tool_calls) == 10
-        assert self.executor._call_llm.call_count == 10
+        monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
 
+        with pytest.raises(ValueError) as excinfo:
+            await self.executor._call_openai([], use_tools=False)  # type: ignore[attr-defined]
 
-class TestToolDefinition:
-    """Test cases for ToolDefinition."""
+        message = str(excinfo.value)
+        assert "OpenAI API call failed" in message
+        assert "400" in message
+        assert "bad request details" in message
 
-    def test_to_prompt_format_basic(self):
-        """Test basic tool formatting."""
-        tool = ToolDefinition(name="test_tool", description="A test tool")
-
-        formatted = tool.to_prompt_format()
-        assert "Tool: test_tool" in formatted
-        assert "Description: A test tool" in formatted
-        assert "Parameters: None" in formatted
-
-    def test_to_prompt_format_with_parameters(self):
-        """Test tool formatting with parameters."""
-        tool = ToolDefinition(
-            name="calculator",
-            description="Perform calculations",
-            parameters=[
-                ParameterDefinition(
-                    name="expression", type="string", description="Math expression", default="0"
-                ),
-                ParameterDefinition(name="precision", type="integer", description="Decimal places"),
-            ],
-            return_type=TypeSchema(type="number", description="Result"),
-            tags=["math", "utility"],
-        )
-
-        formatted = tool.to_prompt_format()
-        assert "Tool: calculator" in formatted
-        assert "Description: Perform calculations" in formatted
-        assert "expression (string) [default: 0]: Math expression" in formatted
-        assert "precision (integer): Decimal places" in formatted
-        assert "Returns: number - Result" in formatted
-        assert "Tags: math, utility" in formatted
-
-
-class TestModelConfigs:
-    """Test cases for model configurations."""
-
-    def test_claude_config(self):
-        """Test Claude configuration."""
-        config = ClaudeConfig(
-            name="claude-3-haiku", api_key="test-key", base_url="https://api.custom.com", timeout=60
-        )
-
-        assert config.get_type() == "claude"
-        assert config.name == "claude-3-haiku"
-        assert config.api_key == "test-key"
-        assert config.base_url == "https://api.custom.com"
-        assert config.timeout == 60
-
-    def test_openai_config(self):
-        """Test OpenAI configuration."""
-        config = OpenAIConfig(
-            name="gpt-4", api_key="test-key", base_url="https://api.custom.com", timeout=45
-        )
-
-        assert config.get_type() == "openai"
-        assert config.name == "gpt-4"
-        assert config.api_key == "test-key"
-        assert config.base_url == "https://api.custom.com"
-        assert config.timeout == 45
-
-    def test_config_defaults(self):
-        """Test default values for configs."""
-        claude = ClaudeConfig(name="claude", api_key="key")
-        assert claude.base_url == "https://api.anthropic.com"
-        assert claude.timeout == 30
-
-        openai = OpenAIConfig(name="gpt", api_key="key")
-        assert openai.base_url == "https://api.openai.com/v1"
-        assert openai.timeout == 30
+    def test_parse_grade_response_code_fence(self) -> None:
+        """Parses grading JSON even when wrapped in code fences."""
+        fenced = """```json
+        {"result":"partially correct","comment":"ok","reasoning":"short"}
+        ```"""
+        parsed = self.executor._parse_grade_response(fenced)  # type: ignore[attr-defined]
+        assert parsed["result"] == "partially correct"
+        assert parsed["comment"] == "ok"
