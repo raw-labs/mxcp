@@ -152,6 +152,48 @@ class TestLLMExecutor:
         assert "400" in message
         assert "bad request details" in message
 
+    @pytest.mark.asyncio
+    async def test_claude_payload_uses_max_tokens(self, monkeypatch) -> None:
+        """Ensure Claude requests use the correct max_tokens field."""
+        captured: dict[str, Any] = {}
+
+        async def fake_post(
+            self, url: str, *args: Any, **kwargs: Any
+        ) -> httpx.Response:  # noqa: ANN401
+            captured["json"] = kwargs.get("json")
+            return httpx.Response(
+                status_code=200,
+                json={"content": [{"type": "text", "text": "ok"}]},
+                request=httpx.Request("POST", url),
+            )
+
+        monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+        await self.executor._call_claude([{"role": "user", "content": "hi"}], use_tools=False, system_override=None)  # type: ignore[attr-defined]
+
+        payload = captured["json"]
+        assert "max_tokens" in payload
+        assert "max_output_tokens" not in payload
+
+    @pytest.mark.asyncio
+    async def test_tool_argument_validation_error_is_captured(self, monkeypatch) -> None:
+        """Validation errors should be recorded, not crash the agent loop."""
+        first = LLMResponse(
+            content="",
+            tool_calls=[
+                LLMToolCall(id="1", tool="get_weather", arguments={})
+            ],  # missing required arg
+        )
+        second = LLMResponse(content="done", tool_calls=[])
+        self.executor._call_llm = AsyncMock(side_effect=[first, second])  # type: ignore[assignment]
+
+        result = await self.executor.execute_prompt("Weather?")
+
+        assert result.answer == "done"
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0].error  # validation error captured
+        assert self.tool_executor.calls == []  # execute_tool not called
+
     def test_parse_grade_response_code_fence(self) -> None:
         """Parses grading JSON even when wrapped in code fences."""
         fenced = """```json

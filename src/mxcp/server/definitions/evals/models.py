@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
@@ -50,7 +50,7 @@ class EvalSuiteModel(EvalBaseModel):
     mxcp: int = 1
     suite: str
     description: str | None = None
-    model: Literal["claude-4-opus", "claude-4-sonnet", "gpt-4o", "gpt-4.1"] | None = None
+    model: str | None = None
     tests: list[EvalTestModel]
 
     @field_validator("suite")

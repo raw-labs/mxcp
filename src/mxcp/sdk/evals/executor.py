@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Protocol, cast
+from typing import Any, Protocol
 
 import httpx
 from pydantic import BaseModel, ValidationError, create_model
@@ -98,11 +98,10 @@ class LLMExecutor:
             if llm_response.tool_calls:
                 self._append_assistant_message(messages, llm_response)
                 for call in llm_response.tool_calls:
-                    validated_args = self._validate_tool_arguments(call.tool, call.arguments)
-                    record = ToolCallRecord(
-                        id=call.id, tool=call.tool, arguments=validated_args or {}
-                    )
+                    record = ToolCallRecord(id=call.id, tool=call.tool, arguments={})
                     try:
+                        validated_args = self._validate_tool_arguments(call.tool, call.arguments)
+                        record.arguments = validated_args
                         result = await self.tool_executor.execute_tool(
                             call.tool, validated_args, user_context
                         )
@@ -378,7 +377,7 @@ class LLMExecutor:
             "model": self.model_config.name,
             "system": system_override or self.system_prompt,
             "messages": messages,
-            "max_output_tokens": 4096,
+            "max_tokens": 4096,
         }
 
         if use_tools and self._anthropic_tools:
@@ -422,6 +421,7 @@ class LLMExecutor:
             payload["tools"] = self._openai_tools
             payload["tool_choice"] = "auto"
 
+        # Allow callers to set provider-specific extras via options
         payload.update(self.model_config.options or {})
 
         async with httpx.AsyncClient() as client:
