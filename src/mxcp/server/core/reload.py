@@ -404,7 +404,7 @@ class ReloadManager:
                 "queue_size": self._queue.qsize() if self._queue else 0,
                 "shutdown": self._shutdown,
                 "draining": self.server.draining,
-                "active_requests": self._get_active_requests(),
+                "active_requests": self.server.active_requests,
             }
 
             # Add reload history if available
