@@ -127,13 +127,19 @@ class EndpointToolExecutor:
         if source_type == "file":
             relative_path = Path(source_value)
             candidates = []
+            # Resolve endpoint path against repo root (or CWD fallback) to handle relative paths
+            try:
+                base_root = find_repo_root()
+            except FileNotFoundError:
+                base_root = Path.cwd()
+
+            endpoint_path_abs = (
+                endpoint_path if endpoint_path.is_absolute() else (base_root / endpoint_path)
+            ).resolve()
+
             if not relative_path.is_absolute():
-                candidates.append((endpoint_path.parent / relative_path).resolve())
-                try:
-                    repo_root = find_repo_root()
-                except FileNotFoundError:
-                    repo_root = Path.cwd()
-                candidates.append((repo_root / relative_path).resolve())
+                candidates.append((endpoint_path_abs.parent / relative_path).resolve())
+                candidates.append((base_root / relative_path).resolve())
             else:
                 candidates.append(relative_path.resolve())
 
