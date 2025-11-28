@@ -229,7 +229,10 @@ class TestEndpointToolExecutor:
         test_endpoints: list[tuple[EndpointDefinitionModel, Path]] = [
             (
                 EndpointDefinitionModel.model_validate(
-                    {"mxcp": 1, "tool": {"name": "python_file_tool", "source": {"file": "script.py"}}}
+                    {
+                        "mxcp": 1,
+                        "tool": {"name": "python_file_tool", "source": {"file": "script.py"}},
+                    }
                 ),
                 Path("endpoints/python.yml"),
             ),
@@ -253,7 +256,10 @@ class TestEndpointToolExecutor:
             ),
             (
                 EndpointDefinitionModel.model_validate(
-                    {"mxcp": 1, "tool": {"name": "default_sql_tool", "source": {"code": "some code"}}}
+                    {
+                        "mxcp": 1,
+                        "tool": {"name": "default_sql_tool", "source": {"code": "some code"}},
+                    }
                 ),
                 Path("endpoints/default.yml"),
             ),

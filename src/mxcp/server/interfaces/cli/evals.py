@@ -169,7 +169,9 @@ def format_eval_results(results: dict[str, Any], debug: bool = False) -> str:
                             f"    {click.style('✗', fg='red')} {test['name']} {click.style(f'({test_time:.2f}s)', fg='bright_black')}"
                         )
                         if test.get("error"):
-                            output.append(f"      {click.style('Error:', fg='red')} {test['error']}")
+                            output.append(
+                                f"      {click.style('Error:', fg='red')} {test['error']}"
+                            )
                         for failure in test.get("failures", []):
                             output.append(f"      {click.style('💡', fg='yellow')} {failure}")
 

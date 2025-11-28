@@ -27,8 +27,7 @@ class ToolExecutor(Protocol):
 
     async def execute_tool(
         self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
 
 @dataclass
@@ -142,7 +141,9 @@ class LLMExecutor:
         )
 
         messages = self._initial_messages(grader_prompt, system_override=grader_system)
-        llm_response = await self._call_llm(messages, use_tools=False, system_override=grader_system)
+        llm_response = await self._call_llm(
+            messages, use_tools=False, system_override=grader_system
+        )
         return self._parse_grade_response(llm_response.content)
 
     def _build_system_prompt(self, tools: list[ToolDefinition]) -> str:
@@ -163,7 +164,10 @@ class LLMExecutor:
     ) -> list[dict[str, Any]]:
         system_prompt = system_override or self.system_prompt
         if self.model_type == "openai":
-            return [{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}]
+            return [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ]
 
         # Anthropic/Claude style keeps system separate; we include it in the API call.
         return [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
@@ -172,7 +176,9 @@ class LLMExecutor:
         self, messages: list[dict[str, Any]], response: LLMResponse
     ) -> None:
         if self.model_type == "openai":
-            messages.append(response.raw_message or {"role": "assistant", "content": response.content})
+            messages.append(
+                response.raw_message or {"role": "assistant", "content": response.content}
+            )
             return
 
         # Claude/Anthropic
@@ -181,13 +187,11 @@ class LLMExecutor:
             or {"role": "assistant", "content": [{"type": "text", "text": response.content}]}
         )
 
-    def _build_tool_models(
-        self, tools: list[ToolDefinition]
-    ) -> dict[str, type[BaseModel]]:
+    def _build_tool_models(self, tools: list[ToolDefinition]) -> dict[str, type[BaseModel]]:
         models: dict[str, type[BaseModel]] = {}
 
         for tool in tools:
-            fields: dict[str, tuple[Any, Any]] = {}
+            fields: dict[str, Any] = {}
             for param in tool.parameters:
                 py_type = self._map_param_type(param.type)
                 default = param.default if param.default is not None else None
@@ -196,7 +200,7 @@ class LLMExecutor:
                 else:
                     fields[param.name] = (py_type, default)
 
-            models[tool.name] = create_model(f"{tool.name}_Args", **fields)  # type: ignore[arg-type]
+            models[tool.name] = create_model(f"{tool.name}_Args", **fields)
 
         return models
 
@@ -267,15 +271,13 @@ class LLMExecutor:
         }
         return mapping.get(param_type.lower(), "string")
 
-    def _validate_tool_arguments(
-        self, tool_name: str, arguments: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _validate_tool_arguments(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         model = self._tool_models.get(tool_name)
         if not model:
             return arguments
 
         try:
-            return cast(dict[str, Any], model.model_validate(arguments).model_dump())
+            return model.model_validate(arguments).model_dump()
         except ValidationError as exc:
             raise ValueError(f"Invalid arguments for tool '{tool_name}': {exc}") from exc
 
@@ -310,7 +312,7 @@ class LLMExecutor:
             return result
         if result is None:
             return "null"
-        if isinstance(result, (int, float, bool)):
+        if isinstance(result, int | float | bool):
             return json.dumps(result)
         try:
             return json.dumps(result)

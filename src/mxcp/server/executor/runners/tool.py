@@ -11,9 +11,9 @@ from typing import Any
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
+from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.definitions.endpoints.utils import detect_language_from_source, extract_source_info
-from mxcp.server.core.config.site_config import find_repo_root
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,9 @@ class EndpointToolExecutor:
         >>> llm_executor = LLMExecutor(model_config, tool_definitions, tool_executor)
     """
 
-    def __init__(self, engine: ExecutionEngine, endpoints: list[tuple[EndpointDefinitionModel, Path]]):
+    def __init__(
+        self, engine: ExecutionEngine, endpoints: list[tuple[EndpointDefinitionModel, Path]]
+    ):
         """Initialize the endpoint tool executor.
 
         Args:
@@ -155,7 +157,9 @@ class EndpointToolExecutor:
             try:
                 return source_path.read_text(), str(source_path)
             except Exception as exc:  # noqa: BLE001
-                raise ValueError(f"Failed to read source file for endpoint '{tool_name}': {exc}") from exc
+                raise ValueError(
+                    f"Failed to read source file for endpoint '{tool_name}': {exc}"
+                ) from exc
 
         return source_value, None
 
