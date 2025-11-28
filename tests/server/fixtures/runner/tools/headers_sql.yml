@@ -11,10 +11,9 @@ tool:
         type: string
       headers_json:
         type: string
-  language: python
   source:
-    file: ../python/context_tools.py
-  tests:
-    - name: just_run
-      arguments: []
+    code: |
+      SELECT 
+        get_request_header('Authorization') AS auth,
+        get_request_headers_json() AS headers_json
 

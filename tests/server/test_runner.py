@@ -430,6 +430,34 @@ async def test_headers_tool_via_sql(
 
 
 @pytest.mark.asyncio
+async def test_headers_sql_returns_null_when_missing(
+    test_repo_path, test_user_config, test_site_config, test_profile
+):
+    """SQL UDFs should return NULL when headers are not provided."""
+    original_dir = os.getcwd()
+    os.chdir(test_repo_path)
+    try:
+        endpoint_type = "tool"
+        name = "headers_sql"
+        args = {}
+        # No request_headers provided - UDFs should return NULL (None in Python)
+        result = await execute_endpoint(
+            endpoint_type,
+            name,
+            args,
+            test_user_config,
+            test_site_config,
+            test_profile,
+        )
+        assert result["auth"] is None, "get_request_header should return NULL when no headers"
+        assert (
+            result["headers_json"] is None
+        ), "get_request_headers_json should return NULL when no headers"
+    finally:
+        os.chdir(original_dir)
+
+
+@pytest.mark.asyncio
 async def test_mcp_logging_demo_tool(
     test_repo_path, test_user_config, test_site_config, test_profile
 ):
