@@ -937,6 +937,32 @@ models:
       timeout: 45
       options:
         reasoning: "fast"  # forwarded to the provider as-is
+
+# Example: use a faster model just for grading expected answers
+mxcp: 1
+suite: faq_checks
+model: gpt-4o                   # primary model used to answer
+expected_answer_model: gpt-4o-mini  # model used only for grading expected answers
+tests:
+  - name: expected_answer_grading
+    prompt: "What are your support hours?"
+    assertions:
+      expected_answer: "Our support team is available Monday to Friday, 9am-5pm local time."
+      # expected_answer_model is useful when:
+      # - Your main model is slow/expensive, but grading can use a lighter model
+      # - You want deterministic, faster grading for many evals
+
+# OpenAI Responses API example (reasoning)
+models:
+  default: "gpt-5"
+  models:
+    gpt-5:
+      type: "openai"
+      api_key: "${OPENAI_API_KEY}"
+      options:
+        api: "responses"          # Choices: responses (Responses API) or chat (default)
+        reasoning:
+          effort: "medium"
 ```
 
 ### Running Evals

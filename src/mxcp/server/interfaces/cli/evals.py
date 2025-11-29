@@ -343,6 +343,28 @@ async def _evals_impl(
 
     # Run evals
     start_time = time.time()
+
+    # Stateful progress renderer that overwrites the same line.
+    _lines: dict[str, str] = {}
+    _order: list[str] = []
+    _lines_printed = 0
+
+    def _render_progress() -> None:
+        nonlocal _lines_printed
+        # Move cursor up to rewrite previous lines
+        if _lines_printed:
+            click.echo(f"\033[{_lines_printed}A\r", nl=False)
+        for key in _order:
+            line = _lines.get(key, "")
+            click.echo("\033[2K\r" + line)
+        _lines_printed = len(_order)
+
+    def _progress(key: str, msg: str) -> None:
+        if key not in _order:
+            _order.append(key)
+        _lines[key] = msg
+        _render_progress()
+
     if suite_name:
         results = await run_eval_suite(
             suite_name,
@@ -351,6 +373,7 @@ async def _evals_impl(
             profile,
             cli_user_context=cli_user_context,
             override_model=model,
+            progress_callback=_progress,
         )
     else:
         results = await run_all_evals(
@@ -359,6 +382,7 @@ async def _evals_impl(
             profile,
             cli_user_context=cli_user_context,
             override_model=model,
+            progress_callback=_progress,
         )
     elapsed_time = time.time() - start_time
     results["elapsed_time"] = elapsed_time
@@ -366,6 +390,8 @@ async def _evals_impl(
     if json_output:
         output_result(results, json_output, debug)
     else:
+        if _lines_printed:
+            click.echo()
         click.echo(format_eval_results(results, debug))
 
     # Exit with error code if any tests failed

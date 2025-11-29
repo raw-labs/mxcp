@@ -1,8 +1,10 @@
 import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import click
 from pydantic_ai import ModelSettings
 
 from mxcp.sdk.auth import UserContext
@@ -45,12 +47,17 @@ def _create_model_config(
     model_type = model_config.type
     api_key = model_config.api_key
     options = dict(model_config.options or {})
+    api_mode = options.get("api") or options.get("endpoint")
 
     if not api_key:
         raise ValueError(f"No API key configured for model '{model}'")
 
     if model_type not in {"anthropic", "openai"}:
         raise ValueError(f"Unknown model type: {model_type}")
+
+    effective_model_type = (
+        "openai-responses" if model_type == "openai" and api_mode == "responses" else model_type
+    )
 
     base_url = model_config.base_url
     timeout = model_config.timeout
@@ -61,7 +68,41 @@ def _create_model_config(
 
     provider_config = ProviderConfig(api_key=api_key, base_url=base_url, timeout=timeout)
 
-    return model, model_type, options, provider_config
+    return model, effective_model_type, options, provider_config
+
+
+def _build_model_settings(
+    model_name: str, model_type: str, model_options: dict[str, Any], allowed_keys: set[str]
+) -> ModelSettings:
+    model_opts = dict(model_options)
+    api_mode = model_opts.pop("api", None) or model_opts.pop("endpoint", None)
+
+    recognized_options = {k: v for k, v in model_opts.items() if k in allowed_keys}
+    extras: dict[str, Any] = {k: v for k, v in model_opts.items() if k not in allowed_keys}
+
+    if model_type == "openai":
+        if api_mode == "responses":
+            # Responses API supports additional parameters such as reasoning.
+            if extras:
+                recognized_options["extra_body"] = extras
+        else:
+            # Filter out Responses-only keys to avoid 400s on chat completions.
+            filtered = {
+                k: v
+                for k, v in extras.items()
+                if k not in {"reasoning", "effort", "response_format"}
+            }
+            if len(filtered) != len(extras):
+                logger.warning(
+                    "Dropping response-specific options for model '%s' using chat completions: %s",
+                    model_name,
+                    sorted(set(extras) - set(filtered)),
+                )
+            extras = filtered
+    if extras and "extra_body" not in recognized_options:
+        recognized_options["extra_body"] = extras
+
+    return ModelSettings(**recognized_options)  # type: ignore[typeddict-item,no-any-return]
 
 
 def _load_endpoints(site_config: SiteConfigModel) -> list[tuple[EndpointDefinitionModel, Path]]:
@@ -189,6 +230,8 @@ async def run_eval_suite(
     profile: str | None,
     cli_user_context: UserContext | None = None,
     override_model: str | None = None,
+    progress_callback: Callable[[str, str], None] | None = None,
+    expected_answer_model: str | None = None,
 ) -> dict[str, Any]:
     """Run a specific eval suite by name.
 
@@ -221,18 +264,16 @@ async def run_eval_suite(
             "error": "No model specified. Set 'model' in eval suite or configure a default model.",
             "suite": suite_name,
         }
+    grading_model = expected_answer_model or getattr(eval_suite, "expected_answer_model", None)
 
     # Create model configuration
     model_name, model_type, model_options, provider_config = _create_model_config(
         model, user_config
     )
     allowed_keys = set(ModelSettings.__annotations__.keys())
-    unknown_keys = set(model_options.keys()) - allowed_keys
-    if unknown_keys:
-        raise ValueError(
-            f"Invalid model options keys: {sorted(unknown_keys)}. Allowed: {sorted(allowed_keys)}"
-        )
-    model_settings = ModelSettings(**model_options)  # type: ignore[typeddict-item]
+    model_opts = dict(model_options)
+
+    model_settings = _build_model_settings(model_name, model_type, model_opts, allowed_keys)
 
     # Load endpoints
     endpoints = _load_endpoints(site_config)
@@ -246,11 +287,40 @@ async def run_eval_suite(
 
     # Create tool executor that bridges LLM calls to endpoint execution
     tool_executor = EndpointToolExecutor(engine, endpoints)
+    grading_executor: LLMExecutor | None = None
+
+    if grading_model:
+        grade_model_name, grade_model_type, grade_opts, grade_provider = _create_model_config(
+            grading_model, user_config
+        )
+        grade_settings = _build_model_settings(
+            grade_model_name, grade_model_type, dict(grade_opts), allowed_keys
+        )
+        grading_executor = LLMExecutor(
+            grade_model_name,
+            grade_model_type,
+            grade_settings,
+            [],  # no tools needed for grading
+            tool_executor,
+            provider_config=grade_provider,
+        )
 
     logger.info(f"Running eval suite: {suite_name} from {file_path}")
     logger.info(f"Suite description: {eval_suite.description or 'No description'}")
     logger.info(f"Model: {model}")
     logger.info(f"Number of tests: {len(eval_suite.tests)}")
+
+    total_tests = len(eval_suite.tests)
+    if progress_callback:
+        progress_callback(
+            f"suite:{suite_name}",
+            "🧪 "
+            + click.style(
+                f"Running suite '{suite_name}' with {total_tests} test"
+                f"{'' if total_tests == 1 else 's'} using model '{model_name}'...",
+                fg="yellow",
+            ),
+        )
 
     try:
         # Create LLM executor with model config, tool definitions, and tool executor
@@ -265,8 +335,17 @@ async def run_eval_suite(
 
         # Run each test
         tests = []
-        for test in eval_suite.tests:
+        for idx, test in enumerate(eval_suite.tests, start=1):
             test_start = time.time()
+            if progress_callback:
+                progress_callback(
+                    f"test:{suite_name}:{idx}",
+                    "⏳ "
+                    + click.style(
+                        f"[{suite_name}] {idx}/{total_tests} • {test.name}...",
+                        fg="cyan",
+                    ),
+                )
 
             # Determine user context for this test
             test_user_context = cli_user_context
@@ -347,7 +426,8 @@ async def run_eval_suite(
                             failures.append(f"Forbidden text '{forbidden_text}' found in response")
 
                 if assertions.expected_answer:
-                    evaluation = await executor.evaluate_expected_answer(
+                    grader = grading_executor or executor
+                    evaluation = await grader.evaluate_expected_answer(
                         response, assertions.expected_answer
                     )
                     grade = (evaluation.get("result") or "").lower()
@@ -366,11 +446,12 @@ async def run_eval_suite(
 
                 test_time = time.time() - test_start
 
+                passed = len(failures) == 0
                 tests.append(
                     {
                         "name": test.name,
                         "description": test.description,
-                        "passed": len(failures) == 0,
+                        "passed": passed,
                         "failures": failures,
                         "time": test_time,
                         "details": {
@@ -390,6 +471,17 @@ async def run_eval_suite(
                         },
                     }
                 )
+                if progress_callback:
+                    icon = click.style("✓", fg="green") if passed else click.style("✗", fg="red")
+                    progress_callback(
+                        f"test:{suite_name}:{idx}",
+                        icon
+                        + " "
+                        + click.style(
+                            f"[{suite_name}] {idx}/{total_tests} • {test.name} ({test_time:.2f}s)",
+                            fg="green" if passed else "red",
+                        ),
+                    )
 
             except Exception as e:
                 test_time = time.time() - test_start
@@ -402,6 +494,15 @@ async def run_eval_suite(
                         "time": test_time,
                     }
                 )
+                if progress_callback:
+                    progress_callback(
+                        f"test:{suite_name}:{idx}",
+                        "✗ "
+                        + click.style(
+                            f"[{suite_name}] {idx}/{total_tests} • {test.name} errored: {e} ({test_time:.2f}s)",
+                            fg="red",
+                        ),
+                    )
 
     finally:
         # Clean up runtime environment
@@ -424,6 +525,8 @@ async def run_all_evals(
     profile: str | None,
     cli_user_context: UserContext | None = None,
     override_model: str | None = None,
+    progress_callback: Callable[[str, str], None] | None = None,
+    expected_answer_model: str | None = None,
 ) -> dict[str, Any]:
     """Run all eval suites found in the repository.
 
@@ -461,8 +564,17 @@ async def run_all_evals(
                 continue
             suite_name = eval_suite.suite or "unnamed"
             # Run the suite
+            if progress_callback:
+                progress_callback(f"suite:{suite_name}", f"🧪 Running eval suite: {suite_name}")
             result = await run_eval_suite(
-                suite_name, user_config, site_config, profile, cli_user_context, override_model
+                suite_name,
+                user_config,
+                site_config,
+                profile,
+                cli_user_context,
+                override_model,
+                progress_callback=progress_callback,
+                expected_answer_model=expected_answer_model,
             )
 
             # Get relative path

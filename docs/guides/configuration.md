@@ -658,6 +658,19 @@ models:
       timeout: 30
       options:
         thinking: false
+
+# Using OpenAI Responses API with reasoning
+# Set api: responses to route through the Responses endpoint (e.g., for reasoning)
+models:
+  default: "gpt-5"
+  models:
+    gpt-5:
+      type: "openai"
+      api_key: "${OPENAI_API_KEY}"
+      options:
+        api: "responses"          # Choices: responses (for OpenAI Responses API), chat (default)
+        reasoning:
+          effort: "medium"        # Passed via extra_body to the provider
 ```
 
 For more information on using evals, see the [LLM Evaluation section](quality.md#llm-evaluation-evals) in the Quality & Testing Guide.

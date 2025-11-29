@@ -51,6 +51,7 @@ class EvalSuiteModel(EvalBaseModel):
     suite: str
     description: str | None = None
     model: str | None = None
+    expected_answer_model: str | None = None
     tests: list[EvalTestModel]
 
     @field_validator("suite")
