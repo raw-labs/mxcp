@@ -42,6 +42,7 @@ def test_model_settings_anthropic_output_config_and_betas() -> None:
         allowed,
     )
 
-    assert getattr(settings, "extra_body", None) == {"effort": "medium"}
+    extra_body = getattr(settings, "extra_body", None)
+    assert extra_body and extra_body.get("output_config") == {"effort": "medium"}
     headers = getattr(settings, "extra_headers", None)
     assert headers and headers.get("anthropic-beta") == "effort-2025-11-24"
