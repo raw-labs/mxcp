@@ -961,7 +961,9 @@ models:
       api_key: "${OPENAI_API_KEY}"
       options:
         api: "responses"          # Choices: responses (Responses API) or chat (default)
-        reasoning:
+        # Provider-specific fields must use prefixes:
+        #   body:<key> for request body, header:<key> for headers
+        body:reasoning:
           effort: "medium"
 ```
 

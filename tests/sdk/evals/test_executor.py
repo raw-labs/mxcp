@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import Any
 
 import pytest
@@ -169,3 +170,32 @@ def test_max_turns_limits_tool_calls() -> None:
 
     assert len(result.tool_calls) == 2
     assert result.tool_calls[-1].error
+
+
+def test_apply_provider_env_for_openai_responses() -> None:
+    prev_key = os.environ.get("OPENAI_API_KEY")
+    prev_url = os.environ.get("OPENAI_BASE_URL")
+    try:
+        os.environ.pop("OPENAI_API_KEY", None)
+        os.environ.pop("OPENAI_BASE_URL", None)
+
+        LLMExecutor(
+            "gpt-5",
+            "openai-responses",
+            ModelSettings(),
+            [],
+            MockToolExecutor(),
+            provider_config=ProviderConfig(api_key="key", base_url="https://api.openai.com"),
+        )
+
+        assert os.environ.get("OPENAI_API_KEY") == "key"
+        assert os.environ.get("OPENAI_BASE_URL") == "https://api.openai.com"
+    finally:
+        if prev_key is None:
+            os.environ.pop("OPENAI_API_KEY", None)
+        else:
+            os.environ["OPENAI_API_KEY"] = prev_key
+        if prev_url is None:
+            os.environ.pop("OPENAI_BASE_URL", None)
+        else:
+            os.environ["OPENAI_BASE_URL"] = prev_url

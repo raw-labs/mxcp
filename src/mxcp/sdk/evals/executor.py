@@ -237,13 +237,16 @@ class LLMExecutor:
 
     def _apply_provider_env(self) -> None:
         """Populate provider env vars if missing, using provided config."""
+        model_type = self.model_type or ""
+        is_openai = model_type.startswith("openai")
+        is_anthropic = model_type.startswith("anthropic")
         env_overrides: dict[str, str] = {}
-        if self.model_type == "openai":
+        if is_openai:
             if self.provider_config.api_key:
                 env_overrides["OPENAI_API_KEY"] = self.provider_config.api_key
             if self.provider_config.base_url:
                 env_overrides["OPENAI_BASE_URL"] = self.provider_config.base_url
-        elif self.model_type == "anthropic":
+        elif is_anthropic:
             if self.provider_config.api_key:
                 env_overrides["ANTHROPIC_API_KEY"] = self.provider_config.api_key
             if self.provider_config.base_url:

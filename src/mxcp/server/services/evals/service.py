@@ -75,32 +75,41 @@ def _build_model_settings(
     model_name: str, model_type: str, model_options: dict[str, Any], allowed_keys: set[str]
 ) -> ModelSettings:
     model_opts = dict(model_options)
-    api_mode = model_opts.pop("api", None) or model_opts.pop("endpoint", None)
+    model_opts.pop("api", None)
+    model_opts.pop("endpoint", None)
 
     recognized_options = {k: v for k, v in model_opts.items() if k in allowed_keys}
-    extras: dict[str, Any] = {k: v for k, v in model_opts.items() if k not in allowed_keys}
+    body_extras: dict[str, Any] = dict(recognized_options.get("extra_body") or {})
+    header_extras: dict[str, str] = dict(recognized_options.get("extra_headers") or {})
+    ignored: list[str] = []
 
-    if model_type == "openai":
-        if api_mode == "responses":
-            # Responses API supports additional parameters such as reasoning.
-            if extras:
-                recognized_options["extra_body"] = extras
+    for key, value in model_opts.items():
+        if key in allowed_keys:
+            continue
+        if key.startswith("body:"):
+            body_extras[key.split(":", 1)[1]] = value
+        elif key.startswith("header:"):
+            header_value: str
+            if isinstance(value, list):
+                header_value = ",".join(str(v) for v in value)
+            else:
+                header_value = str(value)
+            header_extras[key.split(":", 1)[1]] = header_value
         else:
-            # Filter out Responses-only keys to avoid 400s on chat completions.
-            filtered = {
-                k: v
-                for k, v in extras.items()
-                if k not in {"reasoning", "effort", "response_format"}
-            }
-            if len(filtered) != len(extras):
-                logger.warning(
-                    "Dropping response-specific options for model '%s' using chat completions: %s",
-                    model_name,
-                    sorted(set(extras) - set(filtered)),
-                )
-            extras = filtered
-    if extras and "extra_body" not in recognized_options:
-        recognized_options["extra_body"] = extras
+            ignored.append(key)
+
+    if ignored:
+        logger.warning(
+            "Ignoring unprefixed model options for model '%s': %s. "
+            "Use 'body:<key>' or 'header:<key>' prefixes.",
+            model_name,
+            sorted(ignored),
+        )
+
+    if body_extras:
+        recognized_options["extra_body"] = body_extras
+    if header_extras:
+        recognized_options["extra_headers"] = header_extras
 
     return ModelSettings(**recognized_options)  # type: ignore[typeddict-item,no-any-return]
 

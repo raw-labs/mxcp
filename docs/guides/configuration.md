@@ -669,7 +669,10 @@ models:
       api_key: "${OPENAI_API_KEY}"
       options:
         api: "responses"          # Choices: responses (for OpenAI Responses API), chat (default)
-        reasoning:
+        # Provider-specific fields must be prefixed:
+        # - body:<key> goes into the request body
+        # - header:<key> goes into request headers
+        body:reasoning:
           effort: "medium"        # Passed via extra_body to the provider
 ```
 
