@@ -2,6 +2,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from pydantic_ai import ModelSettings
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.evals import ParameterDefinition, ToolDefinition
@@ -69,7 +70,7 @@ def make_executor() -> LLMExecutor:
     executor = LLMExecutor(
         "claude-test",
         "anthropic",
-        {},
+        ModelSettings(),
         tools,
         tool_executor,
         provider_config=ProviderConfig(api_key="key", base_url="https://api.anthropic.com"),
@@ -141,3 +142,30 @@ def test_expected_answer_grading() -> None:
 
 def test_temporary_env_sets_and_restores() -> None:
     pytest.skip("Environment injection removed; no temporary env to test.")
+
+
+def test_max_turns_limits_tool_calls() -> None:
+    class MultiCallAgent:
+        def __init__(self, tools: list[Any]) -> None:
+            self.tools = tools
+
+        async def run(
+            self, _prompt: str, deps: Any | None = None, model_settings: Any | None = None
+        ) -> FakeRun:
+            for _ in range(2):
+                for tool in self.tools:
+                    fn = getattr(tool, "_mxcp_callable", None)
+                    if fn:
+                        if asyncio.iscoroutinefunction(fn):
+                            await fn()
+                        else:
+                            fn()
+            return FakeRun("done")
+
+    executor = make_executor()
+    executor._agent_cls = lambda **kwargs: MultiCallAgent(kwargs["tools"])
+
+    result = asyncio.run(executor.execute_prompt("Weather?", max_turns=1))
+
+    assert len(result.tool_calls) == 2
+    assert result.tool_calls[-1].error

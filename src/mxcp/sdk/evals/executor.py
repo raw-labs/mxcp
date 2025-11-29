@@ -102,6 +102,16 @@ class LLMExecutor:
             )
 
             async def _fn(**kwargs: Any) -> Any:
+                if max_turns is not None and len(history) >= max_turns:
+                    record = ToolCallRecord(
+                        id=None,
+                        tool=tool_def.name,
+                        arguments=kwargs,
+                        error=f"Maximum tool calls exceeded ({max_turns})",
+                    )
+                    history.append(record)
+                    raise RuntimeError(record.error)
+
                 record = ToolCallRecord(id=None, tool=tool_def.name, arguments=kwargs)
                 try:
                     validated = (
@@ -139,9 +149,15 @@ class LLMExecutor:
             model=model_string, instructions=self.system_prompt, tools=agent_tools
         )
 
-        agent_run = await agent.run(prompt, deps=user_context, model_settings=self._model_settings)
-        answer = getattr(agent_run, "output", "")
-        return AgentResult(answer=str(answer), tool_calls=history)
+        try:
+            agent_run = await agent.run(
+                prompt, deps=user_context, model_settings=self._model_settings
+            )
+            answer = getattr(agent_run, "output", "")
+            return AgentResult(answer=str(answer), tool_calls=history)
+        except RuntimeError as exc:
+            logger.error("LLM execution aborted: %s", exc)
+            return AgentResult(answer="", tool_calls=history)
 
     async def evaluate_expected_answer(self, answer: str, expected_answer: str) -> dict[str, str]:
         """Ask the model to grade an answer against an expected value."""
