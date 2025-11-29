@@ -149,6 +149,7 @@ packages = [
     "mxcp.sdk.executor",
     "mxcp.sdk.executor.plugins",
     "mxcp.sdk.executor.plugins.python_plugin",
+    "mxcp.sdk.mcp",
     "mxcp.sdk.policy",
     "mxcp.sdk.telemetry",
     "mxcp.sdk.validator",

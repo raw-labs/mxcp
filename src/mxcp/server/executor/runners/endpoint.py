@@ -7,18 +7,16 @@ logic used by higher-level endpoint orchestration code.
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from jinja2 import Template
 
 if TYPE_CHECKING:
-    from mxcp.server.interfaces.server.mcp import RAWMCP
+    pass
 
-from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
 from mxcp.sdk.validator import TypeValidator
-from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.definitions.endpoints.models import (
     EndpointDefinitionModel,
     PromptDefinitionModel,
@@ -87,11 +85,7 @@ async def execute_code_with_engine(
     params: dict[str, Any],
     execution_engine: ExecutionEngine,
     skip_output_validation: bool,
-    user_config: UserConfigModel,
-    site_config: SiteConfigModel,
-    user_context: UserContext | None = None,
-    server_ref: Optional["RAWMCP"] = None,
-    request_headers: dict[str, str] | None = None,
+    execution_context: ExecutionContext,
 ) -> Any:
     """Execute tool/resource endpoint using SDK execution engine.
 
@@ -107,17 +101,6 @@ async def execute_code_with_engine(
         include_function_name=True,
     )
 
-    # Create execution context and populate with runtime data for the runtime module
-    execution_context = ExecutionContext(user_context=user_context)
-
-    # Populate context with data that runtime module expects
-    execution_context.set("user_config", user_config.model_dump(mode="python", exclude_unset=True))
-    execution_context.set("site_config", site_config.model_dump(mode="python", exclude_unset=True))
-    if server_ref:
-        execution_context.set("_mxcp_server", server_ref)
-    # Add HTTP headers
-    if request_headers:
-        execution_context.set("request_headers", request_headers)
     # Get validation schemas - SDK executor handles input validation internally
     input_schema: list[dict[str, Any]] | None = None
     output_schema: TypeDefinitionModel | None = None

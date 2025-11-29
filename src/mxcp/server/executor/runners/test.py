@@ -22,6 +22,7 @@ from mxcp.server.definitions.endpoints.models import (
     TestDefinitionModel,
     ToolDefinitionModel,
 )
+from mxcp.server.executor.context_utils import build_execution_context
 from mxcp.server.services.endpoints import execute_endpoint_with_engine
 from mxcp.server.services.tests.models import (
     TestCaseResultModel,
@@ -178,6 +179,13 @@ class TestRunner:
             test_user_context = self._get_test_user_context(test_def, cli_user_context)
 
             # Execute the endpoint
+            context = build_execution_context(
+                user_context=test_user_context,
+                user_config=self.user_config,
+                site_config=self.site_config,
+                request_headers=request_headers,
+                transport="cli-test",
+            )
             result = await execute_endpoint_with_engine(
                 endpoint_type,
                 endpoint_name,
@@ -185,10 +193,10 @@ class TestRunner:
                 self.user_config,
                 self.site_config,
                 self.execution_engine,
-                False,  # skip_output_validation
-                test_user_context,
-                None,  # server_ref
-                request_headers,
+                execution_context=context,
+                skip_output_validation=False,
+                user_context=test_user_context,
+                server_ref=None,
             )
             logger.info(f"Execution result: {result}")
 

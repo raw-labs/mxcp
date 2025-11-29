@@ -5,10 +5,10 @@ from typing import Any
 
 import click
 
-from mxcp.sdk.executor import ExecutionContext
 from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
+from mxcp.server.executor.context_utils import build_execution_context
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.interfaces.cli.table_renderer import render_table
 from mxcp.server.interfaces.cli.utils import (
@@ -193,7 +193,12 @@ async def _query_async(
 
     try:
         # Create execution context
-        context = ExecutionContext()
+        context = build_execution_context(
+            user_context=None,
+            user_config=user_config,
+            site_config=site_config,
+            transport="cli-query",
+        )
 
         # Execute query using SDK executor with SQL language
         result = await engine.execute(
