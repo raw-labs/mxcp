@@ -14,7 +14,7 @@ from mxcp.sdk.auth import UserContext
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
-from mxcp.server.definitions.endpoints.utils import detect_language_from_source, extract_source_info
+from mxcp.server.definitions.endpoints.utils import prepare_source_for_execution
 
 logger = logging.getLogger(__name__)
 
@@ -99,15 +99,28 @@ class EndpointToolExecutor:
         context = ExecutionContext(user_context=user_context)
 
         # Determine the source code and language
-        source_info, source_path = self._get_source_code(endpoint_def, endpoint_path, tool_name)
-        language = self._get_language(endpoint_def, tool_name, source_path)
+        if endpoint_def.tool:
+            endpoint_type = "tool"
+        elif endpoint_def.resource:
+            endpoint_type = "resource"
+        else:
+            raise ValueError(f"Endpoint '{tool_name}' has no tool or resource definition")
+
+        repo_root = find_repo_root()
+        language, source_payload = prepare_source_for_execution(
+            endpoint_def,
+            endpoint_type,
+            endpoint_path,
+            repo_root,
+            include_function_name=True,
+        )
 
         logger.debug(f"Executing tool '{tool_name}' with language '{language}'")
 
         try:
             # Execute using the SDK engine
             result = await self.engine.execute(
-                language=language, source_code=source_info, params=arguments, context=context
+                language=language, source_code=source_payload, params=arguments, context=context
             )
 
             logger.debug(f"Tool '{tool_name}' executed successfully")
@@ -116,71 +129,3 @@ class EndpointToolExecutor:
         except Exception as e:
             logger.error(f"Tool '{tool_name}' execution failed: {e}")
             raise
-
-    def _get_source_code(
-        self, endpoint_def: EndpointDefinitionModel, endpoint_path: Path, tool_name: str
-    ) -> tuple[str, str | None]:
-        """Extract source code from endpoint definition, loading files when needed."""
-        # Get the tool or resource definition
-        source = None
-        if endpoint_def.tool:
-            source = endpoint_def.tool.source
-        elif endpoint_def.resource:
-            source = endpoint_def.resource.source
-
-        if not source:
-            raise ValueError(f"No source found for endpoint '{tool_name}'")
-
-        source_type, source_value = extract_source_info(source)
-        if source_type == "file":
-            relative_path = Path(source_value)
-            candidates = []
-            # Resolve endpoint path against repo root (or CWD fallback) to handle relative paths
-            try:
-                base_root = find_repo_root()
-            except FileNotFoundError:
-                base_root = Path.cwd()
-
-            endpoint_path_abs = (
-                endpoint_path if endpoint_path.is_absolute() else (base_root / endpoint_path)
-            ).resolve()
-
-            if not relative_path.is_absolute():
-                candidates.append((endpoint_path_abs.parent / relative_path).resolve())
-                candidates.append((base_root / relative_path).resolve())
-            else:
-                candidates.append(relative_path.resolve())
-
-            source_path = next((c for c in candidates if c.exists()), None)
-
-            if not source_path:
-                # Report first candidate for clarity
-                candidate_msg = candidates[0] if candidates else relative_path
-                raise ValueError(
-                    f"Source file not found for endpoint '{tool_name}': {candidate_msg}"
-                )
-
-            try:
-                return source_path.read_text(), str(source_path)
-            except Exception as exc:  # noqa: BLE001
-                raise ValueError(
-                    f"Failed to read source file for endpoint '{tool_name}': {exc}"
-                ) from exc
-
-        return source_value, None
-
-    def _get_language(
-        self, endpoint_def: EndpointDefinitionModel, tool_name: str, source_path: str | None
-    ) -> str:
-        """Determine the programming language for the endpoint."""
-        # Get the tool or resource definition
-        source = None
-        if endpoint_def.tool:
-            source = endpoint_def.tool.source
-        elif endpoint_def.resource:
-            source = endpoint_def.resource.source
-
-        if not source:
-            raise ValueError(f"No source found for endpoint '{tool_name}'")
-
-        return detect_language_from_source(source, source_path)

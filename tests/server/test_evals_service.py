@@ -1,6 +1,6 @@
 from pydantic_ai import ModelSettings
 
-from mxcp.server.services.evals.service import _build_model_settings
+from mxcp.server.services.evals.service import _build_model_settings, _format_expected_answer_failure
 
 
 def test_model_settings_chat_drops_response_only_keys() -> None:
@@ -12,9 +12,9 @@ def test_model_settings_chat_drops_response_only_keys() -> None:
         allowed,
     )
 
-    extra_body = getattr(settings, "extra_body", None)
+    extra_body = settings.get("extra_body")
     assert extra_body and "reasoning" in extra_body
-    assert getattr(settings, "timeout", None) == 30
+    assert settings.get("timeout") == 30
 
 
 def test_model_settings_responses_keeps_extras() -> None:
@@ -26,7 +26,7 @@ def test_model_settings_responses_keeps_extras() -> None:
         allowed,
     )
 
-    extra_body = getattr(settings, "extra_body", None)
+    extra_body = settings.get("extra_body")
     assert extra_body and "reasoning" in extra_body
 
 
@@ -42,7 +42,25 @@ def test_model_settings_anthropic_output_config_and_betas() -> None:
         allowed,
     )
 
-    extra_body = getattr(settings, "extra_body", None)
+    extra_body = settings.get("extra_body")
     assert extra_body and extra_body.get("output_config") == {"effort": "medium"}
-    headers = getattr(settings, "extra_headers", None)
+    headers = settings.get("extra_headers")
     assert headers and headers.get("anthropic-beta") == "effort-2025-11-24"
+
+
+def test_expected_answer_failure_formatting_is_multiline() -> None:
+    detail = _format_expected_answer_failure(
+        "Answer",
+        "Expected",
+        "wrong",
+        "bad",
+        "missed value",
+    )
+    lines = detail.splitlines()
+    assert lines == [
+        "LLM Answer: Answer",
+        "Expected: Expected",
+        "Grade: wrong",
+        "Comment: bad",
+        "Reasoning: missed value",
+    ]

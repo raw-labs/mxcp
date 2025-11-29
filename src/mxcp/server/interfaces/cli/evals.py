@@ -65,7 +65,14 @@ def format_eval_results(results: dict[str, Any], debug: bool = False) -> str:
 
                 failures = test.get("failures", [])
                 for failure in failures:
-                    output.append(f"    {click.style('💡', fg='yellow')} {failure}")
+                    lines = failure.splitlines()
+                    if not lines:
+                        continue
+                    indent = " " * 4
+                    continuation_indent = indent + " " * 3
+                    output.append(f"{indent}{click.style('💡', fg='yellow')} {lines[0]}")
+                    for line in lines[1:]:
+                        output.append(f"{continuation_indent}{line}")
 
                 if debug and "details" in test:
                     output.append(f"    {click.style('Debug info:', fg='yellow')}")
@@ -168,12 +175,19 @@ def format_eval_results(results: dict[str, Any], debug: bool = False) -> str:
                         output.append(
                             f"    {click.style('✗', fg='red')} {test['name']} {click.style(f'({test_time:.2f}s)', fg='bright_black')}"
                         )
-                        if test.get("error"):
+                        if test.get("error") and debug:
                             output.append(
                                 f"      {click.style('Error:', fg='red')} {test['error']}"
                             )
                         for failure in test.get("failures", []):
-                            output.append(f"      {click.style('💡', fg='yellow')} {failure}")
+                            lines = failure.splitlines()
+                            if not lines:
+                                continue
+                            indent = " " * 6
+                            continuation_indent = indent + " " * 3
+                            output.append(f"{indent}{click.style('💡', fg='yellow')} {lines[0]}")
+                            for line in lines[1:]:
+                                output.append(f"{continuation_indent}{line}")
 
         # Show passed suites
         passed = [s for s in suites if s.get("status") == "passed"]

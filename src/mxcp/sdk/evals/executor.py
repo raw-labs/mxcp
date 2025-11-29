@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -57,6 +59,7 @@ class GradeResult(BaseModel):
 
 
 class LLMExecutor:
+    _env_lock: asyncio.Lock = asyncio.Lock()
     """Pydantic-based agent loop with tool support."""
 
     def __init__(
@@ -75,12 +78,10 @@ class LLMExecutor:
         self.provider_config = provider_config or ProviderConfig()
         self._agent_cls: Callable[..., Any] = Agent
         self._model_settings = model_settings
-
-        self._apply_provider_env()
         self._tool_models = self._build_tool_models(available_tools)
-        self._tool_schemas: dict[str, dict[str, Any]] | None = None
-        self._agent_tools: list[Tool] | None = None
+        self._tool_schemas: dict[str, dict[str, Any]] = {}
         self.system_prompt = self._build_system_prompt(available_tools)
+        self._ensure_responses_env_defaults()
 
         logger.info(
             "LLM executor initialized with model %s (%s) and %d tools",
@@ -88,6 +89,7 @@ class LLMExecutor:
             self.model_type,
             len(available_tools),
         )
+        self._env_lock: asyncio.Lock = getattr(self, "_env_lock", asyncio.Lock())
 
     async def execute_prompt(
         self, prompt: str, user_context: UserContext | None = None, max_turns: int = 10
@@ -97,15 +99,14 @@ class LLMExecutor:
 
         def _make_tool(tool_def: ToolDefinition) -> Tool:
             args_model = self._tool_models.get(tool_def.name)
-            schema = self._tool_schemas.get(tool_def.name) if self._tool_schemas else None
+            schema = self._tool_schemas.get(tool_def.name)
             if schema is None:
                 schema = (
                     args_model.model_json_schema()
                     if args_model
                     else {"type": "object", "properties": {}, "required": []}
                 )
-                if self._tool_schemas is not None:
-                    self._tool_schemas[tool_def.name] = schema
+                self._tool_schemas[tool_def.name] = schema
 
             async def _fn(**kwargs: Any) -> Any:
                 if max_turns is not None and len(history) >= max_turns:
@@ -149,20 +150,17 @@ class LLMExecutor:
             tool._mxcp_callable = _fn  # type: ignore[attr-defined]
             return tool
 
-        if self._agent_tools is None:
-            # initialize schema cache on first build
-            self._tool_schemas = {}
-            self._agent_tools = [_make_tool(t) for t in self.available_tools]
-        agent_tools = self._agent_tools
+        agent_tools = [_make_tool(t) for t in self.available_tools]
         model_string = f"{self.model_type}:{self.model_name}"
         agent = self._agent_cls(
             model=model_string, instructions=self.system_prompt, tools=agent_tools
         )
 
         try:
-            agent_run = await agent.run(
-                prompt, deps=user_context, model_settings=self._model_settings
-            )
+            async with self._temporary_provider_env():
+                agent_run = await agent.run(
+                    prompt, deps=user_context, model_settings=self._model_settings
+                )
             answer = getattr(agent_run, "output", "")
             return AgentResult(answer=str(answer), tool_calls=history)
         except RuntimeError as exc:
@@ -192,7 +190,8 @@ class LLMExecutor:
         agent = self._agent_cls(
             model=model_string, instructions=grader_system, tools=(), output_type=GradeResult
         )
-        run = await agent.run(grader_prompt, model_settings=self._model_settings)
+        async with self._temporary_provider_env():
+            run = await agent.run(grader_prompt, model_settings=self._model_settings)
         out: GradeResult = getattr(run, "output", GradeResult())
         return out.model_dump()
 
@@ -245,22 +244,47 @@ class LLMExecutor:
         logger.debug("Unknown tool parameter type '%s'; defaulting to Any", param_type)
         return Any
 
-    def _apply_provider_env(self) -> None:
-        """Populate provider env vars if missing, using provided config."""
+    def _provider_env_overrides(self) -> dict[str, str]:
+        overrides: dict[str, str] = {}
         model_type = self.model_type or ""
         is_openai = model_type.startswith("openai")
         is_anthropic = model_type.startswith("anthropic")
-        env_overrides: dict[str, str] = {}
         if is_openai:
             if self.provider_config.api_key:
-                env_overrides["OPENAI_API_KEY"] = self.provider_config.api_key
+                overrides["OPENAI_API_KEY"] = self.provider_config.api_key
             if self.provider_config.base_url:
-                env_overrides["OPENAI_BASE_URL"] = self.provider_config.base_url
+                overrides["OPENAI_BASE_URL"] = self.provider_config.base_url
         elif is_anthropic:
             if self.provider_config.api_key:
-                env_overrides["ANTHROPIC_API_KEY"] = self.provider_config.api_key
+                overrides["ANTHROPIC_API_KEY"] = self.provider_config.api_key
             if self.provider_config.base_url:
-                env_overrides["ANTHROPIC_BASE_URL"] = self.provider_config.base_url
+                overrides["ANTHROPIC_BASE_URL"] = self.provider_config.base_url
+        return overrides
 
-        for key, value in env_overrides.items():
-            os.environ.setdefault(key, value)
+    def _ensure_responses_env_defaults(self) -> None:
+        if self.model_type != "openai-responses":
+            return
+        overrides = self._provider_env_overrides()
+        for key, value in overrides.items():
+            if key not in os.environ:
+                os.environ[key] = value
+
+    @asynccontextmanager
+    async def _temporary_provider_env(self) -> Any:
+        overrides = self._provider_env_overrides()
+        if not overrides:
+            yield
+            return
+        previous: dict[str, str | None] = {}
+        async with self._env_lock:
+            try:
+                for key, value in overrides.items():
+                    previous[key] = os.environ.get(key)
+                    os.environ[key] = value
+                yield
+            finally:
+                for key, original in previous.items():
+                    if original is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = original

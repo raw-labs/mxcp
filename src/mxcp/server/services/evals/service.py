@@ -231,6 +231,24 @@ def _compact_text(*parts: str, max_length: int | None = 240) -> str:
     return text
 
 
+def _format_expected_answer_failure(
+    response: str,
+    expected: str,
+    grade: str | None,
+    comment: str | None,
+    reasoning: str | None,
+) -> str:
+    """Build a multi-line failure detail block for expected-answer grading."""
+    lines = [
+        f"LLM Answer: {response}",
+        f"Expected: {expected}",
+        f"Grade: {grade or 'unknown'}",
+        f"Comment: {comment or 'n/a'}",
+        f"Reasoning: {reasoning or 'n/a'}",
+    ]
+    return "\n".join(lines)
+
+
 async def run_eval_suite(
     suite_name: str,
     user_config: UserConfigModel,
@@ -348,7 +366,7 @@ async def run_eval_suite(
             if progress_callback:
                 progress_callback(
                     f"test:{suite_name}:{idx}",
-                    "⏳ "
+                    "  ⏳ "
                     + click.style(
                         f"[{suite_name}] {idx}/{total_tests} • {test.name}...",
                         fg="cyan",
@@ -441,13 +459,12 @@ async def run_eval_suite(
                     grade = (evaluation.get("result") or "").lower()
                     comment = evaluation.get("comment") or "Model answer did not match expected"
                     reasoning = evaluation.get("reasoning") or ""
-                    detail = _compact_text(
-                        f"LLM answer: {response}",
-                        f"Expected: {assertions.expected_answer}",
-                        f"Grade: {grade or 'unknown'}",
-                        f"Comment: {comment}",
-                        f"Reasoning: {reasoning or 'n/a'}",
-                        max_length=None,  # show the full detail in output
+                    detail = _format_expected_answer_failure(
+                        response,
+                        assertions.expected_answer,
+                        grade or "unknown",
+                        comment,
+                        reasoning,
                     )
                     if grade != "correct":
                         failures.append(detail)
@@ -483,7 +500,8 @@ async def run_eval_suite(
                     icon = click.style("✓", fg="green") if passed else click.style("✗", fg="red")
                     progress_callback(
                         f"test:{suite_name}:{idx}",
-                        icon
+                        "  "
+                        + icon
                         + " "
                         + click.style(
                             f"[{suite_name}] {idx}/{total_tests} • {test.name} ({test_time:.2f}s)",
@@ -505,7 +523,7 @@ async def run_eval_suite(
                 if progress_callback:
                     progress_callback(
                         f"test:{suite_name}:{idx}",
-                        "✗ "
+                        "  ✗ "
                         + click.style(
                             f"[{suite_name}] {idx}/{total_tests} • {test.name} errored: {e} ({test_time:.2f}s)",
                             fg="red",

@@ -100,6 +100,27 @@ def test_execute_prompt_with_tool_call() -> None:
     assert call.error is None
 
 
+def test_execute_prompt_tool_calls_do_not_leak_between_runs() -> None:
+    executor = make_executor()
+
+    # First run
+    executor._agent_cls = lambda **kwargs: FakeAgent(
+        tools=kwargs["tools"], output="ok", tool_args={"get_weather": {"location": "Paris"}}
+    )
+    first = asyncio.run(executor.execute_prompt("Weather?"))
+    assert len(first.tool_calls) == 1
+    assert first.tool_calls[0].arguments["location"] == "Paris"
+
+    # Second run should still invoke tools and capture history independently
+    executor._agent_cls = lambda **kwargs: FakeAgent(
+        tools=kwargs["tools"], output="ok", tool_args={"get_weather": {"location": "Rome"}}
+    )
+    second = asyncio.run(executor.execute_prompt("Weather?"))
+
+    assert len(second.tool_calls) == 1
+    assert second.tool_calls[0].arguments["location"] == "Rome"
+
+
 def test_execute_prompt_tool_error() -> None:
     executor = make_executor()
     executor.tool_executor.responses["get_weather"] = ValueError("boom")  # type: ignore[attr-defined]
@@ -142,7 +163,58 @@ def test_expected_answer_grading() -> None:
 
 
 def test_temporary_env_sets_and_restores() -> None:
-    pytest.skip("Environment injection removed; no temporary env to test.")
+    prev_openai_key = os.environ.get("OPENAI_API_KEY")
+    prev_openai_url = os.environ.get("OPENAI_BASE_URL")
+    prev_anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    prev_anthropic_url = os.environ.get("ANTHROPIC_BASE_URL")
+
+    os.environ["OPENAI_API_KEY"] = "original"
+    os.environ["OPENAI_BASE_URL"] = "orig-url"
+
+    try:
+        executor = make_executor()
+
+        class EnvAgent(FakeAgent):
+            async def run(  # type: ignore[override]
+                self, _prompt: str, deps: Any | None = None, model_settings: Any | None = None
+            ) -> FakeRun:
+                # Capture environment while the agent runs
+                captured["during"] = (
+                    os.environ.get("ANTHROPIC_API_KEY"),
+                    os.environ.get("ANTHROPIC_BASE_URL"),
+                )
+                return await super().run(_prompt, deps=deps, model_settings=model_settings)
+
+        captured: dict[str, tuple[str | None, str | None]] = {}
+        executor._agent_cls = lambda **kwargs: EnvAgent(
+            tools=kwargs["tools"], output="done", tool_args={}
+        )
+
+        asyncio.run(executor.execute_prompt("Weather?"))
+
+        assert captured["during"] == ("key", "https://api.anthropic.com")
+        # Ensure globals restored
+        assert os.environ["OPENAI_API_KEY"] == "original"
+        assert os.environ["OPENAI_BASE_URL"] == "orig-url"
+        assert os.environ.get("ANTHROPIC_API_KEY") == prev_anthropic_key
+        assert os.environ.get("ANTHROPIC_BASE_URL") == prev_anthropic_url
+    finally:
+        if prev_anthropic_key is None:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+        else:
+            os.environ["ANTHROPIC_API_KEY"] = prev_anthropic_key
+        if prev_anthropic_url is None:
+            os.environ.pop("ANTHROPIC_BASE_URL", None)
+        else:
+            os.environ["ANTHROPIC_BASE_URL"] = prev_anthropic_url
+        if prev_openai_key is None:
+            os.environ.pop("OPENAI_API_KEY", None)
+        else:
+            os.environ["OPENAI_API_KEY"] = prev_openai_key
+        if prev_openai_url is None:
+            os.environ.pop("OPENAI_BASE_URL", None)
+        else:
+            os.environ["OPENAI_BASE_URL"] = prev_openai_url
 
 
 def test_max_turns_limits_tool_calls() -> None:
