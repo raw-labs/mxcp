@@ -6,6 +6,7 @@ This is primarily used by the evaluation system for LLM tool execution.
 """
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,12 @@ from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.definitions.endpoints.utils import detect_language_from_source, extract_source_info
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class EndpointWithPath:
+    definition: EndpointDefinitionModel
+    path: Path
 
 
 class EndpointToolExecutor:
@@ -43,9 +50,7 @@ class EndpointToolExecutor:
         >>> llm_executor = LLMExecutor(model_config, tool_definitions, tool_executor)
     """
 
-    def __init__(
-        self, engine: ExecutionEngine, endpoints: list[tuple[EndpointDefinitionModel, Path]]
-    ):
+    def __init__(self, engine: ExecutionEngine, endpoints: list[EndpointWithPath]):
         """Initialize the endpoint tool executor.
 
         Args:
@@ -53,11 +58,12 @@ class EndpointToolExecutor:
             endpoints: List of endpoint definitions
         """
         self.engine = engine
-        self.endpoints = [ep for ep, _ in endpoints]
+        self.endpoints = [entry.definition for entry in endpoints]
 
         # Create lookup map for faster tool resolution
         self._tool_map: dict[str, tuple[EndpointDefinitionModel, Path]] = {}
-        for endpoint_def, path in endpoints:
+        for entry in endpoints:
+            endpoint_def, path = entry.definition, entry.path
             if endpoint_def.tool:
                 self._tool_map[endpoint_def.tool.name] = (endpoint_def, path)
             elif endpoint_def.resource:

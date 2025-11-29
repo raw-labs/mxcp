@@ -1,7 +1,6 @@
 import logging
 import time
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import click
@@ -13,10 +12,9 @@ from mxcp.sdk.validator import TypeSchema
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
-from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.definitions.evals.loader import discover_eval_files, load_eval_suite
 from mxcp.server.executor.engine import create_runtime_environment
-from mxcp.server.executor.runners.tool import EndpointToolExecutor
+from mxcp.server.executor.runners.tool import EndpointToolExecutor, EndpointWithPath
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +112,7 @@ def _build_model_settings(
     return ModelSettings(**recognized_options)  # type: ignore[typeddict-item,no-any-return]
 
 
-def _load_endpoints(site_config: SiteConfigModel) -> list[tuple[EndpointDefinitionModel, Path]]:
+def _load_endpoints(site_config: SiteConfigModel) -> list[EndpointWithPath]:
     """Load all available endpoints.
 
     Args:
@@ -124,19 +122,19 @@ def _load_endpoints(site_config: SiteConfigModel) -> list[tuple[EndpointDefiniti
         List of (endpoint definition, file path)
     """
     loader = EndpointLoader(site_config)
-    endpoints: list[tuple[EndpointDefinitionModel, Path]] = []
+    endpoints: list[EndpointWithPath] = []
     discovered = loader.discover_endpoints()
 
     for path, endpoint_def, error in discovered:
         if error is None and endpoint_def and (endpoint_def.tool or endpoint_def.resource):
             # Only include endpoints that have a tool or resource definition
-            endpoints.append((endpoint_def, path))
+            endpoints.append(EndpointWithPath(endpoint_def, path))
 
     return endpoints
 
 
 def _convert_endpoints_to_tool_definitions(
-    endpoints: list[tuple[EndpointDefinitionModel, Path]],
+    endpoints: list[EndpointWithPath],
 ) -> list[ToolDefinition]:
     """Convert endpoint definitions to ToolDefinition objects for the LLM.
 
@@ -148,7 +146,8 @@ def _convert_endpoints_to_tool_definitions(
     """
     tool_definitions = []
 
-    for endpoint_def, _endpoint_path in endpoints:
+    for entry in endpoints:
+        endpoint_def = entry.definition
         if endpoint_def.tool:
             tool = endpoint_def.tool
 

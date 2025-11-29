@@ -344,14 +344,16 @@ async def _evals_impl(
     # Run evals
     start_time = time.time()
 
-    # Stateful progress renderer that overwrites the same line.
+    # Stateful progress renderer that overwrites the same line (TTY only).
     _lines: dict[str, str] = {}
     _order: list[str] = []
     _lines_printed = 0
+    _is_tty = click.get_text_stream("stdout").isatty()
 
     def _render_progress() -> None:
         nonlocal _lines_printed
-        # Move cursor up to rewrite previous lines
+        if not _is_tty:
+            return
         if _lines_printed:
             click.echo(f"\033[{_lines_printed}A\r", nl=False)
         for key in _order:
@@ -360,6 +362,9 @@ async def _evals_impl(
         _lines_printed = len(_order)
 
     def _progress(key: str, msg: str) -> None:
+        if not _is_tty:
+            click.echo(msg)
+            return
         if key not in _order:
             _order.append(key)
         _lines[key] = msg

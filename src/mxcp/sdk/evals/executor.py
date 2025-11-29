@@ -78,15 +78,8 @@ class LLMExecutor:
 
         self._apply_provider_env()
         self._tool_models = self._build_tool_models(available_tools)
-        # Cache tool schemas once to avoid recomputing per prompt
-        self._tool_schemas: dict[str, dict[str, Any]] = {
-            name: (
-                model.model_json_schema()
-                if model
-                else {"type": "object", "properties": {}, "required": []}
-            )
-            for name, model in self._tool_models.items()
-        }
+        self._tool_schemas: dict[str, dict[str, Any]] | None = None
+        self._agent_tools: list[Tool] | None = None
         self.system_prompt = self._build_system_prompt(available_tools)
 
         logger.info(
@@ -104,11 +97,15 @@ class LLMExecutor:
 
         def _make_tool(tool_def: ToolDefinition) -> Tool:
             args_model = self._tool_models.get(tool_def.name)
-            schema = self._tool_schemas.get(tool_def.name) or {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            }
+            schema = self._tool_schemas.get(tool_def.name) if self._tool_schemas else None
+            if schema is None:
+                schema = (
+                    args_model.model_json_schema()
+                    if args_model
+                    else {"type": "object", "properties": {}, "required": []}
+                )
+                if self._tool_schemas is not None:
+                    self._tool_schemas[tool_def.name] = schema
 
             async def _fn(**kwargs: Any) -> Any:
                 if max_turns is not None and len(history) >= max_turns:
@@ -152,7 +149,11 @@ class LLMExecutor:
             tool._mxcp_callable = _fn  # type: ignore[attr-defined]
             return tool
 
-        agent_tools = [_make_tool(t) for t in self.available_tools]
+        if self._agent_tools is None:
+            # initialize schema cache on first build
+            self._tool_schemas = {}
+            self._agent_tools = [_make_tool(t) for t in self.available_tools]
+        agent_tools = self._agent_tools
         model_string = f"{self.model_type}:{self.model_name}"
         agent = self._agent_cls(
             model=model_string, instructions=self.system_prompt, tools=agent_tools
