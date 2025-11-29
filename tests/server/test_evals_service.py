@@ -1,6 +1,9 @@
 from pydantic_ai import ModelSettings
 
-from mxcp.server.services.evals.service import _build_model_settings, _format_expected_answer_failure
+from mxcp.server.services.evals.service import (
+    _build_model_settings,
+    _format_expected_answer_failure,
+)
 
 
 def test_model_settings_chat_drops_response_only_keys() -> None:
