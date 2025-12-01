@@ -215,11 +215,18 @@ class LLMExecutor:
             fields: dict[str, Any] = {}
             for param in tool.parameters:
                 py_type = self._map_param_type(param.type)
-                default = param.default if param.default is not None else None
-                field_info = Field(
-                    default if default is not None or not param.required else ...,
-                    description=param.description or None,
-                )
+                field_info_kwargs: dict[str, Any] = {}
+                if param.description:
+                    field_info_kwargs["description"] = param.description
+
+                if param.default is not None:
+                    default_value: Any = param.default
+                elif param.required:
+                    default_value = ...
+                else:
+                    default_value = None
+
+                field_info = Field(default_value, **field_info_kwargs)
                 fields[param.name] = (py_type, field_info)
 
             models[tool.name] = create_model(f"{tool.name}_Args", **fields)
