@@ -628,7 +628,7 @@ async def test_context_access() -> dict:
         secret_value = None
 
     # Test nested async calls
-    nested_result = await _nested_async()
+    nested_result = await _nested()
 
     return {
         "db_access_works": db_access_works,
@@ -639,7 +639,7 @@ async def test_context_access() -> dict:
         "nested_result": nested_result
     }
 
-async def _nested_async() -> dict:
+async def _nested() -> dict:
     \"\"\"Nested async function to test context propagation.\"\"\"
     await asyncio.sleep(0.01)  # Simulate async work
 

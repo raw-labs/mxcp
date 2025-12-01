@@ -14,6 +14,7 @@ dependencies = [
     # MCP Framework
     "mcp>=1.12,<1.22",  # Official MCP Python SDK
     "aiohttp>=3.8.0",  # HTTP transport for MCP
+    "aiofiles>=23.2.1",  # Async file I/O for audit backend
     "starlette>=0.27.0",  # HTTP server framework
     
     # Data & Processing

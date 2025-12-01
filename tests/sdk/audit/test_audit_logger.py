@@ -4,9 +4,9 @@ These tests focus on the AuditLogger class which provides the main
 interface that applications use for audit logging.
 """
 
+import asyncio
 import json
 import tempfile
-import time
 from pathlib import Path
 
 import pytest
@@ -44,14 +44,14 @@ async def test_audit_logger_creates_records():
             schema_name="mxcp.endpoints",  # Use the default endpoint schema
         )
 
-        # Give background thread time to write
-        time.sleep(0.5)
+        # Give background task time to write
+        await asyncio.sleep(0.5)
 
         # Shutdown
-        logger.shutdown()
+        await logger.close()
 
         # Additional wait after shutdown
-        time.sleep(0.1)
+        await asyncio.sleep(0.1)
 
         # Verify log was written
         assert log_path.exists()
@@ -91,7 +91,7 @@ async def test_audit_logger_disabled():
         )
 
         # Shutdown
-        logger.shutdown()
+        await logger.close()
 
         # File should not exist
         assert not log_path.exists()
@@ -141,9 +141,9 @@ async def test_audit_logger_sensitive_data_redaction():
         )
 
         # Give time to write
-        time.sleep(0.5)
-        logger.shutdown()
-        time.sleep(0.1)
+        await asyncio.sleep(0.5)
+        await logger.close()
+        await asyncio.sleep(0.1)
 
         # Verify redaction - need to find the actual audit record
         with open(log_path) as f:
@@ -198,7 +198,7 @@ async def test_audit_logger_querying():
         import asyncio
 
         await asyncio.sleep(0.1)
-        logger.backend.shutdown()  # Force flush
+        await logger.backend.close()  # Force flush
 
         # Query all records
         all_records = [r async for r in logger.query_records()]
@@ -226,7 +226,7 @@ async def test_audit_logger_querying():
         ]
         assert len(specific_records) == 2
 
-        logger.shutdown()
+        await logger.close()
 
 
 @pytest.mark.asyncio
@@ -256,8 +256,8 @@ async def test_audit_logger_sync_queries():
         )
 
         # Give time for write and force flush
-        time.sleep(0.1)
-        logger.backend.shutdown()
+        await asyncio.sleep(0.1)
+        await logger.backend.close()
 
         # Query records using async interface
         records = [r async for r in logger.query_records(operation_names=["sync_tool"])]
@@ -270,4 +270,4 @@ async def test_audit_logger_sync_queries():
         assert record is not None
         assert record.operation_name == "sync_tool"
 
-        logger.shutdown()
+        await logger.close()

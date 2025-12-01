@@ -384,8 +384,4 @@ class ExecutionEngine:
             raise ValueError(f"Language '{language}' not supported. Available: {available}")
 
         executor = self._executors[language]
-        if hasattr(executor, "extract_parameters"):
-            return executor.extract_parameters(source_code)
-        else:
-            # Fallback for executors that don't implement parameter extraction
-            return []
+        return executor.extract_parameters(source_code)

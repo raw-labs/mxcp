@@ -1,5 +1,4 @@
 import asyncio
-import concurrent.futures
 import contextlib
 import functools
 import hashlib
@@ -8,7 +7,6 @@ import logging
 import os
 import re
 import signal
-import threading
 import time
 import traceback
 from collections.abc import Awaitable, Callable
@@ -48,7 +46,7 @@ from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import get_active_profile, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.core.refs.external import ExternalRefTracker
-from mxcp.server.core.reload import ReloadManager, ReloadRequest
+from mxcp.server.core.reload import AsyncServerLock, ReloadManager, ReloadRequest
 from mxcp.server.core.telemetry import configure_telemetry_from_config, shutdown_telemetry
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 from mxcp.server.definitions.endpoints.models import (
@@ -110,14 +108,13 @@ def with_draining_and_request_tracking(func: T) -> T:
         wait_timeout = 30  # seconds
 
         while True:
-            # Atomically check draining flag and register request if not draining
-            with self.requests_lock:
+            # Check if draining is in progress and if not, increment the active requests counter.
+            async with self.requests_lock:
                 if not self.draining:
-                    # Safe to register - draining hasn't started or has finished
                     self.active_requests += 1
                     break
 
-            # Draining is in progress, wait and retry
+            # Draining is in progress, wait and retry.
             if time.time() - wait_start > wait_timeout:
                 raise RuntimeError(
                     "Service is reloading and taking longer than expected. Please retry in a few seconds."
@@ -127,8 +124,7 @@ def with_draining_and_request_tracking(func: T) -> T:
         try:
             return await func(self, *args, **kwargs)
         finally:
-            # Decrement request counter
-            with self.requests_lock:
+            async with self.requests_lock:
                 self.active_requests -= 1
 
     return cast(T, wrapper)
@@ -149,6 +145,8 @@ class RAWMCP:
     readonly: bool
     _model_cache: dict[str, Any]
     transport_mode: str | None
+
+    _signal_loop: asyncio.AbstractEventLoop | None = None
 
     def __init__(
         self,
@@ -238,7 +236,6 @@ class RAWMCP:
 
         # Resolve configurations
         self._resolve_and_apply_configs()
-
         # Initialize telemetry
         self._initialize_telemetry()
 
@@ -254,17 +251,17 @@ class RAWMCP:
         # Load and validate endpoints
         self._load_endpoints()
 
-        # Initialize audit logger
-        self._initialize_audit_logger()
-
         # Track transport mode and other state
         self.transport_mode = None
         self._shutdown_called = False
 
         # Request tracking for safe reloading
         self.active_requests = 0
-        self.requests_lock = threading.Lock()
+        self.requests_lock = AsyncServerLock()
         self.draining = False
+
+        # Event loop used for signal callbacks (set when main loop starts)
+        self._signal_loop: asyncio.AbstractEventLoop | None = None
 
         # Initialize admin API (but don't start yet - will be started in run())
         self.admin_api = AdminAPIRunner(
@@ -273,8 +270,18 @@ class RAWMCP:
             enabled=get_env_admin_socket_enabled(),
         )
 
-        # Register signal handlers
-        self._register_signal_handlers()
+        # Note: Signal handlers are registered in run() when the system is ready
+        # to handle them, not here in __init__.
+
+        self._initialize_audit_config()
+
+    def _initialize_audit_config(self) -> None:
+        """Resolve static audit logging settings from configuration."""
+        profile_config = self.site_config.profiles.get(self.profile_name)
+        audit_config = profile_config.audit if profile_config else None
+        self._audit_logging_enabled = bool(audit_config and audit_config.enabled)
+        audit_path_str = audit_config.path if audit_config and audit_config.path else ""
+        self._audit_log_path = Path(audit_path_str) if audit_path_str else Path("audit.log")
 
     def _resolve_and_apply_configs(self) -> None:
         """Resolve external references with selective interpolation and apply CLI overrides.
@@ -478,15 +485,8 @@ class RAWMCP:
         if self.oauth_handler and self.oauth_server:
             self._register_oauth_routes()
 
-    async def _run_with_admin_api(self, transport: str) -> None:
-        """Run both the admin API and main server in the same event loop.
-
-        This method is called with asyncio.run() to create a fresh event loop
-        that runs both the admin API's uvicorn server and the main MCP server.
-
-        Args:
-            transport: The transport protocol to use
-        """
+    async def _run_admin_api_and_transport(self, transport: str) -> None:
+        """Start the admin API (if enabled) and run the main MCP server."""
         # Start admin API in this event loop (if enabled)
         await self.admin_api.start()
 
@@ -513,21 +513,19 @@ class RAWMCP:
             await self.admin_api.stop()
             logger.info("Admin API stopped")
 
-    def _initialize_audit_logger(self) -> None:
-        """Initialize audit logger if enabled."""
+    async def _initialize_audit_logger(self) -> None:
+        """Initialize audit logger once the event loop is running."""
+        if self.audit_logger is not None:
+            return
 
-        profile_config = self.site_config.profiles.get(self.profile_name)
-        audit_config = profile_config.audit if profile_config else None
-        if audit_config and audit_config.enabled:
-            log_path_str = audit_config.path or ""
-            log_path = Path(log_path_str) if log_path_str else Path("audit.log")
-            # Ensure parent directory exists
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            self.audit_logger = asyncio.run(AuditLogger.jsonl(log_path))
-            # Register the endpoint execution schema
-            asyncio.run(self._register_audit_schema())
-        else:
-            self.audit_logger = asyncio.run(AuditLogger.disabled())
+        if not self._audit_logging_enabled:
+            self.audit_logger = await AuditLogger.disabled()
+            return
+
+        log_path = self._audit_log_path
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        self.audit_logger = await AuditLogger.jsonl(log_path=log_path)
+        await self._register_audit_schema()
 
     async def _register_audit_schema(self) -> None:
         """Register the application's audit schema."""
@@ -561,14 +559,29 @@ class RAWMCP:
             logger.info("Registered SIGHUP handler for system reload.")
 
     def _handle_reload_signal(self, signum: int, frame: Any) -> None:
-        """Handle SIGHUP signal to reload the configuration."""
-        logger.info("Received SIGHUP signal, initiating configuration reload...")
+        """Handle SIGHUP signal to reload the configuration.
 
-        # Request configuration reload and wait for it to complete
+        Signal handlers run in the main thread but outside the event loop context.
+        We use call_soon_threadsafe to schedule the async reload task on the loop.
+        """
+        logger.info("Received SIGHUP signal, scheduling configuration reload...")
+
+        loop = self._signal_loop
+        if loop is None:
+            logger.error("SIGHUP received but event loop not initialized - ignoring")
+            return
+
+        loop.call_soon_threadsafe(lambda: asyncio.create_task(self._handle_reload_signal_async()))
+
+    async def _handle_reload_signal_async(self) -> None:
+        """Async handler that waits for reload completion."""
         request = self.reload_configuration()
 
-        # Wait for the reload to complete
-        completed = request.wait_for_completion(timeout=60.0)  # 60 second timeout
+        try:
+            completed = await request.wait_for_completion(timeout=60.0)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.error(f"SIGHUP reload wait failed: {exc}")
+            return
 
         if completed:
             logger.info("SIGHUP reload completed successfully")
@@ -694,77 +707,7 @@ class RAWMCP:
             payload_func=reload_config_files, description="Configuration reload (SIGHUP)"
         )
 
-    def _ensure_async_completes(
-        self, coro: Any, timeout: float = 10.0, operation_name: str = "operation"
-    ) -> Any:
-        """Ensure an async operation completes, even when called from sync context with active event loop.
-
-        This method safely runs an async operation from a synchronous context, handling the case
-        where there's already an event loop running in the current thread (which would cause
-        a deadlock if we tried to use asyncio.run()).
-
-        Args:
-            coro: The coroutine to run
-            timeout: Timeout in seconds
-            operation_name: Name of the operation for logging
-
-        Raises:
-            TimeoutError: If the operation times out
-            Exception: If the operation fails
-        """
-
-        async def with_timeout() -> Any:
-            """Wrap the coroutine with a timeout."""
-            return await asyncio.wait_for(coro, timeout=timeout)
-
-        # Check if there's an active event loop in the current thread
-        try:
-            asyncio.get_running_loop()
-            # There is an active loop - we must run in a separate thread to avoid deadlock
-            logger.info(f"Running {operation_name} with active event loop - using separate thread")
-
-            def run_in_new_loop() -> Any:
-                """Run the coroutine in a new event loop in this thread."""
-                # asyncio.run() creates a new event loop, runs the coroutine, and cleans up
-                return asyncio.run(with_timeout())
-
-            # Execute in a separate thread
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(run_in_new_loop)
-                try:
-                    final_type = future.result(
-                        timeout=timeout + 1
-                    )  # Add buffer for thread overhead
-                    logger.info(f"{operation_name} completed successfully")
-                    return final_type
-                except concurrent.futures.TimeoutError:
-                    # The thread itself timed out - this is a fatal error
-                    raise TimeoutError(
-                        f"{operation_name} thread timed out after {timeout + 1} seconds"
-                    ) from None
-                except asyncio.TimeoutError:
-                    # The asyncio.wait_for timed out (this gets wrapped in the future)
-                    raise TimeoutError(
-                        f"{operation_name} timed out after {timeout} seconds"
-                    ) from None
-                except Exception as e:
-                    logger.error(f"{operation_name} failed: {e}")
-                    raise
-
-        except RuntimeError:
-            # No event loop running, we can run directly
-            logger.info(f"Running {operation_name} without active event loop - using asyncio.run")
-            try:
-                result = asyncio.run(with_timeout())
-                logger.info(f"{operation_name} completed successfully")
-                return result
-            except asyncio.TimeoutError:
-                raise TimeoutError(f"{operation_name} timed out after {timeout} seconds") from None
-            except Exception as e:
-                logger.error(f"{operation_name} failed: {e}")
-                raise
-
-    def shutdown(self) -> None:
+    async def shutdown(self) -> None:
         """Shutdown the server gracefully."""
         # Prevent double shutdown
         if self._shutdown_called:
@@ -773,46 +716,53 @@ class RAWMCP:
 
         logger.info("Shutting down MXCP server...")
 
-        try:
-            # Note: Admin API is stopped in _run_with_admin_api() finally block,
-            # not here, since it needs to be stopped while the event loop is still active.
+        # Clear signal loop first to prevent SIGHUP signals from triggering
+        # reload requests during shutdown (they'll be safely ignored).
+        self._signal_loop = None
 
-            # Stop the reload manager
-            self.reload_manager.stop()
+        try:
+            # Stop the reload manager while the loop is still running
+            try:
+                await self.reload_manager.stop()
+            except Exception as exc:
+                logger.error(f"Error stopping reload manager: {exc}")
 
             # Gracefully shut down the reloadable runtime components first
             # This handles python runtimes, plugins, and the db session.
-            self.shutdown_runtime_components()
+            try:
+                self.shutdown_runtime_components()
+            except Exception as exc:
+                logger.error(f"Error shutting down runtime components: {exc}")
 
-            # Close OAuth server persistence - ensure it completes
+            # Close OAuth server persistence
             if self.oauth_server:
                 try:
-                    self._ensure_async_completes(
-                        self.oauth_server.close(),
-                        timeout=5.0,
-                        operation_name="OAuth server shutdown",
-                    )
-                except Exception as e:
-                    logger.error(f"Error closing OAuth server: {e}")
-                    # Continue with shutdown even if OAuth server close fails
+                    await asyncio.wait_for(self.oauth_server.close(), timeout=5.0)
+                    logger.info("Closed OAuth server")
+                except asyncio.TimeoutError:
+                    logger.error("OAuth server shutdown timed out after 5 seconds")
+                except Exception as exc:
+                    logger.error(f"Error closing OAuth server: {exc}")
 
             # Shutdown audit logger if initialized
             if self.audit_logger:
                 try:
-                    self.audit_logger.shutdown()
+                    await asyncio.wait_for(self.audit_logger.close(), timeout=5.0)
                     logger.info("Closed audit logger")
-                except Exception as e:
-                    logger.error(f"Error closing audit logger: {e}")
+                except asyncio.TimeoutError:
+                    logger.error("Audit logger shutdown timed out after 5 seconds")
+                except Exception as exc:
+                    logger.error(f"Error closing audit logger: {exc}")
 
-            # Shutdown telemetry
+            # Shutdown telemetry (synchronous)
             try:
                 shutdown_telemetry()
                 logger.info("Shutdown telemetry")
-            except Exception as e:
-                logger.error(f"Error shutting down telemetry: {e}")
+            except Exception as exc:
+                logger.error(f"Error shutting down telemetry: {exc}")
 
-        except Exception as e:
-            logger.error(f"Error during shutdown: {e}")
+        except Exception as exc:
+            logger.error(f"Error during shutdown: {exc}")
         finally:
             logger.info("MXCP server shutdown complete")
 
@@ -1891,7 +1841,7 @@ class RAWMCP:
                 logger.error(f"Failed to initialize OAuth server: {e}")
                 raise
 
-    def run(self, transport: str = "streamable-http") -> None:
+    async def run(self, transport: str = "streamable-http") -> None:
         """Run the MCP server.
 
         Args:
@@ -1907,13 +1857,11 @@ class RAWMCP:
                 f"Unknown transport: {transport}. Must be one of: {', '.join(valid_transports)}"
             )
 
+        reload_started = False
         try:
             logger.info("Starting MCP server...")
             # Store transport mode for use in handlers
             self.transport_mode = transport
-
-            # Start the reload manager
-            self.reload_manager.start()
 
             # Note: Admin API will be started in the FastMCP lifespan event
             # when the uvicorn event loop is running. This ensures the admin
@@ -1932,23 +1880,35 @@ class RAWMCP:
             # Initialize OAuth server before starting FastMCP - ensure it completes
             if self.oauth_server:
                 try:
-                    self._ensure_async_completes(
-                        self._initialize_oauth_server(),
-                        timeout=10.0,
-                        operation_name="OAuth server initialization",
-                    )
-                except TimeoutError:
+                    await asyncio.wait_for(self._initialize_oauth_server(), timeout=10.0)
+                except asyncio.TimeoutError:
                     raise RuntimeError("OAuth server initialization timed out") from None
-                except Exception as e:
+                except Exception as exc:
                     # Don't continue if OAuth is enabled but initialization failed
-                    raise RuntimeError(f"OAuth server initialization failed: {e}") from e
+                    raise RuntimeError(f"OAuth server initialization failed: {exc}") from exc
 
-            # Start server - use asyncio.run to create event loop and run both admin API and main server
-            asyncio.run(self._run_with_admin_api(transport))
+            loop = asyncio.get_running_loop()
+            self._signal_loop = loop
+
+            # Start reload manager, then register signal handlers.
+            # Order matters: reload_manager must be started before signals can trigger reloads.
+            self.reload_manager.start()
+            reload_started = True
+            self._register_signal_handlers()
+
+            await self._initialize_audit_logger()
+
+            # Start server
+            await self._run_admin_api_and_transport(transport)
             logger.info("MCP server started successfully.")
         except Exception as e:
             logger.error(f"Error running MCP server: {e}")
             raise
+        finally:
+            if reload_started:
+                logger.info("Stopping reload manager")
+                await self.reload_manager.stop()
+                logger.info("Reload manager stopped")
 
     def _register_oauth_routes(self) -> None:
         """Register OAuth callback routes."""

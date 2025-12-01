@@ -38,6 +38,7 @@ Example usage:
     ... )
 """
 
+import asyncio
 import hashlib
 import logging
 from typing import TYPE_CHECKING, Any
@@ -198,12 +199,13 @@ class DuckDBExecutor(ExecutorPlugin):
                     "db.readonly": self._runtime.database_config.readonly,
                 },
             ):
-                try:
-                    # Get a connection from the pool
-                    with self._runtime.get_connection() as session:
-                        # Set execution context for this execution, which is used for dynamic UDFs
-                        context_token = set_execution_context(context)
 
+                def _run_query_with_connection() -> Any:
+                    """Run query in a single thread with connection checkout/release."""
+                    # Use sync context manager - entire lifecycle in one thread
+                    with self._runtime.get_connection() as session:
+                        # Set execution context for dynamic UDFs
+                        context_token = set_execution_context(context)
                         try:
                             result = session.execute_query_to_dict(source_code, params)
 
@@ -221,9 +223,11 @@ class DuckDBExecutor(ExecutorPlugin):
 
                             return result
                         finally:
-                            # Always reset the context when done
                             reset_execution_context(context_token)
 
+                try:
+                    result = await asyncio.to_thread(_run_query_with_connection)
+                    return result
                 except Exception as e:
                     logger.error(f"SQL execution failed: {e}")
                     # Record failure metrics

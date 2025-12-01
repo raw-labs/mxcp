@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import logging.handlers
@@ -5,8 +6,9 @@ import os
 import shutil
 import sys
 import traceback
+from collections.abc import Coroutine
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import click
 
@@ -211,6 +213,24 @@ def output_result(result: Any, json_output: bool = False, debug: bool = False) -
             click.echo(result)
 
 
+T = TypeVar("T")
+
+
+def run_async_cli(coro: Coroutine[Any, Any, T]) -> T:
+    """Execute an async CLI implementation from a synchronous entrypoint.
+
+    Args:
+        coro: The coroutine to run.
+
+    Returns:
+        The result of the coroutine.
+
+    Raises:
+        RuntimeError: If called from within a running event loop.
+    """
+    return asyncio.run(coro)
+
+
 def output_error(error: Exception, json_output: bool = False, debug: bool = False) -> None:
     """Output an error in either JSON or human-readable format.
 
@@ -233,7 +253,6 @@ def output_error(error: Exception, json_output: bool = False, debug: bool = Fals
 
 
 def configure_logging_from_config(
-    site_config: SiteConfigModel,
     user_config: UserConfigModel,
     debug: bool = False,
     transport: str | None = None,
@@ -246,7 +265,6 @@ def configure_logging_from_config(
     Logging is configured at the top level of user config (not per profile).
 
     Args:
-        site_config: The loaded site configuration (required for load_user_config)
         user_config: The loaded user configuration
         debug: Whether to enable debug logging (overrides config level)
         transport: Transport mode ("stdio", "streamable-http", "sse")

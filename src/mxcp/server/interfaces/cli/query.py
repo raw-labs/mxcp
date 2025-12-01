@@ -1,4 +1,3 @@
-import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -17,6 +16,7 @@ from mxcp.server.interfaces.cli.utils import (
     output_error,
     output_result,
     resolve_profile,
+    run_async_cli,
 )
 
 
@@ -80,14 +80,10 @@ def query(
         user_config = load_user_config(site_config, active_profile=active_profile)
 
         # Configure logging
-        configure_logging_from_config(
-            site_config=site_config,
-            user_config=user_config,
-            debug=debug,
-        )
+        configure_logging_from_config(user_config=user_config, debug=debug)
 
         # Run async implementation
-        asyncio.run(_query_async(sql, file, param, active_profile, json_output, debug, readonly))
+        run_async_cli(_query(sql, file, param, active_profile, json_output, debug, readonly))
     except click.ClickException:
         # Let Click exceptions propagate - they have their own formatting
         raise
@@ -100,7 +96,7 @@ def query(
         output_error(e, json_output, debug)
 
 
-async def _query_async(
+async def _query(
     sql: str | None,
     file: str | None,
     param: tuple[str, ...],
