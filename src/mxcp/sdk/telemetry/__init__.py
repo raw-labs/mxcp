@@ -35,15 +35,6 @@ Quick Start:
     ```
 """
 
-from .models import (
-    MetricsConfigModel,
-    Span,
-    SpanKind,
-    Status,
-    StatusCode,
-    TelemetryConfigModel,
-    TracingConfigModel,
-)
 from .config import (
     configure_all,
     configure_tracing,
@@ -59,6 +50,15 @@ from .metrics import (
     record_gauge,
     record_histogram,
     time_histogram,
+)
+from .models import (
+    MetricsConfigModel,
+    Span,
+    SpanKind,
+    Status,
+    StatusCode,
+    TelemetryConfigModel,
+    TracingConfigModel,
 )
 from .tracer import (
     get_current_span,

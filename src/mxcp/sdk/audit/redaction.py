@@ -7,7 +7,7 @@ serialization and consistent behavior.
 import hashlib
 from typing import Any, cast
 
-from ._types import RedactionStrategy
+from .models import RedactionStrategy
 
 
 def apply_redaction(

@@ -24,7 +24,10 @@ class MockToolExecutor:
         self.calls = []
 
     async def execute_tool(
-        self, tool_name: str, arguments: dict[str, Any], user_context: UserContextModel | None = None
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        user_context: UserContextModel | None = None,
     ) -> Any:
         """Mock tool execution that records calls and returns predefined responses."""
         self.calls.append(

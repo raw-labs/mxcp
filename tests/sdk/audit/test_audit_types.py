@@ -132,7 +132,9 @@ def test_audit_schema_creation():
             FieldDefinitionModel(name="user_id", type="string"),
             FieldDefinitionModel(name="ip_address", type="string", sensitive=True),
         ],
-        field_redactions=[FieldRedactionModel(field_path="ip_address", strategy=RedactionStrategy.PARTIAL)],
+        field_redactions=[
+            FieldRedactionModel(field_path="ip_address", strategy=RedactionStrategy.PARTIAL)
+        ],
         extract_fields=["event_type", "user_id"],
         indexes=["event_type", "timestamp", "user_id"],
     )
@@ -152,7 +154,9 @@ def test_audit_schema_creation():
 
 def test_audit_schema_minimal():
     """Test AuditSchema with minimal required fields."""
-    schema = AuditSchemaModel(schema_name="simple_events", version=1, description="Simple event schema")
+    schema = AuditSchemaModel(
+        schema_name="simple_events", version=1, description="Simple event schema"
+    )
 
     assert schema.schema_name == "simple_events"
     assert schema.version == 1

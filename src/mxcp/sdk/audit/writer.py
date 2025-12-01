@@ -22,7 +22,9 @@ class AuditRedactor:
         """
         self.default_strategy = default_strategy
 
-    def redact_record(self, record: AuditRecordModel, redactions: list[FieldRedactionModel]) -> AuditRecordModel:
+    def redact_record(
+        self, record: AuditRecordModel, redactions: list[FieldRedactionModel]
+    ) -> AuditRecordModel:
         """Apply redactions to a record.
 
         Args:
@@ -98,7 +100,9 @@ class BaseAuditWriter:
         """
         self.redactor = redactor or AuditRedactor()
 
-    async def apply_schema_policies(self, record: AuditRecordModel, schema: AuditSchemaModel) -> AuditRecordModel:
+    async def apply_schema_policies(
+        self, record: AuditRecordModel, schema: AuditSchemaModel
+    ) -> AuditRecordModel:
         """Apply schema-based policies to a record.
 
         Args:

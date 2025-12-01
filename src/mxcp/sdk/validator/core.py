@@ -4,8 +4,8 @@ import inspect
 from collections.abc import Callable
 from typing import Any
 
-from .models import ParameterSchemaModel, TypeSchemaModel, ValidationSchemaModel
 from .converters import TypeConverter, ValidationError
+from .models import ParameterSchemaModel, TypeSchemaModel, ValidationSchemaModel
 
 
 class TypeValidator:
@@ -248,7 +248,9 @@ class TypeValidator:
 
         return self._type_schema_to_dict(self.schema.output_schema)
 
-    def _type_schema_to_dict(self, schema: TypeSchemaModel | ParameterSchemaModel) -> dict[str, Any]:
+    def _type_schema_to_dict(
+        self, schema: TypeSchemaModel | ParameterSchemaModel
+    ) -> dict[str, Any]:
         """Convert a TypeSchema or ParameterSchema to a dictionary representation."""
         result: dict[str, Any] = {
             "type": schema.type,

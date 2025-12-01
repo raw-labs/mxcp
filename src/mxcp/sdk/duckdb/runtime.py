@@ -14,9 +14,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
+from .models import (
+    DatabaseConfigModel,
+    PluginConfigModel,
+    PluginDefinitionModel,
+    SecretDefinitionModel,
+)
 from .plugin_loader import load_plugins
 from .session import DuckDBSession
-from .models import DatabaseConfigModel, PluginConfigModel, PluginDefinitionModel, SecretDefinitionModel
 
 logger = logging.getLogger(__name__)
 

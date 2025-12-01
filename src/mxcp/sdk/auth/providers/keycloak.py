@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
+from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from ..models import (
     ExternalUserInfoModel,
     HttpTransportConfigModel,
@@ -20,7 +21,6 @@ from ..models import (
     StateMetaModel,
     UserContextModel,
 )
-from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from ..url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)

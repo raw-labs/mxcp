@@ -62,7 +62,10 @@ class EndpointToolExecutor:
         logger.info(f"EndpointToolExecutor initialized with {len(endpoints)} endpoints")
 
     async def execute_tool(
-        self, tool_name: str, arguments: dict[str, Any], user_context: UserContextModel | None = None
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        user_context: UserContextModel | None = None,
     ) -> Any:
         """Execute a tool by finding the corresponding endpoint.
 

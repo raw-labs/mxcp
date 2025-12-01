@@ -66,7 +66,9 @@ class ExternalOAuthHandler(ABC):
 
     # ----- code exchange step -----
     @abstractmethod
-    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfoModel, StateMetaModel]:
+    async def exchange_code(
+        self, code: str, state: str
+    ) -> tuple[ExternalUserInfoModel, StateMetaModel]:
         """Turn `code` + `state` into `ExternalUserInfoModel` and `StateMetaModel` or raise `HTTPException`."""
 
     # ----- callback wiring -----
@@ -238,13 +240,8 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     client_id=client_id,
                     client_secret=client_config.client_secret,  # None for public clients
                     redirect_uris=redirect_uris_any,
-                    grant_types=cast(
-                        list[Literal["authorization_code", "refresh_token"]],
-                        client_config.grant_types or ["authorization_code"],
-                    ),
-                    response_types=cast(
-                        list[Literal["code"]], ["code"]
-                    ),
+                    grant_types=client_config.grant_types or ["authorization_code"],
+                    response_types=cast(list[Literal["code"]], ["code"]),
                     scope=" ".join(client_config.scopes or []),  # No default scopes
                     client_name=client_config.name,
                 )

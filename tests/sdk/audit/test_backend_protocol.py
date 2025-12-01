@@ -73,7 +73,9 @@ async def test_backend_record_writing(backend):
     """Test that backend properly writes audit records."""
 
     # Create schema first
-    schema = AuditSchemaModel(schema_name="write_test", version=1, description="Test record writing")
+    schema = AuditSchemaModel(
+        schema_name="write_test", version=1, description="Test record writing"
+    )
     await backend.create_schema(schema)
 
     # Write a record
@@ -103,7 +105,9 @@ async def test_backend_record_querying(backend):
     """Test that backend properly implements record querying."""
 
     # Create schema
-    schema = AuditSchemaModel(schema_name="query_test", version=1, description="Test record querying")
+    schema = AuditSchemaModel(
+        schema_name="query_test", version=1, description="Test record querying"
+    )
     await backend.create_schema(schema)
 
     # Write multiple records

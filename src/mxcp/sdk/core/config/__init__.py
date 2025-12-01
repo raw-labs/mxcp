@@ -154,8 +154,8 @@ The module exports all necessary components for configuration processing:
 See individual class documentation for detailed usage information.
 """
 
-from .models import ResolverConfigModel
 from .loader import load_resolver_config
+from .models import ResolverConfigModel
 from .plugins import ResolverPlugin, ResolverRegistry
 from .processor import ResolvedReference, ResolverEngine
 from .resolvers import EnvResolver, FileResolver, OnePasswordResolver, VaultResolver

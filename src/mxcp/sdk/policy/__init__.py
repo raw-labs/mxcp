@@ -40,13 +40,13 @@ Example usage:
     >>> enforcer.enforce_input_policies(user, {"param": "value"})
 """
 
+from .enforcer import PolicyEnforcer
 from .models import (
     PolicyAction,
     PolicyDefinitionModel,
     PolicyEnforcementError,
     PolicySetModel,
 )
-from .enforcer import PolicyEnforcer
 
 __all__ = [
     # Types

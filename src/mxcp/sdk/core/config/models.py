@@ -93,4 +93,3 @@ class ResolverConfigModel(SdkBaseModel):
 
     vault: VaultConfigModel | None = None
     onepassword: OnePasswordConfigModel | None = None
-

@@ -46,7 +46,9 @@ async def test_complete_audit_workflow():
             field_redactions=[
                 FieldRedactionModel(field_path="user_email", strategy=RedactionStrategy.EMAIL),
                 FieldRedactionModel(
-                    field_path="ip_address", strategy=RedactionStrategy.PARTIAL, options={"show_first": 0, "show_last": 3}
+                    field_path="ip_address",
+                    strategy=RedactionStrategy.PARTIAL,
+                    options={"show_first": 0, "show_last": 3},
                 ),
             ],
             extract_fields=["operation", "success"],
@@ -65,7 +67,9 @@ async def test_complete_audit_workflow():
                 FieldDefinitionModel(name="status_code", type="number"),
                 FieldDefinitionModel(name="api_key", type="string", sensitive=True),
             ],
-            field_redactions=[FieldRedactionModel(field_path="api_key", strategy=RedactionStrategy.HASH)],
+            field_redactions=[
+                FieldRedactionModel(field_path="api_key", strategy=RedactionStrategy.HASH)
+            ],
             extract_fields=["method", "endpoint", "status_code"],
         )
 
@@ -245,7 +249,10 @@ async def test_schema_evolution():
             schema_name="evolving_schema",
             version=1,
             description="Version 1 of evolving schema",
-            fields=[FieldDefinitionModel(name="field1", type="string"), FieldDefinitionModel(name="field2", type="number")],
+            fields=[
+                FieldDefinitionModel(name="field1", type="string"),
+                FieldDefinitionModel(name="field2", type="number"),
+            ],
         )
         await logger.create_schema(schema_v1)
 
@@ -270,7 +277,9 @@ async def test_schema_evolution():
                 FieldDefinitionModel(name="field2", type="number"),
                 FieldDefinitionModel(name="field3", type="string", sensitive=True),  # New field
             ],
-            field_redactions=[FieldRedactionModel(field_path="field3", strategy=RedactionStrategy.PARTIAL)],  # New redaction
+            field_redactions=[
+                FieldRedactionModel(field_path="field3", strategy=RedactionStrategy.PARTIAL)
+            ],  # New redaction
         )
         await logger.create_schema(schema_v2)
 

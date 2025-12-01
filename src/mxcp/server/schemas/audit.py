@@ -14,7 +14,9 @@ ENDPOINT_EXECUTION_SCHEMA = AuditSchemaModel(
     retention_days=90,
     evidence_level=EvidenceLevel.DETAILED,
     fields=[
-        FieldDefinitionModel(name="operation_type", type="string"),  # "tool", "resource", or "prompt"
+        FieldDefinitionModel(
+            name="operation_type", type="string"
+        ),  # "tool", "resource", or "prompt"
         FieldDefinitionModel(name="operation_name", type="string"),  # The specific endpoint name
         FieldDefinitionModel(name="input_data", type="object", sensitive=True),
         FieldDefinitionModel(name="output_data", type="object", required=False),

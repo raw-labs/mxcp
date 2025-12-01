@@ -8,4 +8,3 @@ class ValidationResultModel(SdkBaseModel):
 
     is_valid: bool
     error_message: str | None = None
-

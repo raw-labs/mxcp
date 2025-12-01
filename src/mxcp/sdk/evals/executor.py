@@ -26,7 +26,10 @@ class ToolExecutor(Protocol):
     """
 
     async def execute_tool(
-        self, tool_name: str, arguments: dict[str, Any], user_context: UserContextModel | None = None
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        user_context: UserContextModel | None = None,
     ) -> Any:
         """Execute a tool and return the result.
 

@@ -76,7 +76,9 @@ async def test_jsonl_schema_persistence():
                 FieldDefinitionModel(name="field1", type="string", sensitive=True),
                 FieldDefinitionModel(name="field2", type="number"),
             ],
-            field_redactions=[FieldRedactionModel(field_path="field1", strategy=RedactionStrategy.PARTIAL)],
+            field_redactions=[
+                FieldRedactionModel(field_path="field1", strategy=RedactionStrategy.PARTIAL)
+            ],
             extract_fields=["field2"],
             indexes=["field1", "field2"],
         )
@@ -167,9 +169,15 @@ async def test_jsonl_schema_redaction_serialization():
             description="Test redaction serialization",
             field_redactions=[
                 FieldRedactionModel(field_path="email", strategy=RedactionStrategy.EMAIL),
-                FieldRedactionModel(field_path="ssn", strategy=RedactionStrategy.PARTIAL, options={"show_last": 4}),
+                FieldRedactionModel(
+                    field_path="ssn", strategy=RedactionStrategy.PARTIAL, options={"show_last": 4}
+                ),
                 FieldRedactionModel(field_path="secret", strategy=RedactionStrategy.HASH),
-                FieldRedactionModel(field_path="description", strategy=RedactionStrategy.TRUNCATE, options={"length": 20}),
+                FieldRedactionModel(
+                    field_path="description",
+                    strategy=RedactionStrategy.TRUNCATE,
+                    options={"length": 20},
+                ),
                 FieldRedactionModel(field_path="sensitive", strategy=RedactionStrategy.FULL),
             ],
         )

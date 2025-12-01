@@ -169,7 +169,9 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         return list(schema_map.values())
 
-    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchemaModel | None:
+    async def get_schema(
+        self, schema_name: str, version: int | None = None
+    ) -> AuditSchemaModel | None:
         """Get a schema definition by reading from disk."""
         schemas = self._read_schemas_from_disk()
 
@@ -634,7 +636,9 @@ class JSONLAuditWriter(BaseAuditWriter):
             if conn:
                 conn.close()
 
-    async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResultModel:
+    async def verify_integrity(
+        self, start_record_id: str, end_record_id: str
+    ) -> IntegrityResultModel:
         """Verify integrity between two records.
 
         For JSONL backend, this just checks that records exist.

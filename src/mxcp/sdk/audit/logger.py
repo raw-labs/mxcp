@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .backends.noop import NoOpAuditBackend
 from .models import (
     AuditBackend,
     AuditRecordModel,
@@ -16,7 +17,6 @@ from .models import (
     PolicyDecision,
     Status,
 )
-from .backends.noop import NoOpAuditBackend
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,9 @@ class AuditLogger:
         """Create or update a schema."""
         await self.backend.create_schema(schema)
 
-    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchemaModel | None:
+    async def get_schema(
+        self, schema_name: str, version: int | None = None
+    ) -> AuditSchemaModel | None:
         """Get a schema definition."""
         return await self.backend.get_schema(schema_name, version)
 
@@ -159,7 +161,9 @@ class AuditLogger:
         """Get a specific record by ID."""
         return await self.backend.get_record(record_id)
 
-    async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResultModel:
+    async def verify_integrity(
+        self, start_record_id: str, end_record_id: str
+    ) -> IntegrityResultModel:
         """Verify integrity between two records."""
         return await self.backend.verify_integrity(start_record_id, end_record_id)
 

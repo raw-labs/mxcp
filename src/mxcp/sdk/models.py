@@ -37,4 +37,3 @@ class SdkBaseModel(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-

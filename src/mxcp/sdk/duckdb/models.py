@@ -126,4 +126,3 @@ class DatabaseConfigModel(SdkBaseModel):
     path: str
     readonly: bool = False
     extensions: list[ExtensionDefinitionModel] = Field(default_factory=list)
-

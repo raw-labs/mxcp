@@ -147,15 +147,17 @@ class TestSchemaComparison:
         assert param_schema.format == "email"
 
         # Valid validation schema
-        validation = ValidationSchemaModel.model_validate({
-            "input": {
-                "parameters": [
-                    {"name": "x", "type": "integer"},
-                    {"name": "y", "type": "integer"},
-                ]
-            },
-            "output": {"type": "number"},
-        })
+        validation = ValidationSchemaModel.model_validate(
+            {
+                "input": {
+                    "parameters": [
+                        {"name": "x", "type": "integer"},
+                        {"name": "y", "type": "integer"},
+                    ]
+                },
+                "output": {"type": "number"},
+            }
+        )
         assert validation.input_parameters is not None
         assert len(validation.input_parameters) == 2
         assert validation.output_schema is not None

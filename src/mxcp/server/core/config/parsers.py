@@ -33,7 +33,9 @@ def create_duckdb_session_config(
     user_config: UserConfigModel,
     profile_name: str,
     readonly: bool = False,
-) -> tuple[DatabaseConfigModel, list[PluginDefinitionModel], PluginConfigModel, list[SecretDefinitionModel]]:
+) -> tuple[
+    DatabaseConfigModel, list[PluginDefinitionModel], PluginConfigModel, list[SecretDefinitionModel]
+]:
     """Convert MXCP configs to SDK session configuration objects.
 
     Args:
@@ -66,7 +68,9 @@ def create_duckdb_session_config(
 
     # Get plugins from site config plugin array
     plugins = [
-        PluginDefinitionModel(name=plugin_def.name, module=plugin_def.module, config=plugin_def.config)
+        PluginDefinitionModel(
+            name=plugin_def.name, module=plugin_def.module, config=plugin_def.config
+        )
         for plugin_def in site_config.plugin
     ]
 

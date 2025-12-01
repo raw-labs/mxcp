@@ -252,7 +252,9 @@ class AuditBackend(Protocol):
         """Create or update a schema definition."""
         ...
 
-    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchemaModel | None:
+    async def get_schema(
+        self, schema_name: str, version: int | None = None
+    ) -> AuditSchemaModel | None:
         """Get a schema definition. If version is None, get latest active version."""
         ...
 
@@ -297,7 +299,9 @@ class AuditBackend(Protocol):
         """Get a specific record by ID."""
         ...
 
-    async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResultModel:
+    async def verify_integrity(
+        self, start_record_id: str, end_record_id: str
+    ) -> IntegrityResultModel:
         """Verify integrity between two records."""
         ...
 
@@ -309,4 +313,3 @@ class AuditBackend(Protocol):
     async def close(self) -> None:
         """Close backend and release resources."""
         ...
-

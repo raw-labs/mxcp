@@ -7,7 +7,6 @@ This module provides the ResolverEngine class that:
 3. Tracks and manages external references
 """
 
-import json
 import logging
 import time
 from dataclasses import dataclass
@@ -284,7 +283,9 @@ class ResolverEngine:
         if "vault" in config_section:
             vault_config = VaultConfigModel.model_validate(config_section["vault"])
         if "onepassword" in config_section:
-            onepassword_config = OnePasswordConfigModel.model_validate(config_section["onepassword"])
+            onepassword_config = OnePasswordConfigModel.model_validate(
+                config_section["onepassword"]
+            )
 
         resolver_config = ResolverConfigModel(vault=vault_config, onepassword=onepassword_config)
         return cls(resolver_config)

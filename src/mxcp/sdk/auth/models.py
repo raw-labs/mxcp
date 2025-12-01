@@ -2,7 +2,7 @@
 
 from typing import Any, Literal
 
-from pydantic import Field, ConfigDict
+from pydantic import ConfigDict
 
 from mxcp.sdk.models import SdkBaseModel
 
@@ -185,4 +185,3 @@ class StateMetaModel(SdkBaseModel):
     redirect_uri_provided_explicitly: bool
     client_id: str
     callback_url: str | None = None  # Store callback URL for OAuth providers
-

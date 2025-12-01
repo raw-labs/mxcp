@@ -16,7 +16,7 @@ from opentelemetry.trace import get_current_span as otel_get_current_span
 
 from mxcp.sdk.core import PACKAGE_NAME, PACKAGE_VERSION
 
-from ._types import Span, SpanKind, Status, StatusCode
+from .models import Span, SpanKind, Status, StatusCode
 
 logger = logging.getLogger(__name__)
 

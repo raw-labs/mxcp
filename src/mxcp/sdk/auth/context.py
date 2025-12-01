@@ -34,7 +34,9 @@ def get_user_context() -> UserContextModel | None:
     return user_context_var.get()
 
 
-def set_user_context(context: UserContextModel | None) -> "contextvars.Token[UserContextModel | None]":
+def set_user_context(
+    context: UserContextModel | None,
+) -> "contextvars.Token[UserContextModel | None]":
     """
     Set the user context in the current authentication context.
 

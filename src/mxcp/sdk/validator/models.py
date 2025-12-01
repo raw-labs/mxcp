@@ -125,9 +125,8 @@ class ParameterSchemaModel(BaseTypeSchemaModel):
     @classmethod
     def set_has_default(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Set has_default based on whether default is present in input."""
-        if isinstance(values, dict):
-            if "default" in values:
-                values["has_default"] = True
+        if isinstance(values, dict) and "default" in values:
+            values["has_default"] = True
         return values
 
 
@@ -187,4 +186,3 @@ BaseTypeSchemaModel.model_rebuild()
 TypeSchemaModel.model_rebuild()
 ParameterSchemaModel.model_rebuild()
 ValidationSchemaModel.model_rebuild()
-

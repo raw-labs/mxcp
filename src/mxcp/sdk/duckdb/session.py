@@ -16,8 +16,8 @@ from duckdb import func
 from pandas import NaT
 
 from .extension_loader import load_extensions
-from .secret_injection import inject_secrets
 from .models import DatabaseConfigModel, SecretDefinitionModel
+from .secret_injection import inject_secrets
 
 logger = logging.getLogger(__name__)
 

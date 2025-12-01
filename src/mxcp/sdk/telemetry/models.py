@@ -173,4 +173,3 @@ class TelemetryConfigModel(SdkBaseModel):
     # Signal-specific configurations
     tracing: TracingConfigModel = Field(default_factory=TracingConfigModel)
     metrics: MetricsConfigModel = Field(default_factory=MetricsConfigModel)
-

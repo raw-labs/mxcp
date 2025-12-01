@@ -39,7 +39,9 @@ from mxcp.server.executor.runners.endpoint import (
 logger = logging.getLogger(__name__)
 
 
-def parse_policies_from_config(policies_config: PoliciesDefinitionModel | None) -> PolicySetModel | None:
+def parse_policies_from_config(
+    policies_config: PoliciesDefinitionModel | None,
+) -> PolicySetModel | None:
     """Parse policy configuration into PolicySetModel.
 
     This function handles parsing of policy configuration from YAML/JSON format

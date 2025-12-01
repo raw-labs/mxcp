@@ -4,7 +4,13 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
 
-from ..models import AuditRecordModel, AuditSchemaModel, IntegrityResultModel, PolicyDecision, Status
+from ..models import (
+    AuditRecordModel,
+    AuditSchemaModel,
+    IntegrityResultModel,
+    PolicyDecision,
+    Status,
+)
 
 
 class NoOpAuditBackend:
@@ -22,7 +28,9 @@ class NoOpAuditBackend:
         """No-op schema creation."""
         pass
 
-    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchemaModel | None:
+    async def get_schema(
+        self, schema_name: str, version: int | None = None
+    ) -> AuditSchemaModel | None:
         """No-op schema retrieval."""
         return None
 
@@ -71,7 +79,9 @@ class NoOpAuditBackend:
         """No-op record retrieval."""
         return None
 
-    async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResultModel:
+    async def verify_integrity(
+        self, start_record_id: str, end_record_id: str
+    ) -> IntegrityResultModel:
         """No-op integrity verification."""
         return IntegrityResultModel(valid=True, records_checked=0, chain_breaks=[])
 

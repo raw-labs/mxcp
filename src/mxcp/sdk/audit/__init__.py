@@ -192,6 +192,8 @@ Schemas provide several advantages over per-request policies:
 - **Operations**: Bulk retention and querying by schema
 """
 
+from .backends.noop import NoOpAuditBackend
+from .logger import AuditLogger
 from .models import (  # Core types; Protocols
     AuditBackend,
     AuditRecordModel,
@@ -206,8 +208,6 @@ from .models import (  # Core types; Protocols
     RedactionStrategy,
     Status,
 )
-from .backends.noop import NoOpAuditBackend
-from .logger import AuditLogger
 from .redaction import apply_redaction
 from .writer import AuditRedactor, BaseAuditWriter
 

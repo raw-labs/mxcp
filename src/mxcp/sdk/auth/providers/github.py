@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
+from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from ..models import (
     ExternalUserInfoModel,
     GitHubAuthConfigModel,
@@ -17,7 +18,6 @@ from ..models import (
     StateMetaModel,
     UserContextModel,
 )
-from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from ..url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,9 @@ class GitHubOAuthHandler(ExternalOAuthHandler):
         self._pop_state(state)
 
     # ----- code exchange -----
-    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfoModel, StateMetaModel]:
+    async def exchange_code(
+        self, code: str, state: str
+    ) -> tuple[ExternalUserInfoModel, StateMetaModel]:
         # Validate state parameter and get metadata
         state_meta = self._get_state_metadata(state)
 
