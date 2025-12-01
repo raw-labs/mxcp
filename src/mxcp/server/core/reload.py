@@ -205,9 +205,7 @@ class ReloadManager:
             # already "complete". This allows callers (like signal handlers) to
             # work safely before the server is running or during shutdown.
             reason = "shutting down" if self._shutdown else "not started"
-            logger.warning(
-                f"Reload request ignored ({reason}): {request.id} - {description}"
-            )
+            logger.warning(f"Reload request ignored ({reason}): {request.id} - {description}")
             request._completion_event.set()  # Mark as "complete" immediately
             return request
 
