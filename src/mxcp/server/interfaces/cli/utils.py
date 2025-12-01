@@ -226,15 +226,13 @@ def run_async_cli(coro: Coroutine[Any, Any, T]) -> T:
         The result of the coroutine.
     """
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
+        # No loop running - this is the normal CLI case
         return asyncio.run(coro)
 
-    if loop.is_running():
-        raise RuntimeError("Cannot run CLI coroutine while an event loop is already running.")
-
-    future = asyncio.ensure_future(coro, loop=loop)
-    return loop.run_until_complete(future)
+    # A loop is already running - can't nest run_until_complete
+    raise RuntimeError("Cannot run CLI coroutine while an event loop is already running.")
 
 
 def output_error(error: Exception, json_output: bool = False, debug: bool = False) -> None:
