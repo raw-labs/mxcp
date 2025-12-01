@@ -716,6 +716,10 @@ class RAWMCP:
 
         logger.info("Shutting down MXCP server...")
 
+        # Clear signal loop first to prevent SIGHUP signals from triggering
+        # reload requests during shutdown (they'll be safely ignored).
+        self._signal_loop = None
+
         try:
             # Stop the reload manager while the loop is still running
             try:

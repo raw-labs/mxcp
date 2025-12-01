@@ -200,18 +200,22 @@ class ReloadManager:
         )
 
         loop = self._loop
-        if loop is None:
-            # Not started yet - return a no-op request that's already "complete"
-            # This allows callers (like signal handlers) to work safely before
-            # the server is fully running.
+        if loop is None or self._shutdown:
+            # Not started yet OR shutting down - return a no-op request that's
+            # already "complete". This allows callers (like signal handlers) to
+            # work safely before the server is running or during shutdown.
+            reason = "shutting down" if self._shutdown else "not started"
             logger.warning(
-                f"Reload request ignored (manager not started): {request.id} - {description}"
+                f"Reload request ignored ({reason}): {request.id} - {description}"
             )
             request._completion_event.set()  # Mark as "complete" immediately
             return request
 
         def enqueue() -> None:
+            # Double-check shutdown flag in case it changed between the check above
+            # and when this closure actually runs (for call_soon_threadsafe case)
             if self._shutdown:
+                request._completion_event.set()
                 return
             self._queue.put_nowait(request)
 

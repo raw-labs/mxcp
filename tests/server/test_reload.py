@@ -13,8 +13,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
+from mxcp.server.core.reload import ReloadManager, ReloadableServer
 from mxcp.server.interfaces.server.mcp import RAWMCP
-from mxcp.server.core.reload import ReloadManager
 
 
 class TestReloadFunctionality:
@@ -173,3 +173,63 @@ class TestReloadFunctionality:
                 call_args = server.reload_manager.request_reload.call_args
                 assert call_args[1]["payload_func"] is not None
                 assert "Configuration reload (SIGHUP)" in call_args[1]["description"]
+
+
+class TestReloadManagerShutdown:
+    """Test ReloadManager behavior during shutdown scenarios."""
+
+    @staticmethod
+    def _create_mock_server() -> MagicMock:
+        """Create a mock server implementing ReloadableServer protocol."""
+        server = MagicMock(spec=ReloadableServer)
+        server.active_requests = 0
+        server.draining = False
+        server.profile_name = "test"
+        return server
+
+    @pytest.mark.asyncio
+    async def test_request_reload_after_stop_returns_completed_noop(self):
+        """Test that request_reload after stop() returns a no-op request that's already complete."""
+        server = self._create_mock_server()
+        manager = ReloadManager(server)
+
+        # Start and then stop the manager
+        manager.start()
+        await manager.stop()
+
+        # Request reload after stop - should return immediately completed request
+        request = manager.request_reload(description="After shutdown")
+
+        # Should be immediately complete (not block for 60 seconds)
+        completed = request.wait_for_completion(timeout=0.1)
+        assert completed, "Request should be immediately complete after shutdown"
+
+    @pytest.mark.asyncio
+    async def test_request_reload_before_start_returns_completed_noop(self):
+        """Test that request_reload before start() returns a no-op request that's already complete."""
+        server = self._create_mock_server()
+        manager = ReloadManager(server)
+
+        # Don't call start() - manager is not running
+
+        # Request reload before start - should return immediately completed request
+        request = manager.request_reload(description="Before start")
+
+        # Should be immediately complete
+        completed = request.wait_for_completion(timeout=0.1)
+        assert completed, "Request should be immediately complete before start"
+
+    def test_sighup_during_shutdown_is_ignored(self):
+        """Test that SIGHUP signals during shutdown are safely ignored."""
+        # Create a minimal mock server
+        server = MagicMock(spec=RAWMCP)
+        server._signal_loop = None  # Simulates cleared during shutdown
+
+        # Bind the real method
+        server._handle_reload_signal = RAWMCP._handle_reload_signal.__get__(server, RAWMCP)
+
+        # This should not raise and should not call reload_configuration
+        server._handle_reload_signal(signal.SIGHUP, None)
+
+        # reload_configuration should not be called since _signal_loop is None
+        assert not hasattr(server, "reload_configuration") or not server.reload_configuration.called
