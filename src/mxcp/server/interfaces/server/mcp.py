@@ -574,11 +574,11 @@ class RAWMCP:
         loop.call_soon_threadsafe(lambda: asyncio.create_task(self._handle_reload_signal_async()))
 
     async def _handle_reload_signal_async(self) -> None:
-        """Async handler that waits for reload completion without blocking the loop."""
+        """Async handler that waits for reload completion."""
         request = self.reload_configuration()
 
         try:
-            completed = await asyncio.to_thread(request.wait_for_completion, 60.0)
+            completed = await request.wait_for_completion(timeout=60.0)
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.error(f"SIGHUP reload wait failed: {exc}")
             return

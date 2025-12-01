@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
-from mxcp.server.core.reload import ReloadManager, ReloadableServer
+from mxcp.server.core.reload import ReloadManager, ReloadableServer, ReloadRequest
 from mxcp.server.interfaces.server.mcp import RAWMCP
 
 
@@ -201,7 +201,7 @@ class TestReloadManagerShutdown:
         request = manager.request_reload(description="After shutdown")
 
         # Should be immediately complete (not block for 60 seconds)
-        completed = request.wait_for_completion(timeout=0.1)
+        completed = await request.wait_for_completion(timeout=0.1)
         assert completed, "Request should be immediately complete after shutdown"
 
     @pytest.mark.asyncio
@@ -216,7 +216,7 @@ class TestReloadManagerShutdown:
         request = manager.request_reload(description="Before start")
 
         # Should be immediately complete
-        completed = request.wait_for_completion(timeout=0.1)
+        completed = await request.wait_for_completion(timeout=0.1)
         assert completed, "Request should be immediately complete before start"
 
     def test_sighup_during_shutdown_is_ignored(self):
@@ -233,3 +233,84 @@ class TestReloadManagerShutdown:
 
         # reload_configuration should not be called since _signal_loop is None
         assert not hasattr(server, "reload_configuration") or not server.reload_configuration.called
+
+
+class TestReloadManagerExecution:
+    """Test that ReloadManager actually processes requests correctly."""
+
+    @staticmethod
+    def _create_mock_server() -> MagicMock:
+        """Create a mock server implementing ReloadableServer protocol."""
+        from mxcp.server.core.reload import AsyncServerLock
+
+        server = MagicMock(spec=ReloadableServer)
+        server.active_requests = 0
+        server.draining = False
+        server.profile_name = "test"
+        server.requests_lock = AsyncServerLock()
+        return server
+
+    @pytest.mark.asyncio
+    async def test_reload_request_is_processed(self):
+        """Test that a queued reload request is actually processed."""
+        server = self._create_mock_server()
+        manager = ReloadManager(server)
+
+        manager.start()
+        try:
+            # Queue a reload request
+            request = manager.request_reload(description="Test reload")
+
+            # Wait for completion
+            completed = await request.wait_for_completion(timeout=5.0)
+
+            assert completed, "Reload should complete"
+            assert server.shutdown_runtime_components.called
+            assert server.initialize_runtime_components.called
+        finally:
+            await manager.stop()
+
+    @pytest.mark.asyncio
+    async def test_payload_function_is_executed(self):
+        """Test that the payload function is actually called during reload."""
+        server = self._create_mock_server()
+        manager = ReloadManager(server)
+
+        payload_called = []
+
+        def my_payload():
+            payload_called.append(True)
+
+        manager.start()
+        try:
+            request = manager.request_reload(
+                payload_func=my_payload, description="Payload test"
+            )
+            completed = await request.wait_for_completion(timeout=5.0)
+
+            assert completed
+            assert payload_called == [True], "Payload function should be called"
+        finally:
+            await manager.stop()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_completion_timeout(self):
+        """Test that wait_for_completion returns False on timeout."""
+        # Create a request but don't process it (no manager running)
+        request = ReloadRequest(description="Orphan request")
+
+        # Should timeout since no one will set the completion event
+        completed = await request.wait_for_completion(timeout=0.1)
+
+        assert not completed, "Should return False on timeout"
+
+    @pytest.mark.asyncio
+    async def test_is_complete_non_blocking(self):
+        """Test that is_complete() works without blocking."""
+        request = ReloadRequest(description="Test")
+
+        assert not request.is_complete()
+
+        request._completion_event.set()
+
+        assert request.is_complete()
