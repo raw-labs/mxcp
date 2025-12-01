@@ -12,10 +12,10 @@ from celpy.adapter import json_to_cel
 
 from mxcp.sdk.telemetry import record_counter, traced_operation
 
-from ._types import PolicyAction, PolicyEnforcementError, PolicySet
+from .models import PolicyAction, PolicyEnforcementError, PolicySetModel
 
 if TYPE_CHECKING:
-    from mxcp.sdk.auth import UserContext
+    from mxcp.sdk.auth import UserContextModel
 
 logger = logging.getLogger(__name__)
 
@@ -27,20 +27,20 @@ class PolicyEnforcer:
     and output filtering based on CEL (Common Expression Language) conditions.
 
     Example usage:
-        >>> from mxcp.sdk.policy import PolicyEnforcer, PolicySet, PolicyDefinition, PolicyAction
+        >>> from mxcp.sdk.policy import PolicyEnforcer, PolicySetModel, PolicyDefinitionModel, PolicyAction
         >>> from mxcp.sdk.auth import UserContext
         >>>
         >>> # Create a policy set
-        >>> policy_set = PolicySet(
+        >>> policy_set = PolicySetModel(
         ...     input_policies=[
-        ...         PolicyDefinition(
+        ...         PolicyDefinitionModel(
         ...             condition='user.role != "admin"',
         ...             action=PolicyAction.DENY,
         ...             reason="Admin access required"
         ...         )
         ...     ],
         ...     output_policies=[
-        ...         PolicyDefinition(
+        ...         PolicyDefinitionModel(
         ...             condition='user.role == "guest"',
         ...             action=PolicyAction.FILTER_FIELDS,
         ...             fields=["sensitive_data", "internal_id"]
@@ -62,7 +62,7 @@ class PolicyEnforcer:
         >>> filtered_output, action = enforcer.enforce_output_policies(user_context, output)
     """
 
-    def __init__(self, policy_set: PolicySet):
+    def __init__(self, policy_set: PolicySetModel):
         """Initialize the policy enforcer.
 
         Args:
@@ -117,8 +117,8 @@ class PolicyEnforcer:
             cel_context[key] = json_to_cel(value)
         return cel_context
 
-    def _user_context_to_dict(self, user_context: Optional["UserContext"]) -> dict[str, Any]:
-        """Convert UserContext to a dictionary for CEL evaluation."""
+    def _user_context_to_dict(self, user_context: Optional["UserContextModel"]) -> dict[str, Any]:
+        """Convert UserContextModel to a dictionary for CEL evaluation."""
         if user_context is None:
             return {
                 "role": "anonymous",
@@ -148,7 +148,7 @@ class PolicyEnforcer:
         return user_dict
 
     def enforce_input_policies(
-        self, user_context: Optional["UserContext"], params: dict[str, Any]
+        self, user_context: Optional["UserContextModel"], params: dict[str, Any]
     ) -> None:
         """Enforce input policies.
 
@@ -260,7 +260,7 @@ class PolicyEnforcer:
 
     def enforce_output_policies(
         self,
-        user_context: Optional["UserContext"],
+        user_context: Optional["UserContextModel"],
         output: Any,
         endpoint_def: dict[str, Any] | None = None,
     ) -> tuple[Any, str | None]:

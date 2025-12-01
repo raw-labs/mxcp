@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.plugins import DuckDBExecutor
 from mxcp.sdk.duckdb import (
-    DatabaseConfig,
-    ExtensionDefinition,
-    PluginConfig,
+    DatabaseConfigModel,
+    ExtensionDefinitionModel,
+    PluginConfigModel,
 )
 
 
@@ -44,19 +44,19 @@ def mock_user_config():
 def mock_database_config(tmp_path):
     """Create a mock database configuration."""
     db_path = tmp_path / "test.duckdb"
-    return DatabaseConfig(path=str(db_path), readonly=False, extensions=[])
+    return DatabaseConfigModel(path=str(db_path), readonly=False, extensions=[])
 
 
 @pytest.fixture
 def mock_plugin_config():
     """Create a mock plugin configuration."""
-    return PluginConfig(plugins_path="plugins", config={})
+    return PluginConfigModel(plugins_path="plugins", config={})
 
 
 @pytest.fixture
 def mock_context():
     """Create a mock execution context for user authentication."""
-    user_context = UserContext(
+    user_context = UserContextModel(
         user_id="test_user_123",
         username="test_user",
         provider="test",
@@ -95,10 +95,10 @@ class TestDuckDBExecutorBasics:
 
         # Test with different configuration
         db_path = tmp_path / "test_options.duckdb"
-        database_config = DatabaseConfig(
-            path=str(db_path), readonly=False, extensions=[ExtensionDefinition(name="json")]
+        database_config = DatabaseConfigModel(
+            path=str(db_path), readonly=False, extensions=[ExtensionDefinitionModel(name="json")]
         )
-        plugin_config = PluginConfig(plugins_path="plugins", config={})
+        plugin_config = PluginConfigModel(plugins_path="plugins", config={})
 
         runtime = DuckDBRuntime(
             database_config=database_config, plugins=[], plugin_config=plugin_config, secrets=[]
@@ -114,15 +114,15 @@ class TestDuckDBExecutorBasics:
 
         # Create initial executor
         db_path1 = tmp_path / "test1.duckdb"
-        initial_config = DatabaseConfig(path=str(db_path1), readonly=False, extensions=[])
-        plugin_config = PluginConfig(plugins_path="plugins", config={})
+        initial_config = DatabaseConfigModel(path=str(db_path1), readonly=False, extensions=[])
+        plugin_config = PluginConfigModel(plugins_path="plugins", config={})
         runtime1 = DuckDBRuntime(initial_config, [], plugin_config, [])
         executor1 = DuckDBExecutor(runtime1)
 
         # Create new executor with different configuration (different extensions)
         db_path2 = tmp_path / "test2.duckdb"
-        new_config = DatabaseConfig(
-            path=str(db_path2), readonly=False, extensions=[ExtensionDefinition(name="json")]
+        new_config = DatabaseConfigModel(
+            path=str(db_path2), readonly=False, extensions=[ExtensionDefinitionModel(name="json")]
         )
         runtime2 = DuckDBRuntime(new_config, [], plugin_config, [])
         executor2 = DuckDBExecutor(runtime2)
@@ -483,9 +483,9 @@ class TestDuckDBRuntime:
 
         db_path1 = tmp_path / "test_iso1.duckdb"
         db_path2 = tmp_path / "test_iso2.duckdb"
-        database_config1 = DatabaseConfig(path=str(db_path1), readonly=False, extensions=[])
-        database_config2 = DatabaseConfig(path=str(db_path2), readonly=False, extensions=[])
-        plugin_config = PluginConfig(plugins_path="plugins", config={})
+        database_config1 = DatabaseConfigModel(path=str(db_path1), readonly=False, extensions=[])
+        database_config2 = DatabaseConfigModel(path=str(db_path2), readonly=False, extensions=[])
+        plugin_config = PluginConfigModel(plugins_path="plugins", config={})
 
         runtime1 = DuckDBRuntime(
             database_config=database_config1, plugins=[], plugin_config=plugin_config, secrets=[]

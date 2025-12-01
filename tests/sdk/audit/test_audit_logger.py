@@ -13,9 +13,9 @@ import pytest
 
 from mxcp.sdk.audit import (
     AuditLogger,
-    AuditSchema,
-    FieldDefinition,
-    FieldRedaction,
+    AuditSchemaModel,
+    FieldDefinitionModel,
+    FieldRedactionModel,
     RedactionStrategy,
 )
 
@@ -108,18 +108,18 @@ async def test_audit_logger_sensitive_data_redaction():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create a schema with redaction rules
-        auth_schema = AuditSchema(
+        auth_schema = AuditSchemaModel(
             schema_name="test_auth",
             version=1,
             description="Test auth schema with redaction",
             fields=[
-                FieldDefinition("username", "string"),
-                FieldDefinition("password", "string", sensitive=True),
-                FieldDefinition("config", "object"),
+                FieldDefinitionModel(name="username", type="string"),
+                FieldDefinitionModel(name="password", type="string", sensitive=True),
+                FieldDefinitionModel(name="config", type="object"),
             ],
             field_redactions=[
-                FieldRedaction("password", RedactionStrategy.FULL),
-                FieldRedaction("config.api_key", RedactionStrategy.FULL),
+                FieldRedactionModel(field_path="password", strategy=RedactionStrategy.FULL),
+                FieldRedactionModel(field_path="config.api_key", strategy=RedactionStrategy.FULL),
             ],
         )
 
@@ -174,7 +174,7 @@ async def test_audit_logger_querying():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create a test schema
-        test_schema = AuditSchema(
+        test_schema = AuditSchemaModel(
             schema_name="logger_query_test",
             version=1,
             description="Test schema for logger querying",
@@ -240,7 +240,7 @@ async def test_audit_logger_sync_queries():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create schema and log event
-        test_schema = AuditSchema(
+        test_schema = AuditSchemaModel(
             schema_name="sync_test", version=1, description="Sync test schema"
         )
         await logger.create_schema(test_schema)

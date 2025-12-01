@@ -58,7 +58,8 @@ from ..context import (
     reset_execution_context,
     set_execution_context,
 )
-from ..interfaces import ExecutorPlugin, ValidationResult
+from ..interfaces import ExecutorPlugin
+from ..models import ValidationResultModel
 
 if TYPE_CHECKING:
     from mxcp.sdk.duckdb import DuckDBRuntime
@@ -104,31 +105,31 @@ class DuckDBExecutor(ExecutorPlugin):
         # Runtime is managed externally, so we don't shut it down here
         pass
 
-    def validate_source(self, source_code: str) -> ValidationResult:
+    def validate_source(self, source_code: str) -> ValidationResultModel:
         """Validate SQL source code syntax.
 
         Args:
             source_code: SQL code to validate
 
         Returns:
-            ValidationResult with is_valid flag and optional error message
+            ValidationResultModel with is_valid flag and optional error message
         """
         try:
             # Get a connection from the pool to validate
             with self._runtime.get_connection() as session:
                 #### TODO do we need that really?
                 if not session.conn:
-                    return ValidationResult(
+                    return ValidationResultModel(
                         is_valid=False, error_message="No DuckDB session available"
                     )
                 conn = session.conn
                 conn.execute(f"PREPARE stmt AS {source_code}")
                 conn.execute("DEALLOCATE stmt")
-            return ValidationResult(is_valid=True)
+            return ValidationResultModel(is_valid=True)
         except Exception as e:
             error_message = str(e)
             logger.debug(f"SQL validation failed: {error_message}")
-            return ValidationResult(is_valid=False, error_message=error_message)
+            return ValidationResultModel(is_valid=False, error_message=error_message)
 
     def extract_parameters(self, source_code: str) -> list[str]:
         """Extract parameter names from SQL source code.

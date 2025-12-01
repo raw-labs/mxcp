@@ -99,16 +99,6 @@ engine = ResolverEngine()
 engine.register_resolver(CustomResolver())
 ```
 
-### Schema Validation
-Validate resolved configurations against JSON schemas:
-
-```python
-resolved = engine.process_file(
-    "app.yaml",
-    schema_file="app-schema.json"
-)
-```
-
 ## Error Handling
 
 The system gracefully handles resolution failures:
@@ -164,7 +154,7 @@ The module exports all necessary components for configuration processing:
 See individual class documentation for detailed usage information.
 """
 
-from ._types import ResolverConfig
+from .models import ResolverConfigModel
 from .loader import load_resolver_config
 from .plugins import ResolverPlugin, ResolverRegistry
 from .processor import ResolvedReference, ResolverEngine
@@ -172,7 +162,7 @@ from .resolvers import EnvResolver, FileResolver, OnePasswordResolver, VaultReso
 
 __all__ = [
     # Types
-    "ResolverConfig",
+    "ResolverConfigModel",
     "ResolvedReference",
     # Core classes
     "ResolverEngine",

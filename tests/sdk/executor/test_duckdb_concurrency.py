@@ -8,10 +8,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
 from mxcp.sdk.executor.plugins import DuckDBExecutor
-from mxcp.sdk.duckdb import DatabaseConfig, PluginConfig, DuckDBRuntime
+from mxcp.sdk.duckdb import DatabaseConfigModel, PluginConfigModel, DuckDBRuntime
 
 
 @pytest.fixture
@@ -19,13 +19,13 @@ def duckdb_executor(tmp_path: Path) -> Iterator[DuckDBExecutor]:
     """Create a DuckDB executor with test database."""
     db_path = tmp_path / "test.db"
 
-    database_config = DatabaseConfig(
+    database_config = DatabaseConfigModel(
         path=str(db_path),
         readonly=False,
         extensions=[],
     )
 
-    plugin_config = PluginConfig(
+    plugin_config = PluginConfigModel(
         plugins_path="",
         config={},
     )
@@ -57,7 +57,7 @@ async def execute_query(engine: ExecutionEngine, query_id: int, value: int) -> t
     start_time = time.time()
 
     # Create execution context
-    user_context = UserContext(
+    user_context = UserContextModel(
         provider="test",
         user_id=f"user_{query_id}",
         username=f"test_user_{query_id}",

@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 from mxcp.sdk.audit import (
-    AuditRecord,
-    AuditSchema,
+    AuditRecordModel,
+    AuditSchemaModel,
     EvidenceLevel,
 )
 from mxcp.sdk.audit.backends import JSONLAuditWriter
@@ -38,7 +38,7 @@ async def test_backend_schema_management(backend):
     assert len(schemas) == 0
 
     # Create a schema
-    schema = AuditSchema(
+    schema = AuditSchemaModel(
         schema_name="protocol_test",
         version=1,
         description="Test protocol compliance",
@@ -73,11 +73,11 @@ async def test_backend_record_writing(backend):
     """Test that backend properly writes audit records."""
 
     # Create schema first
-    schema = AuditSchema(schema_name="write_test", version=1, description="Test record writing")
+    schema = AuditSchemaModel(schema_name="write_test", version=1, description="Test record writing")
     await backend.create_schema(schema)
 
     # Write a record
-    record = AuditRecord(
+    record = AuditRecordModel(
         schema_name="write_test",
         operation_type="tool",
         operation_name="test_tool",
@@ -103,7 +103,7 @@ async def test_backend_record_querying(backend):
     """Test that backend properly implements record querying."""
 
     # Create schema
-    schema = AuditSchema(schema_name="query_test", version=1, description="Test record querying")
+    schema = AuditSchemaModel(schema_name="query_test", version=1, description="Test record querying")
     await backend.create_schema(schema)
 
     # Write multiple records
@@ -116,7 +116,7 @@ async def test_backend_record_querying(backend):
 
     record_ids = []
     for data in records_data:
-        record = AuditRecord(
+        record = AuditRecordModel(
             schema_name="query_test",
             operation_type=data["type"],
             operation_name=data["name"],
@@ -170,13 +170,13 @@ async def test_backend_record_retrieval(backend):
     """Test that backend can retrieve individual records."""
 
     # Create schema
-    schema = AuditSchema(
+    schema = AuditSchemaModel(
         schema_name="retrieval_test", version=1, description="Test record retrieval"
     )
     await backend.create_schema(schema)
 
     # Write a record
-    original_record = AuditRecord(
+    original_record = AuditRecordModel(
         schema_name="retrieval_test",
         operation_type="tool",
         operation_name="test_tool",
@@ -218,7 +218,7 @@ async def test_backend_schema_deactivation(backend):
     """Test that backend properly handles schema deactivation."""
 
     # Create schema
-    schema = AuditSchema(
+    schema = AuditSchemaModel(
         schema_name="deactivation_test", version=1, description="Test schema deactivation"
     )
     await backend.create_schema(schema)
@@ -248,7 +248,7 @@ async def test_backend_time_filtering(backend):
     """Test that backend supports time-based filtering."""
 
     # Create schema
-    schema = AuditSchema(schema_name="time_test", version=1, description="Test time filtering")
+    schema = AuditSchemaModel(schema_name="time_test", version=1, description="Test time filtering")
     await backend.create_schema(schema)
 
     # Create records with different timestamps
@@ -262,7 +262,7 @@ async def test_backend_time_filtering(backend):
 
     record_ids = []
     for i, timestamp in enumerate(times):
-        record = AuditRecord(
+        record = AuditRecordModel(
             schema_name="time_test",
             operation_type="tool",
             operation_name=f"tool_{i}",
@@ -300,7 +300,7 @@ async def test_backend_integrity_verification(backend):
     """Test that backend implements integrity verification."""
 
     # Create schema
-    schema = AuditSchema(
+    schema = AuditSchemaModel(
         schema_name="integrity_test", version=1, description="Test integrity verification"
     )
     await backend.create_schema(schema)
@@ -308,7 +308,7 @@ async def test_backend_integrity_verification(backend):
     # Write some records
     record_ids = []
     for i in range(3):
-        record = AuditRecord(
+        record = AuditRecordModel(
             schema_name="integrity_test",
             operation_type="tool",
             operation_name=f"tool_{i}",
@@ -344,7 +344,7 @@ async def test_backend_retention_policies(backend):
     """Test that backend implements retention policy application."""
 
     # Create schema with short retention
-    schema = AuditSchema(
+    schema = AuditSchemaModel(
         schema_name="retention_test",
         version=1,
         description="Test retention policies",
@@ -353,7 +353,7 @@ async def test_backend_retention_policies(backend):
     await backend.create_schema(schema)
 
     # Write records with different ages
-    old_record = AuditRecord(
+    old_record = AuditRecordModel(
         schema_name="retention_test",
         operation_type="tool",
         operation_name="old_tool",
@@ -365,7 +365,7 @@ async def test_backend_retention_policies(backend):
     # Make it older than retention period
     old_record.timestamp = datetime.now(timezone.utc) - timedelta(days=2)
 
-    new_record = AuditRecord(
+    new_record = AuditRecordModel(
         schema_name="retention_test",
         operation_type="tool",
         operation_name="new_tool",
@@ -400,13 +400,13 @@ async def test_backend_schema_versioning(backend):
     """Test that backend handles schema versioning correctly."""
 
     # Create version 1
-    schema_v1 = AuditSchema(
+    schema_v1 = AuditSchemaModel(
         schema_name="versioned_schema", version=1, description="Version 1 of schema"
     )
     await backend.create_schema(schema_v1)
 
     # Create version 2
-    schema_v2 = AuditSchema(
+    schema_v2 = AuditSchemaModel(
         schema_name="versioned_schema",
         version=2,
         description="Version 2 of schema",

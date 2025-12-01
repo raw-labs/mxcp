@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
 
-from .._types import AuditRecord, AuditSchema, IntegrityResult, PolicyDecision, Status
+from ..models import AuditRecordModel, AuditSchemaModel, IntegrityResultModel, PolicyDecision, Status
 
 
 class NoOpAuditBackend:
@@ -18,15 +18,15 @@ class NoOpAuditBackend:
         """Initialize the no-op backend."""
         pass
 
-    async def create_schema(self, schema: AuditSchema) -> None:
+    async def create_schema(self, schema: AuditSchemaModel) -> None:
         """No-op schema creation."""
         pass
 
-    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchema | None:
+    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchemaModel | None:
         """No-op schema retrieval."""
         return None
 
-    async def list_schemas(self, active_only: bool = True) -> list[AuditSchema]:
+    async def list_schemas(self, active_only: bool = True) -> list[AuditSchemaModel]:
         """No-op schema listing."""
         return []
 
@@ -38,7 +38,7 @@ class NoOpAuditBackend:
         """No-op retention policy application."""
         return {"processed": 0, "deleted": 0}
 
-    async def write_record(self, record: AuditRecord) -> str:
+    async def write_record(self, record: AuditRecordModel) -> str:
         """No-op record writing."""
         return record.record_id
 
@@ -57,23 +57,23 @@ class NoOpAuditBackend:
         business_context_filters: dict[str, Any] | None = None,
         limit: int | None = None,
         offset: int = 0,
-    ) -> AsyncIterator[AuditRecord]:
+    ) -> AsyncIterator[AuditRecordModel]:
         """No-op record querying - yields nothing."""
 
-        async def _empty() -> AsyncIterator[AuditRecord]:
+        async def _empty() -> AsyncIterator[AuditRecordModel]:
             if False:  # pragma: no cover - intentional no-op
-                yield AuditRecord(schema_name="noop")
+                yield AuditRecordModel(schema_name="noop")
             return
 
         return _empty()
 
-    async def get_record(self, record_id: str) -> AuditRecord | None:
+    async def get_record(self, record_id: str) -> AuditRecordModel | None:
         """No-op record retrieval."""
         return None
 
-    async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResult:
+    async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResultModel:
         """No-op integrity verification."""
-        return IntegrityResult(valid=True, records_checked=0, chain_breaks=[])
+        return IntegrityResultModel(valid=True, records_checked=0, chain_breaks=[])
 
     async def close(self) -> None:
         """No-op close."""

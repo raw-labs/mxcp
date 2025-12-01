@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from mxcp.sdk.validator import TypeSchema
+from mxcp.sdk.validator import TypeSchemaModel
 
 
 # LLM Model configuration types
@@ -73,7 +73,7 @@ class ToolDefinition:
     name: str
     description: str = ""
     parameters: list[ParameterDefinition] = field(default_factory=list)
-    return_type: TypeSchema | None = None
+    return_type: TypeSchemaModel | None = None
     annotations: dict[str, Any] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
 

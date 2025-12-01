@@ -294,7 +294,9 @@ class TestConfigurationLoading:
         """Test loading empty configuration."""
         config = load_resolver_config(None)
         assert config is not None
-        assert isinstance(config, dict)
+        # Config is now a Pydantic model, not a dict
+        assert hasattr(config, "vault")
+        assert hasattr(config, "onepassword")
 
     def test_load_config_from_file(self):
         """Test loading configuration from file."""
@@ -307,10 +309,10 @@ class TestConfigurationLoading:
             f.flush()
 
             config = load_resolver_config(Path(f.name))
-            vault_config = config.get("vault")
-            assert vault_config is not None
-            assert vault_config.get("enabled") is True
-            assert vault_config.get("address") == "https://vault.example.com"
+            # Config is now a Pydantic model with attribute access
+            assert config.vault is not None
+            assert config.vault.enabled is True
+            assert config.vault.address == "https://vault.example.com"
 
             os.unlink(f.name)
 

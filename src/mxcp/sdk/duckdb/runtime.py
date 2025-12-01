@@ -16,7 +16,7 @@ from typing import Any
 
 from .plugin_loader import load_plugins
 from .session import DuckDBSession
-from .types import DatabaseConfig, PluginConfig, PluginDefinition, SecretDefinition
+from .models import DatabaseConfigModel, PluginConfigModel, PluginDefinitionModel, SecretDefinitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +34,10 @@ class DuckDBRuntime:
 
     def __init__(
         self,
-        database_config: DatabaseConfig,
-        plugins: list[PluginDefinition],
-        plugin_config: PluginConfig,
-        secrets: list[SecretDefinition],
+        database_config: DatabaseConfigModel,
+        plugins: list[PluginDefinitionModel],
+        plugin_config: PluginConfigModel,
+        secrets: list[SecretDefinitionModel],
         pool_size: int | None = None,
     ):
         """Initialize the DuckDB runtime.

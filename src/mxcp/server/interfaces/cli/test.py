@@ -3,7 +3,7 @@ from pathlib import Path
 
 import click
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
@@ -323,8 +323,8 @@ async def _test_impl(
             except json.JSONDecodeError as e:
                 raise click.BadParameter(f"Invalid JSON in user context: {e}") from e
 
-        # Create UserContext object from the data
-        cli_user_context = UserContext(
+        # Create UserContextModel object from the data
+        cli_user_context = UserContextModel(
             provider="cli",  # Special provider for CLI usage
             user_id=context_data.get("user_id", "cli_user"),
             username=context_data.get("username", "cli_user"),

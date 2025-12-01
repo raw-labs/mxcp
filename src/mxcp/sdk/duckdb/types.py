@@ -1,79 +1,20 @@
 """Types for DuckDB infrastructure.
 
-This module contains data structures for configuring and managing DuckDB
-connections, extensions, plugins, and secrets.
+This module re-exports the Pydantic models from models.py for public API.
 """
 
-from dataclasses import dataclass, field
-from typing import Any
+from .models import (
+    DatabaseConfigModel,
+    ExtensionDefinitionModel,
+    PluginConfigModel,
+    PluginDefinitionModel,
+    SecretDefinitionModel,
+)
 
-
-@dataclass
-class ExtensionDefinition:
-    """Definition of a DuckDB extension to load.
-
-    Attributes:
-        name: Extension name
-        repo: Optional repository name (e.g., 'community', 'core_nightly')
-    """
-
-    name: str
-    repo: str | None = None
-
-
-@dataclass
-class PluginDefinition:
-    """Definition of a plugin to load.
-
-    Attributes:
-        name: Plugin name
-        module: Python module path
-        config: Optional config key name
-    """
-
-    name: str
-    module: str
-    config: str | None = None
-
-
-@dataclass
-class PluginConfig:
-    """Configuration for plugins.
-
-    Attributes:
-        plugins_path: Path to plugins directory
-        config: Dictionary of plugin configurations
-    """
-
-    plugins_path: str
-    config: dict[str, dict[str, str]]
-
-
-@dataclass
-class SecretDefinition:
-    """Definition of a secret for injection.
-
-    Attributes:
-        name: Secret name
-        type: Secret type (e.g., 'S3', 'HTTP')
-        parameters: Secret parameters
-    """
-
-    name: str
-    type: str
-    parameters: dict[str, Any]
-
-
-@dataclass
-class DatabaseConfig:
-    """Configuration for DuckDB database.
-
-    Attributes:
-        path: Database file path
-        readonly: Whether database is readonly
-        extensions: List of extensions to load
-    """
-
-    path: str
-    readonly: bool = False
-    extensions: list[ExtensionDefinition] = field(default_factory=list)
+__all__ = [
+    "ExtensionDefinitionModel",
+    "PluginDefinitionModel",
+    "PluginConfigModel",
+    "SecretDefinitionModel",
+    "DatabaseConfigModel",
+]

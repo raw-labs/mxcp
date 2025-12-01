@@ -26,7 +26,7 @@ Example:
 """
 
 from .decorators import validate, validate_input, validate_output, validate_strict
-from .loaders import load_schema, load_schema_from_file, validate_schema_structure
+from .loaders import load_schema, load_schema_from_file
 
 __all__ = [
     # Main decorator
@@ -38,5 +38,4 @@ __all__ = [
     # Schema loaders
     "load_schema",
     "load_schema_from_file",
-    "validate_schema_structure",
 ]

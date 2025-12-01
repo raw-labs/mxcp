@@ -13,10 +13,10 @@ import pytest
 
 from mxcp.sdk.audit import (
     AuditLogger,
-    AuditSchema,
+    AuditSchemaModel,
     EvidenceLevel,
-    FieldDefinition,
-    FieldRedaction,
+    FieldDefinitionModel,
+    FieldRedactionModel,
     RedactionStrategy,
 )
 
@@ -31,41 +31,41 @@ async def test_complete_audit_workflow():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Define schemas for different types of operations
-        auth_schema = AuditSchema(
+        auth_schema = AuditSchemaModel(
             schema_name="auth_operations",
             version=1,
             description="Authentication and authorization operations",
             retention_days=365,
             evidence_level=EvidenceLevel.REGULATORY,
             fields=[
-                FieldDefinition("operation", "string"),
-                FieldDefinition("user_email", "string", sensitive=True),
-                FieldDefinition("ip_address", "string", sensitive=True),
-                FieldDefinition("success", "boolean"),
+                FieldDefinitionModel(name="operation", type="string"),
+                FieldDefinitionModel(name="user_email", type="string", sensitive=True),
+                FieldDefinitionModel(name="ip_address", type="string", sensitive=True),
+                FieldDefinitionModel(name="success", type="boolean"),
             ],
             field_redactions=[
-                FieldRedaction("user_email", RedactionStrategy.EMAIL),
-                FieldRedaction(
-                    "ip_address", RedactionStrategy.PARTIAL, {"show_first": 0, "show_last": 3}
+                FieldRedactionModel(field_path="user_email", strategy=RedactionStrategy.EMAIL),
+                FieldRedactionModel(
+                    field_path="ip_address", strategy=RedactionStrategy.PARTIAL, options={"show_first": 0, "show_last": 3}
                 ),
             ],
             extract_fields=["operation", "success"],
             indexes=["operation", "user_email", "timestamp"],
         )
 
-        api_schema = AuditSchema(
+        api_schema = AuditSchemaModel(
             schema_name="api_operations",
             version=1,
             description="API request/response operations",
             retention_days=90,
             evidence_level=EvidenceLevel.DETAILED,
             fields=[
-                FieldDefinition("method", "string"),
-                FieldDefinition("endpoint", "string"),
-                FieldDefinition("status_code", "number"),
-                FieldDefinition("api_key", "string", sensitive=True),
+                FieldDefinitionModel(name="method", type="string"),
+                FieldDefinitionModel(name="endpoint", type="string"),
+                FieldDefinitionModel(name="status_code", type="number"),
+                FieldDefinitionModel(name="api_key", type="string", sensitive=True),
             ],
-            field_redactions=[FieldRedaction("api_key", RedactionStrategy.HASH)],
+            field_redactions=[FieldRedactionModel(field_path="api_key", strategy=RedactionStrategy.HASH)],
             extract_fields=["method", "endpoint", "status_code"],
         )
 
@@ -241,11 +241,11 @@ async def test_schema_evolution():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create version 1 of a schema
-        schema_v1 = AuditSchema(
+        schema_v1 = AuditSchemaModel(
             schema_name="evolving_schema",
             version=1,
             description="Version 1 of evolving schema",
-            fields=[FieldDefinition("field1", "string"), FieldDefinition("field2", "number")],
+            fields=[FieldDefinitionModel(name="field1", type="string"), FieldDefinitionModel(name="field2", type="number")],
         )
         await logger.create_schema(schema_v1)
 
@@ -261,16 +261,16 @@ async def test_schema_evolution():
         )
 
         # Create version 2 with additional fields and redaction
-        schema_v2 = AuditSchema(
+        schema_v2 = AuditSchemaModel(
             schema_name="evolving_schema",
             version=2,
             description="Version 2 with additional fields",
             fields=[
-                FieldDefinition("field1", "string"),
-                FieldDefinition("field2", "number"),
-                FieldDefinition("field3", "string", sensitive=True),  # New field
+                FieldDefinitionModel(name="field1", type="string"),
+                FieldDefinitionModel(name="field2", type="number"),
+                FieldDefinitionModel(name="field3", type="string", sensitive=True),  # New field
             ],
-            field_redactions=[FieldRedaction("field3", RedactionStrategy.PARTIAL)],  # New redaction
+            field_redactions=[FieldRedactionModel(field_path="field3", strategy=RedactionStrategy.PARTIAL)],  # New redaction
         )
         await logger.create_schema(schema_v2)
 
@@ -334,7 +334,7 @@ async def test_high_volume_logging():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create a simple schema
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="volume_test", version=1, description="High volume test schema"
         )
         await logger.create_schema(schema)

@@ -12,11 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from mxcp.sdk.duckdb import (
-    DatabaseConfig,
-    ExtensionDefinition,
-    PluginConfig,
-    PluginDefinition,
-    SecretDefinition,
+    DatabaseConfigModel,
+    ExtensionDefinitionModel,
+    PluginConfigModel,
+    PluginDefinitionModel,
+    SecretDefinitionModel,
 )
 from mxcp.sdk.executor import (
     ExecutionContext,
@@ -33,7 +33,7 @@ def create_duckdb_session_config(
     user_config: UserConfigModel,
     profile_name: str,
     readonly: bool = False,
-) -> tuple[DatabaseConfig, list[PluginDefinition], PluginConfig, list[SecretDefinition]]:
+) -> tuple[DatabaseConfigModel, list[PluginDefinitionModel], PluginConfigModel, list[SecretDefinitionModel]]:
     """Convert MXCP configs to SDK session configuration objects.
 
     Args:
@@ -59,14 +59,14 @@ def create_duckdb_session_config(
 
     # Get extensions from site config (root level)
     extensions = [
-        ExtensionDefinition(name=ext.name, repo=ext.repo) for ext in site_config.extensions
+        ExtensionDefinitionModel(name=ext.name, repo=ext.repo) for ext in site_config.extensions
     ]
 
-    database_config = DatabaseConfig(path=db_path, readonly=readonly, extensions=extensions)
+    database_config = DatabaseConfigModel(path=db_path, readonly=readonly, extensions=extensions)
 
     # Get plugins from site config plugin array
     plugins = [
-        PluginDefinition(name=plugin_def.name, module=plugin_def.module, config=plugin_def.config)
+        PluginDefinitionModel(name=plugin_def.name, module=plugin_def.module, config=plugin_def.config)
         for plugin_def in site_config.plugin
     ]
 
@@ -78,7 +78,7 @@ def create_duckdb_session_config(
     # Get plugins path from site config
     plugins_path = site_config.paths.plugins
 
-    plugin_config = PluginConfig(plugins_path=plugins_path, config=user_plugin_configs)
+    plugin_config = PluginConfigModel(plugins_path=plugins_path, config=user_plugin_configs)
 
     # Get secrets from user config profile
     secrets = []
@@ -86,7 +86,7 @@ def create_duckdb_session_config(
     for secret in user_secrets:
         if secret.parameters:
             secrets.append(
-                SecretDefinition(
+                SecretDefinitionModel(
                     name=secret.name,
                     type=secret.type,
                     parameters=secret.parameters,

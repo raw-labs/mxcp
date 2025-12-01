@@ -4,7 +4,7 @@ import inspect
 from collections.abc import Callable
 from typing import Any
 
-from ._types import ParameterSchema, TypeSchema, ValidationSchema
+from .models import ParameterSchemaModel, TypeSchemaModel, ValidationSchemaModel
 from .converters import TypeConverter, ValidationError
 
 
@@ -20,7 +20,7 @@ class TypeValidator:
     - Sensitive data masking
     """
 
-    def __init__(self, schema: ValidationSchema, strict: bool = False):
+    def __init__(self, schema: ValidationSchemaModel, strict: bool = False):
         """Initialize the validator with a schema.
 
         Args:
@@ -42,7 +42,7 @@ class TypeValidator:
         Returns:
             TypeValidator instance
         """
-        schema = ValidationSchema.from_dict(schema_dict)
+        schema = ValidationSchemaModel.model_validate(schema_dict)
         return cls(schema, strict=strict)
 
     def validate_input(self, params: dict[str, Any], apply_defaults: bool = True) -> dict[str, Any]:
@@ -176,7 +176,7 @@ class TypeValidator:
                 raise ValidationError(f"Function has extra parameters: {extra}")
 
     def _apply_defaults(
-        self, params: dict[str, Any], param_lookup: dict[str, ParameterSchema]
+        self, params: dict[str, Any], param_lookup: dict[str, ParameterSchemaModel]
     ) -> dict[str, Any]:
         """Apply default values to missing parameters.
 
@@ -248,7 +248,7 @@ class TypeValidator:
 
         return self._type_schema_to_dict(self.schema.output_schema)
 
-    def _type_schema_to_dict(self, schema: TypeSchema | ParameterSchema) -> dict[str, Any]:
+    def _type_schema_to_dict(self, schema: TypeSchemaModel | ParameterSchemaModel) -> dict[str, Any]:
         """Convert a TypeSchema or ParameterSchema to a dictionary representation."""
         result: dict[str, Any] = {
             "type": schema.type,

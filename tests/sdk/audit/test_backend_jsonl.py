@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 
 from mxcp.sdk.audit import (
-    AuditRecord,
-    AuditSchema,
+    AuditRecordModel,
+    AuditSchemaModel,
     EvidenceLevel,
-    FieldDefinition,
-    FieldRedaction,
+    FieldDefinitionModel,
+    FieldRedactionModel,
     RedactionStrategy,
 )
 from mxcp.sdk.audit.backends import JSONLAuditWriter
@@ -32,14 +32,14 @@ async def test_jsonl_file_creation():
         assert not schema_path.exists()
 
         # Create a schema - this should create the schema file
-        schema = AuditSchema(schema_name="test_schema", version=1, description="Test schema")
+        schema = AuditSchemaModel(schema_name="test_schema", version=1, description="Test schema")
         await backend.create_schema(schema)
 
         # Schema file should now exist
         assert schema_path.exists()
 
         # Write a record - this should create the log file
-        record = AuditRecord(
+        record = AuditRecordModel(
             schema_name="test_schema",
             operation_type="tool",
             operation_name="test_tool",
@@ -66,17 +66,17 @@ async def test_jsonl_schema_persistence():
         # Create backend and schema
         backend = JSONLAuditWriter(log_path)
 
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="persist_test",
             version=1,
             description="Persistence test schema",
             retention_days=180,
             evidence_level=EvidenceLevel.DETAILED,
             fields=[
-                FieldDefinition("field1", "string", sensitive=True),
-                FieldDefinition("field2", "number"),
+                FieldDefinitionModel(name="field1", type="string", sensitive=True),
+                FieldDefinitionModel(name="field2", type="number"),
             ],
-            field_redactions=[FieldRedaction("field1", RedactionStrategy.PARTIAL)],
+            field_redactions=[FieldRedactionModel(field_path="field1", strategy=RedactionStrategy.PARTIAL)],
             extract_fields=["field2"],
             indexes=["field1", "field2"],
         )
@@ -111,10 +111,10 @@ async def test_jsonl_record_format():
         backend = JSONLAuditWriter(log_path)
 
         # Create schema and record
-        schema = AuditSchema(schema_name="format_test", version=1, description="Format test")
+        schema = AuditSchemaModel(schema_name="format_test", version=1, description="Format test")
         await backend.create_schema(schema)
 
-        record = AuditRecord(
+        record = AuditRecordModel(
             schema_name="format_test",
             operation_type="tool",
             operation_name="format_tool",
@@ -161,16 +161,16 @@ async def test_jsonl_schema_redaction_serialization():
         backend = JSONLAuditWriter(log_path)
 
         # Create schema with various redaction strategies
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="redaction_test",
             version=1,
             description="Test redaction serialization",
             field_redactions=[
-                FieldRedaction("email", RedactionStrategy.EMAIL),
-                FieldRedaction("ssn", RedactionStrategy.PARTIAL, {"show_last": 4}),
-                FieldRedaction("secret", RedactionStrategy.HASH),
-                FieldRedaction("description", RedactionStrategy.TRUNCATE, {"length": 20}),
-                FieldRedaction("sensitive", RedactionStrategy.FULL),
+                FieldRedactionModel(field_path="email", strategy=RedactionStrategy.EMAIL),
+                FieldRedactionModel(field_path="ssn", strategy=RedactionStrategy.PARTIAL, options={"show_last": 4}),
+                FieldRedactionModel(field_path="secret", strategy=RedactionStrategy.HASH),
+                FieldRedactionModel(field_path="description", strategy=RedactionStrategy.TRUNCATE, options={"length": 20}),
+                FieldRedactionModel(field_path="sensitive", strategy=RedactionStrategy.FULL),
             ],
         )
 
@@ -206,7 +206,7 @@ async def test_jsonl_concurrent_writes():
         backend = JSONLAuditWriter(log_path)
 
         # Create schema
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="concurrent_test", version=1, description="Test concurrent writes"
         )
         await backend.create_schema(schema)
@@ -215,7 +215,7 @@ async def test_jsonl_concurrent_writes():
         import asyncio
 
         async def write_record(i):
-            record = AuditRecord(
+            record = AuditRecordModel(
                 schema_name="concurrent_test",
                 operation_type="tool",
                 operation_name=f"tool_{i}",
@@ -258,7 +258,7 @@ async def test_jsonl_query_filtering():
         backend = JSONLAuditWriter(log_path)
         try:
             # Create schema
-            schema = AuditSchema(
+            schema = AuditSchemaModel(
                 schema_name="query_test", version=1, description="Test query filtering"
             )
             await backend.create_schema(schema)
@@ -272,7 +272,7 @@ async def test_jsonl_query_filtering():
             ]
 
             for data in records_data:
-                record = AuditRecord(
+                record = AuditRecordModel(
                     schema_name="query_test",
                     operation_type=data["type"],
                     operation_name=data["name"],
@@ -322,7 +322,7 @@ async def test_jsonl_schema_deactivation():
         backend = JSONLAuditWriter(log_path)
         try:
             # Create active schema
-            schema = AuditSchema(
+            schema = AuditSchemaModel(
                 schema_name="deactivate_test", version=1, description="Test deactivation"
             )
             await backend.create_schema(schema)
@@ -357,7 +357,7 @@ async def test_jsonl_retention_policy():
         backend = JSONLAuditWriter(log_path)
 
         # Create schema with short retention
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="retention_test",
             version=1,
             description="Test retention policy",
@@ -366,7 +366,7 @@ async def test_jsonl_retention_policy():
         await backend.create_schema(schema)
 
         # Write a record
-        record = AuditRecord(
+        record = AuditRecordModel(
             schema_name="retention_test",
             operation_type="tool",
             operation_name="test_tool",

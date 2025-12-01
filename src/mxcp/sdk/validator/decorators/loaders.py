@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-import jsonschema
 import yaml
 
 
@@ -64,40 +63,3 @@ def load_schema_from_file(path: str | Path) -> dict[str, Any]:
     # Load the file
     content = path.read_text(encoding="utf-8")
     return load_schema(content, format=format)
-
-
-def validate_schema_structure(schema: dict[str, Any]) -> None:
-    """Validate that a schema has the expected structure using JSON Schema.
-
-    Args:
-        schema: Schema dictionary to validate
-
-    Raises:
-        ValueError: If schema structure is invalid
-    """
-    # Load the validation JSON schema
-    schema_path = Path(__file__).parent / "schemas" / "validation-schema-1.json"
-
-    if not schema_path.exists():
-        # Fallback to basic validation if JSON schema not available
-        if not isinstance(schema, dict):
-            raise ValueError("Schema must be a dictionary")
-        return
-
-    try:
-        with open(schema_path) as f:
-            validation_schema = json.load(f)
-
-        # Validate the schema against the JSON schema
-        jsonschema.validate(instance=schema, schema=validation_schema)
-
-    except jsonschema.ValidationError as e:
-        # Convert JSON schema error to a more user-friendly message
-        if e.absolute_path:
-            path = ".".join(str(p) for p in e.absolute_path)
-            raise ValueError(f"Schema validation error at '{path}': {e.message}") from e
-        else:
-            raise ValueError(f"Schema validation error: {e.message}") from e
-    except jsonschema.SchemaError as e:
-        # This shouldn't happen unless our validation schema is invalid
-        raise ValueError(f"Invalid validation schema: {e.message}") from e

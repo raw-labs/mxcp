@@ -15,7 +15,7 @@ from duckdb import func
 
 from mxcp.plugins import MXCPBasePlugin
 
-from .types import PluginConfig, PluginDefinition
+from .models import PluginConfigModel, PluginDefinitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +60,8 @@ def _load_plugin(module_path: str, config: dict[str, str], plugins_path: str) ->
 
 
 def load_plugins(
-    plugins_list: list[PluginDefinition],
-    plugin_config: PluginConfig,
+    plugins_list: list[PluginDefinitionModel],
+    plugin_config: PluginConfigModel,
     conn: duckdb.DuckDBPyConnection,
 ) -> dict[str, MXCPBasePlugin]:
     """Load all plugins specified in the plugin definitions.

@@ -18,13 +18,13 @@ from typing import Any
 import aiofiles  # type: ignore[import-untyped]
 import duckdb
 
-from .._types import (
-    AuditRecord,
-    AuditSchema,
+from ..models import (
+    AuditRecordModel,
+    AuditSchemaModel,
     EvidenceLevel,
-    FieldDefinition,
-    FieldRedaction,
-    IntegrityResult,
+    FieldDefinitionModel,
+    FieldRedactionModel,
+    IntegrityResultModel,
     PolicyDecision,
     RedactionStrategy,
     Status,
@@ -48,7 +48,7 @@ class JSONLAuditWriter(BaseAuditWriter):
         if not self.log_path.exists():
             self.log_path.touch()
 
-        self._queue: asyncio.Queue[AuditRecord | object] = asyncio.Queue()
+        self._queue: asyncio.Queue[AuditRecordModel | object] = asyncio.Queue()
         self._writer_task: asyncio.Task[None] | None = None
         self._flush_signal = object()
         self._flush_ack = asyncio.Event()
@@ -60,8 +60,8 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         logger.info(f"JSONL audit writer initialized with file: {self.log_path}")
 
-    def _dict_to_schema(self, d: dict[str, Any]) -> AuditSchema:
-        """Convert a dictionary to an AuditSchema."""
+    def _dict_to_schema(self, d: dict[str, Any]) -> AuditSchemaModel:
+        """Convert a dictionary to an AuditSchemaModel."""
 
         # Convert created_at if it's a string
         if isinstance(d.get("created_at"), str):
@@ -73,7 +73,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         # Convert fields
         if "fields" in d:
-            d["fields"] = [FieldDefinition(**f) for f in d["fields"]]
+            d["fields"] = [FieldDefinitionModel(**f) for f in d["fields"]]
 
         # Convert field_redactions
         if "field_redactions" in d:
@@ -83,16 +83,16 @@ class JSONLAuditWriter(BaseAuditWriter):
 
                 strategy = RedactionStrategy(r.get("strategy", "full"))
                 redactions.append(
-                    FieldRedaction(
+                    FieldRedactionModel(
                         field_path=r["field_path"], strategy=strategy, options=r.get("options")
                     )
                 )
             d["field_redactions"] = redactions
 
-        return AuditSchema(**d)
+        return AuditSchemaModel.model_validate(d)
 
-    def _schema_to_dict(self, schema: AuditSchema) -> dict[str, Any]:
-        """Convert an AuditSchema to a dictionary for JSON serialization."""
+    def _schema_to_dict(self, schema: AuditSchemaModel) -> dict[str, Any]:
+        """Convert an AuditSchemaModel to a dictionary for JSON serialization."""
         result = {
             "schema_name": schema.schema_name,
             "version": schema.version,
@@ -122,7 +122,7 @@ class JSONLAuditWriter(BaseAuditWriter):
         }
         return result
 
-    async def create_schema(self, schema: AuditSchema) -> None:
+    async def create_schema(self, schema: AuditSchemaModel) -> None:
         """Create or update a schema definition."""
         key = schema.get_schema_id()
 
@@ -142,13 +142,13 @@ class JSONLAuditWriter(BaseAuditWriter):
             logger.error(f"Failed to save schema {key}: {e}")
             raise
 
-    def _read_schemas_from_disk(self) -> list[AuditSchema]:
+    def _read_schemas_from_disk(self) -> list[AuditSchemaModel]:
         """Read all schemas from the schema file, returning only the latest version of each."""
         if not self.schema_path.exists():
             return []
 
         # Use a dict to store the latest version of each schema
-        schema_map: dict[str, AuditSchema] = {}
+        schema_map: dict[str, AuditSchemaModel] = {}
 
         try:
             with open(self.schema_path, encoding="utf-8") as f:
@@ -169,7 +169,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         return list(schema_map.values())
 
-    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchema | None:
+    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchemaModel | None:
         """Get a schema definition by reading from disk."""
         schemas = self._read_schemas_from_disk()
 
@@ -189,7 +189,7 @@ class JSONLAuditWriter(BaseAuditWriter):
             matching_schemas.sort(key=lambda x: x.version, reverse=True)
             return matching_schemas[0]
 
-    async def list_schemas(self, active_only: bool = True) -> list[AuditSchema]:
+    async def list_schemas(self, active_only: bool = True) -> list[AuditSchemaModel]:
         """List all schemas by reading from disk."""
         schemas = self._read_schemas_from_disk()
         if active_only:
@@ -212,7 +212,7 @@ class JSONLAuditWriter(BaseAuditWriter):
     async def _writer_loop(self) -> None:
         """Main loop for the background writer task."""
         logger.debug(f"Writer task ENTERED main loop for {self.log_path}")
-        batch: list[AuditRecord] = []
+        batch: list[AuditRecordModel] = []
         last_write = time.time()
 
         while True:
@@ -241,7 +241,7 @@ class JSONLAuditWriter(BaseAuditWriter):
                     self._queue.task_done()
                     continue
 
-                if isinstance(event, AuditRecord):
+                if isinstance(event, AuditRecordModel):
                     batch.append(event)
                     self._queue.task_done()
 
@@ -270,7 +270,7 @@ class JSONLAuditWriter(BaseAuditWriter):
         await self._queue.put(self._flush_signal)
         await self._flush_ack.wait()
 
-    async def _write_events_batch(self, events: list[AuditRecord]) -> None:
+    async def _write_events_batch(self, events: list[AuditRecordModel]) -> None:
         """Write a batch of events to the JSONL file."""
         try:
             async with self._file_lock, aiofiles.open(self.log_path, "a", encoding="utf-8") as f:
@@ -284,7 +284,7 @@ class JSONLAuditWriter(BaseAuditWriter):
         except Exception as e:
             logger.error(f"Failed to write event batch: {e}")
 
-    async def write_record(self, record: AuditRecord) -> str:
+    async def write_record(self, record: AuditRecordModel) -> str:
         """Write an audit record. Policies come from the referenced schema.
 
         Args:
@@ -390,14 +390,14 @@ class JSONLAuditWriter(BaseAuditWriter):
         business_context_filters: dict[str, Any] | None = None,
         limit: int | None = None,
         offset: int = 0,
-    ) -> AsyncIterator[AuditRecord]:
+    ) -> AsyncIterator[AuditRecordModel]:
         """Query audit records with filters.
 
         Uses DuckDB to efficiently query the JSONL file and yields records
         one at a time for memory-efficient processing.
         """
 
-        async def _iterator() -> AsyncIterator[AuditRecord]:
+        async def _iterator() -> AsyncIterator[AuditRecordModel]:
             if not self.log_path.exists():
                 return
 
@@ -456,13 +456,13 @@ class JSONLAuditWriter(BaseAuditWriter):
         session_ids: list[str] | None,
         trace_ids: list[str] | None,
         business_context_filters: dict[str, Any] | None,
-    ) -> tuple[list[AuditRecord], bool]:
+    ) -> tuple[list[AuditRecordModel], bool]:
         """Execute a filtered query batch using DuckDB synchronously."""
         # TODO: business_context_filters support for JSONL backend
         del business_context_filters
 
         conn = None
-        records: list[AuditRecord] = []
+        records: list[AuditRecordModel] = []
         try:
             conn = duckdb.connect(":memory:")
 
@@ -551,9 +551,9 @@ class JSONLAuditWriter(BaseAuditWriter):
                             row_dict[field] = json.loads(row_dict[field])
 
                 record_fields = {
-                    k: v for k, v in row_dict.items() if k in AuditRecord.__dataclass_fields__
+                    k: v for k, v in row_dict.items() if k in AuditRecordModel.model_fields
                 }
-                records.append(AuditRecord(**record_fields))
+                records.append(AuditRecordModel.model_validate(record_fields))
 
             finished = len(result) < batch_size
             return records, finished
@@ -564,7 +564,7 @@ class JSONLAuditWriter(BaseAuditWriter):
             if conn:
                 conn.close()
 
-    async def get_record(self, record_id: str) -> AuditRecord | None:
+    async def get_record(self, record_id: str) -> AuditRecordModel | None:
         """Get a specific record by ID."""
         conn = None
         try:
@@ -621,11 +621,11 @@ class JSONLAuditWriter(BaseAuditWriter):
                         # Keep as string if parsing fails
                         row_dict[field] = json.loads(row_dict[field])
 
-            # Create AuditRecord
+            # Create AuditRecordModel
             record_fields = {
-                k: v for k, v in row_dict.items() if k in AuditRecord.__dataclass_fields__
+                k: v for k, v in row_dict.items() if k in AuditRecordModel.model_fields
             }
-            return AuditRecord(**record_fields)
+            return AuditRecordModel.model_validate(record_fields)
 
         except Exception as e:
             logger.error(f"Failed to get record {record_id}: {e}")
@@ -634,7 +634,7 @@ class JSONLAuditWriter(BaseAuditWriter):
             if conn:
                 conn.close()
 
-    async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResult:
+    async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResultModel:
         """Verify integrity between two records.
 
         For JSONL backend, this just checks that records exist.
@@ -644,13 +644,13 @@ class JSONLAuditWriter(BaseAuditWriter):
         end_record = await self.get_record(end_record_id)
 
         if not start_record or not end_record:
-            return IntegrityResult(
+            return IntegrityResultModel(
                 valid=False, records_checked=0, error="One or both records not found"
             )
 
         # For JSONL, we can't verify hash chains
         # Just return that records exist
-        return IntegrityResult(valid=True, records_checked=2, chain_breaks=[])
+        return IntegrityResultModel(valid=True, records_checked=2, chain_breaks=[])
 
     async def apply_retention_policies(self) -> dict[str, int]:
         """Apply retention policies to remove old records.

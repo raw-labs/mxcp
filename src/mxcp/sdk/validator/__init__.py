@@ -90,11 +90,11 @@ validated_output = validator.validate_output(result)
 
 """
 
-from ._types import (
-    BaseTypeSchema,
-    ParameterSchema,
-    TypeSchema,
-    ValidationSchema,
+from .models import (
+    BaseTypeSchemaModel,
+    ParameterSchemaModel,
+    TypeSchemaModel,
+    ValidationSchemaModel,
 )
 from .converters import (
     TypeConverter,
@@ -104,10 +104,10 @@ from .core import TypeValidator
 
 __all__ = [
     # Types
-    "BaseTypeSchema",
-    "TypeSchema",
-    "ParameterSchema",
-    "ValidationSchema",
+    "BaseTypeSchemaModel",
+    "TypeSchemaModel",
+    "ParameterSchemaModel",
+    "ValidationSchemaModel",
     # Converter classes
     "TypeConverter",
     "ValidationError",

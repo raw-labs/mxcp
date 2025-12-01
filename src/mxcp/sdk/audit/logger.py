@@ -6,13 +6,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ._types import (
+from .models import (
     AuditBackend,
-    AuditRecord,
-    AuditSchema,
+    AuditRecordModel,
+    AuditSchemaModel,
     CallerType,
     EventType,
-    IntegrityResult,
+    IntegrityResultModel,
     PolicyDecision,
     Status,
 )
@@ -68,15 +68,15 @@ class AuditLogger:
 
     # Schema management methods
 
-    async def create_schema(self, schema: AuditSchema) -> None:
+    async def create_schema(self, schema: AuditSchemaModel) -> None:
         """Create or update a schema."""
         await self.backend.create_schema(schema)
 
-    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchema | None:
+    async def get_schema(self, schema_name: str, version: int | None = None) -> AuditSchemaModel | None:
         """Get a schema definition."""
         return await self.backend.get_schema(schema_name, version)
 
-    async def list_schemas(self, active_only: bool = True) -> list[AuditSchema]:
+    async def list_schemas(self, active_only: bool = True) -> list[AuditSchemaModel]:
         """List all schemas."""
         return await self.backend.list_schemas(active_only)
 
@@ -119,7 +119,7 @@ class AuditLogger:
         """
         try:
             # Create audit record with schema reference
-            record = AuditRecord(
+            record = AuditRecordModel(
                 schema_name=schema_name,
                 schema_version=1,  # Default to version 1
                 timestamp=datetime.now(timezone.utc),
@@ -147,7 +147,7 @@ class AuditLogger:
 
     # Query methods - delegate to backend
 
-    async def query_records(self, **kwargs: Any) -> AsyncIterator[AuditRecord]:
+    async def query_records(self, **kwargs: Any) -> AsyncIterator[AuditRecordModel]:
         """Query audit records. See backend.query_records for parameters.
 
         Yields records one at a time for memory-efficient processing.
@@ -155,11 +155,11 @@ class AuditLogger:
         async for record in self.backend.query_records(**kwargs):
             yield record
 
-    async def get_record(self, record_id: str) -> AuditRecord | None:
+    async def get_record(self, record_id: str) -> AuditRecordModel | None:
         """Get a specific record by ID."""
         return await self.backend.get_record(record_id)
 
-    async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResult:
+    async def verify_integrity(self, start_record_id: str, end_record_id: str) -> IntegrityResultModel:
         """Verify integrity between two records."""
         return await self.backend.verify_integrity(start_record_id, end_record_id)
 

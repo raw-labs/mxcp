@@ -4,8 +4,8 @@ import pytest
 
 from mxcp.sdk.telemetry import (
     SpanKind,
-    TelemetryConfig,
-    TracingConfig,
+    TelemetryConfigModel,
+    TracingConfigModel,
     configure_all,
     get_current_span_id,
     get_current_trace_id,
@@ -41,11 +41,11 @@ def test_configure_all_with_kwargs():
 
 def test_configure_all_with_config_object():
     """Test configuring telemetry with config object."""
-    config = TelemetryConfig(
+    config = TelemetryConfigModel(
         enabled=True,
         service_name="test-service",
         environment="testing",
-        tracing=TracingConfig(enabled=True, console_export=True),
+        tracing=TracingConfigModel(enabled=True, console_export=True),
     )
     configure_all(config)
 
@@ -125,7 +125,7 @@ def test_nested_traced_operations():
 
 
 def test_config_from_dict():
-    """Test creating config from dictionary."""
+    """Test creating config from dictionary using Pydantic model_validate."""
     config_dict = {
         "enabled": True,
         "endpoint": "http://localhost:4318",
@@ -134,7 +134,7 @@ def test_config_from_dict():
         "headers": {"Authorization": "Bearer token"},
     }
 
-    config = TelemetryConfig.from_dict(config_dict)
+    config = TelemetryConfigModel.model_validate(config_dict)
     assert config.enabled is True
     assert config.endpoint == "http://localhost:4318"
     assert config.service_name == "my-service"

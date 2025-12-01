@@ -1,9 +1,10 @@
-"""Tests for JSON schema compatibility with endpoint schemas."""
+"""Tests for schema compatibility with endpoint schemas."""
 
 import pytest
 
 from mxcp.sdk.validator import TypeValidator, ValidationError
-from mxcp.sdk.validator.decorators import validate_schema_structure
+from mxcp.sdk.validator.models import ValidationSchemaModel
+from pydantic import ValidationError as PydanticValidationError
 
 
 class TestSchemaCompatibility:
@@ -198,8 +199,8 @@ class TestSchemaCompatibility:
         masked = validator2.mask_sensitive_output({"username": "admin", "password": "secret123"})
         assert masked == "[REDACTED]"  # Entire object marked as sensitive
 
-    def test_schema_structure_validation(self):
-        """Test the schema structure validation function."""
+    def test_schema_structure_validation_with_pydantic(self):
+        """Test schema structure validation using Pydantic models."""
         # Valid schema
         valid_schema = {
             "input": {"parameters": [{"name": "x", "type": "integer"}]},
@@ -207,16 +208,13 @@ class TestSchemaCompatibility:
         }
 
         # Should not raise
-        validate_schema_structure(valid_schema)
+        schema = ValidationSchemaModel.model_validate(valid_schema)
+        assert schema.input_parameters is not None
+        assert schema.output_schema is not None
 
-        # Invalid - missing type in parameter
+    def test_invalid_schema_missing_type(self):
+        """Test that missing type in parameter raises validation error."""
         invalid_schema = {"input": {"parameters": [{"name": "x"}]}}  # Missing type
 
-        with pytest.raises(ValueError, match="'type' is a required property"):
-            validate_schema_structure(invalid_schema)
-
-        # Invalid - parameters not a list
-        invalid_schema2 = {"input": {"parameters": {"x": {"type": "integer"}}}}  # Should be list
-
-        with pytest.raises(ValueError, match="Schema validation error"):
-            validate_schema_structure(invalid_schema2)
+        with pytest.raises(PydanticValidationError):
+            ValidationSchemaModel.model_validate(invalid_schema)

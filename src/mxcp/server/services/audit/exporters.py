@@ -13,7 +13,7 @@ from typing import Any
 
 import duckdb
 
-from mxcp.sdk.audit import AuditLogger, AuditRecord
+from mxcp.sdk.audit import AuditLogger, AuditRecordModel
 
 
 class ExportFormat(Enum):
@@ -199,8 +199,8 @@ def _build_query_params(filters: dict[str, Any] | None) -> dict[str, Any]:
     return params
 
 
-def _record_to_dict(record: AuditRecord) -> dict[str, Any]:
-    """Convert an AuditRecord to a dictionary for export."""
+def _record_to_dict(record: AuditRecordModel) -> dict[str, Any]:
+    """Convert an AuditRecordModel to a dictionary for export."""
     return {
         "record_id": record.record_id,
         "timestamp": record.timestamp.isoformat(),

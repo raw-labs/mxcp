@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.evals import (
     ClaudeConfig,
     LLMExecutor,
@@ -13,7 +13,7 @@ from mxcp.sdk.evals import (
     ParameterDefinition,
     ToolDefinition,
 )
-from mxcp.sdk.validator import TypeSchema
+from mxcp.sdk.validator import TypeSchemaModel
 
 
 class MockToolExecutor:
@@ -24,7 +24,7 @@ class MockToolExecutor:
         self.calls = []
 
     async def execute_tool(
-        self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
+        self, tool_name: str, arguments: dict[str, Any], user_context: UserContextModel | None = None
     ) -> Any:
         """Mock tool execution that records calls and returns predefined responses."""
         self.calls.append(
@@ -171,7 +171,7 @@ class TestLLMExecutor:
             ]
         )
 
-        user_context = UserContext(provider="test", user_id="test-user", username="testuser")
+        user_context = UserContextModel(provider="test", user_id="test-user", username="testuser")
 
         response, tool_calls = await self.executor.execute_prompt(
             "What's the weather in Paris?", user_context=user_context
@@ -249,7 +249,7 @@ class TestToolDefinition:
                 ),
                 ParameterDefinition(name="precision", type="integer", description="Decimal places"),
             ],
-            return_type=TypeSchema(type="number", description="Result"),
+            return_type=TypeSchemaModel(type="number", description="Result"),
             tags=["math", "utility"],
         )
 

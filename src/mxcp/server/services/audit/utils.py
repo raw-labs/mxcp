@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Any
 
-from mxcp.sdk.audit import AuditRecord
+from mxcp.sdk.audit import AuditRecordModel
 
 
 def parse_time_since(since_str: str) -> datetime:
@@ -45,7 +45,7 @@ def parse_time_since(since_str: str) -> datetime:
         raise ValueError(f"Unknown time unit: {unit}")
 
 
-def format_audit_record(record: AuditRecord, json_format: bool = False) -> str:
+def format_audit_record(record: AuditRecordModel, json_format: bool = False) -> str:
     """Format an audit record for display.
 
     Args:

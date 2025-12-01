@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.plugins import PythonExecutor
 
@@ -28,7 +28,7 @@ def temp_repo_dir():
 def mock_context():
     """Create a mock execution context."""
     # Create minimal context with user information
-    user_context = UserContext(
+    user_context = UserContextModel(
         user_id="test_user_123",
         username="test_user",
         provider="test",

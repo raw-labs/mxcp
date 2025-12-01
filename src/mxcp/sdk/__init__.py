@@ -31,8 +31,8 @@ Configuration management with secret resolvers and analytics.
 
 ```python
 from mxcp.sdk.executor import ExecutionEngine, ExecutionContext
-from mxcp.sdk.auth import UserContext
-from mxcp.sdk.policy import PolicyEnforcer, PolicySet
+from mxcp.sdk.auth import UserContextModel
+from mxcp.sdk.policy import PolicyEnforcer, PolicySetModel
 
 # Set up execution engine
 engine = ExecutionEngine()

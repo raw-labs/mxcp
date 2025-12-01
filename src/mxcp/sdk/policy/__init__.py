@@ -5,26 +5,26 @@ including CEL-based policy evaluation for input validation and output filtering.
 
 Key components:
 - PolicyAction: Enum of available policy actions (DENY, FILTER_FIELDS, etc.)
-- PolicyDefinition: Definition of a single policy rule
-- PolicySet: Collection of input and output policies
+- PolicyDefinitionModel: Definition of a single policy rule
+- PolicySetModel: Collection of input and output policies
 - PolicyEnforcer: Core enforcement engine
 - PolicyEnforcementError: Exception raised when access is denied
 
 Example usage:
-    >>> from mxcp.sdk.policy import PolicyEnforcer, PolicySet, PolicyDefinition, PolicyAction
+    >>> from mxcp.sdk.policy import PolicyEnforcer, PolicySetModel, PolicyDefinitionModel, PolicyAction
     >>> from mxcp.sdk.auth import UserContext
     >>>
     >>> # Define policies
-    >>> policy_set = PolicySet(
+    >>> policy_set = PolicySetModel(
     ...     input_policies=[
-    ...         PolicyDefinition(
+    ...         PolicyDefinitionModel(
     ...             condition='user.role != "admin"',
     ...             action=PolicyAction.DENY,
     ...             reason="Admin access required"
     ...         )
     ...     ],
     ...     output_policies=[
-    ...         PolicyDefinition(
+    ...         PolicyDefinitionModel(
     ...             condition='user.role == "guest"',
     ...             action=PolicyAction.FILTER_FIELDS,
     ...             fields=["sensitive_data"]
@@ -40,14 +40,19 @@ Example usage:
     >>> enforcer.enforce_input_policies(user, {"param": "value"})
 """
 
-from ._types import PolicyAction, PolicyDefinition, PolicyEnforcementError, PolicySet
+from .models import (
+    PolicyAction,
+    PolicyDefinitionModel,
+    PolicyEnforcementError,
+    PolicySetModel,
+)
 from .enforcer import PolicyEnforcer
 
 __all__ = [
     # Types
     "PolicyAction",
-    "PolicyDefinition",
-    "PolicySet",
+    "PolicyDefinitionModel",
+    "PolicySetModel",
     "PolicyEnforcementError",
     # Enforcer
     "PolicyEnforcer",

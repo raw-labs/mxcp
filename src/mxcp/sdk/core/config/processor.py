@@ -15,10 +15,9 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
-from jsonschema import ValidationError, validate
 
-from ._types import ResolverConfig
 from .loader import load_resolver_config
+from .models import OnePasswordConfigModel, ResolverConfigModel, VaultConfigModel
 from .plugins import ResolverPlugin, ResolverRegistry
 from .resolvers import EnvResolver, FileResolver, OnePasswordResolver, VaultResolver
 
@@ -234,14 +233,14 @@ class ResolverEngine:
     ```
     """
 
-    def __init__(self, resolver_config: ResolverConfig | None = None):
+    def __init__(self, resolver_config: ResolverConfigModel | None = None):
         """
         Initialize the ResolverEngine.
 
         Args:
             resolver_config: Optional resolver configuration. If None, uses default config.
         """
-        self.resolver_config = resolver_config or ResolverConfig()
+        self.resolver_config = resolver_config or ResolverConfigModel()
         self.registry = ResolverRegistry()
         self._resolved_references: list[ResolvedReference] = []
         self._current_config_path: list[str | int] = []
@@ -279,13 +278,15 @@ class ResolverEngine:
         # Convert dict to ResolverConfig
         config_section = config_dict.get("config", {})
 
-        resolver_config: ResolverConfig = {}
+        vault_config = None
+        onepassword_config = None
 
         if "vault" in config_section:
-            resolver_config["vault"] = config_section["vault"]
+            vault_config = VaultConfigModel.model_validate(config_section["vault"])
         if "onepassword" in config_section:
-            resolver_config["onepassword"] = config_section["onepassword"]
+            onepassword_config = OnePasswordConfigModel.model_validate(config_section["onepassword"])
 
+        resolver_config = ResolverConfigModel(vault=vault_config, onepassword=onepassword_config)
         return cls(resolver_config)
 
     def _initialize_resolvers(self) -> None:
@@ -297,16 +298,16 @@ class ResolverEngine:
         self.registry.register(FileResolver())
 
         # Vault resolver - only if configured
-        if self.resolver_config:
-            vault_config = self.resolver_config.get("vault")
-            if vault_config and vault_config.get("enabled", False):
-                self.registry.register(VaultResolver(dict(vault_config)))
+        if self.resolver_config and self.resolver_config.vault:
+            vault_config = self.resolver_config.vault
+            if vault_config.enabled:
+                self.registry.register(VaultResolver(vault_config.model_dump()))
 
         # 1Password resolver - only if configured
-        if self.resolver_config:
-            op_config = self.resolver_config.get("onepassword")
-            if op_config and op_config.get("enabled", False):
-                self.registry.register(OnePasswordResolver(dict(op_config)))
+        if self.resolver_config and self.resolver_config.onepassword:
+            op_config = self.resolver_config.onepassword
+            if op_config.enabled:
+                self.registry.register(OnePasswordResolver(op_config.model_dump()))
 
         logger.debug(f"Initialized {len(self.registry.list_resolvers())} resolvers")
 
@@ -332,8 +333,6 @@ class ResolverEngine:
     def process_file(
         self,
         file_path: str | Path,
-        schema_file: str | Path | None = None,
-        schema_dict: dict[str, Any] | None = None,
         track_references: bool = True,
     ) -> dict[str, Any]:
         """
@@ -341,8 +340,6 @@ class ResolverEngine:
 
         Args:
             file_path: Path to the YAML file to process
-            schema_file: Optional path to JSON schema file for validation
-            schema_dict: Optional schema dictionary for validation
             track_references: Whether to track resolved references
 
         Returns:
@@ -362,13 +359,11 @@ class ResolverEngine:
         if config_data is None:
             config_data = {}
 
-        return self.process_config(config_data, schema_file, schema_dict, track_references)
+        return self.process_config(config_data, track_references)
 
     def process_config(
         self,
         config_data: dict[str, Any],
-        schema_file: str | Path | None = None,
-        schema_dict: dict[str, Any] | None = None,
         track_references: bool = True,
     ) -> dict[str, Any]:
         """
@@ -376,8 +371,6 @@ class ResolverEngine:
 
         Args:
             config_data: Configuration dictionary to process
-            schema_file: Optional path to JSON schema file for validation
-            schema_dict: Optional schema dictionary for validation
             track_references: Whether to track resolved references
 
         Returns:
@@ -387,34 +380,10 @@ class ResolverEngine:
         if track_references:
             self._resolved_references.clear()
 
-        # First resolve all references
+        # Resolve all references
         resolved_config = self._resolve_references(config_data, track_references)
 
-        # Then validate against schema if provided
-        if schema_file or schema_dict:
-            self._validate_config(resolved_config, schema_file, schema_dict)
-
         return cast(dict[str, Any], resolved_config)
-
-    def _validate_config(
-        self,
-        config_data: dict[str, Any],
-        schema_file: str | Path | None = None,
-        schema_dict: dict[str, Any] | None = None,
-    ) -> None:
-        """Validate configuration against JSON schema."""
-        if schema_file:
-            with open(schema_file) as f:
-                schema = json.load(f)
-        elif schema_dict:
-            schema = schema_dict
-        else:
-            return
-
-        try:
-            validate(instance=config_data, schema=schema)
-        except ValidationError as e:
-            raise ValueError(f"Configuration validation failed: {e.message}") from e
 
     def _resolve_references(self, config: Any, track_references: bool = True) -> Any:
         """Recursively resolve references in configuration."""
@@ -487,7 +456,7 @@ class ResolverEngine:
         """Check if a string contains any references using the registry."""
         return self.registry.find_resolver_for_reference(value) is not None
 
-    def get_resolver_config(self) -> ResolverConfig | None:
+    def get_resolver_config(self) -> ResolverConfigModel | None:
         """Get the current resolver configuration."""
         return self.resolver_config
 

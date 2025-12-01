@@ -1,65 +1,35 @@
-"""Tests for JSON schema-based validation."""
+"""Tests for schema validation using Pydantic models."""
 
 import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
-from mxcp.sdk.validator.decorators import validate_schema_structure
+from mxcp.sdk.validator.models import ValidationSchemaModel
 
 
-class TestJSONSchemaValidation:
-    """Test JSON schema validation functionality."""
+class TestSchemaValidation:
+    """Test schema validation using Pydantic models."""
 
-    def test_json_schema_exists(self):
-        """Test that the JSON schema file exists."""
-        schema_path = (
-            Path(__file__).parent.parent.parent.parent
-            / "src"
-            / "mxcp"
-            / "sdk"
-            / "validator"
-            / "decorators"
-            / "schemas"
-            / "validation-schema-1.json"
-        )
-        assert schema_path.exists(), f"JSON schema not found at {schema_path}"
-
-        # Verify it's valid JSON
-        with open(schema_path) as f:
-            schema = json.load(f)
-
-        # Verify it has expected structure
-        assert "$schema" in schema
-        assert "definitions" in schema
-        assert "parameterSchema" in schema["definitions"]
-        assert "typeSchema" in schema["definitions"]
-
-    def test_validate_with_json_schema(self):
-        """Test that validation uses JSON schema when available."""
-        # Valid schema
+    def test_validate_valid_schema(self):
+        """Test that valid schemas are accepted."""
         valid_schema = {
             "input": {"parameters": [{"name": "x", "type": "string", "minLength": 1}]},
             "output": {"type": "object", "properties": {"result": {"type": "number"}}},
         }
 
         # Should not raise
-        validate_schema_structure(valid_schema)
+        schema = ValidationSchemaModel.model_validate(valid_schema)
+        assert schema.input_parameters is not None
+        assert len(schema.input_parameters) == 1
+        assert schema.input_parameters[0].name == "x"
 
-        # Invalid type value
-        with pytest.raises(ValueError, match="is not one of"):
-            validate_schema_structure(
-                {"input": {"parameters": [{"name": "x", "type": "invalid_type"}]}}  # Not in enum
-            )
-
-        # Invalid format value
-        with pytest.raises(ValueError, match="is not one of"):
-            validate_schema_structure(
-                {
-                    "input": {
-                        "parameters": [{"name": "x", "type": "string", "format": "invalid_format"}]
-                    }
-                }
+    def test_type_field_is_required(self):
+        """Test that type field is required in parameters."""
+        with pytest.raises(ValidationError):
+            ValidationSchemaModel.model_validate(
+                {"input": {"parameters": [{"name": "x"}]}}  # Missing type
             )
 
     def test_complex_schema_validation(self):
@@ -91,7 +61,9 @@ class TestJSONSchemaValidation:
         }
 
         # Should validate successfully
-        validate_schema_structure(complex_schema)
+        schema = ValidationSchemaModel.model_validate(complex_schema)
+        assert schema.input_parameters is not None
+        assert schema.output_schema is not None
 
     def test_schema_with_all_constraints(self):
         """Test schema with all supported constraints."""
@@ -126,4 +98,6 @@ class TestJSONSchemaValidation:
         }
 
         # Should validate successfully
-        validate_schema_structure(full_schema)
+        schema = ValidationSchemaModel.model_validate(full_schema)
+        assert schema.input_parameters is not None
+        assert len(schema.input_parameters) == 4

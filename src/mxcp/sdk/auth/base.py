@@ -21,7 +21,12 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import Response
 
-from ._types import AuthConfig, ExternalUserInfo, StateMeta, UserContext
+from .models import (
+    AuthConfigModel,
+    ExternalUserInfoModel,
+    StateMetaModel,
+    UserContextModel,
+)
 from .persistence import (
     PersistedAccessToken,
     PersistedAuthCode,
@@ -35,8 +40,8 @@ __all__ = [
     "ExternalOAuthHandler",
     "GeneralOAuthAuthorizationServer",
     "AuthorizationParams",
-    "ExternalUserInfo",
-    "StateMeta",
+    "ExternalUserInfoModel",
+    "StateMetaModel",
 ]
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -61,8 +66,8 @@ class ExternalOAuthHandler(ABC):
 
     # ----- code exchange step -----
     @abstractmethod
-    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
-        """Turn `code` + `state` into `ExternalUserInfo` and `StateMeta` or raise `HTTPException`."""
+    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfoModel, StateMetaModel]:
+        """Turn `code` + `state` into `ExternalUserInfoModel` and `StateMetaModel` or raise `HTTPException`."""
 
     # ----- callback wiring -----
     @property
@@ -78,14 +83,14 @@ class ExternalOAuthHandler(ABC):
 
     # ----- user context -----
     @abstractmethod
-    async def get_user_context(self, token: str) -> UserContext:
+    async def get_user_context(self, token: str) -> UserContextModel:
         """Get standardized user context from the OAuth provider.
 
         Args:
             token: OAuth access token for the user
 
         Returns:
-            UserContext with standardized user information
+            UserContextModel with standardized user information
 
         Raises:
             HTTPException: If token is invalid or user info cannot be retrieved
@@ -103,7 +108,7 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
     def __init__(
         self,
         handler: ExternalOAuthHandler,
-        auth_config: AuthConfig | None = None,
+        auth_config: AuthConfigModel | None = None,
         user_config: dict[str, Any] | None = None,
     ):
         self.handler = handler
@@ -111,9 +116,9 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         self.user_config = user_config
 
         # Initialize persistence backend
-        persistence_config = auth_config.get("persistence") if auth_config else None
+        persistence_config = auth_config.persistence if auth_config else None
         self.persistence = create_persistence_backend(
-            cast(dict[str, Any], persistence_config) if persistence_config else None
+            persistence_config.model_dump() if persistence_config else None
         )
 
         # In-memory caches for performance (fallback when persistence is disabled)
@@ -204,14 +209,14 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         except Exception as e:
             logger.error(f"Failed to load clients from persistence: {e}")
 
-    async def _register_configured_clients(self, auth_config: AuthConfig) -> None:
+    async def _register_configured_clients(self, auth_config: AuthConfigModel) -> None:
         """Register pre-configured OAuth clients from user config."""
-        clients = auth_config.get("clients", [])
+        clients = auth_config.clients or []
 
         if clients:
             for client_config in clients:
-                client_id = client_config["client_id"]
-                redirect_uris_str = client_config.get("redirect_uris", [])
+                client_id = client_config.client_id
+                redirect_uris_str = client_config.redirect_uris or []
 
                 # Validate each redirect URI individually
                 redirect_uris_any = []
@@ -231,22 +236,22 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
 
                 client = OAuthClientInformationFull(
                     client_id=client_id,
-                    client_secret=client_config.get("client_secret"),  # None for public clients
+                    client_secret=client_config.client_secret,  # None for public clients
                     redirect_uris=redirect_uris_any,
                     grant_types=cast(
                         list[Literal["authorization_code", "refresh_token"]],
-                        client_config.get("grant_types", ["authorization_code"]),
+                        client_config.grant_types or ["authorization_code"],
                     ),
                     response_types=cast(
-                        list[Literal["code"]], client_config.get("response_types", ["code"])
+                        list[Literal["code"]], ["code"]
                     ),
-                    scope=" ".join(client_config.get("scopes") or []),  # No default scopes
-                    client_name=client_config["name"],
+                    scope=" ".join(client_config.scopes or []),  # No default scopes
+                    client_name=client_config.name,
                 )
 
                 # Store in memory cache
                 self._clients[client_id] = client
-                logger.info(f"Pre-registered OAuth client: {client_id} ({client_config['name']})")
+                logger.info(f"Pre-registered OAuth client: {client_id} ({client_config.name})")
 
             # Store in persistence if available (these are not persisted as they come from config)
             # Pre-configured clients should be loaded from config each time, not persisted

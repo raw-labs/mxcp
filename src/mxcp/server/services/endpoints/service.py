@@ -10,15 +10,15 @@ from typing import TYPE_CHECKING, Any, Optional, cast
 if TYPE_CHECKING:
     from mxcp.server.interfaces.server.mcp import RAWMCP
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.executor.interfaces import ExecutionEngine
 from mxcp.sdk.policy import (
     PolicyAction,
-    PolicyDefinition,
+    PolicyDefinitionModel,
     PolicyEnforcementError,
     PolicyEnforcer,
-    PolicySet,
+    PolicySetModel,
 )
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
@@ -39,11 +39,11 @@ from mxcp.server.executor.runners.endpoint import (
 logger = logging.getLogger(__name__)
 
 
-def parse_policies_from_config(policies_config: PoliciesDefinitionModel | None) -> PolicySet | None:
-    """Parse policy configuration into PolicySet.
+def parse_policies_from_config(policies_config: PoliciesDefinitionModel | None) -> PolicySetModel | None:
+    """Parse policy configuration into PolicySetModel.
 
     This function handles parsing of policy configuration from YAML/JSON format
-    into the PolicySet structure used by the SDK.
+    into the PolicySetModel structure used by the SDK.
 
     Args:
         policies_config: The policies section from endpoint configuration.
@@ -66,7 +66,7 @@ def parse_policies_from_config(policies_config: PoliciesDefinitionModel | None) 
                         }
 
     Returns:
-        PolicySet or None if no policies defined
+        PolicySetModel or None if no policies defined
 
     Example:
         >>> config = {
@@ -93,7 +93,7 @@ def parse_policies_from_config(policies_config: PoliciesDefinitionModel | None) 
 
     for rule in policies_config.input or []:
         input_policies.append(
-            PolicyDefinition(
+            PolicyDefinitionModel(
                 condition=rule.condition,
                 action=PolicyAction(rule.action),
                 reason=rule.reason,
@@ -103,7 +103,7 @@ def parse_policies_from_config(policies_config: PoliciesDefinitionModel | None) 
 
     for rule in policies_config.output or []:
         output_policies.append(
-            PolicyDefinition(
+            PolicyDefinitionModel(
                 condition=rule.condition,
                 action=PolicyAction(rule.action),
                 reason=rule.reason,
@@ -111,7 +111,7 @@ def parse_policies_from_config(policies_config: PoliciesDefinitionModel | None) 
             )
         )
 
-    return PolicySet(input_policies=input_policies, output_policies=output_policies)
+    return PolicySetModel(input_policies=input_policies, output_policies=output_policies)
 
 
 async def execute_endpoint(
@@ -123,7 +123,7 @@ async def execute_endpoint(
     profile_name: str,
     readonly: bool = False,
     skip_output_validation: bool = False,
-    user_context: UserContext | None = None,
+    user_context: UserContextModel | None = None,
     request_headers: dict[str, str] | None = None,
 ) -> Any:
     """Execute endpoint using SDK executor system.
@@ -189,7 +189,7 @@ async def execute_endpoint_with_engine_and_policy(
     execution_context: ExecutionContext,
     *,
     skip_output_validation: bool = False,
-    user_context: UserContext | None = None,
+    user_context: UserContextModel | None = None,
     server_ref: Optional["RAWMCP"] = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Execute endpoint and return both result and policy information.
@@ -319,7 +319,7 @@ async def execute_endpoint_with_engine(
     execution_context: ExecutionContext,
     *,
     skip_output_validation: bool = False,
-    user_context: UserContext | None = None,
+    user_context: UserContextModel | None = None,
     server_ref: Optional["RAWMCP"] = None,
 ) -> Any:
     """Execute endpoint using an existing SDK execution engine.

@@ -8,11 +8,11 @@ import logging
 
 import duckdb
 
-from .types import ExtensionDefinition
+from .models import ExtensionDefinitionModel
 
 
 def load_extensions(
-    con: duckdb.DuckDBPyConnection, extensions: list[ExtensionDefinition] | None = None
+    con: duckdb.DuckDBPyConnection, extensions: list[ExtensionDefinitionModel] | None = None
 ) -> None:
     """Load DuckDB extensions based on configuration.
 
@@ -25,7 +25,7 @@ def load_extensions(
         return
 
     for ext in extensions:
-        # All extensions are now ExtensionDefinition objects
+        # All extensions are now ExtensionDefinitionModel objects
         if not ext.name:
             continue  # Skip extensions without a name
         if ext.repo:

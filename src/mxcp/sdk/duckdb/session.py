@@ -17,7 +17,7 @@ from pandas import NaT
 
 from .extension_loader import load_extensions
 from .secret_injection import inject_secrets
-from .types import DatabaseConfig, SecretDefinition
+from .models import DatabaseConfigModel, SecretDefinitionModel
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,8 @@ def execute_query_to_dict(
 class DuckDBSession:
     def __init__(
         self,
-        database_config: DatabaseConfig,
-        secrets: list[SecretDefinition],
+        database_config: DatabaseConfigModel,
+        secrets: list[SecretDefinitionModel],
     ):
         self.conn: duckdb.DuckDBPyConnection | None = None
         self.database_config = database_config
