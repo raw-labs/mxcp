@@ -283,9 +283,7 @@ class TestReloadManagerExecution:
 
         manager.start()
         try:
-            request = manager.request_reload(
-                payload_func=my_payload, description="Payload test"
-            )
+            request = manager.request_reload(payload_func=my_payload, description="Payload test")
             completed = await request.wait_for_completion(timeout=5.0)
 
             assert completed
