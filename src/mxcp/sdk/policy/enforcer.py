@@ -28,7 +28,7 @@ class PolicyEnforcer:
 
     Example usage:
         >>> from mxcp.sdk.policy import PolicyEnforcer, PolicySetModel, PolicyDefinitionModel, PolicyAction
-        >>> from mxcp.sdk.auth import UserContext
+        >>> from mxcp.sdk.auth import UserContextModel
         >>>
         >>> # Create a policy set
         >>> policy_set = PolicySetModel(
@@ -51,8 +51,11 @@ class PolicyEnforcer:
         >>> # Create enforcer
         >>> enforcer = PolicyEnforcer(policy_set)
         >>>
-        >>> # Create user context
-        >>> user_context = UserContext(username="john", role="guest")
+        >>> # Create user context (role is extracted from raw_profile)
+        >>> user_context = UserContextModel(
+        ...     provider="example", user_id="john-123", username="john",
+        ...     raw_profile={"role": "guest"}
+        ... )
         >>>
         >>> # Enforce input policies
         >>> enforcer.enforce_input_policies(user_context, {"param1": "value1"})

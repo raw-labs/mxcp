@@ -12,7 +12,7 @@ Key components:
 
 Example usage:
     >>> from mxcp.sdk.policy import PolicyEnforcer, PolicySetModel, PolicyDefinitionModel, PolicyAction
-    >>> from mxcp.sdk.auth import UserContext
+    >>> from mxcp.sdk.auth import UserContextModel
     >>>
     >>> # Define policies
     >>> policy_set = PolicySetModel(
@@ -35,8 +35,11 @@ Example usage:
     >>> # Create enforcer
     >>> enforcer = PolicyEnforcer(policy_set)
     >>>
-    >>> # Use with user context
-    >>> user = UserContext(username="john", role="guest")
+    >>> # Use with user context (role is extracted from raw_profile)
+    >>> user = UserContextModel(
+    ...     provider="example", user_id="john-123", username="john",
+    ...     raw_profile={"role": "guest"}
+    ... )
     >>> enforcer.enforce_input_policies(user, {"param": "value"})
 """
 

@@ -39,7 +39,7 @@ engine = ExecutionEngine()
 context = ExecutionContext()
 
 # Add user context
-user = UserContext(username="alice", role="analyst")
+user = UserContextModel(provider="example", user_id="alice-123", username="alice")
 context.set_user_context(user)
 
 # Execute code with policy enforcement
