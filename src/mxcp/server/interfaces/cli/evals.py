@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -388,18 +389,26 @@ async def _evals_impl(
     _lines: dict[str, str] = {}
     _order: list[str] = []
     _lines_printed = 0
+    _last_rendered: dict[str, str] = {}
     _is_tty = click.get_text_stream("stdout").isatty()
 
     def _render_progress() -> None:
-        nonlocal _lines_printed
+        nonlocal _lines_printed, _last_rendered
         if not _is_tty:
             return
         if _lines_printed:
-            click.echo(f"\033[{_lines_printed}A\r", nl=False)
-        for key in _order:
+            sys.stdout.write(f"\033[{_lines_printed}F")
+        total = len(_order)
+        for idx, key in enumerate(_order):
             line = _lines.get(key, "")
-            click.echo("\033[2K\r" + line)
+            previous = _last_rendered.get(key)
+            if line != previous:
+                sys.stdout.write("\033[2K\r" + line)
+            if idx < total - 1:
+                sys.stdout.write("\033[E")
+        sys.stdout.flush()
         _lines_printed = len(_order)
+        _last_rendered = dict(_lines)
 
     def _progress(key: str, msg: str) -> None:
         if not _is_tty:

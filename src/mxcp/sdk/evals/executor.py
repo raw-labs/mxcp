@@ -22,7 +22,7 @@ from mxcp.sdk.auth import UserContext
 from ._types import ToolDefinition
 
 # Agent/tool retry configuration
-DEFAULT_AGENT_RETRIES = 20
+DEFAULT_AGENT_RETRIES = 30
 
 logger = logging.getLogger(__name__)
 
@@ -259,9 +259,8 @@ class LLMExecutor:
             '{"result":"correct|wrong|partially correct","comment":"short","reasoning":"short"}'
         )
 
-        model_string = f"{self.model_type}:{self.model_name}"
         agent = self._agent_cls(
-            model=model_string,
+            model=self._model_reference,
             instructions=grader_system,
             tools=(),
             output_type=GradeResult,

@@ -292,6 +292,25 @@ def test_expected_answer_grading() -> None:
     assert result["comment"]
 
 
+def test_expected_answer_uses_model_reference() -> None:
+    executor = make_executor()
+    observed: list[Any] = []
+
+    def agent_factory(**kwargs: Any) -> FakeAgent:
+        observed.append(kwargs.get("model"))
+        return FakeAgent(
+            tools=kwargs.get("tools", []),
+            output=GradeResult(result="correct", comment="ok", reasoning="match"),
+            tool_args={},
+        )
+
+    executor._agent_cls = agent_factory
+
+    result = asyncio.run(executor.evaluate_expected_answer("value", "value"))
+    assert result["result"] == "correct"
+    assert observed == [executor._model_reference]
+
+
 def test_max_turns_limits_tool_calls() -> None:
     class MultiCallAgent:
         def __init__(self, tools: list[Any]) -> None:
