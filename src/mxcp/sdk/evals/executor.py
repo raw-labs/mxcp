@@ -239,18 +239,15 @@ class LLMExecutor:
         )
 
         grader_system = (
-            "You are a strict but fair judge of semantic coverage. Follow these rules:\n"
-            "1. Break the expected answer into individual facts (names, values, relationships, etc.).\n"
-            "2. For each fact, look for the same meaning anywhere in the candidate answer "
-            "(synonyms, paraphrases, or richer phrasing all count).\n"
-            "3. Extra information in the candidate answer MUST NOT reduce the score as long as every expected fact "
-            "is still stated correctly.\n"
-            "4. Return 'correct' only when all expected facts are present (even if the candidate says more).\n"
-            "5. Return 'partially correct' only when some expected facts appear but at least one fact is missing "
-            "or slightly inaccurate.\n"
-            "6. Return 'wrong' when the expected information is missing, contradicted, or the candidate claims the "
-            "information is unavailable.\n"
-            "Respond with concise JSON containing result (correct|wrong|partially correct), comment, and reasoning."
+            "You check if the candidate answer CONTAINS the expected information.\n\n"
+            "GRADING RULES:\n"
+            "- 'correct': The expected fact(s) appear in the candidate answer. "
+            "Extra details, context, or longer explanations are FINE and do not affect the grade.\n"
+            "- 'partially correct': Only use when the expected answer has MULTIPLE facts and some are missing.\n"
+            "- 'wrong': The expected information is absent, contradicted, or the candidate says it's unavailable.\n\n"
+            "IMPORTANT: If the expected answer is a single value (e.g., a name, status, role) and that exact value "
+            "appears anywhere in the candidate answer, grade it as 'correct' regardless of surrounding text.\n\n"
+            'Return JSON: {"result": "correct|wrong|partially correct", "comment": "...", "reasoning": "..."}'
         )
         grader_prompt = (
             "Compare the candidate answer to the expected answer (semantic match, not exact string).\n"

@@ -385,35 +385,52 @@ async def _evals_impl(
     _lines: dict[str, str] = {}
     _order: list[str] = []
     _lines_printed = 0
-    _last_rendered: dict[str, str] = {}
     _is_tty = click.get_text_stream("stdout").isatty()
 
-    def _render_progress() -> None:
-        nonlocal _lines_printed, _last_rendered
-        if not _is_tty:
+    def _clear_all_progress() -> None:
+        """Clear all progress lines and reset cursor to start."""
+        nonlocal _lines_printed
+        if not _is_tty or _lines_printed == 0:
             return
-        if _lines_printed:
-            sys.stdout.write(f"\033[{_lines_printed}F")
-        total = len(_order)
-        for idx, key in enumerate(_order):
+        # Move up and clear each line
+        for _ in range(_lines_printed):
+            sys.stdout.write("\033[F\033[2K")
+        sys.stdout.flush()
+        _lines_printed = 0
+
+    def _render_progress() -> None:
+        """Render all in-progress items."""
+        nonlocal _lines_printed
+        if not _is_tty or not _order:
+            return
+        for key in _order:
             line = _lines.get(key, "")
-            previous = _last_rendered.get(key)
-            if line != previous:
-                sys.stdout.write("\033[2K\r" + line)
-            if idx < total - 1:
-                sys.stdout.write("\033[E")
+            sys.stdout.write(line + "\n")
         sys.stdout.flush()
         _lines_printed = len(_order)
-        _last_rendered = dict(_lines)
 
     def _progress(key: str, msg: str) -> None:
+        nonlocal _order, _lines
+        is_final = msg.lstrip().startswith("✓") or msg.lstrip().startswith("✗")
+
         if not _is_tty:
             click.echo(msg)
             return
-        if key not in _order:
-            _order.append(key)
-        _lines[key] = msg
-        _render_progress()
+
+        if is_final:
+            # Clear progress, print final result, re-render remaining
+            _clear_all_progress()
+            _order = [k for k in _order if k != key]
+            _lines.pop(key, None)
+            click.echo(msg)
+            _render_progress()
+        else:
+            # Update or add progress line
+            _clear_all_progress()
+            if key not in _order:
+                _order.append(key)
+            _lines[key] = msg
+            _render_progress()
 
     if suite_name:
         results = await run_eval_suite(
@@ -440,8 +457,7 @@ async def _evals_impl(
     if json_output:
         output_result(results, json_output, debug)
     else:
-        if _lines_printed:
-            click.echo()
+        _clear_all_progress()
         click.echo(format_eval_results(results, debug))
 
     # Exit with error code if any tests failed
