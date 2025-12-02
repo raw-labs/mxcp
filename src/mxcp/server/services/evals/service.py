@@ -12,6 +12,7 @@ from mxcp.sdk.validator import TypeSchema
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
+from mxcp.server.definitions.endpoints.models import ParamDefinitionModel, TypeDefinitionModel
 from mxcp.server.definitions.evals.loader import discover_eval_files, load_eval_suite
 from mxcp.server.executor.engine import create_runtime_environment
 from mxcp.server.executor.runners.tool import EndpointToolExecutor, EndpointWithPath
@@ -109,7 +110,81 @@ def _build_model_settings(
     if header_extras:
         recognized_options["extra_headers"] = header_extras
 
+    if "max_tokens" not in recognized_options:
+        recognized_options["max_tokens"] = 10_000
+
     return ModelSettings(**recognized_options)  # type: ignore[typeddict-item,no-any-return]
+
+
+def _type_definition_to_schema(type_definition: TypeDefinitionModel) -> dict[str, Any]:
+    schema: dict[str, Any] = {"type": type_definition.type}
+
+    if type_definition.description:
+        schema["description"] = type_definition.description
+    if type_definition.default is not None:
+        schema["default"] = type_definition.default
+    if type_definition.enum:
+        schema["enum"] = list(type_definition.enum)
+    if type_definition.examples:
+        schema["examples"] = list(type_definition.examples)
+
+    if type_definition.type == "string":
+        if type_definition.format:
+            schema["format"] = type_definition.format
+        if type_definition.minLength is not None:
+            schema["minLength"] = type_definition.minLength
+        if type_definition.maxLength is not None:
+            schema["maxLength"] = type_definition.maxLength
+        if type_definition.pattern:
+            schema["pattern"] = type_definition.pattern
+    elif type_definition.type in {"number", "integer"}:
+        if type_definition.minimum is not None:
+            schema["minimum"] = type_definition.minimum
+        if type_definition.maximum is not None:
+            schema["maximum"] = type_definition.maximum
+        if type_definition.exclusiveMinimum is not None:
+            schema["exclusiveMinimum"] = type_definition.exclusiveMinimum
+        if type_definition.exclusiveMaximum is not None:
+            schema["exclusiveMaximum"] = type_definition.exclusiveMaximum
+        if type_definition.multipleOf is not None:
+            schema["multipleOf"] = type_definition.multipleOf
+    elif type_definition.type == "array":
+        if type_definition.items is not None:
+            schema["items"] = _type_definition_to_schema(type_definition.items)
+        else:
+            schema["items"] = {"type": "string"}
+        if type_definition.minItems is not None:
+            schema["minItems"] = type_definition.minItems
+        if type_definition.maxItems is not None:
+            schema["maxItems"] = type_definition.maxItems
+        if type_definition.uniqueItems is not None:
+            schema["uniqueItems"] = type_definition.uniqueItems
+    elif type_definition.type == "object":
+        if type_definition.properties:
+            schema["properties"] = {
+                key: _type_definition_to_schema(value)
+                for key, value in type_definition.properties.items()
+            }
+        if type_definition.required:
+            schema["required"] = list(type_definition.required)
+        if type_definition.additionalProperties is not None:
+            schema["additionalProperties"] = type_definition.additionalProperties
+
+    return schema
+
+
+def _parameter_definition_from_model(param: ParamDefinitionModel) -> ParameterDefinition:
+    has_default = "default" in param.model_fields_set
+    schema = _type_definition_to_schema(param)
+    schema.pop("name", None)
+    return ParameterDefinition(
+        name=param.name,
+        type=param.type,
+        description=param.description or "",
+        default=param.default if has_default else None,
+        required=not has_default,
+        schema=schema or None,
+    )
 
 
 def _load_endpoints(site_config: SiteConfigModel) -> list[EndpointWithPath]:
@@ -151,18 +226,9 @@ def _convert_endpoints_to_tool_definitions(
         if endpoint_def.tool:
             tool = endpoint_def.tool
 
-            tool_parameters = []
-            for param in tool.parameters or []:
-                has_default = "default" in param.model_fields_set
-                tool_parameters.append(
-                    ParameterDefinition(
-                        name=param.name,
-                        type=param.type,
-                        description=param.description or "",
-                        default=param.default if has_default else None,
-                        required=not has_default,
-                    )
-                )
+            tool_parameters = [
+                _parameter_definition_from_model(param) for param in (tool.parameters or [])
+            ]
 
             return_type = None
             if tool.return_:
@@ -189,18 +255,9 @@ def _convert_endpoints_to_tool_definitions(
 
         elif endpoint_def.resource:
             resource = endpoint_def.resource
-            resource_parameters = []
-            for param in resource.parameters or []:
-                has_default = "default" in param.model_fields_set
-                resource_parameters.append(
-                    ParameterDefinition(
-                        name=param.name,
-                        type=param.type,
-                        description=param.description or "",
-                        default=param.default if has_default else None,
-                        required=not has_default,
-                    )
-                )
+            resource_parameters = [
+                _parameter_definition_from_model(param) for param in (resource.parameters or [])
+            ]
 
             return_type = None
             if resource.return_:
@@ -357,6 +414,7 @@ async def run_eval_suite(
             tool_definitions,
             tool_executor,
             provider_config=provider_config,
+            system_prompt=eval_suite.system_prompt,
         )
 
         # Run each test
@@ -395,19 +453,24 @@ async def run_eval_suite(
 
                 response = agent_result.answer
                 tool_calls = agent_result.tool_calls
+                execution_error = agent_result.error
 
                 # Evaluate assertions
                 failures: list[str] = []
                 assertions = test.assertions
                 evaluation: dict[str, Any] | None = None
 
-                # Surface tool execution errors directly
+                # If the agent failed to execute, report it clearly
+                if execution_error:
+                    failures.append(f"Agent execution failed: {execution_error}")
+
                 for call in tool_calls:
                     if call.error:
-                        failures.append(
-                            _compact_text(
-                                f"Tool '{call.tool}' failed: {call.error}", max_length=None
-                            )
+                        logger.debug(
+                            "Tool '%s' failed during test '%s': %s",
+                            call.tool,
+                            test.name,
+                            call.error,
                         )
 
                 # Check must_call assertions
@@ -452,6 +515,16 @@ async def run_eval_suite(
                             failures.append(f"Forbidden text '{forbidden_text}' found in response")
 
                 if assertions.expected_answer:
+                    logger.debug(
+                        "Evaluating expected_answer assertion for test '%s': response_length=%d, expected='%s'",
+                        test.name,
+                        len(response),
+                        (
+                            assertions.expected_answer[:100] + "..."
+                            if len(assertions.expected_answer) > 100
+                            else assertions.expected_answer
+                        ),
+                    )
                     grader = grading_executor or executor
                     evaluation = await grader.evaluate_expected_answer(
                         response, assertions.expected_answer
@@ -459,6 +532,14 @@ async def run_eval_suite(
                     grade = (evaluation.get("result") or "").lower()
                     comment = evaluation.get("comment") or "Model answer did not match expected"
                     reasoning = evaluation.get("reasoning") or ""
+
+                    logger.debug(
+                        "Expected answer evaluation for '%s': grade=%s, response='%s'",
+                        test.name,
+                        grade,
+                        response[:150] + "..." if len(response) > 150 else response,
+                    )
+
                     detail = _format_expected_answer_failure(
                         response,
                         assertions.expected_answer,
@@ -467,6 +548,12 @@ async def run_eval_suite(
                         reasoning,
                     )
                     if grade != "correct":
+                        logger.info(
+                            "Test '%s' failed expected_answer check: grade=%s, comment=%s",
+                            test.name,
+                            grade,
+                            comment,
+                        )
                         failures.append(detail)
 
                 test_time = time.time() - test_start
@@ -481,6 +568,7 @@ async def run_eval_suite(
                         "time": test_time,
                         "details": {
                             "response": response,
+                            "execution_error": execution_error,
                             "tool_calls": [
                                 {
                                     "id": call.id,
@@ -589,9 +677,7 @@ async def run_all_evals(
             if eval_suite is None:
                 continue
             suite_name = eval_suite.suite or "unnamed"
-            # Run the suite
-            if progress_callback:
-                progress_callback(f"suite:{suite_name}", f"🧪 Running eval suite: {suite_name}")
+            # Run the suite (progress_callback is passed through to run_eval_suite)
             result = await run_eval_suite(
                 suite_name,
                 user_config,

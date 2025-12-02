@@ -127,5 +127,5 @@ class EndpointToolExecutor:
             return result
 
         except Exception as e:
-            logger.error(f"Tool '{tool_name}' execution failed: {e}")
+            logger.debug(f"Tool '{tool_name}' execution failed: {e}")
             raise

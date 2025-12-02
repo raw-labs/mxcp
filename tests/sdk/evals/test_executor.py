@@ -1,9 +1,9 @@
 import asyncio
-import os
 from typing import Any
 
 import pytest
 from pydantic_ai import ModelSettings
+from pydantic_ai.exceptions import ModelRetry
 
 from mxcp.sdk.auth import UserContext
 from mxcp.sdk.evals import ParameterDefinition, ToolDefinition
@@ -34,9 +34,15 @@ class FakeAgent:
             args = self.tool_args.get(tool_name or "", {})
             if fn:
                 if asyncio.iscoroutinefunction(fn):
-                    await fn(**args)
+                    try:
+                        await fn(**args)
+                    except ModelRetry:
+                        continue
                 else:
-                    fn(**args)
+                    try:
+                        fn(**args)
+                    except ModelRetry:
+                        continue
         return FakeRun(self.output)
 
 
@@ -59,24 +65,60 @@ class MockToolExecutor:
         return {"echo": arguments}
 
 
-def make_executor() -> LLMExecutor:
-    tools = [
+def make_executor(
+    tools: list[ToolDefinition] | None = None,
+    responses: dict[str, Any] | None = None,
+    system_prompt: str | None = None,
+    agent_retries: int = 3,
+) -> LLMExecutor:
+    default_tools = [
         ToolDefinition(
             name="get_weather",
             description="Weather lookup",
             parameters=[ParameterDefinition(name="location", type="string", required=True)],
         )
     ]
-    tool_executor = MockToolExecutor({"get_weather": {"temperature": 20}})
+    tool_defs = tools or default_tools
+    default_responses = {"get_weather": {"temperature": 20}} if tools is None else {}
+    tool_executor = MockToolExecutor(responses or default_responses)
     executor = LLMExecutor(
         "claude-test",
         "anthropic",
         ModelSettings(),
-        tools,
+        tool_defs,
         tool_executor,
         provider_config=ProviderConfig(api_key="key", base_url="https://api.anthropic.com"),
+        system_prompt=system_prompt,
+        agent_retries=agent_retries,
     )
     return executor
+
+
+def test_executor_uses_custom_system_prompt() -> None:
+    custom_prompt = "You are a specialized assistant."
+    executor = make_executor(system_prompt=custom_prompt)
+
+    assert executor.system_prompt == custom_prompt
+
+
+def test_executor_passes_agent_retries_to_agent() -> None:
+    observed: list[int | None] = []
+
+    executor = make_executor(agent_retries=5)
+
+    def agent_factory(**kwargs: Any) -> FakeAgent:
+        observed.append(kwargs.get("retries"))
+        return FakeAgent(
+            tools=kwargs["tools"],
+            output="ok",
+            tool_args={"get_weather": {"location": "Paris"}},
+        )
+
+    executor._agent_cls = agent_factory
+
+    asyncio.run(executor.execute_prompt("Weather?"))
+
+    assert observed == [5]
 
 
 def test_execute_prompt_with_tool_call() -> None:
@@ -132,7 +174,13 @@ def test_execute_prompt_tool_error() -> None:
 
     result = asyncio.run(executor.execute_prompt("Weather?"))
 
-    assert result.tool_calls and result.tool_calls[0].error == "boom"
+    assert result.tool_calls
+    error = result.tool_calls[0].error
+    # Error is now a dict with status, tool, error, and suggestion
+    assert isinstance(error, dict)
+    assert error["status"] == "error"
+    assert error["tool"] == "get_weather"
+    assert "boom" in error["error"]
 
 
 def test_tool_argument_validation_error_is_captured() -> None:
@@ -146,7 +194,89 @@ def test_tool_argument_validation_error_is_captured() -> None:
     result = asyncio.run(executor.execute_prompt("Weather?"))
 
     assert result.tool_calls
-    assert result.tool_calls[0].error
+    error = result.tool_calls[0].error
+    # Error is now a dict with status, tool, error, and suggestion
+    assert isinstance(error, dict)
+    assert error["status"] == "error"
+    assert "Field required" in error["error"]
+
+
+def test_tool_model_retry_reinvokes_tool() -> None:
+    class FlakyToolExecutor:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def execute_tool(
+            self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
+        ) -> Any:
+            self.calls += 1
+            if self.calls == 1:
+                raise ValueError("temporary issue")
+            return {"status": "ok"}
+
+    class RetryingAgent(FakeAgent):
+        """Agent that retries tool calls when ModelRetry is raised."""
+
+        def __init__(
+            self,
+            *,
+            tools: list[Any],
+            output: Any,
+            tool_args: dict[str, dict[str, Any]],
+            max_retries: int = 1,
+        ) -> None:
+            super().__init__(tools=tools, output=output, tool_args=tool_args)
+            self.max_retries = max_retries
+
+        async def run(  # type: ignore[override]
+            self, _prompt: str, deps: Any | None = None, model_settings: Any | None = None
+        ) -> FakeRun:
+            for tool in self.tools:
+                fn = getattr(tool, "_mxcp_callable", None)
+                tool_name = getattr(tool, "name", None) or getattr(
+                    getattr(tool, "tool_def", None), "name", None
+                )
+                args = self.tool_args.get(tool_name or "", {})
+                if not fn:
+                    continue
+
+                attempt = 0
+                while attempt < self.max_retries:
+                    try:
+                        if asyncio.iscoroutinefunction(fn):
+                            await fn(**args)
+                        else:
+                            fn(**args)
+                        break
+                    except ModelRetry:
+                        attempt += 1
+                        if attempt >= self.max_retries:
+                            raise
+                        continue
+            return FakeRun(self.output)
+
+    executor = make_executor()
+    flaky_executor = FlakyToolExecutor()
+    executor.tool_executor = flaky_executor  # type: ignore[assignment]
+    executor._agent_cls = lambda **kwargs: RetryingAgent(
+        tools=kwargs["tools"],
+        output="ok",
+        tool_args={"get_weather": {"location": "Paris"}},
+        max_retries=kwargs.get("retries", 1),
+    )
+
+    result = asyncio.run(executor.execute_prompt("Weather?"))
+
+    # Tool was called twice: first raised ModelRetry, second succeeded
+    assert flaky_executor.calls == 2
+    assert len(result.tool_calls) == 2
+    # First call should have error recorded as dict
+    first_error = result.tool_calls[0].error
+    assert isinstance(first_error, dict)
+    assert first_error["status"] == "error"
+    assert "temporary issue" in first_error["error"]
+    # Second call should succeed
+    assert result.tool_calls[1].result == {"status": "ok"}
 
 
 def test_expected_answer_grading() -> None:
@@ -162,61 +292,6 @@ def test_expected_answer_grading() -> None:
     assert result["comment"]
 
 
-def test_temporary_env_sets_and_restores() -> None:
-    prev_openai_key = os.environ.get("OPENAI_API_KEY")
-    prev_openai_url = os.environ.get("OPENAI_BASE_URL")
-    prev_anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
-    prev_anthropic_url = os.environ.get("ANTHROPIC_BASE_URL")
-
-    os.environ["OPENAI_API_KEY"] = "original"
-    os.environ["OPENAI_BASE_URL"] = "orig-url"
-
-    try:
-        executor = make_executor()
-
-        class EnvAgent(FakeAgent):
-            async def run(  # type: ignore[override]
-                self, _prompt: str, deps: Any | None = None, model_settings: Any | None = None
-            ) -> FakeRun:
-                # Capture environment while the agent runs
-                captured["during"] = (
-                    os.environ.get("ANTHROPIC_API_KEY"),
-                    os.environ.get("ANTHROPIC_BASE_URL"),
-                )
-                return await super().run(_prompt, deps=deps, model_settings=model_settings)
-
-        captured: dict[str, tuple[str | None, str | None]] = {}
-        executor._agent_cls = lambda **kwargs: EnvAgent(
-            tools=kwargs["tools"], output="done", tool_args={}
-        )
-
-        asyncio.run(executor.execute_prompt("Weather?"))
-
-        assert captured["during"] == ("key", "https://api.anthropic.com")
-        # Ensure globals restored
-        assert os.environ["OPENAI_API_KEY"] == "original"
-        assert os.environ["OPENAI_BASE_URL"] == "orig-url"
-        assert os.environ.get("ANTHROPIC_API_KEY") == prev_anthropic_key
-        assert os.environ.get("ANTHROPIC_BASE_URL") == prev_anthropic_url
-    finally:
-        if prev_anthropic_key is None:
-            os.environ.pop("ANTHROPIC_API_KEY", None)
-        else:
-            os.environ["ANTHROPIC_API_KEY"] = prev_anthropic_key
-        if prev_anthropic_url is None:
-            os.environ.pop("ANTHROPIC_BASE_URL", None)
-        else:
-            os.environ["ANTHROPIC_BASE_URL"] = prev_anthropic_url
-        if prev_openai_key is None:
-            os.environ.pop("OPENAI_API_KEY", None)
-        else:
-            os.environ["OPENAI_API_KEY"] = prev_openai_key
-        if prev_openai_url is None:
-            os.environ.pop("OPENAI_BASE_URL", None)
-        else:
-            os.environ["OPENAI_BASE_URL"] = prev_openai_url
-
-
 def test_max_turns_limits_tool_calls() -> None:
     class MultiCallAgent:
         def __init__(self, tools: list[Any]) -> None:
@@ -230,9 +305,15 @@ def test_max_turns_limits_tool_calls() -> None:
                     fn = getattr(tool, "_mxcp_callable", None)
                     if fn:
                         if asyncio.iscoroutinefunction(fn):
-                            await fn()
+                            try:
+                                await fn()
+                            except ModelRetry:
+                                continue
                         else:
-                            fn()
+                            try:
+                                fn()
+                            except ModelRetry:
+                                continue
             return FakeRun("done")
 
     executor = make_executor()
@@ -244,30 +325,80 @@ def test_max_turns_limits_tool_calls() -> None:
     assert result.tool_calls[-1].error
 
 
-def test_apply_provider_env_for_openai_responses() -> None:
-    prev_key = os.environ.get("OPENAI_API_KEY")
-    prev_url = os.environ.get("OPENAI_BASE_URL")
-    try:
-        os.environ.pop("OPENAI_API_KEY", None)
-        os.environ.pop("OPENAI_BASE_URL", None)
-
-        LLMExecutor(
-            "gpt-5",
-            "openai-responses",
-            ModelSettings(),
-            [],
-            MockToolExecutor(),
-            provider_config=ProviderConfig(api_key="key", base_url="https://api.openai.com"),
+def test_tool_model_schema_preserves_array_items_type() -> None:
+    predicates_param = ParameterDefinition(
+        name="predicates",
+        type="array",
+        description="Filters",
+        required=True,
+        schema={
+            "type": "array",
+            "description": "Filters",
+            "items": {"type": "string", "description": "SQL predicate"},
+        },
+    )
+    members_param = ParameterDefinition(
+        name="members",
+        type="array",
+        description="Projection list",
+        required=True,
+        schema={"type": "array", "items": {"type": "string"}},
+    )
+    tools = [
+        ToolDefinition(
+            name="sql_search",
+            description="Search objects",
+            parameters=[predicates_param, members_param],
         )
+    ]
+    executor = make_executor(tools=tools)
 
-        assert os.environ.get("OPENAI_API_KEY") == "key"
-        assert os.environ.get("OPENAI_BASE_URL") == "https://api.openai.com"
-    finally:
-        if prev_key is None:
-            os.environ.pop("OPENAI_API_KEY", None)
-        else:
-            os.environ["OPENAI_API_KEY"] = prev_key
-        if prev_url is None:
-            os.environ.pop("OPENAI_BASE_URL", None)
-        else:
-            os.environ["OPENAI_BASE_URL"] = prev_url
+    schema = executor._tool_models["sql_search"].model_json_schema()
+    props = schema["properties"]
+
+    assert props["predicates"]["type"] == "array"
+    assert props["predicates"]["items"]["type"] == "string"
+    assert props["predicates"]["items"]["description"] == "SQL predicate"
+    assert props["members"]["items"]["type"] == "string"
+    assert "predicates" in schema["required"]
+    assert "members" in schema["required"]
+
+
+def test_tool_model_schema_supports_optional_object_params() -> None:
+    context_param = ParameterDefinition(
+        name="context",
+        type="object",
+        description="Optional filters",
+        required=False,
+        default={},
+        schema={
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                "sort": {"type": "string"},
+            },
+            "required": ["limit"],
+            "additionalProperties": False,
+        },
+    )
+    tools = [
+        ToolDefinition(
+            name="fetch_objects",
+            description="Fetch objects",
+            parameters=[
+                ParameterDefinition(name="object_type", type="string", required=True),
+                context_param,
+            ],
+        )
+    ]
+    executor = make_executor(tools=tools)
+
+    schema = executor._tool_models["fetch_objects"].model_json_schema()
+    props = schema["properties"]
+
+    assert "context" in props
+    assert props["context"]["type"] == "object"
+    assert props["context"]["properties"]["limit"]["minimum"] == 1
+    assert props["context"]["properties"]["limit"]["maximum"] == 100
+    assert props["context"]["required"] == ["limit"]
+    assert "context" not in schema.get("required", [])

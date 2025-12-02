@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,30 @@ from mxcp.server.interfaces.cli.utils import (
     resolve_profile,
 )
 from mxcp.server.services.evals import run_all_evals, run_eval_suite
+
+_NOISY_EVAL_LOGGERS = (
+    "openai",
+    "openai._base_client",
+    "openai._client",
+    "openai._streaming",
+    "httpx",
+    "httpcore",
+    "httpcore.connection",
+    "httpcore.connectionpool",
+    "urllib3",
+    "urllib3.connectionpool",
+)
+
+
+def _suppress_noisy_eval_logs(debug: bool) -> None:
+    """Clamp overly chatty third-party loggers unless debug is explicitly enabled."""
+    if debug:
+        return
+
+    for name in _NOISY_EVAL_LOGGERS:
+        noisy_logger = logging.getLogger(name)
+        noisy_logger.setLevel(logging.WARNING)
+        noisy_logger.propagate = True
 
 
 def format_eval_results(results: dict[str, Any], debug: bool = False) -> str:
@@ -286,6 +311,7 @@ def evals(
             user_config=user_config,
             debug=debug,
         )
+        _suppress_noisy_eval_logs(debug)
         # Run async implementation
         asyncio.run(
             _evals_impl(

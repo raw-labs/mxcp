@@ -918,6 +918,29 @@ tests:
         - "Friday"
 ```
 
+### Customizing the System Prompt
+
+Each eval suite can override the default LLM instructions to better match your domain or desired behavior. Add a `system_prompt` field at the suite level—if it is omitted, MXCP falls back to the built-in prompt that encourages concise, tool-aware answers.
+
+```yaml
+mxcp: 1
+suite: relationship_navigation
+description: "Ensure the assistant navigates relationships carefully"
+model: gpt-4o
+system_prompt: |
+  You are a Vertec specialist. Always explain which tool you used.
+  If a tool fails, read the error carefully before trying again.
+
+tests:
+  - name: compare_owners
+    prompt: "Are the owners of Project A and Project B the same?"
+    assertions:
+      must_call:
+        - tool: sql_search_objects
+          args:
+            object_type: "Project"
+```
+
 ### Model Configuration Example
 
 Add models to your user config (`~/.mxcp/config.yml`) so evals know which providers to call:

@@ -19,6 +19,7 @@ class ParameterDefinition:
     description: str = ""
     default: Any | None = None
     required: bool = True
+    schema: dict[str, Any] | None = None
 
 
 @dataclass
