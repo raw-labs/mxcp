@@ -10,14 +10,14 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
-from .._types import (
-    ExternalUserInfo,
-    HttpTransportConfig,
-    SalesforceAuthConfig,
-    StateMeta,
-    UserContext,
-)
 from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from ..models import (
+    ExternalUserInfoModel,
+    HttpTransportConfigModel,
+    SalesforceAuthConfigModel,
+    StateMetaModel,
+    UserContextModel,
+)
 from ..url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
@@ -28,8 +28,8 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
 
     def __init__(
         self,
-        salesforce_config: SalesforceAuthConfig,
-        transport_config: HttpTransportConfig | None = None,
+        salesforce_config: SalesforceAuthConfigModel,
+        transport_config: HttpTransportConfigModel | None = None,
         host: str = "localhost",
         port: int = 8000,
     ):
@@ -43,18 +43,18 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         """
         logger.info(f"SalesforceOAuthHandler init: {salesforce_config}")
 
-        # Required fields are enforced by TypedDict structure
-        self.client_id = salesforce_config["client_id"]
-        self.client_secret = salesforce_config["client_secret"]
+        # Required fields are enforced by Pydantic model structure
+        self.client_id = salesforce_config.client_id
+        self.client_secret = salesforce_config.client_secret
 
         # Salesforce OAuth endpoints
-        self.auth_url = salesforce_config["auth_url"]
-        self.token_url = salesforce_config["token_url"]
+        self.auth_url = salesforce_config.auth_url
+        self.token_url = salesforce_config.token_url
 
         # Use configured scope or default
-        self.scope = salesforce_config.get("scope", "api refresh_token openid profile email")
+        self.scope = salesforce_config.scope or "api refresh_token openid profile email"
 
-        self._callback_path = salesforce_config["callback_path"]
+        self._callback_path = salesforce_config.callback_path
         self.host = host
         self.port = port
 
@@ -62,7 +62,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         self.url_builder = URLBuilder(transport_config)
 
         # State storage for OAuth flow
-        self._state_store: dict[str, StateMeta] = {}
+        self._state_store: dict[str, StateMetaModel] = {}
 
     # ----- authorize -----
     def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
@@ -74,7 +74,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         )
 
         # Store the original redirect URI and callback URL in state for later use
-        self._state_store[state] = StateMeta(
+        self._state_store[state] = StateMetaModel(
             redirect_uri=str(params.redirect_uri),
             code_challenge=params.code_challenge,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
@@ -97,7 +97,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         )
 
     # ----- state helpers -----
-    def _get_state_metadata(self, state: str) -> StateMeta:
+    def _get_state_metadata(self, state: str) -> StateMetaModel:
         try:
             return self._state_store[state]
         except KeyError:
@@ -111,7 +111,9 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         self._pop_state(state)
 
     # ----- code exchange -----
-    async def exchange_code(self, code: str, state: str) -> tuple[ExternalUserInfo, StateMeta]:
+    async def exchange_code(
+        self, code: str, state: str
+    ) -> tuple[ExternalUserInfoModel, StateMetaModel]:
         meta = self._get_state_metadata(state)
 
         # Use the stored callback URL for consistency
@@ -159,7 +161,7 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         # Don't clean up state here - let handle_callback do it after getting metadata
         logger.info(f"Salesforce OAuth token exchange successful for user: {user_id}")
 
-        user_info = ExternalUserInfo(
+        user_info = ExternalUserInfoModel(
             id=user_id,
             scopes=[],
             raw_token=access_token,
@@ -190,14 +192,14 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
             return HTMLResponse(status_code=500, content="oauth_failure")
 
     # ----- user context -----
-    async def get_user_context(self, token: str) -> UserContext:
+    async def get_user_context(self, token: str) -> UserContextModel:
         """Get standardized user context from Salesforce.
 
         Args:
             token: Salesforce OAuth access token
 
         Returns:
-            UserContext with Salesforce user information
+            UserContextModel with Salesforce user information
 
         Raises:
             HTTPException: If token is invalid or user info cannot be retrieved
@@ -205,8 +207,8 @@ class SalesforceOAuthHandler(ExternalOAuthHandler):
         try:
             user_profile = await self._fetch_user_profile(token)
 
-            # Extract Salesforce-specific fields and map to standard UserContext
-            return UserContext(
+            # Extract Salesforce-specific fields and map to standard UserContextModel
+            return UserContextModel(
                 provider="salesforce",
                 user_id=str(user_profile.get("user_id", "")),
                 username=user_profile.get(

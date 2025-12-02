@@ -4,7 +4,6 @@ import base64
 import hashlib
 import logging
 import secrets
-from dataclasses import dataclass
 from typing import Any, cast
 from urllib.parse import urlencode
 
@@ -14,21 +13,20 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
-from .._types import (
-    ExternalUserInfo,
-    HttpTransportConfig,
-    KeycloakAuthConfig,
-    StateMeta,
-    UserContext,
-)
 from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from ..models import (
+    ExternalUserInfoModel,
+    HttpTransportConfigModel,
+    KeycloakAuthConfigModel,
+    StateMetaModel,
+    UserContextModel,
+)
 from ..url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class KeycloakStateMeta(StateMeta):
+class KeycloakStateMetaModel(StateMetaModel):
     """Extended state metadata for Keycloak OAuth flow with PKCE support."""
 
     keycloak_code_verifier: str | None = None  # For Keycloak token exchange
@@ -55,8 +53,8 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
     def __init__(
         self,
-        keycloak_config: KeycloakAuthConfig,
-        transport_config: HttpTransportConfig | None = None,
+        keycloak_config: KeycloakAuthConfigModel,
+        transport_config: HttpTransportConfigModel | None = None,
         host: str = "localhost",
         port: int = 8000,
     ):
@@ -70,13 +68,13 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         """
         logger.info(f"KeycloakOAuthHandler init: {keycloak_config}")
 
-        # Required fields are enforced by TypedDict structure
-        self.client_id = keycloak_config["client_id"]
-        self.client_secret = keycloak_config["client_secret"]
-        self.realm = keycloak_config["realm"]
-        self.server_url = keycloak_config["server_url"].rstrip("/")
-        self.scope = keycloak_config.get("scope", "openid profile email")
-        self._callback_path = keycloak_config["callback_path"]
+        # Required fields are enforced by Pydantic model structure
+        self.client_id = keycloak_config.client_id
+        self.client_secret = keycloak_config.client_secret
+        self.realm = keycloak_config.realm
+        self.server_url = keycloak_config.server_url.rstrip("/")
+        self.scope = keycloak_config.scope or "openid profile email"
+        self._callback_path = keycloak_config.callback_path
 
         # Construct Keycloak OAuth endpoints
         realm_base = f"{self.server_url}/realms/{self.realm}/protocol/openid-connect"
@@ -91,7 +89,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         self.url_builder = URLBuilder(transport_config)
 
         # Internal state management
-        self._state_store: dict[str, KeycloakStateMeta] = {}
+        self._state_store: dict[str, KeycloakStateMetaModel] = {}
 
     @property
     def callback_path(self) -> str:
@@ -111,7 +109,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
         keycloak_code_verifier, keycloak_code_challenge = _generate_pkce_pair()
 
         # Store the original redirect URI, callback URL, and both PKCE flows
-        self._state_store[state] = KeycloakStateMeta(
+        self._state_store[state] = KeycloakStateMetaModel(
             redirect_uri=str(params.redirect_uri),
             code_challenge=params.code_challenge,  # MCP client's original (for internal MCP flow)
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
@@ -146,7 +144,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
     async def exchange_code(
         self, code: str, state: str
-    ) -> tuple[ExternalUserInfo, KeycloakStateMeta]:
+    ) -> tuple[ExternalUserInfoModel, KeycloakStateMetaModel]:
         """Exchange authorization code for tokens."""
         # Validate state parameter and get metadata
         state_meta = self._get_state_metadata(state)
@@ -208,7 +206,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
         logger.info(f"Keycloak OAuth token exchange successful for user: {user_id}")
 
-        user_info = ExternalUserInfo(
+        user_info = ExternalUserInfoModel(
             id=user_id, scopes=scopes, raw_token=access_token, provider="keycloak"
         )
 
@@ -227,7 +225,7 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
 
             return cast(dict[str, Any], response.json())
 
-    def _get_state_metadata(self, state: str) -> KeycloakStateMeta:
+    def _get_state_metadata(self, state: str) -> KeycloakStateMetaModel:
         """Return metadata stored for a given state."""
         state_meta = self._state_store.get(state)
         if not state_meta:
@@ -278,14 +276,14 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
                 status_code=500,
             )
 
-    async def get_user_context(self, token: str) -> UserContext:
+    async def get_user_context(self, token: str) -> UserContextModel:
         """Get standardized user context from Keycloak.
 
         Args:
             token: OAuth access token for the user
 
         Returns:
-            UserContext with standardized user information
+            UserContextModel with standardized user information
 
         Raises:
             HTTPException: If token is invalid or user info cannot be retrieved
@@ -294,9 +292,9 @@ class KeycloakOAuthHandler(ExternalOAuthHandler):
             # Get user info from Keycloak
             user_profile = await self._get_user_info(token)
 
-            # Map Keycloak claims to UserContext
+            # Map Keycloak claims to UserContextModel
             # Keycloak uses standard OIDC claims
-            return UserContext(
+            return UserContextModel(
                 provider="keycloak",
                 user_id=user_profile.get("sub", ""),
                 username=user_profile.get("preferred_username", user_profile.get("email", "")),

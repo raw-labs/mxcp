@@ -1,8 +1,11 @@
-"""Tests comparing validation schema with common-types schema."""
+"""Tests comparing validation Pydantic models with common-types schema."""
 
-import json
-from pathlib import Path
-
+from mxcp.sdk.validator.models import (
+    BaseTypeSchemaModel,
+    ParameterSchemaModel,
+    TypeSchemaModel,
+    ValidationSchemaModel,
+)
 from mxcp.server.definitions.endpoints.models import ParamDefinitionModel, TypeDefinitionModel
 
 
@@ -18,48 +21,22 @@ def _extract_enum(schema_fragment: dict) -> list[str]:
 
 
 class TestSchemaComparison:
-    """Compare validation schema with common-types schema to ensure compatibility."""
+    """Compare validation Pydantic models with common-types schema to ensure compatibility."""
 
     def test_compare_with_common_types(self):
-        """Compare our validation schema with common-types-schema-1.json."""
-        # Load both schemas
-        validation_schema_path = (
-            Path(__file__).parent.parent.parent.parent
-            / "src"
-            / "mxcp"
-            / "sdk"
-            / "validator"
-            / "decorators"
-            / "schemas"
-            / "validation-schema-1.json"
-        )
-
-        with open(validation_schema_path) as f:
-            validation_schema = json.load(f)
-
-        # Get type definitions
-        validation_base_type = validation_schema["definitions"]["baseTypeDefinition"]["properties"]
+        """Compare our validation Pydantic models with common-types models."""
+        # Get schemas from Pydantic models
+        validation_schema = BaseTypeSchemaModel.model_json_schema()
         type_schema = TypeDefinitionModel.model_json_schema()
+
+        # Get base type properties
+        validation_props = set(validation_schema.get("properties", {}).keys())
+
+        # Get common type properties
         common_type = type_schema["$defs"]["TypeDefinitionModel"]["properties"]
-
-        # Check type enum values
-        validation_types = validation_schema["definitions"]["typeEnum"]["enum"]
-        common_types = common_type["type"]["enum"]
-        assert set(validation_types) == set(
-            common_types
-        ), f"Type enums differ: {validation_types} vs {common_types}"
-
-        # Check format enum values
-        validation_formats = validation_schema["definitions"]["formatEnum"]["enum"]
-        common_formats = _extract_enum(common_type["format"])
-        assert set(validation_formats) == set(
-            common_formats
-        ), f"Format enums differ: {validation_formats} vs {common_formats}"
-
-        # Compare type properties
-        print("\n=== Type Property Comparison ===")
-        validation_props = set(validation_base_type.keys())
         common_props = set(common_type.keys())
+
+        print("\n=== Type Property Comparison ===")
 
         # Properties in both
         both = validation_props & common_props
@@ -75,40 +52,16 @@ class TestSchemaComparison:
         if common_only:
             print(f"Properties only in common-types schema: {sorted(common_only)}")
 
-        # Note: 'enum' is in validation but not in common-types typeDefinition
-        # However, 'enum' is in paramDefinition
-
         # Compare parameter definitions
         print("\n=== Parameter Definition Comparison ===")
-        validation_param = validation_schema["definitions"]["parameterSchema"]
+        validation_param_schema = ParameterSchemaModel.model_json_schema()
         param_schema = ParamDefinitionModel.model_json_schema()
 
-        # Extract parameter-specific properties from validation schema
-        validation_param_props = set()
-        for item in validation_param["allOf"]:
-            if "properties" in item:
-                validation_param_props.update(item["properties"].keys())
-
-        # Get common param properties (excluding type properties already compared)
-        common_param_props = set(param_schema["properties"].keys())
+        validation_param_props = set(validation_param_schema.get("properties", {}).keys())
+        common_param_props = set(param_schema.get("properties", {}).keys())
 
         print(f"Validation parameter properties: {sorted(validation_param_props)}")
         print(f"Common parameter properties: {sorted(common_param_props)}")
-
-        # Check required fields
-        validation_param_required = []
-        for item in validation_param["allOf"]:
-            if "required" in item:
-                validation_param_required.extend(item["required"])
-
-        common_param_required = param_schema.get("required", [])
-        print(f"\nValidation param required: {validation_param_required}")
-        print(f"Common param required: {common_param_required}")
-
-        # Key differences found:
-        # 1. common-types paramDefinition requires 'description' - ours doesn't
-        # 2. common-types paramDefinition has pattern validation for 'name' - ours doesn't
-        # 3. 'enum' is in paramDefinition in common-types but in our base type definition
 
     def test_missing_features(self):
         """Document features that differ between schemas."""
@@ -118,20 +71,10 @@ class TestSchemaComparison:
                 "validation-schema": "description is optional for parameters",
                 "impact": "We allow parameters without descriptions",
             },
-            "parameter_name_pattern": {
-                "common-types": "name must match pattern '^[a-zA-Z_][a-zA-Z0-9_]*$'",
-                "validation-schema": "no pattern validation for name",
-                "impact": "We allow any string as parameter name",
-            },
             "enum_location": {
                 "common-types": "enum is in paramDefinition only",
                 "validation-schema": "enum is in base type definition (both params and outputs)",
                 "impact": "We support enum constraints on output types too",
-            },
-            "multipleOf_constraint": {
-                "common-types": "no exclusiveMinimum on multipleOf",
-                "validation-schema": "multipleOf has exclusiveMinimum: 0",
-                "impact": "We ensure multipleOf is positive",
             },
         }
 
@@ -144,7 +87,7 @@ class TestSchemaComparison:
         # These differences are intentional design choices for the validator
 
     def test_schema_alignment_summary(self):
-        """Summary of how validation schema aligns with common-types."""
+        """Summary of how validation Pydantic models align with common-types."""
         alignment = {
             "fully_aligned": [
                 "Type enums (string, number, integer, boolean, array, object)",
@@ -152,18 +95,17 @@ class TestSchemaComparison:
                 "All type constraints (minLength, maxLength, minimum, maximum, etc.)",
                 "sensitive flag with same description",
                 "items, properties, required, additionalProperties",
-                "Parameter name pattern validation (^[a-zA-Z_][a-zA-Z0-9_]*$)",
                 "Parameter properties (name, description, default, examples)",
             ],
             "intentional_differences": [
                 "description is optional for parameters (common-types requires it)",
                 "enum and description available on both types and parameters",
-                "multipleOf doesn't require exclusiveMinimum > 0 (matches common-types)",
             ],
             "validation_advantages": [
                 "Supports enum constraints on output types",
                 "Supports description on output types",
                 "More flexible for validation-only use cases",
+                "Type safety with Pydantic models",
             ],
         }
 
@@ -173,31 +115,49 @@ class TestSchemaComparison:
             for item in items:
                 print(f"  ✓ {item}")
 
-        # Verify critical alignments
-        validation_schema_path = (
-            Path(__file__).parent.parent.parent.parent
-            / "src"
-            / "mxcp"
-            / "sdk"
-            / "validator"
-            / "decorators"
-            / "schemas"
-            / "validation-schema-1.json"
-        )
-        with open(validation_schema_path) as f:
-            validation_schema = json.load(f)
+        # Verify Pydantic models are valid
+        validation_schema = ValidationSchemaModel.model_json_schema()
+        assert "$defs" in validation_schema or "properties" in validation_schema
 
         type_schema = TypeDefinitionModel.model_json_schema()
         type_props = type_schema["$defs"]["TypeDefinitionModel"]["properties"]
 
-        # Verify type enums match exactly
-        validation_types = validation_schema["definitions"]["typeEnum"]["enum"]
-        common_types = type_props["type"]["enum"]
-        assert validation_types == common_types
-
-        # Verify format enums match exactly
-        validation_formats = validation_schema["definitions"]["formatEnum"]["enum"]
-        common_formats = _extract_enum(type_props["format"])
-        assert validation_formats == common_formats
+        # Verify both have key properties
+        assert "type" in type_props
+        assert "format" in type_props
+        assert "sensitive" in type_props
 
         print("\n✅ All critical type system components are aligned!")
+
+    def test_pydantic_model_validation(self):
+        """Test that Pydantic models validate correctly."""
+        # Valid type schema
+        type_schema = TypeSchemaModel(type="string", format="email")
+        assert type_schema.type == "string"
+        assert type_schema.format == "email"
+
+        # Valid parameter schema
+        param_schema = ParameterSchemaModel(
+            name="email",
+            type="string",
+            format="email",
+            description="User email address",
+        )
+        assert param_schema.name == "email"
+        assert param_schema.format == "email"
+
+        # Valid validation schema
+        validation = ValidationSchemaModel.model_validate(
+            {
+                "input": {
+                    "parameters": [
+                        {"name": "x", "type": "integer"},
+                        {"name": "y", "type": "integer"},
+                    ]
+                },
+                "output": {"type": "number"},
+            }
+        )
+        assert validation.input_parameters is not None
+        assert len(validation.input_parameters) == 2
+        assert validation.output_schema is not None

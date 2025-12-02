@@ -11,7 +11,7 @@ from typing import Any, Protocol, cast
 
 import httpx
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 
 from ._types import ModelConfigType, ToolDefinition
 
@@ -26,7 +26,10 @@ class ToolExecutor(Protocol):
     """
 
     async def execute_tool(
-        self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        user_context: UserContextModel | None = None,
     ) -> Any:
         """Execute a tool and return the result.
 
@@ -195,7 +198,7 @@ Only output JSON when calling tools. Otherwise respond with regular text."""
         return self._get_claude_prompt(user_prompt, available_tools, conversation_history)
 
     async def execute_prompt(
-        self, prompt: str, user_context: UserContext | None = None
+        self, prompt: str, user_context: UserContextModel | None = None
     ) -> tuple[str, list[dict[str, Any]]]:
         """Execute a prompt and return the response and tool calls made.
 

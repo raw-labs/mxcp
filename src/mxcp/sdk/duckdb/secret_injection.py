@@ -8,12 +8,12 @@ import logging
 
 import duckdb
 
-from .types import SecretDefinition
+from .models import SecretDefinitionModel
 
 logger = logging.getLogger(__name__)
 
 
-def inject_secrets(con: duckdb.DuckDBPyConnection, secrets: list[SecretDefinition]) -> None:
+def inject_secrets(con: duckdb.DuckDBPyConnection, secrets: list[SecretDefinitionModel]) -> None:
     """Inject secrets into DuckDB session"""
     logger.debug(f"Injecting {len(secrets)} secrets")
     logger.debug(f"Found secrets: {[s.name for s in secrets]}")

@@ -31,15 +31,15 @@ Configuration management with secret resolvers and analytics.
 
 ```python
 from mxcp.sdk.executor import ExecutionEngine, ExecutionContext
-from mxcp.sdk.auth import UserContext
-from mxcp.sdk.policy import PolicyEnforcer, PolicySet
+from mxcp.sdk.auth import UserContextModel
+from mxcp.sdk.policy import PolicyEnforcer, PolicySetModel
 
 # Set up execution engine
 engine = ExecutionEngine()
 context = ExecutionContext()
 
 # Add user context
-user = UserContext(username="alice", role="analyst")
+user = UserContextModel(provider="example", user_id="alice-123", username="alice")
 context.set_user_context(user)
 
 # Execute code with policy enforcement

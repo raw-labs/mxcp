@@ -16,7 +16,7 @@ from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from .models import ConfigResponse, EndpointCounts, Features
 
 if TYPE_CHECKING:
-    from mxcp.sdk.audit._types import AuditRecord
+    from mxcp.sdk.audit.models import AuditRecordModel
     from mxcp.server.core.reload import ReloadRequest
     from mxcp.server.interfaces.server.mcp import RAWMCP
 
@@ -140,12 +140,12 @@ class AdminService:
         trace_ids: list[str] | None = None,
         limit: int | None = None,
         offset: int = 0,
-    ) -> AsyncIterator["AuditRecord"]:
+    ) -> AsyncIterator["AuditRecordModel"]:
         """
         Query audit records with filters.
 
         This is a convenience method that delegates to the audit logger if available.
-        Returns an async iterator of AuditRecord objects.
+        Returns an async iterator of AuditRecordModel objects.
 
         Args:
             schema_name: Filter by schema name
@@ -160,7 +160,7 @@ class AdminService:
             offset: Number of records to skip
 
         Yields:
-            AuditRecord objects matching the filters
+            AuditRecordModel objects matching the filters
         """
         if not self._server.audit_logger:
             return

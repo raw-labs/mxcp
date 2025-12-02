@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ._types import ParameterSchema, TypeSchema
+from .models import ParameterSchemaModel, TypeSchemaModel
 
 
 class ValidationError(ValueError):
@@ -38,7 +38,7 @@ class TypeConverter:
         return type_map.get(python_type, python_type)
 
     @staticmethod
-    def convert_parameter(value: Any, schema: ParameterSchema | TypeSchema) -> Any:
+    def convert_parameter(value: Any, schema: ParameterSchemaModel | TypeSchemaModel) -> Any:
         """Convert input parameter values to appropriate types for execution."""
         param_type = schema.type
         param_format = schema.format
@@ -220,7 +220,7 @@ class TypeConverter:
         return value
 
     @staticmethod
-    def validate_output(value: Any, schema: TypeSchema) -> None:
+    def validate_output(value: Any, schema: TypeSchemaModel) -> None:
         """Validate output values match the expected return type schema."""
         return_type = schema.type
         return_format = schema.format
@@ -370,7 +370,7 @@ class TypeConverter:
             return obj
 
     @staticmethod
-    def mask_sensitive_fields(value: Any, schema: TypeSchema) -> Any:
+    def mask_sensitive_fields(value: Any, schema: TypeSchemaModel) -> Any:
         """Mask sensitive fields in the output based on schema."""
         if schema.sensitive:
             return "[REDACTED]"

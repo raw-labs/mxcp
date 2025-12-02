@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.sdk.audit import AuditLogger, AuditSchema
+from mxcp.sdk.audit import AuditLogger, AuditSchemaModel
 from mxcp.server.services.audit.exporters import export_to_csv, export_to_json, export_to_jsonl
 
 
@@ -25,7 +25,7 @@ async def test_exporters_with_jsonl_backend():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create schema and log events
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="export_test", version=1, description="Test schema for export"
         )
         await logger.create_schema(schema)
@@ -146,7 +146,7 @@ async def test_exporters_with_filters():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create schema and log varied events
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="filter_export_test",
             version=1,
             description="Test schema for filtered export",
@@ -208,7 +208,7 @@ async def test_exporters_memory_efficiency():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create schema
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="large_export_test", version=1, description="Test schema for large export"
         )
         await logger.create_schema(schema)

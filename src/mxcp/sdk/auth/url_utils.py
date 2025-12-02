@@ -4,7 +4,7 @@ import logging
 
 from starlette.requests import Request
 
-from ._types import HttpTransportConfig
+from .models import HttpTransportConfigModel
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +19,13 @@ class URLBuilder:
     - Fallback to request scheme
     """
 
-    def __init__(self, transport_config: HttpTransportConfig | None = None):
+    def __init__(self, transport_config: HttpTransportConfigModel | None = None):
         """Initialize URL builder with transport configuration.
 
         Args:
             transport_config: HTTP transport configuration from user config
         """
-        self.transport_config = transport_config or {}
+        self.transport_config = transport_config or HttpTransportConfigModel()
 
     def get_base_url(
         self,
@@ -44,7 +44,7 @@ class URLBuilder:
             Complete base URL (e.g., 'https://api.example.com:8000')
         """
         # 1. Check for explicit base_url override
-        base_url = self.transport_config.get("base_url")
+        base_url = self.transport_config.base_url
         if base_url:
             logger.debug(f"Using explicit base_url from config: {base_url}")
             return base_url.rstrip("/")
@@ -53,8 +53,8 @@ class URLBuilder:
         scheme = self._detect_scheme(request)
 
         # 3. Determine host and port
-        final_host = host or self.transport_config.get("host", "localhost")
-        final_port = port or self.transport_config.get("port", 8000)
+        final_host = host or self.transport_config.host or "localhost"
+        final_port = port or self.transport_config.port or 8000
 
         # 4. Build URL
         if (scheme == "https" and final_port == 443) or (scheme == "http" and final_port == 80):
@@ -107,13 +107,13 @@ class URLBuilder:
             URL scheme ('http' or 'https')
         """
         # 1. Check explicit configuration
-        config_scheme = self.transport_config.get("scheme")
+        config_scheme = self.transport_config.scheme
         if config_scheme:
             logger.debug(f"Using explicit scheme from config: {config_scheme}")
             return config_scheme
 
         # 2. Check proxy headers (if enabled)
-        if self.transport_config.get("trust_proxy", False) and request:
+        if self.transport_config.trust_proxy and request:
             # X-Forwarded-Proto (most common)
             forwarded_proto = request.headers.get("x-forwarded-proto")
             if forwarded_proto:

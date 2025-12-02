@@ -18,7 +18,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
-    from mxcp.sdk.auth import UserContext
+    from mxcp.sdk.auth import UserContextModel
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -143,7 +143,7 @@ class MXCPBasePlugin:
                 return a + b
     """
 
-    def __init__(self, config: dict[str, Any], user_context: Optional["UserContext"] = None):
+    def __init__(self, config: dict[str, Any], user_context: Optional["UserContextModel"] = None):
         """Initialize the plugin with configuration and optional user context.
 
         Args:
@@ -156,11 +156,11 @@ class MXCPBasePlugin:
         register_plugin(self)
 
     @property
-    def user_context(self) -> Optional["UserContext"]:
+    def user_context(self) -> Optional["UserContextModel"]:
         """Get the authenticated user context.
 
         Returns:
-            UserContext if user is authenticated, None otherwise
+            UserContextModel if user is authenticated, None otherwise
         """
         return self._user_context
 

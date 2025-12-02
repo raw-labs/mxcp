@@ -3,14 +3,13 @@
 import pytest
 
 from mxcp.sdk.validator import TypeValidator
-from mxcp.sdk.validator.decorators import validate_schema_structure
 
 
 class TestParameterNameValidation:
     """Test parameter name pattern validation."""
 
     def test_valid_parameter_names(self):
-        """Test that valid parameter names are accepted."""
+        """Test that valid parameter names are accepted in TypeValidator."""
         valid_names = [
             "name",
             "user_id",
@@ -26,36 +25,11 @@ class TestParameterNameValidation:
         ]
 
         for name in valid_names:
-            schema = {"input": {"parameters": [{"name": name, "type": "string"}]}}
-            # Should not raise
-            validate_schema_structure(schema)
-
-    def test_invalid_parameter_names(self):
-        """Test that invalid parameter names are rejected."""
-        invalid_names = [
-            "123name",  # starts with number
-            "name-with-dash",  # contains dash
-            "name.with.dot",  # contains dot
-            "name with space",  # contains space
-            "name@symbol",  # contains @
-            "",  # empty string
-            "name$var",  # contains $
-            "name!",  # contains !
-            "日本語",  # non-ASCII
-        ]
-
-        # Note: "class" is actually a valid parameter name according to the pattern
-        # The pattern just requires [a-zA-Z_][a-zA-Z0-9_]* which allows reserved words
-
-        for name in invalid_names:
-            schema = {"input": {"parameters": [{"name": name, "type": "string"}]}}
-
-            # Should raise validation error
-            with pytest.raises(ValueError) as exc_info:
-                validate_schema_structure(schema)
-
-            # Check that it's specifically about the name pattern or length
-            assert "does not match" in str(exc_info.value), f"Name '{name}' error: {exc_info.value}"
+            validator = TypeValidator.from_dict(
+                {"input": {"parameters": [{"name": name, "type": "string"}]}}
+            )
+            result = validator.validate_input({name: "test"})
+            assert result == {name: "test"}
 
     def test_parameter_name_in_validator(self):
         """Test that TypeValidator correctly handles parameter names."""
@@ -67,22 +41,25 @@ class TestParameterNameValidation:
         result = validator.validate_input({"user_id": 123})
         assert result == {"user_id": 123}
 
-        # The validator itself doesn't validate parameter names at runtime
-        # It trusts that the schema is valid (validated by JSON schema)
-        # So we can still use invalid names if we bypass schema validation
-        validator_direct = TypeValidator.from_dict(
+    def test_parameter_with_default(self):
+        """Test that parameters with defaults work correctly."""
+        validator = TypeValidator.from_dict(
             {
                 "input": {
                     "parameters": [
-                        {
-                            "name": "123invalid",  # Would fail JSON schema validation
-                            "type": "string",
-                        }
+                        {"name": "required_param", "type": "string"},
+                        {"name": "optional_param", "type": "integer", "default": 42},
                     ]
                 }
             }
         )
 
-        # But it will still work at runtime
-        result = validator_direct.validate_input({"123invalid": "test"})
-        assert result == {"123invalid": "test"}
+        # Test with only required param
+        result = validator.validate_input({"required_param": "test"})
+        assert result["required_param"] == "test"
+        assert result["optional_param"] == 42
+
+        # Test with both params
+        result = validator.validate_input({"required_param": "test", "optional_param": 100})
+        assert result["required_param"] == "test"
+        assert result["optional_param"] == 100

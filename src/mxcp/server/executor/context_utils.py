@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.sdk.mcp import LoggingMCPProxy, MCPLogProxy
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 def build_execution_context(
     *,
-    user_context: UserContext | None,
+    user_context: UserContextModel | None,
     user_config: UserConfigModel,
     site_config: SiteConfigModel,
     server_ref: RAWMCP | None = None,

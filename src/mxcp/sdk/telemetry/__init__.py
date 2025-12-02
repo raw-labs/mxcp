@@ -35,14 +35,6 @@ Quick Start:
     ```
 """
 
-from ._types import (
-    MetricsConfig,
-    Span,
-    Status,
-    StatusCode,
-    TelemetryConfig,
-    TracingConfig,
-)
 from .config import (
     configure_all,
     configure_tracing,
@@ -59,8 +51,16 @@ from .metrics import (
     record_histogram,
     time_histogram,
 )
-from .tracer import (
+from .models import (
+    MetricsConfigModel,
+    Span,
     SpanKind,
+    Status,
+    StatusCode,
+    TelemetryConfigModel,
+    TracingConfigModel,
+)
+from .tracer import (
     get_current_span,
     get_current_span_id,
     get_current_trace_id,
@@ -77,9 +77,9 @@ __all__ = [
     "shutdown_telemetry",
     "is_telemetry_enabled",
     # Configuration types
-    "TelemetryConfig",  # Unified config
-    "TracingConfig",  # Tracing-specific config
-    "MetricsConfig",  # Metrics-specific config
+    "TelemetryConfigModel",  # Unified config
+    "TracingConfigModel",  # Tracing-specific config
+    "MetricsConfigModel",  # Metrics-specific config
     # Tracing
     "traced_operation",
     "get_current_trace_id",

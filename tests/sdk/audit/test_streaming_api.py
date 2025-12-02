@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.sdk.audit import AuditLogger, AuditSchema
+from mxcp.sdk.audit import AuditLogger, AuditSchemaModel
 
 
 @pytest.mark.asyncio
@@ -22,7 +22,7 @@ async def test_streaming_basic():
         logger = await AuditLogger.jsonl(log_path=log_path)
         try:
             # Create test schema
-            schema = AuditSchema(
+            schema = AuditSchemaModel(
                 schema_name="streaming_test", version=1, description="Test schema for streaming"
             )
             await logger.create_schema(schema)
@@ -62,7 +62,7 @@ async def test_streaming_with_limit():
         logger = await AuditLogger.jsonl(log_path=log_path)
         try:
             # Create test schema
-            schema = AuditSchema(
+            schema = AuditSchemaModel(
                 schema_name="limit_test", version=1, description="Test schema for limit"
             )
             await logger.create_schema(schema)
@@ -107,7 +107,7 @@ async def test_streaming_early_termination():
         logger = await AuditLogger.jsonl(log_path=log_path)
         try:
             # Create test schema
-            schema = AuditSchema(
+            schema = AuditSchemaModel(
                 schema_name="break_test", version=1, description="Test schema for early termination"
             )
             await logger.create_schema(schema)
@@ -153,7 +153,7 @@ async def test_streaming_memory_efficiency():
         logger = await AuditLogger.jsonl(log_path=log_path)
         try:
             # Create test schema
-            schema = AuditSchema(
+            schema = AuditSchemaModel(
                 schema_name="memory_test",
                 version=1,
                 description="Test schema for memory efficiency",
@@ -206,7 +206,7 @@ async def test_streaming_with_filters():
         logger = await AuditLogger.jsonl(log_path=log_path)
         try:
             # Create test schema
-            schema = AuditSchema(
+            schema = AuditSchemaModel(
                 schema_name="filter_test", version=1, description="Test schema for filters"
             )
             await logger.create_schema(schema)
@@ -279,7 +279,7 @@ async def test_streaming_empty_results():
         logger = await AuditLogger.jsonl(log_path=log_path)
         try:
             # Create test schema
-            schema = AuditSchema(
+            schema = AuditSchemaModel(
                 schema_name="empty_test", version=1, description="Test schema for empty results"
             )
             await logger.create_schema(schema)
@@ -350,7 +350,7 @@ async def test_concurrent_streaming():
         logger = await AuditLogger.jsonl(log_path=log_path)
         try:
             # Create test schema
-            schema = AuditSchema(
+            schema = AuditSchemaModel(
                 schema_name="concurrent_test",
                 version=1,
                 description="Test schema for concurrent streaming",

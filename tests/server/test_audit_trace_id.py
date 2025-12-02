@@ -78,7 +78,7 @@ def test_audit_logs_include_trace_id():
 
                 # Log an event with trace ID
                 await logger.log_event(
-                    caller_type="test",
+                    caller_type="api",
                     event_type="tool",
                     name="test_tool",
                     input_params={"test": "value"},
@@ -146,7 +146,7 @@ def test_audit_logs_trace_id_null_when_telemetry_disabled():
 
             # Log an event without trace ID
             await logger.log_event(
-                caller_type="test",
+                caller_type="api",
                 event_type="tool",
                 name="test_tool",
                 input_params={"test": "value"},

@@ -7,7 +7,7 @@ including field redaction and business context extraction.
 import copy
 from typing import Any
 
-from ._types import AuditRecord, AuditSchema, FieldRedaction, RedactionStrategy
+from .models import AuditRecordModel, AuditSchemaModel, FieldRedactionModel, RedactionStrategy
 from .redaction import apply_redaction
 
 
@@ -22,7 +22,9 @@ class AuditRedactor:
         """
         self.default_strategy = default_strategy
 
-    def redact_record(self, record: AuditRecord, redactions: list[FieldRedaction]) -> AuditRecord:
+    def redact_record(
+        self, record: AuditRecordModel, redactions: list[FieldRedactionModel]
+    ) -> AuditRecordModel:
         """Apply redactions to a record.
 
         Args:
@@ -30,7 +32,7 @@ class AuditRedactor:
             redactions: List of field redactions to apply
 
         Returns:
-            New AuditRecord with redactions applied
+            New AuditRecordModel with redactions applied
         """
         # Deep copy to avoid modifying original
         redacted = copy.deepcopy(record)
@@ -98,7 +100,9 @@ class BaseAuditWriter:
         """
         self.redactor = redactor or AuditRedactor()
 
-    async def apply_schema_policies(self, record: AuditRecord, schema: AuditSchema) -> AuditRecord:
+    async def apply_schema_policies(
+        self, record: AuditRecordModel, schema: AuditSchemaModel
+    ) -> AuditRecordModel:
         """Apply schema-based policies to a record.
 
         Args:

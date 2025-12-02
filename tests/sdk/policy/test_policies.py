@@ -2,28 +2,28 @@
 
 These tests focus on the core policy enforcement functionality in mxcp.sdk.policy
 without any dependencies on configuration parsing or other MXCP modules.
-All PolicySet objects are created directly using SDK types.
+All PolicySetModel objects are created directly using SDK types.
 """
 
 import pytest
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.policy import (
     PolicyAction,
-    PolicyDefinition,
+    PolicyDefinitionModel,
     PolicyEnforcementError,
     PolicyEnforcer,
-    PolicySet,
+    PolicySetModel,
 )
 
 
-class TestPolicySetCreation:
-    """Test creating PolicySet objects directly."""
+class TestPolicySetModelCreation:
+    """Test creating PolicySetModel objects directly."""
 
     def test_create_empty_policy_set(self):
-        """Test creating an empty PolicySet."""
-        # Create empty PolicySet
-        policy_set = PolicySet(input_policies=[], output_policies=[])
+        """Test creating an empty PolicySetModel."""
+        # Create empty PolicySetModel
+        policy_set = PolicySetModel(input_policies=[], output_policies=[])
 
         assert policy_set is not None
         assert len(policy_set.input_policies) == 0
@@ -31,10 +31,10 @@ class TestPolicySetCreation:
 
     def test_create_input_policies(self):
         """Test creating input policies."""
-        # Create PolicySet with input policies
-        policy_set = PolicySet(
+        # Create PolicySetModel with input policies
+        policy_set = PolicySetModel(
             input_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="user.role == 'guest'",
                     action=PolicyAction.DENY,
                     reason="Guests not allowed",
@@ -51,16 +51,16 @@ class TestPolicySetCreation:
 
     def test_create_output_policies(self):
         """Test creating output policies with field filtering."""
-        # Create PolicySet with output policies
-        policy_set = PolicySet(
+        # Create PolicySetModel with output policies
+        policy_set = PolicySetModel(
             input_policies=[],
             output_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="user.role != 'admin'",
                     action=PolicyAction.FILTER_FIELDS,
                     fields=["salary", "ssn"],
                 ),
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="true", action=PolicyAction.MASK_FIELDS, fields=["phone"]
                 ),
             ],
@@ -83,9 +83,9 @@ class TestPolicyEnforcement:
 
     def test_input_policy_deny(self):
         """Test input policy that denies access."""
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="user.role == 'guest'",
                     action=PolicyAction.DENY,
                     reason="Guests not allowed",
@@ -97,7 +97,7 @@ class TestPolicyEnforcement:
         enforcer = PolicyEnforcer(policy_set)
 
         # Create a guest user context
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test", user_id="guest123", username="guest", raw_profile={"role": "guest"}
         )
 
@@ -109,9 +109,9 @@ class TestPolicyEnforcement:
 
     def test_input_policy_allow(self):
         """Test input policy that allows access."""
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="user.role == 'guest'",
                     action=PolicyAction.DENY,
                     reason="Guests not allowed",
@@ -123,7 +123,7 @@ class TestPolicyEnforcement:
         enforcer = PolicyEnforcer(policy_set)
 
         # Create an admin user context
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test", user_id="admin123", username="admin", raw_profile={"role": "admin"}
         )
 
@@ -132,10 +132,10 @@ class TestPolicyEnforcement:
 
     def test_output_policy_filter_fields(self):
         """Test output policy that filters fields."""
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[],
             output_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="user.role != 'admin'",
                     action=PolicyAction.FILTER_FIELDS,
                     fields=["salary", "ssn"],
@@ -146,7 +146,7 @@ class TestPolicyEnforcement:
         enforcer = PolicyEnforcer(policy_set)
 
         # Create a regular user context
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test", user_id="user123", username="user", raw_profile={"role": "user"}
         )
 
@@ -167,10 +167,10 @@ class TestPolicyEnforcement:
 
     def test_output_policy_mask_fields(self):
         """Test output policy that masks fields."""
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[],
             output_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="!('pii.view' in user.permissions)",
                     action=PolicyAction.MASK_FIELDS,
                     fields=["phone", "address"],
@@ -181,7 +181,7 @@ class TestPolicyEnforcement:
         enforcer = PolicyEnforcer(policy_set)
 
         # Create a user without PII permission
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="user123",
             username="user",
@@ -206,9 +206,9 @@ class TestPolicyEnforcement:
 
     def test_permission_check_policy(self):
         """Test policy with permission checks."""
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="!('resource.read' in user.permissions)",
                     action=PolicyAction.DENY,
                     reason="Missing resource.read permission",
@@ -220,7 +220,7 @@ class TestPolicyEnforcement:
         enforcer = PolicyEnforcer(policy_set)
 
         # User without permission
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="user123",
             username="user",
@@ -233,7 +233,7 @@ class TestPolicyEnforcement:
         assert "Missing resource.read permission" in str(excinfo.value)
 
         # User with permission
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="user456",
             username="user2",
@@ -245,9 +245,9 @@ class TestPolicyEnforcement:
 
     def test_parameter_based_policy(self):
         """Test policy that uses query parameters."""
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="employee_id != user.user_id && user.role != 'admin'",
                     action=PolicyAction.DENY,
                     reason="Users can only view their own profile",
@@ -259,7 +259,7 @@ class TestPolicyEnforcement:
         enforcer = PolicyEnforcer(policy_set)
 
         # Regular user trying to access another user's profile
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test", user_id="user123", username="user", raw_profile={"role": "user"}
         )
 
@@ -275,7 +275,7 @@ class TestPolicyEnforcement:
         enforcer.enforce_input_policies(user_context, params)
 
         # Admin accessing any profile - should be allowed
-        admin_context = UserContext(
+        admin_context = UserContextModel(
             provider="test", user_id="admin123", username="admin", raw_profile={"role": "admin"}
         )
         params = {"employee_id": "user456"}
@@ -283,9 +283,9 @@ class TestPolicyEnforcement:
 
     def test_anonymous_user_context(self):
         """Test policy enforcement with anonymous user context."""
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="user.user_id == null",
                     action=PolicyAction.DENY,
                     reason="Authentication required",
@@ -315,10 +315,10 @@ class TestPolicyEnforcement:
         }
 
         # Create policy set with filter_sensitive_fields
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[],
             output_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="true", action=PolicyAction.FILTER_SENSITIVE_FIELDS  # Always apply
                 )
             ],
@@ -369,10 +369,10 @@ class TestPolicyEnforcement:
             },
         }
 
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[],
             output_policies=[
-                PolicyDefinition(condition="true", action=PolicyAction.FILTER_SENSITIVE_FIELDS)
+                PolicyDefinitionModel(condition="true", action=PolicyAction.FILTER_SENSITIVE_FIELDS)
             ],
         )
 
@@ -407,10 +407,10 @@ class TestPolicyEnforcement:
             },
         }
 
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[],
             output_policies=[
-                PolicyDefinition(condition="true", action=PolicyAction.FILTER_SENSITIVE_FIELDS)
+                PolicyDefinitionModel(condition="true", action=PolicyAction.FILTER_SENSITIVE_FIELDS)
             ],
         )
 
@@ -443,10 +443,10 @@ class TestPolicyEnforcement:
         }
 
         # Only filter for non-admin users
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[],
             output_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="user.role != 'admin'", action=PolicyAction.FILTER_SENSITIVE_FIELDS
                 )
             ],
@@ -457,7 +457,7 @@ class TestPolicyEnforcement:
         data = {"public_data": "visible", "admin_token": "secret"}
 
         # Test with regular user
-        regular_user = UserContext(
+        regular_user = UserContextModel(
             user_id="1",
             username="user",
             email="user@example.com",
@@ -474,7 +474,7 @@ class TestPolicyEnforcement:
         assert action == "filter_sensitive_fields"
 
         # Test with admin user
-        admin_user = UserContext(
+        admin_user = UserContextModel(
             user_id="2",
             username="admin",
             email="admin@example.com",
@@ -497,11 +497,11 @@ class TestFilterSensitivePolicies:
 
     def test_create_filter_sensitive_fields_policy(self):
         """Test creating filter_sensitive_fields policy."""
-        # Create PolicySet with filter_sensitive_fields policy
-        policy_set = PolicySet(
+        # Create PolicySetModel with filter_sensitive_fields policy
+        policy_set = PolicySetModel(
             input_policies=[],
             output_policies=[
-                PolicyDefinition(
+                PolicyDefinitionModel(
                     condition="user.role != 'admin'",
                     action=PolicyAction.FILTER_SENSITIVE_FIELDS,
                     reason="Non-admin users cannot see sensitive data",
@@ -530,10 +530,10 @@ class TestFilterSensitivePolicies:
             },
         }
 
-        policy_set = PolicySet(
+        policy_set = PolicySetModel(
             input_policies=[],
             output_policies=[
-                PolicyDefinition(condition="true", action=PolicyAction.FILTER_SENSITIVE_FIELDS)
+                PolicyDefinitionModel(condition="true", action=PolicyAction.FILTER_SENSITIVE_FIELDS)
             ],
         )
 

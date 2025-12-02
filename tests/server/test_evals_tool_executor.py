@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel, SourceDefinitionModel
 from mxcp.server.executor.runners.tool import EndpointToolExecutor
@@ -108,7 +108,7 @@ class TestEndpointToolExecutor:
     @pytest.mark.asyncio
     async def test_execute_tool_with_code(self):
         """Test executing a tool with inline code."""
-        user_context = UserContext(provider="test", user_id="test-user", username="testuser")
+        user_context = UserContextModel(provider="test", user_id="test-user", username="testuser")
 
         result = await self.executor.execute_tool("get_date", {}, user_context=user_context)
 

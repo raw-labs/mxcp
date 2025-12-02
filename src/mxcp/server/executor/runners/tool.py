@@ -8,7 +8,7 @@ This is primarily used by the evaluation system for LLM tool execution.
 import logging
 from typing import Any
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
 from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
 from mxcp.server.definitions.endpoints.utils import detect_language_from_source, extract_source_info
@@ -62,7 +62,10 @@ class EndpointToolExecutor:
         logger.info(f"EndpointToolExecutor initialized with {len(endpoints)} endpoints")
 
     async def execute_tool(
-        self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        user_context: UserContextModel | None = None,
     ) -> Any:
         """Execute a tool by finding the corresponding endpoint.
 

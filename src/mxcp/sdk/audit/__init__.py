@@ -192,22 +192,22 @@ Schemas provide several advantages over per-request policies:
 - **Operations**: Bulk retention and querying by schema
 """
 
-from ._types import (  # Core types; Protocols
+from .backends.noop import NoOpAuditBackend
+from .logger import AuditLogger
+from .models import (  # Core types; Protocols
     AuditBackend,
-    AuditRecord,
-    AuditSchema,
+    AuditRecordModel,
+    AuditSchemaModel,
     CallerType,
     EventType,
     EvidenceLevel,
-    FieldDefinition,
-    FieldRedaction,
-    IntegrityResult,
+    FieldDefinitionModel,
+    FieldRedactionModel,
+    IntegrityResultModel,
     PolicyDecision,
     RedactionStrategy,
     Status,
 )
-from .backends.noop import NoOpAuditBackend
-from .logger import AuditLogger
 from .redaction import apply_redaction
 from .writer import AuditRedactor, BaseAuditWriter
 
@@ -217,13 +217,13 @@ __all__ = [
     "EventType",
     "PolicyDecision",
     "Status",
-    "AuditRecord",
-    "AuditSchema",
-    "FieldDefinition",
+    "AuditRecordModel",
+    "AuditSchemaModel",
+    "FieldDefinitionModel",
     "EvidenceLevel",
-    "FieldRedaction",
+    "FieldRedactionModel",
     "RedactionStrategy",
-    "IntegrityResult",
+    "IntegrityResultModel",
     # Core classes
     "AuditLogger",
     "BaseAuditWriter",
