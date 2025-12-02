@@ -1,21 +1,19 @@
 """Test that user context is properly passed to audit logs."""
 
-import dataclasses
-
 import pytest
 
-from mxcp.sdk.audit import AuditLogger, AuditRecord
+from mxcp.sdk.audit import AuditLogger, AuditRecordModel
 
 
 def test_audit_record_supports_user_context():
-    """Test that AuditRecord dataclass supports user context fields."""
-    # Check that AuditRecord has user_id and session_id fields
-    field_names = [f.name for f in dataclasses.fields(AuditRecord)]
-    assert "user_id" in field_names, "AuditRecord should have user_id field"
-    assert "session_id" in field_names, "AuditRecord should have session_id field"
+    """Test that AuditRecordModel supports user context fields."""
+    # Check that AuditRecordModel has user_id and session_id fields
+    field_names = list(AuditRecordModel.model_fields.keys())
+    assert "user_id" in field_names, "AuditRecordModel should have user_id field"
+    assert "session_id" in field_names, "AuditRecordModel should have session_id field"
 
     # Verify we can create an audit record with user context
-    record = AuditRecord(
+    record = AuditRecordModel(
         schema_name="test",
         operation_type="tool",
         operation_name="test_tool",

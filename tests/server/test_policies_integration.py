@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.services.endpoints import execute_endpoint
@@ -63,7 +63,7 @@ class TestPolicyIntegration:
     @pytest.mark.asyncio
     async def test_guest_access_denied(self, user_config, site_config):
         """Test that guest users are denied access."""
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="guest123",
             username="guest",
@@ -86,7 +86,7 @@ class TestPolicyIntegration:
     @pytest.mark.asyncio
     async def test_missing_permission_denied(self, user_config, site_config):
         """Test that users without required permissions are denied."""
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="emp456",
             username="user",
@@ -109,7 +109,7 @@ class TestPolicyIntegration:
     @pytest.mark.asyncio
     async def test_user_viewing_others_profile_denied(self, user_config, site_config):
         """Test that users cannot view other employees' profiles."""
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="emp123",
             username="user",
@@ -132,7 +132,7 @@ class TestPolicyIntegration:
     @pytest.mark.asyncio
     async def test_user_viewing_own_profile(self, user_config, site_config):
         """Test that users can view their own profile with filtered data."""
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="emp123",
             username="user",
@@ -167,7 +167,7 @@ class TestPolicyIntegration:
     @pytest.mark.asyncio
     async def test_hr_user_access(self, user_config, site_config):
         """Test that HR users can view all employee data."""
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="hr001",
             username="hr_user",
@@ -218,7 +218,7 @@ class TestPolicyIntegration:
     @pytest.mark.asyncio
     async def test_admin_user_access(self, user_config, site_config):
         """Test that admin users have appropriate access."""
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="admin001",
             username="admin",
@@ -248,7 +248,7 @@ class TestPolicyIntegration:
     @pytest.mark.asyncio
     async def test_user_without_pii_permission(self, user_config, site_config):
         """Test that users without pii.view permission cannot see phone numbers."""
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="hr002",
             username="hr_user2",
@@ -297,7 +297,7 @@ class TestPolicyEnforcementEdgeCases:
     @pytest.mark.asyncio
     async def test_multiple_filter_policies(self, user_config, site_config):
         """Test that multiple output policies are applied correctly."""
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="emp123",
             username="user",
@@ -330,7 +330,7 @@ class TestPolicyEnforcementEdgeCases:
         # Test the compound condition: employee_id != user.user_id && user.role != 'admin' && user.role != 'hr'
 
         # Admin can view any employee even if not their own
-        admin_context = UserContext(
+        admin_context = UserContextModel(
             provider="test",
             user_id="admin001",
             username="admin",
@@ -350,7 +350,7 @@ class TestPolicyEnforcementEdgeCases:
         assert result["id"] == "emp456"  # Admin can view it
 
         # HR can also view any employee
-        hr_context = UserContext(
+        hr_context = UserContextModel(
             provider="test",
             user_id="hr001",
             username="hr_user",
@@ -376,7 +376,7 @@ class TestPolicyEnforcementEdgeCases:
         # This simulates a common scenario where policies are defined generically
         # across endpoints with different schemas
 
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="emp123",
             username="user",
@@ -425,7 +425,7 @@ class TestPolicyEnforcementEdgeCases:
     async def test_nonexistent_fields_in_policies(self, user_config, site_config):
         """Test that policies handle non-existent fields gracefully without errors."""
         # Test with regular user - should trigger both filter and mask policies
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="user123",
             username="regular_user",
@@ -469,7 +469,7 @@ class TestPolicyEnforcementEdgeCases:
             assert field not in result
 
         # Test with admin user - should bypass filter_fields policy
-        admin_context = UserContext(
+        admin_context = UserContextModel(
             provider="test",
             user_id="admin123",
             username="admin_user",
@@ -491,7 +491,7 @@ class TestPolicyEnforcementEdgeCases:
         assert admin_result == result
 
         # Test with superuser - should bypass both policies
-        superuser_context = UserContext(
+        superuser_context = UserContextModel(
             provider="test",
             user_id="super123",
             username="superuser",
@@ -519,7 +519,7 @@ class TestPolicyEnforcementEdgeCases:
         # in the CEL evaluation, potentially bypassing security policies
 
         # Create a non-admin user context
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="regular123",
             username="regular_user",
@@ -557,7 +557,7 @@ class TestPolicyEnforcementEdgeCases:
         # After the fix, user context should take precedence over query parameters
 
         # Test 1: Non-admin user should be allowed (policy condition is false)
-        user_context = UserContext(
+        user_context = UserContextModel(
             provider="test",
             user_id="regular123",
             username="regular_user",
@@ -580,7 +580,7 @@ class TestPolicyEnforcementEdgeCases:
         assert result["name"] == "Test User for test_value"
 
         # Test 2: Admin user should be denied (policy condition is true)
-        admin_context = UserContext(
+        admin_context = UserContextModel(
             provider="test",
             user_id="admin123",
             username="admin_user",

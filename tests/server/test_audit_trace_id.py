@@ -78,7 +78,7 @@ def test_audit_logs_include_trace_id():
 
                 # Log an event with trace ID
                 await logger.log_event(
-                    caller_type="test",
+                    caller_type="api",
                     event_type="tool",
                     name="test_tool",
                     input_params={"test": "value"},
@@ -89,7 +89,7 @@ def test_audit_logs_include_trace_id():
                 )
 
                 # Ensure the logger has written
-                await logger.backend.close()
+                await logger.backend.flush()
 
             # Read the audit log to verify
             with open(audit_file) as f:
@@ -112,6 +112,10 @@ def test_audit_logs_include_trace_id():
                 assert len(audit_record["trace_id"]) == 32
 
         finally:
+            # Close the logger
+            with contextlib.suppress(Exception):
+                await logger.close()
+
             # Cleanup
             if audit_file.exists():
                 audit_file.unlink()
@@ -142,7 +146,7 @@ def test_audit_logs_trace_id_null_when_telemetry_disabled():
 
             # Log an event without trace ID
             await logger.log_event(
-                caller_type="test",
+                caller_type="api",
                 event_type="tool",
                 name="test_tool",
                 input_params={"test": "value"},
@@ -153,7 +157,7 @@ def test_audit_logs_trace_id_null_when_telemetry_disabled():
             )
 
             # Ensure the logger has written
-            await logger.backend.close()
+            await logger.backend.flush()
 
             # Read the audit log to verify
             with open(audit_file) as f:
@@ -173,6 +177,10 @@ def test_audit_logs_trace_id_null_when_telemetry_disabled():
                 assert audit_record["trace_id"] is None
 
         finally:
+            # Close the logger
+            with contextlib.suppress(Exception):
+                await logger.close()
+
             # Cleanup
             if audit_file.exists():
                 audit_file.unlink()

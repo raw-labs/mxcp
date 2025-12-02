@@ -5,13 +5,13 @@ import contextlib
 
 import pytest
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.policy import (
     PolicyAction,
-    PolicyDefinition,
+    PolicyDefinitionModel,
     PolicyEnforcementError,
     PolicyEnforcer,
-    PolicySet,
+    PolicySetModel,
 )
 from mxcp.sdk.telemetry import (
     configure_all,
@@ -54,26 +54,26 @@ def test_policy_enforcement_creates_telemetry_spans():
     assert is_telemetry_enabled()
 
     # Create a policy set with input and output policies
-    policy_set = PolicySet(
+    policy_set = PolicySetModel(
         input_policies=[
-            PolicyDefinition(
+            PolicyDefinitionModel(
                 condition='user.role != "admin"',  # Will pass since user is admin
                 action=PolicyAction.DENY,
                 reason="Admin access required",
             ),
-            PolicyDefinition(
+            PolicyDefinitionModel(
                 condition='param1 == "blocked"',  # Will pass since param1 is "allowed"
                 action=PolicyAction.DENY,
                 reason="Parameter value not allowed",
             ),
         ],
         output_policies=[
-            PolicyDefinition(
+            PolicyDefinitionModel(
                 condition="response.sensitive == true",
                 action=PolicyAction.FILTER_FIELDS,
                 fields=["sensitive_data", "internal_id"],
             ),
-            PolicyDefinition(
+            PolicyDefinitionModel(
                 condition='user.role == "guest"',
                 action=PolicyAction.MASK_FIELDS,
                 fields=["email", "phone"],
@@ -85,7 +85,7 @@ def test_policy_enforcement_creates_telemetry_spans():
     enforcer = PolicyEnforcer(policy_set)
 
     # Create user context
-    user_context = UserContext(
+    user_context = UserContextModel(
         provider="test", user_id="user123", username="admin_user", raw_profile={"role": "admin"}
     )
 
@@ -123,9 +123,9 @@ def test_policy_denial_tracked_in_telemetry():
     configure_all(enabled=True, tracing={"console_export": True})
 
     # Create a policy that will deny
-    policy_set = PolicySet(
+    policy_set = PolicySetModel(
         input_policies=[
-            PolicyDefinition(
+            PolicyDefinitionModel(
                 condition='user.role != "admin"',
                 action=PolicyAction.DENY,
                 reason="Admin access required",
@@ -137,7 +137,7 @@ def test_policy_denial_tracked_in_telemetry():
     enforcer = PolicyEnforcer(policy_set)
 
     # Create non-admin user
-    user_context = UserContext(
+    user_context = UserContextModel(
         provider="test", user_id="user456", username="regular_user", raw_profile={"role": "user"}
     )
 
@@ -155,14 +155,14 @@ def test_nested_policy_spans():
     configure_all(enabled=True, tracing={"console_export": True})
 
     # Create a policy set with multiple policies
-    policy_set = PolicySet(
+    policy_set = PolicySetModel(
         input_policies=[
-            PolicyDefinition(
+            PolicyDefinitionModel(
                 condition='param1 == "value1"',
                 action=PolicyAction.DENY,
                 reason="Value1 not allowed",
             ),
-            PolicyDefinition(
+            PolicyDefinitionModel(
                 condition="param2 > 100", action=PolicyAction.DENY, reason="Value too large"
             ),
         ],
@@ -170,7 +170,7 @@ def test_nested_policy_spans():
     )
 
     enforcer = PolicyEnforcer(policy_set)
-    user_context = UserContext(provider="test", user_id="user789", username="test_user")
+    user_context = UserContextModel(provider="test", user_id="user789", username="test_user")
 
     # Run with telemetry
     with traced_operation("test.root") as root_span:

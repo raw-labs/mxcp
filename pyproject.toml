@@ -14,12 +14,12 @@ dependencies = [
     # MCP Framework
     "mcp>=1.12,<1.22",  # Official MCP Python SDK
     "aiohttp>=3.8.0",  # HTTP transport for MCP
+    "aiofiles>=23.2.1",  # Async file I/O for audit backend
     "starlette>=0.27.0",  # HTTP server framework
     
     # Data & Processing
     "duckdb>=1.4.1",  # Embedded analytics database
     "pandas>=2.0.0",  # DataFrame operations with DuckDB
-    "jsonschema>=4.0.0",  # Schema validation
     "pyyaml>=6.0.1",  # Configuration parsing
     "jinja2>=3.1.3",  # Template engine for SQL/Python generation
     "makefun",  # Dynamic function creation
@@ -59,7 +59,6 @@ dev = [
     "black",  # For code formatting
     "ruff",  # For linting and import sorting
     "mypy",  # For type checking
-    "types-jsonschema",  # Type stubs for jsonschema
     "types-PyYAML",  # Type stubs for PyYAML
     "types-psutil",  # Type stubs for psutil
     "pandas-stubs",  # Type stubs for pandas
@@ -90,7 +89,6 @@ all = [
     "black",
     "ruff",
     "mypy",
-    "types-jsonschema",
     "types-psutil",
     "pandas-stubs",
     "build",
@@ -154,15 +152,12 @@ packages = [
     "mxcp.sdk.telemetry",
     "mxcp.sdk.validator",
     "mxcp.sdk.validator.decorators",
-    "mxcp.sdk.validator.decorators.schemas",
 ]
 include-package-data = true
 
 [tool.setuptools.package-data]
 "mxcp" = ["py.typed"]
 "mxcp.server.schemas" = ["*.json"]
-"mxcp.sdk.core.config" = ["schemas/*.json"]
-"mxcp.sdk.validator.decorators.schemas" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

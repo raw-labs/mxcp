@@ -5,7 +5,7 @@ import pytest
 from pydantic_ai import ModelSettings
 from pydantic_ai.exceptions import ModelRetry
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.evals import ParameterDefinition, ToolDefinition
 from mxcp.sdk.evals.executor import AgentResult, GradeResult, LLMExecutor, ProviderConfig
 
@@ -52,7 +52,10 @@ class MockToolExecutor:
         self.calls: list[dict[str, Any]] = []
 
     async def execute_tool(
-        self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        user_context: UserContextModel | None = None,
     ) -> Any:
         self.calls.append(
             {"tool_name": tool_name, "arguments": arguments, "user_context": user_context}
@@ -123,7 +126,7 @@ def test_executor_passes_agent_retries_to_agent() -> None:
 
 def test_execute_prompt_with_tool_call() -> None:
     executor = make_executor()
-    user_ctx = UserContext(provider="test", user_id="u1", username="user")
+    user_ctx = UserContextModel(provider="test", user_id="u1", username="user")
     executor._agent_cls = lambda **kwargs: FakeAgent(
         tools=kwargs["tools"],
         output="Sunny",
@@ -207,7 +210,10 @@ def test_tool_model_retry_reinvokes_tool() -> None:
             self.calls = 0
 
         async def execute_tool(
-            self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
+            self,
+            tool_name: str,
+            arguments: dict[str, Any],
+            user_context: UserContextModel | None = None,
         ) -> Any:
             self.calls += 1
             if self.calls == 1:

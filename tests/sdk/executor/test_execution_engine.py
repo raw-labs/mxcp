@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
 from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
-from mxcp.sdk.duckdb import DatabaseConfig, PluginConfig, DuckDBRuntime
+from mxcp.sdk.duckdb import DatabaseConfigModel, PluginConfigModel, DuckDBRuntime
 from mxcp.sdk.validator import ValidationError
 
 
@@ -56,7 +56,7 @@ def mock_site_config():
 @pytest.fixture
 def mock_context(mock_user_config, mock_site_config):
     """Create a mock execution context with configs."""
-    user_context = UserContext(
+    user_context = UserContextModel(
         user_id="test_user_123",
         username="test_user",
         provider="test",
@@ -74,9 +74,9 @@ def engine_with_executors(temp_repo_dir, tmp_path):
     # Create shared runtime
     db_path = tmp_path / "test_engine.duckdb"
     runtime = DuckDBRuntime(
-        database_config=DatabaseConfig(path=str(db_path), readonly=False, extensions=[]),
+        database_config=DatabaseConfigModel(path=str(db_path), readonly=False, extensions=[]),
         plugins=[],
-        plugin_config=PluginConfig(plugins_path="plugins", config={}),
+        plugin_config=PluginConfigModel(plugins_path="plugins", config={}),
         secrets=[],
     )
 
@@ -117,11 +117,11 @@ class TestExecutionEngineBasics:
 
         # Create DuckDB runtime first
         duckdb_runtime = DuckDBRuntime(
-            database_config=DatabaseConfig(
+            database_config=DatabaseConfigModel(
                 path=str(temp_repo_dir / "test.db"), readonly=False, extensions=[]
             ),
             plugins=[],
-            plugin_config=PluginConfig(plugins_path="plugins", config={}),
+            plugin_config=PluginConfigModel(plugins_path="plugins", config={}),
             secrets=[],
         )
         duckdb_executor = DuckDBExecutor(runtime=duckdb_runtime)
@@ -539,22 +539,22 @@ def process_data():
         # Register same executor types
         engine1.register_executor(PythonExecutor(repo_root=temp_repo_dir))
         runtime1 = DuckDBRuntime(
-            database_config=DatabaseConfig(
+            database_config=DatabaseConfigModel(
                 path=str(temp_repo_dir / "test1.db"), readonly=False, extensions=[]
             ),
             plugins=[],
-            plugin_config=PluginConfig(plugins_path="plugins", config={}),
+            plugin_config=PluginConfigModel(plugins_path="plugins", config={}),
             secrets=[],
         )
         engine1.register_executor(DuckDBExecutor(runtime=runtime1))
 
         engine2.register_executor(PythonExecutor(repo_root=temp_repo_dir))
         runtime2 = DuckDBRuntime(
-            database_config=DatabaseConfig(
+            database_config=DatabaseConfigModel(
                 path=str(temp_repo_dir / "test2.db"), readonly=False, extensions=[]
             ),
             plugins=[],
-            plugin_config=PluginConfig(plugins_path="plugins", config={}),
+            plugin_config=PluginConfigModel(plugins_path="plugins", config={}),
             secrets=[],
         )
         engine2.register_executor(DuckDBExecutor(runtime=runtime2))

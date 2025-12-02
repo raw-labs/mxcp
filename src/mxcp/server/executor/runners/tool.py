@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
@@ -72,7 +72,10 @@ class EndpointToolExecutor:
         logger.info(f"EndpointToolExecutor initialized with {len(endpoints)} endpoints")
 
     async def execute_tool(
-        self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        user_context: UserContextModel | None = None,
     ) -> Any:
         """Execute a tool by finding the corresponding endpoint.
 

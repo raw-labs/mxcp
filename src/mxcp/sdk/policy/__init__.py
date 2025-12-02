@@ -5,26 +5,26 @@ including CEL-based policy evaluation for input validation and output filtering.
 
 Key components:
 - PolicyAction: Enum of available policy actions (DENY, FILTER_FIELDS, etc.)
-- PolicyDefinition: Definition of a single policy rule
-- PolicySet: Collection of input and output policies
+- PolicyDefinitionModel: Definition of a single policy rule
+- PolicySetModel: Collection of input and output policies
 - PolicyEnforcer: Core enforcement engine
 - PolicyEnforcementError: Exception raised when access is denied
 
 Example usage:
-    >>> from mxcp.sdk.policy import PolicyEnforcer, PolicySet, PolicyDefinition, PolicyAction
-    >>> from mxcp.sdk.auth import UserContext
+    >>> from mxcp.sdk.policy import PolicyEnforcer, PolicySetModel, PolicyDefinitionModel, PolicyAction
+    >>> from mxcp.sdk.auth import UserContextModel
     >>>
     >>> # Define policies
-    >>> policy_set = PolicySet(
+    >>> policy_set = PolicySetModel(
     ...     input_policies=[
-    ...         PolicyDefinition(
+    ...         PolicyDefinitionModel(
     ...             condition='user.role != "admin"',
     ...             action=PolicyAction.DENY,
     ...             reason="Admin access required"
     ...         )
     ...     ],
     ...     output_policies=[
-    ...         PolicyDefinition(
+    ...         PolicyDefinitionModel(
     ...             condition='user.role == "guest"',
     ...             action=PolicyAction.FILTER_FIELDS,
     ...             fields=["sensitive_data"]
@@ -35,19 +35,27 @@ Example usage:
     >>> # Create enforcer
     >>> enforcer = PolicyEnforcer(policy_set)
     >>>
-    >>> # Use with user context
-    >>> user = UserContext(username="john", role="guest")
+    >>> # Use with user context (role is extracted from raw_profile)
+    >>> user = UserContextModel(
+    ...     provider="example", user_id="john-123", username="john",
+    ...     raw_profile={"role": "guest"}
+    ... )
     >>> enforcer.enforce_input_policies(user, {"param": "value"})
 """
 
-from ._types import PolicyAction, PolicyDefinition, PolicyEnforcementError, PolicySet
 from .enforcer import PolicyEnforcer
+from .models import (
+    PolicyAction,
+    PolicyDefinitionModel,
+    PolicyEnforcementError,
+    PolicySetModel,
+)
 
 __all__ = [
     # Types
     "PolicyAction",
-    "PolicyDefinition",
-    "PolicySet",
+    "PolicyDefinitionModel",
+    "PolicySetModel",
     "PolicyEnforcementError",
     # Enforcer
     "PolicyEnforcer",

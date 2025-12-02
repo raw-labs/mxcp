@@ -18,7 +18,7 @@ from opentelemetry.sdk.trace.export import (
     SimpleSpanProcessor,
 )
 
-from ._types import TelemetryConfig
+from .models import TelemetryConfigModel
 
 logger = logging.getLogger(__name__)
 
@@ -26,19 +26,19 @@ logger = logging.getLogger(__name__)
 _telemetry_enabled = False
 
 
-def configure_all(config: TelemetryConfig | None = None, **kwargs: Any) -> None:
+def configure_all(config: TelemetryConfigModel | None = None, **kwargs: Any) -> None:
     """Configure all telemetry signals (traces, metrics, logs).
 
     This is the main entry point for telemetry configuration, treating all
     signals as equal citizens.
 
     Args:
-        config: TelemetryConfig object
+        config: TelemetryConfigModel object
         **kwargs: Alternative to config, pass individual settings
 
     Examples:
         # Using config object
-        config = TelemetryConfig(
+        config = TelemetryConfigModel(
             enabled=True,
             endpoint="http://localhost:4318",
             tracing=TracingConfig(enabled=True),
@@ -51,7 +51,7 @@ def configure_all(config: TelemetryConfig | None = None, **kwargs: Any) -> None:
     """
     # Handle both config object and kwargs
     if config is None:
-        config = TelemetryConfig.from_dict(kwargs)
+        config = TelemetryConfigModel.model_validate(kwargs)
 
     if not config.enabled:
         logger.info("Telemetry disabled globally")
@@ -72,7 +72,7 @@ def configure_all(config: TelemetryConfig | None = None, **kwargs: Any) -> None:
         logger.info("Metrics disabled")
 
 
-def configure_tracing(config: TelemetryConfig) -> None:
+def configure_tracing(config: TelemetryConfigModel) -> None:
     """Configure distributed tracing.
 
     This function specifically configures the tracing signal of telemetry.
@@ -136,7 +136,7 @@ def configure_tracing(config: TelemetryConfig) -> None:
     logger.info("Tracing configuration complete")
 
 
-def _configure_metrics_from_config(config: TelemetryConfig) -> None:
+def _configure_metrics_from_config(config: TelemetryConfigModel) -> None:
     """Configure metrics collection from unified config.
 
     Args:

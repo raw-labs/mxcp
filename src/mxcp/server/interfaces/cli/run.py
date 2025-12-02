@@ -1,11 +1,10 @@
-import asyncio
 import json
 from pathlib import Path
 from typing import Any
 
 import click
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
@@ -16,6 +15,7 @@ from mxcp.server.interfaces.cli.utils import (
     output_error,
     output_result,
     resolve_profile,
+    run_async_cli,
 )
 from mxcp.server.services.endpoints import execute_endpoint
 
@@ -94,14 +94,10 @@ def run_endpoint(
         user_config = load_user_config(site_config, active_profile=active_profile)
 
         # Configure logging
-        configure_logging_from_config(
-            site_config=site_config,
-            user_config=user_config,
-            debug=debug,
-        )
+        configure_logging_from_config(user_config=user_config, debug=debug)
 
         # Run async implementation
-        asyncio.run(
+        run_async_cli(
             _run_endpoint_impl(
                 endpoint_type=endpoint_type,
                 name=name,
@@ -191,8 +187,8 @@ async def _run_endpoint_impl(
             except json.JSONDecodeError as e:
                 raise click.BadParameter(f"Invalid JSON in user context: {e}") from e
 
-        # Create UserContext object from the data
-        user_context_obj = UserContext(
+        # Create UserContextModel object from the data
+        user_context_obj = UserContextModel(
             provider="cli",  # Special provider for CLI usage
             user_id=context_data.get("user_id", "cli_user"),
             username=context_data.get("username", "cli_user"),

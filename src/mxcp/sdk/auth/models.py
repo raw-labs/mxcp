@@ -1,28 +1,30 @@
-"""Standalone authentication types for MXCP SDK.
+"""Pydantic models for the auth module."""
 
-These types are specialized for the auth package and don't depend on other MXCP packages.
-Callers need to translate their config types to these auth-specific types.
-"""
+from typing import Any, Literal
 
-from dataclasses import dataclass
-from typing import Any, Literal, TypedDict
+from pydantic import ConfigDict
+
+from mxcp.sdk.models import SdkBaseModel
 
 
-class HttpTransportConfig(TypedDict, total=False):
+class HttpTransportConfigModel(SdkBaseModel):
     """HTTP transport configuration for OAuth callbacks and URL building.
 
     Specialized for auth needs - handles scheme detection, base URLs, and proxy settings.
     """
 
-    port: int | None
-    host: str | None
-    scheme: Literal["http", "https"] | None
-    base_url: str | None
-    trust_proxy: bool | None
-    stateless: bool | None
+    # Override frozen=True since this is a config object that may need updates
+    model_config = ConfigDict(extra="forbid", frozen=False)
+
+    port: int | None = None
+    host: str | None = None
+    scheme: Literal["http", "https"] | None = None
+    base_url: str | None = None
+    trust_proxy: bool | None = None
+    stateless: bool | None = None
 
 
-class OAuthClientConfig(TypedDict):
+class OAuthClientConfigModel(SdkBaseModel):
     """OAuth client configuration.
 
     Represents a pre-configured OAuth client for the auth server.
@@ -30,13 +32,13 @@ class OAuthClientConfig(TypedDict):
 
     client_id: str
     name: str
-    client_secret: str | None  # None for public clients
-    redirect_uris: list[str] | None
-    grant_types: list[Literal["authorization_code", "refresh_token"]] | None
-    scopes: list[str] | None
+    client_secret: str | None = None  # None for public clients
+    redirect_uris: list[str] | None = None
+    grant_types: list[Literal["authorization_code", "refresh_token"]] | None = None
+    scopes: list[str] | None = None
 
 
-class GitHubAuthConfig(TypedDict):
+class GitHubAuthConfigModel(SdkBaseModel):
     """GitHub OAuth provider configuration.
 
     All fields required for GitHub authentication.
@@ -44,13 +46,13 @@ class GitHubAuthConfig(TypedDict):
 
     client_id: str
     client_secret: str
-    scope: str | None
+    scope: str | None = None
     callback_path: str
     auth_url: str
     token_url: str
 
 
-class AtlassianAuthConfig(TypedDict):
+class AtlassianAuthConfigModel(SdkBaseModel):
     """Atlassian OAuth provider configuration.
 
     For JIRA and Confluence Cloud authentication.
@@ -58,13 +60,13 @@ class AtlassianAuthConfig(TypedDict):
 
     client_id: str
     client_secret: str
-    scope: str | None
+    scope: str | None = None
     callback_path: str
     auth_url: str
     token_url: str
 
 
-class SalesforceAuthConfig(TypedDict):
+class SalesforceAuthConfigModel(SdkBaseModel):
     """Salesforce OAuth provider configuration.
 
     For Salesforce Cloud authentication.
@@ -72,13 +74,13 @@ class SalesforceAuthConfig(TypedDict):
 
     client_id: str
     client_secret: str
-    scope: str | None
+    scope: str | None = None
     callback_path: str
     auth_url: str
     token_url: str
 
 
-class KeycloakAuthConfig(TypedDict):
+class KeycloakAuthConfigModel(SdkBaseModel):
     """Keycloak OAuth provider configuration.
 
     Includes Keycloak-specific fields like realm and server_url.
@@ -88,11 +90,11 @@ class KeycloakAuthConfig(TypedDict):
     client_secret: str
     realm: str
     server_url: str
-    scope: str | None
+    scope: str | None = None
     callback_path: str
 
 
-class GoogleAuthConfig(TypedDict):
+class GoogleAuthConfigModel(SdkBaseModel):
     """Google OAuth provider configuration.
 
     For Google Workspace authentication including Calendar, Drive, etc.
@@ -100,46 +102,56 @@ class GoogleAuthConfig(TypedDict):
 
     client_id: str
     client_secret: str
-    scope: str | None
+    scope: str | None = None
     callback_path: str
     auth_url: str
     token_url: str
 
 
-class AuthPersistenceConfig(TypedDict, total=False):
+class AuthPersistenceConfigModel(SdkBaseModel):
     """Authentication persistence backend configuration.
 
     Currently supports SQLite for storing tokens, auth codes, and clients.
     """
 
-    type: Literal["sqlite"] | None
-    path: str | None
+    # Override frozen=True since this is a config object
+    model_config = ConfigDict(extra="forbid", frozen=False)
+
+    type: Literal["sqlite"] | None = None
+    path: str | None = None
 
 
-class AuthorizationConfig(TypedDict, total=False):
+class AuthorizationConfigModel(SdkBaseModel):
     """Authorization policy configuration.
 
     Defines access control requirements.
     """
 
-    required_scopes: list[str] | None
+    # Override frozen=True since this is a config object
+    model_config = ConfigDict(extra="forbid", frozen=False)
+
+    required_scopes: list[str] | None = None
 
 
-class AuthConfig(TypedDict, total=False):
+class AuthConfigModel(SdkBaseModel):
     """Minimal authentication configuration for the OAuth server.
 
     This type only contains fields needed by GeneralOAuthAuthorizationServer.
     Provider-specific configs are passed directly to their respective handlers.
     """
 
-    provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google"] | None
-    clients: list[OAuthClientConfig] | None  # Pre-configured OAuth clients
-    authorization: AuthorizationConfig | None  # Authorization policies
-    persistence: AuthPersistenceConfig | None  # Token/client persistence
+    # Override frozen=True since this is a config object
+    model_config = ConfigDict(extra="forbid", frozen=False)
+
+    provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google"] | None = (
+        None
+    )
+    clients: list[OAuthClientConfigModel] | None = None  # Pre-configured OAuth clients
+    authorization: AuthorizationConfigModel | None = None  # Authorization policies
+    persistence: AuthPersistenceConfigModel | None = None  # Token/client persistence
 
 
-@dataclass
-class ExternalUserInfo:
+class ExternalUserInfoModel(SdkBaseModel):
     """Result of exchanging an auth-code with an external IdP."""
 
     id: str
@@ -148,8 +160,7 @@ class ExternalUserInfo:
     provider: str
 
 
-@dataclass
-class UserContext:
+class UserContextModel(SdkBaseModel):
     """Standardized user context that all OAuth providers must return.
 
     This represents the common denominator of user information across all providers.
@@ -166,12 +177,11 @@ class UserContext:
     external_token: str | None = None  # Original OAuth provider token
 
 
-@dataclass
-class StateMeta:
+class StateMetaModel(SdkBaseModel):
     """OAuth state metadata for tracking authorization flows."""
 
     redirect_uri: str
-    code_challenge: str | None
+    code_challenge: str | None = None
     redirect_uri_provided_explicitly: bool
     client_id: str
     callback_url: str | None = None  # Store callback URL for OAuth providers

@@ -8,7 +8,7 @@ import contextvars
 from dataclasses import dataclass, field
 from typing import Any
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth.models import UserContextModel
 
 
 @dataclass
@@ -41,7 +41,7 @@ class ExecutionContext:
     """
 
     # User information
-    user_context: UserContext | None = None
+    user_context: UserContextModel | None = None
 
     # Simple key-value storage
     _data: dict[str, Any] = field(default_factory=dict)

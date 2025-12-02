@@ -1,4 +1,3 @@
-import asyncio
 import hashlib
 import json
 
@@ -12,6 +11,7 @@ from mxcp.server.interfaces.cli.utils import (
     output_error,
     output_result,
     resolve_profile,
+    run_async_cli,
 )
 from mxcp.server.services.drift.models import DriftSnapshot
 from mxcp.server.services.drift.snapshot import generate_snapshot
@@ -89,13 +89,10 @@ def drift_snapshot(
         user_config = load_user_config(site_config, active_profile=active_profile)
 
         # Configure logging
-        configure_logging_from_config(
-            site_config=site_config,
-            user_config=user_config,
-            debug=debug,
-        )
+        configure_logging_from_config(user_config=user_config, debug=debug)
+
         # Run async implementation
-        asyncio.run(
+        run_async_cli(
             _drift_snapshot_impl(
                 profile=active_profile,
                 force=force,

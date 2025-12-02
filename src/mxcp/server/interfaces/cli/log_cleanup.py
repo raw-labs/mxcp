@@ -1,6 +1,5 @@
 """CLI command for audit log cleanup operations."""
 
-import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from mxcp.server.interfaces.cli.utils import (
     output_error,
     output_result,
     resolve_profile,
+    run_async_cli,
 )
 
 
@@ -66,14 +66,10 @@ def log_cleanup(profile: str | None, dry_run: bool, json_output: bool, debug: bo
         user_config = load_user_config(site_config, active_profile=active_profile)
 
         # Configure logging
-        configure_logging_from_config(
-            site_config=site_config,
-            user_config=user_config,
-            debug=debug,
-        )
+        configure_logging_from_config(user_config=user_config, debug=debug)
 
         # Run async implementation
-        asyncio.run(_cleanup_async(active_profile, dry_run, json_output, debug))
+        run_async_cli(_cleanup(active_profile, dry_run, json_output, debug))
     except click.ClickException:
         # Let Click exceptions propagate - they have their own formatting
         raise
@@ -86,9 +82,7 @@ def log_cleanup(profile: str | None, dry_run: bool, json_output: bool, debug: bo
         output_error(e, json_output, debug)
 
 
-async def _cleanup_async(
-    profile: str | None, dry_run: bool, json_output: bool, debug: bool
-) -> None:
+async def _cleanup(profile: str | None, dry_run: bool, json_output: bool, debug: bool) -> None:
     """Async implementation of cleanup command."""
 
     audit_logger = None
@@ -209,4 +203,4 @@ async def _cleanup_async(
 
     finally:
         if audit_logger:
-            audit_logger.shutdown()
+            await audit_logger.close()

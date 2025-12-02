@@ -6,9 +6,9 @@ from typing import Any
 import click
 from pydantic_ai import ModelSettings
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.evals import LLMExecutor, ParameterDefinition, ProviderConfig, ToolDefinition
-from mxcp.sdk.validator import TypeSchema
+from mxcp.sdk.validator import TypeSchemaModel
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
@@ -232,7 +232,7 @@ def _convert_endpoints_to_tool_definitions(
 
             return_type = None
             if tool.return_:
-                return_type = TypeSchema.from_dict(
+                return_type = TypeSchemaModel.model_validate(
                     tool.return_.model_dump(mode="python", exclude_unset=True, by_alias=True)
                 )
 
@@ -261,7 +261,7 @@ def _convert_endpoints_to_tool_definitions(
 
             return_type = None
             if resource.return_:
-                return_type = TypeSchema.from_dict(
+                return_type = TypeSchemaModel.model_validate(
                     resource.return_.model_dump(mode="python", exclude_unset=True, by_alias=True)
                 )
 
@@ -311,7 +311,7 @@ async def run_eval_suite(
     user_config: UserConfigModel,
     site_config: SiteConfigModel,
     profile: str | None,
-    cli_user_context: UserContext | None = None,
+    cli_user_context: UserContextModel | None = None,
     override_model: str | None = None,
     progress_callback: Callable[[str, str], None] | None = None,
     expected_answer_model: str | None = None,
@@ -435,7 +435,7 @@ async def run_eval_suite(
             test_user_context = cli_user_context
             if test_user_context is None and test.user_context is not None:
                 test_context_data = test.user_context
-                test_user_context = UserContext(
+                test_user_context = UserContextModel(
                     provider="test",
                     user_id=test_context_data.get("user_id", "test_user"),
                     username=test_context_data.get("username", "test_user"),
@@ -637,7 +637,7 @@ async def run_all_evals(
     user_config: UserConfigModel,
     site_config: SiteConfigModel,
     profile: str | None,
-    cli_user_context: UserContext | None = None,
+    cli_user_context: UserContextModel | None = None,
     override_model: str | None = None,
     progress_callback: Callable[[str, str], None] | None = None,
     expected_answer_model: str | None = None,

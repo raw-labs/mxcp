@@ -246,13 +246,13 @@ tool:
 @pytest.mark.asyncio
 async def test_memory_database_forbidden():
     """Test that :memory: databases are now forbidden."""
-    from mxcp.sdk.duckdb import DuckDBRuntime, DatabaseConfig, PluginConfig
+    from mxcp.sdk.duckdb import DuckDBRuntime, DatabaseConfigModel, PluginConfigModel
 
     # Should raise ValueError for :memory: database
     with pytest.raises(ValueError, match="In-memory databases.*not supported"):
         runtime = DuckDBRuntime(
-            database_config=DatabaseConfig(path=":memory:", readonly=False, extensions=[]),
+            database_config=DatabaseConfigModel(path=":memory:", readonly=False, extensions=[]),
             plugins=[],
-            plugin_config=PluginConfig(plugins_path="plugins", config={}),
+            plugin_config=PluginConfigModel(plugins_path="plugins", config={}),
             secrets=[],
         )

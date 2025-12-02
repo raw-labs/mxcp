@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionEngine
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
@@ -57,7 +57,7 @@ class TestRunner:
         self,
         endpoint_type: str,
         name: str,
-        cli_user_context: UserContext | None = None,
+        cli_user_context: UserContextModel | None = None,
         request_headers: dict[str, str] | None = None,
     ) -> TestSuiteResultModel:
         """Run tests for a specific endpoint.
@@ -149,7 +149,7 @@ class TestRunner:
         endpoint_name: str,
         test_def: TestDefinitionModel,
         column_names: list[str],
-        cli_user_context: UserContext | None,
+        cli_user_context: UserContextModel | None,
         request_headers: dict[str, str] | None,
     ) -> TestCaseResultModel:
         """Run a single test.
@@ -267,8 +267,8 @@ class TestRunner:
         return columns
 
     def _get_test_user_context(
-        self, test_def: TestDefinitionModel, cli_user_context: UserContext | None
-    ) -> UserContext | None:
+        self, test_def: TestDefinitionModel, cli_user_context: UserContextModel | None
+    ) -> UserContextModel | None:
         """Determine user context for test execution."""
         # CLI user context takes precedence
         if cli_user_context is not None:
@@ -278,7 +278,7 @@ class TestRunner:
         # Check for test-defined context
         if test_def.user_context is not None:
             test_context_data = test_def.user_context
-            test_user_context = UserContext(
+            test_user_context = UserContextModel(
                 provider="test",  # Special provider for test-defined contexts
                 user_id=test_context_data.get("user_id", "test_user"),
                 username=test_context_data.get("username", "test_user"),

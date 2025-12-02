@@ -6,7 +6,7 @@ that can be set by auth middleware and retrieved by endpoint execution code.
 
 import contextvars
 
-from ._types import UserContext
+from .models import UserContextModel
 
 # Thread-safe user context management using contextvars
 # This allows auth middleware to set user context and endpoint code to retrieve it
@@ -14,15 +14,15 @@ from ._types import UserContext
 
 # Create a contextvar to store the current user context
 # The default is None, indicating no authenticated user
-user_context_var = contextvars.ContextVar[UserContext | None]("user_context", default=None)
+user_context_var = contextvars.ContextVar[UserContextModel | None]("user_context", default=None)
 
 
-def get_user_context() -> UserContext | None:
+def get_user_context() -> UserContextModel | None:
     """
     Get the current user context from the authentication context.
 
     Returns:
-        The UserContext if a user is authenticated, None otherwise.
+        The UserContextModel if a user is authenticated, None otherwise.
 
     Example:
         >>> user_context = get_user_context()
@@ -34,14 +34,16 @@ def get_user_context() -> UserContext | None:
     return user_context_var.get()
 
 
-def set_user_context(context: UserContext | None) -> "contextvars.Token[UserContext | None]":
+def set_user_context(
+    context: UserContextModel | None,
+) -> "contextvars.Token[UserContextModel | None]":
     """
     Set the user context in the current authentication context.
 
     This is typically called by authentication middleware after successful authentication.
 
     Args:
-        context: The UserContext to set, or None to clear authentication
+        context: The UserContextModel to set, or None to clear authentication
 
     Returns:
         A token that can be used to reset the context
@@ -57,7 +59,7 @@ def set_user_context(context: UserContext | None) -> "contextvars.Token[UserCont
     return user_context_var.set(context)
 
 
-def reset_user_context(token: "contextvars.Token[UserContext | None]") -> None:
+def reset_user_context(token: "contextvars.Token[UserContextModel | None]") -> None:
     """
     Reset the user context using a token.
 

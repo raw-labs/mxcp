@@ -158,11 +158,7 @@ def validate(
         user_config = load_user_config(site_config, active_profile=active_profile)
 
         # Configure logging
-        configure_logging_from_config(
-            site_config=site_config,
-            user_config=user_config,
-            debug=debug,
-        )
+        configure_logging_from_config(user_config=user_config, debug=debug)
 
         # Get readonly flag from environment if not set
         if not readonly:

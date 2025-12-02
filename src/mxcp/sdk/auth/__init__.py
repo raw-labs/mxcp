@@ -24,13 +24,14 @@ This package provides comprehensive authentication functionality including:
 
 ### Basic User Context
 ```python
-from mxcp.sdk.auth import UserContext, set_user_context, get_user_context
+from mxcp.sdk.auth.models import UserContextModel
+from mxcp.sdk.auth.context import set_user_context, get_user_context
 
 # Create and set user context
-user = UserContext(
+user = UserContextModel(
+    provider="internal",
+    user_id="alice",
     username="alice",
-    role="analyst",
-    scopes=["read:data", "write:reports"]
 )
 set_user_context(user)
 
@@ -41,59 +42,61 @@ print(f"Current user: {current_user.username}")
 
 ### OAuth Configuration
 ```python
-from mxcp.sdk.auth import AuthConfig, GitHubAuthConfig
+from mxcp.sdk.auth import AuthConfigModel, GitHubAuthConfigModel
 
-config = AuthConfig(
+config = AuthConfigModel(
     provider="github",
-    github=GitHubAuthConfig(
-        client_id="your-client-id",
-        client_secret="your-secret",
-        scope="user:email",
-        callback_path="/auth/callback",
-        auth_url="https://github.com/login/oauth/authorize",
-        token_url="https://github.com/login/oauth/access_token"
-    )
+)
+github_config = GitHubAuthConfigModel(
+    client_id="your-client-id",
+    client_secret="your-secret",
+    scope="user:email",
+    callback_path="/auth/callback",
+    auth_url="https://github.com/login/oauth/authorize",
+    token_url="https://github.com/login/oauth/access_token"
 )
 ```
 """
 
-from ._types import (
-    AtlassianAuthConfig,
-    AuthConfig,
-    AuthorizationConfig,
-    AuthPersistenceConfig,
-    ExternalUserInfo,
-    GitHubAuthConfig,
-    GoogleAuthConfig,
-    HttpTransportConfig,
-    KeycloakAuthConfig,
-    OAuthClientConfig,
-    SalesforceAuthConfig,
-    UserContext,
-)
 from .base import (
     ExternalOAuthHandler,
     GeneralOAuthAuthorizationServer,
 )
 from .context import get_user_context, reset_user_context, set_user_context
 from .middleware import AuthenticationMiddleware
+from .models import (
+    AtlassianAuthConfigModel,
+    AuthConfigModel,
+    AuthorizationConfigModel,
+    AuthPersistenceConfigModel,
+    ExternalUserInfoModel,
+    GitHubAuthConfigModel,
+    GoogleAuthConfigModel,
+    HttpTransportConfigModel,
+    KeycloakAuthConfigModel,
+    OAuthClientConfigModel,
+    SalesforceAuthConfigModel,
+    StateMetaModel,
+    UserContextModel,
+)
 
 __all__ = [
     # Types
-    "AuthConfig",
-    "HttpTransportConfig",
-    "OAuthClientConfig",
-    "GitHubAuthConfig",
-    "AtlassianAuthConfig",
-    "SalesforceAuthConfig",
-    "KeycloakAuthConfig",
-    "GoogleAuthConfig",
-    "AuthPersistenceConfig",
-    "AuthorizationConfig",
+    "AuthConfigModel",
+    "HttpTransportConfigModel",
+    "OAuthClientConfigModel",
+    "GitHubAuthConfigModel",
+    "AtlassianAuthConfigModel",
+    "SalesforceAuthConfigModel",
+    "KeycloakAuthConfigModel",
+    "GoogleAuthConfigModel",
+    "AuthPersistenceConfigModel",
+    "AuthorizationConfigModel",
+    "StateMetaModel",
     # Core classes
     "ExternalOAuthHandler",
-    "ExternalUserInfo",
-    "UserContext",
+    "ExternalUserInfoModel",
+    "UserContextModel",
     "GeneralOAuthAuthorizationServer",
     "AuthenticationMiddleware",
     # Context management

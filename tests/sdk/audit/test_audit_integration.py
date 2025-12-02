@@ -13,10 +13,10 @@ import pytest
 
 from mxcp.sdk.audit import (
     AuditLogger,
-    AuditSchema,
+    AuditSchemaModel,
     EvidenceLevel,
-    FieldDefinition,
-    FieldRedaction,
+    FieldDefinitionModel,
+    FieldRedactionModel,
     RedactionStrategy,
 )
 
@@ -31,41 +31,45 @@ async def test_complete_audit_workflow():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Define schemas for different types of operations
-        auth_schema = AuditSchema(
+        auth_schema = AuditSchemaModel(
             schema_name="auth_operations",
             version=1,
             description="Authentication and authorization operations",
             retention_days=365,
             evidence_level=EvidenceLevel.REGULATORY,
             fields=[
-                FieldDefinition("operation", "string"),
-                FieldDefinition("user_email", "string", sensitive=True),
-                FieldDefinition("ip_address", "string", sensitive=True),
-                FieldDefinition("success", "boolean"),
+                FieldDefinitionModel(name="operation", type="string"),
+                FieldDefinitionModel(name="user_email", type="string", sensitive=True),
+                FieldDefinitionModel(name="ip_address", type="string", sensitive=True),
+                FieldDefinitionModel(name="success", type="boolean"),
             ],
             field_redactions=[
-                FieldRedaction("user_email", RedactionStrategy.EMAIL),
-                FieldRedaction(
-                    "ip_address", RedactionStrategy.PARTIAL, {"show_first": 0, "show_last": 3}
+                FieldRedactionModel(field_path="user_email", strategy=RedactionStrategy.EMAIL),
+                FieldRedactionModel(
+                    field_path="ip_address",
+                    strategy=RedactionStrategy.PARTIAL,
+                    options={"show_first": 0, "show_last": 3},
                 ),
             ],
             extract_fields=["operation", "success"],
             indexes=["operation", "user_email", "timestamp"],
         )
 
-        api_schema = AuditSchema(
+        api_schema = AuditSchemaModel(
             schema_name="api_operations",
             version=1,
             description="API request/response operations",
             retention_days=90,
             evidence_level=EvidenceLevel.DETAILED,
             fields=[
-                FieldDefinition("method", "string"),
-                FieldDefinition("endpoint", "string"),
-                FieldDefinition("status_code", "number"),
-                FieldDefinition("api_key", "string", sensitive=True),
+                FieldDefinitionModel(name="method", type="string"),
+                FieldDefinitionModel(name="endpoint", type="string"),
+                FieldDefinitionModel(name="status_code", type="number"),
+                FieldDefinitionModel(name="api_key", type="string", sensitive=True),
             ],
-            field_redactions=[FieldRedaction("api_key", RedactionStrategy.HASH)],
+            field_redactions=[
+                FieldRedactionModel(field_path="api_key", strategy=RedactionStrategy.HASH)
+            ],
             extract_fields=["method", "endpoint", "status_code"],
         )
 
@@ -146,7 +150,7 @@ async def test_complete_audit_workflow():
 
         # Wait for async operations to complete and flush writes
         await asyncio.sleep(0.1)
-        logger.backend.shutdown()  # Ensure all records are flushed to disk
+        await logger.backend.close()  # Ensure all records are flushed to disk
 
         # Query and verify the logged events
 
@@ -203,9 +207,9 @@ async def test_complete_audit_workflow():
         assert auth_schema_retrieved.schema_name == "auth_operations"
         assert auth_schema_retrieved.evidence_level == EvidenceLevel.REGULATORY
 
-        # Cleanup - ensure background threads are fully stopped
-        logger.shutdown()
-        await asyncio.sleep(0.1)  # Give threads time to clean up
+        # Cleanup - ensure background tasks are fully stopped
+        await logger.close()
+        await asyncio.sleep(0.1)  # Give tasks time to clean up
 
 
 @pytest.mark.asyncio
@@ -241,11 +245,14 @@ async def test_schema_evolution():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create version 1 of a schema
-        schema_v1 = AuditSchema(
+        schema_v1 = AuditSchemaModel(
             schema_name="evolving_schema",
             version=1,
             description="Version 1 of evolving schema",
-            fields=[FieldDefinition("field1", "string"), FieldDefinition("field2", "number")],
+            fields=[
+                FieldDefinitionModel(name="field1", type="string"),
+                FieldDefinitionModel(name="field2", type="number"),
+            ],
         )
         await logger.create_schema(schema_v1)
 
@@ -261,16 +268,18 @@ async def test_schema_evolution():
         )
 
         # Create version 2 with additional fields and redaction
-        schema_v2 = AuditSchema(
+        schema_v2 = AuditSchemaModel(
             schema_name="evolving_schema",
             version=2,
             description="Version 2 with additional fields",
             fields=[
-                FieldDefinition("field1", "string"),
-                FieldDefinition("field2", "number"),
-                FieldDefinition("field3", "string", sensitive=True),  # New field
+                FieldDefinitionModel(name="field1", type="string"),
+                FieldDefinitionModel(name="field2", type="number"),
+                FieldDefinitionModel(name="field3", type="string", sensitive=True),  # New field
             ],
-            field_redactions=[FieldRedaction("field3", RedactionStrategy.PARTIAL)],  # New redaction
+            field_redactions=[
+                FieldRedactionModel(field_path="field3", strategy=RedactionStrategy.PARTIAL)
+            ],  # New redaction
         )
         await logger.create_schema(schema_v2)
 
@@ -285,8 +294,8 @@ async def test_schema_evolution():
             status="success",
         )
 
-        await asyncio.sleep(0.2)  # Give more time for background thread
-        logger.backend.shutdown()  # Ensure all records are flushed to disk
+        await asyncio.sleep(0.2)  # Give more time for background task
+        await logger.backend.close()  # Ensure all records are flushed to disk
 
         # Query all events
         all_events = [r async for r in logger.query_records(schema_name="evolving_schema")]
@@ -320,9 +329,9 @@ async def test_schema_evolution():
         assert len(retrieved_v2.fields) == 3
         assert len(retrieved_v2.field_redactions) == 1
 
-        # Cleanup - ensure background threads are fully stopped
-        logger.shutdown()
-        await asyncio.sleep(0.1)  # Give threads time to clean up
+        # Cleanup - ensure background tasks are fully stopped
+        await logger.close()
+        await asyncio.sleep(0.1)  # Give tasks time to clean up
 
 
 @pytest.mark.asyncio
@@ -334,7 +343,7 @@ async def test_high_volume_logging():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create a simple schema
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="volume_test", version=1, description="High volume test schema"
         )
         await logger.create_schema(schema)
@@ -366,7 +375,7 @@ async def test_high_volume_logging():
 
         # Give time for async writes to complete
         await asyncio.sleep(1.5)  # Even more time for high volume writes
-        logger.backend.shutdown()
+        await logger.backend.close()
 
         # Verify all events were logged
         all_events = [r async for r in logger.query_records(schema_name="volume_test")]
@@ -389,7 +398,7 @@ async def test_high_volume_logging():
         assert len(user_0_events) == 10  # user_0 appears every 10 events
 
         # Aggressive cleanup - high volume test needs extra cleanup time
-        logger.shutdown()
+        await logger.close()
         await asyncio.sleep(0.5)  # Give extra time for high-volume cleanup
 
         # Force cleanup of any remaining async tasks

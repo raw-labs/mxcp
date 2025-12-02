@@ -4,18 +4,18 @@ These tests focus on the AuditLogger class which provides the main
 interface that applications use for audit logging.
 """
 
+import asyncio
 import json
 import tempfile
-import time
 from pathlib import Path
 
 import pytest
 
 from mxcp.sdk.audit import (
     AuditLogger,
-    AuditSchema,
-    FieldDefinition,
-    FieldRedaction,
+    AuditSchemaModel,
+    FieldDefinitionModel,
+    FieldRedactionModel,
     RedactionStrategy,
 )
 
@@ -44,14 +44,14 @@ async def test_audit_logger_creates_records():
             schema_name="mxcp.endpoints",  # Use the default endpoint schema
         )
 
-        # Give background thread time to write
-        time.sleep(0.5)
+        # Give background task time to write
+        await asyncio.sleep(0.5)
 
         # Shutdown
-        logger.shutdown()
+        await logger.close()
 
         # Additional wait after shutdown
-        time.sleep(0.1)
+        await asyncio.sleep(0.1)
 
         # Verify log was written
         assert log_path.exists()
@@ -91,7 +91,7 @@ async def test_audit_logger_disabled():
         )
 
         # Shutdown
-        logger.shutdown()
+        await logger.close()
 
         # File should not exist
         assert not log_path.exists()
@@ -108,18 +108,18 @@ async def test_audit_logger_sensitive_data_redaction():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create a schema with redaction rules
-        auth_schema = AuditSchema(
+        auth_schema = AuditSchemaModel(
             schema_name="test_auth",
             version=1,
             description="Test auth schema with redaction",
             fields=[
-                FieldDefinition("username", "string"),
-                FieldDefinition("password", "string", sensitive=True),
-                FieldDefinition("config", "object"),
+                FieldDefinitionModel(name="username", type="string"),
+                FieldDefinitionModel(name="password", type="string", sensitive=True),
+                FieldDefinitionModel(name="config", type="object"),
             ],
             field_redactions=[
-                FieldRedaction("password", RedactionStrategy.FULL),
-                FieldRedaction("config.api_key", RedactionStrategy.FULL),
+                FieldRedactionModel(field_path="password", strategy=RedactionStrategy.FULL),
+                FieldRedactionModel(field_path="config.api_key", strategy=RedactionStrategy.FULL),
             ],
         )
 
@@ -141,9 +141,9 @@ async def test_audit_logger_sensitive_data_redaction():
         )
 
         # Give time to write
-        time.sleep(0.5)
-        logger.shutdown()
-        time.sleep(0.1)
+        await asyncio.sleep(0.5)
+        await logger.close()
+        await asyncio.sleep(0.1)
 
         # Verify redaction - need to find the actual audit record
         with open(log_path) as f:
@@ -174,7 +174,7 @@ async def test_audit_logger_querying():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create a test schema
-        test_schema = AuditSchema(
+        test_schema = AuditSchemaModel(
             schema_name="logger_query_test",
             version=1,
             description="Test schema for logger querying",
@@ -198,7 +198,7 @@ async def test_audit_logger_querying():
         import asyncio
 
         await asyncio.sleep(0.1)
-        logger.backend.shutdown()  # Force flush
+        await logger.backend.close()  # Force flush
 
         # Query all records
         all_records = [r async for r in logger.query_records()]
@@ -226,7 +226,7 @@ async def test_audit_logger_querying():
         ]
         assert len(specific_records) == 2
 
-        logger.shutdown()
+        await logger.close()
 
 
 @pytest.mark.asyncio
@@ -240,7 +240,7 @@ async def test_audit_logger_sync_queries():
         logger = await AuditLogger.jsonl(log_path=log_path)
 
         # Create schema and log event
-        test_schema = AuditSchema(
+        test_schema = AuditSchemaModel(
             schema_name="sync_test", version=1, description="Sync test schema"
         )
         await logger.create_schema(test_schema)
@@ -256,8 +256,8 @@ async def test_audit_logger_sync_queries():
         )
 
         # Give time for write and force flush
-        time.sleep(0.1)
-        logger.backend.shutdown()
+        await asyncio.sleep(0.1)
+        await logger.backend.close()
 
         # Query records using async interface
         records = [r async for r in logger.query_records(operation_names=["sync_tool"])]
@@ -270,4 +270,4 @@ async def test_audit_logger_sync_queries():
         assert record is not None
         assert record.operation_name == "sync_tool"
 
-        logger.shutdown()
+        await logger.close()

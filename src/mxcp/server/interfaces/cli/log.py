@@ -1,6 +1,5 @@
 """CLI command for querying MXCP audit logs."""
 
-import asyncio
 from pathlib import Path
 
 import click
@@ -13,6 +12,7 @@ from mxcp.server.interfaces.cli.utils import (
     output_error,
     output_result,
     resolve_profile,
+    run_async_cli,
 )
 from mxcp.server.services.audit import format_audit_record, parse_time_since
 from mxcp.server.services.audit.exporters import export_to_csv, export_to_duckdb
@@ -114,15 +114,11 @@ def log(
         user_config = load_user_config(site_config, active_profile=active_profile)
 
         # Configure logging
-        configure_logging_from_config(
-            site_config=site_config,
-            user_config=user_config,
-            debug=debug,
-        )
+        configure_logging_from_config(user_config=user_config, debug=debug)
 
         # Run async implementation
-        asyncio.run(
-            _log_async(
+        run_async_cli(
+            _log(
                 active_profile,
                 tool,
                 resource,
@@ -150,7 +146,7 @@ def log(
         output_error(e, json_output, debug)
 
 
-async def _log_async(
+async def _log(
     profile: str | None,
     tool: str | None,
     resource: str | None,
@@ -316,6 +312,6 @@ async def _log_async(
         # Clean up resources
         try:
             if audit_logger:
-                audit_logger.shutdown()
+                await audit_logger.close()
         except Exception:
             pass

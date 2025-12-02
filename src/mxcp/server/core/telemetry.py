@@ -10,7 +10,7 @@ from typing import Any
 
 from mxcp.sdk.core import PACKAGE_NAME, PACKAGE_VERSION
 from mxcp.sdk.telemetry import (
-    TelemetryConfig,
+    TelemetryConfigModel,
     configure_all,
     get_current_trace_id,
     shutdown_telemetry,
@@ -71,7 +71,7 @@ def configure_telemetry_from_config(
         config_dict["metrics"] = metrics
 
     # Create config object
-    config = TelemetryConfig.from_dict(config_dict)
+    config = TelemetryConfigModel.model_validate(config_dict)
 
     # Log configuration details
     logger.info(

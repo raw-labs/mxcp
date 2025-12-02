@@ -77,11 +77,7 @@ def list_endpoints(profile: str, json_output: bool, debug: bool) -> None:
         user_config = load_user_config(site_config, active_profile=active_profile)
 
         # Configure logging
-        configure_logging_from_config(
-            site_config=site_config,
-            user_config=user_config,
-            debug=debug,
-        )
+        configure_logging_from_config(user_config=user_config, debug=debug)
 
         loader = EndpointLoader(site_config)
         endpoints = loader.discover_endpoints()

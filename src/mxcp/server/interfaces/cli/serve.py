@@ -8,6 +8,7 @@ from mxcp.server.interfaces.cli.utils import (
     get_env_flag,
     output_error,
     resolve_profile,
+    run_async_cli,
 )
 from mxcp.server.interfaces.server.mcp import RAWMCP
 
@@ -98,7 +99,6 @@ def serve(
 
         # Configure logging ONCE with all settings
         configure_logging_from_config(
-            site_config=site_config,
             user_config=user_config,
             debug=debug,
             transport=effective_transport,
@@ -177,12 +177,17 @@ def serve(
             else:
                 click.echo(f"\n{click.style('✅ Server starting...', fg='green', bold=True)}\n")
 
+        async def _run_server_lifecycle() -> None:
+            """Run the MCP server and ensure shutdown happens in the same event loop."""
+            try:
+                await server.run(transport=server.transport)
+            finally:
+                await server.shutdown()
+
         try:
-            # Start the server
-            server.run(transport=server.transport)
+            # Start the server and ensure shutdown runs inside the same event loop
+            run_async_cli(_run_server_lifecycle())
         finally:
-            # Always cleanup, whether exiting from SIGTERM, SIGINT, or error
-            server.shutdown()
             if server.transport != "stdio":
                 click.echo(f"{click.style('👋 Server stopped', fg='cyan')}")
     except click.ClickException:

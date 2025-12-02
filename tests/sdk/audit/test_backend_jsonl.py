@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 
 from mxcp.sdk.audit import (
-    AuditRecord,
-    AuditSchema,
+    AuditRecordModel,
+    AuditSchemaModel,
     EvidenceLevel,
-    FieldDefinition,
-    FieldRedaction,
+    FieldDefinitionModel,
+    FieldRedactionModel,
     RedactionStrategy,
 )
 from mxcp.sdk.audit.backends import JSONLAuditWriter
@@ -32,14 +32,14 @@ async def test_jsonl_file_creation():
         assert not schema_path.exists()
 
         # Create a schema - this should create the schema file
-        schema = AuditSchema(schema_name="test_schema", version=1, description="Test schema")
+        schema = AuditSchemaModel(schema_name="test_schema", version=1, description="Test schema")
         await backend.create_schema(schema)
 
         # Schema file should now exist
         assert schema_path.exists()
 
         # Write a record - this should create the log file
-        record = AuditRecord(
+        record = AuditRecordModel(
             schema_name="test_schema",
             operation_type="tool",
             operation_name="test_tool",
@@ -50,7 +50,7 @@ async def test_jsonl_file_creation():
         )
 
         await backend.write_record(record)
-        backend.shutdown()  # Force flush
+        await backend.close()  # Force flush
 
         # Log file should now exist
         assert log_path.exists()
@@ -66,17 +66,19 @@ async def test_jsonl_schema_persistence():
         # Create backend and schema
         backend = JSONLAuditWriter(log_path)
 
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="persist_test",
             version=1,
             description="Persistence test schema",
             retention_days=180,
             evidence_level=EvidenceLevel.DETAILED,
             fields=[
-                FieldDefinition("field1", "string", sensitive=True),
-                FieldDefinition("field2", "number"),
+                FieldDefinitionModel(name="field1", type="string", sensitive=True),
+                FieldDefinitionModel(name="field2", type="number"),
             ],
-            field_redactions=[FieldRedaction("field1", RedactionStrategy.PARTIAL)],
+            field_redactions=[
+                FieldRedactionModel(field_path="field1", strategy=RedactionStrategy.PARTIAL)
+            ],
             extract_fields=["field2"],
             indexes=["field1", "field2"],
         )
@@ -99,6 +101,8 @@ async def test_jsonl_schema_persistence():
         assert retrieved_schema.extract_fields == ["field2"]
         assert retrieved_schema.indexes == ["field1", "field2"]
 
+        await backend2.close()
+
 
 @pytest.mark.asyncio
 async def test_jsonl_record_format():
@@ -109,10 +113,10 @@ async def test_jsonl_record_format():
         backend = JSONLAuditWriter(log_path)
 
         # Create schema and record
-        schema = AuditSchema(schema_name="format_test", version=1, description="Format test")
+        schema = AuditSchemaModel(schema_name="format_test", version=1, description="Format test")
         await backend.create_schema(schema)
 
-        record = AuditRecord(
+        record = AuditRecordModel(
             schema_name="format_test",
             operation_type="tool",
             operation_name="format_tool",
@@ -126,7 +130,7 @@ async def test_jsonl_record_format():
         )
 
         record_id = await backend.write_record(record)
-        backend.shutdown()
+        await backend.close()
 
         # Read the JSONL file and verify format
         with open(log_path) as f:
@@ -159,16 +163,22 @@ async def test_jsonl_schema_redaction_serialization():
         backend = JSONLAuditWriter(log_path)
 
         # Create schema with various redaction strategies
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="redaction_test",
             version=1,
             description="Test redaction serialization",
             field_redactions=[
-                FieldRedaction("email", RedactionStrategy.EMAIL),
-                FieldRedaction("ssn", RedactionStrategy.PARTIAL, {"show_last": 4}),
-                FieldRedaction("secret", RedactionStrategy.HASH),
-                FieldRedaction("description", RedactionStrategy.TRUNCATE, {"length": 20}),
-                FieldRedaction("sensitive", RedactionStrategy.FULL),
+                FieldRedactionModel(field_path="email", strategy=RedactionStrategy.EMAIL),
+                FieldRedactionModel(
+                    field_path="ssn", strategy=RedactionStrategy.PARTIAL, options={"show_last": 4}
+                ),
+                FieldRedactionModel(field_path="secret", strategy=RedactionStrategy.HASH),
+                FieldRedactionModel(
+                    field_path="description",
+                    strategy=RedactionStrategy.TRUNCATE,
+                    options={"length": 20},
+                ),
+                FieldRedactionModel(field_path="sensitive", strategy=RedactionStrategy.FULL),
             ],
         )
 
@@ -192,6 +202,8 @@ async def test_jsonl_schema_redaction_serialization():
         assert redactions_by_field["description"].options == {"length": 20}
         assert redactions_by_field["sensitive"].strategy == RedactionStrategy.FULL
 
+        await backend2.close()
+
 
 @pytest.mark.asyncio
 async def test_jsonl_concurrent_writes():
@@ -202,7 +214,7 @@ async def test_jsonl_concurrent_writes():
         backend = JSONLAuditWriter(log_path)
 
         # Create schema
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="concurrent_test", version=1, description="Test concurrent writes"
         )
         await backend.create_schema(schema)
@@ -211,7 +223,7 @@ async def test_jsonl_concurrent_writes():
         import asyncio
 
         async def write_record(i):
-            record = AuditRecord(
+            record = AuditRecordModel(
                 schema_name="concurrent_test",
                 operation_type="tool",
                 operation_name=f"tool_{i}",
@@ -226,7 +238,7 @@ async def test_jsonl_concurrent_writes():
         tasks = [write_record(i) for i in range(10)]
         record_ids = await asyncio.gather(*tasks)
 
-        backend.shutdown()
+        await backend.close()
 
         # Verify all records were written
         assert len(record_ids) == 10
@@ -252,58 +264,61 @@ async def test_jsonl_query_filtering():
         log_path = Path(tmpdir) / "audit.jsonl"
 
         backend = JSONLAuditWriter(log_path)
-
-        # Create schema
-        schema = AuditSchema(
-            schema_name="query_test", version=1, description="Test query filtering"
-        )
-        await backend.create_schema(schema)
-
-        # Write records with different characteristics
-        records_data = [
-            {"name": "tool_a", "type": "tool", "user": "alice"},
-            {"name": "tool_b", "type": "tool", "user": "bob"},
-            {"name": "resource_a", "type": "resource", "user": "alice"},
-            {"name": "tool_c", "type": "tool", "user": "charlie"},
-        ]
-
-        for data in records_data:
-            record = AuditRecord(
-                schema_name="query_test",
-                operation_type=data["type"],
-                operation_name=data["name"],
-                caller_type="cli",
-                input_data={"user": data["user"]},
-                duration_ms=100,
-                operation_status="success",
-                user_id=data["user"],
+        try:
+            # Create schema
+            schema = AuditSchemaModel(
+                schema_name="query_test", version=1, description="Test query filtering"
             )
-            await backend.write_record(record)
+            await backend.create_schema(schema)
 
-        backend.shutdown()
+            # Write records with different characteristics
+            records_data = [
+                {"name": "tool_a", "type": "tool", "user": "alice"},
+                {"name": "tool_b", "type": "tool", "user": "bob"},
+                {"name": "resource_a", "type": "resource", "user": "alice"},
+                {"name": "tool_c", "type": "tool", "user": "charlie"},
+            ]
 
-        # Test various query filters
+            for data in records_data:
+                record = AuditRecordModel(
+                    schema_name="query_test",
+                    operation_type=data["type"],
+                    operation_name=data["name"],
+                    caller_type="cli",
+                    input_data={"user": data["user"]},
+                    duration_ms=100,
+                    operation_status="success",
+                    user_id=data["user"],
+                )
+                await backend.write_record(record)
 
-        # Filter by operation type
-        tool_records = [r async for r in backend.query_records(operation_types=["tool"])]
-        assert len(tool_records) == 3
+            # Ensure events are flushed before querying
+            await backend.flush()
 
-        # Filter by operation names
-        specific_tools = [
-            r async for r in backend.query_records(operation_names=["tool_a", "tool_b"])
-        ]
-        assert len(specific_tools) == 2
+            # Test various query filters
 
-        # Filter by user
-        alice_records = [r async for r in backend.query_records(user_ids=["alice"])]
-        assert len(alice_records) == 2
+            # Filter by operation type
+            tool_records = [r async for r in backend.query_records(operation_types=["tool"])]
+            assert len(tool_records) == 3
 
-        # Combine filters
-        alice_tools = [
-            r async for r in backend.query_records(operation_types=["tool"], user_ids=["alice"])
-        ]
-        assert len(alice_tools) == 1
-        assert alice_tools[0].operation_name == "tool_a"
+            # Filter by operation names
+            specific_tools = [
+                r async for r in backend.query_records(operation_names=["tool_a", "tool_b"])
+            ]
+            assert len(specific_tools) == 2
+
+            # Filter by user
+            alice_records = [r async for r in backend.query_records(user_ids=["alice"])]
+            assert len(alice_records) == 2
+
+            # Combine filters
+            alice_tools = [
+                r async for r in backend.query_records(operation_types=["tool"], user_ids=["alice"])
+            ]
+            assert len(alice_tools) == 1
+            assert alice_tools[0].operation_name == "tool_a"
+        finally:
+            await backend.close()
 
 
 @pytest.mark.asyncio
@@ -313,30 +328,32 @@ async def test_jsonl_schema_deactivation():
         log_path = Path(tmpdir) / "audit.jsonl"
 
         backend = JSONLAuditWriter(log_path)
+        try:
+            # Create active schema
+            schema = AuditSchemaModel(
+                schema_name="deactivate_test", version=1, description="Test deactivation"
+            )
+            await backend.create_schema(schema)
 
-        # Create active schema
-        schema = AuditSchema(
-            schema_name="deactivate_test", version=1, description="Test deactivation"
-        )
-        await backend.create_schema(schema)
+            # Verify it's active
+            active_schemas = await backend.list_schemas(active_only=True)
+            assert len(active_schemas) == 1
+            assert active_schemas[0].schema_name == "deactivate_test"
 
-        # Verify it's active
-        active_schemas = await backend.list_schemas(active_only=True)
-        assert len(active_schemas) == 1
-        assert active_schemas[0].schema_name == "deactivate_test"
+            # Deactivate the schema
+            await backend.deactivate_schema("deactivate_test", 1)
 
-        # Deactivate the schema
-        await backend.deactivate_schema("deactivate_test", 1)
+            # Should not appear in active list
+            active_schemas = await backend.list_schemas(active_only=True)
+            assert len(active_schemas) == 0
 
-        # Should not appear in active list
-        active_schemas = await backend.list_schemas(active_only=True)
-        assert len(active_schemas) == 0
-
-        # But should appear in all schemas list
-        all_schemas = await backend.list_schemas(active_only=False)
-        assert len(all_schemas) == 1
-        assert all_schemas[0].schema_name == "deactivate_test"
-        assert all_schemas[0].active is False
+            # But should appear in all schemas list
+            all_schemas = await backend.list_schemas(active_only=False)
+            assert len(all_schemas) == 1
+            assert all_schemas[0].schema_name == "deactivate_test"
+            assert all_schemas[0].active is False
+        finally:
+            await backend.close()
 
 
 @pytest.mark.asyncio
@@ -348,7 +365,7 @@ async def test_jsonl_retention_policy():
         backend = JSONLAuditWriter(log_path)
 
         # Create schema with short retention
-        schema = AuditSchema(
+        schema = AuditSchemaModel(
             schema_name="retention_test",
             version=1,
             description="Test retention policy",
@@ -357,7 +374,7 @@ async def test_jsonl_retention_policy():
         await backend.create_schema(schema)
 
         # Write a record
-        record = AuditRecord(
+        record = AuditRecordModel(
             schema_name="retention_test",
             operation_type="tool",
             operation_name="test_tool",
@@ -374,7 +391,7 @@ async def test_jsonl_retention_policy():
         record.timestamp = old_timestamp
 
         await backend.write_record(record)
-        backend.shutdown()
+        await backend.close()
 
         # Apply retention policies
         deleted_counts = await backend.apply_retention_policies()

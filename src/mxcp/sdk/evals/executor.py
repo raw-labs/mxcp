@@ -17,7 +17,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.tools import Tool
 from pydantic_ai.tools import ToolDefinition as AgentToolDefinition
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 
 from ._types import ToolDefinition
 
@@ -31,7 +31,10 @@ class ToolExecutor(Protocol):
     """Protocol for tool execution strategies."""
 
     async def execute_tool(
-        self, tool_name: str, arguments: dict[str, Any], user_context: UserContext | None = None
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        user_context: UserContextModel | None = None,
     ) -> Any: ...
 
 
@@ -99,7 +102,7 @@ class LLMExecutor:
         )
 
     async def execute_prompt(
-        self, prompt: str, user_context: UserContext | None = None, max_turns: int = 20
+        self, prompt: str, user_context: UserContextModel | None = None, max_turns: int = 20
     ) -> AgentResult:
         """Run the agent loop for a prompt using pydantic-ai Agent."""
         history: list[ToolCallRecord] = []

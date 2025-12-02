@@ -1,6 +1,6 @@
 import logging
 
-from mxcp.sdk.auth import UserContext
+from mxcp.sdk.auth import UserContextModel
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
@@ -22,7 +22,7 @@ async def run_all_tests(
     site_config: SiteConfigModel,
     profile: str | None,
     readonly: bool | None = None,
-    cli_user_context: UserContext | None = None,
+    cli_user_context: UserContextModel | None = None,
     request_headers: dict[str, str] | None = None,
 ) -> MultiEndpointTestResultsModel:
     """Run tests for all endpoints in the repository (async)"""
@@ -145,7 +145,7 @@ async def run_tests(
     site_config: SiteConfigModel,
     profile: str | None,
     readonly: bool | None = None,
-    cli_user_context: UserContext | None = None,
+    cli_user_context: UserContextModel | None = None,
     request_headers: dict[str, str] | None = None,
 ) -> TestSuiteResultModel:
     """Run tests for a specific endpoint type and name."""

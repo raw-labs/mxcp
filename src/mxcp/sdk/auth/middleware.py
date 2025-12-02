@@ -9,9 +9,9 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 
 from mxcp.sdk.telemetry import record_counter, traced_operation
 
-from ._types import UserContext
 from .base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
 from .context import reset_user_context, set_user_context
+from .models import UserContextModel
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +34,11 @@ class AuthenticationMiddleware:
         self.oauth_server = oauth_server
         self.auth_enabled = oauth_handler is not None and oauth_server is not None
 
-    async def check_authentication(self) -> UserContext | None:
+    async def check_authentication(self) -> UserContextModel | None:
         """Check if the current request is authenticated.
 
         Returns:
-            UserContext if authenticated, None if not authenticated or auth is disabled
+            UserContextModel if authenticated, None if not authenticated or auth is disabled
         """
         provider = "unknown"
 
@@ -116,7 +116,9 @@ class AuthenticationMiddleware:
 
                         user_context = await self.oauth_handler.get_user_context(external_token)
                         # Add external token to the user context for use in DuckDB functions
-                        user_context.external_token = external_token
+                        user_context = user_context.model_copy(
+                            update={"external_token": external_token}
+                        )
                         logger.info(
                             f"Successfully retrieved user context for {user_context.username} (provider: {user_context.provider})"
                         )
@@ -177,7 +179,7 @@ class AuthenticationMiddleware:
             func: Function to protect with authentication
 
         Returns:
-            Wrapped function that checks authentication and sets UserContext in context
+            Wrapped function that checks authentication and sets UserContextModel in context
         """
 
         @wraps(func)

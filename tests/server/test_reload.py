@@ -5,6 +5,7 @@ These tests focus on the public API and observable behavior,
 not internal implementation details.
 """
 
+import asyncio
 import signal
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -12,8 +13,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
+from mxcp.server.core.reload import ReloadManager, ReloadableServer, ReloadRequest
 from mxcp.server.interfaces.server.mcp import RAWMCP
-from mxcp.server.core.reload import ReloadManager
 
 
 class TestReloadFunctionality:
@@ -51,9 +52,16 @@ class TestReloadFunctionality:
         # Mock the reload manager
         server.reload_manager = MagicMock(spec=ReloadManager)
 
+        # Set up the event loop for signal handling
+        loop = asyncio.new_event_loop()
+        server._signal_loop = loop
+
         # Set up the methods we need
         server.reload_configuration = RAWMCP.reload_configuration.__get__(server, RAWMCP)
         server._handle_reload_signal = RAWMCP._handle_reload_signal.__get__(server, RAWMCP)
+        server._handle_reload_signal_async = RAWMCP._handle_reload_signal_async.__get__(
+            server, RAWMCP
+        )
 
         # Mock load_site_config and load_user_config
         with patch(
@@ -64,11 +72,17 @@ class TestReloadFunctionality:
                 "mxcp.server.interfaces.server.mcp.load_user_config",
                 return_value=UserConfigModel.model_validate({}),
             ):
-                # Simulate SIGHUP
-                server._handle_reload_signal(signal.SIGHUP, None)
+                try:
+                    # Simulate SIGHUP - this schedules the async handler
+                    server._handle_reload_signal(signal.SIGHUP, None)
 
-                # Verify reload_manager.request_reload was called
-                server.reload_manager.request_reload.assert_called_once()
+                    # Run the loop briefly to execute the scheduled task
+                    loop.run_until_complete(asyncio.sleep(0.1))
+
+                    # Verify reload_manager.request_reload was called
+                    server.reload_manager.request_reload.assert_called_once()
+                finally:
+                    loop.close()
 
     def test_reload_with_payload_function(self):
         """Test that reload with a payload function works correctly."""
@@ -159,3 +173,142 @@ class TestReloadFunctionality:
                 call_args = server.reload_manager.request_reload.call_args
                 assert call_args[1]["payload_func"] is not None
                 assert "Configuration reload (SIGHUP)" in call_args[1]["description"]
+
+
+class TestReloadManagerShutdown:
+    """Test ReloadManager behavior during shutdown scenarios."""
+
+    @staticmethod
+    def _create_mock_server() -> MagicMock:
+        """Create a mock server implementing ReloadableServer protocol."""
+        server = MagicMock(spec=ReloadableServer)
+        server.active_requests = 0
+        server.draining = False
+        server.profile_name = "test"
+        return server
+
+    @pytest.mark.asyncio
+    async def test_request_reload_after_stop_returns_completed_noop(self):
+        """Test that request_reload after stop() returns a no-op request that's already complete."""
+        server = self._create_mock_server()
+        manager = ReloadManager(server)
+
+        # Start and then stop the manager
+        manager.start()
+        await manager.stop()
+
+        # Request reload after stop - should return immediately completed request
+        request = manager.request_reload(description="After shutdown")
+
+        # Should be immediately complete (not block for 60 seconds)
+        completed = await request.wait_for_completion(timeout=0.1)
+        assert completed, "Request should be immediately complete after shutdown"
+
+    @pytest.mark.asyncio
+    async def test_request_reload_before_start_returns_completed_noop(self):
+        """Test that request_reload before start() returns a no-op request that's already complete."""
+        server = self._create_mock_server()
+        manager = ReloadManager(server)
+
+        # Don't call start() - manager is not running
+
+        # Request reload before start - should return immediately completed request
+        request = manager.request_reload(description="Before start")
+
+        # Should be immediately complete
+        completed = await request.wait_for_completion(timeout=0.1)
+        assert completed, "Request should be immediately complete before start"
+
+    def test_sighup_during_shutdown_is_ignored(self):
+        """Test that SIGHUP signals during shutdown are safely ignored."""
+        # Create a minimal mock server
+        server = MagicMock(spec=RAWMCP)
+        server._signal_loop = None  # Simulates cleared during shutdown
+
+        # Bind the real method
+        server._handle_reload_signal = RAWMCP._handle_reload_signal.__get__(server, RAWMCP)
+
+        # This should not raise and should not call reload_configuration
+        server._handle_reload_signal(signal.SIGHUP, None)
+
+        # reload_configuration should not be called since _signal_loop is None
+        assert not hasattr(server, "reload_configuration") or not server.reload_configuration.called
+
+
+class TestReloadManagerExecution:
+    """Test that ReloadManager actually processes requests correctly."""
+
+    @staticmethod
+    def _create_mock_server() -> MagicMock:
+        """Create a mock server implementing ReloadableServer protocol."""
+        from mxcp.server.core.reload import AsyncServerLock
+
+        server = MagicMock(spec=ReloadableServer)
+        server.active_requests = 0
+        server.draining = False
+        server.profile_name = "test"
+        server.requests_lock = AsyncServerLock()
+        return server
+
+    @pytest.mark.asyncio
+    async def test_reload_request_is_processed(self):
+        """Test that a queued reload request is actually processed."""
+        server = self._create_mock_server()
+        manager = ReloadManager(server)
+
+        manager.start()
+        try:
+            # Queue a reload request
+            request = manager.request_reload(description="Test reload")
+
+            # Wait for completion
+            completed = await request.wait_for_completion(timeout=5.0)
+
+            assert completed, "Reload should complete"
+            assert server.shutdown_runtime_components.called
+            assert server.initialize_runtime_components.called
+        finally:
+            await manager.stop()
+
+    @pytest.mark.asyncio
+    async def test_payload_function_is_executed(self):
+        """Test that the payload function is actually called during reload."""
+        server = self._create_mock_server()
+        manager = ReloadManager(server)
+
+        payload_called = []
+
+        def my_payload():
+            payload_called.append(True)
+
+        manager.start()
+        try:
+            request = manager.request_reload(payload_func=my_payload, description="Payload test")
+            completed = await request.wait_for_completion(timeout=5.0)
+
+            assert completed
+            assert payload_called == [True], "Payload function should be called"
+        finally:
+            await manager.stop()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_completion_timeout(self):
+        """Test that wait_for_completion returns False on timeout."""
+        # Create a request but don't process it (no manager running)
+        request = ReloadRequest(description="Orphan request")
+
+        # Should timeout since no one will set the completion event
+        completed = await request.wait_for_completion(timeout=0.1)
+
+        assert not completed, "Should return False on timeout"
+
+    @pytest.mark.asyncio
+    async def test_is_complete_non_blocking(self):
+        """Test that is_complete() works without blocking."""
+        request = ReloadRequest(description="Test")
+
+        assert not request.is_complete()
+
+        request._completion_event.set()
+
+        assert request.is_complete()

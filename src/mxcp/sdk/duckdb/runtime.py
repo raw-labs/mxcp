@@ -14,9 +14,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
+from .models import (
+    DatabaseConfigModel,
+    PluginConfigModel,
+    PluginDefinitionModel,
+    SecretDefinitionModel,
+)
 from .plugin_loader import load_plugins
 from .session import DuckDBSession
-from .types import DatabaseConfig, PluginConfig, PluginDefinition, SecretDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +39,10 @@ class DuckDBRuntime:
 
     def __init__(
         self,
-        database_config: DatabaseConfig,
-        plugins: list[PluginDefinition],
-        plugin_config: PluginConfig,
-        secrets: list[SecretDefinition],
+        database_config: DatabaseConfigModel,
+        plugins: list[PluginDefinitionModel],
+        plugin_config: PluginConfigModel,
+        secrets: list[SecretDefinitionModel],
         pool_size: int | None = None,
     ):
         """Initialize the DuckDB runtime.
@@ -126,20 +131,27 @@ class DuckDBRuntime:
         if self._shutdown:
             raise RuntimeError("DuckDB runtime is shutting down")
 
-        # Get a connection from the pool (blocks if none available)
-        session = self._pool.get()
-
-        # Track active session
-        with self._lock:
-            self._active_sessions.add(session)
-
+        session = self._checkout_session()
         try:
             yield session
         finally:
-            # Return to pool and remove from active set
-            with self._lock:
-                self._active_sessions.discard(session)
-            self._pool.put(session)
+            self._release_session(session)
+
+    def _checkout_session(self) -> DuckDBSession:
+        """Checkout a session from the pool."""
+        if self._shutdown:
+            raise RuntimeError("DuckDB runtime is shutting down")
+
+        session = self._pool.get()
+        with self._lock:
+            self._active_sessions.add(session)
+        return session
+
+    def _release_session(self, session: DuckDBSession) -> None:
+        """Return a session to the pool."""
+        with self._lock:
+            self._active_sessions.discard(session)
+        self._pool.put(session)
 
     def shutdown(self) -> None:
         """Shutdown all connections in the runtime.
