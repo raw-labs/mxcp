@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import sys
 import time
 from pathlib import Path
@@ -32,6 +33,8 @@ _NOISY_EVAL_LOGGERS = (
     "urllib3",
     "urllib3.connectionpool",
 )
+
+_ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
 
 def _suppress_noisy_eval_logs(debug: bool) -> None:
@@ -411,7 +414,8 @@ async def _evals_impl(
 
     def _progress(key: str, msg: str) -> None:
         nonlocal _order, _lines
-        is_final = msg.lstrip().startswith("✓") or msg.lstrip().startswith("✗")
+        clean = _ANSI_ESCAPE.sub("", msg).lstrip()
+        is_final = clean.startswith("✓") or clean.startswith("✗")
 
         if not _is_tty:
             click.echo(msg)
