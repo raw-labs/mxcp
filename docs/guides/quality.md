@@ -805,7 +805,7 @@ Create eval files with the suffix `-evals.yml` or `.evals.yml`:
 mxcp: 1
 suite: customer_analysis
 description: "Test LLM's ability to analyze customer data"
-model: claude-3-opus  # Optional: specify model for this suite
+model: claude-3-5-sonnet-20240620  # Optional: specify model for this suite (ensure valid ID)
 
 tests:
   - name: churn_risk_assessment
@@ -819,6 +819,7 @@ tests:
         - tool: get_churn_score
           args:
             customer_id: "ABC"
+      expected_answer: "The customer is high risk of churn"
       answer_contains:
         - "risk"
         - "churn"
@@ -880,6 +881,115 @@ answer_not_contains:
   - "unauthorized"
 ```
 
+#### `expected_answer`
+Checks the model's final answer against an expected answer using the LLM as a grader. The grader
+returns `correct`, `wrong`, or `partially correct` plus a short comment.
+
+```yaml
+expected_answer: "The customer is high risk of churn"
+```
+
+### Complete Eval Example
+
+```yaml
+# faq-evals.yml
+mxcp: 1
+suite: faq_checks
+description: "Make sure the assistant answers FAQs accurately and uses tools when needed"
+model: gpt-4o
+
+tests:
+  - name: tool_usage_for_price_lookup
+    prompt: "What's the current price for SKU-1234?"
+    assertions:
+      must_call:
+        - tool: get_product_price
+          args:
+            sku: "SKU-1234"
+      answer_contains:
+        - "price"
+
+  - name: expected_answer_grading
+    prompt: "What are your support hours?"
+    assertions:
+      expected_answer: "Our support team is available Monday to Friday, 9am-5pm local time."
+      answer_contains:
+        - "Monday"
+        - "Friday"
+```
+
+### Customizing the System Prompt
+
+Each eval suite can override the default LLM instructions to better match your domain or desired behavior. Add a `system_prompt` field at the suite level—if it is omitted, MXCP falls back to the built-in prompt that encourages concise, tool-aware answers.
+
+```yaml
+mxcp: 1
+suite: relationship_navigation
+description: "Ensure the assistant navigates relationships carefully"
+model: gpt-4o
+system_prompt: |
+  You are a Vertec specialist. Always explain which tool you used.
+  If a tool fails, read the error carefully before trying again.
+
+tests:
+  - name: compare_owners
+    prompt: "Are the owners of Project A and Project B the same?"
+    assertions:
+      must_call:
+        - tool: sql_search_objects
+          args:
+            object_type: "Project"
+```
+
+### Model Configuration Example
+
+Add models to your user config (`~/.mxcp/config.yml`) so evals know which providers to call:
+
+```yaml
+models:
+  default: "claude-3-5-sonnet-20240620"
+  models:
+    claude-3-5-sonnet-20240620:
+      type: "anthropic"
+      api_key: "${ANTHROPIC_API_KEY}"
+      timeout: 30
+    gpt-4o:
+      type: "openai"
+      api_key: "${OPENAI_API_KEY}"
+      base_url: "https://api.openai.com/v1"
+      timeout: 45
+      options:
+        reasoning: "fast"  # forwarded to the provider as-is
+
+# Example: use a faster model just for grading expected answers
+mxcp: 1
+suite: faq_checks
+model: gpt-4o                   # primary model used to answer
+expected_answer_model: gpt-4o-mini  # model used only for grading expected answers
+tests:
+  - name: expected_answer_grading
+    prompt: "What are your support hours?"
+    assertions:
+      expected_answer: "Our support team is available Monday to Friday, 9am-5pm local time."
+      # expected_answer_model is useful when:
+      # - Your main model is slow/expensive, but grading can use a lighter model
+      # - You want deterministic, faster grading for many evals
+
+# OpenAI Responses API example (reasoning)
+models:
+  default: "gpt-5"
+  models:
+    gpt-5:
+      type: "openai"
+      api_key: "${OPENAI_API_KEY}"
+      options:
+        api: "responses"          # Choices: responses (Responses API) or chat (default)
+        # Provider-specific fields must use prefixes:
+        #   body:<key> for request body, header:<key> for headers
+        body:reasoning:
+          effort: "medium"
+```
+
 ### Running Evals
 
 ```bash
@@ -910,7 +1020,7 @@ models:
   default: claude-3-opus
   models:
     claude-3-opus:
-      type: claude
+      type: anthropic
       api_key: ${ANTHROPIC_API_KEY}
       timeout: 60
       max_retries: 3

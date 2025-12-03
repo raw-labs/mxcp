@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
@@ -22,6 +22,7 @@ class EvalAssertionsModel(EvalBaseModel):
     must_not_call: list[str] | None = None
     answer_contains: list[str] | None = None
     answer_not_contains: list[str] | None = None
+    expected_answer: str | None = None
 
 
 class EvalTestModel(EvalBaseModel):
@@ -49,7 +50,9 @@ class EvalSuiteModel(EvalBaseModel):
     mxcp: int = 1
     suite: str
     description: str | None = None
-    model: Literal["claude-4-opus", "claude-4-sonnet", "gpt-4o", "gpt-4.1"] | None = None
+    model: str | None = None
+    expected_answer_model: str | None = None
+    system_prompt: str | None = None
     tests: list[EvalTestModel]
 
     @field_validator("suite")

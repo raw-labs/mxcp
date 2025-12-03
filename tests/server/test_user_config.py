@@ -402,3 +402,36 @@ def test_load_without_resolving_refs(tmp_path):
         # Clean up the secret file
         if secret_file.exists():
             secret_file.unlink()
+
+
+def test_model_options_allowed(tmp_path):
+    """Ensure model options field is accepted in user config."""
+    config_path = tmp_path / "config.yml"
+    config_content = """
+    mxcp: 1
+    models:
+      default: "gpt-4o"
+      models:
+        gpt-4o:
+          type: "openai"
+          api_key: "${OPENAI_API_KEY}"
+          options:
+            reasoning: "fast"
+    projects:
+      test_project:
+        profiles:
+          dev: {}
+    """
+    config_path.write_text(config_content)
+
+    os.environ["MXCP_CONFIG"] = str(config_path)
+    os.environ["OPENAI_API_KEY"] = "secret"
+
+    site_config = make_site_config("test_project", "dev")
+
+    user_config = load_user_config(site_config).model_dump(mode="python")
+    model_cfg = user_config["models"]["models"]["gpt-4o"]
+    assert model_cfg["options"]["reasoning"] == "fast"
+
+    del os.environ["MXCP_CONFIG"]
+    del os.environ["OPENAI_API_KEY"]

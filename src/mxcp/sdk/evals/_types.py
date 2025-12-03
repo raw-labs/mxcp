@@ -1,54 +1,16 @@
 """Types for MXCP SDK Evals module.
 
-This module contains type definitions for LLM models, tool definitions,
-and other data structures used in the evaluation framework.
+This module contains type definitions for tool definitions and
+other data structures used in the evaluation framework.
 """
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
 from mxcp.sdk.validator import TypeSchemaModel
 
-
-# LLM Model configuration types
-@dataclass
-class ModelConfig(ABC):
-    """Base class for LLM model configurations."""
-
-    name: str
-    api_key: str
-
-    @abstractmethod
-    def get_type(self) -> str:
-        """Get the type identifier for this model."""
-        pass
-
-
-@dataclass
-class ClaudeConfig(ModelConfig):
-    """Configuration for Claude models."""
-
-    base_url: str = "https://api.anthropic.com"
-    timeout: int = 30
-
-    def get_type(self) -> str:
-        return "claude"
-
-
-@dataclass
-class OpenAIConfig(ModelConfig):
-    """Configuration for OpenAI models."""
-
-    base_url: str = "https://api.openai.com/v1"
-    timeout: int = 30
-
-    def get_type(self) -> str:
-        return "openai"
-
-
-# Union type for all supported model configurations
-ModelConfigType = ClaudeConfig | OpenAIConfig
+# Type alias for JSON Schema representation
+JsonSchema = dict[str, Any]
 
 
 @dataclass
@@ -60,6 +22,8 @@ class ParameterDefinition:
     description: str = ""
     default: Any | None = None
     required: bool = True
+    schema: JsonSchema | None = None
+    """Optional JSON Schema for complex parameter validation."""
 
 
 @dataclass

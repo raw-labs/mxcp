@@ -1,367 +1,423 @@
-"""Core LLM executor for MXCP SDK Evals.
+"""Agent-style LLM executor for MXCP evals."""
 
-This module provides the main LLMExecutor class that handles LLM orchestration
-and tool calling, with tool execution delegated to external implementations.
-"""
+from __future__ import annotations
 
-import json
 import logging
-import re
-from typing import Any, Protocol, cast
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any, Protocol
 
-import httpx
+from pydantic import BaseModel, Field, create_model
+from pydantic_ai import Agent, ModelSettings, RunContext
+from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior, UsageLimitExceeded
+from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel
+from pydantic_ai.providers.anthropic import AnthropicProvider
+from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.tools import Tool
+from pydantic_ai.tools import ToolDefinition as AgentToolDefinition
 
 from mxcp.sdk.auth import UserContextModel
 
-from ._types import ModelConfigType, ToolDefinition
+from ._types import ToolDefinition
+
+# Agent/tool retry configuration
+DEFAULT_AGENT_RETRIES = 30
+
+# Type alias for model references (either a model object or a string identifier)
+ModelReference = OpenAIChatModel | OpenAIResponsesModel | AnthropicModel | str
 
 logger = logging.getLogger(__name__)
 
 
 class ToolExecutor(Protocol):
-    """Protocol for tool execution strategies.
-
-    Different contexts can implement this protocol to provide their own
-    tool execution logic (e.g., using ExecutionEngine, HTTP APIs, mocks, etc.).
-    """
+    """Protocol for tool execution strategies."""
 
     async def execute_tool(
         self,
         tool_name: str,
         arguments: dict[str, Any],
         user_context: UserContextModel | None = None,
-    ) -> Any:
-        """Execute a tool and return the result.
+    ) -> Any: ...
 
-        Args:
-            tool_name: Name of the tool to execute
-            arguments: Arguments to pass to the tool
-            user_context: Optional user context for execution
 
-        Returns:
-            Result of tool execution
+@dataclass
+class ToolCallRecord:
+    id: str | None
+    tool: str
+    arguments: dict[str, Any]
+    result: Any | None = None
+    error: Any | None = None
 
-        Raises:
-            Exception: If tool execution fails
-        """
-        ...
+
+@dataclass
+class AgentResult:
+    answer: str
+    tool_calls: list[ToolCallRecord] = field(default_factory=list)
+    error: str | None = None  # Execution error if agent failed to produce an answer
+
+
+class ProviderConfig(BaseModel):
+    api_key: str | None = None
+    base_url: str | None = None
+    timeout: int | None = None
+    model_config = {"extra": "forbid"}
+
+
+class GradeResult(BaseModel):
+    result: str = Field(default="unknown")
+    comment: str = Field(default="")
+    reasoning: str = Field(default="")
 
 
 class LLMExecutor:
-    """Core LLM executor focused on LLM orchestration and tool calling.
-
-    This class handles:
-    - LLM API interactions (Claude, OpenAI, etc.)
-    - Tool call extraction from LLM responses
-    - Multi-turn conversations with tool results
-    - Prompt formatting for different model types
-
-    Tool execution is delegated to an external ToolExecutor implementation,
-    making this class highly testable and reusable across different contexts.
-
-    Example usage:
-        >>> # Create tool definitions (metadata only)
-        >>> tools = [
-        ...     ToolDefinition(
-        ...         name="get_weather",
-        ...         description="Get current weather for a location",
-        ...         parameters=[
-        ...             ParameterDefinition(name="location", type="string", description="City name")
-        ...         ]
-        ...     )
-        ... ]
-        >>>
-        >>> # Create model config
-        >>> model = ClaudeConfig(name="claude-3-haiku", api_key="...")
-        >>>
-        >>> # Create tool executor (implemented by context)
-        >>> tool_executor = MyToolExecutor(...)
-        >>>
-        >>> # Create LLM executor
-        >>> executor = LLMExecutor(model, tools, tool_executor)
-        >>>
-        >>> # Execute a prompt
-        >>> response, tool_calls = await executor.execute_prompt(
-        ...     "What's the weather in Paris?",
-        ...     user_context=user_context
-        ... )
-    """
+    """Pydantic-based agent loop with tool support."""
 
     def __init__(
         self,
-        model_config: ModelConfigType,
+        model_name: str,
+        model_type: str,
+        model_settings: ModelSettings,
         available_tools: list[ToolDefinition],
         tool_executor: ToolExecutor,
+        provider_config: ProviderConfig | None = None,
+        system_prompt: str | None = None,
+        agent_retries: int = DEFAULT_AGENT_RETRIES,
     ):
-        """Initialize LLM executor.
-
-        Args:
-            model_config: Configuration for the LLM model (Claude, OpenAI, etc.)
-            available_tools: List of tool definitions available to the LLM
-            tool_executor: Implementation for executing tools
-        """
-        self.model_config = model_config
         self.available_tools = available_tools
         self.tool_executor = tool_executor
+        self.model_name = model_name
+        self.model_type = model_type
+        self.provider_config = provider_config or ProviderConfig()
+        self._agent_cls: Callable[..., Any] = Agent
+        self._model_settings = model_settings
+        self._tool_models = self._build_tool_models(available_tools)
+        self._tool_schemas: dict[str, dict[str, Any]] = {}
+        self.system_prompt = system_prompt or self._build_system_prompt(available_tools)
+        self._agent_retries = max(1, agent_retries)
+        self._model_reference = self._build_model_reference()
 
         logger.info(
-            f"LLM executor initialized with model: {model_config.name} ({model_config.get_type()})"
+            "LLM executor initialized with model %s (%s) and %d tools",
+            self.model_name,
+            self.model_type,
+            len(available_tools),
         )
-        logger.info(f"Available tools: {len(available_tools)}")
-
-    def _format_tools_for_prompt(self) -> str:
-        """Format all available tools for inclusion in the prompt."""
-        if not self.available_tools:
-            return "No tools available."
-
-        tool_sections = []
-        for tool in self.available_tools:
-            tool_sections.append(tool.to_prompt_format())
-
-        return "=== AVAILABLE TOOLS ===\n\n" + "\n\n".join(tool_sections)
-
-    def _get_model_prompt(
-        self, user_prompt: str, conversation_history: list[dict[str, str]] | None = None
-    ) -> str:
-        """Get model-specific prompt format"""
-        available_tools = self._format_tools_for_prompt()
-        model_type = self.model_config.get_type()
-
-        if model_type == "claude":
-            return self._get_claude_prompt(user_prompt, available_tools, conversation_history)
-        elif model_type == "openai":
-            return self._get_openai_prompt(user_prompt, available_tools, conversation_history)
-        else:
-            return self._get_default_prompt(user_prompt, available_tools, conversation_history)
-
-    def _get_claude_prompt(
-        self,
-        user_prompt: str,
-        available_tools: str,
-        conversation_history: list[dict[str, str]] | None = None,
-    ) -> str:
-        """Claude-specific prompt format"""
-        system_prompt = f"""You are a helpful assistant with access to the following tools:
-
-{available_tools}
-
-To use a tool, respond with a JSON object:
-{{"tool": "tool_name", "arguments": {{"param": "value"}}}}
-
-For multiple tool calls, use an array:
-[{{"tool": "tool1", "arguments": {{}}}}, {{"tool": "tool2", "arguments": {{}}}}]
-
-Only output JSON when calling tools. Otherwise respond with regular text."""
-
-        messages = []
-        if conversation_history:
-            for msg in conversation_history:
-                messages.append(f"{msg['role']}: {msg['content']}")
-        messages.append(f"Human: {user_prompt}")
-
-        return system_prompt + "\n\n" + "\n\n".join(messages)
-
-    def _get_openai_prompt(
-        self,
-        user_prompt: str,
-        available_tools: str,
-        conversation_history: list[dict[str, str]] | None = None,
-    ) -> str:
-        """OpenAI-specific prompt format"""
-        system_prompt = f"""You are a helpful assistant with access to the following tools:
-
-{available_tools}
-
-To use a tool, respond with a JSON object:
-{{"tool": "tool_name", "arguments": {{"param": "value"}}}}
-
-For multiple tool calls, use an array:
-[{{"tool": "tool1", "arguments": {{}}}}, {{"tool": "tool2", "arguments": {{}}}}]
-
-Only output JSON when calling tools. Otherwise respond with regular text."""
-
-        messages = []
-        if conversation_history:
-            for msg in conversation_history:
-                messages.append(f"{msg['role']}: {msg['content']}")
-        messages.append(f"User: {user_prompt}")
-
-        return system_prompt + "\n\n" + "\n\n".join(messages)
-
-    def _get_default_prompt(
-        self,
-        user_prompt: str,
-        available_tools: str,
-        conversation_history: list[dict[str, str]] | None = None,
-    ) -> str:
-        """Default prompt format"""
-        return self._get_claude_prompt(user_prompt, available_tools, conversation_history)
 
     async def execute_prompt(
-        self, prompt: str, user_context: UserContextModel | None = None
-    ) -> tuple[str, list[dict[str, Any]]]:
-        """Execute a prompt and return the response and tool calls made.
+        self, prompt: str, user_context: UserContextModel | None = None, max_turns: int = 20
+    ) -> AgentResult:
+        """Run the agent loop for a prompt using pydantic-ai Agent."""
+        history: list[ToolCallRecord] = []
+        # Local callable mapping for this execution (passed to agent factory for testing)
+        tool_callables: dict[str, Callable[..., Any]] = {}
 
-        Args:
-            prompt: The user prompt to execute
-            user_context: Optional user context for tool execution
+        def _make_tool(tool_def: ToolDefinition) -> Tool:
+            args_model = self._tool_models.get(tool_def.name)
+            schema = self._tool_schemas.get(tool_def.name)
+            if schema is None:
+                schema = (
+                    args_model.model_json_schema()
+                    if args_model
+                    else {"type": "object", "properties": {}, "required": []}
+                )
+                self._tool_schemas[tool_def.name] = schema
 
-        Returns:
-            Tuple of (final_response, list_of_tool_calls_made)
-        """
-        conversation_history: list[dict[str, Any]] = []
-        tool_calls_made: list[dict[str, Any]] = []
-        max_iterations = 10  # Prevent infinite loops
-
-        for _iteration in range(max_iterations):
-            # Get model-specific prompt
-            full_prompt = self._get_model_prompt(prompt, conversation_history)
-
-            # Call the LLM
-            response = await self._call_llm(full_prompt)
-
-            # Check if response contains tool calls
-            tool_calls = self._extract_tool_calls(response)
-
-            if not tool_calls:
-                # No more tool calls, return final response
-                return response, tool_calls_made
-
-            # Execute tool calls
-            tool_results = []
-            for tool_call in tool_calls:
-                tool_calls_made.append(tool_call)
-
-                try:
-                    tool_name = tool_call["tool"]
-                    arguments = tool_call.get("arguments", {})
-
-                    # Execute the tool using external executor
-                    result = await self.tool_executor.execute_tool(
-                        tool_name, arguments, user_context
+            async def _fn(**kwargs: Any) -> Any:
+                if max_turns is not None and len(history) >= max_turns:
+                    error_msg = f"Maximum tool calls exceeded ({max_turns})"
+                    history.append(
+                        ToolCallRecord(
+                            id=None, tool=tool_def.name, arguments=kwargs, error=error_msg
+                        )
                     )
+                    raise RuntimeError(error_msg)
 
-                    tool_results.append({"tool": tool_name, "result": result})
+                record = ToolCallRecord(id=None, tool=tool_def.name, arguments=kwargs)
+                try:
+                    validated = (
+                        args_model.model_validate(kwargs).model_dump() if args_model else kwargs
+                    )
+                    record.arguments = validated
+                    result = await self.tool_executor.execute_tool(
+                        tool_def.name, validated, user_context
+                    )
+                    record.result = result
+                    return result
+                except ModelRetry as exc:
+                    error_response = self._build_tool_error_response(tool_def.name, exc.message)
+                    record.error = error_response
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    error_response = self._build_tool_error_response(tool_def.name, str(exc))
+                    record.error = error_response
+                    retry_message = self._format_tool_retry_message(error_response)
+                    raise ModelRetry(retry_message) from exc
+                finally:
+                    history.append(record)
 
-                except Exception as e:
-                    tool_results.append({"tool": tool_call.get("tool", "unknown"), "error": str(e)})
+            async def _prepare(
+                _ctx: RunContext[Any], _tool_def: AgentToolDefinition
+            ) -> AgentToolDefinition:
+                return AgentToolDefinition(
+                    name=tool_def.name,
+                    description=tool_def.description,
+                    parameters_json_schema=schema,
+                    strict=True,
+                )
 
-            # Add tool results to conversation
-            conversation_history.append({"role": "assistant", "content": response})
-            conversation_history.append(
-                {"role": "system", "content": f"Tool results: {json.dumps(tool_results)}"}
+            tool = Tool(
+                _fn,
+                name=tool_def.name,
+                description=tool_def.description,
+                prepare=_prepare,
             )
+            tool_callables[tool_def.name] = _fn
+            return tool
 
-            # Continue conversation with tool results
-            prompt = "Please incorporate the tool results into your response."
+        agent_tools = [_make_tool(t) for t in self.available_tools]
 
-        # If we reach here, we hit the max iterations
-        return response, tool_calls_made
+        # Build agent kwargs - only pass _tool_callables for test agents (not real pydantic-ai Agent)
+        agent_kwargs: dict[str, Any] = {
+            "model": self._model_reference,
+            "instructions": self.system_prompt,
+            "tools": agent_tools,
+            "retries": self._agent_retries,
+        }
+        if self._agent_cls is not Agent:
+            # Test agent factory - pass tool callables for invocation
+            agent_kwargs["_tool_callables"] = tool_callables
 
-    def _extract_tool_calls(self, response: str) -> list[dict[str, Any]]:
-        """Extract tool calls from LLM response"""
+        agent = self._agent_cls(**agent_kwargs)
+
         try:
-            # Try to parse as JSON (single tool call)
-            tool_call = json.loads(response.strip())
-            if isinstance(tool_call, dict) and "tool" in tool_call:
-                return [tool_call]
-            elif isinstance(tool_call, list):
-                # Multiple tool calls
-                return [tc for tc in tool_call if isinstance(tc, dict) and "tool" in tc]
-        except json.JSONDecodeError:
-            pass
-
-        # If not pure JSON, look for JSON in the response
-
-        json_pattern = r'\{[^}]*"tool"[^}]*\}'
-        matches = re.findall(json_pattern, response)
-
-        tool_calls = []
-        for match in matches:
-            try:
-                tool_call = json.loads(match)
-                if "tool" in tool_call:
-                    tool_calls.append(tool_call)
-            except json.JSONDecodeError:
-                continue
-
-        return tool_calls
-
-    async def _call_llm(self, prompt: str) -> str:
-        """Call the actual LLM API using the configured model"""
-
-        # Log the full prompt in debug mode
-        logger.debug(f"=== LLM Request to {self.model_config.name} ===")
-        logger.debug(f"Full prompt:\n{prompt}")
-        logger.debug("=== End of prompt ===")
-
-        model_type = self.model_config.get_type()
-
-        if model_type == "claude":
-            return await self._call_claude(prompt)
-        elif model_type == "openai":
-            return await self._call_openai(prompt)
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
-
-    async def _call_claude(self, prompt: str) -> str:
-        """Call Claude API"""
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self.model_config.base_url}/v1/messages",
-                headers={
-                    "x-api-key": self.model_config.api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": self.model_config.name,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 4096,
-                },
-                timeout=self.model_config.timeout,
+            agent_run = await agent.run(
+                prompt, deps=user_context, model_settings=self._model_settings
             )
 
-            response.raise_for_status()
-            data = response.json()
+            answer = getattr(agent_run, "output", "")
 
-            # Log response in debug mode
-            logger.debug(f"=== LLM Response from {self.model_config.name} ===")
-            logger.debug(f"Response: {data['content'][0]['text'][:500]}...")  # First 500 chars
-            logger.debug("=== End of response ===")
-
-            return cast(str, data["content"][0]["text"])
-
-    async def _call_openai(self, prompt: str) -> str:
-        """Call OpenAI API"""
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self.model_config.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.model_config.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.model_config.name,
-                    "messages": [
-                        {"role": "system", "content": "You are a helpful assistant."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "max_tokens": 4096,
-                },
-                timeout=self.model_config.timeout,
-            )
-
-            response.raise_for_status()
-            data = response.json()
-
-            # Log response in debug mode
-            logger.debug(f"=== LLM Response from {self.model_config.name} ===")
+            # Log detailed info about the result
             logger.debug(
-                f"Response: {data['choices'][0]['message']['content'][:500]}..."
-            )  # First 500 chars
-            logger.debug("=== End of response ===")
+                "Agent completed: answer_length=%d, tool_calls=%d, raw_output_type=%s",
+                len(str(answer)) if answer else 0,
+                len(history),
+                type(answer).__name__,
+            )
 
-            return cast(str, data["choices"][0]["message"]["content"])
+            if not answer:
+                logger.warning(
+                    "Agent returned empty output after %d tool calls. "
+                    "Check conversation history above for details.",
+                    len(history),
+                )
+            return AgentResult(answer=str(answer), tool_calls=history)
+
+        except UnexpectedModelBehavior as exc:
+            error_msg = f"Agent exhausted retries ({self._agent_retries}): {exc}"
+            logger.error(
+                "Agent failed after exhausting retries (retries=%d, tool_calls=%d): %s",
+                self._agent_retries,
+                len(history),
+                exc,
+            )
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Tool call history on failure: %s", [tc.tool for tc in history])
+            return AgentResult(answer="", tool_calls=history, error=error_msg)
+        except UsageLimitExceeded as exc:
+            error_msg = f"Usage limit exceeded: {exc}"
+            logger.error("Agent hit usage limit after %d tool calls: %s", len(history), exc)
+            return AgentResult(answer="", tool_calls=history, error=error_msg)
+        except RuntimeError as exc:
+            error_msg = f"Execution aborted: {exc}"
+            logger.error("LLM execution aborted after %d tool calls: %s", len(history), exc)
+            return AgentResult(answer="", tool_calls=history, error=error_msg)
+        except Exception as exc:
+            error_msg = f"Unexpected error ({type(exc).__name__}): {exc}"
+            logger.error(
+                "Unexpected error during agent execution after %d tool calls: %s: %s",
+                len(history),
+                type(exc).__name__,
+                exc,
+            )
+            return AgentResult(answer="", tool_calls=history, error=error_msg)
+
+    async def evaluate_expected_answer(self, answer: str, expected_answer: str) -> dict[str, str]:
+        """Ask the model to grade an answer against an expected value."""
+        logger.debug(
+            "Grading answer:\n  Candidate: %s\n  Expected: %s",
+            answer[:200] + "..." if len(answer) > 200 else answer,
+            expected_answer[:200] + "..." if len(expected_answer) > 200 else expected_answer,
+        )
+
+        grader_system = (
+            "You check if the candidate answer CONTAINS the expected information.\n\n"
+            "GRADING RULES:\n"
+            "- 'correct': The expected fact(s) appear in the candidate answer. "
+            "Extra details, context, or longer explanations are FINE and do not affect the grade.\n"
+            "- 'partially correct': Only use when the expected answer has MULTIPLE facts and some are missing.\n"
+            "- 'wrong': The expected information is absent, contradicted, or the candidate says it's unavailable.\n\n"
+            "IMPORTANT: If the expected answer is a single value (e.g., a name, status, role) and that exact value "
+            "appears anywhere in the candidate answer, grade it as 'correct' regardless of surrounding text.\n\n"
+            'Return JSON: {"result": "correct|wrong|partially correct", "comment": "...", "reasoning": "..."}'
+        )
+        grader_prompt = (
+            "Compare the candidate answer to the expected answer (semantic match, not exact string).\n"
+            "Candidate answer:\n"
+            f"{answer}\n\n"
+            "Expected answer:\n"
+            f"{expected_answer}\n\n"
+            "Respond with JSON like "
+            '{"result":"correct|wrong|partially correct","comment":"short","reasoning":"short"}'
+        )
+
+        agent = self._agent_cls(
+            model=self._model_reference,
+            instructions=grader_system,
+            tools=(),
+            output_type=GradeResult,
+            retries=self._agent_retries,
+        )
+
+        try:
+            run = await agent.run(grader_prompt, model_settings=self._model_settings)
+            out: GradeResult = getattr(run, "output", GradeResult())
+            result = out.model_dump()
+
+            logger.debug(
+                "Grading result: %s (comment: %s, reasoning: %s)",
+                result.get("result", "unknown"),
+                result.get("comment", ""),
+                result.get("reasoning", ""),
+            )
+
+            return result
+        except Exception as exc:
+            logger.error("Grading failed with error: %s: %s", type(exc).__name__, exc)
+            return {"result": "unknown", "comment": f"Grading error: {exc}", "reasoning": ""}
+
+    def _build_system_prompt(self, tools: list[ToolDefinition]) -> str:
+        if not tools:
+            return "You are an AI assistant. If no tools are suitable, answer directly."
+
+        tool_names = ", ".join(tool.name for tool in tools)
+        return (
+            "You are an AI assistant that uses tools to answer questions accurately. "
+            f"Available tools: {tool_names}.\n\n"
+            "IMPORTANT GUIDELINES:\n"
+            "1. If a tool call fails, READ THE ERROR MESSAGE CAREFULLY. "
+            "It often contains hints about what went wrong and how to fix it.\n"
+            "2. If you don't know the correct parameters (like field names or schema), "
+            "look for tools that can help you discover this information first.\n"
+            "3. Be persistent: try different approaches if one doesn't work.\n"
+            "4. YOU MUST ALWAYS PROVIDE A FINAL ANSWER. Even if tools fail, "
+            "provide the best answer you can with the information available, "
+            "or explain what information you were unable to retrieve."
+        )
+
+    def _build_tool_models(self, tools: list[ToolDefinition]) -> dict[str, type[BaseModel]]:
+        models: dict[str, type[BaseModel]] = {}
+        for tool in tools:
+            fields: dict[str, Any] = {}
+            for param in tool.parameters:
+                py_type = self._map_param_type(param.type)
+                field_kwargs: dict[str, Any] = {}
+                if param.description:
+                    field_kwargs["description"] = param.description
+
+                if getattr(param, "schema", None):
+                    schema_extra_raw: dict[str, Any] = param.schema or {}
+                    schema_extra = dict(schema_extra_raw)
+                    schema_extra.pop("type", None)
+                    if schema_extra:
+                        field_kwargs["json_schema_extra"] = schema_extra
+
+                if param.default is not None:
+                    default_value: Any = param.default
+                elif param.required:
+                    default_value = ...
+                else:
+                    default_value = None
+
+                field_info = Field(default_value, **field_kwargs)
+                fields[param.name] = (py_type, field_info)
+
+            models[tool.name] = create_model(f"{tool.name}_Args", **fields)
+        return models
+
+    def _build_tool_error_response(self, tool_name: str, error_message: str) -> dict[str, Any]:
+        """Build a structured error response that guides the model to recover."""
+        return {
+            "status": "error",
+            "tool": tool_name,
+            "error": error_message,
+            "suggestion": (
+                "This tool call failed. Read the error message carefully - it often "
+                "contains hints about what went wrong. Consider: (1) calling this tool "
+                "with corrected arguments, (2) using a different tool to discover the "
+                "correct parameters first, or (3) trying a different approach."
+            ),
+        }
+
+    def _format_tool_retry_message(self, error_response: dict[str, Any]) -> str:
+        """Convert a structured error response into a message for ModelRetry."""
+        tool = error_response.get("tool", "unknown")
+        error_text = error_response.get("error", "Unknown error")
+        suggestion = error_response.get("suggestion")
+        base = f"Tool '{tool}' failed with error: {error_text}"
+        if suggestion:
+            return f"{base}. {suggestion}"
+        return base
+
+    def _build_model_reference(self) -> ModelReference:
+        """Instantiate a model object for providers that support direct configuration."""
+        model_type = (self.model_type or "").lower()
+        provider_kwargs = self._provider_kwargs()
+
+        try:
+            if model_type in {"openai", "openai-chat"}:
+                return OpenAIChatModel(self.model_name, provider=OpenAIProvider(**provider_kwargs))
+            if model_type == "openai-responses":
+                return OpenAIResponsesModel(
+                    self.model_name, provider=OpenAIProvider(**provider_kwargs)
+                )
+            if model_type.startswith("anthropic"):
+                return AnthropicModel(
+                    self.model_name, provider=AnthropicProvider(**provider_kwargs)
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Failed to build custom provider for model '%s' (%s): %s. Falling back to string reference.",
+                self.model_name,
+                self.model_type,
+                exc,
+            )
+
+        return f"{self.model_type}:{self.model_name}"
+
+    def _provider_kwargs(self) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {}
+        if self.provider_config.base_url:
+            kwargs["base_url"] = self.provider_config.base_url
+        if self.provider_config.api_key:
+            kwargs["api_key"] = self.provider_config.api_key
+        if self.provider_config.timeout:
+            kwargs["timeout"] = self.provider_config.timeout
+        return kwargs
+
+    def _map_param_type(self, param_type: str) -> Any:
+        """Map simple tool parameter types to Python/Pydantic types."""
+        key = param_type.lower()
+        mapping: dict[tuple[str, ...], Any] = {
+            ("string", "str", "text"): str,
+            ("integer", "int"): int,
+            ("number", "float", "double"): float,
+            ("boolean", "bool"): bool,
+            ("object", "map", "dict"): dict[str, Any],
+            ("array", "list"): list[Any],
+        }
+        for aliases, py_type in mapping.items():
+            if key in aliases:
+                return py_type
+        logger.warning("Unknown tool parameter type '%s'; defaulting to Any", param_type)
+        return Any

@@ -1,4 +1,7 @@
 import json
+import logging
+import re
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -17,6 +20,93 @@ from mxcp.server.interfaces.cli.utils import (
     run_async_cli,
 )
 from mxcp.server.services.evals import run_all_evals, run_eval_suite
+
+_NOISY_EVAL_LOGGERS = (
+    "openai",
+    "openai._base_client",
+    "openai._client",
+    "openai._streaming",
+    "httpx",
+    "httpcore",
+    "httpcore.connection",
+    "httpcore.connectionpool",
+    "urllib3",
+    "urllib3.connectionpool",
+)
+
+_ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+
+# ANSI escape sequences for terminal control
+_ANSI_MOVE_UP_CLEAR = "\033[F\033[2K"
+
+# Characters that indicate a final (completed) progress message
+_FINAL_INDICATORS = ("✓", "✗")
+
+
+class ProgressRenderer:
+    """Stateful progress renderer that overwrites lines in TTY mode."""
+
+    def __init__(self, is_tty: bool = True) -> None:
+        self._lines: dict[str, str] = {}
+        self._order: list[str] = []
+        self._lines_printed: int = 0
+        self._is_tty = is_tty
+
+    def clear_all(self) -> None:
+        """Clear all progress lines and reset cursor to start."""
+        if not self._is_tty or self._lines_printed == 0:
+            return
+        for _ in range(self._lines_printed):
+            sys.stdout.write(_ANSI_MOVE_UP_CLEAR)
+        sys.stdout.flush()
+        self._lines_printed = 0
+
+    def _render(self) -> None:
+        """Render all in-progress items."""
+        if not self._is_tty or not self._order:
+            return
+        for key in self._order:
+            line = self._lines.get(key, "")
+            sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+        self._lines_printed = len(self._order)
+
+    def _is_final_message(self, msg: str) -> bool:
+        """Check if message indicates completion (success or failure)."""
+        clean = _ANSI_ESCAPE.sub("", msg).lstrip()
+        return any(clean.startswith(indicator) for indicator in _FINAL_INDICATORS)
+
+    def update(self, key: str, msg: str) -> None:
+        """Update progress for a key. Final messages are printed permanently."""
+        if not self._is_tty:
+            click.echo(msg)
+            return
+
+        if self._is_final_message(msg):
+            # Clear progress, print final result, re-render remaining
+            self.clear_all()
+            self._order = [k for k in self._order if k != key]
+            self._lines.pop(key, None)
+            click.echo(msg)
+            self._render()
+        else:
+            # Update or add progress line
+            self.clear_all()
+            if key not in self._order:
+                self._order.append(key)
+            self._lines[key] = msg
+            self._render()
+
+
+def _suppress_noisy_eval_logs(debug: bool) -> None:
+    """Clamp overly chatty third-party loggers unless debug is explicitly enabled."""
+    if debug:
+        return
+
+    for name in _NOISY_EVAL_LOGGERS:
+        noisy_logger = logging.getLogger(name)
+        noisy_logger.setLevel(logging.WARNING)
+        noisy_logger.propagate = True
 
 
 def format_eval_results(results: dict[str, Any], debug: bool = False) -> str:
@@ -65,7 +155,14 @@ def format_eval_results(results: dict[str, Any], debug: bool = False) -> str:
 
                 failures = test.get("failures", [])
                 for failure in failures:
-                    output.append(f"    {click.style('💡', fg='yellow')} {failure}")
+                    lines = failure.splitlines()
+                    if not lines:
+                        continue
+                    indent = " " * 4
+                    continuation_indent = indent + " " * 3
+                    output.append(f"{indent}{click.style('💡', fg='yellow')} {lines[0]}")
+                    for line in lines[1:]:
+                        output.append(f"{continuation_indent}{line}")
 
                 if debug and "details" in test:
                     output.append(f"    {click.style('Debug info:', fg='yellow')}")
@@ -173,7 +270,14 @@ def format_eval_results(results: dict[str, Any], debug: bool = False) -> str:
                                 f"      {click.style('Error:', fg='red')} {test['error']}"
                             )
                         for failure in test.get("failures", []):
-                            output.append(f"      {click.style('💡', fg='yellow')} {failure}")
+                            lines = failure.splitlines()
+                            if not lines:
+                                continue
+                            indent = " " * 6
+                            continuation_indent = indent + " " * 3
+                            output.append(f"{indent}{click.style('💡', fg='yellow')} {lines[0]}")
+                            for line in lines[1:]:
+                                output.append(f"{continuation_indent}{line}")
 
         # Show passed suites
         passed = [s for s in suites if s.get("status") == "passed"]
@@ -268,6 +372,7 @@ def evals(
 
         # Configure logging
         configure_logging_from_config(user_config=user_config, debug=debug)
+        _suppress_noisy_eval_logs(debug)
         # Run async implementation
         run_async_cli(
             _evals_impl(
@@ -339,6 +444,11 @@ async def _evals_impl(
 
     # Run evals
     start_time = time.time()
+
+    # Create progress renderer for TTY-aware output
+    is_tty = click.get_text_stream("stdout").isatty()
+    progress = ProgressRenderer(is_tty=is_tty)
+
     if suite_name:
         results = await run_eval_suite(
             suite_name,
@@ -347,6 +457,7 @@ async def _evals_impl(
             profile,
             cli_user_context=cli_user_context,
             override_model=model,
+            progress_callback=progress.update,
         )
     else:
         results = await run_all_evals(
@@ -355,6 +466,7 @@ async def _evals_impl(
             profile,
             cli_user_context=cli_user_context,
             override_model=model,
+            progress_callback=progress.update,
         )
     elapsed_time = time.time() - start_time
     results["elapsed_time"] = elapsed_time
@@ -362,6 +474,7 @@ async def _evals_impl(
     if json_output:
         output_result(results, json_output, debug)
     else:
+        progress.clear_all()
         click.echo(format_eval_results(results, debug))
 
     # Exit with error code if any tests failed

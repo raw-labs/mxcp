@@ -6,14 +6,23 @@ This is primarily used by the evaluation system for LLM tool execution.
 """
 
 import logging
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionContext, ExecutionEngine
+from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
-from mxcp.server.definitions.endpoints.utils import detect_language_from_source, extract_source_info
+from mxcp.server.definitions.endpoints.utils import prepare_source_for_execution
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class EndpointWithPath:
+    definition: EndpointDefinitionModel
+    path: Path
 
 
 class EndpointToolExecutor:
@@ -41,7 +50,7 @@ class EndpointToolExecutor:
         >>> llm_executor = LLMExecutor(model_config, tool_definitions, tool_executor)
     """
 
-    def __init__(self, engine: ExecutionEngine, endpoints: list[EndpointDefinitionModel]):
+    def __init__(self, engine: ExecutionEngine, endpoints: list[EndpointWithPath]):
         """Initialize the endpoint tool executor.
 
         Args:
@@ -49,15 +58,16 @@ class EndpointToolExecutor:
             endpoints: List of endpoint definitions
         """
         self.engine = engine
-        self.endpoints = endpoints
+        self.endpoints = [entry.definition for entry in endpoints]
 
         # Create lookup map for faster tool resolution
-        self._tool_map: dict[str, EndpointDefinitionModel] = {}
-        for endpoint_def in endpoints:
+        self._tool_map: dict[str, tuple[EndpointDefinitionModel, Path]] = {}
+        for entry in endpoints:
+            endpoint_def, path = entry.definition, entry.path
             if endpoint_def.tool:
-                self._tool_map[endpoint_def.tool.name] = endpoint_def
+                self._tool_map[endpoint_def.tool.name] = (endpoint_def, path)
             elif endpoint_def.resource:
-                self._tool_map[endpoint_def.resource.uri] = endpoint_def
+                self._tool_map[endpoint_def.resource.uri] = (endpoint_def, path)
 
         logger.info(f"EndpointToolExecutor initialized with {len(endpoints)} endpoints")
 
@@ -82,60 +92,43 @@ class EndpointToolExecutor:
             Exception: If execution fails
         """
         # Find the endpoint
-        endpoint_def = self._tool_map.get(tool_name)
-        if not endpoint_def:
+        entry = self._tool_map.get(tool_name)
+        if not entry:
             available_tools = list(self._tool_map.keys())
             raise ValueError(f"Tool '{tool_name}' not found. Available tools: {available_tools}")
+        endpoint_def, endpoint_path = entry
 
         # Create execution context
         context = ExecutionContext(user_context=user_context)
 
         # Determine the source code and language
-        source_info = self._get_source_code(endpoint_def, tool_name)
-        language = self._get_language(endpoint_def, tool_name, source_info)
+        if endpoint_def.tool:
+            endpoint_type = "tool"
+        elif endpoint_def.resource:
+            endpoint_type = "resource"
+        else:
+            raise ValueError(f"Endpoint '{tool_name}' has no tool or resource definition")
+
+        repo_root = find_repo_root()
+        language, source_payload = prepare_source_for_execution(
+            endpoint_def,
+            endpoint_type,
+            endpoint_path,
+            repo_root,
+            include_function_name=True,
+        )
 
         logger.debug(f"Executing tool '{tool_name}' with language '{language}'")
 
         try:
             # Execute using the SDK engine
             result = await self.engine.execute(
-                language=language, source_code=source_info, params=arguments, context=context
+                language=language, source_code=source_payload, params=arguments, context=context
             )
 
             logger.debug(f"Tool '{tool_name}' executed successfully")
             return result
 
         except Exception as e:
-            logger.error(f"Tool '{tool_name}' execution failed: {e}")
+            logger.debug(f"Tool '{tool_name}' execution failed: {e}")
             raise
-
-    def _get_source_code(self, endpoint_def: EndpointDefinitionModel, tool_name: str) -> str:
-        """Extract source code from endpoint definition."""
-        # Get the tool or resource definition
-        source = None
-        if endpoint_def.tool:
-            source = endpoint_def.tool.source
-        elif endpoint_def.resource:
-            source = endpoint_def.resource.source
-
-        if not source:
-            raise ValueError(f"No source found for endpoint '{tool_name}'")
-
-        source_type, source_value = extract_source_info(source)
-        return source_value
-
-    def _get_language(
-        self, endpoint_def: EndpointDefinitionModel, tool_name: str, source_info: str
-    ) -> str:
-        """Determine the programming language for the endpoint."""
-        # Get the tool or resource definition
-        source = None
-        if endpoint_def.tool:
-            source = endpoint_def.tool.source
-        elif endpoint_def.resource:
-            source = endpoint_def.resource.source
-
-        if not source:
-            raise ValueError(f"No source found for endpoint '{tool_name}'")
-
-        return detect_language_from_source(source, source_info)

@@ -58,11 +58,7 @@ def get_endpoint_source_code(
         return source.code
 
     if source.file is not None:
-        source_path = Path(source.file)
-        if source_path.is_absolute():
-            full_path = repo_root / source_path.relative_to("/")
-        else:
-            full_path = endpoint_file_path.parent / source_path
+        full_path = resolve_file_path(source.file, endpoint_file_path, repo_root)
         return full_path.read_text()
     raise ValueError("No source code found in endpoint definition")
 
@@ -124,9 +120,24 @@ def resolve_file_path(file_path: str, endpoint_file_path: Path, repo_root: Path)
     """
     source_path = Path(file_path)
     if source_path.is_absolute():
-        return repo_root / source_path.relative_to("/")
+        return source_path
+
+    repo_candidate = (repo_root / source_path).resolve(strict=False)
+
+    endpoint_path = endpoint_file_path
+    if not endpoint_path.is_absolute():
+        endpoint_path = (repo_root / endpoint_path).resolve(strict=False)
     else:
-        return endpoint_file_path.parent / source_path
+        endpoint_path = endpoint_path.resolve(strict=False)
+    endpoint_candidate = (endpoint_path.parent / source_path).resolve(strict=False)
+
+    if repo_candidate.exists():
+        return repo_candidate
+    if endpoint_candidate.exists():
+        return endpoint_candidate
+
+    # Default to repo-relative path to keep behavior predictable even if file is missing
+    return repo_candidate
 
 
 def get_endpoint_name_or_uri(
@@ -193,14 +204,14 @@ def prepare_source_for_execution(
         if not tool_def:
             raise ValueError("No tool definition found")
         source = tool_def.source
-        language = tool_def.language
+        language = (source.language if source else None) or tool_def.language
         function_name = tool_def.name
     elif endpoint_type == "resource":
         resource_def = endpoint_definition.resource
         if not resource_def:
             raise ValueError("No resource definition found")
         source = resource_def.source
-        language = resource_def.language
+        language = (source.language if source else None) or resource_def.language
     else:
         raise ValueError("Prompts don't have source code")
 
@@ -236,4 +247,4 @@ def prepare_source_for_execution(
                 endpoint_definition, endpoint_type, endpoint_file_path, repo_root
             )
             return (language, source_code)
-    raise ValueError("No source code or file specified in endpoint definition")
+    raise ValueError("No source found for endpoint")
