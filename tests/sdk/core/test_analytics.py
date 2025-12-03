@@ -327,20 +327,22 @@ class TestThreadSafety:
             for i in range(5):
                 track_event(f"event_{threading.current_thread().name}_{i}")
 
-        threads = []
-        for i in range(3):
-            thread = threading.Thread(target=track_events, name=f"thread_{i}")
-            threads.append(thread)
-            thread.start()
+        # Explicitly enable analytics (CI sets MXCP_DISABLE_ANALYTICS=1)
+        with patch.dict(os.environ, {"MXCP_DISABLE_ANALYTICS": "false"}):
+            threads = []
+            for i in range(3):
+                thread = threading.Thread(target=track_events, name=f"thread_{i}")
+                threads.append(thread)
+                thread.start()
 
-        for thread in threads:
-            thread.join()
+            for thread in threads:
+                thread.join()
 
-        # Wait for all async operations
-        time.sleep(0.5)
+            # Wait for all async operations
+            time.sleep(0.5)
 
-        # Verify all events were tracked
-        assert mock_client.capture.call_count == 15  # 3 threads * 5 events each
+            # Verify all events were tracked
+            assert mock_client.capture.call_count == 15  # 3 threads * 5 events each
 
     @patch("mxcp.sdk.core.analytics.track_command")
     def test_concurrent_decorator_usage(self, mock_track_command):
