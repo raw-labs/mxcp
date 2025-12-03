@@ -204,14 +204,14 @@ def prepare_source_for_execution(
         if not tool_def:
             raise ValueError("No tool definition found")
         source = tool_def.source
-        language = source.language or tool_def.language
+        language = (source.language if source else None) or tool_def.language
         function_name = tool_def.name
     elif endpoint_type == "resource":
         resource_def = endpoint_definition.resource
         if not resource_def:
             raise ValueError("No resource definition found")
         source = resource_def.source
-        language = source.language or resource_def.language
+        language = (source.language if source else None) or resource_def.language
     else:
         raise ValueError("Prompts don't have source code")
 
