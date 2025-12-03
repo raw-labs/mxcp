@@ -175,7 +175,7 @@ def initialize_analytics() -> None:
         This function is thread-safe and can be called from any thread.
     """
     global posthog_client
-    if not is_analytics_opted_out():
+    if not is_analytics_opted_out() and posthog_client is None:
         posthog_client = Posthog(
             project_api_key=POSTHOG_API_KEY,
             host=POSTHOG_HOST,
