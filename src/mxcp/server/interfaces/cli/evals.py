@@ -36,6 +36,67 @@ _NOISY_EVAL_LOGGERS = (
 
 _ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
+# ANSI escape sequences for terminal control
+_ANSI_MOVE_UP_CLEAR = "\033[F\033[2K"
+
+# Characters that indicate a final (completed) progress message
+_FINAL_INDICATORS = ("✓", "✗")
+
+
+class ProgressRenderer:
+    """Stateful progress renderer that overwrites lines in TTY mode."""
+
+    def __init__(self, is_tty: bool = True) -> None:
+        self._lines: dict[str, str] = {}
+        self._order: list[str] = []
+        self._lines_printed: int = 0
+        self._is_tty = is_tty
+
+    def clear_all(self) -> None:
+        """Clear all progress lines and reset cursor to start."""
+        if not self._is_tty or self._lines_printed == 0:
+            return
+        for _ in range(self._lines_printed):
+            sys.stdout.write(_ANSI_MOVE_UP_CLEAR)
+        sys.stdout.flush()
+        self._lines_printed = 0
+
+    def _render(self) -> None:
+        """Render all in-progress items."""
+        if not self._is_tty or not self._order:
+            return
+        for key in self._order:
+            line = self._lines.get(key, "")
+            sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+        self._lines_printed = len(self._order)
+
+    def _is_final_message(self, msg: str) -> bool:
+        """Check if message indicates completion (success or failure)."""
+        clean = _ANSI_ESCAPE.sub("", msg).lstrip()
+        return any(clean.startswith(indicator) for indicator in _FINAL_INDICATORS)
+
+    def update(self, key: str, msg: str) -> None:
+        """Update progress for a key. Final messages are printed permanently."""
+        if not self._is_tty:
+            click.echo(msg)
+            return
+
+        if self._is_final_message(msg):
+            # Clear progress, print final result, re-render remaining
+            self.clear_all()
+            self._order = [k for k in self._order if k != key]
+            self._lines.pop(key, None)
+            click.echo(msg)
+            self._render()
+        else:
+            # Update or add progress line
+            self.clear_all()
+            if key not in self._order:
+                self._order.append(key)
+            self._lines[key] = msg
+            self._render()
+
 
 def _suppress_noisy_eval_logs(debug: bool) -> None:
     """Clamp overly chatty third-party loggers unless debug is explicitly enabled."""
@@ -384,57 +445,9 @@ async def _evals_impl(
     # Run evals
     start_time = time.time()
 
-    # Stateful progress renderer that overwrites the same line (TTY only).
-    _lines: dict[str, str] = {}
-    _order: list[str] = []
-    _lines_printed = 0
-    _is_tty = click.get_text_stream("stdout").isatty()
-
-    def _clear_all_progress() -> None:
-        """Clear all progress lines and reset cursor to start."""
-        nonlocal _lines_printed
-        if not _is_tty or _lines_printed == 0:
-            return
-        # Move up and clear each line
-        for _ in range(_lines_printed):
-            sys.stdout.write("\033[F\033[2K")
-        sys.stdout.flush()
-        _lines_printed = 0
-
-    def _render_progress() -> None:
-        """Render all in-progress items."""
-        nonlocal _lines_printed
-        if not _is_tty or not _order:
-            return
-        for key in _order:
-            line = _lines.get(key, "")
-            sys.stdout.write(line + "\n")
-        sys.stdout.flush()
-        _lines_printed = len(_order)
-
-    def _progress(key: str, msg: str) -> None:
-        nonlocal _order, _lines
-        clean = _ANSI_ESCAPE.sub("", msg).lstrip()
-        is_final = clean.startswith("✓") or clean.startswith("✗")
-
-        if not _is_tty:
-            click.echo(msg)
-            return
-
-        if is_final:
-            # Clear progress, print final result, re-render remaining
-            _clear_all_progress()
-            _order = [k for k in _order if k != key]
-            _lines.pop(key, None)
-            click.echo(msg)
-            _render_progress()
-        else:
-            # Update or add progress line
-            _clear_all_progress()
-            if key not in _order:
-                _order.append(key)
-            _lines[key] = msg
-            _render_progress()
+    # Create progress renderer for TTY-aware output
+    is_tty = click.get_text_stream("stdout").isatty()
+    progress = ProgressRenderer(is_tty=is_tty)
 
     if suite_name:
         results = await run_eval_suite(
@@ -444,7 +457,7 @@ async def _evals_impl(
             profile,
             cli_user_context=cli_user_context,
             override_model=model,
-            progress_callback=_progress,
+            progress_callback=progress.update,
         )
     else:
         results = await run_all_evals(
@@ -453,7 +466,7 @@ async def _evals_impl(
             profile,
             cli_user_context=cli_user_context,
             override_model=model,
-            progress_callback=_progress,
+            progress_callback=progress.update,
         )
     elapsed_time = time.time() - start_time
     results["elapsed_time"] = elapsed_time
@@ -461,7 +474,7 @@ async def _evals_impl(
     if json_output:
         output_result(results, json_output, debug)
     else:
-        _clear_all_progress()
+        progress.clear_all()
         click.echo(format_eval_results(results, debug))
 
     # Exit with error code if any tests failed

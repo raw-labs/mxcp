@@ -17,20 +17,27 @@ class FakeRun:
 
 class FakeAgent:
     def __init__(
-        self, *, tools: list[Any], output: Any, tool_args: dict[str, dict[str, Any]]
+        self,
+        *,
+        tools: list[Any],
+        output: Any,
+        tool_args: dict[str, dict[str, Any]],
+        tool_callables: dict[str, Any] | None = None,
     ) -> None:
         self.tools = tools
         self.output = output
         self.tool_args = tool_args
+        self.tool_callables = tool_callables or {}
 
     async def run(
         self, _prompt: str, deps: Any | None = None, model_settings: Any | None = None
     ) -> FakeRun:
         for tool in self.tools:
-            fn = getattr(tool, "_mxcp_callable", None)
             tool_name = getattr(tool, "name", None) or getattr(
                 getattr(tool, "tool_def", None), "name", None
             )
+            # Look up callable from provided map
+            fn = self.tool_callables.get(tool_name or "")
             args = self.tool_args.get(tool_name or "", {})
             if fn:
                 if asyncio.iscoroutinefunction(fn):
@@ -115,6 +122,7 @@ def test_executor_passes_agent_retries_to_agent() -> None:
             tools=kwargs["tools"],
             output="ok",
             tool_args={"get_weather": {"location": "Paris"}},
+            tool_callables=kwargs.get("_tool_callables", {}),
         )
 
     executor._agent_cls = agent_factory
@@ -131,6 +139,7 @@ def test_execute_prompt_with_tool_call() -> None:
         tools=kwargs["tools"],
         output="Sunny",
         tool_args={"get_weather": {"location": "Paris"}},
+        tool_callables=kwargs.get("_tool_callables", {}),
     )
 
     result = asyncio.run(executor.execute_prompt("Weather?", user_context=user_ctx))
@@ -150,7 +159,10 @@ def test_execute_prompt_tool_calls_do_not_leak_between_runs() -> None:
 
     # First run
     executor._agent_cls = lambda **kwargs: FakeAgent(
-        tools=kwargs["tools"], output="ok", tool_args={"get_weather": {"location": "Paris"}}
+        tools=kwargs["tools"],
+        output="ok",
+        tool_args={"get_weather": {"location": "Paris"}},
+        tool_callables=kwargs.get("_tool_callables", {}),
     )
     first = asyncio.run(executor.execute_prompt("Weather?"))
     assert len(first.tool_calls) == 1
@@ -158,7 +170,10 @@ def test_execute_prompt_tool_calls_do_not_leak_between_runs() -> None:
 
     # Second run should still invoke tools and capture history independently
     executor._agent_cls = lambda **kwargs: FakeAgent(
-        tools=kwargs["tools"], output="ok", tool_args={"get_weather": {"location": "Rome"}}
+        tools=kwargs["tools"],
+        output="ok",
+        tool_args={"get_weather": {"location": "Rome"}},
+        tool_callables=kwargs.get("_tool_callables", {}),
     )
     second = asyncio.run(executor.execute_prompt("Weather?"))
 
@@ -173,6 +188,7 @@ def test_execute_prompt_tool_error() -> None:
         tools=kwargs["tools"],
         output="Error",
         tool_args={"get_weather": {"location": "Rome"}},
+        tool_callables=kwargs.get("_tool_callables", {}),
     )
 
     result = asyncio.run(executor.execute_prompt("Weather?"))
@@ -192,6 +208,7 @@ def test_tool_argument_validation_error_is_captured() -> None:
         tools=kwargs["tools"],
         output="done",
         tool_args={"get_weather": {}},  # missing required arg
+        tool_callables=kwargs.get("_tool_callables", {}),
     )
 
     result = asyncio.run(executor.execute_prompt("Weather?"))
@@ -229,19 +246,22 @@ def test_tool_model_retry_reinvokes_tool() -> None:
             tools: list[Any],
             output: Any,
             tool_args: dict[str, dict[str, Any]],
+            tool_callables: dict[str, Any] | None = None,
             max_retries: int = 1,
         ) -> None:
-            super().__init__(tools=tools, output=output, tool_args=tool_args)
+            super().__init__(
+                tools=tools, output=output, tool_args=tool_args, tool_callables=tool_callables
+            )
             self.max_retries = max_retries
 
         async def run(  # type: ignore[override]
             self, _prompt: str, deps: Any | None = None, model_settings: Any | None = None
         ) -> FakeRun:
             for tool in self.tools:
-                fn = getattr(tool, "_mxcp_callable", None)
                 tool_name = getattr(tool, "name", None) or getattr(
                     getattr(tool, "tool_def", None), "name", None
                 )
+                fn = self.tool_callables.get(tool_name or "")
                 args = self.tool_args.get(tool_name or "", {})
                 if not fn:
                     continue
@@ -268,6 +288,7 @@ def test_tool_model_retry_reinvokes_tool() -> None:
         tools=kwargs["tools"],
         output="ok",
         tool_args={"get_weather": {"location": "Paris"}},
+        tool_callables=kwargs.get("_tool_callables", {}),
         max_retries=kwargs.get("retries", 1),
     )
 
@@ -291,6 +312,7 @@ def test_expected_answer_grading() -> None:
         tools=kwargs.get("tools", []),
         output=GradeResult(result="correct", comment="ok", reasoning="match"),
         tool_args={},
+        tool_callables=kwargs.get("_tool_callables", {}),
     )
 
     result = asyncio.run(executor.evaluate_expected_answer("hello", "hello"))
@@ -308,6 +330,7 @@ def test_expected_answer_uses_model_reference() -> None:
             tools=kwargs.get("tools", []),
             output=GradeResult(result="correct", comment="ok", reasoning="match"),
             tool_args={},
+            tool_callables=kwargs.get("_tool_callables", {}),
         )
 
     executor._agent_cls = agent_factory
@@ -319,15 +342,17 @@ def test_expected_answer_uses_model_reference() -> None:
 
 def test_max_turns_limits_tool_calls() -> None:
     class MultiCallAgent:
-        def __init__(self, tools: list[Any]) -> None:
+        def __init__(self, tools: list[Any], tool_callables: dict[str, Any]) -> None:
             self.tools = tools
+            self.tool_callables = tool_callables
 
         async def run(
             self, _prompt: str, deps: Any | None = None, model_settings: Any | None = None
         ) -> FakeRun:
             for _ in range(2):
                 for tool in self.tools:
-                    fn = getattr(tool, "_mxcp_callable", None)
+                    tool_name = getattr(tool, "name", None)
+                    fn = self.tool_callables.get(tool_name or "")
                     if fn:
                         if asyncio.iscoroutinefunction(fn):
                             try:
@@ -342,7 +367,9 @@ def test_max_turns_limits_tool_calls() -> None:
             return FakeRun("done")
 
     executor = make_executor()
-    executor._agent_cls = lambda **kwargs: MultiCallAgent(kwargs["tools"])
+    executor._agent_cls = lambda **kwargs: MultiCallAgent(
+        kwargs["tools"], kwargs.get("_tool_callables", {})
+    )
 
     result = asyncio.run(executor.execute_prompt("Weather?", max_turns=1))
 
@@ -427,3 +454,92 @@ def test_tool_model_schema_supports_optional_object_params() -> None:
     assert props["context"]["properties"]["limit"]["maximum"] == 100
     assert props["context"]["required"] == ["limit"]
     assert "context" not in schema.get("required", [])
+
+
+def test_executor_with_empty_tool_list() -> None:
+    """Test executor handles empty tool list gracefully."""
+    # Create executor directly, bypassing make_executor which adds default tools
+    tool_executor = MockToolExecutor()
+    executor = LLMExecutor(
+        "claude-test",
+        "anthropic",
+        ModelSettings(),
+        [],  # Empty tool list
+        tool_executor,
+        provider_config=ProviderConfig(api_key="key", base_url="https://api.anthropic.com"),
+    )
+
+    assert executor.available_tools == []
+    assert executor._tool_models == {}
+    # System prompt should indicate no tools
+    assert (
+        "no tools" in executor.system_prompt.lower()
+        or "answer directly" in executor.system_prompt.lower()
+    )
+
+
+def test_unknown_parameter_type_defaults_to_any() -> None:
+    """Test that unknown parameter types fall back to Any with a warning."""
+    tools = [
+        ToolDefinition(
+            name="custom_tool",
+            description="Tool with unknown type",
+            parameters=[ParameterDefinition(name="param", type="unknown_type", required=True)],
+        )
+    ]
+    # This should not raise an error
+    executor = make_executor(tools=tools)
+
+    # The tool model should be created
+    assert "custom_tool" in executor._tool_models
+
+
+def test_execute_prompt_handles_empty_output() -> None:
+    """Test that empty agent output is handled gracefully."""
+    executor = make_executor()
+
+    executor._agent_cls = lambda **kwargs: FakeAgent(
+        tools=kwargs["tools"],
+        output="",  # Empty output
+        tool_args={},
+        tool_callables=kwargs.get("_tool_callables", {}),
+    )
+
+    result = asyncio.run(executor.execute_prompt("Test prompt"))
+
+    assert isinstance(result, AgentResult)
+    assert result.answer == ""
+    assert result.error is None
+
+
+def test_provider_config_defaults() -> None:
+    """Test ProviderConfig uses defaults correctly."""
+    from mxcp.sdk.evals.executor import ProviderConfig
+
+    config = ProviderConfig()
+    assert config.api_key is None
+    assert config.base_url is None
+    assert config.timeout is None
+
+
+def test_provider_config_with_values() -> None:
+    """Test ProviderConfig accepts and stores values."""
+    from mxcp.sdk.evals.executor import ProviderConfig
+
+    config = ProviderConfig(
+        api_key="test-key",
+        base_url="https://api.example.com",
+        timeout=30,
+    )
+    assert config.api_key == "test-key"
+    assert config.base_url == "https://api.example.com"
+    assert config.timeout == 30
+
+
+def test_agent_retries_clamped_to_minimum() -> None:
+    """Test that agent_retries is clamped to at least 1."""
+    executor = make_executor(agent_retries=0)
+    assert executor._agent_retries == 1
+
+    executor = make_executor(agent_retries=-5)
+    assert executor._agent_retries == 1

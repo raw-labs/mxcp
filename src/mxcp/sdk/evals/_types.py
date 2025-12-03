@@ -9,6 +9,9 @@ from typing import Any
 
 from mxcp.sdk.validator import TypeSchemaModel
 
+# Type alias for JSON Schema representation
+JsonSchema = dict[str, Any]
+
 
 @dataclass
 class ParameterDefinition:
@@ -19,7 +22,8 @@ class ParameterDefinition:
     description: str = ""
     default: Any | None = None
     required: bool = True
-    schema: dict[str, Any] | None = None
+    schema: JsonSchema | None = None
+    """Optional JSON Schema for complex parameter validation."""
 
 
 @dataclass

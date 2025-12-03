@@ -24,6 +24,9 @@ from ._types import ToolDefinition
 # Agent/tool retry configuration
 DEFAULT_AGENT_RETRIES = 30
 
+# Type alias for model references (either a model object or a string identifier)
+ModelReference = OpenAIChatModel | OpenAIResponsesModel | AnthropicModel | str
+
 logger = logging.getLogger(__name__)
 
 
@@ -106,6 +109,8 @@ class LLMExecutor:
     ) -> AgentResult:
         """Run the agent loop for a prompt using pydantic-ai Agent."""
         history: list[ToolCallRecord] = []
+        # Local callable mapping for this execution (passed to agent factory for testing)
+        tool_callables: dict[str, Callable[..., Any]] = {}
 
         def _make_tool(tool_def: ToolDefinition) -> Tool:
             args_model = self._tool_models.get(tool_def.name)
@@ -167,16 +172,23 @@ class LLMExecutor:
                 description=tool_def.description,
                 prepare=_prepare,
             )
-            tool._mxcp_callable = _fn  # type: ignore[attr-defined]
+            tool_callables[tool_def.name] = _fn
             return tool
 
         agent_tools = [_make_tool(t) for t in self.available_tools]
-        agent = self._agent_cls(
-            model=self._model_reference,
-            instructions=self.system_prompt,
-            tools=agent_tools,
-            retries=self._agent_retries,
-        )
+
+        # Build agent kwargs - only pass _tool_callables for test agents (not real pydantic-ai Agent)
+        agent_kwargs: dict[str, Any] = {
+            "model": self._model_reference,
+            "instructions": self.system_prompt,
+            "tools": agent_tools,
+            "retries": self._agent_retries,
+        }
+        if self._agent_cls is not Agent:
+            # Test agent factory - pass tool callables for invocation
+            agent_kwargs["_tool_callables"] = tool_callables
+
+        agent = self._agent_cls(**agent_kwargs)
 
         try:
             agent_run = await agent.run(
@@ -357,7 +369,7 @@ class LLMExecutor:
             return f"{base}. {suggestion}"
         return base
 
-    def _build_model_reference(self) -> Any:
+    def _build_model_reference(self) -> ModelReference:
         """Instantiate a model object for providers that support direct configuration."""
         model_type = (self.model_type or "").lower()
         provider_kwargs = self._provider_kwargs()
@@ -389,6 +401,8 @@ class LLMExecutor:
             kwargs["base_url"] = self.provider_config.base_url
         if self.provider_config.api_key:
             kwargs["api_key"] = self.provider_config.api_key
+        if self.provider_config.timeout:
+            kwargs["timeout"] = self.provider_config.timeout
         return kwargs
 
     def _map_param_type(self, param_type: str) -> Any:
@@ -405,5 +419,5 @@ class LLMExecutor:
         for aliases, py_type in mapping.items():
             if key in aliases:
                 return py_type
-        logger.debug("Unknown tool parameter type '%s'; defaulting to Any", param_type)
+        logger.warning("Unknown tool parameter type '%s'; defaulting to Any", param_type)
         return Any

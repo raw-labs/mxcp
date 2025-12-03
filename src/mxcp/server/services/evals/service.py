@@ -30,7 +30,7 @@ def _create_model_config(
         user_config: User configuration containing model settings
 
     Returns:
-        Tuple of (model_name, model_type, options, api_key, base_url, timeout)
+        Tuple of (model_name, model_type, options, provider_config)
 
     Raises:
         ValueError: If model is not configured or has invalid type
@@ -279,15 +279,6 @@ def _convert_endpoints_to_tool_definitions(
     return tool_definitions
 
 
-def _compact_text(*parts: str, max_length: int | None = 240) -> str:
-    """Join parts, collapse whitespace, and optionally truncate for display."""
-    text = " ".join(p.strip() for p in parts if p).strip()
-    text = " ".join(text.split())
-    if max_length and len(text) > max_length:
-        return text[: max_length - 3] + "..."
-    return text
-
-
 def _format_expected_answer_failure(
     response: str,
     expected: str,
@@ -304,6 +295,114 @@ def _format_expected_answer_failure(
         f"Reasoning: {reasoning or 'n/a'}",
     ]
     return "\n".join(lines)
+
+
+async def _evaluate_test_assertions(
+    test: Any,
+    response: str,
+    tool_calls: list[Any],
+    execution_error: str | None,
+    grader: LLMExecutor,
+) -> tuple[list[str], dict[str, Any] | None]:
+    """Evaluate all assertions for a test.
+
+    Returns:
+        Tuple of (failures list, expected_answer_evaluation dict or None)
+    """
+    failures: list[str] = []
+    evaluation: dict[str, Any] | None = None
+    assertions = test.assertions
+
+    # If the agent failed to execute, report it clearly
+    if execution_error:
+        failures.append(f"Agent execution failed: {execution_error}")
+
+    for call in tool_calls:
+        if call.error:
+            logger.debug(
+                "Tool '%s' failed during test '%s': %s",
+                call.tool,
+                test.name,
+                call.error,
+            )
+
+    # Check must_call assertions
+    if assertions.must_call:
+        for expected_call in assertions.must_call:
+            expected_tool = expected_call.tool
+            expected_args = expected_call.args or {}
+
+            found = False
+            for call in tool_calls:
+                if call.tool == expected_tool:
+                    actual_args = call.arguments or {}
+                    if all(actual_args.get(k) == v for k, v in expected_args.items()):
+                        found = True
+                        break
+
+            if not found:
+                failures.append(
+                    f"Expected call to '{expected_tool}' with args {expected_args} not found"
+                )
+
+    # Check must_not_call assertions
+    if assertions.must_not_call:
+        for forbidden_tool in assertions.must_not_call:
+            if any(call.tool == forbidden_tool for call in tool_calls):
+                failures.append(f"Tool '{forbidden_tool}' was called but should not have been")
+
+    # Check answer_contains assertions
+    if assertions.answer_contains:
+        for expected_text in assertions.answer_contains:
+            if expected_text.lower() not in response.lower():
+                failures.append(f"Expected text '{expected_text}' not found in response")
+
+    # Check answer_not_contains assertions
+    if assertions.answer_not_contains:
+        for forbidden_text in assertions.answer_not_contains:
+            if forbidden_text.lower() in response.lower():
+                failures.append(f"Forbidden text '{forbidden_text}' found in response")
+
+    if assertions.expected_answer:
+        logger.debug(
+            "Evaluating expected_answer assertion for test '%s': response_length=%d, expected='%s'",
+            test.name,
+            len(response),
+            (
+                assertions.expected_answer[:100] + "..."
+                if len(assertions.expected_answer) > 100
+                else assertions.expected_answer
+            ),
+        )
+        evaluation = await grader.evaluate_expected_answer(response, assertions.expected_answer)
+        grade = (evaluation.get("result") or "").lower()
+        comment = evaluation.get("comment") or "Model answer did not match expected"
+        reasoning = evaluation.get("reasoning") or ""
+
+        logger.debug(
+            "Expected answer evaluation for '%s': grade=%s, response='%s'",
+            test.name,
+            grade,
+            response[:150] + "..." if len(response) > 150 else response,
+        )
+
+        detail = _format_expected_answer_failure(
+            response,
+            assertions.expected_answer,
+            grade or "unknown",
+            comment,
+            reasoning,
+        )
+        if grade != "correct":
+            logger.info(
+                "Test '%s' failed expected_answer check: grade=%s, comment=%s",
+                test.name,
+                grade,
+                comment,
+            )
+            failures.append(detail)
+
+    return failures, evaluation
 
 
 async def run_eval_suite(
@@ -394,16 +493,6 @@ async def run_eval_suite(
     logger.info(f"Number of tests: {len(eval_suite.tests)}")
 
     total_tests = len(eval_suite.tests)
-    if progress_callback:
-        progress_callback(
-            f"suite:{suite_name}",
-            "🧪 "
-            + click.style(
-                f"Running suite '{suite_name}' with {total_tests} test"
-                f"{'' if total_tests == 1 else 's'} using model '{model_name}'...",
-                fg="yellow",
-            ),
-        )
 
     try:
         # Create LLM executor with model config, tool definitions, and tool executor
@@ -456,105 +545,10 @@ async def run_eval_suite(
                 execution_error = agent_result.error
 
                 # Evaluate assertions
-                failures: list[str] = []
-                assertions = test.assertions
-                evaluation: dict[str, Any] | None = None
-
-                # If the agent failed to execute, report it clearly
-                if execution_error:
-                    failures.append(f"Agent execution failed: {execution_error}")
-
-                for call in tool_calls:
-                    if call.error:
-                        logger.debug(
-                            "Tool '%s' failed during test '%s': %s",
-                            call.tool,
-                            test.name,
-                            call.error,
-                        )
-
-                # Check must_call assertions
-                if assertions.must_call:
-                    for expected_call in assertions.must_call:
-                        expected_tool = expected_call.tool
-                        expected_args = expected_call.args or {}
-
-                        found = False
-                        for call in tool_calls:
-                            if call.tool == expected_tool:
-                                actual_args = call.arguments or {}
-                                if all(actual_args.get(k) == v for k, v in expected_args.items()):
-                                    found = True
-                                    break
-
-                        if not found:
-                            failures.append(
-                                f"Expected call to '{expected_tool}' with args {expected_args} not found"
-                            )
-
-                # Check must_not_call assertions
-                if assertions.must_not_call:
-                    for forbidden_tool in assertions.must_not_call:
-                        if any(call.tool == forbidden_tool for call in tool_calls):
-                            failures.append(
-                                f"Tool '{forbidden_tool}' was called but should not have been"
-                            )
-
-                # Check answer_contains assertions
-                if assertions.answer_contains:
-                    for expected_text in assertions.answer_contains:
-                        if expected_text.lower() not in response.lower():
-                            failures.append(
-                                f"Expected text '{expected_text}' not found in response"
-                            )
-
-                # Check answer_not_contains assertions
-                if assertions.answer_not_contains:
-                    for forbidden_text in assertions.answer_not_contains:
-                        if forbidden_text.lower() in response.lower():
-                            failures.append(f"Forbidden text '{forbidden_text}' found in response")
-
-                if assertions.expected_answer:
-                    logger.debug(
-                        "Evaluating expected_answer assertion for test '%s': response_length=%d, expected='%s'",
-                        test.name,
-                        len(response),
-                        (
-                            assertions.expected_answer[:100] + "..."
-                            if len(assertions.expected_answer) > 100
-                            else assertions.expected_answer
-                        ),
-                    )
-                    grader = grading_executor or executor
-                    evaluation = await grader.evaluate_expected_answer(
-                        response, assertions.expected_answer
-                    )
-                    grade = (evaluation.get("result") or "").lower()
-                    comment = evaluation.get("comment") or "Model answer did not match expected"
-                    reasoning = evaluation.get("reasoning") or ""
-
-                    logger.debug(
-                        "Expected answer evaluation for '%s': grade=%s, response='%s'",
-                        test.name,
-                        grade,
-                        response[:150] + "..." if len(response) > 150 else response,
-                    )
-
-                    detail = _format_expected_answer_failure(
-                        response,
-                        assertions.expected_answer,
-                        grade or "unknown",
-                        comment,
-                        reasoning,
-                    )
-                    if grade != "correct":
-                        logger.info(
-                            "Test '%s' failed expected_answer check: grade=%s, comment=%s",
-                            test.name,
-                            grade,
-                            comment,
-                        )
-                        failures.append(detail)
+                grader = grading_executor or executor
+                failures, evaluation = await _evaluate_test_assertions(
+                    test, response, tool_calls, execution_error, grader
+                )
 
                 test_time = time.time() - test_start
 
@@ -579,7 +573,7 @@ async def run_eval_suite(
                                 }
                                 for call in tool_calls
                             ],
-                            "expected_answer": assertions.expected_answer,
+                            "expected_answer": test.assertions.expected_answer,
                             "expected_answer_evaluation": evaluation,
                         },
                     }
