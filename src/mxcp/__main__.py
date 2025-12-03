@@ -28,6 +28,8 @@ def cli(ctx: click.Context) -> None:
         from mxcp.sdk.core.analytics import track_base_command
 
         track_base_command()
+        # Show help when no subcommand is provided
+        click.echo(ctx.get_help())
 
 
 cli.add_command(list_endpoints)
