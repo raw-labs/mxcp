@@ -8,8 +8,8 @@ from typing import Any
 import click
 import yaml
 
+from mxcp.sdk.core.analytics import track_command_with_timing
 from mxcp.sdk.duckdb import DuckDBSession
-from mxcp.server.core.config.analytics import track_command_with_timing
 from mxcp.server.core.config.parsers import create_duckdb_session_config
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config

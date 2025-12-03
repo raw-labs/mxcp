@@ -28,6 +28,7 @@ from mxcp.sdk.auth import GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth.context import get_user_context
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.core import PACKAGE_VERSION
+from mxcp.sdk.core.analytics import flush_analytics, track_endpoint_execution
 from mxcp.sdk.mcp import FastMCPLogProxy
 from mxcp.sdk.telemetry import (
     decrement_gauge,
@@ -720,51 +721,54 @@ class RAWMCP:
         # reload requests during shutdown (they'll be safely ignored).
         self._signal_loop = None
 
+        # Stop the reload manager while the loop is still running
         try:
-            # Stop the reload manager while the loop is still running
-            try:
-                await self.reload_manager.stop()
-            except Exception as exc:
-                logger.error(f"Error stopping reload manager: {exc}")
-
-            # Gracefully shut down the reloadable runtime components first
-            # This handles python runtimes, plugins, and the db session.
-            try:
-                self.shutdown_runtime_components()
-            except Exception as exc:
-                logger.error(f"Error shutting down runtime components: {exc}")
-
-            # Close OAuth server persistence
-            if self.oauth_server:
-                try:
-                    await asyncio.wait_for(self.oauth_server.close(), timeout=5.0)
-                    logger.info("Closed OAuth server")
-                except asyncio.TimeoutError:
-                    logger.error("OAuth server shutdown timed out after 5 seconds")
-                except Exception as exc:
-                    logger.error(f"Error closing OAuth server: {exc}")
-
-            # Shutdown audit logger if initialized
-            if self.audit_logger:
-                try:
-                    await asyncio.wait_for(self.audit_logger.close(), timeout=5.0)
-                    logger.info("Closed audit logger")
-                except asyncio.TimeoutError:
-                    logger.error("Audit logger shutdown timed out after 5 seconds")
-                except Exception as exc:
-                    logger.error(f"Error closing audit logger: {exc}")
-
-            # Shutdown telemetry (synchronous)
-            try:
-                shutdown_telemetry()
-                logger.info("Shutdown telemetry")
-            except Exception as exc:
-                logger.error(f"Error shutting down telemetry: {exc}")
-
+            await self.reload_manager.stop()
         except Exception as exc:
-            logger.error(f"Error during shutdown: {exc}")
-        finally:
-            logger.info("MXCP server shutdown complete")
+            logger.error(f"Error stopping reload manager: {exc}")
+
+        # Gracefully shut down the reloadable runtime components first
+        # This handles python runtimes, plugins, and the db session.
+        try:
+            self.shutdown_runtime_components()
+        except Exception as exc:
+            logger.error(f"Error shutting down runtime components: {exc}")
+
+        # Close OAuth server persistence
+        if self.oauth_server:
+            try:
+                await asyncio.wait_for(self.oauth_server.close(), timeout=5.0)
+                logger.info("Closed OAuth server")
+            except asyncio.TimeoutError:
+                logger.error("OAuth server shutdown timed out after 5 seconds")
+            except Exception as exc:
+                logger.error(f"Error closing OAuth server: {exc}")
+
+        # Shutdown audit logger if initialized
+        if self.audit_logger:
+            try:
+                await asyncio.wait_for(self.audit_logger.close(), timeout=5.0)
+                logger.info("Closed audit logger")
+            except asyncio.TimeoutError:
+                logger.error("Audit logger shutdown timed out after 5 seconds")
+            except Exception as exc:
+                logger.error(f"Error closing audit logger: {exc}")
+
+        # Shutdown telemetry (synchronous)
+        try:
+            shutdown_telemetry()
+            logger.info("Shutdown telemetry")
+        except Exception as exc:
+            logger.error(f"Error shutting down telemetry: {exc}")
+
+        # Flush analytics events (synchronous)
+        try:
+            flush_analytics()
+            logger.info("Flushed analytics")
+        except Exception as exc:
+            logger.error(f"Error flushing analytics: {exc}")
+
+        logger.info("MXCP server shutdown complete")
 
     def _sanitize_model_name(self, name: str) -> str:
         """Sanitize a name to be a valid Python class name."""
@@ -1327,6 +1331,16 @@ class RAWMCP:
                             },
                             description="Total endpoint errors",
                         )
+
+                    # Track endpoint execution for anonymous analytics
+                    # Note: endpoint name is hashed for privacy
+                    track_endpoint_execution(
+                        endpoint_type=endpoint_key,
+                        endpoint_name=name,
+                        success=(status == "success"),
+                        duration_ms=duration_ms,
+                        transport=caller,
+                    )
 
                     # Log the audit event
                     if self.audit_logger:

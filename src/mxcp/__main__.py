@@ -1,6 +1,6 @@
 import click
 
-from mxcp.server.core.config.analytics import initialize_analytics, track_base_command
+from mxcp.sdk.core.analytics import initialize_analytics
 from mxcp.server.interfaces.cli.dbt import dbt_config, dbt_wrapper
 from mxcp.server.interfaces.cli.drift_check import drift_check
 from mxcp.server.interfaces.cli.drift_snapshot import drift_snapshot
@@ -17,12 +17,17 @@ from mxcp.server.interfaces.cli.test import test
 from mxcp.server.interfaces.cli.validate import validate
 
 
-@click.group()
-def cli() -> None:
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx: click.Context) -> None:
     """MXCP CLI"""
     initialize_analytics()
-    # Track when user runs just 'mxcp' without any command
-    track_base_command()
+    # Only track if user ran just 'mxcp' without any subcommand
+    # Subcommands track themselves via @track_command_with_timing decorator
+    if ctx.invoked_subcommand is None:
+        from mxcp.sdk.core.analytics import track_base_command
+
+        track_base_command()
 
 
 cli.add_command(list_endpoints)

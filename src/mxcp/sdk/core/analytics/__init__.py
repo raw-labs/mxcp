@@ -38,13 +38,17 @@ Thread Safety:
     This module is fully thread-safe and uses a dedicated thread pool for analytics operations.
 """
 
+import atexit
 import contextlib
 import functools
+import hashlib
 import logging
 import os
+import threading
 import time
+import uuid
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 from posthog import Posthog
@@ -53,13 +57,90 @@ from mxcp.sdk.core.version import PACKAGE_NAME, PACKAGE_VERSION
 
 POSTHOG_API_KEY = "phc_6BP2PRVBewZUihdpac9Qk6QHd4eXykdhrvoFncqBjl0"
 POSTHOG_HOST = "https://eu.i.posthog.com"  # Fixed: EU region
-POSTHOG_TIMEOUT = 1  # Timeout for analytics requests - analytics is non-critical
-
-# Create a thread pool for analytics
-analytics_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="analytics")
+POSTHOG_TIMEOUT = 10  # Timeout for HTTP requests (PostHog handles this in background thread)
 
 # Global PostHog instance
-posthog_client = None
+posthog_client: Posthog | None = None
+
+# Installation ID for anonymous but distinct user tracking
+_installation_id: str | None = None
+_installation_id_lock = threading.Lock()
+_INSTALLATION_ID_FILE = Path.home() / ".config" / "mxcp" / "installation_id"
+
+
+def _get_installation_id() -> str:
+    """Get or create a unique installation ID for this machine.
+
+    The ID is a random UUID generated on first run and stored in
+    ~/.config/mxcp/installation_id. This allows tracking distinct
+    installations without collecting any personal information.
+
+    Users can delete this file to reset their installation ID,
+    or set MXCP_DISABLE_ANALYTICS=1 to disable tracking entirely.
+
+    Thread-safe: Uses a lock to prevent race conditions on first access.
+    """
+    global _installation_id
+
+    # Fast path: return cached ID without lock
+    if _installation_id is not None:
+        return _installation_id
+
+    # Slow path: acquire lock for initialization
+    with _installation_id_lock:
+        # Double-check after acquiring lock (another thread may have initialized)
+        if _installation_id is not None:
+            return _installation_id
+
+        try:
+            # Try to read existing ID
+            if _INSTALLATION_ID_FILE.exists():
+                cached_id = _INSTALLATION_ID_FILE.read_text().strip()
+                if cached_id:
+                    _installation_id = cached_id
+                    return _installation_id
+
+            # Generate new ID
+            new_id = str(uuid.uuid4())
+
+            # Save it (create directory if needed)
+            _INSTALLATION_ID_FILE.parent.mkdir(parents=True, exist_ok=True)
+            _INSTALLATION_ID_FILE.write_text(new_id)
+
+            _installation_id = new_id
+            return _installation_id
+        except Exception:
+            # If anything fails, use a session-only ID (not persisted)
+            _installation_id = str(uuid.uuid4())
+            return _installation_id
+
+
+def _hash_name(name: str) -> str:
+    """Hash an endpoint name for anonymous tracking.
+
+    Returns first 12 characters of SHA256 hash - enough to identify patterns
+    without revealing the actual name.
+    """
+    return hashlib.sha256(name.encode()).hexdigest()[:12]
+
+
+def _flush_analytics() -> None:
+    """Flush pending analytics events before process exit."""
+    global posthog_client
+    if posthog_client is not None:
+        with contextlib.suppress(Exception):
+            posthog_client.flush()  # type: ignore[no-untyped-call]
+
+
+def flush_analytics() -> None:
+    """
+    Explicitly flush pending analytics events.
+
+    This is useful for graceful shutdown in long-running processes (like servers)
+    where you want to ensure events are sent before the process terminates.
+    This is a synchronous blocking call.
+    """
+    _flush_analytics()
 
 
 def initialize_analytics() -> None:
@@ -73,11 +154,11 @@ def initialize_analytics() -> None:
     The initialization is safe to call multiple times - subsequent calls will be ignored
     if analytics is already initialized.
 
-    Behavior:
-        - If analytics is opted out via environment variable, no client is created
-        - Uses asynchronous mode for better performance
-        - Configures appropriate timeouts for non-critical operations
-        - Sets up proper error handling and logging levels
+    PostHog Configuration:
+        - Async mode (sync_mode=False): Events are queued and sent in background thread
+        - flush_interval=0.5: Auto-flush every 0.5 seconds (PostHog default)
+        - flush_at=100: Auto-flush when 100 events are queued (PostHog default)
+        - atexit handler: Ensures remaining events are flushed on process exit
 
     Environment Variables:
         MXCP_DISABLE_ANALYTICS: Set to "1", "true", or "yes" to disable analytics
@@ -99,9 +180,14 @@ def initialize_analytics() -> None:
             project_api_key=POSTHOG_API_KEY,
             host=POSTHOG_HOST,
             debug=False,
-            sync_mode=False,  # Use async mode for better performance
+            sync_mode=False,  # Async mode: PostHog handles threading internally
             timeout=POSTHOG_TIMEOUT,
+            # Default flush_interval=0.5 and flush_at=100 handle periodic flushing
         )
+        # Register flush handler to ensure events are sent before process exits
+        atexit.register(_flush_analytics)
+        # Eagerly load installation ID to avoid blocking file I/O in async context
+        _get_installation_id()
 
 
 def is_analytics_opted_out() -> bool:
@@ -140,9 +226,9 @@ def track_event(event_name: str, properties: dict[str, Any] | None = None) -> No
     """
     Track an event in PostHog if analytics is enabled.
 
-    This function provides the core event tracking functionality. It's completely
-    non-blocking and will silently fail if there are any issues, ensuring that
-    analytics problems never affect the main application.
+    This function provides the core event tracking functionality. It's non-blocking
+    and will silently fail if there are any issues, ensuring that analytics problems
+    never affect the main application.
 
     Args:
         event_name (str): Name of the event to track. Should be descriptive and
@@ -151,7 +237,9 @@ def track_event(event_name: str, properties: dict[str, Any] | None = None) -> No
             with the event. These provide additional context about the event.
 
     Behavior:
-        - Runs asynchronously in a dedicated thread pool
+        - Non-blocking: PostHog handles async delivery internally with background thread
+        - Auto-flush every 0.5 seconds (PostHog default)
+        - Auto-flush at 100 queued events (PostHog default)
         - Automatically adds default properties (app name, version)
         - Silently handles all errors to prevent analytics from affecting the main app
         - Respects the analytics opt-out setting
@@ -185,28 +273,24 @@ def track_event(event_name: str, properties: dict[str, Any] | None = None) -> No
         logging.getLogger("posthog").setLevel(logging.ERROR)
         logging.getLogger("urllib3").setLevel(logging.ERROR)
 
-        def _track() -> None:
-            try:
-                # Add default properties
-                event_properties = {
-                    "app": PACKAGE_NAME,
-                    "version": PACKAGE_VERSION,  # Dynamic version from pyproject.toml
-                    **(properties or {}),
-                }
+        try:
+            # Add default properties
+            event_properties = {
+                "app": PACKAGE_NAME,
+                "version": PACKAGE_VERSION,
+                **(properties or {}),
+            }
 
-                if posthog_client is not None:
-                    posthog_client.capture(
-                        distinct_id="anonymous",  # We don't track individual users
-                        event=event_name,
-                        properties=event_properties,
-                    )
-            except Exception:
-                # Silently fail - analytics should never affect the main application
-                pass
-
-        # Submit to thread pool and don't wait for result
-        with contextlib.suppress(Exception):
-            analytics_executor.submit(_track)
+            # PostHog.capture() is non-blocking in async mode - it queues the event
+            # and returns immediately. PostHog's internal thread handles delivery.
+            posthog_client.capture(
+                distinct_id=_get_installation_id(),
+                event=event_name,
+                properties=event_properties,
+            )
+        except Exception:
+            # Silently fail - analytics should never affect the main application
+            pass
 
 
 def track_command(
@@ -371,3 +455,53 @@ def track_command_with_timing(command_name: str) -> Any:
         return wrapper
 
     return decorator
+
+
+def track_endpoint_execution(
+    endpoint_type: str,
+    endpoint_name: str,
+    success: bool,
+    duration_ms: float,
+    transport: str | None = None,
+) -> None:
+    """
+    Track MCP endpoint (tool/resource/prompt) execution.
+
+    Privacy: The endpoint name is hashed to prevent revealing proprietary tool names
+    while still allowing pattern analysis (e.g., "tool X is called 100x more than tool Y").
+
+    Args:
+        endpoint_type: Type of endpoint ("tool", "resource", "prompt")
+        endpoint_name: Name of the endpoint (will be hashed for privacy)
+        success: Whether the execution succeeded
+        duration_ms: Execution time in milliseconds
+        transport: Transport mode ("stdio", "http", or None)
+
+    Example:
+        ```python
+        from mxcp.sdk.core.analytics import track_endpoint_execution
+
+        track_endpoint_execution(
+            endpoint_type="tool",
+            endpoint_name="my_tool",  # Will be hashed
+            success=True,
+            duration_ms=150.5,
+            transport="http"
+        )
+        ```
+
+    Privacy Note:
+        The endpoint name is hashed using SHA256, with only the first 12 characters
+        retained. This allows for pattern matching and usage analysis without
+        revealing the actual tool names, which may be considered proprietary.
+    """
+    properties: dict[str, Any] = {
+        "endpoint_type": endpoint_type,
+        "endpoint_hash": _hash_name(endpoint_name),
+        "success": success,
+        "duration_ms": duration_ms,
+    }
+    if transport:
+        properties["transport"] = transport
+
+    track_event("mcp_endpoint_executed", properties)

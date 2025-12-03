@@ -14,7 +14,6 @@ This test suite covers all aspects of the analytics functionality including:
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import Mock, patch
 
 import pytest
@@ -24,7 +23,6 @@ from mxcp.sdk.core.analytics import (
     POSTHOG_API_KEY,
     POSTHOG_HOST,
     POSTHOG_TIMEOUT,
-    analytics_executor,
     initialize_analytics,
     is_analytics_opted_out,
     track_base_command,
@@ -47,8 +45,7 @@ class TestAnalyticsConfiguration:
         """Test that analytics constants are properly configured."""
         assert POSTHOG_API_KEY == "phc_6BP2PRVBewZUihdpac9Qk6QHd4eXykdhrvoFncqBjl0"
         assert POSTHOG_HOST == "https://eu.i.posthog.com"
-        assert POSTHOG_TIMEOUT == 1
-        assert isinstance(analytics_executor, ThreadPoolExecutor)
+        assert POSTHOG_TIMEOUT == 10
 
     def test_opt_out_detection_true_values(self):
         """Test analytics opt-out detection with various true values."""
@@ -123,7 +120,10 @@ class TestEventTracking:
             mock_client.capture.assert_called_once()
             call_args = mock_client.capture.call_args
 
-            assert call_args[1]["distinct_id"] == "anonymous"
+            # distinct_id should be a valid UUID (installation ID)
+            distinct_id = call_args[1]["distinct_id"]
+            assert len(distinct_id) == 36  # UUID format: 8-4-4-4-12
+            assert distinct_id.count("-") == 4
             assert call_args[1]["event"] == "test_event"
             assert call_args[1]["properties"]["app"] == "mxcp"
             assert call_args[1]["properties"]["version"] == PACKAGE_VERSION
@@ -387,16 +387,6 @@ class TestErrorHandling:
 
             # Verify capture was called
             mock_client.capture.assert_called_once()
-
-    @patch("mxcp.sdk.core.analytics.analytics_executor")
-    def test_thread_pool_error_handling(self, mock_executor):
-        """Test error handling when thread pool operations fail."""
-        mock_executor.submit = Mock(side_effect=Exception("Thread pool error"))
-
-        with patch.dict(os.environ, {"MXCP_DISABLE_ANALYTICS": "false"}):
-            with patch("mxcp.sdk.core.analytics.posthog_client", Mock()):
-                # This should not raise an exception
-                track_event("test_event")
 
     @patch("mxcp.sdk.core.analytics.track_command")
     def test_decorator_analytics_error_handling(self, mock_track_command):
