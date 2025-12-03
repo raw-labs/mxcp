@@ -365,21 +365,25 @@ class RAWMCP:
         )
 
     def get_endpoint_counts(self) -> dict[str, int]:
-        """Get counts of valid endpoints by type."""
+        """Get counts of valid endpoints by type.
+
+        Uses self.endpoints which may be filtered to exclude endpoints with
+        validation errors.
+        """
         tool_count = sum(
             1
-            for _, endpoint, error in self._all_endpoints
-            if error is None and endpoint is not None and endpoint.tool is not None
+            for _, endpoint in self.endpoints
+            if endpoint is not None and endpoint.tool is not None
         )
         resource_count = sum(
             1
-            for _, endpoint, error in self._all_endpoints
-            if error is None and endpoint is not None and endpoint.resource is not None
+            for _, endpoint in self.endpoints
+            if endpoint is not None and endpoint.resource is not None
         )
         prompt_count = sum(
             1
-            for _, endpoint, error in self._all_endpoints
-            if error is None and endpoint is not None and endpoint.prompt is not None
+            for _, endpoint in self.endpoints
+            if endpoint is not None and endpoint.prompt is not None
         )
 
         return {
@@ -388,6 +392,39 @@ class RAWMCP:
             "prompts": prompt_count,
             "total": tool_count + resource_count + prompt_count,
         }
+
+    def validate_all_endpoints(self) -> list[dict[str, str]]:
+        """Validate all endpoints and return any validation errors.
+
+        This method validates endpoints using the execution engine to check SQL syntax,
+        etc. Call this before run() to check for validation errors.
+
+        Returns:
+            List of validation errors as dicts with 'path' and 'error' keys.
+            Empty list if all endpoints are valid.
+        """
+        validation_errors: list[dict[str, str]] = []
+
+        if self.runtime_environment is None:
+            raise RuntimeError("Execution engine not initialized")
+
+        for path, _endpoint_def in self.endpoints:
+            try:
+                validation_result = validate_endpoint(
+                    str(path), self.site_config, self.runtime_environment.execution_engine
+                )
+
+                if validation_result.status != "ok":
+                    validation_errors.append(
+                        {
+                            "path": str(path),
+                            "error": validation_result.message or "Unknown validation error",
+                        }
+                    )
+            except Exception as e:
+                validation_errors.append({"path": str(path), "error": str(e)})
+
+        return validation_errors
 
     def _load_endpoints(self) -> None:
         """Load and categorize endpoints."""

@@ -1,3 +1,5 @@
+import json
+
 import click
 
 from mxcp.server.core.config.analytics import track_command_with_timing
@@ -11,6 +13,65 @@ from mxcp.server.interfaces.cli.utils import (
     run_async_cli,
 )
 from mxcp.server.interfaces.server.mcp import RAWMCP
+
+
+def _format_endpoint_errors(skipped_endpoints: list[dict[str, str]]) -> str:
+    """Format endpoint errors for human-readable display.
+
+    Args:
+        skipped_endpoints: List of dicts with 'path' and 'error' keys
+
+    Returns:
+        Formatted string for terminal display
+    """
+    output = []
+    output.append(f"\n{click.style('❌ Server startup failed!', fg='red', bold=True)}")
+    output.append(
+        f"   Found {click.style(str(len(skipped_endpoints)), fg='red')} endpoint(s) with errors\n"
+    )
+
+    output.append(f"{click.style('Failed endpoints:', fg='red', bold=True)}")
+
+    sorted_endpoints = sorted(skipped_endpoints, key=lambda x: x["path"])
+    for i, skipped in enumerate(sorted_endpoints):
+        output.append(f"  {click.style('✗', fg='red')} {skipped['path']}")
+        error_msg = skipped["error"]
+        if error_msg:
+            lines = error_msg.split("\n")
+            first_line = lines[0]
+            output.append(f"    {click.style('Error:', fg='red')} {first_line}")
+            for line in lines[1:]:
+                if line.strip():
+                    output.append(f"    {line}")
+        if i < len(sorted_endpoints) - 1:
+            output.append("")
+
+    output.append(
+        f"\n{click.style('💡 Tip:', fg='yellow')} "
+        "Fix validation errors or use --ignore-errors to start anyway"
+    )
+    output.append("")
+
+    return "\n".join(output)
+
+
+def _format_endpoint_errors_json(skipped_endpoints: list[dict[str, str]]) -> str:
+    """Format endpoint errors for JSON output.
+
+    Args:
+        skipped_endpoints: List of dicts with 'path' and 'error' keys
+
+    Returns:
+        JSON string with error information
+    """
+    return json.dumps(
+        {
+            "status": "error",
+            "message": f"Found {len(skipped_endpoints)} endpoint(s) with errors",
+            "failed_endpoints": skipped_endpoints,
+        },
+        indent=2,
+    )
 
 
 @click.command(name="serve")
@@ -35,6 +96,16 @@ from mxcp.server.interfaces.server.mcp import RAWMCP
 @click.option(
     "--stateless", is_flag=True, help="Enable stateless HTTP mode (for serverless deployments)"
 )
+@click.option(
+    "--ignore-errors",
+    is_flag=True,
+    help="Start server even if some endpoints have validation errors",
+)
+@click.option(
+    "--json-output",
+    is_flag=True,
+    help="Output startup errors in JSON format (only used when startup fails)",
+)
 @track_command_with_timing("serve")  # type: ignore[misc]
 def serve(
     profile: str | None,
@@ -44,12 +115,17 @@ def serve(
     sql_tools: str | None,
     readonly: bool,
     stateless: bool,
+    ignore_errors: bool,
+    json_output: bool,
 ) -> None:
     """Start the MXCP MCP server to expose endpoints via HTTP or stdio.
 
     This command starts a server that exposes your MXCP endpoints as an MCP-compatible
     interface. By default, it uses the transport configuration from your user config,
     but can also be overridden with command line options.
+
+    By default, the server will fail to start if any endpoints have validation errors.
+    Use --ignore-errors to start the server anyway, skipping invalid endpoints.
 
     \b
     Examples:
@@ -61,6 +137,7 @@ def serve(
         mxcp serve --sql-tools false # Disable built-in SQL querying and schema exploration tools
         mxcp serve --readonly        # Open database connection in read-only mode
         mxcp serve --stateless       # Enable stateless HTTP mode
+        mxcp serve --ignore-errors   # Start even if some endpoints have errors
     """
     # Get readonly flag from environment if not set by flag
     if not readonly:
@@ -116,6 +193,32 @@ def serve(
             debug=debug,
         )
 
+        # Check for endpoint loading errors (YAML parsing, schema errors)
+        all_errors = list(server.skipped_endpoints)
+
+        # Also validate endpoints (SQL syntax, etc.)
+        validation_errors = server.validate_all_endpoints()
+        all_errors.extend(validation_errors)
+
+        # Fail startup if there are any endpoint errors (unless --ignore-errors)
+        if all_errors and not ignore_errors:
+            if json_output:
+                click.echo(_format_endpoint_errors_json(all_errors))
+            else:
+                click.echo(_format_endpoint_errors(all_errors))
+            raise click.Abort()
+
+        # If ignoring errors, add validation errors to skipped list for tracking
+        # and remove failed endpoints from the valid list
+        if validation_errors:
+            server.skipped_endpoints.extend(validation_errors)
+            failed_paths = {e["path"] for e in validation_errors}
+            server.endpoints = [
+                (path, endpoint)
+                for path, endpoint in server.endpoints
+                if str(path) not in failed_paths
+            ]
+
         # Get endpoint counts for display
         endpoint_counts = server.get_endpoint_counts()
 
@@ -166,6 +269,14 @@ def serve(
                 click.echo(
                     "   Create tools in the 'tools/' directory, resources in 'resources/', etc."
                 )
+
+            # Show warning if there are skipped endpoints (when using --ignore-errors)
+            if server.skipped_endpoints:
+                click.echo(
+                    f"\n{click.style('⚠️  Skipped endpoints:', fg='yellow', bold=True)} "
+                    f"{click.style(str(len(server.skipped_endpoints)), fg='yellow')}"
+                )
+                click.echo("   Use 'mxcp validate' to see details")
 
             click.echo("\n" + "-" * 60)
 

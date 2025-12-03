@@ -1,0 +1,7 @@
+mxcp: 1
+projects:
+  serve_error_test:
+    profiles:
+      default: {}
+vault:
+  enabled: false

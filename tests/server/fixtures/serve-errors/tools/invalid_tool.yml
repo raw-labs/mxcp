@@ -1,0 +1,6 @@
+tool:
+  name: invalid_tool
+  description: An invalid tool with a SQL error
+  source:
+    code: "SELECT * FROM nonexistent_table_that_does_not_exist"
+

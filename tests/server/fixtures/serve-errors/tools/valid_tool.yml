@@ -1,0 +1,6 @@
+tool:
+  name: valid_tool
+  description: A valid tool for testing
+  source:
+    code: "SELECT 'hello' as greeting"
+
