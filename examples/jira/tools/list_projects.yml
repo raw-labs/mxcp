@@ -5,9 +5,7 @@ tool:
   description: |
     Return a concise list of Jira projects.
     Returns basic project information including key, name, type, and lead.
-  type: tool
   annotations:
-    title: List Projects
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

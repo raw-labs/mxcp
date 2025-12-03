@@ -5,9 +5,7 @@ tool:
   description: |
     List all projects in your Jira instance using OAuth authentication.
     Returns a JSON string containing an array of projects with their details.
-  type: tool
   annotations:
-    title: List Projects (OAuth)
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

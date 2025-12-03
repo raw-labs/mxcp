@@ -5,9 +5,7 @@ tool:
   description: |
     Get a specific user by their unique account ID.
     Returns detailed user information including display name, email, and account status.
-  type: tool
   annotations:
-    title: Get User
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

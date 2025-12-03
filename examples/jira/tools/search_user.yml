@@ -5,9 +5,7 @@ tool:
   description: |
     Search for users by query string (username, email, or display name).
     Returns a list of matching users with their details.
-  type: tool
   annotations:
-    title: Search User
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

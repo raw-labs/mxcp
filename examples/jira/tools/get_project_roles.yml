@@ -5,9 +5,7 @@ tool:
   description: |
     Get all roles available in a project.
     Returns a list of roles with their IDs and URLs.
-  type: tool
   annotations:
-    title: Get Project Roles
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

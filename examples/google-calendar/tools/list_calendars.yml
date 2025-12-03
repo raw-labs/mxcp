@@ -1,7 +1,6 @@
 mxcp: 1
 tool:
   name: list_calendars
-  title: List Google Calendars
   description: |
     List all calendars accessible to the authenticated user.
     Returns calendars with their access permissions, timezones, and display properties.

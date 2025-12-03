@@ -5,9 +5,7 @@ tool:
   description: |
     Search Confluence pages by keyword.
     Returns a JSON string containing matching pages with their details.
-  type: tool
   annotations:
-    title: Search Pages
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

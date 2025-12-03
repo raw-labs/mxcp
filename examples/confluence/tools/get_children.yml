@@ -5,9 +5,7 @@ tool:
   description: |
     List direct children of a Confluence page.
     Returns a JSON string containing the child pages.
-  type: tool
   annotations:
-    title: Get Children
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

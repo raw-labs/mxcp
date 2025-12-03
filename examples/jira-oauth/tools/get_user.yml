@@ -5,9 +5,7 @@ tool:
   description: |
     Get details for a specific user in your Jira instance by their username using OAuth authentication.
     Returns a JSON string containing the user's details.
-  type: tool
   annotations:
-    title: Get User Details (OAuth)
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

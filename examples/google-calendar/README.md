@@ -26,7 +26,7 @@ This example demonstrates how to create safe, read-only MCP tools that interact 
 1. **Google Account**: You need a Google account with Calendar access
 2. **Google Cloud Project**: Create a project in Google Cloud Console with Calendar API enabled
 3. **OAuth Credentials**: Create OAuth 2.0 credentials for your application
-4. **Python Dependencies**: The `google-api-python-client` and related libraries (automatically managed by MXCP)
+4. **Python Dependencies**: The `google-api-python-client`, `google-auth` and related libraries (automatically managed by MXCP)
 
 ## Setup
 

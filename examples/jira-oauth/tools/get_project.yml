@@ -5,9 +5,7 @@ tool:
   description: |
     Get details for a specific project in your Jira instance by its project key using OAuth authentication.
     Returns a JSON string containing the project's details.
-  type: tool
   annotations:
-    title: Get Project Details (OAuth)
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

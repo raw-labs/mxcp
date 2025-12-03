@@ -5,9 +5,7 @@ tool:
   description: |
     Show metadata about a Confluence page.
     Returns a JSON string containing page details like title, author, update date, and labels.
-  type: tool
   annotations:
-    title: Describe Page
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

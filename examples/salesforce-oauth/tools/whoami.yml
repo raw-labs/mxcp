@@ -1,7 +1,6 @@
 mxcp: 1
 tool:
   name: whoami
-  title: Current User Information
   description: |
     Get the current authenticated user's information (user_id, email, name) from OAuth context.
     Use this tool before executing personalized SOQL queries to identify the user for filtering records by ownership or assignment.

@@ -5,9 +5,7 @@ tool:
   description: |
     List all accessible Confluence spaces.
     Returns a JSON string containing space keys and names.
-  type: tool
   annotations:
-    title: List Spaces
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

@@ -1,7 +1,6 @@
 mxcp: 1
 tool:
   name: whoami
-  title: Current User Information
   description: |
     Get the current authenticated user's information (id, email, name) from Google OAuth context.
     Use this tool to verify authentication status and get user profile data.

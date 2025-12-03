@@ -5,9 +5,7 @@ tool:
   description: |
     Get detailed information for a specific JIRA issue by its key.
     Returns comprehensive issue information including all fields, assignee, reporter, etc.
-  type: tool
   annotations:
-    title: Get Issue
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

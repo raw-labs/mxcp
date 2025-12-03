@@ -6,9 +6,7 @@ tool:
     Execute a JQL (Jira Query Language) query to search for issues in your Jira instance.
     Returns a list of issues with their details.
     Use the start and limit parameters to paginate through large result sets.
-  type: tool
   annotations:
-    title: JQL Query
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true
