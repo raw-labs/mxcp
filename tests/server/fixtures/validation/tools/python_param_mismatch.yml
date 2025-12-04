@@ -1,0 +1,17 @@
+mxcp: 1
+tool:
+  name: python_param_mismatch
+  description: Python tool with parameter mismatch between YAML and function
+  language: python
+  source:
+    file: ../python/param_mismatch.py
+  parameters:
+    - name: user_id
+      type: integer
+      description: User ID
+    - name: extra_param
+      type: string
+      description: Extra parameter not in function signature
+  return:
+    type: object
+

@@ -197,31 +197,10 @@ def validate_endpoint_payload(
 
         language = executable_component.language or "sql"
 
-        if language == "python":
-            source = executable_component.source
-            if not source or source.file is None:
-                return EndpointValidationResultModel(
-                    status="error",
-                    path=relative_path,
-                    message="Python endpoints must specify source.file",
-                )
-
-            file_path = Path(source.file)
-            if not file_path.is_absolute():
-                file_path = path_obj.parent / file_path
-
-            if not file_path.exists():
-                return EndpointValidationResultModel(
-                    status="error",
-                    path=relative_path,
-                    message=f"Python source file not found: {file_path}",
-                )
-
-            return EndpointValidationResultModel(status="ok", path=relative_path)
-
-        if language == "sql":
+        # Unified validation for both SQL and Python
+        if language in ("sql", "python"):
             try:
-                sql_query = get_endpoint_source_code(endpoint, endpoint_type, path_obj, repo_root)
+                source_code = get_endpoint_source_code(endpoint, endpoint_type, path_obj, repo_root)
             except Exception as e:
                 return EndpointValidationResultModel(
                     status="error",
@@ -229,13 +208,16 @@ def validate_endpoint_payload(
                     message=f"Error resolving source code: {str(e)}",
                 )
 
-            if not sql_query:
+            if not source_code:
                 return EndpointValidationResultModel(
-                    status="error", path=relative_path, message="No SQL query found"
+                    status="error",
+                    path=relative_path,
+                    message=f"No {language} source code found",
                 )
 
             try:
-                validation_result = execution_engine.validate_source("sql", sql_query)
+                # Language-agnostic validation using execution engine
+                validation_result = execution_engine.validate_source(language, source_code)
                 if not validation_result.is_valid:
                     error_message = (
                         validation_result.error_message or "Source code syntax validation failed"
@@ -246,7 +228,8 @@ def validate_endpoint_payload(
                         message=f"Source code syntax validation failed: {error_message}",
                     )
 
-                sql_param_names = execution_engine.extract_parameters("sql", sql_query)
+                # Language-agnostic parameter extraction
+                param_names = execution_engine.extract_parameters(language, source_code)
             except Exception as e:
                 return EndpointValidationResultModel(
                     status="error",
@@ -254,14 +237,14 @@ def validate_endpoint_payload(
                     message=f"Source code validation error: {str(e)}",
                 )
 
-            if not isinstance(sql_param_names, list):
-                sql_param_names = list(sql_param_names)
+            if not isinstance(param_names, list):
+                param_names = list(param_names)
 
             yaml_params = executable_component.parameters or []
             yaml_param_names = [p.name for p in yaml_params]
 
-            missing_params = set(sql_param_names) - set(yaml_param_names)
-            extra_params = set(yaml_param_names) - set(sql_param_names)
+            missing_params = set(param_names) - set(yaml_param_names)
+            extra_params = set(yaml_param_names) - set(param_names)
             if missing_params or extra_params:
                 return EndpointValidationResultModel(
                     status="error",

@@ -207,6 +207,67 @@ def test_validate_complex_jinja_prompt_invalid(
         os.chdir(original_dir)
 
 
+def test_validate_python_syntax_error(validation_repo_path, site_config, test_execution_engine):
+    """Test validation of Python endpoint with syntax error."""
+    original_dir = os.getcwd()
+    os.chdir(validation_repo_path)
+    try:
+        endpoint_path = "tools/python_syntax_error.yml"
+        result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
+        assert result.status == "error"
+        assert result.message is not None
+        assert "syntax" in result.message.lower()
+    finally:
+        os.chdir(original_dir)
+
+
+def test_validate_python_param_mismatch(validation_repo_path, site_config, test_execution_engine):
+    """Test validation of Python endpoint with parameter mismatch."""
+    original_dir = os.getcwd()
+    os.chdir(validation_repo_path)
+    try:
+        endpoint_path = "tools/python_param_mismatch.yml"
+        result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
+        assert result.status == "error"
+        assert result.message is not None
+        assert "parameter mismatch" in result.message.lower()
+        assert "extra_param" in result.message
+    finally:
+        os.chdir(original_dir)
+
+
+def test_validate_python_inline_code_error(
+    validation_repo_path, site_config, test_execution_engine
+):
+    """Test validation of Python endpoint with inline code (should fail)."""
+    original_dir = os.getcwd()
+    os.chdir(validation_repo_path)
+    try:
+        endpoint_path = "tools/python_inline_code.yml"
+        result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
+        assert result.status == "error"
+        assert result.message is not None
+        # Should fail during YAML parsing due to model validator
+        assert "python" in result.message.lower() and (
+            "file" in result.message.lower() or "inline" in result.message.lower()
+        )
+    finally:
+        os.chdir(original_dir)
+
+
+def test_validate_python_valid(validation_repo_path, site_config, test_execution_engine):
+    """Test validation of valid Python endpoint."""
+    original_dir = os.getcwd()
+    os.chdir(validation_repo_path)
+    try:
+        endpoint_path = "tools/python_valid.yml"
+        result = validate_endpoint(endpoint_path, site_config, test_execution_engine)
+        assert result.status == "ok"
+        assert result.path == endpoint_path
+    finally:
+        os.chdir(original_dir)
+
+
 def test_validate_duplicate_tool_names(validation_repo_path, site_config, test_execution_engine):
     """Test validation detects duplicate tool names across different files."""
     original_dir = os.getcwd()

@@ -1,0 +1,17 @@
+mxcp: 1
+tool:
+  name: python_syntax_error
+  description: Python tool with syntax error in source file
+  language: python
+  source:
+    file: ../python/syntax_error.py
+  parameters:
+    - name: user_id
+      type: integer
+      description: User ID
+    - name: name
+      type: string
+      description: User name
+  return:
+    type: object
+

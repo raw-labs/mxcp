@@ -122,6 +122,15 @@ class ToolDefinitionModel(DefinitionModel):
     tests: list[TestDefinitionModel] | None = None
     policies: PoliciesDefinitionModel | None = None
 
+    @model_validator(mode="after")
+    def validate_python_source(self) -> ToolDefinitionModel:
+        """Validate that Python endpoints use file-based source."""
+        if self.language == "python" and self.source and self.source.file is None:
+            raise ValueError(
+                "Python endpoints must specify source.file (inline code not supported)"
+            )
+        return self
+
 
 class ResourceDefinitionModel(DefinitionModel):
     uri: str
@@ -136,6 +145,15 @@ class ResourceDefinitionModel(DefinitionModel):
     enabled: bool = True
     tests: list[TestDefinitionModel] | None = None
     policies: PoliciesDefinitionModel | None = None
+
+    @model_validator(mode="after")
+    def validate_python_source(self) -> ResourceDefinitionModel:
+        """Validate that Python endpoints use file-based source."""
+        if self.language == "python" and self.source and self.source.file is None:
+            raise ValueError(
+                "Python endpoints must specify source.file (inline code not supported)"
+            )
+        return self
 
 
 class PromptMessageModel(DefinitionModel):

@@ -1,0 +1,16 @@
+mxcp: 1
+tool:
+  name: python_inline_code
+  description: Python tool using inline code instead of file (should fail)
+  language: python
+  source:
+    code: |
+      def inline_func(x: int) -> int:
+          return x * 2
+  parameters:
+    - name: x
+      type: integer
+      description: Input value
+  return:
+    type: integer
+

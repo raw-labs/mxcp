@@ -1,0 +1,17 @@
+mxcp: 1
+tool:
+  name: python_valid
+  description: Valid Python tool for testing
+  language: python
+  source:
+    file: ../python/valid_function.py
+  parameters:
+    - name: item_id
+      type: integer
+      description: Item ID
+    - name: category
+      type: string
+      description: Category name
+  return:
+    type: object
+
