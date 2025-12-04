@@ -69,6 +69,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # Required for uploading Trivy SARIF results
     
     steps:
     - name: Check out code
@@ -126,7 +127,7 @@ jobs:
           type=semver,pattern={{major}},value=v${{ steps.version.outputs.docker_version }},enable=${{ steps.version.outputs.is_latest }}
           type=raw,value=latest,enable=${{ steps.version.outputs.is_latest }}
     
-    - name: Build and push
+    - name: Build and push Docker image (multi-arch)
       uses: docker/build-push-action@v6
       with:
         context: .
@@ -139,6 +140,72 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+    
+    # Scan the published image (both architectures)
+    - name: Scan image for vulnerabilities (amd64)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ghcr.io/raw-labs/mxcp:${{ steps.version.outputs.docker_version }}
+        format: 'sarif'
+        output: 'trivy-results-amd64.sarif'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '0'  # Report vulnerabilities without blocking release
+        scanners: 'vuln,secret'
+      env:
+        TRIVY_PLATFORM: linux/amd64
+    
+    - name: Scan image for vulnerabilities (arm64)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ghcr.io/raw-labs/mxcp:${{ steps.version.outputs.docker_version }}
+        format: 'sarif'
+        output: 'trivy-results-arm64.sarif'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '0'  # Report vulnerabilities without blocking release
+        scanners: 'vuln,secret'
+      env:
+        TRIVY_PLATFORM: linux/arm64
+    
+    - name: Generate SBOM (amd64)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ghcr.io/raw-labs/mxcp:${{ steps.version.outputs.docker_version }}
+        format: 'cyclonedx'
+        output: 'sbom-amd64.json'
+        scanners: 'vuln'
+      env:
+        TRIVY_PLATFORM: linux/amd64
+    
+    - name: Generate SBOM (arm64)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ghcr.io/raw-labs/mxcp:${{ steps.version.outputs.docker_version }}
+        format: 'cyclonedx'
+        output: 'sbom-arm64.json'
+        scanners: 'vuln'
+      env:
+        TRIVY_PLATFORM: linux/arm64
+    
+    - name: Upload SBOMs as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-${{ steps.version.outputs.version }}
+        path: sbom-*.json
+        retention-days: 90
+    
+    - name: Upload Trivy results to GitHub Security (amd64)
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results-amd64.sarif'
+        category: 'trivy-container-amd64'
+    
+    - name: Upload Trivy results to GitHub Security (arm64)
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results-arm64.sarif'
+        category: 'trivy-container-arm64'
 
 
 
