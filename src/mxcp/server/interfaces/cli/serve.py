@@ -13,13 +13,14 @@ from mxcp.server.interfaces.cli.utils import (
     run_async_cli,
 )
 from mxcp.server.interfaces.server.mcp import RAWMCP
+from mxcp.server.services.endpoints.models import EndpointErrorModel
 
 
-def _format_endpoint_errors(skipped_endpoints: list[dict[str, str]]) -> str:
+def _format_endpoint_errors(skipped_endpoints: list[EndpointErrorModel]) -> str:
     """Format endpoint errors for human-readable display.
 
     Args:
-        skipped_endpoints: List of dicts with 'path' and 'error' keys
+        skipped_endpoints: List of EndpointErrorModel instances
 
     Returns:
         Formatted string for terminal display
@@ -32,10 +33,10 @@ def _format_endpoint_errors(skipped_endpoints: list[dict[str, str]]) -> str:
 
     output.append(f"{click.style('Failed endpoints:', fg='red', bold=True)}")
 
-    sorted_endpoints = sorted(skipped_endpoints, key=lambda x: x["path"])
+    sorted_endpoints = sorted(skipped_endpoints, key=lambda x: x.path)
     for i, skipped in enumerate(sorted_endpoints):
-        output.append(f"  {click.style('✗', fg='red')} {skipped['path']}")
-        error_msg = skipped["error"]
+        output.append(f"  {click.style('✗', fg='red')} {skipped.path}")
+        error_msg = skipped.error
         if error_msg:
             lines = error_msg.split("\n")
             first_line = lines[0]
@@ -55,11 +56,11 @@ def _format_endpoint_errors(skipped_endpoints: list[dict[str, str]]) -> str:
     return "\n".join(output)
 
 
-def _format_endpoint_errors_json(skipped_endpoints: list[dict[str, str]]) -> str:
+def _format_endpoint_errors_json(skipped_endpoints: list[EndpointErrorModel]) -> str:
     """Format endpoint errors for JSON output.
 
     Args:
-        skipped_endpoints: List of dicts with 'path' and 'error' keys
+        skipped_endpoints: List of EndpointErrorModel instances
 
     Returns:
         JSON string with error information
@@ -68,7 +69,7 @@ def _format_endpoint_errors_json(skipped_endpoints: list[dict[str, str]]) -> str
         {
             "status": "error",
             "message": f"Found {len(skipped_endpoints)} endpoint(s) with errors",
-            "failed_endpoints": skipped_endpoints,
+            "failed_endpoints": [e.model_dump() for e in skipped_endpoints],
         },
         indent=2,
     )
@@ -212,7 +213,7 @@ def serve(
         # and remove failed endpoints from the valid list
         if validation_errors:
             server.skipped_endpoints.extend(validation_errors)
-            failed_paths = {e["path"] for e in validation_errors}
+            failed_paths = {e.path for e in validation_errors}
             server.endpoints = [
                 (path, endpoint)
                 for path, endpoint in server.endpoints
