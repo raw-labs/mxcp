@@ -97,6 +97,19 @@ mxcp serve [OPTIONS]
 - `--sql-tools`: Enable or disable built-in SQL querying and schema exploration tools (true/false)
 - `--readonly`: Open database connection in read-only mode
 - `--stateless`: Enable stateless HTTP mode for Claude.ai and serverless deployments
+- `--ignore-errors`: Start server even if some endpoints have validation errors (by default, the server fails to start if any endpoints are invalid)
+- `--json-output`: Output startup errors in JSON format (only used when startup fails due to validation errors)
+
+**Strict Validation (Default Behavior):**
+
+By default, `mxcp serve` validates all endpoints at startup and **fails if any endpoints have errors**. This ensures you're aware of configuration issues before the server starts. Common validation errors include:
+
+- Invalid YAML syntax in endpoint definitions
+- Missing required fields (name, description, etc.)
+- SQL syntax errors in queries
+- Invalid parameter or return type definitions
+
+If you want to start the server anyway and skip invalid endpoints, use the `--ignore-errors` flag.
 
 **Examples:**
 ```bash
@@ -108,6 +121,8 @@ mxcp serve --sql-tools true  # Enable built-in SQL querying tools
 mxcp serve --sql-tools false # Disable built-in SQL querying tools
 mxcp serve --readonly        # Open database connection in read-only mode
 mxcp serve --stateless       # Enable stateless HTTP mode
+mxcp serve --ignore-errors   # Start even if some endpoints are invalid
+mxcp serve --json-output     # Output validation errors as JSON (useful for CI/CD)
 ```
 
 ### `mxcp run`

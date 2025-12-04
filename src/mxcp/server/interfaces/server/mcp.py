@@ -68,6 +68,7 @@ from mxcp.server.services.endpoints import (
     execute_endpoint_with_engine,
     execute_endpoint_with_engine_and_policy,
 )
+from mxcp.server.services.endpoints.models import EndpointErrorModel
 from mxcp.server.services.endpoints.validator import validate_endpoint
 
 if TYPE_CHECKING:
@@ -365,21 +366,25 @@ class RAWMCP:
         )
 
     def get_endpoint_counts(self) -> dict[str, int]:
-        """Get counts of valid endpoints by type."""
+        """Get counts of valid endpoints by type.
+
+        Uses self.endpoints which may be filtered to exclude endpoints with
+        validation errors.
+        """
         tool_count = sum(
             1
-            for _, endpoint, error in self._all_endpoints
-            if error is None and endpoint is not None and endpoint.tool is not None
+            for _, endpoint in self.endpoints
+            if endpoint is not None and endpoint.tool is not None
         )
         resource_count = sum(
             1
-            for _, endpoint, error in self._all_endpoints
-            if error is None and endpoint is not None and endpoint.resource is not None
+            for _, endpoint in self.endpoints
+            if endpoint is not None and endpoint.resource is not None
         )
         prompt_count = sum(
             1
-            for _, endpoint, error in self._all_endpoints
-            if error is None and endpoint is not None and endpoint.prompt is not None
+            for _, endpoint in self.endpoints
+            if endpoint is not None and endpoint.prompt is not None
         )
 
         return {
@@ -388,6 +393,39 @@ class RAWMCP:
             "prompts": prompt_count,
             "total": tool_count + resource_count + prompt_count,
         }
+
+    def validate_all_endpoints(self) -> list[EndpointErrorModel]:
+        """Validate all endpoints and return any validation errors.
+
+        This method validates endpoints using the execution engine to check SQL syntax,
+        etc. Call this before run() to check for validation errors.
+
+        Returns:
+            List of EndpointErrorModel instances for endpoints with validation errors.
+            Empty list if all endpoints are valid.
+        """
+        validation_errors: list[EndpointErrorModel] = []
+
+        if self.runtime_environment is None:
+            raise RuntimeError("Execution engine not initialized")
+
+        for path, _endpoint_def in self.endpoints:
+            try:
+                validation_result = validate_endpoint(
+                    str(path), self.site_config, self.runtime_environment.execution_engine
+                )
+
+                if validation_result.status != "ok":
+                    validation_errors.append(
+                        EndpointErrorModel(
+                            path=str(path),
+                            error=validation_result.message or "Unknown validation error",
+                        )
+                    )
+            except Exception as e:
+                validation_errors.append(EndpointErrorModel(path=str(path), error=str(e)))
+
+        return validation_errors
 
     def _load_endpoints(self) -> None:
         """Load and categorize endpoints."""
@@ -401,8 +439,8 @@ class RAWMCP:
         self.endpoints = [
             (path, endpoint) for path, endpoint, error in self._all_endpoints if error is None
         ]
-        self.skipped_endpoints = [
-            {"path": str(path), "error": error}
+        self.skipped_endpoints: list[EndpointErrorModel] = [
+            EndpointErrorModel(path=str(path), error=error)
             for path, _, error in self._all_endpoints
             if error is not None
         ]
@@ -413,7 +451,7 @@ class RAWMCP:
         )
         if self.skipped_endpoints:
             for skipped in self.skipped_endpoints:
-                logger.warning(f"Failed to load endpoint {skipped['path']}: {skipped['error']}")
+                logger.warning(f"Failed to load endpoint {skipped.path}: {skipped.error}")
 
     def _initialize_oauth(self) -> None:
         """Initialize OAuth authentication using profile-specific auth config."""
@@ -1790,10 +1828,10 @@ class RAWMCP:
                         f"Skipping invalid endpoint {path}: {validation_result.message or 'Unknown error'}"
                     )
                     self.skipped_endpoints.append(
-                        {
-                            "path": str(path),
-                            "error": validation_result.message or "Unknown error",
-                        }
+                        EndpointErrorModel(
+                            path=str(path),
+                            error=validation_result.message or "Unknown error",
+                        )
                     )
                     continue
 
@@ -1818,7 +1856,7 @@ class RAWMCP:
                     logger.warning(f"Unknown endpoint type in {path}: {endpoint_def}")
             except Exception as e:
                 logger.error(f"Error registering endpoint {path}: {e}", exc_info=True)
-                self.skipped_endpoints.append({"path": str(path), "error": str(e)})
+                self.skipped_endpoints.append(EndpointErrorModel(path=str(path), error=str(e)))
                 continue
 
         # Register DuckDB features if enabled
@@ -1829,7 +1867,7 @@ class RAWMCP:
         if self.skipped_endpoints:
             logger.warning(f"Skipped {len(self.skipped_endpoints)} invalid endpoints:")
             for skipped in self.skipped_endpoints:
-                logger.warning(f"  - {skipped['path']}: {skipped['error']}")
+                logger.warning(f"  - {skipped.path}: {skipped.error}")
 
     async def _initialize_oauth_server(self) -> None:
         """Initialize OAuth server persistence if enabled."""
