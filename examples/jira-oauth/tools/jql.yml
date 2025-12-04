@@ -6,9 +6,7 @@ tool:
     Execute a JQL (Jira Query Language) query to search for issues in your Jira instance using OAuth authentication.
     Returns a JSON string containing the matching issues with their details.
     Use the start and limit parameters to paginate through large result sets.
-  type: tool
   annotations:
-    title: JQL Query (OAuth)
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

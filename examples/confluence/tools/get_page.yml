@@ -5,9 +5,7 @@ tool:
   description: |
     Fetch a Confluence page's content.
     Returns a JSON string containing the page content in both storage format and rendered HTML.
-  type: tool
   annotations:
-    title: Get Page
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

@@ -1,7 +1,6 @@
 mxcp: 1
 tool:
   name: get_freebusy
-  title: Check Calendar Availability
   description: |
     Check free/busy status across multiple calendars for a specified time range.
     Useful for finding meeting slots and checking availability before scheduling.

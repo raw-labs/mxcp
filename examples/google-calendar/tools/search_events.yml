@@ -1,7 +1,6 @@
 mxcp: 1
 tool:
   name: search_events
-  title: Search Calendar Events
   description: |
     Search for events matching a text query. Searches across event titles, descriptions,
     locations, and attendee information with optional time filtering.

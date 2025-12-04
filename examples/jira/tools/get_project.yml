@@ -5,9 +5,7 @@ tool:
   description: |
     Get details for a specific project by its key.
     Returns comprehensive project information including description, settings, and lead.
-  type: tool
   annotations:
-    title: Get Project
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

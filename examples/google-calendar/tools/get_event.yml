@@ -1,7 +1,6 @@
 mxcp: 1
 tool:
   name: get_event
-  title: Get Event Details
   description: |
     Retrieve detailed information for a specific event by ID.
     Returns complete event data in simplified format optimized for LLM use.

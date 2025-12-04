@@ -1,7 +1,6 @@
 mxcp: 1
 tool:
   name: get_calendar
-  title: Get Calendar Details
   description: |
     Get detailed information for a specific calendar by ID.
     Returns calendar metadata including timezone, access role, and display properties.

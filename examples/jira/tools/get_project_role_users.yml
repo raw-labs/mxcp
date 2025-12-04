@@ -5,9 +5,7 @@ tool:
   description: |
     Get users and groups for a specific role in a project.
     Returns detailed information about users and groups assigned to the role.
-  type: tool
   annotations:
-    title: Get Project Role Users
     readOnlyHint: true
     destructiveHint: false
     idempotentHint: true

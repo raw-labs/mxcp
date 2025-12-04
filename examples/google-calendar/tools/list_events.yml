@@ -1,7 +1,6 @@
 mxcp: 1
 tool:
   name: list_events
-  title: List Calendar Events
   description: |
     List events from a specific calendar with optional time filtering and pagination.
     Returns events in simplified format optimized for LLM consumption.
