@@ -4,7 +4,7 @@ transport:
     port: 8000
     host: 0.0.0.0
     # Set base_url to your server's public URL for production
-    base_url: https://b14528528272.ngrok-free.app
+    base_url: http://localhost:8000
 
 projects:
   google-calendar:
