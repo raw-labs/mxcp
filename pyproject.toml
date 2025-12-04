@@ -172,7 +172,10 @@ markers = [
 line-length = 100
 target-version = ["py310"]
 extend-exclude = '''
-^/examples/
+(
+  ^examples/
+  | tests/server/fixtures/validation/python/syntax_error\.py
+)
 '''
 
 [tool.ruff]
