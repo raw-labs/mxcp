@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: '*'
 
+env:
+  MXCP_DISABLE_ANALYTICS: "1"  # Disable PostHog analytics in CI
+
 jobs:
   test:
     runs-on: ubuntu-latest

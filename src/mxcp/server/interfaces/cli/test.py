@@ -4,7 +4,7 @@ from pathlib import Path
 import click
 
 from mxcp.sdk.auth import UserContextModel
-from mxcp.server.core.config.analytics import track_command_with_timing
+from mxcp.sdk.core.analytics import track_command_with_timing
 from mxcp.server.core.config.site_config import find_repo_root, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.definitions.endpoints.utils import EndpointType

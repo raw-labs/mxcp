@@ -8,6 +8,9 @@ on:
       - 'v*.*.*a*'      # Alpha releases (e.g., v1.0.0a1)
       - 'v*.*.*b*'      # Beta releases (e.g., v1.0.0b1)
 
+env:
+  MXCP_DISABLE_ANALYTICS: "1"  # Disable PostHog analytics in CI
+
 permissions:
   contents: read
   id-token: write  # Required for PyPI trusted publishing
