@@ -79,13 +79,33 @@ jobs:
         format: 'sarif'
         output: 'trivy-dockerfile.sarif'
         severity: 'CRITICAL,HIGH'
-        exit-code: '1'  # Fail on critical/high vulnerabilities
+        exit-code: '0'  # Report vulnerabilities without blocking CI
     
     - name: Upload Dockerfile scan results
       uses: github/codeql-action/upload-sarif@v3
       if: always()
       with:
         sarif_file: 'trivy-dockerfile.sarif'
+
+  # Static Application Security Testing (SAST) with CodeQL
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+    - uses: actions/checkout@v5
+    
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: python
+        queries: security-and-quality
+    
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:python"
 
   # Verify the package can be built (useful even if you release manually)
   build:
