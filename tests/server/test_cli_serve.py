@@ -3,7 +3,7 @@
 import json
 import os
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
