@@ -38,7 +38,6 @@ Thread Safety:
     This module is fully thread-safe and uses a dedicated thread pool for analytics operations.
 """
 
-import atexit
 import contextlib
 import functools
 import hashlib
@@ -124,25 +123,6 @@ def _hash_name(name: str) -> str:
     return hashlib.sha256(name.encode()).hexdigest()[:12]
 
 
-def _flush_analytics() -> None:
-    """Flush pending analytics events before process exit."""
-    global posthog_client
-    if posthog_client is not None:
-        with contextlib.suppress(Exception):
-            posthog_client.flush()  # type: ignore[no-untyped-call]
-
-
-def flush_analytics() -> None:
-    """
-    Explicitly flush pending analytics events.
-
-    This is useful for graceful shutdown in long-running processes (like servers)
-    where you want to ensure events are sent before the process terminates.
-    This is a synchronous blocking call.
-    """
-    _flush_analytics()
-
-
 def initialize_analytics() -> None:
     """
     Initialize PostHog analytics if not opted out.
@@ -158,7 +138,12 @@ def initialize_analytics() -> None:
         - Async mode (sync_mode=False): Events are queued and sent in background thread
         - flush_interval=0.5: Auto-flush every 0.5 seconds (PostHog default)
         - flush_at=100: Auto-flush when 100 events are queued (PostHog default)
-        - atexit handler: Ensures remaining events are flushed on process exit
+
+    Note:
+        We intentionally do NOT register an atexit handler to flush events.
+        Analytics is non-critical, and blocking on process exit (which flush can do
+        indefinitely on network issues) is unacceptable. PostHog's auto-flush handles
+        the common case; some events may be lost on abrupt termination.
 
     Environment Variables:
         MXCP_DISABLE_ANALYTICS: Set to "1", "true", or "yes" to disable analytics
@@ -184,8 +169,6 @@ def initialize_analytics() -> None:
             timeout=POSTHOG_TIMEOUT,
             # Default flush_interval=0.5 and flush_at=100 handle periodic flushing
         )
-        # Register flush handler to ensure events are sent before process exits
-        atexit.register(_flush_analytics)
         # Eagerly load installation ID to avoid blocking file I/O in async context
         _get_installation_id()
 

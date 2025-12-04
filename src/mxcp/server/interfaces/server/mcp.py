@@ -28,7 +28,7 @@ from mxcp.sdk.auth import GeneralOAuthAuthorizationServer
 from mxcp.sdk.auth.context import get_user_context
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.core import PACKAGE_VERSION
-from mxcp.sdk.core.analytics import flush_analytics, track_endpoint_execution
+from mxcp.sdk.core.analytics import track_endpoint_execution
 from mxcp.sdk.mcp import FastMCPLogProxy
 from mxcp.sdk.telemetry import (
     decrement_gauge,
@@ -761,12 +761,9 @@ class RAWMCP:
         except Exception as exc:
             logger.error(f"Error shutting down telemetry: {exc}")
 
-        # Flush analytics events (synchronous)
-        try:
-            flush_analytics()
-            logger.info("Flushed analytics")
-        except Exception as exc:
-            logger.error(f"Error flushing analytics: {exc}")
+        # Note: We intentionally do NOT flush analytics here.
+        # Analytics is non-critical, and flush() can block indefinitely on network issues.
+        # PostHog's auto-flush (every 0.5s) handles the common case.
 
         logger.info("MXCP server shutdown complete")
 
