@@ -58,12 +58,13 @@ github_config = GitHubAuthConfigModel(
 ```
 """
 
-from .base import (
-    ExternalOAuthHandler,
-    GeneralOAuthAuthorizationServer,
-)
+from .adapter import GrantResult, ProviderAdapter, ProviderError, UserInfo
+from .fastmcp_provider import FastMCPAuthProvider
 from .context import get_user_context, reset_user_context, set_user_context
 from .middleware import AuthenticationMiddleware
+from .service import AuthService
+from .sessions import OAuthState, Session, SessionManager
+from .storage import SqliteTokenStore, TokenEncryption, TokenStore
 from .models import (
     AtlassianAuthConfigModel,
     AuthConfigModel,
@@ -81,7 +82,7 @@ from .models import (
 )
 
 __all__ = [
-    # Types
+    # Config Types
     "AuthConfigModel",
     "HttpTransportConfigModel",
     "OAuthClientConfigModel",
@@ -93,11 +94,24 @@ __all__ = [
     "AuthPersistenceConfigModel",
     "AuthorizationConfigModel",
     "StateMetaModel",
+    # Provider Adapter
+    "ProviderAdapter",
+    "GrantResult",
+    "UserInfo",
+    "ProviderError",
+    # Session Management
+    "Session",
+    "SessionManager",
+    "OAuthState",
+    # Token Storage
+    "TokenStore",
+    "SqliteTokenStore",
+    "TokenEncryption",
     # Core classes
-    "ExternalOAuthHandler",
+    "AuthService",
+    "FastMCPAuthProvider",
     "ExternalUserInfoModel",
     "UserContextModel",
-    "GeneralOAuthAuthorizationServer",
     "AuthenticationMiddleware",
     # Context management
     "get_user_context",

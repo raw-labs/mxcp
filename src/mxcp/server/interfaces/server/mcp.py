@@ -24,7 +24,7 @@ from pydantic import AnyHttpUrl, Field, create_model
 from starlette.responses import JSONResponse
 
 from mxcp.sdk.audit import AuditLogger
-from mxcp.sdk.auth import GeneralOAuthAuthorizationServer
+from mxcp.sdk.auth import AuthService
 from mxcp.sdk.auth.context import get_user_context
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.core import PACKAGE_VERSION
@@ -39,9 +39,8 @@ from mxcp.sdk.telemetry import (
 )
 from mxcp.server.admin import AdminAPIRunner
 from mxcp.server.core.auth.helpers import (
-    create_oauth_handler,
+    create_auth_service,
     create_url_builder,
-    translate_auth_config,
 )
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import get_active_profile, load_site_config
@@ -147,6 +146,7 @@ class RAWMCP:
     readonly: bool
     _model_cache: dict[str, Any]
     transport_mode: str | None
+    auth_service: AuthService
 
     _signal_loop: asyncio.AbstractEventLoop | None = None
 
@@ -457,22 +457,18 @@ class RAWMCP:
     def _initialize_oauth(self) -> None:
         """Initialize OAuth authentication using profile-specific auth config."""
         auth_config = self.active_profile.auth
-        self.oauth_handler = create_oauth_handler(
+
+        # Create AuthService which encapsulates provider, session manager, and middleware
+        self.auth_service = create_auth_service(
             auth_config,
             host=self.host,
             port=self.port,
             user_config=self.user_config,
         )
-        self.oauth_server = None
+
         self.auth_settings = None
 
-        if self.oauth_handler:
-            auth_config_dict = translate_auth_config(auth_config)
-            user_config_dict = self.user_config.model_dump(mode="python")
-            self.oauth_server = GeneralOAuthAuthorizationServer(
-                self.oauth_handler, auth_config_dict, user_config_dict
-            )
-
+        if self.auth_service.auth_enabled:
             # Use URL builder for OAuth endpoints
             url_builder = create_url_builder(self.user_config)
             base_url = url_builder.get_base_url(host=self.host, port=self.port)
@@ -511,18 +507,19 @@ class RAWMCP:
 
         logger.info(f"Initializing FastMCP with host={self.host}, port={self.port}")
 
-        if self.auth_settings and self.oauth_server:
+        if self.auth_settings and self.auth_service.fastmcp_provider:
             fastmcp_kwargs["auth"] = self.auth_settings
-            fastmcp_kwargs["auth_server_provider"] = self.oauth_server
+            fastmcp_kwargs["auth_server_provider"] = self.auth_service.fastmcp_provider
 
         self.mcp = FastMCP(**fastmcp_kwargs)
 
-        # Initialize authentication middleware
-        self.auth_middleware = AuthenticationMiddleware(self.oauth_handler, self.oauth_server)
+        # Initialize authentication middleware via AuthService
+        self.auth_middleware = self.auth_service.build_middleware()
 
         # Register OAuth routes if enabled
-        if self.oauth_handler and self.oauth_server:
-            self._register_oauth_routes()
+        if self.auth_service.auth_enabled:
+            self.auth_service.register_routes(self.mcp)
+            self._register_oauth_metadata_routes()
 
     async def _run_admin_api_and_transport(self, transport: str) -> None:
         """Start the admin API (if enabled) and run the main MCP server."""
@@ -772,15 +769,15 @@ class RAWMCP:
         except Exception as exc:
             logger.error(f"Error shutting down runtime components: {exc}")
 
-        # Close OAuth server persistence
-        if self.oauth_server:
+        # Close auth service (OAuth server persistence)
+        if self.auth_service.auth_enabled:
             try:
-                await asyncio.wait_for(self.oauth_server.close(), timeout=5.0)
-                logger.info("Closed OAuth server")
+                await asyncio.wait_for(self.auth_service.close(), timeout=5.0)
+                logger.info("Closed auth service")
             except asyncio.TimeoutError:
-                logger.error("OAuth server shutdown timed out after 5 seconds")
+                logger.error("Auth service shutdown timed out after 5 seconds")
             except Exception as exc:
-                logger.error(f"Error closing OAuth server: {exc}")
+                logger.error(f"Error closing auth service: {exc}")
 
         # Shutdown audit logger if initialized
         if self.audit_logger:
@@ -1882,12 +1879,12 @@ class RAWMCP:
 
     async def _initialize_oauth_server(self) -> None:
         """Initialize OAuth server persistence if enabled."""
-        if self.oauth_server:
+        if self.auth_service.auth_enabled:
             try:
-                await self.oauth_server.initialize()
-                logger.info("OAuth server initialized successfully")
+                await self.auth_service.initialize()
+                logger.info("Auth service initialized successfully")
             except Exception as e:
-                logger.error(f"Failed to initialize OAuth server: {e}")
+                logger.error(f"Failed to initialize auth service: {e}")
                 raise
 
     async def run(self, transport: str = "streamable-http") -> None:
@@ -1926,15 +1923,15 @@ class RAWMCP:
                     f"About to start uvicorn with host={self.mcp.settings.host}, port={self.mcp.settings.port}"
                 )
 
-            # Initialize OAuth server before starting FastMCP - ensure it completes
-            if self.oauth_server:
+            # Initialize auth service before starting FastMCP - ensure it completes
+            if self.auth_service.auth_enabled:
                 try:
                     await asyncio.wait_for(self._initialize_oauth_server(), timeout=10.0)
                 except asyncio.TimeoutError:
-                    raise RuntimeError("OAuth server initialization timed out") from None
+                    raise RuntimeError("Auth service initialization timed out") from None
                 except Exception as exc:
-                    # Don't continue if OAuth is enabled but initialization failed
-                    raise RuntimeError(f"OAuth server initialization failed: {exc}") from exc
+                    # Don't continue if auth is enabled but initialization failed
+                    raise RuntimeError(f"Auth service initialization failed: {exc}") from exc
 
             loop = asyncio.get_running_loop()
             self._signal_loop = loop
@@ -1959,22 +1956,8 @@ class RAWMCP:
                 await self.reload_manager.stop()
                 logger.info("Reload manager stopped")
 
-    def _register_oauth_routes(self) -> None:
-        """Register OAuth callback routes."""
-        if self.oauth_handler is None:
-            logger.warning("OAuth handler not configured, skipping OAuth routes")
-            return
-
-        callback_path = self.oauth_handler.callback_path
-        logger.info(f"Registering OAuth callback route: {callback_path}")
-
-        # Use custom_route to register the callback
-        @self.mcp.custom_route(callback_path, methods=["GET"])  # type: ignore[misc]
-        async def oauth_callback(request: Any) -> Any:
-            if self.oauth_handler is None or self.oauth_server is None:
-                raise RuntimeError("OAuth not configured")
-            return await self.oauth_handler.on_callback(request, self.oauth_server)
-
+    def _register_oauth_metadata_routes(self) -> None:
+        """Register OAuth metadata routes (called by AuthService.register_routes internally)."""
         # Register OAuth Protected Resource metadata endpoint
         @self.mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])  # type: ignore[misc]
         async def oauth_protected_resource_metadata(request: Any) -> Any:
