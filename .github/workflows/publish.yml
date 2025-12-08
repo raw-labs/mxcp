@@ -190,7 +190,7 @@ jobs:
         TRIVY_PLATFORM: linux/arm64
     
     - name: Upload SBOMs as artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: sbom-${{ steps.version.outputs.version }}
         path: sbom-*.json
