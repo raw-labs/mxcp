@@ -5,7 +5,7 @@ import logging
 import secrets
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from mcp.server.auth.provider import (  # type: ignore[attr-defined]
     AccessToken,
@@ -193,11 +193,8 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                         client_id=client_data.client_id,
                         client_secret=client_data.client_secret,
                         redirect_uris=redirect_uris_pydantic,
-                        grant_types=cast(
-                            list[Literal["authorization_code", "refresh_token"]],
-                            client_data.grant_types,
-                        ),
-                        response_types=cast(list[Literal["code"]], client_data.response_types),
+                        grant_types=client_data.grant_types,
+                        response_types=client_data.response_types,
                         scope=client_data.scope,
                         client_name=client_data.client_name,
                     )
@@ -236,12 +233,17 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                     logger.error(f"Skipping configured client {client_id}: no valid redirect URIs")
                     continue
 
+                # Cast grant_types to the expected union type
+                grant_types_list = cast(
+                    list[str], client_config.grant_types or ["authorization_code"]
+                )
+
                 client = OAuthClientInformationFull(
                     client_id=client_id,
                     client_secret=client_config.client_secret,  # None for public clients
                     redirect_uris=redirect_uris_any,
-                    grant_types=client_config.grant_types or ["authorization_code"],
-                    response_types=cast(list[Literal["code"]], ["code"]),
+                    grant_types=grant_types_list,
+                    response_types=["code"],
                     scope=" ".join(client_config.scopes or []),  # No default scopes
                     client_name=client_config.name,
                 )
@@ -291,13 +293,8 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
                             client_id=persisted_client.client_id,
                             client_secret=persisted_client.client_secret,
                             redirect_uris=redirect_uris_pydantic,
-                            grant_types=cast(
-                                list[Literal["authorization_code", "refresh_token"]],
-                                persisted_client.grant_types,
-                            ),
-                            response_types=cast(
-                                list[Literal["code"]], persisted_client.response_types
-                            ),
+                            grant_types=persisted_client.grant_types,
+                            response_types=persisted_client.response_types,
                             scope=persisted_client.scope,
                             client_name=persisted_client.client_name,
                         )
@@ -314,21 +311,28 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         async with self._lock:
             logger.info(f"Registering client: {client_info.client_id}")
 
-            # Store in memory cache
+            # Store in memory cache - client_id can be None in the model but shouldn't be here
+            if not client_info.client_id:
+                raise ValueError("client_id is required for registration")
+
             self._clients[client_info.client_id] = client_info
 
             # Store in persistence if available
             if self.persistence:
                 try:
                     # Convert Pydantic AnyUrl objects to strings for JSON serialization
-                    redirect_uris_str = [str(uri) for uri in client_info.redirect_uris]
+                    redirect_uris_str = (
+                        [str(uri) for uri in client_info.redirect_uris]
+                        if client_info.redirect_uris
+                        else []
+                    )
 
                     persisted_client = PersistedClient(
                         client_id=client_info.client_id,
                         client_secret=client_info.client_secret,
                         redirect_uris=redirect_uris_str,  # Convert AnyUrl to strings
-                        grant_types=cast(list[str], client_info.grant_types),
-                        response_types=cast(list[str], client_info.response_types),
+                        grant_types=client_info.grant_types,
+                        response_types=client_info.response_types,
                         scope=client_info.scope or "",
                         client_name=client_info.client_name or "",
                         created_at=time.time(),
@@ -405,8 +409,8 @@ class GeneralOAuthAuthorizationServer(OAuthAuthorizationServerProvider[Any, Any,
         logger.info(
             f"OAuth authorize request - client_id: {client.client_id if client else 'None'}, params: {params}"
         )
-        if not client:
-            logger.error("No client provided to authorize method")
+        if not client or not client.client_id:
+            logger.error("No client or client_id provided to authorize method")
             raise HTTPException(400, "Client not found")
         return self.handler.get_authorize_url(client.client_id, params)
 
