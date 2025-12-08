@@ -1,5 +1,6 @@
 """Tests for EndpointToolExecutor integration."""
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -7,7 +8,7 @@ import pytest
 from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionContext
 from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel, SourceDefinitionModel
-from mxcp.server.executor.runners.tool import EndpointToolExecutor
+from mxcp.server.executor.runners.tool import EndpointToolExecutor, EndpointWithPath
 
 
 class MockExecutionEngine:
@@ -47,60 +48,79 @@ class TestEndpointToolExecutor:
                 "weather.py": {"temperature": 22, "condition": "sunny"},
             }
         )
+        self._monkeypatch = pytest.MonkeyPatch()
+        self._monkeypatch.setattr(
+            "mxcp.server.executor.runners.tool.find_repo_root", lambda: Path.cwd()
+        )
 
-        self.endpoints: list[EndpointDefinitionModel] = [
-            EndpointDefinitionModel.model_validate(
-                {
-                    "mxcp": 1,
-                    "tool": {
-                        "name": "get_date",
-                        "description": "Get current date",
-                        "parameters": [],
-                        "source": {"code": "SELECT current_date()"},
-                    },
-                }
+        self.endpoints = [
+            EndpointWithPath(
+                EndpointDefinitionModel.model_validate(
+                    {
+                        "mxcp": 1,
+                        "tool": {
+                            "name": "get_date",
+                            "description": "Get current date",
+                            "parameters": [],
+                            "source": {"code": "SELECT current_date()"},
+                        },
+                    }
+                ),
+                Path("endpoints/get_date.yml"),
             ),
-            EndpointDefinitionModel.model_validate(
-                {
-                    "mxcp": 1,
-                    "tool": {
-                        "name": "calculate",
-                        "description": "Calculate expression",
-                        "parameters": [{"name": "expr", "type": "string"}],
-                        "source": {"code": "return 2 + 2", "language": "python"},
-                    },
-                }
+            EndpointWithPath(
+                EndpointDefinitionModel.model_validate(
+                    {
+                        "mxcp": 1,
+                        "tool": {
+                            "name": "calculate",
+                            "description": "Calculate expression",
+                            "parameters": [{"name": "expr", "type": "string"}],
+                            "source": {"code": "return 2 + 2", "language": "python"},
+                        },
+                    }
+                ),
+                Path("endpoints/calculate.yml"),
             ),
-            EndpointDefinitionModel.model_validate(
-                {
-                    "mxcp": 1,
-                    "tool": {
-                        "name": "get_weather",
-                        "description": "Get weather info",
-                        "parameters": [{"name": "location", "type": "string"}],
-                        "source": {"file": "weather.py", "language": "python"},
-                    },
-                }
+            EndpointWithPath(
+                EndpointDefinitionModel.model_validate(
+                    {
+                        "mxcp": 1,
+                        "tool": {
+                            "name": "get_weather",
+                            "description": "Get weather info",
+                            "parameters": [{"name": "location", "type": "string"}],
+                            "source": {"code": "weather.py", "language": "python"},
+                        },
+                    }
+                ),
+                Path("endpoints/get_weather.yml"),
             ),
-            EndpointDefinitionModel.model_validate(
-                {
-                    "mxcp": 1,
-                    "resource": {
-                        "uri": "data://users",
-                        "description": "User data resource",
-                        "parameters": [{"name": "limit", "type": "integer"}],
-                        "source": {"code": "SELECT * FROM users LIMIT $limit"},
-                    },
-                }
+            EndpointWithPath(
+                EndpointDefinitionModel.model_validate(
+                    {
+                        "mxcp": 1,
+                        "resource": {
+                            "uri": "data://users",
+                            "description": "User data resource",
+                            "parameters": [{"name": "limit", "type": "integer"}],
+                            "source": {"code": "SELECT * FROM users LIMIT $limit"},
+                        },
+                    }
+                ),
+                Path("endpoints/users.yml"),
             ),
         ]
 
         self.executor = EndpointToolExecutor(self.engine, self.endpoints)
 
+    def teardown_method(self):
+        self._monkeypatch.undo()
+
     def test_initialization(self):
         """Test EndpointToolExecutor initialization."""
         assert self.executor.engine == self.engine
-        assert self.executor.endpoints == self.endpoints
+        assert len(self.executor.endpoints) == len(self.endpoints)
         assert len(self.executor._tool_map) == 4
         assert "get_date" in self.executor._tool_map
         assert "data://users" in self.executor._tool_map
@@ -139,6 +159,8 @@ class TestEndpointToolExecutor:
     @pytest.mark.asyncio
     async def test_execute_tool_with_file(self):
         """Test executing a tool with file reference."""
+        tmp_file = Path("weather.py")
+        tmp_file.write_text("weather.py")
         result = await self.executor.execute_tool("get_weather", {"location": "Paris"})
 
         assert result == {"temperature": 22, "condition": "sunny"}
@@ -149,6 +171,8 @@ class TestEndpointToolExecutor:
         assert call["language"] == "python"
         assert call["source_code"] == "weather.py"
         assert call["params"] == {"location": "Paris"}
+        if tmp_file.exists():
+            tmp_file.unlink()
 
     @pytest.mark.asyncio
     async def test_execute_resource(self):
@@ -205,43 +229,98 @@ class TestEndpointToolExecutor:
             "source",
             SourceDefinitionModel.model_construct(code=None, file=None),
         )
-        endpoints_no_source: list[EndpointDefinitionModel] = [endpoint]
-
+        endpoints_no_source = [EndpointWithPath(endpoint, Path("endpoints/broken.yml"))]
         executor = EndpointToolExecutor(self.engine, endpoints_no_source)
 
         with pytest.raises(ValueError) as exc_info:
             await executor.execute_tool("broken_tool", {})
 
-        assert "No source code or file found in source definition" in str(exc_info.value)
+        assert "No source found for endpoint" in str(exc_info.value)
 
-    def test_get_language_inference(self):
-        """Test language inference via endpoint execution."""
-        # Create endpoints with different language sources
-        test_endpoints: list[EndpointDefinitionModel] = [
+    @pytest.mark.asyncio
+    async def test_execute_tool_loads_file_content(self, tmp_path, monkeypatch):
+        """Ensure file-based sources are read and executed with their content."""
+        sql_dir = tmp_path / "sql"
+        sql_dir.mkdir()
+        sql_file = sql_dir / "hello.sql"
+        sql_file.write_text("select 1 as val;")
+
+        # Provide mxcp-site.yml so find_repo_root() resolves to tmp_path
+        (tmp_path / "mxcp-site.yml").write_text("mxcp: 1\nproject: test\nprofile: default\n")
+        monkeypatch.chdir(tmp_path)
+
+        endpoint = EndpointWithPath(
             EndpointDefinitionModel.model_validate(
-                {"mxcp": 1, "tool": {"name": "python_file_tool", "source": {"file": "script.py"}}}
+                {"mxcp": 1, "tool": {"name": "hello_tool", "source": {"file": "sql/hello.sql"}}}
             ),
+            Path("endpoints/hello.yml"),
+        )
+
+        engine = MockExecutionEngine({"select 1 as val;": {"val": 1}})
+        executor = EndpointToolExecutor(engine, [endpoint])
+
+        result = await executor.execute_tool("hello_tool", {})
+
+        assert result == {"val": 1}
+        assert engine.calls[0]["source_code"] == "select 1 as val;"
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_loads_relative_parent_path(self, tmp_path, monkeypatch):
+        """Relative paths with '..' should resolve correctly."""
+        (tmp_path / "mxcp-site.yml").write_text("mxcp: 1\nproject: test\nprofile: default\n")
+        sql_dir = tmp_path.parent / "shared-sql"
+        sql_dir.mkdir(exist_ok=True)
+        sql_file = sql_dir / "hi.sql"
+        sql_file.write_text("select 2 as val;")
+
+        # endpoint references ../shared-sql/hi.sql relative to repo root
+        endpoint = EndpointWithPath(
             EndpointDefinitionModel.model_validate(
-                {"mxcp": 1, "tool": {"name": "sql_file_tool", "source": {"file": "query.sql"}}}
+                {"mxcp": 1, "tool": {"name": "hi_tool", "source": {"file": "../shared-sql/hi.sql"}}}
             ),
+            Path("endpoints/hi.yml"),
+        )
+
+        engine = MockExecutionEngine({"select 2 as val;": {"val": 2}})
+        monkeypatch.chdir(tmp_path)
+        executor = EndpointToolExecutor(engine, [endpoint])
+
+        result = await executor.execute_tool("hi_tool", {})
+
+        assert result == {"val": 2}
+
+    @pytest.mark.asyncio
+    async def test_python_file_executes_by_path(self, tmp_path, monkeypatch):
+        """Python sources should be passed as file paths to the engine."""
+        (tmp_path / "mxcp-site.yml").write_text("mxcp: 1\nproject: test\nprofile: default\n")
+        py_dir = tmp_path / "python"
+        py_dir.mkdir()
+        script = py_dir / "hello.py"
+        script.write_text("def python_tool():\n" "    return {'message': 'hi'}\n")
+
+        endpoint = EndpointWithPath(
             EndpointDefinitionModel.model_validate(
                 {
                     "mxcp": 1,
                     "tool": {
-                        "name": "explicit_override_tool",
-                        "source": {"file": "script.py", "language": "sql"},
+                        "name": "python_tool",
+                        "source": {"file": "python/hello.py", "language": "python"},
                     },
                 }
             ),
-            EndpointDefinitionModel.model_validate(
-                {"mxcp": 1, "tool": {"name": "default_sql_tool", "source": {"code": "some code"}}}
-            ),
-        ]
+            Path("endpoints/python.yml"),
+        )
 
-        test_executor = EndpointToolExecutor(self.engine, test_endpoints)
+        monkeypatch.chdir(tmp_path)
+        engine = MockExecutionEngine()
+        executor = EndpointToolExecutor(engine, [endpoint])
 
-        # Verify the tools were properly registered
-        assert "python_file_tool" in test_executor._tool_map
-        assert "sql_file_tool" in test_executor._tool_map
-        assert "explicit_override_tool" in test_executor._tool_map
-        assert "default_sql_tool" in test_executor._tool_map
+        result = await executor.execute_tool("python_tool", {})
+
+        assert result == "Mock result for " + engine.calls[0]["source_code"]
+        assert engine.calls[0]["language"] == "python"
+        source_code = engine.calls[0]["source_code"]
+        file_part, sep, function_name = source_code.partition(":")
+        assert sep == ":"
+        assert function_name == "python_tool"
+        assert Path(file_part).resolve() == script.resolve()

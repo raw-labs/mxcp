@@ -609,18 +609,13 @@ Add model configuration to your user config file (`~/.mxcp/config.yml`):
 
 ```yaml
 models:
-  default: "claude-4-sonnet"  # Default model to use for evals
+  default: "claude-3-5-sonnet-20240620"  # Default model to use for evals (update to a valid ID)
   models:
-    claude-4-opus:
-      type: "claude"
+    claude-3-5-sonnet-20240620:
+      type: "anthropic"
       api_key: "${ANTHROPIC_API_KEY}"  # Environment variable containing API key
-      timeout: 60  # Request timeout in seconds
+      timeout: 30  # Anthropic Messages model ID; ensure your account has access
       max_retries: 3  # Number of retries on failure
-    
-    claude-4-sonnet:
-      type: "claude"
-      api_key: "${ANTHROPIC_API_KEY}"
-      timeout: 30
     
     gpt-4o:
       type: "openai"
@@ -638,11 +633,48 @@ models:
 
 - **default**: The model to use when not specified in eval suite or CLI
 - **models**: Dictionary of model configurations
-  - **type**: Either "claude" or "openai"
+- **type**: Either "anthropic" or "openai"
   - **api_key**: API key (you can use environment variables references)
-  - **base_url**: Custom API endpoint (optional, for OpenAI-compatible services)
-  - **timeout**: Request timeout in seconds
-  - **max_retries**: Number of retries on failure
+- **base_url**: Custom API endpoint (optional, for OpenAI-compatible services)
+- **timeout**: Request timeout in seconds
+- **max_retries**: Number of retries on failure
+- **options**: Extra provider-specific options forwarded to the model (e.g. `thinking: false`)
+
+Example with mixed providers and options:
+
+```yaml
+models:
+  default: "gpt-4o"
+  models:
+    gpt-4o:
+      type: "openai"
+      api_key: "${OPENAI_API_KEY}"
+      timeout: 45
+      options:
+        reasoning: "fast"
+    claude-3-5-sonnet-20240620:
+      type: "anthropic"
+      api_key: "${ANTHROPIC_API_KEY}"
+      timeout: 30
+      options:
+        thinking: false
+
+# Using OpenAI Responses API with reasoning
+# Set api: responses to route through the Responses endpoint (e.g., for reasoning)
+models:
+  default: "gpt-5"
+  models:
+    gpt-5:
+      type: "openai"
+      api_key: "${OPENAI_API_KEY}"
+      options:
+        api: "responses"          # Choices: responses (for OpenAI Responses API), chat (default)
+        # Provider-specific fields must be prefixed:
+        # - body:<key> goes into the request body
+        # - header:<key> goes into request headers
+        body:reasoning:
+          effort: "medium"        # Passed via extra_body to the provider
+```
 
 For more information on using evals, see the [LLM Evaluation section](quality.md#llm-evaluation-evals) in the Quality & Testing Guide.
 

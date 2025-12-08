@@ -411,7 +411,7 @@ class PythonExecutor(ExecutorPlugin):
                     return result
                 except (ImportError, SyntaxError) as e:
                     # These are executor-level errors that should be wrapped
-                    logger.error(f"Python execution failed: {e}")
+                    logger.debug(f"Python execution failed: {e}")
                     # Record error metrics
                     record_counter(
                         "mxcp.python.executions_total",
@@ -496,7 +496,7 @@ class PythonExecutor(ExecutorPlugin):
             return await self._execute_function(func, params, context)
 
         except Exception as e:
-            logger.error(f"Failed to execute file {file_path}: {e}")
+            logger.debug(f"Failed to execute file {file_path}: {e}")
             raise
 
     async def _execute_inline(
@@ -566,7 +566,7 @@ class PythonExecutor(ExecutorPlugin):
             raise ValueError("No suitable function found in inline code")
 
         except Exception as e:
-            logger.error(f"Failed to execute inline code: {e}")
+            logger.debug(f"Failed to execute inline code: {e}")
             raise
 
     async def _execute_function(
@@ -606,5 +606,5 @@ class PythonExecutor(ExecutorPlugin):
             return result
 
         except Exception as e:
-            logger.error(f"Function execution failed: {e}")
+            logger.debug(f"Function execution failed: {e}")
             raise
