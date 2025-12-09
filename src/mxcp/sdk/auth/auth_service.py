@@ -48,6 +48,9 @@ class AuthService:
         extra_params: Mapping[str, str] | None = None,
     ) -> tuple[str, StateRecord]:
         """Create state and return provider authorize URL."""
+        # First touchpoint for a new client request: persist a one-time state
+        # (client/redirect/PKCE/scopes). No session is created until the IdP
+        # callback succeeds.
         state_record = await self.session_manager.create_state(
             client_id=client_id,
             redirect_uri=redirect_uri,
@@ -70,6 +73,8 @@ class AuthService:
         self, *, code: str, state: str, code_verifier: str | None = None
     ) -> tuple[AuthCodeRecord, StoredSession]:
         """Process provider callback, creating session and issuing auth code."""
+        # Resume the flow using the stored state. This is the first moment we
+        # create an MCP session—only after the provider code exchange succeeds.
         state_record = await self.session_manager.consume_state(state)
         if not state_record:
             raise ProviderError("invalid_state", "State not found or expired", status_code=400)

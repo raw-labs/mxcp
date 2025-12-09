@@ -21,6 +21,7 @@ async def session_manager(tmp_path: Path) -> SessionManager:
 
 @pytest.mark.asyncio
 async def test_state_create_and_consume_once(session_manager: SessionManager) -> None:
+    # State can be consumed exactly once; carries PKCE and scopes.
     record = await session_manager.create_state(
         client_id="client-1",
         redirect_uri="http://localhost/redirect",
@@ -39,6 +40,7 @@ async def test_state_create_and_consume_once(session_manager: SessionManager) ->
 
 @pytest.mark.asyncio
 async def test_state_expiry_respected(session_manager: SessionManager) -> None:
+    # Expired state cannot be consumed.
     record = await session_manager.create_state(
         client_id=None,
         redirect_uri=None,
@@ -54,6 +56,7 @@ async def test_state_expiry_respected(session_manager: SessionManager) -> None:
 
 @pytest.mark.asyncio
 async def test_auth_code_create_and_consume_once(session_manager: SessionManager) -> None:
+    # Auth code can be consumed exactly once.
     code = await session_manager.create_auth_code(
         session_id="session-1",
         redirect_uri="http://localhost/redirect",
@@ -69,6 +72,7 @@ async def test_auth_code_create_and_consume_once(session_manager: SessionManager
 
 @pytest.mark.asyncio
 async def test_issue_get_and_revoke_session(session_manager: SessionManager) -> None:
+    # Session issuance, retrieval by access token, and revocation.
     user_info = UserInfo(
         provider="dummy",
         user_id="u1",
@@ -96,6 +100,7 @@ async def test_issue_get_and_revoke_session(session_manager: SessionManager) -> 
 
 @pytest.mark.asyncio
 async def test_cleanup_expired_session(session_manager: SessionManager) -> None:
+    # Cleanup removes expired sessions.
     session = await session_manager.issue_session(
         provider="dummy",
         user_info=UserInfo(provider="dummy", user_id="u", username="u"),
@@ -114,6 +119,7 @@ async def test_cleanup_expired_session(session_manager: SessionManager) -> None:
 
 @pytest.mark.asyncio
 async def test_issue_and_load_session(session_manager: SessionManager) -> None:
+    # Session issuance and lookup by access token, with provider metadata.
     now = time.time()
     user_info = UserInfo(
         provider="dummy",
@@ -140,6 +146,7 @@ async def test_issue_and_load_session(session_manager: SessionManager) -> None:
 
 @pytest.mark.asyncio
 async def test_expired_session_returns_none(session_manager: SessionManager) -> None:
+    # Expired sessions are not returned.
     user_info = UserInfo(provider="dummy", user_id="expired", username="expired")
     session = await session_manager.issue_session(
         provider="dummy",
@@ -156,6 +163,7 @@ async def test_expired_session_returns_none(session_manager: SessionManager) -> 
 
 @pytest.mark.asyncio
 async def test_cleanup_clears_expired_items(session_manager: SessionManager) -> None:
+    # Cleanup removes expired states/auth codes.
     await session_manager.create_state(
         client_id=None,
         redirect_uri=None,
