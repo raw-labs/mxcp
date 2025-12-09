@@ -5,8 +5,6 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-from mcp.server.auth.middleware.auth_context import get_access_token
-
 from mxcp.sdk.auth.contracts import ProviderAdapter, ProviderError
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.telemetry import record_counter, traced_operation
@@ -28,7 +26,7 @@ class AuthenticationMiddleware:
         *,
         session_manager: SessionManager | None = None,
         provider_adapter: ProviderAdapter | None = None,
-        token_getter: Callable[[], Any] | None = None,
+        token_getter: Callable[[], str | None],
     ):
         """Initialize authentication middleware.
 
@@ -37,13 +35,13 @@ class AuthenticationMiddleware:
             oauth_server: OAuth authorization server instance (None if auth is disabled)
             session_manager: Session manager for new auth flow
             provider_adapter: Provider adapter for fetching user context
-            token_getter: Override for access token retrieval (useful for tests)
+            token_getter: Callable returning the access token string (or None)
         """
         self.oauth_handler = oauth_handler
         self.oauth_server = oauth_server
         self.session_manager = session_manager
         self.provider_adapter = provider_adapter
-        self.token_getter = token_getter or get_access_token
+        self.token_getter = token_getter
 
         self.using_session_manager = session_manager is not None and provider_adapter is not None
         self.auth_enabled = self.using_session_manager or (
@@ -70,12 +68,7 @@ class AuthenticationMiddleware:
 
             try:
                 # Get the access token from the current request context
-                access_token_obj = self.token_getter()
-                token_value = (
-                    access_token_obj.token
-                    if hasattr(access_token_obj, "token")
-                    else access_token_obj
-                )
+                token_value = self.token_getter()
 
                 if not token_value:
                     logger.warning("No access token found in request context")
