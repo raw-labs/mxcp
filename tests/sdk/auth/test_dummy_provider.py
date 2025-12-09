@@ -5,6 +5,7 @@ from mxcp.sdk.auth.providers.dummy import DummyProviderAdapter
 
 
 def test_build_authorize_url_includes_state_and_pkce() -> None:
+    # Authorize URL carries state, redirect, scopes, PKCE, and extra params.
     adapter = DummyProviderAdapter()
     url = adapter.build_authorize_url(
         redirect_uri="http://localhost/callback",
@@ -25,6 +26,7 @@ def test_build_authorize_url_includes_state_and_pkce() -> None:
 
 @pytest.mark.asyncio
 async def test_exchange_code_success_and_scopes() -> None:
+    # Happy path code exchange returns tokens and requested scopes.
     adapter = DummyProviderAdapter(expected_code="OK", issued_scopes=["a", "b"])
     result = await adapter.exchange_code(
         code="OK",
@@ -41,6 +43,7 @@ async def test_exchange_code_success_and_scopes() -> None:
 
 @pytest.mark.asyncio
 async def test_exchange_code_rejects_bad_code() -> None:
+    # Unknown codes are rejected.
     adapter = DummyProviderAdapter(expected_code="GOOD")
     with pytest.raises(ProviderError) as excinfo:
         await adapter.exchange_code(
@@ -52,6 +55,7 @@ async def test_exchange_code_rejects_bad_code() -> None:
 
 @pytest.mark.asyncio
 async def test_exchange_code_rejects_bad_pkce() -> None:
+    # PKCE verifier mismatch is rejected.
     adapter = DummyProviderAdapter(expected_code="GOOD", expected_code_verifier="verifier")
     with pytest.raises(ProviderError):
         await adapter.exchange_code(
@@ -63,6 +67,7 @@ async def test_exchange_code_rejects_bad_pkce() -> None:
 
 @pytest.mark.asyncio
 async def test_refresh_token_rotates_access_token() -> None:
+    # Refresh returns a rotated access token and preserves refresh token.
     adapter = DummyProviderAdapter()
     initial = await adapter.refresh_token(refresh_token="DUMMY_REFRESH_TOKEN", scopes=None)
     rotated = await adapter.refresh_token(refresh_token="DUMMY_REFRESH_TOKEN", scopes=None)
@@ -74,6 +79,7 @@ async def test_refresh_token_rotates_access_token() -> None:
 
 @pytest.mark.asyncio
 async def test_fetch_user_info_success_and_failure() -> None:
+    # User info succeeds for issued token and rejects unknown.
     adapter = DummyProviderAdapter()
     grant = await adapter.exchange_code(
         code="TEST_CODE_OK", redirect_uri="http://localhost/callback", code_verifier=None
@@ -89,6 +95,7 @@ async def test_fetch_user_info_success_and_failure() -> None:
 
 @pytest.mark.asyncio
 async def test_revoke_token_validates_known_tokens() -> None:
+    # Revoke succeeds for known tokens and rejects unknown tokens.
     adapter = DummyProviderAdapter()
     grant = await adapter.exchange_code(
         code="TEST_CODE_OK", redirect_uri="http://localhost/callback", code_verifier=None

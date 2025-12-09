@@ -26,6 +26,7 @@ def _db_row(db_path: Path, query: str) -> sqlite3.Row | None:
 
 @pytest.mark.asyncio
 async def test_state_round_trip(tmp_path: Path) -> None:
+    # States persist and can be consumed exactly once.
     db_path = tmp_path / "auth.db"
     store = SqliteTokenStore(db_path)
     await store.initialize()
@@ -52,6 +53,7 @@ async def test_state_round_trip(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_state_expiry(tmp_path: Path) -> None:
+    # Expired states are rejected and removed.
     db_path = tmp_path / "auth.db"
     store = SqliteTokenStore(db_path)
     await store.initialize()
@@ -74,6 +76,7 @@ async def test_state_expiry(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_auth_code_round_trip(tmp_path: Path) -> None:
+    # Auth codes persist and can be consumed exactly once.
     db_path = tmp_path / "auth.db"
     store = SqliteTokenStore(db_path)
     await store.initialize()
@@ -97,6 +100,7 @@ async def test_auth_code_round_trip(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_session_store_and_load_with_encryption(tmp_path: Path) -> None:
+    # Sessions persist with encryption/hashing and round-trip correctly.
     key = Fernet.generate_key()
     db_path = tmp_path / "auth.db"
     store = SqliteTokenStore(db_path, encryption_key=key)
@@ -145,6 +149,7 @@ async def test_session_store_and_load_with_encryption(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_session_expiry_and_cleanup(tmp_path: Path) -> None:
+    # Expired sessions are cleaned up and not returned.
     db_path = tmp_path / "auth.db"
     store = SqliteTokenStore(db_path)
     await store.initialize()

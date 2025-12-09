@@ -25,6 +25,8 @@ async def auth_service(tmp_path):
 
 @pytest.mark.asyncio
 async def test_full_auth_flow(auth_service: AuthService) -> None:
+    # Full issuer-mode happy path: state + PKCE, provider code exchange, session,
+    # MXCP auth code, and final token exchange.
     authorize_url, state_record = await auth_service.authorize(
         client_id="client-1",
         redirect_uri="http://client/app",
@@ -58,5 +60,6 @@ async def test_full_auth_flow(auth_service: AuthService) -> None:
 
 @pytest.mark.asyncio
 async def test_invalid_state_rejected(auth_service: AuthService) -> None:
+    # Rejects callbacks with unknown/expired state.
     with pytest.raises(ProviderError):
         await auth_service.handle_callback(code="TEST_CODE_OK", state="unknown", code_verifier=None)
