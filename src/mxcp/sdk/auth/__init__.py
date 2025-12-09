@@ -58,9 +58,15 @@ github_config = GitHubAuthConfigModel(
 ```
 """
 
-from .base import (
-    ExternalOAuthHandler,
-    GeneralOAuthAuthorizationServer,
+from .auth_service import AccessTokenResponse, AuthService
+from .base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from .contracts import (
+    GrantResult,
+    ProviderAdapter,
+    ProviderError,
+    ScopeMapper,
+    Session,
+    UserInfo,
 )
 from .context import get_user_context, reset_user_context, set_user_context
 from .middleware import AuthenticationMiddleware
@@ -78,6 +84,14 @@ from .models import (
     SalesforceAuthConfigModel,
     StateMetaModel,
     UserContextModel,
+)
+from .session_manager import SessionManager
+from .storage import (
+    AuthCodeRecord,
+    SqliteTokenStore,
+    StateRecord,
+    StoredSession,
+    TokenStore,
 )
 
 __all__ = [
@@ -97,8 +111,24 @@ __all__ = [
     "ExternalOAuthHandler",
     "ExternalUserInfoModel",
     "UserContextModel",
+    "AccessTokenResponse",
+    "AuthService",
     "GeneralOAuthAuthorizationServer",
     "AuthenticationMiddleware",
+    # Contracts
+    "GrantResult",
+    "ProviderAdapter",
+    "ProviderError",
+    "ScopeMapper",
+    "Session",
+    "UserInfo",
+    "SessionManager",
+    # Storage
+    "AuthCodeRecord",
+    "SqliteTokenStore",
+    "StateRecord",
+    "StoredSession",
+    "TokenStore",
     # Context management
     "get_user_context",
     "set_user_context",
