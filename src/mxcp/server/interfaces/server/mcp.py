@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeVar, cast
 
 import uvicorn
 from makefun import create_function
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import Context as FastMCPContextRuntime
 from mcp.server.fastmcp import FastMCP
@@ -518,7 +519,13 @@ class RAWMCP:
         self.mcp = FastMCP(**fastmcp_kwargs)
 
         # Initialize authentication middleware
-        self.auth_middleware = AuthenticationMiddleware(self.oauth_handler, self.oauth_server)
+        self.auth_middleware = AuthenticationMiddleware(
+            self.oauth_handler,
+            self.oauth_server,
+            token_getter=lambda: (
+                get_access_token().token if get_access_token() else None  # type: ignore[call-arg]
+            ),
+        )
 
         # Register OAuth routes if enabled
         if self.oauth_handler and self.oauth_server:

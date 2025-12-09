@@ -7,11 +7,6 @@ from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import SqliteTokenStore
 
 
-class _Token:
-    def __init__(self, token: str) -> None:
-        self.token = token
-
-
 @pytest_asyncio.fixture
 async def session_manager(tmp_path):
     store = SqliteTokenStore(tmp_path / "auth.db")
@@ -30,6 +25,7 @@ async def provider():
 async def test_session_manager_happy_path(
     session_manager: SessionManager, provider: DummyProviderAdapter
 ) -> None:
+    # SessionManager + ProviderAdapter path: valid token yields user context.
     user_info = await provider.fetch_user_info(access_token=provider._access_token)  # type: ignore[attr-defined]
     session = await session_manager.issue_session(
         provider=provider.provider_name,
@@ -45,7 +41,7 @@ async def test_session_manager_happy_path(
         oauth_server=None,
         session_manager=session_manager,
         provider_adapter=provider,
-        token_getter=lambda: _Token(session.access_token),
+        token_getter=lambda: session.access_token,
     )
 
     user_context = await middleware.check_authentication()
@@ -58,12 +54,13 @@ async def test_session_manager_happy_path(
 async def test_session_manager_invalid_token_returns_none(
     session_manager: SessionManager, provider: DummyProviderAdapter
 ) -> None:
+    # Invalid token should fail auth and return None.
     middleware = AuthenticationMiddleware(
         oauth_handler=None,
         oauth_server=None,
         session_manager=session_manager,
         provider_adapter=provider,
-        token_getter=lambda: _Token("unknown"),
+        token_getter=lambda: "unknown",
     )
 
     assert await middleware.check_authentication() is None
@@ -73,6 +70,7 @@ async def test_session_manager_invalid_token_returns_none(
 async def test_session_manager_missing_token_returns_none(
     session_manager: SessionManager, provider: DummyProviderAdapter
 ) -> None:
+    # Missing token should fail auth and return None.
     middleware = AuthenticationMiddleware(
         oauth_handler=None,
         oauth_server=None,
