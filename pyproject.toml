@@ -25,6 +25,7 @@ dependencies = [
     "makefun",  # Dynamic function creation
     "cel-python>=0.2.0",  # Policy enforcement engine
     "httpx>=0.28.0",  # HTTP client for API calls
+    "cryptography>=41.0.0",  # Fernet encryption for auth token storage
     
     # CLI
     "click>=8.1.7",  # CLI framework
