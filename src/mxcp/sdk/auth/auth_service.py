@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-import time
 import base64
 import hashlib
-from typing import Mapping, Sequence
+import logging
+import secrets
+import time
+from collections.abc import Mapping, Sequence
 from fnmatch import fnmatch
 
 from mxcp.sdk.auth.contracts import GrantResult, ProviderAdapter, ProviderError
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import AuthCodeRecord, StateRecord, StoredSession
 from mxcp.sdk.models import SdkBaseModel
+
+logger = logging.getLogger(__name__)
 
 
 class AccessTokenResponse(SdkBaseModel):
@@ -52,18 +56,41 @@ class AuthService:
         scopes: Sequence[str],
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
+        client_state: str | None = None,
         extra_params: Mapping[str, str] | None = None,
     ) -> tuple[str, StateRecord]:
         """Create state and return provider authorize URL."""
         self._validate_client_redirect(client_id, redirect_uri)
+
+        # Generate PKCE pair for provider (Google) if needed
+        # The MCP client's code_challenge is for MXCP ↔ MCP client flow
+        # We need our own PKCE pair for MXCP ↔ Google flow
+        provider_code_verifier: str | None = None
+        provider_code_challenge: str | None = None
+        provider_code_challenge_method: str | None = None
+
+        if code_challenge:  # If MCP client uses PKCE, we should too with Google
+            # Generate code_verifier (43-128 chars, base64url)
+            provider_code_verifier = (
+                base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("utf-8").rstrip("=")
+            )
+            # Generate code_challenge using S256
+            challenge_bytes = hashlib.sha256(provider_code_verifier.encode("utf-8")).digest()
+            provider_code_challenge = (
+                base64.urlsafe_b64encode(challenge_bytes).decode("utf-8").rstrip("=")
+            )
+            provider_code_challenge_method = "S256"
+
         # First touchpoint for a new client request: persist a one-time state
         # (client/redirect/PKCE/scopes). No session is created until the IdP
         # callback succeeds.
         state_record = await self.session_manager.create_state(
             client_id=client_id,
             redirect_uri=redirect_uri,
-            code_challenge=code_challenge,
+            code_challenge=code_challenge,  # MCP client's challenge (for MXCP ↔ client)
             code_challenge_method=code_challenge_method,
+            provider_code_verifier=provider_code_verifier,  # Our verifier (for MXCP ↔ Google)
+            client_state=client_state,  # Original state from MCP client
             scopes=scopes,
         )
 
@@ -71,29 +98,45 @@ class AuthService:
             redirect_uri=self.callback_url,
             state=state_record.state,
             scopes=scopes,
-            code_challenge=code_challenge,
-            code_challenge_method=code_challenge_method,
+            code_challenge=provider_code_challenge,  # Use our challenge for Google
+            code_challenge_method=provider_code_challenge_method,
             extra_params=extra_params,
+        )
+        logger.info(
+            "authorize: issued state",
+            extra={
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "state": state_record.state,
+                "scopes": list(scopes) if scopes else [],
+            },
         )
         return authorize_url, state_record
 
     async def handle_callback(
         self, *, code: str, state: str, code_verifier: str | None = None
-    ) -> tuple[AuthCodeRecord, StoredSession]:
-        """Process provider callback, creating session and issuing auth code."""
+    ) -> tuple[AuthCodeRecord, StoredSession, str | None]:
+        """Process provider callback, creating session and issuing auth code.
+
+        Returns:
+            Tuple of (auth_code, session, client_state) where client_state is the
+            original state from the MCP client to be returned in the redirect.
+        """
         # Resume the flow using the stored state. This is the first moment we
         # create an MCP session—only after the provider code exchange succeeds.
         state_record = await self.session_manager.consume_state(state)
         if not state_record:
+            logger.warning("handle_callback: state not found or expired", extra={"state": state})
             raise ProviderError("invalid_state", "State not found or expired", status_code=400)
 
         # Re-validate client and redirect from the stored state.
         self._validate_client_redirect(state_record.client_id, state_record.redirect_uri)
 
+        # Use the provider's code_verifier (for Google), not the MCP client's
         grant: GrantResult = await self.provider_adapter.exchange_code(
             code=code,
             redirect_uri=self.callback_url,
-            code_verifier=code_verifier,
+            code_verifier=state_record.provider_code_verifier,  # Use stored provider verifier
             scopes=state_record.scopes,
         )
 
@@ -122,7 +165,7 @@ class AuthService:
             scopes=grant.provider_scopes_granted,
         )
 
-        return auth_code, session
+        return auth_code, session, state_record.client_state
 
     async def exchange_token(
         self,
@@ -132,7 +175,18 @@ class AuthService:
         client_id: str | None = None,
         redirect_uri: str | None = None,
     ) -> AccessTokenResponse:
-        """Exchange an auth code for MXCP tokens."""
+        """Exchange an auth code for MXCP tokens.
+
+        Note: PKCE verification is handled upstream by the MCP token handler
+        before this method is called. This method focuses on business logic:
+        validating the code, checking client/redirect binding, and issuing tokens.
+
+        Args:
+            auth_code: The authorization code to exchange
+            code_verifier: Deprecated - PKCE is verified upstream by MCP framework
+            client_id: Client ID for validation
+            redirect_uri: Redirect URI for validation
+        """
         code_record = await self.session_manager.load_auth_code(auth_code)
         if not code_record:
             raise ProviderError(
@@ -145,7 +199,8 @@ class AuthService:
         if redirect_uri and code_record.redirect_uri and redirect_uri != code_record.redirect_uri:
             raise ProviderError("invalid_grant", "Redirect URI mismatch", 400)
 
-        self._verify_pkce(code_record, code_verifier)
+        # PKCE verification is handled upstream by the MCP token handler
+        # before exchange_authorization_code() is called
         deleted = await self.session_manager.try_delete_auth_code(auth_code)
         if not deleted:
             raise ProviderError("invalid_grant", "Authorization code already used", status_code=400)
@@ -170,7 +225,13 @@ class AuthService:
         )
 
     def _verify_pkce(self, code_record: AuthCodeRecord, code_verifier: str | None) -> None:
-        """Enforce PKCE at MXCP auth-code redemption time."""
+        """Enforce PKCE at MXCP auth-code redemption time.
+
+        Note: In issuer mode, PKCE verification is handled upstream by the MCP
+        token handler before exchange_token() is called. This method is kept
+        for potential future use cases or testing scenarios where direct PKCE
+        verification might be needed.
+        """
         if not code_record.code_challenge:
             return
         if code_verifier is None:

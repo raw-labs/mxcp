@@ -22,11 +22,13 @@ from mxcp.sdk.models import SdkBaseModel
 class StateRecord(SdkBaseModel):
     """Persisted OAuth state used for PKCE and redirect validation."""
 
-    state: str
+    state: str  # MXCP-generated state (used for Google callback)
     client_id: str | None = None
     redirect_uri: str | None = None
     code_challenge: str | None = None
     code_challenge_method: str | None = None
+    provider_code_verifier: str | None = None  # Code verifier for provider (Google) PKCE
+    client_state: str | None = None  # Original state from MCP client (returned in redirect)
     scopes: list[str] | None = None
     expires_at: float
     created_at: float
@@ -138,6 +140,8 @@ class SqliteTokenStore(TokenStore):
             "redirect_uri": record.redirect_uri,
             "code_challenge": record.code_challenge,
             "code_challenge_method": record.code_challenge_method,
+            "provider_code_verifier": record.provider_code_verifier,
+            "client_state": record.client_state,
             "scopes": json.dumps(record.scopes or []),
             "expires_at": record.expires_at,
             "created_at": record.created_at,
@@ -248,6 +252,8 @@ class SqliteTokenStore(TokenStore):
                 redirect_uri TEXT,
                 code_challenge TEXT,
                 code_challenge_method TEXT,
+                provider_code_verifier TEXT,
+                client_state TEXT,
                 scopes TEXT NOT NULL,
                 expires_at REAL NOT NULL,
                 created_at REAL NOT NULL
@@ -270,6 +276,7 @@ class SqliteTokenStore(TokenStore):
             """
         )
         self._ensure_auth_code_columns()
+        self._ensure_state_columns()
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -314,6 +321,17 @@ class SqliteTokenStore(TokenStore):
         if "client_id" not in columns:
             cursor.execute("ALTER TABLE auth_codes ADD COLUMN client_id TEXT")
 
+    def _ensure_state_columns(self) -> None:
+        """Add missing state columns when upgrading existing db."""
+        assert self._conn is not None
+        cursor = self._conn.cursor()
+        cursor.execute("PRAGMA table_info(states)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "provider_code_verifier" not in columns:
+            cursor.execute("ALTER TABLE states ADD COLUMN provider_code_verifier TEXT")
+        if "client_state" not in columns:
+            cursor.execute("ALTER TABLE states ADD COLUMN client_state TEXT")
+
     # State helpers
     def _sync_store_state(self, payload: dict[str, Any]) -> None:
         assert self._conn is not None
@@ -321,8 +339,8 @@ class SqliteTokenStore(TokenStore):
             self._conn.execute(
                 """
                 INSERT OR REPLACE INTO states
-                (state, client_id, redirect_uri, code_challenge, code_challenge_method, scopes, expires_at, created_at)
-                VALUES (:state, :client_id, :redirect_uri, :code_challenge, :code_challenge_method, :scopes, :expires_at, :created_at)
+                (state, client_id, redirect_uri, code_challenge, code_challenge_method, provider_code_verifier, client_state, scopes, expires_at, created_at)
+                VALUES (:state, :client_id, :redirect_uri, :code_challenge, :code_challenge_method, :provider_code_verifier, :client_state, :scopes, :expires_at, :created_at)
                 """,
                 payload,
             )
@@ -343,12 +361,25 @@ class SqliteTokenStore(TokenStore):
             self._conn.execute("DELETE FROM states WHERE state = ?", (state,))
             self._conn.commit()
 
+            # Handle provider_code_verifier and client_state which may not exist in older databases
+            from contextlib import suppress
+
+            provider_code_verifier = None
+            with suppress(KeyError, IndexError):
+                provider_code_verifier = row["provider_code_verifier"]
+
+            client_state = None
+            with suppress(KeyError, IndexError):
+                client_state = row["client_state"]
+
             return StateRecord(
                 state=row["state"],
                 client_id=row["client_id"],
                 redirect_uri=row["redirect_uri"],
                 code_challenge=row["code_challenge"],
                 code_challenge_method=row["code_challenge_method"],
+                provider_code_verifier=provider_code_verifier,
+                client_state=client_state,
                 scopes=json.loads(row["scopes"]),
                 expires_at=row["expires_at"],
                 created_at=row["created_at"],
@@ -512,11 +543,15 @@ class SqliteTokenStore(TokenStore):
         scopes_json = row["scopes"]
         scopes = json.loads(scopes_json) if scopes_json else None
 
+        # access_token_encrypted is NOT NULL in schema, so _decrypt should never return None
+        access_token = self._decrypt(row["access_token_encrypted"])
+        assert access_token is not None, "access_token_encrypted is NOT NULL, decryption should never return None"
+
         return StoredSession(
             session_id=row["session_id"],
             provider=row["provider"],
             user_info=user_info,
-            access_token=self._decrypt(row["access_token_encrypted"]),
+            access_token=access_token,
             refresh_token=(
                 self._decrypt(row["refresh_token_encrypted"])
                 if row["refresh_token_encrypted"]
