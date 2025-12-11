@@ -6,6 +6,7 @@ import time
 import base64
 import hashlib
 from typing import Mapping, Sequence
+from fnmatch import fnmatch
 
 from mxcp.sdk.auth.contracts import GrantResult, ProviderAdapter, ProviderError
 from mxcp.sdk.auth.session_manager import SessionManager
@@ -34,10 +35,14 @@ class AuthService:
         provider_adapter: ProviderAdapter,
         session_manager: SessionManager,
         callback_url: str,
+        client_registry: Mapping[str, Sequence[str]] | None = None,
+        allowed_redirect_patterns: Sequence[str] | None = None,
     ):
         self.provider_adapter = provider_adapter
         self.session_manager = session_manager
         self.callback_url = callback_url.rstrip("/")
+        self.client_registry = {k: list(v) for k, v in (client_registry or {}).items()}
+        self.allowed_redirect_patterns = list(allowed_redirect_patterns or [])
 
     async def authorize(
         self,
@@ -50,6 +55,7 @@ class AuthService:
         extra_params: Mapping[str, str] | None = None,
     ) -> tuple[str, StateRecord]:
         """Create state and return provider authorize URL."""
+        self._validate_client_redirect(client_id, redirect_uri)
         # First touchpoint for a new client request: persist a one-time state
         # (client/redirect/PKCE/scopes). No session is created until the IdP
         # callback succeeds.
@@ -81,6 +87,9 @@ class AuthService:
         if not state_record:
             raise ProviderError("invalid_state", "State not found or expired", status_code=400)
 
+        # Re-validate client and redirect from the stored state.
+        self._validate_client_redirect(state_record.client_id, state_record.redirect_uri)
+
         grant: GrantResult = await self.provider_adapter.exchange_code(
             code=code,
             redirect_uri=self.callback_url,
@@ -106,6 +115,7 @@ class AuthService:
 
         auth_code = await self.session_manager.create_auth_code(
             session_id=session.session_id,
+            client_id=state_record.client_id,
             redirect_uri=state_record.redirect_uri,
             code_challenge=state_record.code_challenge,
             code_challenge_method=state_record.code_challenge_method,
@@ -115,7 +125,12 @@ class AuthService:
         return auth_code, session
 
     async def exchange_token(
-        self, *, auth_code: str, code_verifier: str | None = None
+        self,
+        *,
+        auth_code: str,
+        code_verifier: str | None = None,
+        client_id: str | None = None,
+        redirect_uri: str | None = None,
     ) -> AccessTokenResponse:
         """Exchange an auth code for MXCP tokens."""
         code_record = await self.session_manager.load_auth_code(auth_code)
@@ -124,12 +139,16 @@ class AuthService:
                 "invalid_grant", "Authorization code invalid or expired", status_code=400
             )
 
+        # Enforce client and redirect binding if provided or stored.
+        if code_record.client_id and client_id and client_id != code_record.client_id:
+            raise ProviderError("invalid_grant", "Client mismatch for authorization code", 400)
+        if redirect_uri and code_record.redirect_uri and redirect_uri != code_record.redirect_uri:
+            raise ProviderError("invalid_grant", "Redirect URI mismatch", 400)
+
         self._verify_pkce(code_record, code_verifier)
         deleted = await self.session_manager.try_delete_auth_code(auth_code)
         if not deleted:
-            raise ProviderError(
-                "invalid_grant", "Authorization code already used", status_code=400
-            )
+            raise ProviderError("invalid_grant", "Authorization code already used", status_code=400)
 
         session = await self.session_manager.get_session_by_id(code_record.session_id)
         if not session:
@@ -177,6 +196,30 @@ class AuthService:
 
         if not valid:
             raise ProviderError("invalid_grant", "PKCE verification failed", status_code=400)
+
+    def _validate_client_redirect(self, client_id: str | None, redirect_uri: str | None) -> None:
+        """Ensure client is registered and redirect URI matches allowed patterns."""
+        if not client_id:
+            raise ProviderError("invalid_request", "client_id is required", status_code=400)
+        if not redirect_uri:
+            raise ProviderError("invalid_request", "redirect_uri is required", status_code=400)
+
+        patterns = self.client_registry.get(client_id)
+        if patterns is None:
+            # DCR-friendly: fall back to global allowed patterns if provided.
+            if not self.allowed_redirect_patterns:
+                raise ProviderError(
+                    "invalid_client", f"Unknown client_id {client_id}", status_code=400
+                )
+            patterns = self.allowed_redirect_patterns
+
+        matched = any(fnmatch(redirect_uri, pattern) for pattern in patterns)
+        if not matched:
+            raise ProviderError(
+                "invalid_request",
+                f"redirect_uri not allowed for client {client_id}",
+                status_code=400,
+            )
 
 
 __all__ = ["AccessTokenResponse", "AuthService"]
