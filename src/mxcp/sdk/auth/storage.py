@@ -50,7 +50,14 @@ class StoredSession(Session):
 
 
 class TokenStore(Protocol):
-    """Abstract interface for token persistence."""
+    """Abstract interface for token persistence.
+
+    Backends must ensure:
+    - States and auth codes are one-time use and honor expiry.
+    - Sessions are keyed by hashed access token; returning an expired session must
+      delete it and return None.
+    - Storage operations are async-safe (thread-safe if using sync engines).
+    """
 
     async def initialize(self) -> None: ...
 
@@ -92,9 +99,11 @@ class SqliteTokenStore(TokenStore):
         self._logger = logging.getLogger(__name__)
         self._conn: sqlite3.Connection | None = None
         self._lock = threading.RLock()
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="auth-store")
+        self._executor: ThreadPoolExecutor | None = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="auth-store"
+        )
         self._initialized = False
-        self._fernet = Fernet(encryption_key) if encryption_key else None
+        self._fernet = self._build_fernet(encryption_key) if encryption_key else None
         if not self._fernet and self.allow_plaintext_tokens:
             self._logger.warning(
                 "Storing auth tokens in plaintext because allow_plaintext_tokens=True and no "
@@ -104,11 +113,15 @@ class SqliteTokenStore(TokenStore):
     async def initialize(self) -> None:
         if self._initialized:
             return
-        await asyncio.get_event_loop().run_in_executor(self._executor, self._sync_initialize)
+        executor = self._ensure_executor()
+        await asyncio.get_event_loop().run_in_executor(executor, self._sync_initialize)
 
     async def close(self) -> None:
-        await asyncio.get_event_loop().run_in_executor(self._executor, self._sync_close)
-        self._executor.shutdown(wait=True)
+        if self._executor:
+            await asyncio.get_event_loop().run_in_executor(self._executor, self._sync_close)
+            self._executor.shutdown(wait=True)
+        self._executor = None
+        self._initialized = False
 
     # ── State ──────────────────────────────────────────────────────────────────
     async def store_state(self, record: StateRecord) -> None:
@@ -202,6 +215,7 @@ class SqliteTokenStore(TokenStore):
             if self._conn:
                 self._conn.close()
                 self._conn = None
+            self._initialized = False
 
     def _create_tables(self) -> None:
         assert self._conn is not None
@@ -478,6 +492,24 @@ class SqliteTokenStore(TokenStore):
     def _hash_token(self, token: str) -> str:
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
+    def _ensure_executor(self) -> ThreadPoolExecutor:
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="auth-store")
+        return self._executor
+
+    def _build_fernet(self, encryption_key: str | bytes) -> Fernet:
+        """Normalize and validate a Fernet key (accepts bytes or str)."""
+        key_bytes = (
+            encryption_key.encode("utf-8") if isinstance(encryption_key, str) else encryption_key
+        )
+        try:
+            return Fernet(key_bytes)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "Invalid Fernet key: expected urlsafe base64-encoded 32-byte value. "
+                "Pass the raw bytes from Fernet.generate_key() or the same value as a string."
+            ) from exc
+
     def _encrypt(self, value: str | None) -> str | None:
         if value is None:
             return None
@@ -508,6 +540,8 @@ class SqliteTokenStore(TokenStore):
     def _serialize_session(self, record: StoredSession) -> dict[str, Any]:
         access_token = record.access_token
         refresh_token = record.refresh_token
+        if record.expires_at is None:
+            raise ValueError("Session expires_at is required for persistence.")
         return {
             "access_token_hash": self._hash_token(access_token),
             "access_token_encrypted": self._encrypt(access_token) or "",
