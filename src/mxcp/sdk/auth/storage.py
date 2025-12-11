@@ -70,6 +70,8 @@ class TokenStore(Protocol):
 
     async def load_session_by_id(self, session_id: str) -> StoredSession | None: ...
 
+    async def load_session_by_refresh_token(self, refresh_token: str) -> StoredSession | None: ...
+
     async def delete_session_by_token(self, access_token: str) -> None: ...
 
     async def cleanup_expired(self) -> dict[str, int]: ...
@@ -164,6 +166,12 @@ class SqliteTokenStore(TokenStore):
     async def load_session_by_id(self, session_id: str) -> StoredSession | None:
         return await asyncio.get_event_loop().run_in_executor(
             self._executor, self._sync_load_session_by_id, session_id
+        )
+
+    async def load_session_by_refresh_token(self, refresh_token: str) -> StoredSession | None:
+        hashed = self._hash_token(refresh_token)
+        return await asyncio.get_event_loop().run_in_executor(
+            self._executor, self._sync_load_session_by_refresh_hash, hashed
         )
 
     async def delete_session_by_token(self, access_token: str) -> None:
@@ -374,6 +382,24 @@ class SqliteTokenStore(TokenStore):
         with self._lock:
             row = self._conn.execute(
                 "SELECT * FROM sessions WHERE session_id = ? LIMIT 1", (session_id,)
+            ).fetchone()
+            if not row:
+                return None
+
+            if self._is_expired_row(row):
+                self._conn.execute(
+                    "DELETE FROM sessions WHERE access_token_hash = ?", (row["access_token_hash"],)
+                )
+                self._conn.commit()
+                return None
+
+            return self._row_to_session(row)
+
+    def _sync_load_session_by_refresh_hash(self, refresh_token_hash: str) -> StoredSession | None:
+        assert self._conn is not None
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM sessions WHERE refresh_token_hash = ?", (refresh_token_hash,)
             ).fetchone()
             if not row:
                 return None
