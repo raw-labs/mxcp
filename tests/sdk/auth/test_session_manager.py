@@ -60,6 +60,7 @@ async def test_auth_code_create_and_consume_once(session_manager: SessionManager
     # Auth code can be consumed exactly once.
     code = await session_manager.create_auth_code(
         session_id="session-1",
+        client_id="client-1",
         redirect_uri="http://localhost/redirect",
         code_challenge=None,
         code_challenge_method=None,
@@ -179,6 +180,7 @@ async def test_cleanup_clears_expired_items(session_manager: SessionManager) -> 
     )
     await session_manager.create_auth_code(
         session_id="cleanup-session",
+        client_id="client-1",
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
@@ -196,6 +198,7 @@ async def test_auth_code_load_and_delete(session_manager: SessionManager) -> Non
     # Auth code can be loaded without consuming, then explicitly deleted.
     code = await session_manager.create_auth_code(
         session_id="session-load",
+        client_id="client-1",
         redirect_uri=None,
         code_challenge="challenge",
         code_challenge_method="S256",
