@@ -84,9 +84,6 @@ class SessionManager:
         await self.token_store.store_auth_code(record)
         return record
 
-    async def consume_auth_code(self, code: str) -> AuthCodeRecord | None:
-        return await self.token_store.consume_auth_code(code)
-
     async def load_auth_code(self, code: str) -> AuthCodeRecord | None:
         return await self.token_store.load_auth_code(code)
 
