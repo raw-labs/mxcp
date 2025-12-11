@@ -231,7 +231,7 @@ class SqliteTokenStore(TokenStore):
                 access_token_encrypted TEXT NOT NULL,
                 refresh_token_hash TEXT,
                 refresh_token_encrypted TEXT,
-                session_id TEXT NOT NULL,
+                session_id TEXT NOT NULL UNIQUE,
                 provider TEXT NOT NULL,
                 user_info TEXT NOT NULL,
                 scopes TEXT,
