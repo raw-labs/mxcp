@@ -77,9 +77,10 @@ async def test_auth_code_round_trip(token_store) -> None:
         created_at=now,
     )
     await store.store_auth_code(code)
-    loaded = await store.consume_auth_code("auth-code-1")
+    loaded = await store.load_auth_code("auth-code-1")
     assert loaded == code
-    assert await store.consume_auth_code("auth-code-1") is None
+    await store.delete_auth_code("auth-code-1")
+    assert await store.load_auth_code("auth-code-1") is None
 
 
 @pytest.mark.asyncio
@@ -217,9 +218,11 @@ async def test_store_isolation_for_multiple_records(token_store) -> None:
     )
     await store.store_auth_code(code1)
     await store.store_auth_code(code2)
-    assert await store.consume_auth_code("code-1") == code1
-    assert await store.consume_auth_code("code-1") is None
-    assert await store.consume_auth_code("code-2") == code2
+    assert await store.load_auth_code("code-1") == code1
+    await store.delete_auth_code("code-1")
+    assert await store.load_auth_code("code-1") is None
+    assert await store.load_auth_code("code-2") == code2
+    await store.delete_auth_code("code-2")
 
     # Sessions
     user_info_a = UserInfo(
@@ -405,7 +408,7 @@ async def test_auth_code_load_expires_on_read(token_store) -> None:
     await store.store_auth_code(code)
     assert await store.load_auth_code("expired-code") is None
     # Ensure it was deleted
-    assert await store.consume_auth_code("expired-code") is None
+    assert await store.load_auth_code("expired-code") is None
 
 
 @pytest.mark.asyncio

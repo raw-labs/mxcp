@@ -125,7 +125,7 @@ class AuthService:
             )
 
         self._verify_pkce(code_record, code_verifier)
-        await self.session_manager.consume_auth_code(auth_code)
+        await self.session_manager.delete_auth_code(auth_code)
 
         session = await self.session_manager.get_session_by_id(code_record.session_id)
         if not session:

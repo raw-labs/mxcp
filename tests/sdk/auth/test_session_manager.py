@@ -66,11 +66,12 @@ async def test_auth_code_create_and_consume_once(session_manager: SessionManager
         scopes=["x"],
     )
 
-    loaded = await session_manager.consume_auth_code(code.code)
+    loaded = await session_manager.load_auth_code(code.code)
     assert loaded is not None
     assert loaded.session_id == "session-1"
     assert loaded.scopes == ["x"]
-    assert await session_manager.consume_auth_code(code.code) is None
+    await session_manager.delete_auth_code(code.code)
+    assert await session_manager.load_auth_code(code.code) is None
 
 
 @pytest.mark.asyncio

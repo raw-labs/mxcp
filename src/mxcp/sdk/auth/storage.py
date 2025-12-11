@@ -71,8 +71,7 @@ class TokenStore(Protocol):
 
     async def store_auth_code(self, record: AuthCodeRecord) -> None: ...
 
-    async def consume_auth_code(self, code: str) -> AuthCodeRecord | None: ...
-
+    # Auth codes should be loaded, validated, then explicitly deleted.
     async def load_auth_code(self, code: str) -> AuthCodeRecord | None: ...
 
     async def delete_auth_code(self, code: str) -> None: ...
@@ -164,11 +163,6 @@ class SqliteTokenStore(TokenStore):
         }
         await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_store_auth_code, payload
-        )
-
-    async def consume_auth_code(self, code: str) -> AuthCodeRecord | None:
-        return await asyncio.get_running_loop().run_in_executor(
-            self._executor, self._sync_consume_auth_code, code
         )
 
     async def load_auth_code(self, code: str) -> AuthCodeRecord | None:
@@ -362,32 +356,6 @@ class SqliteTokenStore(TokenStore):
                 payload,
             )
             self._conn.commit()
-
-    def _sync_consume_auth_code(self, code: str) -> AuthCodeRecord | None:
-        assert self._conn is not None
-        with self._lock:
-            row = self._conn.execute("SELECT * FROM auth_codes WHERE code = ?", (code,)).fetchone()
-            if not row:
-                return None
-
-            if row["expires_at"] < time.time():
-                self._conn.execute("DELETE FROM auth_codes WHERE code = ?", (code,))
-                self._conn.commit()
-                return None
-
-            self._conn.execute("DELETE FROM auth_codes WHERE code = ?", (code,))
-            self._conn.commit()
-
-            return AuthCodeRecord(
-                code=row["code"],
-                session_id=row["session_id"],
-                redirect_uri=row["redirect_uri"],
-                code_challenge=row["code_challenge"],
-                code_challenge_method=row["code_challenge_method"],
-                scopes=json.loads(row["scopes"]),
-                expires_at=row["expires_at"],
-                created_at=row["created_at"],
-            )
 
     def _sync_load_auth_code(self, code: str) -> AuthCodeRecord | None:
         """Load auth code without consuming; expires-on-read."""
