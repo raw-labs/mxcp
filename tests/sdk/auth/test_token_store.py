@@ -149,6 +149,46 @@ async def test_session_store_and_load_with_encryption(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_session_scopes_are_preserved(tmp_path: Path) -> None:
+    # Session scopes should survive a reload and not be replaced by provider scopes.
+    key = Fernet.generate_key()
+    db_path = tmp_path / "auth.db"
+    store = SqliteTokenStore(db_path, encryption_key=key)
+    await store.initialize()
+
+    now = time.time()
+    user_info = UserInfo(
+        provider="dummy",
+        user_id="user-1",
+        username="user-1",
+        provider_scopes_granted=["provider.scope"],
+    )
+    session = StoredSession(
+        session_id="session-1",
+        provider="dummy",
+        user_info=user_info,
+        access_token="mxcp_token",
+        refresh_token="mxcp_refresh",
+        provider_access_token="provider_token",
+        provider_refresh_token="provider_refresh",
+        provider_expires_at=now + 300,
+        expires_at=now + 600,
+        created_at=now,
+        issued_at=now,
+        scopes=["mxcp.read"],
+    )
+
+    await store.store_session(session)
+    loaded = await store.load_session_by_token("mxcp_token")
+
+    assert loaded is not None
+    assert loaded.scopes == ["mxcp.read"]
+    assert loaded.user_info.provider_scopes_granted == ["provider.scope"]
+
+    await store.close()
+
+
+@pytest.mark.asyncio
 async def test_session_store_requires_encryption_key_by_default(tmp_path: Path) -> None:
     # Storing tokens without a key should fail unless explicitly allowed.
     db_path = tmp_path / "auth.db"
