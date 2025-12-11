@@ -61,6 +61,8 @@ async def test_auth_code_create_and_consume_once(session_manager: SessionManager
     code = await session_manager.create_auth_code(
         session_id="session-1",
         redirect_uri="http://localhost/redirect",
+        code_challenge=None,
+        code_challenge_method=None,
         scopes=["x"],
     )
 
@@ -176,6 +178,8 @@ async def test_cleanup_clears_expired_items(session_manager: SessionManager) -> 
     await session_manager.create_auth_code(
         session_id="cleanup-session",
         redirect_uri=None,
+        code_challenge=None,
+        code_challenge_method=None,
         scopes=None,
         ttl_seconds=-1,
     )
@@ -183,3 +187,25 @@ async def test_cleanup_clears_expired_items(session_manager: SessionManager) -> 
     counts = await session_manager.cleanup()
     assert counts["states"] >= 1
     assert counts["auth_codes"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_auth_code_load_and_delete(session_manager: SessionManager) -> None:
+    # Auth code can be loaded without consuming, then explicitly deleted.
+    code = await session_manager.create_auth_code(
+        session_id="session-load",
+        redirect_uri=None,
+        code_challenge="challenge",
+        code_challenge_method="S256",
+        scopes=["y"],
+    )
+
+    loaded = await session_manager.load_auth_code(code.code)
+    assert loaded is not None and loaded.code_challenge == "challenge"
+
+    # Load should not consume
+    loaded_again = await session_manager.load_auth_code(code.code)
+    assert loaded_again is not None
+
+    await session_manager.delete_auth_code(code.code)
+    assert await session_manager.load_auth_code(code.code) is None
