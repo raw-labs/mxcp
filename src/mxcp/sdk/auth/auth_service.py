@@ -199,15 +199,19 @@ class AuthService:
 
     def _validate_client_redirect(self, client_id: str | None, redirect_uri: str | None) -> None:
         """Ensure client is registered and redirect URI matches allowed patterns."""
-        if not client_id:
-            raise ProviderError("invalid_request", "client_id is required", status_code=400)
-        if not redirect_uri:
-            raise ProviderError("invalid_request", "redirect_uri is required", status_code=400)
+        if not client_id or not redirect_uri:
+            # Backward-compatible: if no allowlists configured, allow all.
+            if not self.client_registry and not self.allowed_redirect_patterns:
+                return
+            raise ProviderError("invalid_request", "client_id and redirect_uri are required", 400)
 
         patterns = self.client_registry.get(client_id)
         if patterns is None:
             # DCR-friendly: fall back to global allowed patterns if provided.
             if not self.allowed_redirect_patterns:
+                # If no allowlists at all, allow all (legacy behavior).
+                if not self.client_registry:
+                    return
                 raise ProviderError(
                     "invalid_client", f"Unknown client_id {client_id}", status_code=400
                 )
