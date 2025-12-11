@@ -114,11 +114,11 @@ class SqliteTokenStore(TokenStore):
         if self._initialized:
             return
         executor = self._ensure_executor()
-        await asyncio.get_event_loop().run_in_executor(executor, self._sync_initialize)
+        await asyncio.get_running_loop().run_in_executor(executor, self._sync_initialize)
 
     async def close(self) -> None:
         if self._executor:
-            await asyncio.get_event_loop().run_in_executor(self._executor, self._sync_close)
+            await asyncio.get_running_loop().run_in_executor(self._executor, self._sync_close)
             self._executor.shutdown(wait=True)
         self._executor = None
         self._initialized = False
@@ -135,12 +135,12 @@ class SqliteTokenStore(TokenStore):
             "expires_at": record.expires_at,
             "created_at": record.created_at,
         }
-        await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_store_state, payload
         )
 
     async def consume_state(self, state: str) -> StateRecord | None:
-        return await asyncio.get_event_loop().run_in_executor(
+        return await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_consume_state, state
         )
 
@@ -154,48 +154,48 @@ class SqliteTokenStore(TokenStore):
             "expires_at": record.expires_at,
             "created_at": record.created_at,
         }
-        await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_store_auth_code, payload
         )
 
     async def consume_auth_code(self, code: str) -> AuthCodeRecord | None:
-        return await asyncio.get_event_loop().run_in_executor(
+        return await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_consume_auth_code, code
         )
 
     # ── Sessions ───────────────────────────────────────────────────────────────
     async def store_session(self, record: StoredSession) -> None:
         payload = self._serialize_session(record)
-        await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_store_session, payload
         )
 
     async def load_session_by_token(self, access_token: str) -> StoredSession | None:
         hashed = self._hash_token(access_token)
-        return await asyncio.get_event_loop().run_in_executor(
+        return await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_load_session_by_hash, hashed
         )
 
     async def load_session_by_id(self, session_id: str) -> StoredSession | None:
-        return await asyncio.get_event_loop().run_in_executor(
+        return await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_load_session_by_id, session_id
         )
 
     async def load_session_by_refresh_token(self, refresh_token: str) -> StoredSession | None:
         hashed = self._hash_token(refresh_token)
-        return await asyncio.get_event_loop().run_in_executor(
+        return await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_load_session_by_refresh_hash, hashed
         )
 
     async def delete_session_by_token(self, access_token: str) -> None:
         hashed = self._hash_token(access_token)
-        await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_delete_session_by_hash, hashed
         )
 
     # ── Cleanup ────────────────────────────────────────────────────────────────
     async def cleanup_expired(self) -> dict[str, int]:
-        return await asyncio.get_event_loop().run_in_executor(
+        return await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_cleanup_expired
         )
 
