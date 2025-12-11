@@ -371,3 +371,32 @@ async def test_authorize_rejects_dcr_pattern_mismatch(tmp_path) -> None:
         )
 
     await store.close()
+
+
+@pytest.mark.asyncio
+async def test_authorize_allows_all_when_no_allowlists(tmp_path) -> None:
+    store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
+    await store.initialize()
+    session_manager = SessionManager(store)
+    provider = DummyProviderAdapter(expected_code_verifier=None)
+    # No registry, no allowed patterns → allow all (legacy behavior)
+    service = AuthService(
+        provider_adapter=provider,
+        session_manager=session_manager,
+        callback_url="http://localhost/auth/callback",
+        client_registry={},
+        allowed_redirect_patterns=None,
+    )
+
+    try:
+        _, state_record = await service.authorize(
+            client_id="any-client",
+            redirect_uri="http://evil/app",
+            scopes=["dummy.read"],
+            code_challenge=None,
+            code_challenge_method=None,
+        )
+        assert state_record.client_id == "any-client"
+        assert state_record.redirect_uri == "http://evil/app"
+    finally:
+        await store.close()

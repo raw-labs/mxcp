@@ -103,6 +103,7 @@ Use this as the implementation playbook to rebuild auth cleanly.
 - Enforce PKCE end-to-end (provider sees the challenge), align access-token TTL to provider `expires_in`, and handle invalid/expired provider tokens deterministically (fail fast vs fallback).
 - Single-use state/auth codes with TTL; clear OAuth error semantics on bad client/redirect/code/PKCE.
 - Small tests: allow/deny redirect patterns; wrong client/redirect/PKCE rejected; happy path with dummy provider.
+- Default behavior: if no client registry or redirect patterns are configured, allow all redirects (backward compatible); set a registry or allowed patterns to enable enforcement.
 
 ### Phase 2: End-to-end smoke with one real provider
 - Wire to server/SDK paths; run authorize → callback → token → protected call with a single provider (e.g., GitHub).
