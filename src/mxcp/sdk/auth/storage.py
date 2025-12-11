@@ -38,6 +38,8 @@ class AuthCodeRecord(SdkBaseModel):
     code: str
     session_id: str
     redirect_uri: str | None = None
+    code_challenge: str | None = None
+    code_challenge_method: str | None = None
     scopes: list[str] | None = None
     expires_at: float
     created_at: float
@@ -70,6 +72,10 @@ class TokenStore(Protocol):
     async def store_auth_code(self, record: AuthCodeRecord) -> None: ...
 
     async def consume_auth_code(self, code: str) -> AuthCodeRecord | None: ...
+
+    async def load_auth_code(self, code: str) -> AuthCodeRecord | None: ...
+
+    async def delete_auth_code(self, code: str) -> None: ...
 
     async def store_session(self, record: StoredSession) -> None: ...
 
@@ -150,6 +156,8 @@ class SqliteTokenStore(TokenStore):
             "code": record.code,
             "session_id": record.session_id,
             "redirect_uri": record.redirect_uri,
+            "code_challenge": record.code_challenge,
+            "code_challenge_method": record.code_challenge_method,
             "scopes": json.dumps(record.scopes or []),
             "expires_at": record.expires_at,
             "created_at": record.created_at,
@@ -161,6 +169,16 @@ class SqliteTokenStore(TokenStore):
     async def consume_auth_code(self, code: str) -> AuthCodeRecord | None:
         return await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_consume_auth_code, code
+        )
+
+    async def load_auth_code(self, code: str) -> AuthCodeRecord | None:
+        return await asyncio.get_running_loop().run_in_executor(
+            self._executor, self._sync_load_auth_code, code
+        )
+
+    async def delete_auth_code(self, code: str) -> None:
+        await asyncio.get_running_loop().run_in_executor(
+            self._executor, self._sync_delete_auth_code, code
         )
 
     # ── Sessions ───────────────────────────────────────────────────────────────
@@ -240,12 +258,15 @@ class SqliteTokenStore(TokenStore):
                 code TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
                 redirect_uri TEXT,
+                code_challenge TEXT,
+                code_challenge_method TEXT,
                 scopes TEXT NOT NULL,
                 expires_at REAL NOT NULL,
                 created_at REAL NOT NULL
             )
             """
         )
+        self._ensure_auth_code_pkce_columns()
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -276,6 +297,17 @@ class SqliteTokenStore(TokenStore):
         columns = [row[1] for row in cursor.fetchall()]
         if "scopes" not in columns:
             cursor.execute("ALTER TABLE sessions ADD COLUMN scopes TEXT")
+
+    def _ensure_auth_code_pkce_columns(self) -> None:
+        """Add PKCE fields to auth_codes table when upgrading existing db."""
+        assert self._conn is not None
+        cursor = self._conn.cursor()
+        cursor.execute("PRAGMA table_info(auth_codes)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "code_challenge" not in columns:
+            cursor.execute("ALTER TABLE auth_codes ADD COLUMN code_challenge TEXT")
+        if "code_challenge_method" not in columns:
+            cursor.execute("ALTER TABLE auth_codes ADD COLUMN code_challenge_method TEXT")
 
     # State helpers
     def _sync_store_state(self, payload: dict[str, Any]) -> None:
@@ -324,8 +356,8 @@ class SqliteTokenStore(TokenStore):
             self._conn.execute(
                 """
                 INSERT OR REPLACE INTO auth_codes
-                (code, session_id, redirect_uri, scopes, expires_at, created_at)
-                VALUES (:code, :session_id, :redirect_uri, :scopes, :expires_at, :created_at)
+                (code, session_id, redirect_uri, code_challenge, code_challenge_method, scopes, expires_at, created_at)
+                VALUES (:code, :session_id, :redirect_uri, :code_challenge, :code_challenge_method, :scopes, :expires_at, :created_at)
                 """,
                 payload,
             )
@@ -350,10 +382,40 @@ class SqliteTokenStore(TokenStore):
                 code=row["code"],
                 session_id=row["session_id"],
                 redirect_uri=row["redirect_uri"],
+                code_challenge=row["code_challenge"],
+                code_challenge_method=row["code_challenge_method"],
                 scopes=json.loads(row["scopes"]),
                 expires_at=row["expires_at"],
                 created_at=row["created_at"],
             )
+
+    def _sync_load_auth_code(self, code: str) -> AuthCodeRecord | None:
+        """Load auth code without consuming; expires-on-read."""
+        assert self._conn is not None
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM auth_codes WHERE code = ?", (code,)).fetchone()
+            if not row:
+                return None
+            if row["expires_at"] < time.time():
+                self._conn.execute("DELETE FROM auth_codes WHERE code = ?", (code,))
+                self._conn.commit()
+                return None
+            return AuthCodeRecord(
+                code=row["code"],
+                session_id=row["session_id"],
+                redirect_uri=row["redirect_uri"],
+                code_challenge=row["code_challenge"],
+                code_challenge_method=row["code_challenge_method"],
+                scopes=json.loads(row["scopes"]),
+                expires_at=row["expires_at"],
+                created_at=row["created_at"],
+            )
+
+    def _sync_delete_auth_code(self, code: str) -> None:
+        assert self._conn is not None
+        with self._lock:
+            self._conn.execute("DELETE FROM auth_codes WHERE code = ?", (code,))
+            self._conn.commit()
 
     # Session helpers
     def _sync_store_session(self, payload: dict[str, Any]) -> None:

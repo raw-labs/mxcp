@@ -358,6 +358,57 @@ async def test_session_store_plaintext_opt_in(
 
 
 @pytest.mark.asyncio
+async def test_auth_code_load_and_delete(token_store) -> None:
+    # Auth codes can be loaded without consumption and deleted explicitly.
+    store = token_store
+
+    now = time.time()
+    code = AuthCodeRecord(
+        code="loadable-code",
+        session_id="session-1",
+        redirect_uri=None,
+        code_challenge="challenge",
+        code_challenge_method="S256",
+        scopes=["x"],
+        expires_at=now + 30,
+        created_at=now,
+    )
+
+    await store.store_auth_code(code)
+
+    loaded = await store.load_auth_code("loadable-code")
+    assert loaded is not None
+    # Load should not consume
+    loaded_again = await store.load_auth_code("loadable-code")
+    assert loaded_again is not None
+
+    await store.delete_auth_code("loadable-code")
+    assert await store.load_auth_code("loadable-code") is None
+
+
+@pytest.mark.asyncio
+async def test_auth_code_load_expires_on_read(token_store) -> None:
+    # Expired codes are dropped on load.
+    store = token_store
+    now = time.time()
+    code = AuthCodeRecord(
+        code="expired-code",
+        session_id="session-1",
+        redirect_uri=None,
+        code_challenge=None,
+        code_challenge_method=None,
+        scopes=None,
+        expires_at=now - 1,
+        created_at=now - 2,
+    )
+
+    await store.store_auth_code(code)
+    assert await store.load_auth_code("expired-code") is None
+    # Ensure it was deleted
+    assert await store.consume_auth_code("expired-code") is None
+
+
+@pytest.mark.asyncio
 async def test_session_store_accepts_string_fernet_key(tmp_path: Path) -> None:
     # String form of Fernet key should be accepted for ergonomics.
     key_str = Fernet.generate_key().decode("utf-8")

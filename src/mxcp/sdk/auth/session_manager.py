@@ -64,6 +64,8 @@ class SessionManager:
         *,
         session_id: str,
         redirect_uri: str | None,
+        code_challenge: str | None,
+        code_challenge_method: str | None,
         scopes: Sequence[str] | None = None,
         ttl_seconds: int | None = None,
     ) -> AuthCodeRecord:
@@ -73,6 +75,8 @@ class SessionManager:
             code=code,
             session_id=session_id,
             redirect_uri=redirect_uri,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
             scopes=list(scopes) if scopes is not None else None,
             expires_at=now + (ttl_seconds or self.auth_code_ttl_seconds),
             created_at=now,
@@ -82,6 +86,12 @@ class SessionManager:
 
     async def consume_auth_code(self, code: str) -> AuthCodeRecord | None:
         return await self.token_store.consume_auth_code(code)
+
+    async def load_auth_code(self, code: str) -> AuthCodeRecord | None:
+        return await self.token_store.load_auth_code(code)
+
+    async def delete_auth_code(self, code: str) -> None:
+        await self.token_store.delete_auth_code(code)
 
     async def issue_session(
         self,
