@@ -385,6 +385,152 @@ mxcp test
 mxcp serve
 ```
 
+## Python Models
+
+dbt supports Python models (dbt 1.3+) for complex transformations that are difficult in SQL. This is useful for ML preprocessing, statistical analysis, or leveraging Python libraries.
+
+### Basic Python Model
+
+```python
+# models/marts/customer_segments.py
+import pandas as pd
+
+def model(dbt, session):
+    """Segment customers using Python logic."""
+
+    # Reference upstream dbt model
+    customer_df = dbt.ref("customer_summary")
+
+    # Complex Python logic
+    def assign_segment(row):
+        if row['total_spent'] > 1000 and row['order_count'] > 10:
+            return 'champion'
+        elif row['total_spent'] > 500:
+            return 'loyal'
+        elif row['order_count'] > 5:
+            return 'potential'
+        else:
+            return 'new'
+
+    customer_df['segment'] = customer_df.apply(assign_segment, axis=1)
+
+    return customer_df
+```
+
+### ML Preprocessing
+
+```python
+# models/marts/customer_features.py
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+
+def model(dbt, session):
+    """Create ML-ready feature vectors."""
+
+    df = dbt.ref("customer_summary")
+
+    # Select numeric features
+    features = ['order_count', 'total_spent', 'days_since_first_order']
+
+    # Normalize features
+    scaler = StandardScaler()
+    df[features] = scaler.fit_transform(df[features])
+
+    return df
+```
+
+### Text Processing
+
+```python
+# models/marts/product_embeddings.py
+import pandas as pd
+
+def model(dbt, session):
+    """Generate text embeddings for products."""
+
+    products_df = dbt.ref("stg_products")
+
+    # Clean and combine text fields
+    products_df['search_text'] = (
+        products_df['name'].str.lower() + ' ' +
+        products_df['description'].str.lower().fillna('')
+    )
+
+    # Remove special characters
+    products_df['search_text'] = products_df['search_text'].str.replace(
+        r'[^\w\s]', '', regex=True
+    )
+
+    return products_df
+```
+
+### Configuration
+
+Configure Python models in `schema.yml`:
+
+```yaml
+# models/schema.yml
+version: 2
+
+models:
+  - name: customer_segments
+    description: Customer segmentation using Python logic
+    config:
+      materialized: table
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+      - name: segment
+        tests:
+          - accepted_values:
+              values: ['champion', 'loyal', 'potential', 'new']
+```
+
+### When to Use Python Models
+
+| Use Case | SQL or Python? |
+|----------|----------------|
+| Simple joins and aggregations | SQL |
+| Window functions | SQL |
+| Complex conditional logic | Python |
+| ML preprocessing | Python |
+| Text processing | Python |
+| Statistical calculations | Python |
+| Using external libraries | Python |
+
+### Dependencies
+
+Install required packages in your environment:
+
+```bash
+pip install dbt-duckdb pandas scikit-learn
+```
+
+### Combining SQL and Python
+
+Chain SQL and Python models:
+
+```
+stg_customers.sql → int_customer_orders.sql → customer_segments.py → customer_summary.sql
+       ↓                    ↓                        ↓                      ↓
+   Raw cleanup         SQL joins            Python segmentation      Final formatting
+```
+
+Reference Python models in SQL:
+
+```sql
+-- models/marts/customer_summary.sql
+SELECT
+    cs.*,
+    seg.segment,
+    seg.segment_score
+FROM {{ ref('customer_summary_base') }} cs
+LEFT JOIN {{ ref('customer_segments') }} seg  -- Python model
+    ON cs.customer_id = seg.customer_id
+```
+
 ## Performance Optimization
 
 ### Materialize Frequently Used Data

@@ -362,7 +362,7 @@ from utils.validators import validate_email
 ```
 
 ### 4. Version Control
-```gitignore
+```txt
 # .gitignore
 *.duckdb
 *.duckdb.wal

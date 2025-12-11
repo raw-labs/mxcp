@@ -101,7 +101,7 @@ Create a cron job for regular cleanup:
 crontab -e
 ```
 
-```cron
+```bash
 # Run cleanup daily at 2 AM
 0 2 * * * /usr/local/bin/mxcp log-cleanup --profile production >> /var/log/mxcp/cleanup.log 2>&1
 
