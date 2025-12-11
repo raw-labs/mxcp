@@ -1,0 +1,279 @@
+"""Issuer-mode OAuthAuthorizationServerProvider backed by AuthService and SessionManager."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from collections.abc import Mapping
+from typing import Any
+
+from mcp.server.auth import provider as provider_module
+from mcp.server.auth.provider import (
+    AccessToken,
+    AuthorizationCode,
+    AuthorizationParams,
+    AuthorizeError,
+    OAuthAuthorizationServerProvider,
+    RefreshToken,
+    TokenError,
+    construct_redirect_uri,
+)
+from mcp.shared.auth import OAuthClientInformationFull
+from pydantic import AnyUrl, ValidationError
+
+from mxcp.sdk.auth.auth_service import AuthService
+from mxcp.sdk.auth.session_manager import SessionManager
+from mxcp.sdk.auth.storage import StoredSession
+
+OAuthTokenType = Any
+OAuthToken: Any = provider_module.OAuthToken  # type: ignore[attr-defined]
+
+logger = logging.getLogger(__name__)
+
+
+class IssuerOAuthAuthorizationServer(
+    OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]
+):
+    """Bridges AuthService/SessionManager to the MCP OAuth provider protocol."""
+
+    def __init__(
+        self,
+        *,
+        auth_service: AuthService,
+        session_manager: SessionManager,
+        clients: Mapping[str, OAuthClientInformationFull] | None = None,
+    ) -> None:
+        self.auth_service = auth_service
+        self.session_manager = session_manager
+        self._clients: dict[str, OAuthClientInformationFull] = dict(clients or {})
+        self._lock = asyncio.Lock()
+        self._store_initialized = False
+
+    async def initialize(self) -> None:
+        """Initialize underlying storage for tokens/state."""
+        await self._ensure_store_initialized()
+
+    # ----- client registration -----
+    async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
+        return self._clients.get(client_id)
+
+    async def register_client(self, client_info: OAuthClientInformationFull) -> None:
+        if client_info.client_id is None:
+            raise AuthorizeError("invalid_request", "Client ID is required")
+        async with self._lock:
+            self._clients[client_info.client_id] = client_info
+
+    # ----- authorize -----
+    async def authorize(
+        self, client: OAuthClientInformationFull, params: AuthorizationParams
+    ) -> str:
+        await self._ensure_store_initialized()
+        if client is None:
+            raise AuthorizeError("unauthorized_client", "Client not found")
+
+        if client.client_id is None:
+            raise AuthorizeError("unauthorized_client", "Client ID is missing")
+
+        redirect_uri_str = str(params.redirect_uri)
+        if (
+            params.redirect_uri_provided_explicitly
+            and client.redirect_uris
+            and redirect_uri_str not in [str(u) for u in client.redirect_uris]
+        ):
+            raise AuthorizeError("invalid_request", "Redirect URI not registered for client")
+
+        scopes: list[str] = params.scopes or (
+            client.scope.split() if client and client.scope else []
+        )
+
+        pkce_method = "S256" if params.code_challenge else None
+        authorize_url, _ = await self.auth_service.authorize(
+            client_id=client.client_id,
+            redirect_uri=redirect_uri_str,
+            scopes=scopes,
+            code_challenge=params.code_challenge,
+            code_challenge_method=pkce_method,
+            client_state=params.state,  # Store client's original state
+            extra_params={},
+        )
+        return authorize_url
+
+    # ----- callback handling (custom helper, not part of interface) -----
+    async def handle_callback(self, code: str, state: str) -> str:
+        await self._ensure_store_initialized()
+        logger.info("IssuerProvider.handle_callback: received callback", extra={"state": state})
+        auth_code, _session, client_state = await self.auth_service.handle_callback(
+            code=code, state=state, code_verifier=None
+        )
+        redirect_uri = auth_code.redirect_uri or ""
+        # Use the client's original state (if provided), otherwise fall back to the Google state
+        redirect_state = client_state if client_state else state
+        return construct_redirect_uri(redirect_uri, code=auth_code.code, state=redirect_state)
+
+    # ----- auth code loading / exchange -----
+    async def load_authorization_code(
+        self, client: OAuthClientInformationFull, authorization_code: str
+    ) -> AuthorizationCode | None:
+        await self._ensure_store_initialized()
+        code_record = await self.session_manager.load_auth_code(authorization_code)
+        if not code_record:
+            return None
+
+        try:
+            redirect_uri = AnyUrl(code_record.redirect_uri) if code_record.redirect_uri else None
+        except ValidationError:
+            return None
+
+        if not redirect_uri:
+            raise TokenError("invalid_grant", "Missing redirect URI on authorization code")
+
+        if code_record.expires_at < time.time():
+            await self.session_manager.try_delete_auth_code(authorization_code)
+            return None
+
+        if redirect_uri and client and client.redirect_uris:
+            registered = [str(uri) for uri in client.redirect_uris]
+            if str(redirect_uri) not in registered:
+                raise TokenError("invalid_grant", "Redirect URI mismatch")
+
+        client_id = code_record.client_id or (client.client_id if client else None)
+        if not client_id:
+            raise TokenError("invalid_grant", "Missing client_id on authorization code")
+
+        return AuthorizationCode(
+            code=code_record.code,
+            scopes=code_record.scopes or [],
+            expires_at=code_record.expires_at,
+            client_id=client_id,
+            code_challenge=code_record.code_challenge or "",
+            redirect_uri=redirect_uri or AnyUrl("http://localhost"),  # pragma: allowlist secret
+            redirect_uri_provided_explicitly=bool(code_record.redirect_uri),
+        )
+
+    async def exchange_authorization_code(
+        self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
+    ) -> OAuthTokenType:
+        await self._ensure_store_initialized()
+        # PKCE verification is handled by the MCP token handler before this method is called
+        token_response = await self.auth_service.exchange_token(
+            auth_code=authorization_code.code,
+            code_verifier=None,  # Not used - PKCE verified upstream
+            client_id=client.client_id if client else None,
+            redirect_uri=str(authorization_code.redirect_uri),
+        )
+
+        return OAuthToken(
+            access_token=token_response.access_token,
+            refresh_token=token_response.refresh_token,
+            token_type="Bearer",
+            expires_in=token_response.expires_in,
+            scope=" ".join(authorization_code.scopes),
+        )
+
+    # ----- refresh tokens -----
+    async def load_refresh_token(
+        self, client: OAuthClientInformationFull, refresh_token: str
+    ) -> RefreshToken | None:
+        await self._ensure_store_initialized()
+        session = await self.session_manager.token_store.load_session_by_refresh_token(
+            refresh_token
+        )
+        if not session:
+            return None
+        if session.expires_at and session.expires_at < time.time():
+            await self.session_manager.revoke_session(session.access_token)
+            return None
+        if not client or not client.client_id:
+            raise TokenError("invalid_client", "Client ID missing for refresh token")
+        return RefreshToken(
+            token=refresh_token,
+            client_id=client.client_id if client else "",
+            scopes=session.scopes or [],
+            expires_at=int(session.expires_at) if session.expires_at else None,
+        )
+
+    async def exchange_refresh_token(
+        self,
+        client: OAuthClientInformationFull,
+        refresh_token: RefreshToken,
+        scopes: list[str],
+    ) -> OAuthTokenType:
+        await self._ensure_store_initialized()
+        session = await self.session_manager.token_store.load_session_by_refresh_token(
+            refresh_token.token
+        )
+        if not session:
+            raise TokenError("invalid_grant", "Refresh token not found")
+
+        if session.expires_at and session.expires_at < time.time():
+            await self.session_manager.revoke_session(session.access_token)
+            raise TokenError("invalid_grant", "Refresh token expired")
+
+        # Rotate session
+        await self.session_manager.revoke_session(session.access_token)
+        new_session = await self._issue_rotated_session(session, scopes or session.scopes or [])
+
+        return OAuthToken(
+            access_token=new_session.access_token,
+            refresh_token=new_session.refresh_token,
+            token_type="Bearer",
+            expires_in=(
+                int(new_session.expires_at - time.time()) if new_session.expires_at else None
+            ),
+            scope=" ".join(scopes or session.scopes or []),
+        )
+
+    # ----- access token verification -----
+    async def load_access_token(self, token: str) -> AccessToken | None:
+        await self._ensure_store_initialized()
+        session = await self.session_manager.get_session(token)
+        if not session:
+            return None
+        if session.expires_at and session.expires_at < time.time():
+            await self.session_manager.revoke_session(session.access_token)
+            return None
+        return AccessToken(
+            token=session.access_token,
+            client_id="",
+            scopes=session.scopes or [],
+            expires_at=int(session.expires_at) if session.expires_at else None,
+        )
+
+    async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
+        await self._ensure_store_initialized()
+        token_value = token.token if isinstance(token, AccessToken | RefreshToken) else str(token)
+        if isinstance(token, AccessToken):
+            await self.session_manager.revoke_session(token_value)
+            return
+
+        # For refresh tokens, find the session and remove it by access token
+        session = await self.session_manager.token_store.load_session_by_refresh_token(token_value)
+        if session:
+            await self.session_manager.revoke_session(session.access_token)
+
+    # ----- helpers -----
+    async def _issue_rotated_session(
+        self, session: StoredSession, scopes: list[str]
+    ) -> StoredSession:
+        ttl_seconds: int | None = None
+        if session.expires_at:
+            ttl_seconds = max(0, int(session.expires_at - time.time()))
+        return await self.session_manager.issue_session(
+            provider=session.provider,
+            user_info=session.user_info,
+            provider_access_token=session.provider_access_token,
+            provider_refresh_token=session.provider_refresh_token,
+            provider_expires_at=session.provider_expires_at,
+            scopes=scopes,
+            access_token_ttl_seconds=ttl_seconds,
+        )
+
+    async def _ensure_store_initialized(self) -> None:
+        if self._store_initialized:
+            return
+        async with self._lock:
+            if self._store_initialized:
+                return
+            await self.session_manager.token_store.initialize()
+            self._store_initialized = True
