@@ -358,6 +358,66 @@ async def test_session_store_plaintext_opt_in(
 
 
 @pytest.mark.asyncio
+async def test_session_store_accepts_string_fernet_key(tmp_path: Path) -> None:
+    # String form of Fernet key should be accepted for ergonomics.
+    key_str = Fernet.generate_key().decode("utf-8")
+    db_path = tmp_path / "auth.db"
+    store = SqliteTokenStore(db_path, encryption_key=key_str)
+    await store.initialize()
+
+    now = time.time()
+    user_info = UserInfo(provider="dummy", user_id="u", username="u")
+    session = StoredSession(
+        session_id="session-str-key",
+        provider="dummy",
+        user_info=user_info,
+        access_token="plain_token",
+        refresh_token=None,
+        provider_access_token=None,
+        provider_refresh_token=None,
+        provider_expires_at=None,
+        expires_at=now + 10,
+        created_at=now,
+        issued_at=now,
+        scopes=None,
+    )
+
+    await store.store_session(session)
+    loaded = await store.load_session_by_token(session.access_token)
+
+    assert loaded is not None and loaded.session_id == "session-str-key"
+    await store.close()
+
+
+@pytest.mark.asyncio
+async def test_store_can_reinitialize_after_close(tmp_path: Path) -> None:
+    # Store can be closed and reinitialized for reuse.
+    db_path = tmp_path / "auth.db"
+    key = Fernet.generate_key()
+    store = SqliteTokenStore(db_path, encryption_key=key)
+
+    await store.initialize()
+    await store.close()
+
+    await store.initialize()
+    now = time.time()
+    state = StateRecord(
+        state="reinit",
+        client_id=None,
+        redirect_uri=None,
+        code_challenge=None,
+        code_challenge_method=None,
+        scopes=None,
+        expires_at=now + 5,
+        created_at=now,
+    )
+    await store.store_state(state)
+    assert await store.consume_state("reinit") is not None
+
+    await store.close()
+
+
+@pytest.mark.asyncio
 async def test_session_expiry_and_cleanup(tmp_path: Path) -> None:
     # Expired sessions are cleaned up and not returned.
     db_path = tmp_path / "auth.db"
