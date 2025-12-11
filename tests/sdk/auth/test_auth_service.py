@@ -99,6 +99,27 @@ async def test_token_exchange_requires_pkce_wrong_verifier(auth_service: AuthSer
 
 
 @pytest.mark.asyncio
+async def test_token_exchange_second_redemption_rejected(auth_service: AuthService) -> None:
+    # After a successful redemption, a second attempt is rejected.
+    verifier = "once-only"
+    challenge = _s256_challenge(verifier)
+    authorize_url, state_record = await auth_service.authorize(
+        client_id="client-1",
+        redirect_uri="http://client/app",
+        scopes=["dummy.read"],
+        code_challenge=challenge,
+        code_challenge_method="S256",
+    )
+    auth_code, _ = await auth_service.handle_callback(
+        code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
+    )
+
+    await auth_service.exchange_token(auth_code=auth_code.code, code_verifier=verifier)
+    with pytest.raises(ProviderError):
+        await auth_service.exchange_token(auth_code=auth_code.code, code_verifier=verifier)
+
+
+@pytest.mark.asyncio
 async def test_token_exchange_requires_pkce_missing_verifier(auth_service: AuthService) -> None:
     verifier = "missing"
     challenge = _s256_challenge(verifier)

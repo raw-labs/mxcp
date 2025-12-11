@@ -70,7 +70,8 @@ async def test_auth_code_create_and_consume_once(session_manager: SessionManager
     assert loaded is not None
     assert loaded.session_id == "session-1"
     assert loaded.scopes == ["x"]
-    await session_manager.delete_auth_code(code.code)
+    assert await session_manager.try_delete_auth_code(code.code) is True
+    assert await session_manager.try_delete_auth_code(code.code) is False
     assert await session_manager.load_auth_code(code.code) is None
 
 

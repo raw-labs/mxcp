@@ -79,7 +79,9 @@ async def test_auth_code_round_trip(token_store) -> None:
     await store.store_auth_code(code)
     loaded = await store.load_auth_code("auth-code-1")
     assert loaded == code
-    await store.delete_auth_code("auth-code-1")
+    assert await store.try_delete_auth_code("auth-code-1") is True
+    # Second delete should fail (already deleted)
+    assert await store.try_delete_auth_code("auth-code-1") is False
     assert await store.load_auth_code("auth-code-1") is None
 
 
@@ -219,10 +221,11 @@ async def test_store_isolation_for_multiple_records(token_store) -> None:
     await store.store_auth_code(code1)
     await store.store_auth_code(code2)
     assert await store.load_auth_code("code-1") == code1
-    await store.delete_auth_code("code-1")
+    assert await store.try_delete_auth_code("code-1") is True
+    assert await store.try_delete_auth_code("code-1") is False
     assert await store.load_auth_code("code-1") is None
     assert await store.load_auth_code("code-2") == code2
-    await store.delete_auth_code("code-2")
+    assert await store.try_delete_auth_code("code-2") is True
 
     # Sessions
     user_info_a = UserInfo(

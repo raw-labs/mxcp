@@ -90,6 +90,9 @@ class SessionManager:
     async def delete_auth_code(self, code: str) -> None:
         await self.token_store.delete_auth_code(code)
 
+    async def try_delete_auth_code(self, code: str) -> bool:
+        return await self.token_store.try_delete_auth_code(code)
+
     async def issue_session(
         self,
         *,

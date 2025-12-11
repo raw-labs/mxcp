@@ -75,6 +75,7 @@ class TokenStore(Protocol):
     async def load_auth_code(self, code: str) -> AuthCodeRecord | None: ...
 
     async def delete_auth_code(self, code: str) -> None: ...
+    async def try_delete_auth_code(self, code: str) -> bool: ...
 
     async def store_session(self, record: StoredSession) -> None: ...
 
@@ -173,6 +174,11 @@ class SqliteTokenStore(TokenStore):
     async def delete_auth_code(self, code: str) -> None:
         await asyncio.get_running_loop().run_in_executor(
             self._executor, self._sync_delete_auth_code, code
+        )
+
+    async def try_delete_auth_code(self, code: str) -> bool:
+        return await asyncio.get_running_loop().run_in_executor(
+            self._executor, self._sync_try_delete_auth_code, code
         )
 
     # ── Sessions ───────────────────────────────────────────────────────────────
@@ -384,6 +390,14 @@ class SqliteTokenStore(TokenStore):
         with self._lock:
             self._conn.execute("DELETE FROM auth_codes WHERE code = ?", (code,))
             self._conn.commit()
+
+    def _sync_try_delete_auth_code(self, code: str) -> bool:
+        """Attempt to delete an auth code; returns True if a row was removed."""
+        assert self._conn is not None
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM auth_codes WHERE code = ?", (code,))
+            self._conn.commit()
+            return cur.rowcount > 0
 
     # Session helpers
     def _sync_store_session(self, payload: dict[str, Any]) -> None:
