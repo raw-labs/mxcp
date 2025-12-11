@@ -1,5 +1,6 @@
 import pytest
 import pytest_asyncio
+from cryptography.fernet import Fernet
 
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.auth.providers.dummy import DummyProviderAdapter
@@ -9,7 +10,7 @@ from mxcp.sdk.auth.storage import SqliteTokenStore
 
 @pytest_asyncio.fixture
 async def session_manager(tmp_path):
-    store = SqliteTokenStore(tmp_path / "auth.db")
+    store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
     await store.initialize()
     manager = SessionManager(store)
     yield manager

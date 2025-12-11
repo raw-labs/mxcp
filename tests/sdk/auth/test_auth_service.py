@@ -1,5 +1,6 @@
 import pytest
 import pytest_asyncio
+from cryptography.fernet import Fernet
 
 from mxcp.sdk.auth.auth_service import AuthService
 from mxcp.sdk.auth.contracts import ProviderError
@@ -10,7 +11,7 @@ from mxcp.sdk.auth.storage import SqliteTokenStore
 
 @pytest_asyncio.fixture
 async def auth_service(tmp_path):
-    store = SqliteTokenStore(tmp_path / "auth.db")
+    store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
     await store.initialize()
     session_manager = SessionManager(store)
     provider = DummyProviderAdapter(expected_code_verifier="verifier")
