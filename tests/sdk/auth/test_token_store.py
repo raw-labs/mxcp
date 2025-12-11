@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 import time
 from pathlib import Path
@@ -148,10 +149,88 @@ async def test_session_store_and_load_with_encryption(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_session_store_requires_encryption_key_by_default(tmp_path: Path) -> None:
+    # Storing tokens without a key should fail unless explicitly allowed.
+    db_path = tmp_path / "auth.db"
+    store = SqliteTokenStore(db_path)
+    await store.initialize()
+
+    now = time.time()
+    user_info = UserInfo(provider="dummy", user_id="u", username="u")
+    session = StoredSession(
+        session_id="session-plain",
+        provider="dummy",
+        user_info=user_info,
+        access_token="plain_token",
+        refresh_token=None,
+        provider_access_token=None,
+        provider_refresh_token=None,
+        provider_expires_at=None,
+        expires_at=now + 10,
+        created_at=now,
+        issued_at=now,
+        scopes=None,
+    )
+
+    with pytest.raises(ValueError, match="Token encryption key is required"):
+        await store.store_session(session)
+
+    await store.close()
+
+
+@pytest.mark.asyncio
+async def test_session_store_plaintext_opt_in(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Plaintext storage is only allowed with explicit opt-in and logs a warning.
+    caplog.set_level(logging.WARNING)
+    db_path = tmp_path / "auth.db"
+    store = SqliteTokenStore(db_path, allow_plaintext_tokens=True)
+    await store.initialize()
+
+    now = time.time()
+    user_info = UserInfo(provider="dummy", user_id="u", username="u")
+    session = StoredSession(
+        session_id="session-plain",
+        provider="dummy",
+        user_info=user_info,
+        access_token="plain_token",
+        refresh_token="plain_refresh",
+        provider_access_token="provider_plain",
+        provider_refresh_token=None,
+        provider_expires_at=None,
+        expires_at=now + 10,
+        created_at=now,
+        issued_at=now,
+        scopes=None,
+    )
+
+    await store.store_session(session)
+    loaded = await store.load_session_by_token(session.access_token)
+
+    assert loaded is not None
+    assert loaded.access_token == "plain_token"
+    assert loaded.refresh_token == "plain_refresh"
+    assert loaded.provider_access_token == "provider_plain"
+
+    row = _db_row(
+        db_path,
+        "SELECT access_token_encrypted, refresh_token_encrypted, provider_access_token FROM sessions",
+    )
+    assert row is not None
+    assert row["access_token_encrypted"] == "plain_token"
+    assert row["refresh_token_encrypted"] == "plain_refresh"
+    assert row["provider_access_token"] == "provider_plain"
+    assert any("plaintext" in message for message in caplog.messages)
+
+    await store.close()
+
+
+@pytest.mark.asyncio
 async def test_session_expiry_and_cleanup(tmp_path: Path) -> None:
     # Expired sessions are cleaned up and not returned.
     db_path = tmp_path / "auth.db"
-    store = SqliteTokenStore(db_path)
+    store = SqliteTokenStore(db_path, encryption_key=Fernet.generate_key())
     await store.initialize()
 
     now = time.time()

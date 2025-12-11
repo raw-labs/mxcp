@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import sqlite3
 import threading
 import time
@@ -77,13 +78,26 @@ class TokenStore(Protocol):
 class SqliteTokenStore(TokenStore):
     """SQLite-backed TokenStore with hashing and optional Fernet encryption."""
 
-    def __init__(self, db_path: Path, encryption_key: str | bytes | None = None) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        encryption_key: str | bytes | None = None,
+        *,
+        allow_plaintext_tokens: bool = False,
+    ) -> None:
         self.db_path = db_path
+        self.allow_plaintext_tokens = allow_plaintext_tokens
+        self._logger = logging.getLogger(__name__)
         self._conn: sqlite3.Connection | None = None
         self._lock = threading.RLock()
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="auth-store")
         self._initialized = False
         self._fernet = Fernet(encryption_key) if encryption_key else None
+        if not self._fernet and self.allow_plaintext_tokens:
+            self._logger.warning(
+                "Storing auth tokens in plaintext because allow_plaintext_tokens=True and no "
+                "encryption key was provided. This disables at-rest protection."
+            )
 
     async def initialize(self) -> None:
         if self._initialized:
@@ -428,19 +442,29 @@ class SqliteTokenStore(TokenStore):
     def _encrypt(self, value: str | None) -> str | None:
         if value is None:
             return None
-        if not self._fernet:
-            return value
-        return self._fernet.encrypt(value.encode("utf-8")).decode("utf-8")
+        if self._fernet:
+            return self._fernet.encrypt(value.encode("utf-8")).decode("utf-8")
+        if not self.allow_plaintext_tokens:
+            raise ValueError(
+                "Token encryption key is required; set allow_plaintext_tokens=True to store "
+                "tokens in plaintext."
+            )
+        return value
 
     def _decrypt(self, value: str | None) -> str | None:
         if value is None:
             return None
-        if not self._fernet:
-            return value
-        try:
-            return self._fernet.decrypt(value.encode("utf-8")).decode("utf-8")
-        except InvalidToken as exc:
-            raise ValueError("Failed to decrypt stored token") from exc
+        if self._fernet:
+            try:
+                return self._fernet.decrypt(value.encode("utf-8")).decode("utf-8")
+            except InvalidToken as exc:
+                raise ValueError("Failed to decrypt stored token") from exc
+        if not self.allow_plaintext_tokens:
+            raise ValueError(
+                "Token encryption key is required to decrypt stored tokens; plaintext tokens "
+                "are disabled."
+            )
+        return value
 
     def _serialize_session(self, record: StoredSession) -> dict[str, Any]:
         access_token = record.access_token
