@@ -386,3 +386,102 @@ async def test_session_expiry_and_cleanup(tmp_path: Path) -> None:
     assert await store.load_session_by_token("expired_token") is None
 
     await store.close()
+
+
+@pytest.mark.asyncio
+async def test_load_session_by_refresh_token(token_store) -> None:
+    # Sessions can be loaded by refresh token.
+    store = token_store
+
+    now = time.time()
+    user_info = UserInfo(provider="dummy", user_id="u", username="u")
+    session = StoredSession(
+        session_id="session-refresh",
+        provider="dummy",
+        user_info=user_info,
+        access_token="access_token_1",
+        refresh_token="refresh_token_1",
+        provider_access_token=None,
+        provider_refresh_token=None,
+        provider_expires_at=None,
+        expires_at=now + 600,
+        created_at=now,
+        issued_at=now,
+        scopes=["read"],
+    )
+
+    await store.store_session(session)
+    loaded = await store.load_session_by_refresh_token("refresh_token_1")
+
+    assert loaded is not None
+    assert loaded.session_id == "session-refresh"
+    assert loaded.access_token == "access_token_1"
+    assert loaded.refresh_token == "refresh_token_1"
+
+
+@pytest.mark.asyncio
+async def test_load_session_by_refresh_token_not_found(token_store) -> None:
+    # Unknown refresh token returns None.
+    store = token_store
+
+    loaded = await store.load_session_by_refresh_token("nonexistent_refresh")
+    assert loaded is None
+
+
+@pytest.mark.asyncio
+async def test_load_session_by_refresh_token_no_refresh_token(token_store) -> None:
+    # Session without refresh token cannot be found by refresh token.
+    store = token_store
+
+    now = time.time()
+    user_info = UserInfo(provider="dummy", user_id="u", username="u")
+    session = StoredSession(
+        session_id="session-no-refresh",
+        provider="dummy",
+        user_info=user_info,
+        access_token="access_only",
+        refresh_token=None,
+        provider_access_token=None,
+        provider_refresh_token=None,
+        provider_expires_at=None,
+        expires_at=now + 600,
+        created_at=now,
+        issued_at=now,
+        scopes=None,
+    )
+
+    await store.store_session(session)
+
+    # Cannot find by None refresh token
+    loaded = await store.load_session_by_refresh_token("access_only")
+    assert loaded is None
+
+
+@pytest.mark.asyncio
+async def test_load_session_by_refresh_token_expired(tmp_path: Path) -> None:
+    # Expired sessions are not returned when loading by refresh token.
+    db_path = tmp_path / "auth.db"
+    store = SqliteTokenStore(db_path, encryption_key=Fernet.generate_key())
+    await store.initialize()
+
+    now = time.time()
+    session = StoredSession(
+        session_id="session-expired-refresh",
+        provider="dummy",
+        user_info=UserInfo(provider="dummy", user_id="u", username="u"),
+        access_token="expired_access",
+        refresh_token="expired_refresh",
+        provider_access_token=None,
+        provider_refresh_token=None,
+        provider_expires_at=None,
+        expires_at=now - 1,
+        created_at=now - 10,
+        issued_at=now - 10,
+        scopes=None,
+    )
+    await store.store_session(session)
+
+    loaded = await store.load_session_by_refresh_token("expired_refresh")
+    assert loaded is None
+
+    await store.close()
