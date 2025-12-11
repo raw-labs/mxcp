@@ -5,6 +5,8 @@ sidebar:
   order: 1
 ---
 
+> **Related Topics:** [Quickstart](/getting-started/quickstart#validate-your-project) (first validation) | [CLI Reference](/reference/cli) (command options) | [Common Tasks](/reference/common-tasks#testing--quality) (quick how-to)
+
 MXCP provides a comprehensive 4-layer quality framework to ensure your endpoints are production-ready. This section covers validation, testing, linting, and LLM evaluation.
 
 ## Quality Layers

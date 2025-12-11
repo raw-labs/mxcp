@@ -5,6 +5,8 @@ sidebar:
   order: 2
 ---
 
+> **Related Topics:** [Deployment](deployment) (production setup) | [Authentication](/security/authentication) (OAuth secrets) | [Project Structure](/concepts/project-structure) (config file location) | [Common Tasks](/reference/common-tasks#how-do-i-use-secrets) (quick how-to)
+
 MXCP uses two configuration files: site configuration for project settings and user configuration for secrets and authentication.
 
 ## Configuration Files
@@ -370,20 +372,31 @@ For long-running servers, reload configuration without restart:
 ```bash
 # Send SIGHUP signal
 kill -HUP $(pgrep -f "mxcp serve")
+
+# Or use admin socket
+curl --unix-socket /run/mxcp/mxcp.sock -X POST http://localhost/reload
 ```
 
-What gets reloaded:
-- Vault secrets
-- File references
-- Environment variables
-- DuckDB connection
-- Python runtimes
+**Reload Process:**
+1. SIGHUP handler waits synchronously (up to 60 seconds)
+2. Only external references are refreshed (not the configuration file structure)
+3. Service remains available - new requests wait while reload completes
+4. Automatic rollback on failure - if new values cause errors, server continues with old values
 
-What does NOT reload:
+**What gets reloaded:**
+- Vault secrets (`vault://`)
+- File contents (`file://`)
+- Environment variables (`${VAR}`)
+- DuckDB connection (always recreated to pick up database changes)
+- Python runtimes with updated configs
+
+**What does NOT reload:**
 - Configuration file structure
 - OAuth provider settings
 - Server host/port
 - Registered endpoints
+
+**Note:** The DuckDB connection is always recreated during a reload, regardless of whether configuration values have changed. This ensures any external changes to the database file (new tables, data updates) are visible after reload.
 
 ## Model Configuration
 

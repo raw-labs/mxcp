@@ -1,9 +1,11 @@
 ---
 title: "Tutorials"
-description: "Step-by-step tutorials for building MXCP endpoints. Learn SQL queries, Python integrations, and advanced patterns."
+description: "Hands-on MXCP tutorials: Hello World in 5 minutes, SQL data queries, Python with async and ML, combining SQL+Python. Copy-paste code included."
 sidebar:
   order: 1
 ---
+
+> **Related Topics:** [Quickstart](/getting-started/quickstart) (project setup) | [Concepts](/concepts/) (understand MXCP) | [Common Tasks](/reference/common-tasks) (quick how-to)
 
 This section contains step-by-step tutorials to help you build MXCP endpoints. Each tutorial focuses on a specific skill and builds on the concepts from the quickstart guide.
 

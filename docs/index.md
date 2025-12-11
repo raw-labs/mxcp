@@ -145,9 +145,42 @@ Your AI tools are now available with full security, audit trails, and policy enf
 - [Development Guide](contributing/development) - Setup and architecture
 - [Code Style](contributing/development#code-style) - Formatting and conventions
 
-## Next Steps
+## Learning Paths
 
-1. **New to MXCP?** Start with the [Quickstart Guide](getting-started/quickstart)
-2. **Building your first tool?** Follow the [Hello World Tutorial](tutorials/hello-world)
-3. **Need security?** Read about [Authentication](security/authentication) and [Policies](security/policies)
-4. **Going to production?** Check the [Deployment Guide](operations/deployment)
+Choose the path that matches your goal:
+
+### I'm New to MXCP
+1. [Glossary](getting-started/glossary) - Understand key terms (5 min)
+2. [Quickstart](getting-started/quickstart) - Create your first project (10 min)
+3. [Hello World Tutorial](tutorials/hello-world) - Build and test a tool (15 min)
+4. [Concepts](concepts/) - Understand how MXCP works
+
+### I'm Building AI Tools
+1. [SQL Endpoints](tutorials/sql-endpoints) - Query data with SQL
+2. [Python Endpoints](tutorials/python-endpoints) - Complex logic and APIs
+3. [Examples](examples/) - Real-world patterns
+4. [Common Tasks](reference/common-tasks) - Quick how-to reference
+
+### I'm Adding Security
+1. [Security Overview](security/) - Understand the security model
+2. [Authentication](security/authentication) - Set up OAuth
+3. [Policies](security/policies) - Access control with CEL
+4. [Auditing](security/auditing) - Track operations
+
+### I'm Going to Production
+1. [Configuration](operations/configuration) - Environment management
+2. [Deployment](operations/deployment) - Docker and systemd
+3. [Monitoring](operations/monitoring) - Observability setup
+4. [Quality](quality/) - Testing and validation
+
+## Quick Links
+
+| Task | Documentation |
+|------|---------------|
+| Create a tool | [Hello World Tutorial](tutorials/hello-world) |
+| Add authentication | [Authentication Guide](security/authentication) |
+| Filter sensitive data | [Policies Guide](security/policies) |
+| Write tests | [Testing Guide](quality/testing) |
+| Deploy to production | [Deployment Guide](operations/deployment) |
+| Look up CLI commands | [CLI Reference](reference/cli) |
+| Find common patterns | [Common Tasks](reference/common-tasks) |

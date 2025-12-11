@@ -5,6 +5,8 @@ sidebar:
   order: 2
 ---
 
+> **Related Topics:** [Type System](type-system) (parameter/return types) | [YAML Schema](/reference/yaml-schema) (complete field reference) | [SQL Endpoints](/tutorials/sql-endpoints) (SQL tutorial) | [Python Endpoints](/tutorials/python-endpoints) (Python tutorial)
+
 MXCP supports three types of MCP endpoints, each serving different purposes. Understanding when to use each type helps you design better AI integrations.
 
 ## Tools

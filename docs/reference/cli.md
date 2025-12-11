@@ -5,6 +5,8 @@ sidebar:
   order: 2
 ---
 
+> **Related Topics:** [Quickstart](/getting-started/quickstart) (first commands) | [Common Tasks](common-tasks) (quick how-to) | [Quality](/quality/) (validation, testing, linting)
+
 Complete reference for all MXCP command-line interface commands.
 
 ## Project Structure

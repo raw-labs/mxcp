@@ -5,6 +5,8 @@ sidebar:
   order: 3
 ---
 
+> **Related Topics:** [Endpoints](endpoints) (use types in definitions) | [Policies](/security/policies) (filter by type) | [YAML Schema](/reference/yaml-schema) (complete field reference) | [Testing](/quality/testing) (validate types)
+
 MXCP's type system provides robust data validation for endpoint parameters and return values. It combines JSON Schema compatibility with DuckDB type mapping, ensuring type safety across your entire application.
 
 ## Base Types

@@ -5,6 +5,8 @@ sidebar:
   order: 4
 ---
 
+> **Related Topics:** [Validation](validation) (structural checks) | [Testing](testing) (functional tests) | [Endpoints](/concepts/endpoints) (definition best practices) | [Common Tasks](/reference/common-tasks#how-do-i-check-for-linting-issues) (quick how-to)
+
 The MXCP linter checks your endpoint metadata quality, ensuring AI tools can understand and use your endpoints effectively.
 
 ## Running Linter

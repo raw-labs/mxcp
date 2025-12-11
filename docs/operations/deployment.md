@@ -1,9 +1,11 @@
 ---
 title: "Deployment"
-description: "Deploy MXCP to production. Docker, systemd, Kubernetes patterns, signal handling, and operational best practices."
+description: "Production deployment: Docker, systemd, Kubernetes. Signal handling (SIGHUP reload), health checks, multi-profile setup, operational patterns."
 sidebar:
   order: 3
 ---
+
+> **Related Topics:** [Configuration](configuration) (profiles, secrets) | [Monitoring](monitoring) (observability) | [Admin Socket](admin-socket) (health checks) | [Common Tasks](/reference/common-tasks#how-do-i-deploy-to-production) (quick how-to)
 
 This guide covers deploying MXCP to production environments, including Docker, systemd, and container orchestration patterns.
 

@@ -5,6 +5,8 @@ sidebar:
   order: 4
 ---
 
+> **Related Topics:** [Configuration](/operations/configuration) (enable auditing) | [Monitoring](/operations/monitoring) (observability) | [Policies](policies) (access control) | [Common Tasks](/reference/common-tasks#how-do-i-enable-audit-logging) (quick setup)
+
 MXCP provides comprehensive audit logging to track all endpoint executions. Audit logs are essential for security, compliance, debugging, and understanding usage patterns.
 
 ## What Gets Logged
@@ -424,6 +426,116 @@ For better performance on large datasets:
 1. Export to DuckDB
 2. Create indexes for common queries
 3. Use time-based partitioning
+
+## Log Retention and Cleanup
+
+MXCP provides automated audit log cleanup to manage storage and comply with data retention policies.
+
+### Retention Configuration
+
+Configure retention in your audit schema:
+
+```yaml
+audit:
+  enabled: true
+  path: audit/logs.jsonl
+  retention_days: 90  # Keep records for 90 days
+```
+
+### Manual Cleanup
+
+Run cleanup manually:
+
+```bash
+# Apply retention policies
+mxcp log-cleanup
+
+# Preview what would be deleted (dry run)
+mxcp log-cleanup --dry-run
+
+# Use specific profile
+mxcp log-cleanup --profile production
+
+# Output as JSON
+mxcp log-cleanup --json
+```
+
+### Automated Cleanup
+
+**Using Cron:**
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line (runs daily at 2 AM)
+0 2 * * * cd /path/to/project && /usr/bin/mxcp log-cleanup
+```
+
+**Using systemd:**
+
+1. Create a timer unit (`/etc/systemd/system/mxcp-audit-cleanup.timer`):
+```ini
+[Unit]
+Description=MXCP Audit Log Cleanup Timer
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+2. Create a service unit (`/etc/systemd/system/mxcp-audit-cleanup.service`):
+```ini
+[Unit]
+Description=MXCP Audit Log Cleanup
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/project
+ExecStart=/usr/bin/mxcp log-cleanup
+User=mxcp
+```
+
+3. Enable and start:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now mxcp-audit-cleanup.timer
+```
+
+### Cleanup Output
+
+Example JSON output:
+```json
+{
+  "status": "ok",
+  "result": {
+    "status": "success",
+    "message": "Deleted 1523 records",
+    "deleted_per_schema": {
+      "api_operations:1": 1200,
+      "debug_logs:1": 323
+    }
+  }
+}
+```
+
+### Retention Guidelines
+
+| Log Type | Suggested Retention | Reason |
+|----------|-------------------|--------|
+| Authentication | 365 days | Regulatory compliance |
+| API access | 90 days | Operational analysis |
+| Debug | 30 days | Troubleshooting |
+| Error | 180 days | Incident investigation |
+
+### Best Practices
+
+1. **Test first**: Always use `--dry-run` before automated cleanup
+2. **Monitor disk space**: Set alerts for audit directory size
+3. **Backup**: Archive old logs before deletion
+4. **Gradual rollout**: Start conservative, adjust as needed
 
 ## Security Considerations
 

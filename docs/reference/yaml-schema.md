@@ -1,198 +1,218 @@
 ---
 title: "YAML Schema Reference"
-description: "Complete reference for all MXCP YAML configuration files. Field definitions, types, and valid values for endpoint definitions and project configuration."
+description: "Overview of all MXCP YAML configuration files with links to detailed schema references for tools, resources, prompts, and configuration."
 sidebar:
   order: 5
 ---
 
-This reference documents all YAML configuration files in MXCP, their fields, types, and valid values.
+> **Related Topics:** [Endpoints](/concepts/endpoints) (endpoint types) | [Type System](/concepts/type-system) (parameter types) | [Configuration](/operations/configuration) (runtime config) | [Validation](/quality/validation) (check syntax)
+
+This page provides an overview of all YAML configuration files in MXCP. Click through to detailed schema references for complete documentation.
+
+## Schema References
+
+| Schema | File Location | Description |
+|--------|---------------|-------------|
+| [Tool Schema](/reference/schema-tool) | `tools/*.yml` | Tool endpoint definitions |
+| [Resource Schema](/reference/schema-resource) | `resources/*.yml` | Resource endpoint definitions |
+| [Prompt Schema](/reference/schema-prompt) | `prompts/*.yml` | Prompt endpoint definitions |
+| [Site Configuration](/reference/schema-site-config) | `mxcp-site.yml` | Project configuration |
+| [User Configuration](/reference/schema-user-config) | `~/.mxcp/config.yml` | User-level settings and secrets |
 
 ## File Types Overview
 
-| File | Purpose | Location |
-|------|---------|----------|
-| `mxcp-site.yml` | Project configuration | Project root |
-| `*.yml` in `tools/` | Tool definitions | `tools/` directory |
-| `*.yml` in `resources/` | Resource definitions | `resources/` directory |
-| `*.yml` in `prompts/` | Prompt definitions | `prompts/` directory |
-| `~/.mxcp/config.yml` | User configuration | Home directory |
+### Endpoint Definitions
 
-## Endpoint Definition Files
+Endpoints are the core building blocks of MXCP. Each type has its own schema:
 
-All endpoint files (tools, resources, prompts) share a common structure.
-
-### Common Header
-
-```yaml
-mxcp: 1                    # Required. Schema version (always 1)
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `mxcp` | integer | Yes | Schema version. Currently only `1` is valid. |
-
-### Tool Definition
+**[Tools](/reference/schema-tool)** - Callable functions that AI agents can invoke:
 
 ```yaml
 mxcp: 1
 tool:
-  name: my_tool              # Required. Unique identifier
-  description: Does X        # Required. What the tool does
-  language: sql              # Required. sql or python
-
-  parameters:                # Optional. Input parameters
+  name: get_user
+  description: Retrieve user by ID
+  parameters:
     - name: user_id
       type: integer
-      description: User ID
-
-  return:                    # Optional. Return type definition
-    type: array
-    items:
-      type: object
-
-  source:                    # Required. Implementation
-    inline: SELECT * FROM users
-    # OR
-    file: ../sql/query.sql
-
-  tests:                     # Optional. Test cases
-    - name: basic_test
-      arguments:
-        - key: user_id
-          value: 1
+  source:
+    file: ../sql/get_user.sql
 ```
 
-#### Tool Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Unique identifier. Use snake_case. |
-| `description` | string | Yes | Human-readable description for AI clients. |
-| `language` | string | Yes | `sql` or `python` |
-| `parameters` | array | No | Input parameter definitions. |
-| `return` | object | No | Return type schema. |
-| `source` | object | Yes | Implementation source. |
-| `tests` | array | No | Test case definitions. |
-
-### Resource Definition
+**[Resources](/reference/schema-resource)** - Data accessible via URI patterns:
 
 ```yaml
 mxcp: 1
 resource:
-  uri_template: "user://{user_id}"  # Required. URI pattern
-  name: User Profile                 # Required. Display name
-  description: User information      # Required. Description
-  mime_type: application/json        # Optional. Content type
-  language: sql                      # Required. sql or python
-
-  parameters:                        # Optional. URI parameters
-    - name: user_id
-      type: integer
-
+  uri: "user://{user_id}/profile"
+  name: User Profile
   source:
-    inline: SELECT * FROM users WHERE id = $user_id
+    file: ../sql/user_profile.sql
 ```
 
-#### Resource Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `uri_template` | string | Yes | URI pattern with `{param}` placeholders. |
-| `name` | string | Yes | Human-readable name. |
-| `description` | string | Yes | What the resource provides. |
-| `mime_type` | string | No | Content type. Default: `application/json` |
-| `language` | string | Yes | `sql` or `python` |
-| `parameters` | array | No | URI parameter definitions. |
-| `source` | object | Yes | Implementation source. |
-
-### Prompt Definition
+**[Prompts](/reference/schema-prompt)** - Templated conversation starters:
 
 ```yaml
 mxcp: 1
 prompt:
-  name: analyze_data           # Required. Unique identifier
-  description: Analysis prompt # Required. Description
-
-  parameters:                  # Optional. Template parameters
+  name: analyze_data
+  description: Analyze data with customizable focus
+  parameters:
     - name: topic
       type: string
-      description: Topic to analyze
-
-  messages:                    # Required. Prompt messages
+  messages:
     - role: system
       type: text
       prompt: "You are an expert analyst."
     - role: user
       type: text
-      prompt: "Analyze the following: {{ topic }}"
+      prompt: "Analyze: {{ topic }}"
 ```
 
-#### Prompt Fields
+### Configuration Files
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Unique identifier. |
-| `description` | string | Yes | What the prompt does. |
-| `parameters` | array | No | Template parameter definitions. |
-| `messages` | array | Yes | Message sequence with Jinja2 templates. |
+**[Site Configuration](/reference/schema-site-config)** (`mxcp-site.yml`) - Project-level settings:
 
-## Parameter Definition
+```yaml
+mxcp: 1
+project: my-project
+profile: default
 
-Parameters are used in tools and resources.
+extensions:
+  - httpfs
+  - parquet
+
+profiles:
+  default:
+    duckdb:
+      path: ./data/app.duckdb
+    audit:
+      enabled: true
+```
+
+**[User Configuration](/reference/schema-user-config)** (`~/.mxcp/config.yml`) - User-level secrets and auth:
+
+```yaml
+mxcp: 1
+projects:
+  my-project:
+    profiles:
+      default:
+        secrets:
+          - name: api_key
+            type: api
+            parameters:
+              api_key: "${MY_API_KEY}"
+        auth:
+          provider: github
+          github:
+            client_id: Ov23li...
+            client_secret: "${GITHUB_SECRET}"
+            callback_path: /callback
+```
+
+## Common Schema Elements
+
+### Schema Version
+
+All MXCP YAML files start with the schema version:
+
+```yaml
+mxcp: 1    # Required, always 1
+```
+
+### Parameters
+
+Parameters are shared across tools, resources, and prompts:
 
 ```yaml
 parameters:
-  # Required parameter (no default)
-  - name: user_id              # Required. Parameter name
-    type: integer              # Required. Data type
-    description: The user ID   # Required. Description
-    examples: [1, 2, 3]        # Optional. Example values
-
-  # Optional parameter (has default)
-  - name: limit
-    type: integer
-    description: Maximum results
-    default: 10                # Optional. Makes parameter optional
-
-    # Validation constraints
-    minimum: 1                 # For numbers
-    maximum: 1000              # For numbers
-    minLength: 1               # For strings
-    maxLength: 100             # For strings
-    enum: [a, b, c]            # Allowed values
-    minItems: 1                # For arrays
-    maxItems: 50               # For arrays
+  - name: user_id          # Required: identifier
+    type: integer          # Required: data type
+    description: User ID   # Recommended: description
+    default: null          # Optional: makes parameter optional
+    minimum: 1             # Optional: validation constraint
 ```
 
-### Parameter Fields
+See [Type System](/concepts/type-system) for complete type documentation.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Parameter identifier. Use snake_case. |
-| `type` | string | Yes | Data type (see Type System below). |
-| `description` | string | Yes | Human-readable description. |
-| `default` | any | No | Default value. Without it, parameter is required. |
-| `examples` | array | No | Example values for documentation. |
-| `format` | string | No | Format hint (e.g., `email`, `date-time`). |
+### Source
 
-### Validation Constraints
+Tools and resources require a source definition:
 
-| Constraint | Applies To | Description |
-|------------|------------|-------------|
-| `minimum` | integer, number | Minimum value (inclusive) |
-| `maximum` | integer, number | Maximum value (inclusive) |
-| `exclusiveMinimum` | integer, number | Minimum value (exclusive) |
-| `exclusiveMaximum` | integer, number | Maximum value (exclusive) |
-| `minLength` | string | Minimum string length |
-| `maxLength` | string | Maximum string length |
-| `pattern` | string | Regex pattern to match |
-| `enum` | any | List of allowed values |
-| `minItems` | array | Minimum array length |
-| `maxItems` | array | Maximum array length |
+```yaml
+# Inline code
+source:
+  code: |
+    SELECT * FROM users WHERE id = $user_id
 
-## Type System
+# External file
+source:
+  file: ../sql/get_user.sql
+```
 
-### Primitive Types
+### Tests
+
+All endpoint types support inline tests:
+
+```yaml
+tests:
+  - name: test_basic
+    arguments:
+      - key: user_id
+        value: 1
+    result_contains:
+      name: "Alice"
+```
+
+See [Testing](/quality/testing) for complete documentation.
+
+### Policies
+
+Tools and resources support access control policies:
+
+```yaml
+policies:
+  input:
+    - condition: "user.role == 'guest'"
+      action: deny
+      reason: "Guests cannot access this endpoint"
+  output:
+    - condition: "user.role != 'admin'"
+      action: filter_fields
+      fields: ["salary", "ssn"]
+```
+
+See [Policies](/security/policies) for complete documentation.
+
+## Validation
+
+Validate all YAML files:
+
+```bash
+# Validate entire project
+mxcp validate
+
+# Validate specific file
+mxcp validate tools/my-tool.yml
+
+# Verbose output
+mxcp validate --debug
+```
+
+## Quick Reference
+
+### Required Fields by Type
+
+| Type | Required Fields |
+|------|-----------------|
+| Tool | `mxcp`, `tool.name`, `tool.source` |
+| Resource | `mxcp`, `resource.uri`, `resource.source` |
+| Prompt | `mxcp`, `prompt.name`, `prompt.description`, `prompt.messages` |
+| Site Config | `mxcp`, `project`, `profile` |
+| User Config | `mxcp` |
+
+### Data Types
 
 | Type | Description | Example |
 |------|-------------|---------|
@@ -200,401 +220,22 @@ parameters:
 | `integer` | Whole number | `42` |
 | `number` | Decimal number | `3.14` |
 | `boolean` | True/false | `true` |
-| `null` | Null value | `null` |
+| `array` | List of items | `[1, 2, 3]` |
+| `object` | Key-value pairs | `{key: value}` |
 
-### Complex Types
+### Policy Actions
 
-#### Array Type
-
-```yaml
-type: array
-items:
-  type: string        # Type of array elements
-minItems: 1           # Optional minimum length
-maxItems: 100         # Optional maximum length
-```
-
-#### Object Type
-
-```yaml
-type: object
-properties:
-  name:
-    type: string
-  age:
-    type: integer
-required:             # Optional list of required properties
-  - name
-additionalProperties: false  # Optional. Disallow extra properties
-```
-
-### Format Hints
-
-| Format | Type | Description |
+| Action | Type | Description |
 |--------|------|-------------|
-| `date` | string | ISO 8601 date (YYYY-MM-DD) |
-| `date-time` | string | ISO 8601 datetime |
-| `time` | string | ISO 8601 time |
-| `email` | string | Email address |
-| `uri` | string | URI/URL |
-| `uuid` | string | UUID |
-| `hostname` | string | Hostname |
-| `ipv4` | string | IPv4 address |
-| `ipv6` | string | IPv6 address |
-
-## Source Definition
-
-The `source` field defines where the implementation code lives.
-
-### Inline Source
-
-```yaml
-source:
-  code: |
-    SELECT * FROM users
-    WHERE id = $user_id
-```
-
-### File Source
-
-```yaml
-source:
-  file: ../sql/get_user.sql    # Relative path from YAML file
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `code` | string | Code written directly in YAML |
-| `file` | string | Path to external file |
-
-Only one of `code` or `file` should be specified.
-
-## Test Definition
-
-Tests validate endpoint behavior.
-
-```yaml
-tests:
-  - name: test_basic           # Required. Test identifier
-    description: Basic test    # Optional. Test description
-
-    arguments:                 # Required. Input arguments
-      - key: user_id
-        value: 1
-
-    # Assertions
-    result:                    # Expected exact result
-      id: 1
-      name: "Alice"
-    result_contains:           # Partial match (fields must exist)
-      name: "Alice"
-    result_contains_text: "Alice"  # For string results
-    result_length: 5           # For array results
-
-  - name: test_with_user_context
-    description: Test policy filtering
-    arguments:
-      - key: user_id
-        value: 1
-    user_context:              # User context for policy testing
-      role: admin
-      permissions: ["data.read"]
-    result_not_contains:       # Fields that should NOT exist
-      - ssn
-      - salary
-```
-
-### Test Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Unique test identifier |
-| `description` | string | No | Human-readable description |
-| `arguments` | array | Yes | Input arguments as key-value pairs |
-| `user_context` | object | No | User context for policy testing |
-
-### Test Assertions
-
-| Assertion | Type | Description |
-|-----------|------|-------------|
-| `result` | any | Expected exact result |
-| `result_contains` | object | Partial match - fields must exist |
-| `result_contains_text` | string | For string results - must contain substring |
-| `result_not_contains` | array | List of field names that should NOT exist |
-| `result_contains_item` | object | For arrays - at least one item must match |
-| `result_contains_all` | array | For arrays - all items must be present |
-| `result_length` | integer | For arrays - exact length required |
-
-## Project Configuration (mxcp-site.yml)
-
-The project configuration file in the project root.
-
-```yaml
-mxcp: 1
-project:
-  name: my-project             # Required. Project identifier
-  description: My MCP server   # Optional. Project description
-
-profiles:
-  default:                     # Profile name
-    duckdb:
-      path: ./data/app.duckdb  # Database path
-      readonly: false          # Read-only mode
-
-    extensions:                # DuckDB extensions to load
-      - httpfs
-      - parquet
-
-    secrets:                   # Secret definitions
-      - name: api_key
-        type: env
-        key: API_KEY
-
-    audit:                     # Audit logging
-      enabled: true
-      path: ./audit/logs.jsonl
-
-    dbt:                       # dbt integration
-      enabled: true
-      project_dir: ./dbt
-
-    sql_tools:                 # Built-in SQL tools
-      enabled: false
-
-  production:                  # Additional profile
-    duckdb:
-      path: /data/prod.duckdb
-      readonly: true
-```
-
-### Project Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Project identifier |
-| `description` | string | No | Project description |
-
-### Profile Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `duckdb` | object | Database configuration |
-| `extensions` | array | DuckDB extensions to load |
-| `secrets` | array | Secret definitions |
-| `audit` | object | Audit logging configuration |
-| `dbt` | object | dbt integration settings |
-| `sql_tools` | object | Built-in SQL tools settings |
-
-### DuckDB Configuration
-
-```yaml
-duckdb:
-  path: ./data/app.duckdb      # Database file path
-  readonly: false              # Read-only mode
-  memory_limit: 4GB            # Memory limit
-  threads: 4                   # Number of threads
-```
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `path` | string | `:memory:` | Database file path |
-| `readonly` | boolean | `false` | Read-only mode |
-| `memory_limit` | string | - | Memory limit (e.g., "4GB") |
-| `threads` | integer | - | Number of worker threads |
-
-### Secret Types
-
-```yaml
-secrets:
-  # Environment variable
-  - name: api_key
-    type: env
-    key: API_KEY
-
-  # File contents
-  - name: cert
-    type: file
-    path: /etc/ssl/cert.pem
-
-  # HashiCorp Vault
-  - name: db_password
-    type: vault
-    path: secret/data/db
-    key: password
-
-  # Custom key-value
-  - name: custom
-    type: custom
-    parameters:
-      key1: value1
-      key2: value2
-```
-
-| Type | Fields | Description |
-|------|--------|-------------|
-| `env` | `key` | Environment variable name |
-| `file` | `path` | File path to read |
-| `vault` | `path`, `key` | Vault secret path and key |
-| `custom` | `parameters` | Custom key-value pairs |
-
-### Audit Configuration
-
-```yaml
-audit:
-  enabled: true
-  path: ./audit/logs.jsonl
-  retention:
-    days: 90
-    max_size: 1GB
-    max_files: 10
-```
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable audit logging |
-| `path` | string | `./audit/logs.jsonl` | Log file path |
-| `retention.days` | integer | `30` | Days to retain logs |
-| `retention.max_size` | string | `500MB` | Maximum file size |
-| `retention.max_files` | integer | `10` | Maximum rotated files |
-
-### dbt Configuration
-
-```yaml
-dbt:
-  enabled: true
-  project_dir: ./dbt
-  profiles_dir: ~/.dbt
-  target: dev
-```
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable dbt integration |
-| `project_dir` | string | `./dbt` | dbt project directory |
-| `profiles_dir` | string | `~/.dbt` | dbt profiles directory |
-| `target` | string | `dev` | dbt target to use |
-
-### SQL Tools Configuration
-
-```yaml
-sql_tools:
-  enabled: true
-```
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable built-in SQL tools |
-
-When enabled, provides: `execute_sql_query`, `list_tables`, `get_table_schema`
-
-## User Configuration (~/.mxcp/config.yml)
-
-User-level configuration for secrets and defaults.
-
-```yaml
-mxcp: 1
-projects:
-  my-project:                  # Project name to match
-    profiles:
-      default:                 # Profile name
-        secrets:
-          - name: api_key
-            type: env
-            key: MY_API_KEY
-
-vault:                         # Global Vault settings
-  address: https://vault.example.com
-  token_path: ~/.vault-token
-```
-
-### Vault Configuration
-
-```yaml
-vault:
-  address: https://vault.example.com
-  token_path: ~/.vault-token
-  namespace: admin
-  auth_method: token           # token, approle, kubernetes
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `address` | string | Vault server URL |
-| `token_path` | string | Path to token file |
-| `namespace` | string | Vault namespace |
-| `auth_method` | string | Authentication method |
-
-## Complete Example
-
-A complete tool definition with all features:
-
-```yaml
-mxcp: 1
-tool:
-  name: search_orders
-  description: Search customer orders with filters
-  language: sql
-
-  parameters:
-    - name: customer_id
-      type: integer
-      description: Filter by customer ID
-      required: false
-      minimum: 1
-
-    - name: status
-      type: string
-      description: Order status filter
-      required: false
-      enum: [pending, shipped, delivered, cancelled]
-      default: pending
-
-    - name: limit
-      type: integer
-      description: Maximum results
-      required: false
-      default: 50
-      minimum: 1
-      maximum: 1000
-
-  return:
-    type: array
-    items:
-      type: object
-      properties:
-        order_id:
-          type: integer
-        customer_id:
-          type: integer
-        status:
-          type: string
-        total:
-          type: number
-        created_at:
-          type: string
-          format: date-time
-
-  source:
-    file: ../sql/search_orders.sql
-
-  tests:
-    - name: test_default_status
-      arguments:
-        - key: customer_id
-          value: 1
-      result_contains:
-        status: pending
-
-    - name: test_limit
-      arguments:
-        - key: limit
-          value: 5
-      expect_count: 5
-```
+| `deny` | input | Block the request |
+| `filter_fields` | output | Remove specified fields |
+| `mask_fields` | output | Mask field values |
+| `filter_sensitive_fields` | output | Remove sensitive fields |
 
 ## Next Steps
 
-- [Endpoints Concepts](/concepts/endpoints) - How endpoints work
-- [Type System](/concepts/type-system) - Detailed type documentation
-- [Testing](/quality/testing) - Writing effective tests
-- [Configuration](/operations/configuration) - Runtime configuration
+- [Tool Schema](/reference/schema-tool) - Complete tool reference
+- [Resource Schema](/reference/schema-resource) - Complete resource reference
+- [Prompt Schema](/reference/schema-prompt) - Complete prompt reference
+- [Site Configuration](/reference/schema-site-config) - Project configuration
+- [User Configuration](/reference/schema-user-config) - Secrets and authentication

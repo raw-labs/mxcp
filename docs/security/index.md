@@ -5,6 +5,8 @@ sidebar:
   order: 1
 ---
 
+> **Related Topics:** [Configuration](/operations/configuration) (secrets setup) | [Deployment](/operations/deployment) (production security) | [Common Tasks](/reference/common-tasks#security) (quick how-to)
+
 MXCP provides enterprise-grade security features for production AI applications. This section covers authentication, authorization, and audit capabilities.
 
 ## Security Features

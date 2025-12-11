@@ -277,16 +277,16 @@ tool:
   name: employee_data
   # ... parameters and return ...
 
-policies:
-  input:
-    - condition: "user.role == 'guest'"
-      action: deny
-      reason: "Guests cannot access employee data"
-  output:
-    - condition: "user.role != 'admin'"
-      action: filter_fields
-      fields: ["salary", "ssn"]
-      reason: "Sensitive data restricted to admins"
+  policies:
+    input:
+      - condition: "user.role == 'guest'"
+        action: deny
+        reason: "Guests cannot access employee data"
+    output:
+      - condition: "user.role != 'admin'"
+        action: filter_fields
+        fields: ["salary", "ssn"]
+        reason: "Sensitive data restricted to admins"
 ```
 
 Test with user context:
@@ -316,6 +316,165 @@ mxcp log --since 1h
 mxcp log --tool hello_world
 mxcp log --status error
 ```
+
+## Advanced Patterns
+
+### Combining SQL and Python
+
+Create powerful tools that leverage both SQL efficiency and Python flexibility:
+
+```yaml
+# tools/customer-insights.yml
+mxcp: 1
+tool:
+  name: customer_insights
+  description: Generate AI insights for customer behavior
+  language: python
+  parameters:
+    - name: customer_id
+      type: string
+  return:
+    type: object
+  source:
+    file: ../python/insights.py
+```
+
+```python
+# python/insights.py
+from mxcp.runtime import db
+import statistics
+
+def customer_insights(customer_id: str) -> dict:
+    """Combine SQL data analysis with Python ML insights."""
+
+    # Use SQL for efficient data aggregation
+    purchase_data = db.execute("""
+        SELECT
+            COUNT(*) as total_purchases,
+            SUM(amount) as total_spent,
+            AVG(amount) as avg_order_value
+        FROM purchases
+        WHERE customer_id = $customer_id
+    """, {"customer_id": customer_id})
+
+    # Get purchase history for pattern analysis
+    history = db.execute("""
+        SELECT amount, purchase_date
+        FROM purchases
+        WHERE customer_id = $customer_id
+        ORDER BY purchase_date DESC
+        LIMIT 50
+    """, {"customer_id": customer_id})
+
+    # Use Python for complex analysis
+    amounts = [p["amount"] for p in history]
+    trend = "stable"
+    if len(amounts) >= 10:
+        recent = statistics.mean(amounts[:10])
+        older = statistics.mean(amounts[10:20]) if len(amounts) >= 20 else amounts[-1]
+        trend = "increasing" if recent > older * 1.1 else "decreasing" if recent < older * 0.9 else "stable"
+
+    return {
+        "customer_id": customer_id,
+        "purchase_summary": purchase_data[0] if purchase_data else None,
+        "spending_trend": trend
+    }
+```
+
+### Type-Safe Parameter Validation
+
+```yaml
+parameters:
+  - name: date_range
+    type: object
+    properties:
+      start_date:
+        type: string
+        format: date
+        description: "Start date (YYYY-MM-DD)"
+      end_date:
+        type: string
+        format: date
+        description: "End date (YYYY-MM-DD)"
+    required: ["start_date", "end_date"]
+
+  - name: metrics
+    type: array
+    items:
+      type: string
+      enum: ["revenue", "users", "conversion"]
+    description: "Metrics to include"
+    minItems: 1
+    maxItems: 5
+```
+
+## Why MXCP?
+
+MXCP provides unique value for building AI-powered applications:
+
+1. **Flexible Implementation**: Choose SQL for data queries, Python for complex logic, or both
+2. **Enterprise Security**: Policy enforcement, audit trails, OAuth authentication
+3. **Production Ready**: Type safety, monitoring, drift detection, comprehensive testing
+4. **Developer Experience**: Fast iteration, hot reload, comprehensive validation
+5. **Scalability**: From prototype to production without re-architecting
+
+## Key Architecture Patterns
+
+### SQL + dbt Workflow
+
+1. **dbt models** (`models/*.sql`) - Create tables/views in DuckDB using dbt syntax
+2. **MXCP tools** (`tools/*.yml`) - Query the dbt tables directly using standard SQL
+3. **SQL files** (`sql/*.sql`) - Contain the actual SQL logic referenced by tools
+
+### Python Workflow
+
+1. **Python modules** (`python/*.py`) - Implement complex logic, API calls, ML models
+2. **MXCP tools** (`tools/*.yml`) - Define interfaces with `language: python`
+3. **Runtime services** - Access database, config, and secrets via `mxcp.runtime`
+
+**Perfect separation**: Choose the right tool for each job, with all endpoints getting enterprise features automatically.
+
+## Troubleshooting
+
+### Common Issues
+
+**dbt models not found:**
+```bash
+# Ensure dbt project is properly configured
+dbt debug
+dbt compile
+```
+
+**Policy errors:**
+```bash
+# Test with explicit user context
+mxcp run tool my_tool --user-context '{"role": "admin"}'
+```
+
+**Validation errors:**
+```bash
+# Get detailed validation output
+mxcp validate --debug
+
+# Check specific endpoint
+mxcp validate tools/my-tool.yml
+```
+
+**Python import errors:**
+```bash
+# Ensure virtual environment is active
+source .venv/bin/activate
+
+# Check Python path
+mxcp run tool my_tool --debug
+```
+
+### Getting Help
+
+- **Documentation**: All features are documented in the docs
+- **Examples**: Check `examples/` directory for real-world patterns
+- **Validation**: Use `mxcp validate` to check your configuration
+- **Debug mode**: Add `--debug` to any command for verbose output
 
 ## Next Steps
 

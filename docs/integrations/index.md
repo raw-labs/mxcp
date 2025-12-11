@@ -5,6 +5,8 @@ sidebar:
   order: 1
 ---
 
+> **Related Topics:** [Quickstart](/getting-started/quickstart) (first setup) | [Configuration](/operations/configuration) (dbt, extensions) | [SQL Endpoints](/tutorials/sql-endpoints) (use DuckDB)
+
 MXCP integrates with AI platforms, data transformation tools, and database systems to create production-ready AI applications.
 
 ## Integration Architecture

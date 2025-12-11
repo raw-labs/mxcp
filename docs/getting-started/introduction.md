@@ -1,19 +1,23 @@
 ---
 title: "Introduction"
-description: "Learn what MXCP is, how it works, and why it's the best choice for building production AI tools."
+description: "In-depth guide to MXCP architecture, request flow, and design patterns. Understand how MXCP works under the hood."
 sidebar:
   order: 1
 ---
 
-MXCP (Model Context Protocol eXtension Platform) is an enterprise-grade framework for building production-ready AI tools. It extends the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) with security, testing, and operational features required for real-world deployments.
+This guide provides an in-depth look at how MXCP works. For a quick start, see the [Quickstart Guide](quickstart). For terminology, see the [Glossary](glossary).
 
-## What is MCP?
+## What is MXCP?
 
-The Model Context Protocol is an open standard that enables AI assistants like Claude to interact with external data sources and tools. MCP servers expose:
+MXCP (Model Context Protocol eXtension Platform) is an enterprise-grade framework for building production-ready AI tools. It extends the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) with security, testing, and operational features.
 
-- **Tools** - Functions the AI can call (e.g., query a database, create a ticket)
-- **Resources** - Data the AI can read (e.g., customer profiles, documents)
-- **Prompts** - Reusable prompt templates with parameters
+### MCP Basics
+
+The Model Context Protocol enables AI assistants like Claude to interact with external systems. MCP servers expose:
+
+- **Tools** - Functions AI can call (query data, create records, perform actions)
+- **Resources** - Data AI can read (profiles, documents, configurations)
+- **Prompts** - Reusable templates for consistent AI interactions
 
 ## What MXCP Adds
 
@@ -311,10 +315,20 @@ flowchart TB
 | Drift Detection | No | Built-in |
 | Hot Reload | No | Built-in |
 
+## Summary
+
+MXCP provides:
+- **Protocol Compliance** - Full MCP implementation
+- **Enterprise Security** - OAuth, policies, audit logging
+- **Flexible Implementation** - SQL for data, Python for logic
+- **Quality Assurance** - Validation, testing, linting, evals
+- **Production Operations** - Monitoring, drift detection, hot reload
+
 ## Next Steps
 
-Ready to get started?
-
-1. **[Quickstart](quickstart)** - Get MXCP running in 5 minutes
-2. **[Hello World Tutorial](/tutorials/hello-world)** - Build your first tool
-3. **[Concepts](/concepts)** - Understand endpoints, types, and project structure
+| Goal | Next Step |
+|------|-----------|
+| Understand terminology | [Glossary](glossary) |
+| Build something now | [Quickstart](quickstart) |
+| Learn step-by-step | [Hello World Tutorial](/tutorials/hello-world) |
+| Deep dive into concepts | [Core Concepts](/concepts/) |

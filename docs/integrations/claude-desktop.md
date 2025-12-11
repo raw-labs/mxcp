@@ -5,6 +5,8 @@ sidebar:
   order: 2
 ---
 
+> **Related Topics:** [Quickstart](/getting-started/quickstart#connect-to-claude-desktop) (first connection) | [Deployment](/operations/deployment) (production setup) | [Common Tasks](/reference/common-tasks#how-do-i-connect-to-claude-desktop) (quick how-to)
+
 Claude Desktop has native Model Context Protocol (MCP) support, making it the easiest way to connect your MXCP endpoints to an AI assistant.
 
 ## Configuration

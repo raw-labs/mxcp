@@ -5,6 +5,8 @@ sidebar:
   order: 3
 ---
 
+> **Related Topics:** [SQL Endpoints Tutorial](/tutorials/sql-endpoints) (step-by-step guide) | [DuckDB Integration](/integrations/duckdb) (extensions, data sources) | [Authentication](/security/authentication) (user functions)
+
 MXCP uses DuckDB SQL syntax with additional built-in functions for authentication and access control.
 
 ## DuckDB SQL

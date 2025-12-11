@@ -5,6 +5,8 @@ sidebar:
   order: 4
 ---
 
+> **Related Topics:** [Configuration](/operations/configuration) (site and user config) | [Endpoints](endpoints) (tool, resource, prompt files) | [Quickstart](/getting-started/quickstart) (`mxcp init` details)
+
 MXCP enforces an organized directory structure to improve project maintainability and enable auto-discovery of endpoints. This guide explains the structure and best practices for organizing your project.
 
 ## Standard Structure

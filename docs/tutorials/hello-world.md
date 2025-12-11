@@ -5,6 +5,8 @@ sidebar:
   order: 2
 ---
 
+> **Related Topics:** [Endpoints](/concepts/endpoints) (understand endpoint types) | [Type System](/concepts/type-system) (parameter types) | [Testing](/quality/testing) (test assertions) | [Quickstart](/getting-started/quickstart) (project setup)
+
 In this tutorial, you'll create your first MXCP tool - a simple greeting function. You'll learn the fundamental concepts that apply to all MXCP endpoints.
 
 ## Goal

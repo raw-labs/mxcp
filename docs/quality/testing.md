@@ -1,9 +1,11 @@
 ---
 title: "Testing"
-description: "Test MXCP endpoints with embedded test cases. Assertions, policy testing, and CI/CD integration."
+description: "MXCP test framework: YAML test definitions, result assertions, policy testing with user_context, error handling, CI/CD integration."
 sidebar:
   order: 3
 ---
+
+> **Related Topics:** [Validation](validation) (check syntax before testing) | [Policies](/security/policies) (test access control) | [Evals](evals) (AI behavior testing) | [Common Tasks](/reference/common-tasks#how-do-i-add-tests-to-an-endpoint) (quick how-to)
 
 MXCP provides built-in testing capabilities to verify endpoint functionality. Tests are defined directly in endpoint YAML files and run with `mxcp test`.
 

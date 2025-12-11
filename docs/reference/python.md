@@ -5,6 +5,8 @@ sidebar:
   order: 4
 ---
 
+> **Related Topics:** [Python Endpoints Tutorial](/tutorials/python-endpoints) (step-by-step guide) | [Plugins](plugins) (custom UDFs) | [Configuration](/operations/configuration) (secrets access) | [Type System](/concepts/type-system) (parameter types)
+
 Python endpoints have access to the `mxcp.runtime` module, which provides database access, configuration, secrets, and lifecycle management.
 
 ## Quick Example

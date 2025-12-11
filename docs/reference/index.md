@@ -1,13 +1,26 @@
 ---
 title: "Reference"
-description: "Complete reference documentation for MXCP. CLI commands, SQL functions, Python API, and plugin development."
+description: "Complete MXCP reference: CLI commands, YAML schema, SQL functions, Python runtime API, plugins, and common task how-tos."
 sidebar:
   order: 1
 ---
 
+> **Related Topics:** [Concepts](/concepts/) (understand MXCP) | [Tutorials](/tutorials/) (learn by doing) | [Quality](/quality/) (testing, validation)
+
 This section provides comprehensive reference documentation for all MXCP components.
 
+## Quick Start
+
+**Looking for how to do something?** See [Common Tasks](common-tasks) - quick answers to "How do I...?" questions.
+
 ## Reference Topics
+
+### [Common Tasks](common-tasks)
+Quick how-to reference for frequent tasks:
+- Adding authentication
+- Filtering sensitive data
+- Writing tests
+- Configuring production
 
 ### [CLI Reference](cli)
 Complete command-line interface documentation:

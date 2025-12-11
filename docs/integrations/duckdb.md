@@ -5,6 +5,8 @@ sidebar:
   order: 4
 ---
 
+> **Related Topics:** [SQL Endpoints](/tutorials/sql-endpoints) (tutorial) | [SQL Reference](/reference/sql) (built-in functions) | [Configuration](/operations/configuration) (extensions setup) | [Common Tasks](/reference/common-tasks#how-do-i-use-duckdb-extensions) (quick how-to)
+
 DuckDB serves as MXCP's SQL execution engine, providing fast, local-first data access with extensive connectivity options.
 
 ## Overview

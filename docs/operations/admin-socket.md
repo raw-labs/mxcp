@@ -168,6 +168,31 @@ curl --unix-socket /run/mxcp/mxcp.sock http://localhost/config
 
 Sensitive values (secrets, credentials) are redacted.
 
+## Error Responses
+
+All error responses follow a consistent format:
+
+```json
+{
+  "error": "error_code",
+  "message": "Human-readable error message",
+  "detail": "Detailed error information (debug mode only)"
+}
+```
+
+**HTTP Status Codes:**
+- `200`: Success
+- `500`: Internal server error
+
+**Example Error:**
+```json
+{
+  "error": "internal_error",
+  "message": "Failed to retrieve status",
+  "detail": "NoneType object has no attribute 'reload_manager'"
+}
+```
+
 ## Client Examples
 
 ### Bash
@@ -261,6 +286,140 @@ fi
 
 echo "OK: MXCP v$VERSION, uptime $UPTIME, $TOOLS tools"
 exit 0
+```
+
+### File Watcher for Auto-Reload
+
+Monitor configuration files and trigger reload automatically:
+
+```python
+#!/usr/bin/env python3
+"""Monitor MXCP config and trigger reload on changes."""
+
+import time
+import httpx
+from pathlib import Path
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+SOCKET_PATH = "/run/mxcp/mxcp.sock"
+CONFIG_PATH = "/app/config/mxcp-site.yml"
+
+class ConfigChangeHandler(FileSystemEventHandler):
+    def __init__(self, client):
+        self.client = client
+        self.last_reload = 0
+
+    def on_modified(self, event):
+        if event.src_path == CONFIG_PATH:
+            # Debounce: only reload if 5 seconds passed
+            now = time.time()
+            if now - self.last_reload > 5:
+                print(f"Config changed, triggering reload...")
+                response = self.client.post("/reload").json()
+                print(f"Reload initiated: {response['reload_request_id']}")
+                self.last_reload = now
+
+def main():
+    transport = httpx.HTTPTransport(uds=SOCKET_PATH)
+    client = httpx.Client(transport=transport, base_url="http://localhost")
+
+    # Set up file watcher
+    event_handler = ConfigChangeHandler(client)
+    observer = Observer()
+    observer.schedule(event_handler, path=str(Path(CONFIG_PATH).parent), recursive=False)
+    observer.start()
+
+    print(f"Monitoring {CONFIG_PATH} for changes...")
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+
+    observer.join()
+
+if __name__ == "__main__":
+    main()
+```
+
+## OpenAPI Documentation
+
+The admin API provides auto-generated OpenAPI documentation with interactive interfaces.
+
+### Accessing OpenAPI Schema
+
+```bash
+# Get OpenAPI JSON schema
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/openapi.json | jq
+
+# Save schema to file
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/openapi.json > admin-api-schema.json
+```
+
+### Interactive Documentation
+
+The API includes Swagger UI and ReDoc interfaces for interactive exploration. Since the admin socket doesn't expose a network port, use these methods to access the documentation:
+
+**Option 1: SSH Port Forwarding (Recommended)**
+
+```bash
+# On your local machine - forward Unix socket over SSH
+ssh -L 8080:/run/mxcp/mxcp.sock production-server
+
+# Then open in browser:
+# http://localhost:8080/docs      (Swagger UI)
+# http://localhost:8080/redoc     (ReDoc)
+```
+
+**Option 2: socat Proxy**
+
+If SSH socket forwarding doesn't work (older SSH versions):
+
+```bash
+# On the server - create TCP proxy to Unix socket
+socat TCP-LISTEN:8080,reuseaddr,fork UNIX-CONNECT:/run/mxcp/mxcp.sock &
+
+# Then SSH tunnel the TCP port:
+ssh -L 8080:localhost:8080 production-server
+
+# Open http://localhost:8080/docs
+```
+
+**Option 3: Local Development**
+
+For local development, you can temporarily expose the socket:
+
+```bash
+# Create temporary TCP proxy (not for production!)
+socat TCP-LISTEN:8080,reuseaddr,fork UNIX-CONNECT:/run/mxcp/mxcp.sock
+
+# Access directly at http://localhost:8080/docs
+```
+
+### Interactive Documentation Features
+
+The documentation interfaces allow you to:
+- Browse all available endpoints with descriptions
+- View request/response schemas with examples
+- Try endpoints directly (use caution in production)
+- Download the OpenAPI specification for code generation
+- View authentication requirements
+
+### Using the Schema
+
+Generate client code from the OpenAPI schema:
+
+```bash
+# Download schema
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/openapi.json > admin-api.json
+
+# Generate Python client (using openapi-generator)
+openapi-generator generate -i admin-api.json -g python -o ./admin-client
+
+# Generate TypeScript client
+openapi-generator generate -i admin-api.json -g typescript-fetch -o ./admin-client-ts
 ```
 
 ## Docker Integration

@@ -1,9 +1,11 @@
 ---
 title: "Authentication"
-description: "Configure OAuth authentication in MXCP. Support for GitHub, Atlassian, Salesforce, Google, Keycloak, and custom providers."
+description: "OAuth 2.0 setup for MXCP: GitHub, Google, Atlassian, Salesforce, Keycloak. Client configuration, token handling, user context for policies."
 sidebar:
   order: 2
 ---
+
+> **Related Topics:** [Policies](policies) (use user context for access control) | [Configuration](/operations/configuration) (secrets management) | [Common Tasks](/reference/common-tasks#how-do-i-add-authentication) (quick setup)
 
 MXCP supports OAuth 2.0 authentication to control who can access your MCP server. This guide covers configuring various OAuth providers.
 
@@ -32,6 +34,7 @@ projects:
           github:
             client_id: your_client_id
             client_secret: your_client_secret
+            callback_path: /callback
             auth_url: https://github.com/login/oauth/authorize
             token_url: https://github.com/login/oauth/access_token
 ```
@@ -61,11 +64,10 @@ projects:
           github:
             client_id: Ov23li...
             client_secret: your_client_secret
+            callback_path: /callback
             auth_url: https://github.com/login/oauth/authorize
             token_url: https://github.com/login/oauth/access_token
-            scopes:
-              - read:user
-              - user:email
+            scope: "read:user user:email"
 ```
 
 ### 3. Available Scopes
@@ -99,13 +101,10 @@ auth:
   atlassian:
     client_id: your_client_id
     client_secret: your_client_secret
+    callback_path: /callback
     auth_url: https://auth.atlassian.com/authorize
     token_url: https://auth.atlassian.com/oauth/token
-    audience: api.atlassian.com
-    scopes:
-      - read:me
-      - read:jira-work
-      - write:jira-work
+    scope: "read:me read:jira-work write:jira-work"
 ```
 
 ### 3. Available Scopes
@@ -138,13 +137,10 @@ auth:
   salesforce:
     client_id: your_consumer_key
     client_secret: your_consumer_secret
+    callback_path: /callback
     auth_url: https://login.salesforce.com/services/oauth2/authorize
     token_url: https://login.salesforce.com/services/oauth2/token
-    scopes:
-      - openid
-      - profile
-      - email
-      - api
+    scope: "openid profile email api"
 ```
 
 ### 3. Sandbox Environment
@@ -179,22 +175,22 @@ auth:
   google:
     client_id: your_client_id.apps.googleusercontent.com
     client_secret: your_client_secret
+    callback_path: /callback
     auth_url: https://accounts.google.com/o/oauth2/v2/auth
     token_url: https://oauth2.googleapis.com/token
-    scopes:
-      - openid
-      - email
-      - profile
+    scope: "openid email profile"
 ```
 
 ### 3. Domain Restriction
 
-Restrict to specific Google Workspace domain:
+To restrict to a specific Google Workspace domain, validate the user's email domain in your policies:
 
 ```yaml
-google:
-  # ... credentials ...
-  hd: yourcompany.com  # Hosted domain
+policies:
+  input:
+    - condition: "!user.email.endsWith('@yourcompany.com')"
+      action: deny
+      reason: "Access restricted to company domain"
 ```
 
 ## Keycloak Authentication
@@ -221,12 +217,10 @@ auth:
   keycloak:
     client_id: mxcp-server
     client_secret: your_client_secret
-    auth_url: https://keycloak.example.com/realms/myrealm/protocol/openid-connect/auth
-    token_url: https://keycloak.example.com/realms/myrealm/protocol/openid-connect/token
-    scopes:
-      - openid
-      - profile
-      - email
+    realm: myrealm
+    server_url: https://keycloak.example.com
+    callback_path: /callback
+    scope: "openid profile email"
 ```
 
 ## Token Persistence
@@ -236,13 +230,13 @@ MXCP stores OAuth tokens for session continuity:
 ```yaml
 auth:
   provider: github
-  token_persistence:
-    enabled: true
-    path: ~/.mxcp/tokens.json  # Encrypted storage
+  persistence:
+    type: sqlite
+    path: ~/.mxcp/oauth.db
 ```
 
 Tokens are:
-- Encrypted at rest
+- Stored securely in SQLite
 - Refreshed automatically when expired
 - Cleared on logout
 
@@ -253,11 +247,13 @@ After authentication, user information is available in policies:
 ```yaml
 policies:
   input:
-    - condition: "user.email.endsWith('@yourcompany.com')"
-      action: allow
+    - condition: "!user.email.endsWith('@yourcompany.com')"
+      action: deny
+      reason: "Only company emails allowed"
 
     - condition: "user.role != 'admin'"
       action: deny
+      reason: "Admin role required"
 ```
 
 ### Available User Fields
@@ -392,6 +388,154 @@ Regularly rotate OAuth client secrets.
 ```bash
 mxcp log --since 24h | grep -i auth
 ```
+
+## Advanced Features
+
+### Dynamic Client Registration (RFC 7591)
+
+MXCP implements RFC 7591 Dynamic Client Registration. Clients can register themselves at runtime:
+
+```bash
+curl -X POST http://localhost:8000/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_name": "My Application",
+    "redirect_uris": ["https://myapp.example.com/oauth/callback"],
+    "grant_types": ["authorization_code"],
+    "scope": "mxcp:access"
+  }'
+```
+
+Response:
+```json
+{
+  "client_id": "generated-client-id",
+  "client_secret": "generated-client-secret",
+  "client_id_issued_at": 1640995200,
+  "client_secret_expires_at": 0,
+  "redirect_uris": ["https://myapp.example.com/oauth/callback"],
+  "grant_types": ["authorization_code"],
+  "scope": "mxcp:access"
+}
+```
+
+### OAuth State Persistence
+
+By default, OAuth state is stored in memory and lost on server restart. Enable persistence for production:
+
+```yaml
+auth:
+  provider: github
+  persistence:
+    type: sqlite
+    path: "/var/lib/mxcp/oauth.db"
+```
+
+**What Gets Persisted:**
+- Access tokens and mappings to external provider tokens
+- Authorization codes (with automatic expiration cleanup)
+- Dynamically registered clients
+
+**Benefits:**
+- Session continuity across server restarts
+- Zero-downtime deployments
+- Better user experience during maintenance
+
+**Security:** Set file permissions to 600 on the OAuth database.
+
+### Authorization Configuration
+
+Configure scope-based authorization to control endpoint access:
+
+```yaml
+auth:
+  provider: github
+  authorization:
+    required_scopes:
+      - "mxcp:access"
+      - "mxcp:admin"
+```
+
+**Configuration Options:**
+- `required_scopes: []` - Authentication only (no scope requirements)
+- `required_scopes: ["mxcp:access"]` - Require basic access
+- Multiple scopes - User must have ALL listed scopes
+
+### User Token Access in SQL
+
+When authentication is enabled, SQL queries can access user information:
+
+```sql
+-- Get the user's OAuth provider token
+SELECT get_user_external_token() as token;
+
+-- Get user information
+SELECT get_username() as username;
+SELECT get_user_provider() as provider;
+SELECT get_user_email() as email;
+```
+
+**Use Cases:**
+
+Making authenticated API calls from SQL:
+```sql
+SELECT *
+FROM read_json_auto(
+    'https://api.github.com/user/repos',
+    headers = MAP {
+        'Authorization': 'Bearer ' || get_user_external_token(),
+        'User-Agent': 'MXCP'
+    }
+);
+```
+
+User-specific data filtering:
+```sql
+SELECT *
+FROM user_documents
+WHERE created_by = get_username();
+```
+
+**Function Behavior:**
+- When authentication is disabled: Functions return empty strings
+- When user is not authenticated: Functions return empty strings
+- When user is authenticated: Functions return actual user data
+
+### Pre-Configured OAuth Clients
+
+Define static clients in configuration:
+
+```yaml
+auth:
+  provider: github
+  clients:
+    - client_id: "my-app-client"
+      client_secret: "${CLIENT_SECRET}"
+      name: "My Application"
+      redirect_uris:
+        - "https://myapp.example.com/callback"
+      scopes:
+        - "mxcp:access"
+```
+
+**Client Configuration Options:**
+- `client_id` (required): Unique identifier
+- `name` (required): Human-readable name
+- `client_secret` (optional): Secret for confidential clients
+- `redirect_uris` (optional): Allowed redirect URIs
+- `grant_types` (optional): Allowed grant types (default: `["authorization_code"]`)
+- `scopes` (optional): Allowed scopes (default: `["mxcp:access"]`)
+
+## Production Checklist
+
+- [ ] Enable OAuth persistence for session continuity
+- [ ] Set file permissions (600) on OAuth database
+- [ ] Use environment variables for secrets
+- [ ] Configure HTTPS for all redirect URIs
+- [ ] Limit OAuth scopes to minimum required
+- [ ] Remove development clients from production config
+- [ ] Enable audit logging for authentication events
+- [ ] Set up monitoring for auth-related errors
 
 ## Next Steps
 

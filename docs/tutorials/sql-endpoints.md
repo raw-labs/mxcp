@@ -5,6 +5,8 @@ sidebar:
   order: 3
 ---
 
+> **Related Topics:** [Type System](/concepts/type-system) (parameter types) | [DuckDB Integration](/integrations/duckdb) (extensions, features) | [dbt Integration](/integrations/dbt) (data modeling) | [SQL Reference](/reference/sql) (built-in functions)
+
 SQL endpoints are ideal for data queries and aggregations. In this tutorial, you'll learn to build increasingly complex SQL tools, from simple queries to sophisticated analytics.
 
 ## Goal

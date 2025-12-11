@@ -5,6 +5,8 @@ sidebar:
   order: 2
 ---
 
+> **Related Topics:** [Testing](testing) (run assertions) | [Linting](linting) (metadata quality) | [Type System](/concepts/type-system) (type definitions) | [YAML Schema](/reference/yaml-schema) (field reference)
+
 Validation ensures your endpoint definitions are structurally correct before execution. It catches errors early in development.
 
 ## Running Validation

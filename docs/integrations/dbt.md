@@ -5,6 +5,8 @@ sidebar:
   order: 3
 ---
 
+> **Related Topics:** [Configuration](/operations/configuration) (enable dbt) | [SQL Endpoints](/tutorials/sql-endpoints) (query dbt models) | [DuckDB Integration](duckdb) (database engine) | [Common Tasks](/reference/common-tasks#how-do-i-integrate-with-dbt) (quick how-to)
+
 dbt (data build tool) is the data quality layer in MXCP's production methodology. It transforms raw data into well-structured models that AI can consume reliably.
 
 ## Why dbt?

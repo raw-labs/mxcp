@@ -1,9 +1,11 @@
 ---
 title: "Core Concepts"
-description: "Understand the fundamental concepts of MXCP: endpoints, type system, project structure, and how they work together."
+description: "MXCP fundamentals: tools vs resources vs prompts, type system basics, project structure, and execution flow. Essential reading before building."
 sidebar:
   order: 1
 ---
+
+> **Related Topics:** [Glossary](/getting-started/glossary) (term definitions) | [Quickstart](/getting-started/quickstart) (hands-on setup) | [Tutorials](/tutorials/) (step-by-step guides)
 
 MXCP is built around a few core concepts that work together to provide a complete framework for building production AI tools. Understanding these concepts will help you design better endpoints and take full advantage of MXCP's features.
 

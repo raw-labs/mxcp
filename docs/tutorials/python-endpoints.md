@@ -5,6 +5,8 @@ sidebar:
   order: 4
 ---
 
+> **Related Topics:** [Python Runtime Reference](/reference/python) (API details) | [Type System](/concepts/type-system) (parameter types) | [Plugins](/reference/plugins) (custom UDFs) | [SQL Endpoints](sql-endpoints) (when to use SQL instead)
+
 Python endpoints let you build tools with complex logic, API integrations, and ML models. In this tutorial, you'll learn to use MXCP's Python runtime features effectively.
 
 ## Goal
@@ -727,6 +729,62 @@ result = results[0]  # First row
 import logging
 logger = logging.getLogger(__name__)
 logger.info("Processing request")
+```
+
+## Performance Considerations
+
+Python endpoints have more overhead than SQL queries:
+
+- For simple data retrieval, prefer SQL endpoints
+- Use Python for complex logic, external API calls, or data transformations
+- Lifecycle hooks help avoid repeated initialization
+- Async functions can improve performance for I/O-bound operations
+
+```python
+# Prefer SQL for simple queries:
+# tools/list-users.yml with SQL source
+
+# Use Python when you need:
+# - Complex business logic
+# - External API calls
+# - ML model predictions
+# - Data transformations with Python libraries
+```
+
+## Migration from SQL
+
+To migrate an SQL endpoint to Python:
+
+1. Keep the same tool/resource definition
+2. Change `language: sql` to `language: python`
+3. Update the source file reference
+4. Implement the function with the same name as the endpoint
+
+**Before (SQL):**
+```yaml
+tool:
+  name: get_total
+  language: sql
+  source:
+    file: ../sql/queries.sql
+```
+
+**After (Python):**
+```yaml
+tool:
+  name: get_total
+  language: python
+  source:
+    file: ../python/calculations.py
+```
+
+```python
+# python/calculations.py
+from mxcp.runtime import db
+
+def get_total() -> dict:
+    results = db.execute("SELECT SUM(amount) as total FROM orders")
+    return {"total": results[0]["total"] if results else 0}
 ```
 
 ## Next Steps

@@ -5,6 +5,8 @@ sidebar:
   order: 5
 ---
 
+> **Related Topics:** [Python Reference](python) (runtime API) | [DuckDB Integration](/integrations/duckdb) (extensions) | [Type System](/concepts/type-system) (type mapping)
+
 MXCP plugins extend DuckDB with custom User Defined Functions (UDFs) written in Python. Plugins provide domain-specific functionality, API integrations, and custom data processing.
 
 ## Overview

@@ -127,6 +127,12 @@ except Exception as e:
     output_error(e, json_output, debug)
 ```
 
+**Why this pattern?**
+- Site config defines project requirements and structure
+- User config provides personal settings and secrets
+- Auto-generation allows projects to work out-of-the-box without requiring manual setup
+- CLI layer ownership keeps configuration concerns separate from business logic
+
 ### DuckDB Connection Management
 
 ```python
@@ -139,6 +145,64 @@ with runtime.get_connection() as session:
 # Connection returned to pool
 runtime.shutdown()  # For graceful shutdown
 ```
+
+**Connection Management Details:**
+- **CLI commands**: Create their own `DuckDBRuntime` instance for the operation
+- **Server mode**: Shared `DuckDBRuntime` with connection pool (default size: 2 × CPU cores)
+- **Thread safety**: Each request gets its own connection from the pool
+- **Initialization**: Extensions, secrets, and plugins loaded once when pool is created
+- **Reload behavior**: Pool gracefully drains and refreshes without downtime
+- **Zero-downtime updates**: Database changes are visible to new connections without stopping the service
+
+### Object Lifecycle Management
+
+CLI commands follow a consistent pattern for object construction and destruction:
+
+```python
+def cli_command():
+    try:
+        # Create session with context manager
+        with DuckDBSession(user_config, site_config) as session:
+            # Use session for operations
+            result = session.conn.execute(sql)
+
+        # Session automatically cleaned up here
+
+    except Exception as e:
+        output_error(e, json_output, debug)
+```
+
+**Key Principles:**
+1. **CLI owns objects**: Command functions create and manage all objects
+2. **Context managers**: Use `with` statements for resources that need cleanup
+3. **Exception safety**: Ensure cleanup happens even if exceptions occur
+4. **Explicit cleanup**: Don't rely on garbage collection for resource cleanup
+
+### Error Handling Patterns
+
+Consistent error handling across all commands:
+
+```python
+from mxcp.cli.utils import output_error, configure_logging
+
+def cli_command(debug: bool, json_output: bool):
+    configure_logging(debug)  # Set up logging first
+
+    try:
+        # Command logic
+        pass
+    except Exception as e:
+        # Unified error output
+        output_error(e, json_output, debug)
+        raise click.Abort()  # Exit with error code
+```
+
+### Debug and Logging
+
+- **Early setup**: Configure logging before any operations
+- **Consistent levels**: Use standard logging levels (DEBUG, INFO, WARNING, ERROR)
+- **Structured output**: Debug info includes full tracebacks when `--debug` is enabled
+- **Environment support**: `MXCP_DEBUG=1` environment variable support
 
 ### CLI Command Pattern
 
@@ -228,6 +292,14 @@ def test_something(test_repo_path):
         os.chdir(original_dir)
 ```
 
+### Key Testing Principles
+
+1. **Repository context**: Tests must `chdir` to the test repository fixture directory
+2. **Config isolation**: Each test uses its own config files via `MXCP_CONFIG` environment variable
+3. **Complete fixtures**: Include all necessary files (site config, user config, endpoints, SQL)
+4. **Cleanup**: Always restore the original working directory using try/finally
+5. **Independence**: Tests should not depend on each other or share state
+
 ## Pull Request Process
 
 ### Before Submitting
@@ -284,8 +356,35 @@ git push origin v1.0.0
 
 1. Version validation (tag matches pyproject.toml)
 2. Package build and validation
-3. PyPI publication
-4. Docker image build and push
+3. PyPI publication (using trusted publishing)
+4. CDN propagation wait (up to 10 minutes)
+5. Docker image build and push to `ghcr.io/raw-labs/mxcp`
+
+### Monitoring the Release
+
+1. Watch GitHub Actions at: `https://github.com/raw-labs/mxcp/actions`
+2. Verify on PyPI: `https://pypi.org/project/mxcp/`
+3. Test installation:
+   ```bash
+   # For stable releases
+   pip install --upgrade mxcp
+   mxcp --version
+
+   # For pre-releases
+   pip install --pre --upgrade mxcp
+   mxcp --version
+   ```
+
+### Typical Release Workflow
+
+A common pattern for major releases:
+
+1. **Alpha** (`1.0.0a1`, `1.0.0a2`) - Early testing, API may change
+2. **Beta** (`1.0.0b1`, `1.0.0b2`) - Feature complete, stabilizing
+3. **Release Candidate** (`1.0.0rc1`, `1.0.0rc2`) - Final testing before stable
+4. **Stable** (`1.0.0`) - Production ready
+
+For minor/patch releases, you can skip pre-releases and go straight to stable.
 
 ## Communication
 
