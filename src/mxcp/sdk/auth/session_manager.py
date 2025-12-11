@@ -63,6 +63,7 @@ class SessionManager:
         self,
         *,
         session_id: str,
+        client_id: str | None,
         redirect_uri: str | None,
         code_challenge: str | None,
         code_challenge_method: str | None,
@@ -74,6 +75,7 @@ class SessionManager:
         record = AuthCodeRecord(
             code=code,
             session_id=session_id,
+            client_id=client_id,
             redirect_uri=redirect_uri,
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
