@@ -11,28 +11,38 @@ MXCP integrates with AI platforms, data transformation tools, and database syste
 
 ## Integration Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     AI Platforms                            │
-│  Claude Desktop │ OpenAI │ Custom Clients │ MCP CLI        │
-└─────────────────────────────────────────────────────────────┘
-                          │ MCP Protocol
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     MXCP Server                             │
-│  Tools │ Resources │ Prompts │ Policies │ Auth             │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     DuckDB Engine                           │
-│  SQL Execution │ Extensions │ Data Sources                 │
-└─────────────────────────────────────────────────────────────┘
-         │              │                │
-         ▼              ▼                ▼
-┌─────────────┐ ┌─────────────┐ ┌─────────────────────────────┐
-│  dbt Models │ │ Local Files │ │  Remote: S3, HTTP, DBs     │
-└─────────────┘ └─────────────┘ └─────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph AI["AI Platforms"]
+        Claude["Claude Desktop"]
+        OpenAI["OpenAI"]
+        Custom["Custom Clients"]
+        CLI["MCP CLI"]
+    end
+
+    subgraph Server["MXCP Server"]
+        Tools["Tools"]
+        Resources["Resources"]
+        Prompts["Prompts"]
+        Policies["Policies"]
+        Auth["Auth"]
+    end
+
+    subgraph Engine["DuckDB Engine"]
+        SQL["SQL Execution"]
+        Extensions["Extensions"]
+        Sources["Data Sources"]
+    end
+
+    dbt["dbt Models"]
+    Local["Local Files"]
+    Remote["Remote: S3, HTTP, DBs"]
+
+    AI -->|MCP Protocol| Server
+    Server --> Engine
+    Engine --> dbt
+    Engine --> Local
+    Engine --> Remote
 ```
 
 ## Integrations

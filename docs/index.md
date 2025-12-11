@@ -76,25 +76,39 @@ Your AI tools are now available with full security, audit trails, and policy enf
 
 ## Architecture
 
-```
-┌─────────────────┐      ┌────────────────────────────┐      ┌─────────────────┐
-│   LLM Client    │      │         MXCP Framework     │      │ Implementations │
-│  (Claude, etc)  │◄────►│  ┌─────────────────────┐   │◄────►│                 │
-│                 │ MCP  │  │ Security & Policies │   │      │  SQL Endpoints  │
-│                 │      │  ├─────────────────────┤   │      │  Python Tools   │
-└─────────────────┘      │  │   Type System       │   │      │  Async Handlers │
-                         │  ├─────────────────────┤   │      └─────────────────┘
-                         │  │   Audit Engine      │   │              │
-                         │  ├─────────────────────┤   │              ▼
-                         │  │ Validation & Tests  │   │      ┌─────────────────┐
-                         │  └─────────────────────┘   │      │  Data Sources   │
-                         └────────────────────────────┘      │  ├──────────────┤
-                                      │                      │  │  Databases   │
-                                      ▼                      │  │  APIs        │
-                              ┌──────────────┐               │  │  Files       │
-                              │ Audit Logs   │               │  │  dbt Models  │
-                              │ (JSONL/DB)   │               └─────────────────┘
-                              └──────────────┘
+```mermaid
+flowchart LR
+    subgraph Clients["LLM Clients"]
+        Claude["Claude Desktop"]
+        Other["Other MCP Clients"]
+    end
+
+    subgraph MXCP["MXCP Framework"]
+        Security["Security & Policies"]
+        Types["Type System"]
+        Audit["Audit Engine"]
+        Validation["Validation & Tests"]
+    end
+
+    subgraph Impl["Implementations"]
+        SQL["SQL Endpoints"]
+        Python["Python Tools"]
+        Async["Async Handlers"]
+    end
+
+    subgraph Data["Data Sources"]
+        DB["Databases"]
+        APIs["APIs"]
+        Files["Files"]
+        dbt["dbt Models"]
+    end
+
+    AuditLogs[("Audit Logs<br/>(JSONL/DB)")]
+
+    Clients <-->|MCP| MXCP
+    MXCP <--> Impl
+    Impl --> Data
+    MXCP --> AuditLogs
 ```
 
 ## Documentation Structure

@@ -119,43 +119,32 @@ Before deploying to production:
 
 ### Single Instance
 
-```
-┌─────────────┐      ┌─────────────┐
-│   Client    │◄────►│    MXCP     │
-│  (Claude)   │ MCP  │   Server    │
-└─────────────┘      └─────────────┘
-                            │
-                            ▼
-                     ┌─────────────┐
-                     │   DuckDB    │
-                     └─────────────┘
+```mermaid
+flowchart LR
+    Client["Client<br/>(Claude)"] <-->|MCP| MXCP["MXCP Server"]
+    MXCP --> DB[("DuckDB")]
 ```
 
 ### Behind Reverse Proxy
 
-```
-┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-│   Client    │◄────►│   nginx/    │◄────►│    MXCP     │
-│  (Browser)  │ HTTPS│   Traefik   │ HTTP │   Server    │
-└─────────────┘      └─────────────┘      └─────────────┘
+```mermaid
+flowchart LR
+    Client["Client<br/>(Browser)"] <-->|HTTPS| Proxy["nginx/Traefik"]
+    Proxy <-->|HTTP| MXCP["MXCP Server"]
 ```
 
 ### Container Deployment
 
-```
-┌────────────────────────────────────────┐
-│              Kubernetes                │
-│  ┌────────────┐    ┌────────────┐     │
-│  │   MXCP     │    │   MXCP     │     │
-│  │   Pod 1    │    │   Pod 2    │     │
-│  └────────────┘    └────────────┘     │
-│         │                │            │
-│         ▼                ▼            │
-│  ┌─────────────────────────────┐      │
-│  │       Shared Storage        │      │
-│  │         (DuckDB)            │      │
-│  └─────────────────────────────┘      │
-└────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph K8s["Kubernetes"]
+        Pod1["MXCP Pod 1"]
+        Pod2["MXCP Pod 2"]
+        Storage[("Shared Storage<br/>(DuckDB)")]
+
+        Pod1 --> Storage
+        Pod2 --> Storage
+    end
 ```
 
 ## Common Operations

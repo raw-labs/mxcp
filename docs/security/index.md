@@ -39,54 +39,28 @@ Track all operations for compliance:
 
 MXCP implements a layered security model:
 
-```
-┌─────────────────────────────────────────────┐
-│                  Request                     │
-└─────────────────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────┐
-│             Authentication                   │
-│  - OAuth token validation                   │
-│  - Session verification                     │
-│  - User identity extraction                 │
-└─────────────────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────┐
-│             Input Policies                   │
-│  - Role-based access control                │
-│  - Permission checks                        │
-│  - Parameter validation                     │
-└─────────────────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────┐
-│              Execution                       │
-│  - SQL or Python code                       │
-│  - Database operations                      │
-└─────────────────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────┐
-│            Output Policies                   │
-│  - Field filtering                          │
-│  - Data masking                             │
-│  - Sensitive data protection                │
-└─────────────────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────┐
-│             Audit Logging                    │
-│  - Request details                          │
-│  - User context                             │
-│  - Execution result                         │
-└─────────────────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────┐
-│                 Response                     │
-└─────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    Request["Request"]
+
+    Auth["**Authentication**<br/>OAuth token validation<br/>Session verification<br/>User identity extraction"]
+
+    Input["**Input Policies**<br/>Role-based access control<br/>Permission checks<br/>Parameter validation"]
+
+    Exec["**Execution**<br/>SQL or Python code<br/>Database operations"]
+
+    Output["**Output Policies**<br/>Field filtering<br/>Data masking<br/>Sensitive data protection"]
+
+    Audit["**Audit Logging**<br/>Request details<br/>User context<br/>Execution result"]
+
+    Response["Response"]
+
+    Request --> Auth
+    Auth --> Input
+    Input --> Exec
+    Exec --> Output
+    Output --> Audit
+    Audit --> Response
 ```
 
 ## Quick Start

@@ -11,29 +11,19 @@ MXCP provides a comprehensive 4-layer quality framework to ensure your endpoints
 
 ## Quality Layers
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    mxcp validate                         │
-│  Structural correctness: YAML syntax, required fields   │
-└─────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────┐
-│                     mxcp test                           │
-│  Functional correctness: Execution, assertions          │
-└─────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────┐
-│                     mxcp lint                           │
-│  Metadata quality: Descriptions, examples, best practices│
-└─────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────┐
-│                    mxcp evals                           │
-│  AI behavior: LLM interaction, safety, correctness      │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    Validate["**mxcp validate**<br/>Structural correctness:<br/>YAML syntax, required fields"]
+
+    Test["**mxcp test**<br/>Functional correctness:<br/>Execution, assertions"]
+
+    Lint["**mxcp lint**<br/>Metadata quality:<br/>Descriptions, examples, best practices"]
+
+    Evals["**mxcp evals**<br/>AI behavior:<br/>LLM interaction, safety, correctness"]
+
+    Validate --> Test
+    Test --> Lint
+    Lint --> Evals
 ```
 
 ## Quick Start
