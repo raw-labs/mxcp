@@ -1,17 +1,9 @@
 ---
 title: "Observability Guide"
 description: "Understanding what MXCP emits for monitoring and how to configure it"
-keywords:
-  - mxcp observability
-  - opentelemetry
-  - audit logs
-  - traces
-  - metrics
-sidebar_position: 6
-slug: /guides/observability
+sidebar:
+  order: 6
 ---
-
-# MXCP Observability Guide
 
 This guide explains what observability signals MXCP emits and how to configure them.
 
@@ -85,7 +77,7 @@ Local REST API for health checks:
 - Active requests, reload state
 - Configuration metadata
 - **Best for:** Health checks, triggering reloads
-- See [Admin Socket Guide](admin-socket.md)
+- See [Admin Socket Guide](admin-socket)
 
 ## Configuring OpenTelemetry
 
@@ -438,6 +430,6 @@ rate(mxcp_auth_attempts_total{status!="success"}[5m]) > 0.1
 
 ## See Also
 
-- [Admin Socket Guide](admin-socket.md) - Local monitoring API
-- [Running MXCP](operational.md) - Production deployment
-- [Configuration Guide](configuration.md) - All config options
+- [Admin Socket Guide](admin-socket) - Local monitoring API
+- [Running MXCP](operational) - Production deployment
+- [Configuration Guide](configuration) - All config options

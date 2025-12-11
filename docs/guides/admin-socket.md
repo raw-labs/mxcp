@@ -1,22 +1,11 @@
 ---
 title: "Admin API"
 description: "Local administration interface for MXCP via REST over Unix socket"
-keywords:
-  - admin API
-  - local control
-  - management
-  - reload
-  - unix socket
-  - REST
-sidebar_position: 8
-slug: /guides/admin-api
+sidebar:
+  order: 8
 ---
 
-# Admin API
-
 MXCP provides a local administration REST API over Unix domain socket for querying server status and triggering reloads without requiring network access.
-
-## Overview
 
 The admin API enables:
 - **Health Monitoring**: Query server status and uptime
@@ -551,6 +540,6 @@ curl -v --unix-socket /run/mxcp/mxcp.sock http://localhost/health
 
 ## See Also
 
-- [Configuration Guide](/guides/configuration) - Configuration file structure and environment variables
-- [Operational Guide](/guides/operational) - Production deployment patterns and health monitoring
-- [Signal Handling](/guides/operational#signal-handling--hot-reload) - SIGHUP and graceful shutdown
+- [Configuration Guide](../guides/configuration) - Configuration file structure and environment variables
+- [Operational Guide](../guides/operational) - Production deployment patterns and health monitoring
+- [Signal Handling](../guides/operational#signal-handling--hot-reload) - SIGHUP and graceful shutdown

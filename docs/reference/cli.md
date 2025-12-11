@@ -1,18 +1,9 @@
 ---
 title: "CLI Reference"
 description: "Complete command-line interface reference for MXCP. All commands, options, and usage examples for the mxcp CLI tool."
-keywords:
-  - mxcp cli
-  - command line interface
-  - cli commands
-  - mxcp serve
-  - mxcp run
-  - mxcp validate
-sidebar_position: 1
-slug: /reference/cli
+sidebar:
+  order: 1
 ---
-
-# MXCP CLI Reference
 
 This document provides a comprehensive reference for all MXCP command-line interface (CLI) commands and their options.
 
@@ -183,7 +174,7 @@ mxcp query "SELECT * FROM users" --readonly
 
 Validates endpoint YAML files for correctness.
 
-> 📖 For comprehensive validation, testing, and quality best practices, see the [Quality & Testing Guide](../guides/quality.md).
+> 📖 For comprehensive validation, testing, and quality best practices, see the [Quality & Testing Guide](../guides/quality).
 
 **Usage:**
 ```bash
@@ -211,7 +202,7 @@ mxcp validate --readonly        # Open database connection in read-only mode
 
 Runs tests for endpoints to verify they work correctly.
 
-> 📖 Learn how to write comprehensive tests and use assertion types in the [Quality & Testing Guide](../guides/quality.md#testing).
+> 📖 Learn how to write comprehensive tests and use assertion types in the [Quality & Testing Guide](../guides/quality#testing).
 
 **Usage:**
 ```bash
@@ -279,7 +270,7 @@ tests:
 
 Checks endpoints for metadata quality issues and suggests improvements for better LLM performance.
 
-> 📖 See the [Quality & Testing Guide](../guides/quality.md#linting) for metadata best practices and LLM optimization tips.
+> 📖 See the [Quality & Testing Guide](../guides/quality#linting) for metadata best practices and LLM optimization tips.
 
 **Usage:**
 ```bash
@@ -312,7 +303,7 @@ The lint command analyzes your endpoints and suggests improvements to make them 
 
 Runs LLM evaluation tests to verify how AI models interact with your endpoints.
 
-> 📖 Learn about writing and running evals in the [Quality & Testing Guide](../guides/quality.md#llm-evaluation-evals).
+> 📖 Learn about writing and running evals in the [Quality & Testing Guide](../guides/quality#llm-evaluation-evals).
 
 **Usage:**
 ```bash
@@ -423,7 +414,7 @@ Creates a snapshot of the current state of your MXCP repository, including:
 - Validation results
 - Test results
 
-The snapshot is used as a baseline to detect drift between different environments or over time. For more information, see the [Drift Detection Guide](../features/drift-detection.md).
+The snapshot is used as a baseline to detect drift between different environments or over time. For more information, see the [Drift Detection Guide](../features/drift-detection).
 
 ### `mxcp drift-check`
 
@@ -455,7 +446,7 @@ Compares the current state of your database and endpoints against a previously g
 - Added, removed, or modified endpoints
 - Changes in validation or test results
 
-Exit code is 1 if drift is detected, 0 if no drift. For more information, see the [Drift Detection Guide](../features/drift-detection.md).
+Exit code is 1 if drift is detected, 0 if no drift. For more information, see the [Drift Detection Guide](../features/drift-detection).
 
 ### `mxcp log`
 
@@ -503,7 +494,7 @@ Queries the audit logs to show execution history for tools, resources, and promp
 
 Audit logs are stored in JSONL (JSON Lines) format, which allows concurrent reading while the server is running - no database locking issues. The `--export-duckdb` option allows you to convert the logs to a DuckDB database for complex SQL analysis.
 
-For more information, see the [Audit Logging Guide](../features/auditing.md).
+For more information, see the [Audit Logging Guide](../features/auditing).
 
 ### `mxcp log-cleanup`
 
@@ -535,7 +526,7 @@ Deletes audit records older than their schema's retention policy. Each audit sch
 
 The `--dry-run` option shows what would be deleted without making changes, useful for testing retention policies before deploying automated cleanup.
 
-For more information, see the [Audit Cleanup Guide](../guides/audit-cleanup.md).
+For more information, see the [Audit Cleanup Guide](../guides/audit-cleanup).
 
 ### `mxcp dbt-config`
 
@@ -639,4 +630,4 @@ The following environment variables can be used to configure MXCP:
 - `MXCP_TELEMETRY_TRACING_CONSOLE`: Enable console trace export for debugging (`true`/`false`)
 - `MXCP_TELEMETRY_METRICS_INTERVAL`: Metrics export interval in seconds (default: `60`)
 
-For more details on environment variables and their usage, see the [Configuration Guide](../guides/configuration.md) and [Observability Guide](../guides/observability.md). 
+For more details on environment variables and their usage, see the [Configuration Guide](../guides/configuration) and [Observability Guide](../guides/observability). 

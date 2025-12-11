@@ -1,20 +1,11 @@
 ---
 title: "Audit Log Cleanup"
 description: "How to manage audit log retention and automated cleanup in MXCP"
-keywords:
-  - audit log cleanup
-  - retention policies
-  - scheduled cleanup
-  - cron
-  - systemd
-sidebar_position: 6
+sidebar:
+  order: 6
 ---
 
-# Audit Log Cleanup
-
 MXCP provides automated audit log cleanup to manage storage and comply with data retention policies.
-
-## Overview
 
 Audit schemas can define retention policies that specify how long audit records should be kept:
 

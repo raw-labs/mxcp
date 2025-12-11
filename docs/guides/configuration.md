@@ -1,18 +1,9 @@
 ---
 title: "Configuration Guide"
 description: "Complete guide to MXCP configuration including user settings, repository configuration, endpoint definitions, and environment variables."
-keywords:
-  - mxcp configuration
-  - user config
-  - site config
-  - endpoint configuration
-  - secrets management
-  - environment variables
-sidebar_position: 1
-slug: /guides/configuration
+sidebar:
+  order: 1
 ---
-
-# MXCP Configuration Guide
 
 This guide covers all aspects of MXCP configuration, from user settings to endpoint definitions.
 
@@ -361,7 +352,7 @@ profiles:
   - Created by `mxcp drift-snapshot`
   - Should be unique per profile to avoid conflicts
 
-For more details on drift detection, see the [Drift Detection Guide](../features/drift-detection.md).
+For more details on drift detection, see the [Drift Detection Guide](../features/drift-detection).
 
 ### SQL Tools
 ```yaml
@@ -491,7 +482,7 @@ MXCP supports policy-based access control for endpoints. Policies can control wh
 - CEL expressions: Flexible condition evaluation
 - User context: Role-based and permission-based access
 
-For detailed information on policy configuration and examples, see the [Policy Enforcement Guide](../features/policies.md).
+For detailed information on policy configuration and examples, see the [Policy Enforcement Guide](../features/policies).
 
 ## SQL Source Files
 
@@ -514,7 +505,7 @@ source:
 
 ## Type System
 
-MXCP uses a comprehensive type system for input validation and output conversion. See the [Type System](../reference/type-system.md) documentation for details.
+MXCP uses a comprehensive type system for input validation and output conversion. See the [Type System](../reference/type-system) documentation for details.
 
 ## Jinja Templates in Prompts
 
@@ -644,7 +635,7 @@ models:
   - **timeout**: Request timeout in seconds
   - **max_retries**: Number of retries on failure
 
-For more information on using evals, see the [LLM Evaluation section](quality.md#llm-evaluation-evals) in the Quality & Testing Guide.
+For more information on using evals, see the [LLM Evaluation section](quality#llm-evaluation-evals) in the Quality & Testing Guide.
 
 ## Best Practices
 

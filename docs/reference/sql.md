@@ -1,18 +1,9 @@
 ---
 title: "SQL Reference"
 description: "Quick reference for SQL in MXCP including DuckDB syntax and built-in authentication functions."
-keywords:
-  - mxcp sql
-  - duckdb sql
-  - sql functions
-  - authentication sql
-  - get_username
-  - get_user_external_token
-sidebar_position: 4
-slug: /reference/sql
+sidebar:
+  order: 4
 ---
-
-# SQL Reference
 
 MXCP uses DuckDB SQL syntax with additional built-in functions for authentication and access control. This reference provides a quick lookup of SQL capabilities in MXCP.
 
@@ -105,5 +96,5 @@ WHERE age > $min_age
 ## See Also
 
 - [DuckDB Documentation](https://duckdb.org/docs/sql/introduction)
-- [Authentication Guide](../guides/authentication.md)
-- [SQL Endpoints](../features/overview.md) 
+- [Authentication Guide](../guides/authentication)
+- [SQL Endpoints](../features/overview) 

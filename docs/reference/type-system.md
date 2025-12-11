@@ -1,18 +1,9 @@
 ---
 title: "Type System"
 description: "Complete guide to MXCP's type system for defining and validating data structures. JSON Schema compatible with DuckDB type mapping and format annotations."
-keywords:
-  - mxcp type system
-  - json schema
-  - data validation
-  - duckdb types
-  - format annotations
-  - type definitions
-sidebar_position: 2
-slug: /reference/type-system
+sidebar:
+  order: 2
 ---
-
-# MXCP Type System
 
 MXCP's type system provides a robust foundation for defining and validating data structures in your endpoints. It combines the best aspects of JSON Schema, OpenAPI, and AI function calling conventions while maintaining compatibility with SQL/DuckDB types.
 

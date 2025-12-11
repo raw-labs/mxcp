@@ -1,18 +1,9 @@
 ---
 title: "Quality & Testing Guide"
 description: "Best practices for ensuring endpoint quality through validation, testing, and linting in MXCP. Learn how to write tests, validate endpoints, and maintain high-quality metadata."
-keywords:
-  - mxcp testing
-  - endpoint validation
-  - mxcp lint
-  - quality assurance
-  - test cases
-  - metadata best practices
-sidebar_position: 4
-slug: /guides/quality
+sidebar:
+  order: 4
 ---
-
-# Quality & Testing Guide
 
 Quality assurance is a **critical phase** in MXCP's production methodology. This guide covers the comprehensive testing approach that separates hobby projects from production-ready MCP servers.
 

@@ -1,18 +1,9 @@
 ---
 title: "Integrations"
 description: "Integrate MXCP with AI platforms, dbt, and data sources. Connect with Claude Desktop, OpenAI, and other LLM providers. Access diverse data sources through DuckDB."
-keywords:
-  - mxcp integrations
-  - claude desktop integration
-  - dbt integration
-  - duckdb extensions
-  - llm integration
-  - ai data integration
-sidebar_position: 3
-slug: /guides/integrations
+sidebar:
+  order: 3
 ---
-
-# MXCP Integrations
 
 MXCP provides seamless integration with AI platforms and data tools to create powerful, production-ready AI applications. This guide covers how to connect MXCP with LLMs, transform data with dbt, and access diverse data sources through DuckDB.
 
@@ -217,7 +208,7 @@ dbt:
   enabled: true
 ```
 
-For more details on dbt configuration, see the [Configuration Guide](configuration.md).
+For more details on dbt configuration, see the [Configuration Guide](configuration).
 
 ### Commands
 
@@ -387,7 +378,7 @@ secrets:
   - http_headers_token
 ```
 
-For more details on secret management, see the [Configuration Guide](configuration.md#secrets).
+For more details on secret management, see the [Configuration Guide](configuration#secrets).
 
 ### Best Practices
 
@@ -409,4 +400,4 @@ For more details on secret management, see the [Configuration Guide](configurati
 4. **Data Quality**
    - Use tests to ensure data consistency
    - Implement data validation in your models
-   - Monitor for schema drift using MXCP's [drift detection](../features/drift-detection.md)
+   - Monitor for schema drift using MXCP's [drift detection](../features/drift-detection)

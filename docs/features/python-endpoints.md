@@ -1,8 +1,11 @@
-# Python Endpoints
+---
+title: "Python Endpoints"
+description: "Learn how to create Python-based endpoints in MXCP for complex logic, external API integration, and data transformations."
+sidebar:
+  order: 5
+---
 
 MXCP supports Python-based endpoints alongside SQL endpoints, allowing you to implement more complex logic while still leveraging the MXCP infrastructure.
-
-## Overview
 
 Python endpoints enable you to:
 - Write complex business logic that would be difficult in SQL
@@ -558,7 +561,7 @@ tool:
 
 ## See Also
 
-- [Python Reference](../reference/python.md) - Quick reference for all runtime APIs
-- [SQL Reference](../reference/sql.md) - SQL syntax and built-in functions
-- [Configuration Guide](../guides/configuration.md) - Secrets and settings
-- [Plugin Development](../reference/plugins.md) - Create reusable components 
+- [Python Reference](../reference/python) - Quick reference for all runtime APIs
+- [SQL Reference](../reference/sql) - SQL syntax and built-in functions
+- [Configuration Guide](../guides/configuration) - Secrets and settings
+- [Plugin Development](../reference/plugins) - Create reusable components 

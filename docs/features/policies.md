@@ -1,22 +1,11 @@
 ---
 title: "Policy Enforcement"
 description: "Control access to MXCP endpoints and filter sensitive data with policy enforcement. Learn to use CEL expressions for fine-grained authorization and data filtering."
-keywords:
-  - mxcp policies
-  - policy enforcement
-  - access control
-  - data filtering
-  - cel expressions
-  - user authorization
-sidebar_position: 2
-slug: /features/policies
+sidebar:
+  order: 2
 ---
 
-# Policy Enforcement
-
 MXCP supports policy enforcement to control access to endpoints and filter sensitive data based on user context. Policies are defined using the Common Expression Language (CEL) and can be applied at both input and output stages of endpoint execution.
-
-## Overview
 
 Policy enforcement allows you to:
 
@@ -567,11 +556,11 @@ MXCP's policy engine provides enterprise-grade security for your data-to-AI inte
 
 ## See Also
 
-- **[Authentication & Authorization](../guides/authentication.md)** - Configure OAuth and user authentication
-- **[Audit Logging](./auditing.md)** - Track all policy decisions and access attempts
-- **[Testing Policies](../guides/quality.md#testing-policy-protected-endpoints)** - Write tests for policy-protected endpoints
-- **[Features Overview](./overview.md)** - Explore all MXCP capabilities
+- **[Authentication & Authorization](../guides/authentication)** - Configure OAuth and user authentication
+- **[Audit Logging](./auditing)** - Track all policy decisions and access attempts
+- **[Testing Policies](../guides/quality#testing-policy-protected-endpoints)** - Write tests for policy-protected endpoints
+- **[Features Overview](./overview)** - Explore all MXCP capabilities
 
 ---
 
-*Ready to secure your endpoints? Start with the [Quickstart Guide](../getting-started/quickstart.md) and add policies as you go.*
+*Ready to secure your endpoints? Start with the [Quickstart Guide](../getting-started/quickstart) and add policies as you go.*

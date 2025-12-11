@@ -1,0 +1,67 @@
+---
+title: "Reference"
+description: "Complete API and technical reference for MXCP. CLI commands, type system, SQL syntax, Python runtime APIs, and plugin development."
+sidebar:
+  order: 0
+---
+
+This section provides complete API and technical reference documentation for MXCP. Use these references when you need detailed information about specific commands, types, or APIs.
+
+## Command Line Interface
+
+### [CLI Reference](./cli)
+Complete command-line interface reference for MXCP. All commands, options, and usage examples for the `mxcp` CLI tool including:
+- Project management (`init`, `serve`, `list`)
+- Quality assurance (`validate`, `test`, `lint`, `evals`)
+- Operations (`logs`, `drift`, `dbt`)
+- Development (`run`, `reload`)
+
+## Type System & Validation
+
+### [Type System](./type-system)
+Complete guide to MXCP's type system for defining and validating data structures. JSON Schema compatible with DuckDB type mapping and format annotations:
+- Primitive types (string, number, boolean, integer)
+- Complex types (object, array)
+- Format annotations (date, datetime, uuid, email)
+- Constraints and validation rules
+
+## Language References
+
+### [SQL Reference](./sql)
+Quick reference for SQL in MXCP including DuckDB syntax and built-in authentication functions:
+- DuckDB SQL syntax basics
+- Named parameter binding
+- Built-in `mxcp_user_*` functions
+- Extensions and data formats
+
+### [Python Reference](./python)
+Quick reference for `mxcp.runtime` module APIs available in Python endpoints:
+- Database access (`db.execute`, `db.fetch_one`, `db.fetch_all`)
+- Configuration access (`config.get`, `config.secrets`)
+- Plugin registration and lifecycle hooks
+- Thread safety considerations
+
+## Extensibility
+
+### [Plugins](./plugins)
+Extend MXCP with custom Python plugins. Create User Defined Functions (UDFs) for DuckDB:
+- Plugin structure and registration
+- UDF creation with `@udf` decorator
+- Provider plugins for OAuth
+- Lifecycle hooks (`on_startup`, `on_shutdown`, `on_reload`)
+
+## Quick Lookup
+
+| Reference | Use When |
+|-----------|----------|
+| [CLI](./cli) | Running MXCP commands |
+| [Type System](./type-system) | Defining endpoint parameters and returns |
+| [SQL](./sql) | Writing SQL queries and using built-in functions |
+| [Python](./python) | Implementing Python endpoints |
+| [Plugins](./plugins) | Extending MXCP with custom functions |
+
+## Related Resources
+
+- [Configuration Guide](../guides/configuration) - How to configure MXCP
+- [Quality & Testing](../guides/quality) - Testing your endpoints
+- [Python Endpoints](../features/python-endpoints) - Building Python tools

@@ -1,22 +1,11 @@
 ---
 title: "Audit Logging"
 description: "Track all tool, resource, and prompt executions with MXCP's enterprise-grade audit logging. Essential for security, compliance, and usage analysis."
-keywords:
-  - mxcp audit logging (log querying)
-  - compliance logging
-  - security auditing
-  - usage tracking
-  - jsonl logs
-  - enterprise security
-sidebar_position: 4
-slug: /features/auditing
+sidebar:
+  order: 4
 ---
 
-# Audit Logging
-
 MXCP provides enterprise-grade audit logging to track all tool, resource, and prompt executions across your organization. Audit logs are essential for security, compliance, debugging, and understanding usage patterns.
-
-## Overview
 
 When enabled, MXCP logs every execution that goes through the server (`mxcp serve`) with:
 - **Timestamp**: When the execution occurred (UTC)

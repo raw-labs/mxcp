@@ -1,23 +1,11 @@
 ---
 title: "Authentication"
 description: "Set up OAuth authentication in MXCP with GitHub, Atlassian, or Salesforce. Secure your endpoints and tools with enterprise-grade authentication."
-keywords:
-  - mxcp authentication
-  - oauth setup
-  - google oauth
-  - github oauth
-  - atlassian oauth
-  - salesforce oauth
-  - endpoint security
-sidebar_position: 2
-slug: /guides/authentication
+sidebar:
+  order: 2
 ---
 
-# Authentication
-
 MXCP supports OAuth authentication to protect your endpoints and tools. When authentication is enabled, all tools, resources, prompts, and built-in SQL features require valid authentication tokens.
-
-## Overview
 
 Authentication is configured in your user configuration file (`~/.mxcp/config.yml`) under each profile's `auth` section. MXCP supports multiple OAuth providers and can be easily extended to support additional providers.
 
@@ -1470,13 +1458,13 @@ The authentication system is designed to be extensible. Future OAuth providers c
 
 ## See Also
 
-- **[SQL Reference](../reference/sql.md)** - Quick reference for authentication SQL functions
-- **[Policy Enforcement](../features/policies.md)** - Control access to endpoints based on user context
-- **[Audit Logging](../features/auditing.md)** - Track authentication events and access attempts
-- **[Testing with User Context](quality.md#testing-policy-protected-endpoints)** - Test authenticated endpoints
-- **[Configuration Guide](configuration.md)** - Complete configuration reference
-- **[Features Overview](../features/overview.md)** - Explore all MXCP capabilities
+- **[SQL Reference](../reference/sql)** - Quick reference for authentication SQL functions
+- **[Policy Enforcement](../features/policies)** - Control access to endpoints based on user context
+- **[Audit Logging](../features/auditing)** - Track authentication events and access attempts
+- **[Testing with User Context](quality#testing-policy-protected-endpoints)** - Test authenticated endpoints
+- **[Configuration Guide](configuration)** - Complete configuration reference
+- **[Features Overview](../features/overview)** - Explore all MXCP capabilities
 
 ---
 
-*Ready to secure your MXCP server? Start with the [Quickstart Guide](../getting-started/quickstart.md) and add authentication as needed.*
+*Ready to secure your MXCP server? Start with the [Quickstart Guide](../getting-started/quickstart) and add authentication as needed.*

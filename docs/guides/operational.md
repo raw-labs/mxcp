@@ -1,18 +1,9 @@
 ---
 title: "Running MXCP in Production"
 description: "Practical guide for deploying and operating MXCP servers in production environments"
-keywords:
-  - mxcp deployment
-  - production operations
-  - docker deployment
-  - systemd
-  - monitoring
-  - signal handling
-sidebar_position: 5
-slug: /guides/operational
+sidebar:
+  order: 5
 ---
-
-# Running MXCP in Production
 
 This guide covers deploying and operating MXCP servers in production. It focuses on the practical reality of MXCP: single-instance deployments for teams or individuals.
 
@@ -143,7 +134,7 @@ volumes:
   mxcp-audit:
 ```
 
-**Note:** Healthcheck requires `MXCP_ADMIN_ENABLED=true`. See [Admin Socket Guide](admin-socket.md) for details.
+**Note:** Healthcheck requires `MXCP_ADMIN_ENABLED=true`. See [Admin Socket Guide](admin-socket) for details.
 
 ### Running the Container
 
@@ -399,7 +390,7 @@ export VAULT_TOKEN="your-vault-token"
 export OP_SERVICE_ACCOUNT_TOKEN="your-op-token"
 ```
 
-See [Configuration Guide](configuration.md) and [Observability Guide](observability.md) for complete details.
+See [Configuration Guide](configuration) and [Observability Guide](observability) for complete details.
 
 ### Volume Mounts
 
@@ -504,7 +495,7 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl --unix-socket /run/mxcp/mxcp.sock http://localhost/health || exit 1
 ```
 
-For complete admin socket documentation including all endpoints and examples, see the [Admin Socket Guide](admin-socket.md).
+For complete admin socket documentation including all endpoints and examples, see the [Admin Socket Guide](admin-socket).
 
 ### Observability
 
@@ -515,7 +506,7 @@ MXCP provides comprehensive observability through:
 3. **OpenTelemetry** - Distributed tracing and metrics
 4. **Admin Socket** - Local monitoring and health checks
 
-For complete observability setup including OpenTelemetry, Grafana, and log shipping, see the [Observability Guide](observability.md).
+For complete observability setup including OpenTelemetry, Grafana, and log shipping, see the [Observability Guide](observability).
 
 ### Basic Audit Log Analysis
 
@@ -574,7 +565,7 @@ EOF
 ### Secret Management
 
 **Never commit secrets:**
-```gitignore
+```text
 # .gitignore
 config.yml
 *.key
@@ -775,8 +766,8 @@ mxcp serve
 
 ## Additional Resources
 
-- **[Production Methodology](production-methodology.md)** - How to build production-ready MCP tools
-- **[Admin Socket Guide](admin-socket.md)** - Complete admin API reference
-- **[Observability Guide](observability.md)** - OpenTelemetry, metrics, and log shipping
-- **[Configuration Guide](configuration.md)** - Detailed configuration options
-- **[Authentication Guide](authentication.md)** - OAuth setup and security
+- **[Production Methodology](production-methodology)** - How to build production-ready MCP tools
+- **[Admin Socket Guide](admin-socket)** - Complete admin API reference
+- **[Observability Guide](observability)** - OpenTelemetry, metrics, and log shipping
+- **[Configuration Guide](configuration)** - Detailed configuration options
+- **[Authentication Guide](authentication)** - OAuth setup and security

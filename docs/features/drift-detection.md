@@ -1,18 +1,9 @@
 ---
 title: "Drift Detection"
 description: "Monitor and track changes to database schema and endpoints across environments with MXCP's drift detection system. Maintain consistency and catch unintended changes."
-keywords:
-  - mxcp drift detection
-  - schema monitoring
-  - database changes
-  - endpoint changes
-  - environment consistency
-  - change tracking
-sidebar_position: 3
-slug: /features/drift-detection
+sidebar:
+  order: 3
 ---
-
-# Drift Detection
 
 MXCP's drift detection system helps you monitor and track changes to your database schema and endpoint definitions across different environments and over time. This is crucial for maintaining consistency, catching unintended changes, and ensuring your AI applications work reliably across development, staging, and production environments.
 

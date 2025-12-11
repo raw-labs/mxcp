@@ -1,20 +1,9 @@
 ---
 title: "Quickstart Guide"
 description: "Get started with MXCP quickly - create AI tools with SQL or Python. Learn to build tools, integrate with dbt, and deploy production-ready AI applications."
-keywords:
-  - mxcp quickstart
-  - mxcp tutorial
-  - python mcp tools
-  - sql mcp endpoints
-  - ai tools framework
-  - dbt integration
-  - claude desktop setup
-  - mcp server
-sidebar_position: 2
-slug: /quickstart
+sidebar:
+  order: 2
 ---
-
-# MXCP Quickstart Guide
 
 This guide demonstrates MXCP's structured approach to building production-ready MCP servers. You'll learn not just how to create AI tools, but how to build them **the right way** - with proper data modeling, comprehensive testing, and enterprise-grade security.
 
@@ -891,7 +880,7 @@ mxcp drift-check --profile production
    mxcp list         # Verify everything is loaded
    ```
    
-   > 💡 Learn more about writing tests and ensuring quality in the [Quality & Testing Guide](../guides/quality.md)
+   > 💡 Learn more about writing tests and ensuring quality in the [Quality & Testing Guide](../guides/quality)
 
 2. **Explore the CLI**
    ```bash
@@ -901,12 +890,12 @@ mxcp drift-check --profile production
    ```
 
 ### Dive Deeper
-1. **[Type System](../reference/type-system.md)** - Master MXCP's type safety features
-2. **[Quality & Testing](../guides/quality.md)** - Write comprehensive tests and ensure quality
-3. **[Policies](../features/policies.md)** - Implement fine-grained access control
-4. **[Authentication](../guides/authentication.md)** - Set up OAuth for your organization
-5. **[Plugins](../reference/plugins.md)** - Extend DuckDB with custom Python functions
-6. **[Drift Detection](../features/drift-detection.md)** - Monitor changes across environments
+1. **[Type System](../reference/type-system)** - Master MXCP's type safety features
+2. **[Quality & Testing](../guides/quality)** - Write comprehensive tests and ensure quality
+3. **[Policies](../features/policies)** - Implement fine-grained access control
+4. **[Authentication](../guides/authentication)** - Set up OAuth for your organization
+5. **[Plugins](../reference/plugins)** - Extend DuckDB with custom Python functions
+6. **[Drift Detection](../features/drift-detection)** - Monitor changes across environments
 
 ### Build Your Own
 1. **Start Simple**: Begin with basic SQL queries
@@ -970,8 +959,8 @@ After completing this quickstart, you should understand MXCP's unique value:
 **Perfect separation**: Choose the right tool for each job, with all endpoints getting enterprise features automatically.
 
 ### Learn More
-- **[Python Endpoints](../features/python-endpoints.md)** - Build complex tools with Python
-- **[Type System](../reference/type-system.md)** - Master MXCP's type validation system
-- **[dbt Integration](../guides/integrations.md#dbt-integration)** - Build robust data transformation pipelines
-- **[Drift Detection](../features/drift-detection.md)** - Monitor changes across environments
-- **[Plugin Development](../reference/plugins.md)** - Extend MXCP with custom functionality 
+- **[Python Endpoints](../features/python-endpoints)** - Build complex tools with Python
+- **[Type System](../reference/type-system)** - Master MXCP's type validation system
+- **[dbt Integration](../guides/integrations#dbt-integration)** - Build robust data transformation pipelines
+- **[Drift Detection](../features/drift-detection)** - Monitor changes across environments
+- **[Plugin Development](../reference/plugins)** - Extend MXCP with custom functionality 

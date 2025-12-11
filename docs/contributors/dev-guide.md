@@ -1,17 +1,9 @@
 ---
 title: "Development Guide"
 description: "Complete guide for contributing to MXCP development including setup, architecture patterns, testing, and pull request process."
-keywords:
-  - mxcp development
-  - contributing to mxcp
-  - mxcp development setup
-  - python development
-  - duckdb development
-sidebar_position: 1
-slug: /contributors/development
+sidebar:
+  order: 1
 ---
-
-# Development Guide
 
 Welcome to the MXCP development community! This guide will help you get started with contributing to the project.
 
@@ -214,7 +206,7 @@ MXCP uses a specific pattern for organizing test fixtures:
 - **Complete repositories**: Each fixture contains a complete MXCP repository with `mxcp-site.yml` and `mxcp-config.yml`
 - **Isolated environments**: Tests use environment variables to point to their specific config files
 
-> 📖 For endpoint testing best practices and writing tests for MXCP endpoints, see the [Quality & Testing Guide](../guides/quality.md).
+> 📖 For endpoint testing best practices and writing tests for MXCP endpoints, see the [Quality & Testing Guide](../guides/quality).
 
 ```python
 # Standard test setup pattern
@@ -628,7 +620,7 @@ git tag v1.0.0 && git push origin v1.0.0
 
 ## Code of Conduct
 
-Please read and follow our [Code of Conduct](https://github.com/raw-labs/mxcp/blob/main/CODE_OF_CONDUCT.md). We aim to maintain a welcoming and inclusive community.
+Please read and follow our [Code of Conduct](https://github.com/raw-labs/mxcp/blob/main/CODE_OF_CONDUCT). We aim to maintain a welcoming and inclusive community.
 
 ## License
 

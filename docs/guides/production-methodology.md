@@ -1,17 +1,9 @@
 ---
 title: "Production Methodology"
 description: "Learn the structured approach to building reliable, production-ready MCP servers with MXCP"
-keywords:
-  - mxcp methodology
-  - production mcp
-  - data modeling
-  - service design
-  - quality assurance
-sidebar_position: 0
-slug: /guides/production-methodology
+sidebar:
+  order: 0
 ---
-
-# The Production-Ready Way to Build MCP Servers
 
 MXCP isn't just another MCP implementation - it's a **complete methodology** for building production-ready AI tools. This guide explains the structured approach that separates hobbyist integrations from enterprise-grade systems.
 

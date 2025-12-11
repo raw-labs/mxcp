@@ -1,18 +1,9 @@
 ---
 title: "Python Reference"
 description: "Quick reference for mxcp.runtime module APIs available in Python endpoints."
-keywords:
-  - mxcp python
-  - python runtime
-  - mxcp.runtime
-  - python endpoints
-  - db.execute
-  - config.get_secret
-sidebar_position: 5
-slug: /reference/python
+sidebar:
+  order: 5
 ---
-
-# Python Reference
 
 Python endpoints in MXCP have access to the `mxcp.runtime` module, which provides functions for database access, configuration, secrets, and plugins. This reference provides a quick lookup of available APIs.
 
@@ -240,6 +231,6 @@ Python return values must match the declared endpoint return type:
 
 ## See Also
 
-- [Python Endpoints Guide](../features/python-endpoints.md)
-- [Configuration Guide](../guides/configuration.md)
-- [Plugin Development](plugins.md) 
+- [Python Endpoints Guide](../features/python-endpoints)
+- [Configuration Guide](../guides/configuration)
+- [Plugin Development](plugins) 
