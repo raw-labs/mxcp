@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 import time
-from typing import Sequence
+from collections.abc import Sequence
 
 from mxcp.sdk.auth.contracts import UserInfo
 from mxcp.sdk.auth.storage import (
@@ -13,6 +14,8 @@ from mxcp.sdk.auth.storage import (
     StoredSession,
     TokenStore,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SessionManager:
@@ -38,6 +41,8 @@ class SessionManager:
         redirect_uri: str | None,
         code_challenge: str | None,
         code_challenge_method: str | None,
+        provider_code_verifier: str | None = None,
+        client_state: str | None = None,
         scopes: Sequence[str] | None = None,
         ttl_seconds: int | None = None,
     ) -> StateRecord:
@@ -49,6 +54,8 @@ class SessionManager:
             redirect_uri=redirect_uri,
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
+            provider_code_verifier=provider_code_verifier,
+            client_state=client_state,
             scopes=list(scopes) if scopes is not None else None,
             expires_at=now + (ttl_seconds or self.state_ttl_seconds),
             created_at=now,
@@ -57,7 +64,12 @@ class SessionManager:
         return record
 
     async def consume_state(self, state: str) -> StateRecord | None:
-        return await self.token_store.consume_state(state)
+        record = await self.token_store.consume_state(state)
+        if record is None:
+            logger.warning("SessionManager.consume_state: state not found", extra={"state": state})
+        else:
+            logger.info("SessionManager.consume_state: state consumed", extra={"state": state})
+        return record
 
     async def create_auth_code(
         self,
