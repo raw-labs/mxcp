@@ -125,7 +125,11 @@ class AuthService:
             )
 
         self._verify_pkce(code_record, code_verifier)
-        await self.session_manager.delete_auth_code(auth_code)
+        deleted = await self.session_manager.try_delete_auth_code(auth_code)
+        if not deleted:
+            raise ProviderError(
+                "invalid_grant", "Authorization code already used", status_code=400
+            )
 
         session = await self.session_manager.get_session_by_id(code_record.session_id)
         if not session:
