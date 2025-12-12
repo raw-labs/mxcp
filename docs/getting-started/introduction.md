@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-This guide provides an in-depth look at how MXCP works. For a quick start, see the [Quickstart Guide](quickstart). For terminology, see the [Glossary](glossary).
+This guide provides an in-depth look at how MXCP works. For a quick start, see the [Quickstart Guide](/getting-started/quickstart/). For terminology, see the [Glossary](/getting-started/glossary/).
 
 ## What is MXCP?
 
@@ -32,7 +32,7 @@ flowchart TB
 
     subgraph MXCP["MXCP Framework"]
         direction TB
-        Auth["Authentication<br/>(OAuth, API Keys)"]
+        Auth["Authentication<br/>(OAuth)"]
         Policy["Policy Engine<br/>(CEL Expressions)"]
         Audit["Audit Logger<br/>(JSONL, Database)"]
         Types["Type System<br/>(Validation)"]
@@ -61,7 +61,7 @@ flowchart TB
 
 ### Security & Governance
 
-- **Authentication** - OAuth providers (GitHub, Google, Atlassian, Salesforce, Keycloak) or API keys
+- **Authentication** - OAuth providers (GitHub, Google, Atlassian, Salesforce, Keycloak)
 - **Policy Enforcement** - Fine-grained access control using CEL expressions
 - **Audit Logging** - Track every operation for compliance and debugging
 
@@ -86,23 +86,26 @@ flowchart TB
 
 ## How It Works
 
-### 1. Define Your Project
+MXCP projects consist of a configuration file and endpoint definitions. Here's what each part looks like:
 
-Create a project configuration file:
+### Project Configuration
+
+Every MXCP project starts with `mxcp-site.yml`:
 
 ```yaml
-# mxcp-site.yml
 mxcp: 1
 project: my-project
-profile: dev
+profile: default
 
-database:
-  path: "data/app.db"
+profiles:
+  default:
+    duckdb:
+      path: data/app.duckdb
 ```
 
-### 2. Create Endpoints
+### Endpoint Definition
 
-Define tools using SQL or Python:
+Tools are defined in YAML files with parameters, return types, and SQL or Python source:
 
 ```yaml
 # tools/search_users.yml
@@ -130,76 +133,38 @@ tool:
       SELECT id, name, email
       FROM users
       WHERE name ILIKE '%' || $query || '%'
-         OR email ILIKE '%' || $query || '%'
       LIMIT 10
 ```
 
-### 3. Add Security
+### Policy Protection
 
-Protect sensitive operations with policies:
-
-```yaml
-# tools/delete_user.yml
-mxcp: 1
-tool:
-  name: delete_user
-  description: Delete a user account (admin only)
-
-  parameters:
-    - name: user_id
-      type: integer
-
-  policies:
-    input:
-      - condition: "user.role != 'admin'"
-        action: deny
-        message: "Only administrators can delete users"
-
-  source:
-    code: |
-      DELETE FROM users WHERE id = $user_id
-      RETURNING id, 'deleted' as status
-```
-
-### 4. Write Tests
-
-Verify your endpoints work correctly:
+Sensitive operations can be protected with CEL policy expressions:
 
 ```yaml
-# In the same tool file
-  tests:
-    - name: admin_can_delete
-      arguments:
-        - key: user_id
-          value: 123
-      user_context:
-        role: admin
-      result_contains:
-        status: "deleted"
-
-    - name: non_admin_denied
-      arguments:
-        - key: user_id
-          value: 123
-      user_context:
-        role: user
-      expect_error: true
+policies:
+  input:
+    - condition: "user.role != 'admin'"
+      action: deny
+      reason: "Only administrators can delete users"
 ```
 
-### 5. Run and Connect
+### Built-in Testing
 
-Start the server and connect your AI client:
+Each endpoint can include tests that verify behavior:
 
-```bash
-# Validate configuration
-mxcp validate
-
-# Run tests
-mxcp test
-
-# Start the server
-mxcp serve
+```yaml
+tests:
+  - name: search_finds_alice
+    arguments:
+      - key: query
+        value: "alice"
+    result_contains_item:
+      name: "Alice Smith"
 ```
+
+:::tip[Ready to build?]
+See the [Quickstart Guide](/getting-started/quickstart/) for a complete hands-on tutorial, or try `mxcp init --bootstrap` to generate a working example project.
+:::
 
 ## Request Flow
 
@@ -264,42 +229,6 @@ flowchart LR
     Sources[(Source Data)] -->|Load| dbt
 ```
 
-### Enterprise: Full Stack
-
-For large-scale deployments:
-
-```mermaid
-flowchart TB
-    subgraph Clients
-        C1[Claude Desktop]
-        C2[Custom App]
-        C3[API Gateway]
-    end
-
-    subgraph "MXCP Cluster"
-        LB[Load Balancer]
-        S1[MXCP Server 1]
-        S2[MXCP Server 2]
-    end
-
-    subgraph "Data Layer"
-        DuckDB[(DuckDB)]
-        Postgres[(PostgreSQL)]
-        APIs[External APIs]
-    end
-
-    subgraph "Observability"
-        Logs[Audit Logs]
-        Traces[OpenTelemetry]
-        Metrics[Prometheus]
-    end
-
-    Clients <--> LB
-    LB <--> S1 & S2
-    S1 & S2 <--> DuckDB & Postgres & APIs
-    S1 & S2 --> Logs & Traces & Metrics
-```
-
 ## Comparison with Other Approaches
 
 | Feature | Plain MCP | MXCP |
@@ -312,23 +241,29 @@ flowchart TB
 | Testing Framework | No | Built-in |
 | SQL Endpoints | No | DuckDB |
 | Python Endpoints | Manual | Integrated |
+| dbt Integration | No | Built-in |
+| Observability | No | OpenTelemetry |
 | Drift Detection | No | Built-in |
 | Hot Reload | No | Built-in |
+| Linting | No | Built-in |
+| AI Evals | No | Built-in |
 
 ## Summary
 
 MXCP provides:
 - **Protocol Compliance** - Full MCP implementation
-- **Enterprise Security** - OAuth, policies, audit logging
-- **Flexible Implementation** - SQL for data, Python for logic
-- **Quality Assurance** - Validation, testing, linting, evals
-- **Production Operations** - Monitoring, drift detection, hot reload
+- **Enterprise Security** - OAuth authentication, CEL policies, audit logging
+- **Flexible Implementation** - SQL endpoints with DuckDB, Python for complex logic
+- **Type Safety** - Comprehensive parameter and return type validation
+- **Data Integration** - Built-in dbt support for data transformation pipelines
+- **Quality Assurance** - Validation, testing, linting, AI evals
+- **Production Operations** - OpenTelemetry observability, drift detection, hot reload
 
 ## Next Steps
 
 | Goal | Next Step |
 |------|-----------|
-| Understand terminology | [Glossary](glossary) |
-| Build something now | [Quickstart](quickstart) |
-| Learn step-by-step | [Hello World Tutorial](/tutorials/hello-world) |
+| Understand terminology | [Glossary](/getting-started/glossary/) |
+| Build something now | [Quickstart](/getting-started/quickstart/) |
+| Learn step-by-step | [Hello World Tutorial](/tutorials/hello-world/) |
 | Deep dive into concepts | [Core Concepts](/concepts/) |

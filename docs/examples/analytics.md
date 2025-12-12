@@ -38,10 +38,12 @@ analytics/
 # mxcp-site.yml
 mxcp: 1
 project: analytics
-profile: dev
+profile: default
 
-database:
-  path: ":memory:"
+profiles:
+  default:
+    duckdb:
+      path: data/analytics.duckdb
 
 dbt:
   enabled: true

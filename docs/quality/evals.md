@@ -5,7 +5,7 @@ sidebar:
   order: 5
 ---
 
-> **Related Topics:** [Testing](testing) (functional tests) | [Configuration](/operations/configuration#model-configuration) (model setup) | [Policies](/security/policies) (safety enforcement) | [YAML Schema](/reference/yaml-schema#evals) (eval syntax)
+> **Related Topics:** [Testing](testing) (functional tests) | [Configuration](/operations/configuration#model-configuration) (model setup) | [Policies](/security/policies) (safety enforcement)
 
 MXCP evals test how AI models interact with your endpoints. This ensures AI uses your tools correctly and safely in production.
 

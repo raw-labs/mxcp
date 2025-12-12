@@ -43,6 +43,8 @@ resource:
   uri: "users://{user_id}"
   description: User profile data
   mime_type: application/json
+  source:
+    file: ../sql/get_user.sql
 ```
 
 ### Prompts
@@ -78,8 +80,10 @@ Strings can have format annotations for specialized handling:
 - `email` - Email addresses
 - `uri` - URLs
 - `date` - ISO 8601 dates
+- `time` - ISO 8601 times
 - `date-time` - ISO 8601 timestamps
 - `duration` - ISO 8601 durations
+- `timestamp` - Unix timestamps
 
 ### Validation Constraints
 - `minimum`/`maximum` - Number bounds

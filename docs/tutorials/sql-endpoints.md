@@ -47,9 +47,7 @@ INSERT INTO users (id, name, email, department) VALUES
 
 Initialize the database:
 ```bash
-# The database path depends on your profile name
-# For the 'default' profile, it's typically data/db-default.duckdb
-duckdb data/db-default.duckdb < sql/setup.sql
+mxcp query --file sql/setup.sql
 ```
 
 **Tool definition** (`tools/get-user.yml`):
@@ -249,7 +247,7 @@ INSERT INTO orders (id, user_id, amount, status) VALUES
 
 Initialize:
 ```bash
-duckdb data/db-default.duckdb < sql/setup-orders.sql
+mxcp query --file sql/setup-orders.sql
 ```
 
 **Tool definition** (`tools/user-orders.yml`):

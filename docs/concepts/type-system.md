@@ -160,7 +160,6 @@ parameters:
       type: string
     zip:
       type: string
-      pattern: "^[0-9]{5}$"
   required: ["street", "city"]
 ```
 
@@ -341,7 +340,6 @@ MXCP intentionally restricts schema complexity:
 - `$ref` - No schema references
 - `allOf`, `oneOf`, `anyOf` - No union types
 - `patternProperties` - No regex property matching
-- `pattern` - No regex string validation
 - Conditional schemas (`if`/`then`)
 
 These restrictions ensure:

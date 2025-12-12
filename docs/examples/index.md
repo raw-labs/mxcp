@@ -154,7 +154,7 @@ tool:
     input:
       - condition: "user.role != 'admin'"
         action: deny
-        message: "Only admins can delete users"
+        reason: "Only admins can delete users"
   source:
     code: |
       DELETE FROM users WHERE id = $user_id

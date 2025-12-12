@@ -39,10 +39,12 @@ customer-service/
 # mxcp-site.yml
 mxcp: 1
 project: customer-service
-profile: dev
+profile: default
 
-database:
-  path: ":memory:"
+profiles:
+  default:
+    duckdb:
+      path: data/customer-service.duckdb
 
 extensions:
   - json
@@ -366,7 +368,7 @@ tool:
     input:
       - condition: "user.role == 'guest'"
         action: deny
-        message: "Authentication required to create tickets"
+        reason: "Authentication required to create tickets"
 
   source:
     code: |
@@ -391,17 +393,9 @@ tool:
       result_contains:
         status: "open"
 
-    - name: guest_denied
-      arguments:
-        - key: customer_id
-          value: 1
-        - key: subject
-          value: "Test"
-        - key: description
-          value: "Test"
-      user_context:
-        role: guest
-      expect_error: true
+    # Policy denial tests are done via CLI:
+    # mxcp run tool create_ticket --param customer_id=1 --param subject=Test --param description=Test --user-context '{"role": "guest"}'
+    # Expected: Policy enforcement failed: Authentication required to create tickets
 ```
 
 ### Process Refund
@@ -444,10 +438,10 @@ tool:
     input:
       - condition: "user.role != 'admin'"
         action: deny
-        message: "Only administrators can process refunds"
+        reason: "Only administrators can process refunds"
       - condition: "input.amount <= 0"
         action: deny
-        message: "Refund amount must be positive"
+        reason: "Refund amount must be positive"
 
   source:
     file: ../python/refunds.py
@@ -467,17 +461,9 @@ tool:
       result_contains:
         success: true
 
-    - name: non_admin_denied
-      arguments:
-        - key: order_id
-          value: 101
-        - key: amount
-          value: 50.00
-        - key: reason
-          value: "Test"
-      user_context:
-        role: support
-      expect_error: true
+    # Policy denial tests are done via CLI:
+    # mxcp run tool process_refund --param order_id=101 --param amount=50.00 --param reason=Test --user-context '{"role": "support"}'
+    # Expected: Policy enforcement failed: Only administrators can process refunds
 ```
 
 ## Python Implementation

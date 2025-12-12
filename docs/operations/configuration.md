@@ -229,9 +229,11 @@ mxcp serve
 profiles:
   default:
     duckdb:
-      path: db.duckdb      # Database file path
-      readonly: false       # Read-only mode
+      path: data/myapp.duckdb  # Database file path (default: data/db-{profile}.duckdb)
+      readonly: false          # Read-only mode
 ```
+
+If `path` is not specified, MXCP creates the database at `data/db-{profile_name}.duckdb` (e.g., `data/db-default.duckdb` for the default profile).
 
 ### Extensions
 

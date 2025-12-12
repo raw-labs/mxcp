@@ -322,15 +322,13 @@ output:
 ```
 
 ### mask_fields
-Replace field values with masked versions:
+Replace field values with `"****"`:
 
 ```yaml
 output:
   - condition: "user.role == 'support'"
     action: mask_fields
-    fields:
-      email: "***@***.***"
-      phone: "***-***-****"
+    fields: ["email", "phone"]
     reason: "Data masked for support role"
 ```
 
@@ -391,11 +389,10 @@ When multiple output policies match, they are applied in order. Each policy's ac
 
 ```yaml
 output:
-  # First: mask email for non-admins
+  # First: mask email for non-admins (replaced with "****")
   - condition: "user.role != 'admin'"
     action: mask_fields
-    fields:
-      email: "***@***.***"
+    fields: ["email"]
 
   # Second: remove salary for non-finance (applied to already-masked response)
   - condition: "user.department != 'finance'"
@@ -698,15 +695,12 @@ Mask data based on multiple conditions:
 
 ```yaml
 output:
-  # Mask data based on security clearance
+  # Mask data based on security clearance (all masked to "****")
   - condition: |
       response.security_clearance > user.security_clearance ||
       (response.classified && !('classified.view' in user.permissions))
     action: mask_fields
-    fields:
-      details: "[CLASSIFIED]"
-      location: "[REDACTED]"
-      contacts: "[RESTRICTED]"
+    fields: ["details", "location", "contacts"]
 ```
 
 ## Troubleshooting

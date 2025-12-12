@@ -292,13 +292,14 @@ duckdb:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `path` | string | Auto-generated | Database file path. |
+| `path` | string | `data/db-{profile}.duckdb` | Database file path. |
 | `readonly` | boolean | `false` | Open database in read-only mode. |
 
 **Path Behavior:**
-- If not specified, MXCP creates an in-memory database
+- If not specified, defaults to `data/db-{profile_name}.duckdb` (e.g., `data/db-default.duckdb`)
 - Relative paths are resolved from project root
 - Use absolute paths for production deployments
+- Override with `MXCP_DUCKDB_PATH` environment variable
 
 ### Drift Configuration
 

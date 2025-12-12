@@ -488,14 +488,20 @@ extensions:
 
 ```yaml
 # mxcp-site.yml
-database:
-  path: ":memory:"  # In-memory (default)
-  # path: "data.duckdb"  # Persistent
+profiles:
+  default:
+    duckdb:
+      path: data/app.duckdb  # Persistent (default: data/db-{profile}.duckdb)
+      readonly: false         # Set true for read-only access
+```
 
-  settings:
-    threads: 4
-    memory_limit: "4GB"
-    temp_directory: "/tmp/duckdb"
+DuckDB settings like `threads`, `memory_limit`, and `temp_directory` can be configured via SQL pragmas in your queries or setup scripts:
+
+```sql
+-- In sql/setup.sql or at query time
+SET threads = 4;
+SET memory_limit = '4GB';
+SET temp_directory = '/tmp/duckdb';
 ```
 
 ## Best Practices

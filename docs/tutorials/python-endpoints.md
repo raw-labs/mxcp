@@ -319,7 +319,7 @@ Use lifecycle hooks for initialization and cleanup.
 
 **Python implementation** (`python/services.py`):
 ```python
-from mxcp.runtime import db, config, on_init, on_shutdown, on_reload
+from mxcp.runtime import db, config, on_init, on_shutdown
 
 # Global state (use sparingly)
 _cache = {}
@@ -351,17 +351,6 @@ def cleanup():
 
     print("Service cleaned up")
 
-@on_reload
-def refresh():
-    """Called on SIGHUP (configuration reload)."""
-    global _cache
-    print("Reloading configuration...")
-
-    # Clear caches
-    _cache.clear()
-
-    print("Configuration reloaded")
-
 def cached_lookup(key: str) -> dict:
     """Tool that uses the cache."""
     if key in _cache:
@@ -383,7 +372,8 @@ def cached_lookup(key: str) -> dict:
 Lifecycle hooks:
 - `@on_init` - Called once when server starts
 - `@on_shutdown` - Called when server stops
-- `@on_reload` - Called on SIGHUP signal
+
+For reloading the database during runtime, use `reload_duckdb()`. See [Python Reference](/reference/python/#reload_duckdb).
 
 ## Step 6: Combining SQL and Python
 

@@ -200,7 +200,7 @@ Test access control policies with user context:
 ```yaml
 tests:
   - name: admin_sees_all
-    description: Admin can see all fields
+    description: Admin can see all fields including sensitive data
     arguments:
       - key: id
         value: 1
@@ -210,11 +210,13 @@ tests:
         - data.read
         - pii.view
     result_contains:
-      salary: true
-      ssn: true
+      id: 1
+      name: "Alice"
+      salary: 75000
+      ssn: "123-45-6789"
 
   - name: user_filtered
-    description: Regular user sees filtered data
+    description: Regular user sees filtered data (no sensitive fields)
     arguments:
       - key: id
         value: 1
@@ -223,7 +225,8 @@ tests:
       permissions:
         - data.read
     result_contains:
-      name: true
+      id: 1
+      name: "Alice"
     result_not_contains:
       - salary
       - ssn
@@ -511,18 +514,20 @@ tool:
           value: "Engineering"
       user_context:
         role: hr
-      result_contains:
-        - salary: true
+      result_contains_item:
+        department: "Engineering"
+        salary: 95000
 
     - name: non_hr_no_salary
-      description: Non-HR cannot see salary
+      description: Non-HR cannot see salary (filtered by policy)
       arguments:
         - key: department
           value: "Engineering"
       user_context:
         role: engineer
-      result_not_contains:
-        - salary
+      result_contains_item:
+        department: "Engineering"
+        # salary field is filtered out by policy
 ```
 
 ## Next Steps

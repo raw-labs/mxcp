@@ -81,7 +81,8 @@ tool:
         - key: region
           value: "North"
       result_contains:
-        total_sales: true
+        total_sales: 15420.50
+        transaction_count: 42
 ```
 
 ### Tool Annotations
@@ -237,7 +238,7 @@ prompt: |
 
 ## Source Options
 
-All endpoint types support two source options:
+Tools and resources support two source options (prompts use `messages` instead):
 
 ### Inline Code
 

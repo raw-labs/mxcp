@@ -42,10 +42,12 @@ data-management/
 # mxcp-site.yml
 mxcp: 1
 project: data-management
-profile: dev
+profile: default
 
-database:
-  path: data.duckdb
+profiles:
+  default:
+    duckdb:
+      path: data/data.duckdb
 
 extensions:
   - json
@@ -146,10 +148,10 @@ tool:
     input:
       - condition: "user.role != 'admin'"
         action: deny
-        message: "Only admins can create users"
+        reason: "Only admins can create users"
       - condition: "input.role == 'admin' && user.permissions not contains 'users:create:admin'"
         action: deny
-        message: "Cannot create admin users without permission"
+        reason: "Cannot create admin users without permission"
 
   source:
     file: ../../python/users.py
@@ -168,15 +170,9 @@ tool:
         email: "test@example.com"
         role: "user"
 
-    - name: non_admin_denied
-      arguments:
-        - key: email
-          value: "test@example.com"
-        - key: name
-          value: "Test"
-      user_context:
-        role: user
-      expect_error: true
+    # Policy denial tests are done via CLI:
+    # mxcp run tool create_user --param email=test@example.com --param name=Test --user-context '{"role": "user"}'
+    # Expected: Policy enforcement failed: Only admins can create users
 ```
 
 ### Get User
@@ -305,10 +301,10 @@ tool:
     input:
       - condition: "user.role != 'admin' && input.user_id != user.id"
         action: deny
-        message: "Can only update own profile"
+        reason: "Can only update own profile"
       - condition: "user.role != 'admin' && input.role != null"
         action: deny
-        message: "Only admins can change roles"
+        reason: "Only admins can change roles"
 
   source:
     file: ../../python/users.py
@@ -352,10 +348,10 @@ tool:
     input:
       - condition: "user.role != 'admin'"
         action: deny
-        message: "Only admins can delete users"
+        reason: "Only admins can delete users"
       - condition: "input.hard_delete && user.permissions not contains 'users:hard_delete'"
         action: deny
-        message: "Hard delete requires special permission"
+        reason: "Hard delete requires special permission"
 
   source:
     code: |
@@ -721,7 +717,7 @@ tool:
     input:
       - condition: "user.role != 'admin'"
         action: deny
-        message: "Only admins can import data"
+        reason: "Only admins can import data"
 
   source:
     file: ../../python/batch.py
@@ -764,7 +760,7 @@ tool:
     input:
       - condition: "user.role != 'admin' && user.role != 'manager'"
         action: deny
-        message: "Export requires admin or manager role"
+        reason: "Export requires admin or manager role"
 
   source:
     code: |
@@ -841,7 +837,7 @@ resource:
       - condition: "user.id != result.owner_id && user.role != 'admin'"
         action: filter_fields
         fields: ["content"]
-        message: "Only owner can view full content"
+        reason: "Only owner can view full content"
 
   source:
     code: |
