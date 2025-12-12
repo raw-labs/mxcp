@@ -37,6 +37,7 @@ class AuthCodeRecord(SdkBaseModel):
 
     code: str
     session_id: str
+    client_id: str | None = None
     redirect_uri: str | None = None
     code_challenge: str | None = None
     code_challenge_method: str | None = None
@@ -155,6 +156,7 @@ class SqliteTokenStore(TokenStore):
         payload = {
             "code": record.code,
             "session_id": record.session_id,
+            "client_id": record.client_id,
             "redirect_uri": record.redirect_uri,
             "code_challenge": record.code_challenge,
             "code_challenge_method": record.code_challenge_method,
@@ -257,6 +259,7 @@ class SqliteTokenStore(TokenStore):
             CREATE TABLE IF NOT EXISTS auth_codes (
                 code TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
+                client_id TEXT,
                 redirect_uri TEXT,
                 code_challenge TEXT,
                 code_challenge_method TEXT,
@@ -266,7 +269,7 @@ class SqliteTokenStore(TokenStore):
             )
             """
         )
-        self._ensure_auth_code_pkce_columns()
+        self._ensure_auth_code_columns()
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -298,8 +301,8 @@ class SqliteTokenStore(TokenStore):
         if "scopes" not in columns:
             cursor.execute("ALTER TABLE sessions ADD COLUMN scopes TEXT")
 
-    def _ensure_auth_code_pkce_columns(self) -> None:
-        """Add PKCE fields to auth_codes table when upgrading existing db."""
+    def _ensure_auth_code_columns(self) -> None:
+        """Add missing auth_code columns when upgrading existing db."""
         assert self._conn is not None
         cursor = self._conn.cursor()
         cursor.execute("PRAGMA table_info(auth_codes)")
@@ -308,6 +311,8 @@ class SqliteTokenStore(TokenStore):
             cursor.execute("ALTER TABLE auth_codes ADD COLUMN code_challenge TEXT")
         if "code_challenge_method" not in columns:
             cursor.execute("ALTER TABLE auth_codes ADD COLUMN code_challenge_method TEXT")
+        if "client_id" not in columns:
+            cursor.execute("ALTER TABLE auth_codes ADD COLUMN client_id TEXT")
 
     # State helpers
     def _sync_store_state(self, payload: dict[str, Any]) -> None:
@@ -356,8 +361,8 @@ class SqliteTokenStore(TokenStore):
             self._conn.execute(
                 """
                 INSERT OR REPLACE INTO auth_codes
-                (code, session_id, redirect_uri, code_challenge, code_challenge_method, scopes, expires_at, created_at)
-                VALUES (:code, :session_id, :redirect_uri, :code_challenge, :code_challenge_method, :scopes, :expires_at, :created_at)
+                (code, session_id, client_id, redirect_uri, code_challenge, code_challenge_method, scopes, expires_at, created_at)
+                VALUES (:code, :session_id, :client_id, :redirect_uri, :code_challenge, :code_challenge_method, :scopes, :expires_at, :created_at)
                 """,
                 payload,
             )
@@ -377,6 +382,7 @@ class SqliteTokenStore(TokenStore):
             return AuthCodeRecord(
                 code=row["code"],
                 session_id=row["session_id"],
+                client_id=row["client_id"],
                 redirect_uri=row["redirect_uri"],
                 code_challenge=row["code_challenge"],
                 code_challenge_method=row["code_challenge_method"],
