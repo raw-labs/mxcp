@@ -28,7 +28,6 @@ from starlette.responses import JSONResponse, RedirectResponse
 from mxcp.sdk.audit import AuditLogger
 from mxcp.sdk.auth.auth_service import AuthService
 from mxcp.sdk.auth.context import get_user_context
-from mxcp.sdk.auth.issuer_provider import IssuerOAuthAuthorizationServer
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import SqliteTokenStore
@@ -48,6 +47,7 @@ from mxcp.server.core.auth.helpers import (
     create_url_builder,
     translate_auth_config,
 )
+from mxcp.server.core.auth.issuer_provider import IssuerOAuthAuthorizationServer
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import get_active_profile, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
