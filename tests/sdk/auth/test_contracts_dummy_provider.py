@@ -39,6 +39,7 @@ async def test_exchange_and_fetch_user_info_success() -> None:
 
     assert grant.access_token
     assert grant.refresh_token
+    assert grant.provider_scopes_granted is not None
     assert "alpha" in grant.provider_scopes_granted
     assert grant.expires_at is not None
 

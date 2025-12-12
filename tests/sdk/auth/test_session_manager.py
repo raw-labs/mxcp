@@ -1,5 +1,6 @@
 import asyncio
 import time
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,7 @@ from mxcp.sdk.auth.storage import SqliteTokenStore
 
 
 @pytest_asyncio.fixture
-async def session_manager(tmp_path: Path) -> SessionManager:
+async def session_manager(tmp_path: Path) -> AsyncGenerator[SessionManager, None]:
     store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
     await store.initialize()
     manager = SessionManager(store)
@@ -48,7 +49,7 @@ async def test_state_expiry_respected(session_manager: SessionManager) -> None:
         code_challenge=None,
         code_challenge_method=None,
         scopes=None,
-        ttl_seconds=0.05,
+        ttl_seconds=0,
     )
 
     await asyncio.sleep(0.1)
@@ -114,7 +115,7 @@ async def test_cleanup_expired_session(session_manager: SessionManager) -> None:
         provider_refresh_token=None,
         provider_expires_at=None,
         scopes=None,
-        access_token_ttl_seconds=0.01,
+        access_token_ttl_seconds=0,
     )
 
     await asyncio.sleep(0.05)

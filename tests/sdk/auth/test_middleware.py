@@ -1,3 +1,6 @@
+from collections.abc import AsyncGenerator
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
 from cryptography.fernet import Fernet
@@ -9,7 +12,7 @@ from mxcp.sdk.auth.storage import SqliteTokenStore
 
 
 @pytest_asyncio.fixture
-async def session_manager(tmp_path):
+async def session_manager(tmp_path: Path) -> AsyncGenerator[SessionManager, None]:
     store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
     await store.initialize()
     manager = SessionManager(store)
@@ -18,7 +21,7 @@ async def session_manager(tmp_path):
 
 
 @pytest_asyncio.fixture
-async def provider():
+async def provider() -> DummyProviderAdapter:
     return DummyProviderAdapter()
 
 
@@ -27,12 +30,12 @@ async def test_session_manager_happy_path(
     session_manager: SessionManager, provider: DummyProviderAdapter
 ) -> None:
     # SessionManager + ProviderAdapter path: valid token yields user context.
-    user_info = await provider.fetch_user_info(access_token=provider._access_token)  # type: ignore[attr-defined]
+    user_info = await provider.fetch_user_info(access_token=provider._access_token)
     session = await session_manager.issue_session(
         provider=provider.provider_name,
         user_info=user_info,
-        provider_access_token=provider._access_token,  # type: ignore[attr-defined]
-        provider_refresh_token=provider._refresh_token,  # type: ignore[attr-defined]
+        provider_access_token=provider._access_token,
+        provider_refresh_token=provider._refresh_token,
         provider_expires_at=user_info.raw_profile.get("exp") if user_info.raw_profile else None,
         scopes=user_info.provider_scopes_granted,
     )
@@ -48,7 +51,7 @@ async def test_session_manager_happy_path(
     user_context = await middleware.check_authentication()
     assert user_context is not None
     assert user_context.user_id == user_info.user_id
-    assert user_context.external_token == provider._access_token  # type: ignore[attr-defined]
+    assert user_context.external_token == provider._access_token
 
 
 @pytest.mark.asyncio
