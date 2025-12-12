@@ -54,6 +54,15 @@ class IssuerOAuthAuthorizationServer(
         """Initialize underlying storage for tokens/state."""
         await self._ensure_store_initialized()
 
+    async def close(self) -> None:
+        """Close underlying persistence used by this OAuth server."""
+        if not self._store_initialized:
+            return
+        try:
+            await self.session_manager.token_store.close()
+        finally:
+            self._store_initialized = False
+
     # ----- client registration -----
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         return self._clients.get(client_id)
@@ -102,7 +111,7 @@ class IssuerOAuthAuthorizationServer(
     # ----- callback handling (custom helper, not part of interface) -----
     async def handle_callback(self, code: str, state: str) -> str:
         await self._ensure_store_initialized()
-        logger.info("IssuerProvider.handle_callback: received callback", extra={"state": state})
+        logger.info("IssuerProvider.handle_callback: received callback")
         auth_code, _session, client_state = await self.auth_service.handle_callback(
             code=code, state=state, code_verifier=None
         )
