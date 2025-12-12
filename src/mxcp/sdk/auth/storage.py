@@ -545,7 +545,9 @@ class SqliteTokenStore(TokenStore):
 
         # access_token_encrypted is NOT NULL in schema, so _decrypt should never return None
         access_token = self._decrypt(row["access_token_encrypted"])
-        assert access_token is not None, "access_token_encrypted is NOT NULL, decryption should never return None"
+        assert (
+            access_token is not None
+        ), "access_token_encrypted is NOT NULL, decryption should never return None"
 
         return StoredSession(
             session_id=row["session_id"],
