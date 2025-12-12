@@ -60,6 +60,7 @@ github_config = GitHubAuthConfigModel(
 
 from .auth_service import AccessTokenResponse, AuthService
 from .base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
+from .context import get_user_context, reset_user_context, set_user_context
 from .contracts import (
     GrantResult,
     ProviderAdapter,
@@ -68,7 +69,6 @@ from .contracts import (
     Session,
     UserInfo,
 )
-from .context import get_user_context, reset_user_context, set_user_context
 from .middleware import AuthenticationMiddleware
 from .models import (
     AtlassianAuthConfigModel,
