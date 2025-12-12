@@ -1,5 +1,7 @@
 import base64
 import hashlib
+from collections.abc import AsyncGenerator
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -13,7 +15,7 @@ from mxcp.sdk.auth.storage import SqliteTokenStore
 
 
 @pytest_asyncio.fixture
-async def auth_service(tmp_path):
+async def auth_service(tmp_path: Path) -> AsyncGenerator[AuthService, None]:
     store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
     await store.initialize()
     session_manager = SessionManager(store)
@@ -310,7 +312,7 @@ async def test_access_token_ttl_aligns_to_provider(auth_service: AuthService) ->
 
 
 @pytest.mark.asyncio
-async def test_authorize_allows_dcr_pattern_when_client_unknown(tmp_path) -> None:
+async def test_authorize_allows_dcr_pattern_when_client_unknown(tmp_path: Path) -> None:
     store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
     await store.initialize()
     session_manager = SessionManager(store)
@@ -339,7 +341,7 @@ async def test_authorize_allows_dcr_pattern_when_client_unknown(tmp_path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_authorize_rejects_dcr_pattern_mismatch(tmp_path) -> None:
+async def test_authorize_rejects_dcr_pattern_mismatch(tmp_path: Path) -> None:
     store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
     await store.initialize()
     session_manager = SessionManager(store)
@@ -365,7 +367,7 @@ async def test_authorize_rejects_dcr_pattern_mismatch(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_authorize_allows_all_when_no_allowlists(tmp_path) -> None:
+async def test_authorize_allows_all_when_no_allowlists(tmp_path: Path) -> None:
     store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
     await store.initialize()
     session_manager = SessionManager(store)

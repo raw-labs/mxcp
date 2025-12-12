@@ -2,26 +2,33 @@ import logging
 import sqlite3
 import time
 from pathlib import Path
+from typing import cast
 
 import pytest
 from cryptography.fernet import Fernet
 
 from mxcp.sdk.auth.contracts import UserInfo
-from mxcp.sdk.auth.storage import AuthCodeRecord, SqliteTokenStore, StateRecord, StoredSession
+from mxcp.sdk.auth.storage import (
+    AuthCodeRecord,
+    SqliteTokenStore,
+    StateRecord,
+    StoredSession,
+    TokenStore,
+)
 
 
 def _db_row(db_path: Path, query: str) -> sqlite3.Row | None:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        row = conn.execute(query).fetchone()
+        row = cast(sqlite3.Row | None, conn.execute(query).fetchone())
         return row
     finally:
         conn.close()
 
 
 @pytest.mark.asyncio
-async def test_state_round_trip(token_store) -> None:
+async def test_state_round_trip(token_store: TokenStore) -> None:
     # States persist and can be consumed exactly once.
     store = token_store
 
@@ -44,7 +51,7 @@ async def test_state_round_trip(token_store) -> None:
 
 
 @pytest.mark.asyncio
-async def test_state_expiry(token_store) -> None:
+async def test_state_expiry(token_store: TokenStore) -> None:
     # Expired states are rejected and removed.
     store = token_store
 
@@ -63,7 +70,7 @@ async def test_state_expiry(token_store) -> None:
 
 
 @pytest.mark.asyncio
-async def test_auth_code_round_trip(token_store) -> None:
+async def test_auth_code_round_trip(token_store: TokenStore) -> None:
     # Auth codes persist and can be consumed exactly once.
     store = token_store
 
@@ -86,7 +93,7 @@ async def test_auth_code_round_trip(token_store) -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_store_and_load_with_encryption(token_store) -> None:
+async def test_session_store_and_load_with_encryption(token_store: TokenStore) -> None:
     # Sessions persist with encryption/hashing and round-trip correctly.
     store = token_store
 
@@ -124,6 +131,7 @@ async def test_session_store_and_load_with_encryption(token_store) -> None:
     assert loaded.provider_refresh_token == "provider_refresh"
     assert loaded.user_info.user_id == "user-1"
 
+    assert isinstance(store, SqliteTokenStore)
     row = _db_row(
         store.db_path, "SELECT access_token_encrypted, refresh_token_encrypted FROM sessions"
     )
@@ -133,7 +141,7 @@ async def test_session_store_and_load_with_encryption(token_store) -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_scopes_are_preserved(token_store) -> None:
+async def test_session_scopes_are_preserved(token_store: TokenStore) -> None:
     # Session scopes should survive a reload and not be replaced by provider scopes.
     store = token_store
 
@@ -168,7 +176,7 @@ async def test_session_scopes_are_preserved(token_store) -> None:
 
 
 @pytest.mark.asyncio
-async def test_store_isolation_for_multiple_records(token_store) -> None:
+async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> None:
     # Multiple states, auth codes, and sessions remain isolated and retrievable.
     store = token_store
 
@@ -364,7 +372,7 @@ async def test_session_store_plaintext_opt_in(
 
 
 @pytest.mark.asyncio
-async def test_auth_code_load_and_delete(token_store) -> None:
+async def test_auth_code_load_and_delete(token_store: TokenStore) -> None:
     # Auth codes can be loaded without consumption and deleted explicitly.
     store = token_store
 
@@ -393,7 +401,7 @@ async def test_auth_code_load_and_delete(token_store) -> None:
 
 
 @pytest.mark.asyncio
-async def test_auth_code_load_expires_on_read(token_store) -> None:
+async def test_auth_code_load_expires_on_read(token_store: TokenStore) -> None:
     # Expired codes are dropped on load.
     store = token_store
     now = time.time()
@@ -506,7 +514,7 @@ async def test_session_expiry_and_cleanup(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_session_by_refresh_token(token_store) -> None:
+async def test_load_session_by_refresh_token(token_store: TokenStore) -> None:
     # Sessions can be loaded by refresh token.
     store = token_store
 
@@ -537,7 +545,7 @@ async def test_load_session_by_refresh_token(token_store) -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_session_by_refresh_token_not_found(token_store) -> None:
+async def test_load_session_by_refresh_token_not_found(token_store: TokenStore) -> None:
     # Unknown refresh token returns None.
     store = token_store
 
@@ -546,7 +554,7 @@ async def test_load_session_by_refresh_token_not_found(token_store) -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_session_by_refresh_token_no_refresh_token(token_store) -> None:
+async def test_load_session_by_refresh_token_no_refresh_token(token_store: TokenStore) -> None:
     # Session without refresh token cannot be found by refresh token.
     store = token_store
 
