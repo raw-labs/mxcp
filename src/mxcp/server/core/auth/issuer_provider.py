@@ -112,53 +112,19 @@ class IssuerOAuthAuthorizationServer(
         return construct_redirect_uri(redirect_uri, code=auth_code.code, state=client_state)
 
     async def handle_callback_error(
-        self,
-        *,
-        state: str,
-        error: str,
-        error_description: str | None = None,
+        self, *, state: str, error: str, error_description: str | None = None
     ) -> str | None:
-        """Build a client redirect for provider callback errors.
-
-        This is used when the upstream provider redirects the user-agent back to the
-        MXCP callback URL with `error=...` instead of `code=...`.
-
-        If we can resolve the stored state (which contains the original client
-        redirect_uri and the MCP client's original `state`), we redirect the browser
-        back to that redirect_uri with standard OAuth error parameters.
-
-        If the state cannot be resolved (missing/expired), return None so callers can
-        fall back to a safe JSON 400 response.
-        """
-
+        """Handle provider error callbacks by redirecting back to the client."""
         await self._ensure_store_initialized()
         state_record = await self.session_manager.consume_state(state)
-        if not state_record:
+        if not state_record or not state_record.redirect_uri:
             return None
-
-        # Validate redirect against allowlists from the stored state. This prevents open
-        # redirects and enforces client/redirect binding consistently with success flow.
-        self.auth_service._validate_client_redirect(
-            state_record.client_id, state_record.redirect_uri
-        )
-
-        if not state_record.redirect_uri:
-            return None
-
         return construct_redirect_uri(
             state_record.redirect_uri,
             error=error,
             error_description=error_description,
             state=state_record.client_state,
         )
-
-    async def close(self) -> None:
-        """Close underlying persistence resources.
-
-        RAWMCP calls this during shutdown to close OAuth server persistence.
-        """
-
-        await self.session_manager.token_store.close()
 
     # ----- auth code loading / exchange -----
     async def load_authorization_code(

@@ -6,10 +6,10 @@ from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyUrl
 
 from mxcp.sdk.auth.auth_service import AuthService
-from mxcp.sdk.auth.issuer_provider import IssuerOAuthAuthorizationServer
 from mxcp.sdk.auth.providers.dummy import DummyProviderAdapter
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import SqliteTokenStore
+from mxcp.server.core.auth.issuer_provider import IssuerOAuthAuthorizationServer
 
 
 @pytest.mark.asyncio
