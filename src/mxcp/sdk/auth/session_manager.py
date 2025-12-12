@@ -66,9 +66,9 @@ class SessionManager:
     async def consume_state(self, state: str) -> StateRecord | None:
         record = await self.token_store.consume_state(state)
         if record is None:
-            logger.warning("SessionManager.consume_state: state not found", extra={"state": state})
+            logger.warning("SessionManager.consume_state: state not found")
         else:
-            logger.info("SessionManager.consume_state: state consumed", extra={"state": state})
+            logger.info("SessionManager.consume_state: state consumed")
         return record
 
     async def create_auth_code(
