@@ -23,7 +23,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import OAuthClientInformationFull
 from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, AnyUrl, Field, ValidationError, create_model
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 
 from mxcp.sdk.audit import AuditLogger
 from mxcp.sdk.auth.auth_service import AuthService
@@ -463,8 +463,14 @@ class RAWMCP:
         """Initialize OAuth authentication using profile-specific auth config."""
         auth_config = self.active_profile.auth
         self.oauth_handler = None  # legacy path disabled for Phase 2
-        self.provider_adapter = create_provider_adapter(
-            auth_config, host=self.host, port=self.port, user_config=self.user_config
+        # The server-side provider adapter includes HTTP callback route details
+        # (e.g. callback_path/build_callback_url) beyond the SDK ProviderAdapter protocol,
+        # so we keep the attribute permissively typed.
+        self.provider_adapter = cast(
+            Any,
+            create_provider_adapter(
+                auth_config, host=self.host, port=self.port, user_config=self.user_config
+            ),
         )
         self.session_manager: SessionManager | None = None
         self.oauth_server = None
@@ -575,11 +581,11 @@ class RAWMCP:
         # Initialize authentication middleware
         self.auth_middleware = AuthenticationMiddleware(
             self.oauth_handler,
-            self.oauth_server,
+            cast(Any, self.oauth_server),
             session_manager=self.session_manager,
             provider_adapter=getattr(self, "provider_adapter", None),
             token_getter=lambda: (
-                get_access_token().token if get_access_token() else None  # type: ignore[call-arg]
+                access_token.token if (access_token := get_access_token()) else None
             ),
         )
 
@@ -2028,7 +2034,7 @@ class RAWMCP:
             logger.warning("OAuth provider not configured, skipping OAuth routes")
             return
 
-        callback_path = self.provider_adapter.callback_path  # type: ignore[attr-defined]
+        callback_path = self.provider_adapter.callback_path
         logger.info(f"Registering OAuth callback route: {callback_path}")
 
         @self.mcp.custom_route(callback_path, methods=["GET"])  # type: ignore[misc]
@@ -2040,6 +2046,22 @@ class RAWMCP:
             error = request.query_params.get("error")
 
             if error:
+                # If we can resolve the stored state, redirect back to the MCP client's
+                # redirect_uri with standard OAuth error parameters. This keeps browser
+                # UX intact (the client app regains control of the flow).
+                if state and isinstance(self.oauth_server, IssuerOAuthAuthorizationServer):
+                    try:
+                        redirect_uri = await self.oauth_server.handle_callback_error(
+                            state=state,
+                            error=error,
+                            error_description=request.query_params.get("error_description"),
+                        )
+                        if redirect_uri:
+                            return RedirectResponse(redirect_uri)
+                    except Exception:
+                        # Fall back to safe JSON below when state resolution fails.
+                        pass
+
                 return JSONResponse(
                     content={
                         "error": error,
@@ -2052,8 +2074,6 @@ class RAWMCP:
                 return JSONResponse(content={"error": "invalid_request"}, status_code=400)
 
             redirect_uri = await self.oauth_server.handle_callback(code, state)
-            from starlette.responses import RedirectResponse
-
             return RedirectResponse(redirect_uri)
 
         # Register OAuth Protected Resource metadata endpoint
