@@ -107,9 +107,9 @@ class IssuerOAuthAuthorizationServer(
             code=code, state=state, code_verifier=None
         )
         redirect_uri = auth_code.redirect_uri or ""
-        # Use the client's original state (if provided), otherwise fall back to the Google state
-        redirect_state = client_state if client_state else state
-        return construct_redirect_uri(redirect_uri, code=auth_code.code, state=redirect_state)
+        # Never return the internal MXCP/IdP state to the client. If the MCP client did not
+        # provide an original state, omit the state param in the redirect.
+        return construct_redirect_uri(redirect_uri, code=auth_code.code, state=client_state)
 
     # ----- auth code loading / exchange -----
     async def load_authorization_code(
