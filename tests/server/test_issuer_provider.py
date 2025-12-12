@@ -1,3 +1,4 @@
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -13,7 +14,7 @@ from mxcp.server.core.auth.issuer_provider import IssuerOAuthAuthorizationServer
 
 
 @pytest.mark.asyncio
-async def test_end_to_end_authorize_to_token(tmp_path) -> None:
+async def test_end_to_end_authorize_to_token(tmp_path: Path) -> None:
     adapter = DummyProviderAdapter()
     token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
     session_manager = SessionManager(token_store)
@@ -31,6 +32,7 @@ async def test_end_to_end_authorize_to_token(tmp_path) -> None:
         response_types=["code"],
         scope="dummy.read",
     )
+    assert client.client_id is not None
 
     server = IssuerOAuthAuthorizationServer(
         auth_service=auth_service,

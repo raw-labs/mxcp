@@ -1,7 +1,9 @@
 import asyncio
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from pytest import MonkeyPatch
 
 from mxcp.sdk.auth.contracts import ProviderError
 from mxcp.sdk.auth.models import GoogleAuthConfigModel
@@ -9,7 +11,7 @@ from mxcp.sdk.auth.providers.google import GoogleProviderAdapter
 
 
 class _FakeResponse:
-    def __init__(self, status_code: int, payload: dict[str, object], text: str = ""):
+    def __init__(self, status_code: int, payload: dict[str, object], text: str = "") -> None:
         self.status_code = status_code
         self._payload = payload
         self.text = text
@@ -19,19 +21,24 @@ class _FakeResponse:
 
 
 class _FakeClient:
-    def __init__(self, post_response: _FakeResponse):
+    def __init__(self, post_response: _FakeResponse) -> None:
         self._post_response = post_response
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "_FakeClient":
         return self
 
-    async def __aexit__(self, exc_type, exc, tb):
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any,
+    ) -> bool:
         return False
 
-    async def post(self, *args, **kwargs):
+    async def post(self, *args: Any, **kwargs: Any) -> _FakeResponse:
         return self._post_response
 
-    async def get(self, *args, **kwargs):
+    async def get(self, *args: Any, **kwargs: Any) -> _FakeResponse:
         return _FakeResponse(200, {"sub": "user-1", "email": "user@example.com"})
 
 
@@ -47,7 +54,9 @@ def google_config() -> GoogleAuthConfigModel:
     )
 
 
-def test_build_authorize_url_includes_required_params(google_config: GoogleAuthConfigModel):
+def test_build_authorize_url_includes_required_params(
+    google_config: GoogleAuthConfigModel,
+) -> None:
     adapter = GoogleProviderAdapter(google_config)
     url = adapter.build_authorize_url(
         redirect_uri="https://server/google/callback",
@@ -69,7 +78,9 @@ def test_build_authorize_url_includes_required_params(google_config: GoogleAuthC
 
 
 @pytest.mark.asyncio
-async def test_exchange_code_happy_path(monkeypatch, google_config: GoogleAuthConfigModel):
+async def test_exchange_code_happy_path(
+    monkeypatch: MonkeyPatch, google_config: GoogleAuthConfigModel
+) -> None:
     post_response = _FakeResponse(
         200,
         {"access_token": "at", "refresh_token": "rt", "expires_in": 3600, "token_type": "Bearer"},
@@ -80,7 +91,9 @@ async def test_exchange_code_happy_path(monkeypatch, google_config: GoogleAuthCo
     )
 
     adapter = GoogleProviderAdapter(google_config)
-    adapter._fetch_user_profile = lambda token: asyncio.sleep(0, {"sub": "user-1"})  # type: ignore[assignment]
+    monkeypatch.setattr(
+        adapter, "_fetch_user_profile", lambda token: asyncio.sleep(0, {"sub": "user-1"})
+    )
 
     grant = await adapter.exchange_code(
         code="code",
@@ -94,7 +107,9 @@ async def test_exchange_code_happy_path(monkeypatch, google_config: GoogleAuthCo
 
 
 @pytest.mark.asyncio
-async def test_exchange_code_error(monkeypatch, google_config: GoogleAuthConfigModel):
+async def test_exchange_code_error(
+    monkeypatch: MonkeyPatch, google_config: GoogleAuthConfigModel
+) -> None:
     post_response = _FakeResponse(400, {"error": "bad"}, text="bad")
     fake_client = _FakeClient(post_response)
     monkeypatch.setattr(
@@ -102,7 +117,9 @@ async def test_exchange_code_error(monkeypatch, google_config: GoogleAuthConfigM
     )
 
     adapter = GoogleProviderAdapter(google_config)
-    adapter._fetch_user_profile = lambda token: asyncio.sleep(0, {"sub": "user-1"})  # type: ignore[assignment]
+    monkeypatch.setattr(
+        adapter, "_fetch_user_profile", lambda token: asyncio.sleep(0, {"sub": "user-1"})
+    )
 
     with pytest.raises(ProviderError):
         await adapter.exchange_code(
