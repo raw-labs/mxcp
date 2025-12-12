@@ -34,8 +34,8 @@ from mxcp.sdk.auth.auth_service import AuthService
 from mxcp.sdk.auth.contracts import GrantResult, UserInfo
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import SqliteTokenStore
-from mxcp.server.interfaces.server.mcp import RAWMCP
 from mxcp.server.core.auth.issuer_provider import IssuerOAuthAuthorizationServer
+from mxcp.server.interfaces.server.mcp import RAWMCP
 
 IssuerModeServerFixture = tuple[RAWMCP, SqliteTokenStore, SessionManager]
 
