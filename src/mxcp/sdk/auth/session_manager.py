@@ -57,7 +57,7 @@ class SessionManager:
             provider_code_verifier=provider_code_verifier,
             client_state=client_state,
             scopes=list(scopes) if scopes is not None else None,
-            expires_at=now + (ttl_seconds or self.state_ttl_seconds),
+            expires_at=now + (ttl_seconds if ttl_seconds is not None else self.state_ttl_seconds),
             created_at=now,
         )
         await self.token_store.store_state(record)
@@ -92,7 +92,8 @@ class SessionManager:
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
             scopes=list(scopes) if scopes is not None else None,
-            expires_at=now + (ttl_seconds or self.auth_code_ttl_seconds),
+            expires_at=now
+            + (ttl_seconds if ttl_seconds is not None else self.auth_code_ttl_seconds),
             created_at=now,
         )
         await self.token_store.store_auth_code(record)
@@ -131,7 +132,12 @@ class SessionManager:
             provider_access_token=provider_access_token,
             provider_refresh_token=provider_refresh_token,
             provider_expires_at=provider_expires_at,
-            expires_at=now + (access_token_ttl_seconds or self.access_token_ttl_seconds),
+            expires_at=now
+            + (
+                access_token_ttl_seconds
+                if access_token_ttl_seconds is not None
+                else self.access_token_ttl_seconds
+            ),
             created_at=now,
             issued_at=now,
             scopes=list(scopes) if scopes is not None else None,
