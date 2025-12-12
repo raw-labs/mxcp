@@ -107,7 +107,6 @@ class AuthService:
             extra={
                 "client_id": client_id,
                 "redirect_uri": redirect_uri,
-                "state": state_record.state,
                 "scopes": list(scopes) if scopes else [],
             },
         )
@@ -126,7 +125,7 @@ class AuthService:
         # create an MCP session—only after the provider code exchange succeeds.
         state_record = await self.session_manager.consume_state(state)
         if not state_record:
-            logger.warning("handle_callback: state not found or expired", extra={"state": state})
+            logger.warning("handle_callback: state not found or expired")
             raise ProviderError("invalid_state", "State not found or expired", status_code=400)
 
         # Re-validate client and redirect from the stored state.
