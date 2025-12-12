@@ -6,6 +6,7 @@ import logging
 import time
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
+from urllib.parse import urlencode
 
 from mcp.shared._httpx_utils import create_mcp_http_client
 
@@ -53,25 +54,23 @@ class GoogleProviderAdapter(ProviderAdapter):
         extra_params: Mapping[str, str] | None = None,
     ) -> str:
         scope_str = " ".join(scopes) if scopes else self.scope
-        params = {
-            "client_id": self.client_id,
-            "redirect_uri": redirect_uri,
-            "response_type": "code",
-            "scope": scope_str,
-            "state": state,
-            "access_type": "offline",
-            "prompt": "consent",
-        }
+        params = [
+            ("client_id", self.client_id),
+            ("redirect_uri", redirect_uri),
+            ("response_type", "code"),
+            ("scope", scope_str),
+            ("state", state),
+            ("access_type", "offline"),
+            ("prompt", "consent"),
+        ]
         if code_challenge:
-            params["code_challenge"] = code_challenge
+            params.append(("code_challenge", code_challenge))
         if code_challenge_method:
-            params["code_challenge_method"] = code_challenge_method
+            params.append(("code_challenge_method", code_challenge_method))
         if extra_params:
-            params.update(extra_params)
-
-        # Keep parameter order stable for testability
-        pieces = [f"{key}={value}" for key, value in params.items()]
-        return f"{self.auth_url}?" + "&".join(pieces)
+            params.extend(extra_params.items())
+        query_string = urlencode(params, doseq=True)
+        return f"{self.auth_url}?{query_string}"
 
     async def exchange_code(
         self,
