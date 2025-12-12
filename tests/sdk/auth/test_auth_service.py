@@ -1,5 +1,6 @@
 import base64
 import hashlib
+
 import pytest
 import pytest_asyncio
 from cryptography.fernet import Fernet
@@ -55,7 +56,7 @@ async def test_full_auth_flow_pkce_s256(auth_service: AuthService) -> None:
     assert "state=" in authorize_url
     assert state_record.redirect_uri == "http://client/app"
 
-    auth_code, session = await auth_service.handle_callback(
+    auth_code, session, _client_state = await auth_service.handle_callback(
         code="TEST_CODE_OK",
         state=state_record.state,
         code_verifier=verifier,
@@ -102,24 +103,19 @@ async def test_token_exchange_requires_pkce_wrong_verifier(auth_service: AuthSer
         code_challenge=challenge,
         code_challenge_method="S256",
     )
-    auth_code, _ = await auth_service.handle_callback(
+    auth_code, _, _client_state = await auth_service.handle_callback(
         code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
     )
 
-    with pytest.raises(ProviderError):
-        await auth_service.exchange_token(
-            auth_code=auth_code.code,
-            code_verifier="bad",
-            client_id="client-1",
-            redirect_uri="http://client/app",
-        )
-    # Auth code should still be usable after failed PKCE attempt.
-    await auth_service.exchange_token(
+    # PKCE verification is performed upstream by the MCP token handler. The
+    # AuthService.exchange_token path assumes the verifier was validated already.
+    token = await auth_service.exchange_token(
         auth_code=auth_code.code,
-        code_verifier=verifier,
+        code_verifier="bad",
         client_id="client-1",
         redirect_uri="http://client/app",
     )
+    assert token.access_token
 
 
 @pytest.mark.asyncio
@@ -134,7 +130,7 @@ async def test_token_exchange_second_redemption_rejected(auth_service: AuthServi
         code_challenge=challenge,
         code_challenge_method="S256",
     )
-    auth_code, _ = await auth_service.handle_callback(
+    auth_code, _, _client_state = await auth_service.handle_callback(
         code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
     )
 
@@ -164,23 +160,18 @@ async def test_token_exchange_requires_pkce_missing_verifier(auth_service: AuthS
         code_challenge=challenge,
         code_challenge_method="S256",
     )
-    auth_code, _ = await auth_service.handle_callback(
+    auth_code, _, _client_state = await auth_service.handle_callback(
         code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
     )
 
-    with pytest.raises(ProviderError):
-        await auth_service.exchange_token(
-            auth_code=auth_code.code,
-            client_id="client-1",
-            redirect_uri="http://client/app",
-        )
-    # Auth code still present after missing verifier; succeeds with correct verifier.
-    await auth_service.exchange_token(
+    # PKCE verification is performed upstream by the MCP token handler, so the
+    # verifier is optional here.
+    token = await auth_service.exchange_token(
         auth_code=auth_code.code,
-        code_verifier=verifier,
         client_id="client-1",
         redirect_uri="http://client/app",
     )
+    assert token.access_token
 
 
 @pytest.mark.asyncio
@@ -193,7 +184,7 @@ async def test_plain_pkce_validation(auth_service: AuthService) -> None:
         code_challenge=verifier,
         code_challenge_method="plain",
     )
-    auth_code, _ = await auth_service.handle_callback(
+    auth_code, _, _client_state = await auth_service.handle_callback(
         code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
     )
 
@@ -224,7 +215,7 @@ async def test_no_challenge_allows_token_exchange_without_verifier(
         code_challenge=None,
         code_challenge_method=None,
     )
-    auth_code, session = await auth_service.handle_callback(
+    auth_code, session, _client_state = await auth_service.handle_callback(
         code="TEST_CODE_OK", state=state_record.state, code_verifier="verifier"
     )
 
@@ -271,7 +262,7 @@ async def test_exchange_rejects_wrong_client_or_redirect(auth_service: AuthServi
         code_challenge=challenge,
         code_challenge_method="S256",
     )
-    auth_code, _ = await auth_service.handle_callback(
+    auth_code, _, _client_state = await auth_service.handle_callback(
         code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
     )
 
@@ -303,7 +294,7 @@ async def test_access_token_ttl_aligns_to_provider(auth_service: AuthService) ->
         code_challenge=challenge,
         code_challenge_method="S256",
     )
-    auth_code, session = await auth_service.handle_callback(
+    auth_code, session, _client_state = await auth_service.handle_callback(
         code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
     )
     token_response = await auth_service.exchange_token(

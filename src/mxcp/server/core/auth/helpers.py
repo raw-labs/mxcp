@@ -1,6 +1,7 @@
 """Authentication helper functions for translating between MXCP config models and SDK auth types."""
 
 from mxcp.sdk.auth import ExternalOAuthHandler
+from mxcp.sdk.auth.contracts import ProviderAdapter
 from mxcp.sdk.auth.models import (
     AtlassianAuthConfigModel,
     AuthConfigModel,
@@ -15,7 +16,7 @@ from mxcp.sdk.auth.models import (
 )
 from mxcp.sdk.auth.providers.atlassian import AtlassianOAuthHandler
 from mxcp.sdk.auth.providers.github import GitHubOAuthHandler
-from mxcp.sdk.auth.providers.google import GoogleOAuthHandler
+from mxcp.sdk.auth.providers.google import GoogleProviderAdapter
 from mxcp.sdk.auth.providers.keycloak import KeycloakOAuthHandler
 from mxcp.sdk.auth.providers.salesforce import SalesforceOAuthHandler
 from mxcp.sdk.auth.url_utils import URLBuilder
@@ -142,13 +143,9 @@ def create_oauth_handler(
         return KeycloakOAuthHandler(keycloak_model, transport_config, host=host, port=port)
 
     if provider == "google":
-        google_config = user_auth_config.google
-        if not google_config:
-            raise ValueError("Google provider selected but no Google configuration found")
-        google_model = GoogleAuthConfigModel.model_validate(
-            google_config.model_dump(exclude_none=True)
+        raise ValueError(
+            "Google provider now uses ProviderAdapter. Use create_provider_adapter instead."
         )
-        return GoogleOAuthHandler(google_model, transport_config, host=host, port=port)
 
     raise ValueError(f"Unsupported auth provider: {provider}")
 
@@ -164,3 +161,32 @@ def create_url_builder(user_config: UserConfigModel) -> URLBuilder:
     """
     transport_config = translate_transport_config(user_config.transport.http)
     return URLBuilder(transport_config)
+
+
+def create_provider_adapter(
+    user_auth_config: UserAuthConfigModel,
+    host: str = "localhost",
+    port: int = 8000,
+    user_config: UserConfigModel | None = None,
+) -> ProviderAdapter | None:
+    """Create a ProviderAdapter for issuer-mode OAuth."""
+    provider = user_auth_config.provider
+    if provider == "none":
+        return None
+
+    transport_config = None
+    if user_config:
+        transport_config = translate_transport_config(
+            user_config.transport.http if user_config.transport else None
+        )
+
+    if provider == "google":
+        google_config = user_auth_config.google
+        if not google_config:
+            raise ValueError("Google provider selected but no Google configuration found")
+        google_model = GoogleAuthConfigModel.model_validate(
+            google_config.model_dump(exclude_none=True)
+        )
+        return GoogleProviderAdapter(google_model, transport_config, host=host, port=port)
+
+    raise ValueError(f"Unsupported provider for adapter: {provider}")

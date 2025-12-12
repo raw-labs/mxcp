@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from ..contracts import GrantResult, ProviderAdapter, ProviderError, UserInfo
 
