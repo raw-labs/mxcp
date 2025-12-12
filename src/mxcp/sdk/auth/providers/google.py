@@ -1,270 +1,251 @@
-"""Google OAuth provider implementation for MXCP authentication."""
+"""Google OAuth ProviderAdapter implementation for issuer-mode auth."""
+
+from __future__ import annotations
 
 import logging
-import secrets
+import time
+from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
-from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse, Response
 
-from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
-from ..models import (
-    ExternalUserInfoModel,
-    GoogleAuthConfigModel,
-    HttpTransportConfigModel,
-    StateMetaModel,
-    UserContextModel,
-)
+from ..contracts import GrantResult, ProviderAdapter, ProviderError, UserInfo
+from ..models import GoogleAuthConfigModel, HttpTransportConfigModel
 from ..url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
 
 
-class GoogleOAuthHandler(ExternalOAuthHandler):
-    """Google OAuth provider implementation for Google Workspace APIs."""
+class GoogleProviderAdapter(ProviderAdapter):
+    """Google OAuth ProviderAdapter that uses real HTTP calls."""
+
+    provider_name = "google"
 
     def __init__(
         self,
         google_config: GoogleAuthConfigModel,
         transport_config: HttpTransportConfigModel | None = None,
+        *,
         host: str = "localhost",
         port: int = 8000,
     ):
-        """Initialize Google OAuth handler.
-
-        Args:
-            google_config: Google-specific OAuth configuration
-            transport_config: HTTP transport configuration for URL building
-            host: The server host for callback URLs
-            port: The server port for callback URLs
-        """
-        logger.info("GoogleOAuthHandler initialized for Google Workspace authentication")
-
-        # Required fields are enforced by Pydantic model structure
         self.client_id = google_config.client_id
         self.client_secret = google_config.client_secret
-
-        # Google OAuth endpoints
         self.auth_url = google_config.auth_url
         self.token_url = google_config.token_url
-
-        # Use configured scope or default to calendar read-only
         self.scope = (
             google_config.scope
             or "https://www.googleapis.com/auth/calendar.readonly openid profile email"
         )
-
         self._callback_path = google_config.callback_path
         self.host = host
         self.port = port
-
-        # Initialize URL builder for proper scheme detection
         self.url_builder = URLBuilder(transport_config)
 
-        # State storage for OAuth flow
-        self._state_store: dict[str, StateMetaModel] = {}
+    def build_authorize_url(
+        self,
+        *,
+        redirect_uri: str,
+        state: str,
+        scopes: Sequence[str],
+        code_challenge: str | None = None,
+        code_challenge_method: str | None = None,
+        extra_params: Mapping[str, str] | None = None,
+    ) -> str:
+        scope_str = " ".join(scopes) if scopes else self.scope
+        params = {
+            "client_id": self.client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": scope_str,
+            "state": state,
+            "access_type": "offline",
+            "prompt": "consent",
+        }
+        if code_challenge:
+            params["code_challenge"] = code_challenge
+        if code_challenge_method:
+            params["code_challenge_method"] = code_challenge_method
+        if extra_params:
+            params.update(extra_params)
 
-    # ----- authorize -----
-    def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
-        state = params.state or secrets.token_hex(16)
+        # Keep parameter order stable for testability
+        pieces = [f"{key}={value}" for key, value in params.items()]
+        return f"{self.auth_url}?" + "&".join(pieces)
 
-        # Use URL builder to construct callback URL with proper scheme detection
-        full_callback_url = self.url_builder.build_callback_url(
-            self._callback_path, host=self.host, port=self.port
-        )
-
-        # Store the original redirect URI and callback URL in state for later use
-        self._state_store[state] = StateMetaModel(
-            redirect_uri=str(params.redirect_uri),
-            code_challenge=params.code_challenge,
-            redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
-            client_id=client_id,
-            callback_url=full_callback_url,
-        )
-
-        logger.info(
-            f"Google OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
-        )
-
-        # Google requires specific parameters including access_type for refresh tokens
-        return (
-            f"{self.auth_url}?"
-            f"client_id={self.client_id}&"
-            f"redirect_uri={full_callback_url}&"
-            f"response_type=code&"
-            f"scope={self.scope}&"
-            f"state={state}&"
-            f"access_type=offline&"  # Request refresh token
-            f"prompt=consent"  # Force consent to ensure refresh token is returned
-        )
-
-    # ----- state helpers -----
-    def _get_state_metadata(self, state: str) -> StateMetaModel:
-        try:
-            return self._state_store[state]
-        except KeyError:
-            raise HTTPException(400, "Invalid state parameter") from None
-
-    def _pop_state(self, state: str) -> None:
-        self._state_store.pop(state, None)
-
-    def cleanup_state(self, state: str) -> None:
-        """Clean up state and associated callback URL after OAuth flow completion."""
-        self._pop_state(state)
-
-    # ----- code exchange -----
     async def exchange_code(
-        self, code: str, state: str
-    ) -> tuple[ExternalUserInfoModel, StateMetaModel]:
-        # Validate state parameter and get metadata
-        state_meta = self._get_state_metadata(state)
-
-        # Use the stored callback URL from state metadata
-        full_callback_url = state_meta.callback_url
-        if not full_callback_url:
-            # Fallback to constructing it using URL builder
-            full_callback_url = self.url_builder.build_callback_url(
-                self._callback_path, host=self.host, port=self.port
-            )
-
-        logger.info(
-            f"Google OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}"
-        )
+        self,
+        *,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str | None = None,
+        scopes: Sequence[str] | None = None,
+    ) -> GrantResult:
+        payload = {
+            "grant_type": "authorization_code",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "code": code,
+            "redirect_uri": redirect_uri,
+        }
+        if code_verifier:
+            payload["code_verifier"] = code_verifier
 
         async with create_mcp_http_client() as client:
             resp = await client.post(
                 self.token_url,
-                data={
-                    "grant_type": "authorization_code",
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "code": code,
-                    "redirect_uri": full_callback_url,
-                },
+                data=payload,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
+
         if resp.status_code != 200:
-            logger.error(f"Google token exchange failed: {resp.status_code} {resp.text}")
-            raise HTTPException(400, "Failed to exchange code for token")
-        payload = resp.json()
-        if "error" in payload:
-            logger.error(f"Google token exchange error: {payload}")
-            raise HTTPException(400, payload.get("error_description", payload["error"]))
+            description = ""
+            try:
+                description = resp.text
+            except Exception:
+                description = "Unknown error"
+            raise ProviderError("invalid_grant", description, status_code=resp.status_code)
 
-        # Get user info to extract the actual user ID
-        access_token = payload["access_token"]
+        data = resp.json()
+        if "error" in data:
+            raise ProviderError(
+                data.get("error", "invalid_grant"),
+                data.get("error_description", "Failed to exchange code"),
+                status_code=resp.status_code,
+            )
+
+        access_token = data.get("access_token")
+        refresh_token = data.get("refresh_token")
+        expires_in = data.get("expires_in")
+
+        if not access_token:
+            raise ProviderError("invalid_grant", "No access_token in response", status_code=400)
+
         user_profile = await self._fetch_user_profile(access_token)
+        user_scopes = list(scopes) if scopes is not None else []
+        expires_at = time.time() + float(expires_in) if expires_in else None
 
-        # Use either 'sub' (OpenID Connect) or 'id' (OAuth2) as the unique identifier
-        user_id = user_profile.get("sub") or user_profile.get("id", "")
-        if not user_id:
-            logger.error("Google user profile missing both 'sub' and 'id' fields")
-            raise HTTPException(400, "Invalid user profile: missing user ID")
-
-        # Don't clean up state here - let handle_callback do it after getting metadata
-        logger.info(f"Google OAuth token exchange successful for user: {user_id}")
-
-        user_info = ExternalUserInfoModel(
-            id=user_id,
-            scopes=[],
-            raw_token=access_token,
-            provider="google",
+        return GrantResult(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=expires_at,
+            provider_scopes_granted=user_scopes or data.get("scope", "").split(),
+            raw_profile=user_profile,
+            token_type=data.get("token_type", "Bearer"),
         )
 
-        return user_info, state_meta
+    async def refresh_token(
+        self, *, refresh_token: str, scopes: Sequence[str] | None = None
+    ) -> GrantResult:
+        payload = {
+            "grant_type": "refresh_token",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "refresh_token": refresh_token,
+        }
+        if scopes:
+            payload["scope"] = " ".join(scopes)
 
-    # ----- callback -----
+        async with create_mcp_http_client() as client:
+            resp = await client.post(
+                self.token_url,
+                data=payload,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+        if resp.status_code != 200:
+            description = ""
+            try:
+                description = resp.text
+            except Exception:
+                description = "Unknown error"
+            raise ProviderError("invalid_grant", description, status_code=resp.status_code)
+
+        data = resp.json()
+        if "error" in data:
+            raise ProviderError(
+                data.get("error", "invalid_grant"),
+                data.get("error_description", "Failed to refresh token"),
+                status_code=resp.status_code,
+            )
+
+        access_token = data.get("access_token")
+        expires_in = data.get("expires_in")
+        if not access_token:
+            raise ProviderError("invalid_grant", "No access_token in refresh response", 400)
+
+        granted_scopes = data.get("scope", "").split() or list(scopes or [])
+        expires_at = time.time() + float(expires_in) if expires_in else None
+
+        return GrantResult(
+            access_token=access_token,
+            refresh_token=data.get("refresh_token", refresh_token),
+            expires_at=expires_at,
+            provider_scopes_granted=granted_scopes,
+            raw_profile=None,
+            token_type=data.get("token_type", "Bearer"),
+        )
+
+    async def fetch_user_info(self, *, access_token: str) -> UserInfo:
+        profile = await self._fetch_user_profile(access_token)
+        user_id = str(profile.get("sub") or profile.get("id") or "")
+        if not user_id:
+            raise ProviderError("invalid_token", "Google profile missing id", status_code=400)
+
+        email = profile.get("email")
+        username = (email.split("@")[0] if email else user_id) or user_id
+
+        return UserInfo(
+            provider=self.provider_name,
+            user_id=user_id,
+            username=username,
+            email=email,
+            name=profile.get("name"),
+            avatar_url=profile.get("picture"),
+            raw_profile=profile,
+            provider_scopes_granted=profile.get("scope", "").split() or None,
+        )
+
+    async def revoke_token(self, *, token: str, token_type_hint: str | None = None) -> bool:
+        async with create_mcp_http_client() as client:
+            resp = await client.post(
+                "https://oauth2.googleapis.com/revoke",
+                params={"token": token},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+        if resp.status_code in {200, 400}:
+            # 400 for invalid token per Google docs; treat as already revoked
+            return True
+        raise ProviderError("invalid_token", f"Failed to revoke token: {resp.status_code}", 400)
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+    def build_callback_url(self) -> str:
+        """Public helper to build callback URL for router registration."""
+        return self.url_builder.build_callback_url(
+            self._callback_path, host=self.host, port=self.port
+        )
+
     @property
-    def callback_path(self) -> str:  # noqa: D401
+    def callback_path(self) -> str:
         return self._callback_path
 
-    async def on_callback(
-        self, request: Request, provider: "GeneralOAuthAuthorizationServer"
-    ) -> Response:  # noqa: E501
-        code = request.query_params.get("code")
-        state = request.query_params.get("state")
-        error = request.query_params.get("error")
-
-        if error:
-            logger.error(f"Google OAuth error: {error}")
-            error_desc = request.query_params.get("error_description", error)
-            return HTMLResponse(status_code=400, content=f"OAuth error: {error_desc}")
-
-        if not code or not state:
-            raise HTTPException(400, "Missing code or state")
-        try:
-            redirect_uri = await provider.handle_callback(code, state)
-            return RedirectResponse(redirect_uri)
-        except HTTPException:
-            raise
-        except Exception as exc:
-            logger.error("Google callback failed", exc_info=exc)
-            return HTMLResponse(status_code=500, content="oauth_failure")
-
-    # ----- user context -----
-    async def get_user_context(self, token: str) -> UserContextModel:
-        """Get standardized user context from Google.
-
-        Args:
-            token: Google OAuth access token
-
-        Returns:
-            UserContextModel with Google user information
-
-        Raises:
-            HTTPException: If token is invalid or user info cannot be retrieved
-        """
-        try:
-            user_profile = await self._fetch_user_profile(token)
-
-            # Extract Google-specific fields and map to standard UserContextModel
-            # Use either 'sub' (OpenID Connect) or 'id' (OAuth2) as the unique identifier
-            user_id = str(user_profile.get("sub") or user_profile.get("id", ""))
-            return UserContextModel(
-                provider="google",
-                user_id=user_id,  # Use whichever ID field is available
-                username=user_profile.get("email", f"user_{user_id}").split("@")[
-                    0
-                ],  # Use email prefix as username
-                email=user_profile.get("email"),
-                name=user_profile.get("name"),
-                avatar_url=user_profile.get("picture"),
-                raw_profile=user_profile,
-                external_token=token,
-            )
-        except Exception as e:
-            logger.error(f"Failed to get Google user context: {e}")
-            raise HTTPException(500, f"Failed to retrieve user information: {e}") from e
-
-    # ----- private helper -----
     async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
-        """Fetch raw user profile from Google UserInfo API (private implementation detail)."""
-        logger.info(f"Fetching Google user profile with token: {token[:10]}...")
-
         async with create_mcp_http_client() as client:
             resp = await client.get(
                 "https://www.googleapis.com/oauth2/v2/userinfo",
                 headers={"Authorization": f"Bearer {token}"},
             )
 
-        logger.info(f"Google UserInfo API response: {resp.status_code}")
-
         if resp.status_code != 200:
-            error_body = ""
+            description = ""
             try:
-                error_body = resp.text
-                logger.error(f"Google UserInfo API error {resp.status_code}: {error_body}")
+                description = resp.text
             except Exception:
-                logger.error(
-                    f"Google UserInfo API error {resp.status_code}: Unable to read response body"
-                )
-            raise ValueError(f"Google API error: {resp.status_code} - {error_body}")
+                description = "Unknown error"
+            raise ProviderError(
+                "invalid_token",
+                f"Google UserInfo failed: {description}",
+                status_code=resp.status_code,
+            )
 
-        user_data = cast(dict[str, Any], resp.json())
-        logger.info(
-            f"Successfully fetched Google user profile for sub: {user_data.get('sub', 'unknown')}"
-        )
-        return user_data
+        return cast(dict[str, Any], resp.json())
