@@ -5,16 +5,51 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Mapping, Sequence
-from typing import Any, cast
+from typing import Any
 from urllib.parse import urlencode
 
 from mcp.shared._httpx_utils import create_mcp_http_client
+from pydantic import ConfigDict, ValidationError
+
+from mxcp.sdk.models import SdkBaseModel
 
 from ..contracts import GrantResult, ProviderAdapter, ProviderError, UserInfo
 from ..models import GoogleAuthConfigModel, HttpTransportConfigModel
 from ..url_utils import URLBuilder
 
 logger = logging.getLogger(__name__)
+
+
+class _GoogleTokenResponse(SdkBaseModel):
+    """Minimal token endpoint response (successful or error)."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    access_token: str | None = None
+    refresh_token: str | None = None
+    expires_in: float | None = None
+    scope: str | None = None
+    token_type: str | None = None
+
+    error: str | None = None
+    error_description: str | None = None
+
+
+class _GoogleUserInfoResponse(SdkBaseModel):
+    """Minimal userinfo response used to normalize UserInfo."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    sub: str | None = None
+    id: str | None = None
+    email: str | None = None
+    name: str | None = None
+    picture: str | None = None
+    scope: str | None = None
+
+    @property
+    def resolved_user_id(self) -> str:
+        return self.sub or self.id or ""
 
 
 class GoogleProviderAdapter(ProviderAdapter):
@@ -105,17 +140,26 @@ class GoogleProviderAdapter(ProviderAdapter):
                 description = "Unknown error"
             raise ProviderError("invalid_grant", description, status_code=resp.status_code)
 
-        data = resp.json()
-        if "error" in data:
+        data: dict[str, Any] = resp.json()
+        try:
+            token = _GoogleTokenResponse.model_validate(data)
+        except ValidationError as exc:
             raise ProviderError(
-                data.get("error", "invalid_grant"),
-                data.get("error_description", "Failed to exchange code"),
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            ) from exc
+
+        if token.error is not None:
+            raise ProviderError(
+                token.error or "invalid_grant",
+                token.error_description or "Failed to exchange code",
                 status_code=resp.status_code,
             )
 
-        access_token = data.get("access_token")
-        refresh_token = data.get("refresh_token")
-        expires_in = data.get("expires_in")
+        access_token = token.access_token
+        refresh_token = token.refresh_token
+        expires_in = token.expires_in
 
         if not access_token:
             raise ProviderError("invalid_grant", "No access_token in response", status_code=400)
@@ -124,13 +168,14 @@ class GoogleProviderAdapter(ProviderAdapter):
         user_scopes = list(scopes) if scopes is not None else []
         expires_at = time.time() + float(expires_in) if expires_in else None
 
+        token_type = token.token_type if token.token_type is not None else "Bearer"
         return GrantResult(
             access_token=access_token,
             refresh_token=refresh_token,
             expires_at=expires_at,
-            provider_scopes_granted=user_scopes or data.get("scope", "").split(),
+            provider_scopes_granted=user_scopes or (token.scope.split() if token.scope else []),
             raw_profile=user_profile,
-            token_type=data.get("token_type", "Bearer"),
+            token_type=token_type,
         )
 
     async def refresh_token(
@@ -160,38 +205,57 @@ class GoogleProviderAdapter(ProviderAdapter):
                 description = "Unknown error"
             raise ProviderError("invalid_grant", description, status_code=resp.status_code)
 
-        data = resp.json()
-        if "error" in data:
+        data: dict[str, Any] = resp.json()
+        try:
+            token = _GoogleTokenResponse.model_validate(data)
+        except ValidationError as exc:
             raise ProviderError(
-                data.get("error", "invalid_grant"),
-                data.get("error_description", "Failed to refresh token"),
+                "invalid_grant",
+                "Invalid refresh response payload",
+                status_code=resp.status_code,
+            ) from exc
+
+        if token.error is not None:
+            raise ProviderError(
+                token.error or "invalid_grant",
+                token.error_description or "Failed to refresh token",
                 status_code=resp.status_code,
             )
 
-        access_token = data.get("access_token")
-        expires_in = data.get("expires_in")
+        access_token = token.access_token
+        expires_in = token.expires_in
         if not access_token:
             raise ProviderError("invalid_grant", "No access_token in refresh response", 400)
 
-        granted_scopes = data.get("scope", "").split() or list(scopes or [])
+        granted_scopes = (token.scope.split() if token.scope else []) or list(scopes or [])
         expires_at = time.time() + float(expires_in) if expires_in else None
 
+        token_type = token.token_type if token.token_type is not None else "Bearer"
         return GrantResult(
             access_token=access_token,
-            refresh_token=data.get("refresh_token", refresh_token),
+            refresh_token=token.refresh_token if token.refresh_token is not None else refresh_token,
             expires_at=expires_at,
             provider_scopes_granted=granted_scopes,
             raw_profile=None,
-            token_type=data.get("token_type", "Bearer"),
+            token_type=token_type,
         )
 
     async def fetch_user_info(self, *, access_token: str) -> UserInfo:
         profile = await self._fetch_user_profile(access_token)
-        user_id = str(profile.get("sub") or profile.get("id") or "")
+        try:
+            parsed = _GoogleUserInfoResponse.model_validate(profile)
+        except ValidationError as exc:
+            raise ProviderError(
+                "invalid_token",
+                "Google profile response was invalid",
+                status_code=400,
+            ) from exc
+
+        user_id = parsed.resolved_user_id
         if not user_id:
             raise ProviderError("invalid_token", "Google profile missing id", status_code=400)
 
-        email = profile.get("email")
+        email = parsed.email
         username = (email.split("@")[0] if email else user_id) or user_id
 
         return UserInfo(
@@ -199,10 +263,10 @@ class GoogleProviderAdapter(ProviderAdapter):
             user_id=user_id,
             username=username,
             email=email,
-            name=profile.get("name"),
-            avatar_url=profile.get("picture"),
+            name=parsed.name,
+            avatar_url=parsed.picture,
             raw_profile=profile,
-            provider_scopes_granted=profile.get("scope", "").split() or None,
+            provider_scopes_granted=parsed.scope.split() if parsed.scope else None,
         )
 
     async def revoke_token(self, *, token: str, token_type_hint: str | None = None) -> bool:
@@ -247,4 +311,13 @@ class GoogleProviderAdapter(ProviderAdapter):
                 status_code=resp.status_code,
             )
 
-        return cast(dict[str, Any], resp.json())
+        payload: dict[str, Any] = resp.json()
+        try:
+            _GoogleUserInfoResponse.model_validate(payload)
+        except ValidationError as exc:
+            raise ProviderError(
+                "invalid_token",
+                "Invalid userinfo payload",
+                status_code=resp.status_code,
+            ) from exc
+        return payload
