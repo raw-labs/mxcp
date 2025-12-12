@@ -47,7 +47,9 @@ INSERT INTO users (id, name, email, department) VALUES
 
 Initialize the database:
 ```bash
-duckdb db.duckdb < sql/setup.sql
+# The database path depends on your profile name
+# For the 'default' profile, it's typically data/db-default.duckdb
+duckdb data/db-default.duckdb < sql/setup.sql
 ```
 
 **Tool definition** (`tools/get-user.yml`):
@@ -116,8 +118,7 @@ tool:
   parameters:
     - name: department
       type: string
-      description: Department to filter by
-      enum: ["Engineering", "Sales", "Marketing", "HR"]
+      description: Department to filter by (Engineering, Sales, Marketing, HR)
       default: null
 
     - name: name_pattern
@@ -248,7 +249,7 @@ INSERT INTO orders (id, user_id, amount, status) VALUES
 
 Initialize:
 ```bash
-duckdb db.duckdb < sql/setup-orders.sql
+duckdb data/db-default.duckdb < sql/setup-orders.sql
 ```
 
 **Tool definition** (`tools/user-orders.yml`):

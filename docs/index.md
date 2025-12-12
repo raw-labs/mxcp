@@ -156,8 +156,8 @@ flowchart LR
 - [Plugins](reference/plugins) - Extend DuckDB with custom UDFs
 
 ### Contributing
-- [Development Guide](contributing/development) - Setup and architecture
-- [Code Style](contributing/development#code-style) - Formatting and conventions
+- [Development Guide](contributing/) - Setup and architecture
+- [Code Style](contributing/#2-code-style) - Formatting and conventions
 
 ## Learning Paths
 

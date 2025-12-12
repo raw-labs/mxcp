@@ -50,8 +50,8 @@ tool:
 mxcp test
 
 # Run tests for specific endpoint
-mxcp test --tool get_user
-mxcp test --resource user-profile
+mxcp test tool get_user
+mxcp test resource user-profile
 
 # JSON output
 mxcp test --json-output
@@ -336,7 +336,7 @@ INSERT OR REPLACE INTO users VALUES
 
 Run setup:
 ```bash
-duckdb db.duckdb < sql/test_setup.sql
+duckdb data/db-default.duckdb < sql/test_setup.sql
 mxcp test
 ```
 
@@ -377,7 +377,7 @@ jobs:
       - run: pip install mxcp
       - name: Setup test data
         run: |
-          duckdb db.duckdb < sql/test_setup.sql
+          duckdb data/db-default.duckdb < sql/test_setup.sql
       - name: Run tests
         run: mxcp test --json-output > test-results.json
       - name: Upload results

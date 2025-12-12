@@ -481,26 +481,26 @@ mxcp run tool my_tool --debug
 You've created your first MXCP project with tools, tests, and security. Here's where to go next:
 
 ### Learn Core Concepts
-- [Endpoints](concepts/endpoints) - Understand tools, resources, and prompts
-- [Type System](concepts/type-system) - Master input/output validation
-- [Project Structure](concepts/project-structure) - Organize your project
+- [Endpoints](/concepts/endpoints) - Understand tools, resources, and prompts
+- [Type System](/concepts/type-system) - Master input/output validation
+- [Project Structure](/concepts/project-structure) - Organize your project
 
 ### Build More Complex Tools
-- [SQL Endpoints Tutorial](tutorials/sql-endpoints) - Query data efficiently
-- [Python Endpoints Tutorial](tutorials/python-endpoints) - Build complex logic
-- [dbt Integration](integrations/dbt) - Data transformation pipelines
+- [SQL Endpoints Tutorial](/tutorials/sql-endpoints) - Query data efficiently
+- [Python Endpoints Tutorial](/tutorials/python-endpoints) - Build complex logic
+- [dbt Integration](/integrations/dbt) - Data transformation pipelines
 
 ### Add Enterprise Features
-- [Authentication](security/authentication) - OAuth setup
-- [Policies](security/policies) - Fine-grained access control
-- [Audit Logging](security/auditing) - Compliance tracking
+- [Authentication](/security/authentication) - OAuth setup
+- [Policies](/security/policies) - Fine-grained access control
+- [Audit Logging](/security/auditing) - Compliance tracking
 
 ### Go to Production
-- [Configuration](operations/configuration) - Environment management
-- [Deployment](operations/deployment) - Docker, systemd patterns
-- [Monitoring](operations/monitoring) - Observability setup
+- [Configuration](/operations/configuration) - Environment management
+- [Deployment](/operations/deployment) - Docker, systemd patterns
+- [Monitoring](/operations/monitoring) - Observability setup
 
 ### Ensure Quality
-- [Validation](quality/validation) - Endpoint correctness
-- [Testing](quality/testing) - Comprehensive test coverage
-- [Evals](quality/evals) - AI behavior verification
+- [Validation](/quality/validation) - Endpoint correctness
+- [Testing](/quality/testing) - Comprehensive test coverage
+- [Evals](/quality/evals) - AI behavior verification

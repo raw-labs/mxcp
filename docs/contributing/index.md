@@ -402,7 +402,7 @@ For minor/patch releases, you can skip pre-releases and go straight to stable.
 
 ## Code of Conduct
 
-Follow our [Code of Conduct](https://github.com/raw-labs/mxcp/blob/main/CODE_OF_CONDUCT). We maintain a welcoming and inclusive community.
+Follow our [Code of Conduct](https://github.com/raw-labs/mxcp/blob/main/CODE_OF_CONDUCT.md). We maintain a welcoming and inclusive community.
 
 ## License
 
