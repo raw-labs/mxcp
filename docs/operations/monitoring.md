@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-> **Related Topics:** [Deployment](deployment) (production setup) | [Admin Socket](admin-socket) (health checks) | [Auditing](/security/auditing) (operation logs) | [Configuration](configuration) (OTEL settings)
+> **Related Topics:** [Deployment](/operations/deployment) (production setup) | [Admin Socket](/operations/admin-socket) (health checks) | [Auditing](/security/auditing) (operation logs) | [Configuration](/operations/configuration) (OTEL settings)
 
 This guide covers monitoring and observability for MXCP deployments, including tracing, metrics, drift detection, and the Admin API.
 
@@ -905,6 +905,6 @@ if __name__ == '__main__':
 
 ## Next Steps
 
-- [Deployment](deployment) - Production deployment
+- [Deployment](/operations/deployment) - Production deployment
 - [Auditing](/security/auditing) - Audit log configuration
-- [Configuration](configuration) - Complete config reference
+- [Configuration](/operations/configuration) - Complete config reference

@@ -2,7 +2,7 @@
 title: "Prompt Schema"
 description: "Complete YAML schema reference for MXCP prompt definitions. Messages, parameters, Jinja2 templates, and multi-turn conversations."
 sidebar:
-  order: 8
+  order: 4
 ---
 
 > **Related Topics:** [Endpoints](/concepts/endpoints) (prompt concepts) | [Type System](/concepts/type-system) (parameter types)

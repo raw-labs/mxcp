@@ -559,6 +559,6 @@ EXPLAIN ANALYZE SELECT * FROM large_table;
 
 ## Next Steps
 
-- [dbt Integration](dbt) - Data transformation
+- [dbt Integration](/integrations/dbt) - Data transformation
 - [Configuration](/operations/configuration) - Secrets management
 - [Monitoring](/operations/monitoring) - Performance tracking

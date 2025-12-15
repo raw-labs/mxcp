@@ -44,28 +44,28 @@ mxcp evals
 
 ## Topics
 
-### [Validation](validation)
+### [Validation](/quality/validation)
 Verify endpoint structure and syntax:
 - YAML correctness
 - Required fields
 - Type definitions
 - File references
 
-### [Testing](testing)
+### [Testing](/quality/testing)
 Test endpoint functionality:
 - Test case definitions
 - Assertion types
 - Policy testing
 - CI/CD integration
 
-### [Linting](linting)
+### [Linting](/quality/linting)
 Improve AI comprehension:
 - Description quality
 - Example coverage
 - Best practice checks
 - Auto-suggestions
 
-### [Evals](evals)
+### [Evals](/quality/evals)
 Test AI behavior:
 - LLM tool usage
 - Safety verification
@@ -174,7 +174,7 @@ mxcp evals --model gpt-4   # Use specific model
 
 ## Next Steps
 
-- [Validation](validation) - Structural checks
-- [Testing](testing) - Functional testing
-- [Linting](linting) - Metadata quality
-- [Evals](evals) - AI behavior testing
+- [Validation](/quality/validation) - Structural checks
+- [Testing](/quality/testing) - Functional testing
+- [Linting](/quality/linting) - Metadata quality
+- [Evals](/quality/evals) - AI behavior testing

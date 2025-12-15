@@ -411,5 +411,5 @@ df -h /var/log/mxcp
 ## Next Steps
 
 - [Auditing](/security/auditing) - Audit log configuration
-- [Monitoring](monitoring) - Log analysis
-- [Deployment](deployment) - Production setup
+- [Monitoring](/operations/monitoring) - Log analysis
+- [Deployment](/operations/deployment) - Production setup

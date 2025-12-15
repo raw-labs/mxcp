@@ -9,21 +9,21 @@ Learn MXCP through complete, working examples that demonstrate real-world patter
 
 ## Example Projects
 
-### [Customer Service](customer-service)
+### [Customer Service](/examples/customer-service)
 AI-powered customer support tools:
 - Customer lookup and search
 - Order history and tracking
 - Ticket management
 - Policy-protected sensitive data
 
-### [Analytics Dashboard](analytics)
+### [Analytics Dashboard](/examples/analytics)
 Business intelligence endpoints:
 - Sales reports and metrics
 - Time-series analysis
 - Aggregations and rollups
 - Real-time dashboards
 
-### [Data Management](data-management)
+### [Data Management](/examples/data-management)
 CRUD operations and data handling:
 - User management
 - Document storage
@@ -437,7 +437,7 @@ my-mxcp-project/
 
 ## Next Steps
 
-- [Customer Service Example](customer-service)
-- [Analytics Example](analytics)
-- [Data Management Example](data-management)
+- [Customer Service Example](/examples/customer-service)
+- [Analytics Example](/examples/analytics)
+- [Data Management Example](/examples/data-management)
 - [Tutorials](/tutorials) - Step-by-step guides

@@ -386,6 +386,6 @@ SELECT * FROM users WHERE id = $user_id;
 
 ## Next Steps
 
-- [Python Reference](python) - Runtime API
+- [Python Reference](/reference/python) - Runtime API
 - [DuckDB Documentation](https://duckdb.org/docs/sql/introduction) - Full SQL reference
 - [Tutorials](/tutorials) - SQL endpoint examples

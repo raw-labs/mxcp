@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-> **Related Topics:** [Python Runtime Reference](/reference/python) (API details) | [Type System](/concepts/type-system) (parameter types) | [Plugins](/reference/plugins) (custom UDFs) | [SQL Endpoints](sql-endpoints) (when to use SQL instead)
+> **Related Topics:** [Python Runtime Reference](/reference/python) (API details) | [Type System](/concepts/type-system) (parameter types) | [Plugins](/reference/plugins) (custom UDFs) | [SQL Endpoints](/tutorials/sql-endpoints) (when to use SQL instead)
 
 Python endpoints let you build tools with complex logic, API integrations, and ML models. In this tutorial, you'll learn to use MXCP's Python runtime features effectively.
 
@@ -20,7 +20,7 @@ Build Python tools that:
 
 ## Prerequisites
 
-- Completed the [Hello World Tutorial](hello-world)
+- Completed the [Hello World Tutorial](/tutorials/hello-world)
 - Basic Python knowledge
 - A project directory with `mxcp init`
 

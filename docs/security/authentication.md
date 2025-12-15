@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-> **Related Topics:** [Policies](policies) (use user context for access control) | [Configuration](/operations/configuration) (secrets management) | [Common Tasks](/reference/common-tasks#how-do-i-add-authentication) (quick setup)
+> **Related Topics:** [Policies](/security/policies) (use user context for access control) | [Configuration](/operations/configuration) (secrets management) | [Common Tasks](/reference/common-tasks#how-do-i-add-authentication) (quick setup)
 
 MXCP supports OAuth 2.0 authentication to control who can access your MCP server. This guide covers configuring various OAuth providers.
 
@@ -539,6 +539,6 @@ auth:
 
 ## Next Steps
 
-- [Policies](policies) - Configure access control
-- [Auditing](auditing) - Track authentication events
+- [Policies](/security/policies) - Configure access control
+- [Auditing](/security/auditing) - Track authentication events
 - [Configuration](/operations/configuration) - More configuration options

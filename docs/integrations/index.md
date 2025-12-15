@@ -47,21 +47,21 @@ flowchart TB
 
 ## Integrations
 
-### [Claude Desktop](claude-desktop)
+### [Claude Desktop](/integrations/claude-desktop)
 Native MCP integration with Claude Desktop:
 - Zero-code connection
 - Stdio transport
 - Multi-server support
 - Developer console access
 
-### [dbt](dbt)
+### [dbt](/integrations/dbt)
 Data transformation and quality layer:
 - Model preparation for AI
 - Data quality testing
 - Performance optimization
 - Documentation generation
 
-### [DuckDB](duckdb)
+### [DuckDB](/integrations/duckdb)
 Powerful SQL execution engine:
 - Extension ecosystem
 - Multi-source connectivity
@@ -422,6 +422,6 @@ Access Claude Desktop's developer console to see:
 
 ## Next Steps
 
-- [Claude Desktop](claude-desktop) - Detailed setup
-- [dbt](dbt) - Data transformation
-- [DuckDB](duckdb) - SQL engine and extensions
+- [Claude Desktop](/integrations/claude-desktop) - Detailed setup
+- [dbt](/integrations/dbt) - Data transformation
+- [DuckDB](/integrations/duckdb) - SQL engine and extensions

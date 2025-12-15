@@ -657,6 +657,6 @@ mxcp run tool trend_analysis \
 
 ## Next Steps
 
-- [Customer Service Example](customer-service) - Support tools
-- [Data Management Example](data-management) - CRUD operations
+- [Customer Service Example](/examples/customer-service) - Support tools
+- [Data Management Example](/examples/data-management) - CRUD operations
 - [dbt Integration](/integrations/dbt) - Data transformation

@@ -17,7 +17,7 @@ Control who can access your MCP server:
 - **Session Management** - Secure token handling with persistence
 - **Stateless Mode** - For serverless deployments
 
-[Learn about authentication →](authentication)
+[Learn about authentication →](/security/authentication)
 
 ### Policies
 Control what users can do and see:
@@ -25,7 +25,7 @@ Control what users can do and see:
 - **Output Policies** - Filter sensitive data
 - **CEL Expressions** - Flexible condition evaluation
 
-[Learn about policies →](policies)
+[Learn about policies →](/security/policies)
 
 ### Audit Logging
 Track all operations for compliance:
@@ -33,7 +33,7 @@ Track all operations for compliance:
 - **User Attribution** - Who did what and when
 - **Query Interface** - Search and analyze logs
 
-[Learn about auditing →](auditing)
+[Learn about auditing →](/security/auditing)
 
 ## Security Model
 
@@ -193,6 +193,6 @@ MXCP's security features support various compliance requirements:
 
 ## Next Steps
 
-- [Authentication](authentication) - Configure OAuth providers
-- [Policies](policies) - Implement access control
-- [Auditing](auditing) - Set up audit logging
+- [Authentication](/security/authentication) - Configure OAuth providers
+- [Policies](/security/policies) - Implement access control
+- [Auditing](/security/auditing) - Set up audit logging

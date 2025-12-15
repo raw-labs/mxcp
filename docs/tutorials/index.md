@@ -11,20 +11,20 @@ This section contains step-by-step tutorials to help you build MXCP endpoints. E
 
 ## Getting Started Tutorials
 
-### [Hello World](hello-world)
+### [Hello World](/tutorials/hello-world)
 Your first MXCP tool. Learn the basics of:
 - Creating a tool definition
 - Writing SQL implementation
 - Running and testing tools
 
-### [SQL Endpoints](sql-endpoints)
+### [SQL Endpoints](/tutorials/sql-endpoints)
 Build data query tools with SQL:
 - Parameter binding
 - Complex queries with joins
 - Aggregations and grouping
 - Working with DuckDB features
 
-### [Python Endpoints](python-endpoints)
+### [Python Endpoints](/tutorials/python-endpoints)
 Build complex logic with Python:
 - Accessing the runtime API
 - Database operations from Python
@@ -68,9 +68,9 @@ All code examples are tested and working. You can copy-paste them directly into 
 
 If you're new to MXCP, follow this learning path:
 
-1. **[Hello World](hello-world)** - Understand the basics
-2. **[SQL Endpoints](sql-endpoints)** - Master data queries
-3. **[Python Endpoints](python-endpoints)** - Build complex logic
+1. **[Hello World](/tutorials/hello-world)** - Understand the basics
+2. **[SQL Endpoints](/tutorials/sql-endpoints)** - Master data queries
+3. **[Python Endpoints](/tutorials/python-endpoints)** - Build complex logic
 
 After completing these tutorials, explore:
 - [Security section](/security/) - Add authentication and policies

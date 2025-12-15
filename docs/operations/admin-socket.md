@@ -587,6 +587,6 @@ journalctl -u mxcp --since "5 minutes ago"
 
 ## Next Steps
 
-- [Monitoring](monitoring) - OpenTelemetry integration
-- [Deployment](deployment) - Production deployment
-- [Configuration](configuration) - Configuration reference
+- [Monitoring](/operations/monitoring) - OpenTelemetry integration
+- [Deployment](/operations/deployment) - Production deployment
+- [Configuration](/operations/configuration) - Configuration reference

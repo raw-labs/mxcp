@@ -891,6 +891,6 @@ mxcp run tool export_data \
 
 ## Next Steps
 
-- [Customer Service Example](customer-service) - Support tools
-- [Analytics Example](analytics) - Business intelligence
+- [Customer Service Example](/examples/customer-service) - Support tools
+- [Analytics Example](/examples/analytics) - Business intelligence
 - [Policies](/security/policies) - Access control

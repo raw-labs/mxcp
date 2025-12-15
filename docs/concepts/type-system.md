@@ -5,9 +5,15 @@ sidebar:
   order: 3
 ---
 
-> **Related Topics:** [Endpoints](endpoints) (use types in definitions) | [Policies](/security/policies) (filter by type) | [YAML Schema](/reference/yaml-schema) (complete field reference) | [Testing](/quality/testing) (validate types)
+> **Related Topics:** [Endpoints](/concepts/endpoints) (use types in definitions) | [Policies](/security/policies) (filter by type) | [YAML Schemas](/schemas/) (complete field reference) | [Testing](/quality/testing) (validate types)
 
 MXCP's type system provides robust data validation for endpoint parameters and return values. It combines JSON Schema compatibility with DuckDB type mapping, ensuring type safety across your entire application.
+
+**Why types matter:**
+- **Validation** - Invalid data is rejected before execution
+- **Documentation** - LLMs understand what values are expected
+- **SQL Safety** - Parameters are properly typed in queries
+- **Policy Filtering** - Sensitive fields can be automatically filtered
 
 ## Base Types
 
@@ -33,7 +39,7 @@ String types can have format annotations for specialized handling:
 | `date` | ISO 8601 date | `"2024-01-15"` | `DATE` |
 | `time` | ISO 8601 time | `"14:30:00"` | `TIME` |
 | `date-time` | ISO 8601 timestamp | `"2024-01-15T14:30:00Z"` | `TIMESTAMP WITH TIME ZONE` |
-| `duration` | ISO 8601 duration | `"P1DT2H"` | `INTERVAL` |
+| `duration` | ISO 8601 duration | `"P1DT2H"` | `VARCHAR` |
 | `timestamp` | Unix timestamp | `1705329000` | `TIMESTAMP` |
 
 ### Using Formats
@@ -81,6 +87,24 @@ parameters:
     examples: ["pending", "shipped"]
 ```
 
+### Required vs Optional Parameters
+
+Parameters are **required by default**. A parameter becomes **optional** when it has a `default` value:
+
+```yaml
+parameters:
+  # Required - must be provided
+  - name: user_id
+    type: integer
+    description: User ID
+
+  # Optional - uses default if not provided
+  - name: limit
+    type: integer
+    description: Maximum results
+    default: 10
+```
+
 ### String Annotations
 
 | Annotation | Description |
@@ -114,13 +138,20 @@ parameters:
   maximum: 150
   description: Age in years
 
+- name: quantity
+  type: integer
+  minimum: 1
+  multipleOf: 5
+  description: Quantity (must be multiple of 5)
+
 - name: price
   type: number
   minimum: 0
   exclusiveMaximum: 1000000
-  multipleOf: 0.01
   description: Price in dollars
 ```
+
+> **Note:** `multipleOf` works reliably with integers. For decimal precision (e.g., currency), use integer cents instead of `multipleOf: 0.01` due to floating-point precision limitations.
 
 ### Array Annotations
 
@@ -211,7 +242,7 @@ return:
 
 ## Sensitive Data
 
-Mark fields containing sensitive data with `sensitive: true`:
+Mark fields containing sensitive data with `sensitive: true`. The `sensitive` flag can be applied to **any type** - strings, numbers, integers, booleans, arrays, or objects:
 
 ```yaml
 return:
@@ -222,9 +253,17 @@ return:
     password:
       type: string
       sensitive: true
-    api_key:
-      type: string
-      sensitive: true
+    balance:
+      type: number
+      sensitive: true  # Numbers can also be sensitive
+    config:
+      type: object
+      properties:
+        host:
+          type: string
+        api_key:
+          type: string
+          sensitive: true  # Nested sensitive field
 ```
 
 Sensitive fields are:
@@ -254,6 +293,41 @@ return:
         refresh_token:
           type: string
 ```
+
+### Using with Policies
+
+The `filter_sensitive_fields` policy action automatically removes all fields marked as sensitive:
+
+```yaml
+policies:
+  output:
+    - condition: "user.role != 'admin'"
+      action: filter_sensitive_fields
+      reason: "Non-admin users cannot see sensitive data"
+```
+
+This is more maintainable than `filter_fields` as sensitive fields are defined once in the schema rather than repeated in policies.
+
+## Using Types in SQL
+
+Parameters defined in your YAML are available in SQL queries using `$parameter_name` syntax:
+
+```yaml
+parameters:
+  - name: user_id
+    type: integer
+  - name: status
+    type: string
+    enum: ["active", "inactive"]
+```
+
+```sql
+SELECT * FROM users
+WHERE id = $user_id
+  AND status = $status
+```
+
+The type system ensures parameters are properly escaped and typed when passed to DuckDB.
 
 ## Type Conversion
 
@@ -339,7 +413,7 @@ MXCP intentionally restricts schema complexity:
 **Not supported:**
 - `$ref` - No schema references
 - `allOf`, `oneOf`, `anyOf` - No union types
-- `patternProperties` - No regex property matching
+- `pattern`, `patternProperties` - No regex-based constraints
 - Conditional schemas (`if`/`then`)
 
 These restrictions ensure:
@@ -362,50 +436,31 @@ Error: Value 'invalid' not in enum: ['admin', 'user', 'guest']
 
 ## Best Practices
 
-### 1. Use Format Annotations
-Always specify formats for specialized strings:
+### Always Add Descriptions
+Every parameter and return field should have a description:
 ```yaml
-# Good
-type: string
-format: email
-
-# Avoid
-type: string  # No format for email
+- name: user_id
+  type: integer
+  description: Unique identifier for the user
 ```
 
-### 2. Provide Examples
-Include examples for better documentation:
+### Use Format Annotations
+Specify formats for specialized strings:
 ```yaml
-- name: region
+- name: email
   type: string
-  examples: ["North", "South", "East", "West"]
+  format: email  # Validates email format
 ```
 
-### 3. Be Explicit
-Define all constraints:
+### Set Defaults for Optional Parameters
+Make optional parameters explicit:
 ```yaml
-# Good
-- name: items
-  type: array
-  items:
-    type: string
-  minItems: 1
-  maxItems: 100
-
-# Avoid
-- name: items
-  type: array  # No item schema or constraints
+- name: limit
+  type: integer
+  default: 10  # Optional - uses 10 if not provided
 ```
 
-### 4. Mark Sensitive Data
-Protect sensitive information:
-```yaml
-- name: api_key
-  type: string
-  sensitive: true
-```
-
-### 5. Use Enums for Fixed Values
+### Use Enums for Fixed Values
 Constrain to valid options:
 ```yaml
 - name: status
@@ -413,8 +468,16 @@ Constrain to valid options:
   enum: ["active", "inactive", "pending"]
 ```
 
-### 6. Define Return Types
-Always define complete return schemas:
+### Mark Sensitive Data
+Protect sensitive information:
+```yaml
+- name: api_key
+  type: string
+  sensitive: true  # Redacted in logs, filterable by policies
+```
+
+### Define Complete Return Types
+Always specify return schemas with required fields:
 ```yaml
 return:
   type: object
@@ -426,8 +489,51 @@ return:
   required: ["id", "name"]
 ```
 
+### Provide Examples
+Include examples for documentation and testing:
+```yaml
+- name: region
+  type: string
+  examples: ["North", "South", "East", "West"]
+```
+
+### Be Explicit with Constraints
+Define array and numeric constraints:
+```yaml
+- name: items
+  type: array
+  items:
+    type: string
+  minItems: 1
+  maxItems: 100
+```
+
+### Validate Early
+Use `mxcp validate` to check type definitions before deployment:
+```bash
+mxcp validate
+```
+
+### Group Sensitive Data
+Consider putting all sensitive fields in a dedicated object that can be marked sensitive as a whole:
+```yaml
+return:
+  type: object
+  properties:
+    public:
+      type: object
+      properties:
+        name: { type: string }
+    secrets:
+      type: object
+      sensitive: true
+      properties:
+        token: { type: string }
+        key: { type: string }
+```
+
 ## Next Steps
 
-- [Endpoints](endpoints) - Use types in endpoint definitions
+- [Endpoints](/concepts/endpoints) - Use types in endpoint definitions
 - [Policies](/security/policies) - Filter based on types
 - [Testing](/quality/testing) - Test type validation

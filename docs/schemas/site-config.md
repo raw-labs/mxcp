@@ -2,7 +2,7 @@
 title: "Site Configuration Schema"
 description: "Complete YAML schema reference for mxcp-site.yml. Project settings, profiles, DuckDB, dbt, extensions, and audit configuration."
 sidebar:
-  order: 9
+  order: 5
 ---
 
 > **Related Topics:** [Configuration](/operations/configuration) (configuration guide) | [dbt Integration](/integrations/dbt) (dbt setup) | [Auditing](/security/auditing) (audit logs)
@@ -112,7 +112,7 @@ from mxcp.runtime import secrets
 api_key = secrets.get("api_key")
 ```
 
-See [User Configuration Schema](/reference/schema-user-config) for defining secret values.
+See [User Configuration Schema](/schemas/user-config) for defining secret values.
 
 ## Extensions
 
@@ -473,7 +473,7 @@ Common validation errors:
 
 ## Next Steps
 
-- [User Configuration Schema](/reference/schema-user-config) - Configure secrets and authentication
+- [User Configuration Schema](/schemas/user-config) - Configure secrets and authentication
 - [Configuration Guide](/operations/configuration) - Complete configuration documentation
 - [dbt Integration](/integrations/dbt) - Set up data transformation
 - [Auditing](/security/auditing) - Configure audit logging

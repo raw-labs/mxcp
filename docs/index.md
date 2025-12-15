@@ -114,87 +114,87 @@ flowchart LR
 ## Documentation Structure
 
 ### Getting Started
-- [Quickstart](getting-started/quickstart) - Get running in 5 minutes
-- [Installation](getting-started/quickstart#installation) - Install MXCP and dependencies
+- [Quickstart](/getting-started/quickstart) - Get running in 5 minutes
+- [Installation](/getting-started/quickstart#install-mxcp) - Install MXCP and dependencies
 
 ### Core Concepts
-- [Endpoints](concepts/endpoints) - Tools, resources, and prompts
-- [Type System](concepts/type-system) - Parameter and return type definitions
-- [Project Structure](concepts/project-structure) - Directory organization
+- [Endpoints](/concepts/endpoints) - Tools, resources, and prompts
+- [Type System](/concepts/type-system) - Parameter and return type definitions
+- [Project Structure](/concepts/project-structure) - Directory organization
 
 ### Tutorials
-- [Hello World](tutorials/hello-world) - Your first MXCP tool
-- [SQL Endpoints](tutorials/sql-endpoints) - Query data with SQL
-- [Python Endpoints](tutorials/python-endpoints) - Build complex logic
+- [Hello World](/tutorials/hello-world) - Your first MXCP tool
+- [SQL Endpoints](/tutorials/sql-endpoints) - Query data with SQL
+- [Python Endpoints](/tutorials/python-endpoints) - Build complex logic
 
 ### Security
-- [Authentication](security/authentication) - OAuth provider setup
-- [Policies](security/policies) - Access control with CEL expressions
-- [Audit Logging](security/auditing) - Track operations for compliance
+- [Authentication](/security/authentication) - OAuth provider setup
+- [Policies](/security/policies) - Access control with CEL expressions
+- [Audit Logging](/security/auditing) - Track operations for compliance
 
 ### Operations
-- [Configuration](operations/configuration) - Site and user configuration
-- [Deployment](operations/deployment) - Docker, systemd, production patterns
-- [Monitoring](operations/monitoring) - Observability and drift detection
+- [Configuration](/operations/configuration) - Site and user configuration
+- [Deployment](/operations/deployment) - Docker, systemd, production patterns
+- [Monitoring](/operations/monitoring) - Observability and drift detection
 
 ### Quality
-- [Validation](quality/validation) - Check endpoint correctness
-- [Testing](quality/testing) - Write and run tests
-- [Linting](quality/linting) - Improve LLM comprehension
-- [Evals](quality/evals) - AI behavior testing
+- [Validation](/quality/validation) - Check endpoint correctness
+- [Testing](/quality/testing) - Write and run tests
+- [Linting](/quality/linting) - Improve LLM comprehension
+- [Evals](/quality/evals) - AI behavior testing
 
 ### Integrations
-- [Claude Desktop](integrations/claude-desktop) - MCP client setup
-- [dbt](integrations/dbt) - Data transformation pipelines
-- [DuckDB](integrations/duckdb) - Extensions and features
+- [Claude Desktop](/integrations/claude-desktop) - MCP client setup
+- [dbt](/integrations/dbt) - Data transformation pipelines
+- [DuckDB](/integrations/duckdb) - Extensions and features
 
 ### Reference
-- [CLI](reference/cli) - Command-line interface
-- [YAML Schema](reference/yaml-schema) - Complete field reference for all YAML files
-- [SQL Functions](reference/sql) - Built-in authentication functions
-- [Python Runtime](reference/python) - Runtime API reference
-- [Plugins](reference/plugins) - Extend DuckDB with custom UDFs
+- [CLI](/reference/cli) - Command-line interface
+- [YAML Schemas](/schemas/) - Complete field reference for all YAML files
+- [SQL Functions](/reference/sql) - Built-in authentication functions
+- [Python Runtime](/reference/python) - Runtime API reference
+- [Plugins](/reference/plugins) - Extend DuckDB with custom UDFs
 
 ### Contributing
-- [Development Guide](contributing/) - Setup and architecture
-- [Code Style](contributing/#2-code-style) - Formatting and conventions
+- [Development Guide](/contributing/) - Setup and architecture
+- [Code Style](/contributing/#2-code-style) - Formatting and conventions
 
 ## Learning Paths
 
 Choose the path that matches your goal:
 
 ### I'm New to MXCP
-1. [Glossary](getting-started/glossary) - Understand key terms (5 min)
-2. [Quickstart](getting-started/quickstart) - Create your first project (10 min)
-3. [Hello World Tutorial](tutorials/hello-world) - Build and test a tool (15 min)
-4. [Concepts](concepts/) - Understand how MXCP works
+1. [Glossary](/getting-started/glossary) - Understand key terms (5 min)
+2. [Quickstart](/getting-started/quickstart) - Create your first project (10 min)
+3. [Hello World Tutorial](/tutorials/hello-world) - Build and test a tool (15 min)
+4. [Concepts](/concepts/) - Understand how MXCP works
 
 ### I'm Building AI Tools
-1. [SQL Endpoints](tutorials/sql-endpoints) - Query data with SQL
-2. [Python Endpoints](tutorials/python-endpoints) - Complex logic and APIs
-3. [Examples](examples/) - Real-world patterns
-4. [Common Tasks](reference/common-tasks) - Quick how-to reference
+1. [SQL Endpoints](/tutorials/sql-endpoints) - Query data with SQL
+2. [Python Endpoints](/tutorials/python-endpoints) - Complex logic and APIs
+3. [Examples](/examples/) - Real-world patterns
+4. [Common Tasks](/reference/common-tasks) - Quick how-to reference
 
 ### I'm Adding Security
-1. [Security Overview](security/) - Understand the security model
-2. [Authentication](security/authentication) - Set up OAuth
-3. [Policies](security/policies) - Access control with CEL
-4. [Auditing](security/auditing) - Track operations
+1. [Security Overview](/security/) - Understand the security model
+2. [Authentication](/security/authentication) - Set up OAuth
+3. [Policies](/security/policies) - Access control with CEL
+4. [Auditing](/security/auditing) - Track operations
 
 ### I'm Going to Production
-1. [Configuration](operations/configuration) - Environment management
-2. [Deployment](operations/deployment) - Docker and systemd
-3. [Monitoring](operations/monitoring) - Observability setup
-4. [Quality](quality/) - Testing and validation
+1. [Configuration](/operations/configuration) - Environment management
+2. [Deployment](/operations/deployment) - Docker and systemd
+3. [Monitoring](/operations/monitoring) - Observability setup
+4. [Quality](/quality/) - Testing and validation
 
 ## Quick Links
 
 | Task | Documentation |
 |------|---------------|
-| Create a tool | [Hello World Tutorial](tutorials/hello-world) |
-| Add authentication | [Authentication Guide](security/authentication) |
-| Filter sensitive data | [Policies Guide](security/policies) |
-| Write tests | [Testing Guide](quality/testing) |
-| Deploy to production | [Deployment Guide](operations/deployment) |
-| Look up CLI commands | [CLI Reference](reference/cli) |
-| Find common patterns | [Common Tasks](reference/common-tasks) |
+| Create a tool | [Hello World Tutorial](/tutorials/hello-world) |
+| Add authentication | [Authentication Guide](/security/authentication) |
+| Filter sensitive data | [Policies Guide](/security/policies) |
+| Write tests | [Testing Guide](/quality/testing) |
+| Deploy to production | [Deployment Guide](/operations/deployment) |
+| Look up CLI commands | [CLI Reference](/reference/cli) |
+| Find common patterns | [Common Tasks](/reference/common-tasks) |

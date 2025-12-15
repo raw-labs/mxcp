@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-> **Related Topics:** [Configuration](/operations/configuration) (enable auditing) | [Monitoring](/operations/monitoring) (observability) | [Policies](policies) (access control) | [Common Tasks](/reference/common-tasks#how-do-i-enable-audit-logging) (quick setup)
+> **Related Topics:** [Configuration](/operations/configuration) (enable auditing) | [Monitoring](/operations/monitoring) (observability) | [Policies](/security/policies) (access control) | [Common Tasks](/reference/common-tasks#how-do-i-enable-audit-logging) (quick setup)
 
 MXCP provides comprehensive audit logging to track all endpoint executions. Audit logs are essential for security, compliance, debugging, and understanding usage patterns.
 
@@ -546,6 +546,6 @@ Example JSON output:
 
 ## Next Steps
 
-- [Policies](policies) - Control what gets logged
-- [Authentication](authentication) - Track user identity
+- [Policies](/security/policies) - Control what gets logged
+- [Authentication](/security/authentication) - Track user identity
 - [Monitoring](/operations/monitoring) - Set up observability

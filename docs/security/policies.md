@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-> **Related Topics:** [Authentication](authentication) (user context source) | [Auditing](auditing) (log policy decisions) | [Testing](/quality/testing) (test policies) | [Common Tasks](/reference/common-tasks#how-do-i-restrict-access-to-a-tool) (quick how-to)
+> **Related Topics:** [Authentication](/security/authentication) (user context source) | [Auditing](/security/auditing) (log policy decisions) | [Testing](/quality/testing) (test policies) | [Common Tasks](/reference/common-tasks#how-do-i-restrict-access-to-a-tool) (quick how-to)
 
 MXCP's policy engine provides fine-grained access control for your endpoints. Policies can control who can call endpoints (input policies) and what data they can see (output policies).
 
@@ -296,7 +296,7 @@ input:
     reason: "Missing data.read permission"
 ```
 
-**Note:** For logging access without blocking, use audit logging instead of policies. See [Auditing](auditing) for details on tracking all access events.
+**Note:** For logging access without blocking, use audit logging instead of policies. See [Auditing](/security/auditing) for details on tracking all access events.
 
 ## Output Policy Actions
 
@@ -722,6 +722,6 @@ output:
 
 ## Next Steps
 
-- [Authentication](authentication) - Configure user context source
-- [Auditing](auditing) - Log policy decisions
+- [Authentication](/security/authentication) - Configure user context source
+- [Auditing](/security/auditing) - Log policy decisions
 - [Testing](/quality/testing) - Test policies comprehensively

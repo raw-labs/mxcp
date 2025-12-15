@@ -19,7 +19,7 @@ Build SQL tools that:
 
 ## Prerequisites
 
-- Completed the [Hello World Tutorial](hello-world)
+- Completed the [Hello World Tutorial](/tutorials/hello-world)
 - Basic SQL knowledge
 - A project directory with `mxcp init`
 
@@ -543,6 +543,6 @@ LIMIT $limit
 
 ## Next Steps
 
-- [Python Endpoints Tutorial](python-endpoints) - Add Python logic
+- [Python Endpoints Tutorial](/tutorials/python-endpoints) - Add Python logic
 - [dbt Integration](/integrations/dbt) - Use dbt for data modeling
 - [SQL Reference](/reference/sql) - Complete SQL features

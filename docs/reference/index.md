@@ -1,61 +1,54 @@
 ---
 title: "Reference"
-description: "Complete MXCP reference: CLI commands, YAML schema, SQL functions, Python runtime API, plugins, and common task how-tos."
+description: "Complete MXCP reference: CLI commands, SQL functions, Python runtime API, plugins, and common task how-tos."
 sidebar:
   order: 1
 ---
 
-> **Related Topics:** [Concepts](/concepts/) (understand MXCP) | [Tutorials](/tutorials/) (learn by doing) | [Quality](/quality/) (testing, validation)
+> **Related Topics:** [Concepts](/concepts/) (understand MXCP) | [Tutorials](/tutorials/) (learn by doing) | [YAML Schemas](/schemas/) (configuration files) | [Quality](/quality/) (testing, validation)
 
 This section provides comprehensive reference documentation for all MXCP components.
 
 ## Quick Start
 
-**Looking for how to do something?** See [Common Tasks](common-tasks) - quick answers to "How do I...?" questions.
+**Looking for how to do something?** See [Common Tasks](/reference/common-tasks) - quick answers to "How do I...?" questions.
 
 ## Reference Topics
 
-### [Common Tasks](common-tasks)
+### [Common Tasks](/reference/common-tasks)
 Quick how-to reference for frequent tasks:
 - Adding authentication
 - Filtering sensitive data
 - Writing tests
 - Configuring production
 
-### [CLI Reference](cli)
+### [CLI Reference](/reference/cli)
 Complete command-line interface documentation:
 - All commands and options
 - Output formats
 - Environment variables
 - Error handling
 
-### [SQL Reference](sql)
+### [SQL Reference](/reference/sql)
 SQL capabilities in MXCP:
 - DuckDB SQL syntax
 - Built-in authentication functions
 - Parameter binding
 - Common extensions
 
-### [Python Reference](python)
+### [Python Reference](/reference/python)
 Python runtime API:
 - Database access (`db`)
 - Configuration (`config`)
 - Plugin access (`plugins`)
 - Lifecycle hooks
 
-### [Plugin Reference](plugins)
+### [Plugin Reference](/reference/plugins)
 Plugin development guide:
 - Plugin structure
 - UDF definition
 - Type mapping
 - Authentication integration
-
-### [YAML Schema Reference](yaml-schema)
-Complete field reference for all YAML files:
-- Endpoint definition files (tools, resources, prompts)
-- Project configuration (mxcp-site.yml)
-- User configuration (~/.mxcp/config.yml)
-- Parameter and type definitions
 
 ## Quick Reference
 
@@ -195,8 +188,8 @@ my-project/
 
 ## Next Steps
 
-- [CLI Reference](cli) - Full command documentation
-- [YAML Schema Reference](yaml-schema) - Complete field reference
-- [SQL Reference](sql) - SQL capabilities
-- [Python Reference](python) - Runtime API
-- [Plugin Reference](plugins) - Plugin development
+- [CLI Reference](/reference/cli) - Full command documentation
+- [SQL Reference](/reference/sql) - SQL capabilities
+- [Python Reference](/reference/python) - Runtime API
+- [Plugin Reference](/reference/plugins) - Plugin development
+- [YAML Schemas](/schemas/) - Configuration file schemas

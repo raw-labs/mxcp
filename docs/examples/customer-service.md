@@ -636,6 +636,6 @@ mxcp serve --transport stdio
 
 ## Next Steps
 
-- [Analytics Example](analytics) - Business intelligence
-- [Data Management Example](data-management) - CRUD operations
+- [Analytics Example](/examples/analytics) - Business intelligence
+- [Data Management Example](/examples/data-management) - CRUD operations
 - [Security](/security) - Authentication and policies

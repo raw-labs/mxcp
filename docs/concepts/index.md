@@ -61,7 +61,7 @@ prompt:
       prompt: "Analyze this data: {{ data }}"
 ```
 
-[Learn more about endpoints →](endpoints)
+[Learn more about endpoints →](/concepts/endpoints)
 
 ## Type System
 
@@ -98,7 +98,7 @@ Mark fields as `sensitive: true` to:
 - Filter with policies
 - Protect in responses
 
-[Learn more about the type system →](type-system)
+[Learn more about the type system →](/concepts/type-system)
 
 ## Project Structure
 
@@ -123,7 +123,7 @@ This structure enables:
 - **Separation of concerns** - Clear organization
 - **Version control** - Easy diffs and reviews
 
-[Learn more about project structure →](project-structure)
+[Learn more about project structure →](/concepts/project-structure)
 
 ## Configuration
 
@@ -162,6 +162,6 @@ This consistent flow ensures:
 
 ## Next Steps
 
-- [Endpoints](endpoints) - Deep dive into tools, resources, and prompts
-- [Type System](type-system) - Complete type reference
-- [Project Structure](project-structure) - Directory organization
+- [Endpoints](/concepts/endpoints) - Deep dive into tools, resources, and prompts
+- [Type System](/concepts/type-system) - Complete type reference
+- [Project Structure](/concepts/project-structure) - Directory organization

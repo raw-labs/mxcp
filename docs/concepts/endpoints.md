@@ -5,9 +5,15 @@ sidebar:
   order: 2
 ---
 
-> **Related Topics:** [Type System](type-system) (parameter/return types) | [YAML Schema](/reference/yaml-schema) (complete field reference) | [SQL Endpoints](/tutorials/sql-endpoints) (SQL tutorial) | [Python Endpoints](/tutorials/python-endpoints) (Python tutorial)
+> **Related Topics:** [Type System](/concepts/type-system) (parameter/return types) | [YAML Schemas](/schemas/) (complete field reference) | [SQL Endpoints](/tutorials/sql-endpoints) (SQL tutorial) | [Python Endpoints](/tutorials/python-endpoints) (Python tutorial)
 
 MXCP supports three types of MCP endpoints, each serving different purposes. Understanding when to use each type helps you design better AI integrations.
+
+| Type | Purpose | Identified By | Implementation |
+|------|---------|---------------|----------------|
+| **Tool** | Actions and queries | `name` | SQL or Python |
+| **Resource** | Data access | `uri` template | SQL or Python |
+| **Prompt** | Message templates | `name` | Jinja2 messages |
 
 ## Tools
 
@@ -67,6 +73,7 @@ tool:
         type: number
         description: Average sale amount
 
+  language: sql
   source:
     file: ../sql/sales_report.sql
 
@@ -97,6 +104,10 @@ Annotations help LLMs understand tool behavior:
 | `idempotentHint` | Multiple calls produce same result |
 | `openWorldHint` | Tool interacts with external systems |
 
+### Inline Tests
+
+The `tests` block defines test cases that run with `mxcp test`. See [Testing](/quality/testing) for details.
+
 ### SQL vs Python Tools
 
 **SQL Tools** - Best for:
@@ -109,6 +120,7 @@ Annotations help LLMs understand tool behavior:
 - External API calls
 - ML model inference
 - File processing
+- Database queries with complex logic (via `db.execute()`)
 
 ## Resources
 
@@ -148,6 +160,7 @@ resource:
         type: string
         format: date
 
+  language: sql
   source:
     file: ../sql/employee_profile.sql
 ```
@@ -194,13 +207,11 @@ prompt:
 
   messages:
     - role: system
-      type: text
       prompt: |
         You are a data analyst specializing in {{ data_type }} data.
         Provide clear, actionable insights.
 
     - role: user
-      type: text
       prompt: |
         Analyze the {{ data_type }} data for {{ time_period }}.
 
@@ -238,44 +249,80 @@ prompt: |
 
 ## Source Options
 
-Tools and resources support two source options (prompts use `messages` instead):
+Tools and resources support source options for defining implementation code. Prompts use `messages` instead of `source`.
 
-### Inline Code
+### SQL Source Options
 
+SQL endpoints support both inline code and external files:
+
+**Inline Code** - Good for simple queries:
 ```yaml
+language: sql
 source:
   code: |
-    SELECT *
+    SELECT id, name, email
     FROM users
     WHERE id = $user_id
 ```
 
-### External File
-
+**External File** - Recommended for complex queries:
 ```yaml
+language: sql
 source:
   file: ../sql/get_user.sql
 ```
 
-External files are recommended for:
-- Better version control diffs
-- Syntax highlighting in editors
-- Reusable SQL/Python code
+### Python Source Options
 
-## Language Options
-
-Specify the implementation language:
+Python endpoints **require external files** - inline Python code is not supported:
 
 ```yaml
-# SQL (default)
-language: sql
-source:
-  file: ../sql/query.sql
-
-# Python
 language: python
 source:
   file: ../python/handler.py
+```
+
+The Python file must contain a function matching the endpoint name. Access runtime services via imports from `mxcp.runtime`:
+
+```python
+# python/handler.py
+from mxcp.runtime import db, config
+
+def get_user(user_id: int) -> dict:
+    """Function parameters are the endpoint's defined parameters."""
+    result = db.execute(
+        "SELECT * FROM users WHERE id = $id",
+        {"id": user_id}
+    )
+    return result[0] if result else None
+```
+
+Available runtime imports:
+- `db` - Database access (`db.execute()`)
+- `config` - Configuration and secrets (`config.get_secret()`)
+- `plugins` - Access registered plugins
+- `on_init`, `on_shutdown` - Lifecycle hooks
+
+### When to Use External Files
+
+External files are recommended for:
+- **Complex logic** - Better syntax highlighting and editor support
+- **Reusable code** - Share SQL/Python across multiple endpoints
+- **Version control** - Cleaner diffs when queries change
+- **Testing** - Easier to test Python modules independently
+
+### Source Path Resolution
+
+File paths are relative to the endpoint YAML file:
+
+```
+my-project/
+├── tools/
+│   └── get_user.yml      # source.file: ../sql/get_user.sql
+├── sql/
+│   └── get_user.sql
+└── python/
+    └── handlers.py
 ```
 
 ## Enabling/Disabling Endpoints
@@ -295,7 +342,7 @@ This is useful for:
 
 ## Tags
 
-Tags help organize and categorize endpoints:
+Tags are string labels that help organize and categorize endpoints. All endpoint types (tools, resources, prompts) support tags.
 
 ```yaml
 tool:
@@ -303,10 +350,53 @@ tool:
   tags: ["sales", "reporting", "finance"]
 ```
 
-Tags are useful for:
-- Documentation organization
-- Filtering in large projects
-- Client-side categorization
+### How Tags Are Used
+
+**LLM Context** - Tags are included when endpoints are presented to AI models during evaluations (`mxcp evals`), helping LLMs understand endpoint categories and relationships.
+
+**Linting** - `mxcp lint` warns if endpoints are missing tags, as they improve discoverability and organization.
+
+**Documentation** - Tags provide metadata for organizing large projects and generating documentation.
+
+### Tag Naming Conventions
+
+- Use single lowercase words: `sales`, `admin`, `read`
+- Combine multiple tags instead of compound words: `["users", "management"]` not `["user-management"]`
+- Keep tags short and descriptive
+- Use consistent categories across your project
+- Common patterns:
+  - **Domain**: `sales`, `inventory`, `customers`, `hr`
+  - **Operation type**: `read`, `write`, `delete`, `search`, `create`, `list`
+  - **Access level**: `admin`, `public`, `internal`
+
+### Example
+
+```yaml
+# Consistent tagging across related endpoints
+tools/get_user.yml:     tags: ["users", "read"]
+tools/create_user.yml:  tags: ["users", "write"]
+tools/delete_user.yml:  tags: ["users", "delete", "admin"]
+tools/list_users.yml:   tags: ["users", "read", "search"]
+```
+
+## Policies
+
+Endpoints can define access control policies. See [Policies](/security/policies) for details.
+
+```yaml
+tool:
+  name: get_employee
+  # ... parameters and return type ...
+
+  policies:
+    input:
+      - condition: "user.role != 'hr'"
+        action: deny
+        reason: "HR access required"
+    output:
+      - condition: "user.role != 'admin'"
+        action: filter_sensitive_fields
+```
 
 ## Best Practices
 
@@ -337,7 +427,8 @@ Tags are useful for:
 
 ## Next Steps
 
-- [Type System](type-system) - Parameter and return type details
-- [Project Structure](project-structure) - File organization
+- [Type System](/concepts/type-system) - Parameter and return type details
+- [Project Structure](/concepts/project-structure) - File organization
+- [Policies](/security/policies) - Access control and data filtering
 - [SQL Endpoints Tutorial](/tutorials/sql-endpoints) - Build SQL tools
 - [Python Endpoints Tutorial](/tutorials/python-endpoints) - Build Python tools

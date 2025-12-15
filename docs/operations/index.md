@@ -11,21 +11,21 @@ This section covers everything you need to deploy and operate MXCP in production
 
 ## Topics
 
-### [Configuration](configuration)
+### [Configuration](/operations/configuration)
 Complete configuration reference:
 - Site configuration (`mxcp-site.yml`)
 - User configuration (`~/.mxcp/config.yml`)
 - Environment variables
 - Secret management (Vault, 1Password)
 
-### [Deployment](deployment)
+### [Deployment](/operations/deployment)
 Production deployment patterns:
 - Docker deployment
 - systemd service configuration
 - Kubernetes deployment
 - Signal handling and hot reload
 
-### [Monitoring](monitoring)
+### [Monitoring](/operations/monitoring)
 Observability and operational monitoring:
 - OpenTelemetry integration
 - Drift detection
@@ -190,6 +190,6 @@ du -h db.duckdb
 
 ## Next Steps
 
-- [Configuration](configuration) - Complete configuration guide
-- [Deployment](deployment) - Production deployment patterns
-- [Monitoring](monitoring) - Observability setup
+- [Configuration](/operations/configuration) - Complete configuration guide
+- [Deployment](/operations/deployment) - Production deployment patterns
+- [Monitoring](/operations/monitoring) - Observability setup

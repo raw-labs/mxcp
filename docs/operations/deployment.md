@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-> **Related Topics:** [Configuration](configuration) (profiles, secrets) | [Monitoring](monitoring) (observability) | [Admin Socket](admin-socket) (health checks) | [Common Tasks](/reference/common-tasks#how-do-i-deploy-to-production) (quick how-to)
+> **Related Topics:** [Configuration](/operations/configuration) (profiles, secrets) | [Monitoring](/operations/monitoring) (observability) | [Admin Socket](/operations/admin-socket) (health checks) | [Common Tasks](/reference/common-tasks#how-do-i-deploy-to-production) (quick how-to)
 
 This guide covers deploying MXCP to production environments, including Docker, systemd, and container orchestration patterns.
 
@@ -559,6 +559,6 @@ iptables -A INPUT -p tcp --dport 8000 -j DROP
 
 ## Next Steps
 
-- [Monitoring](monitoring) - Set up observability
-- [Configuration](configuration) - Complete config reference
+- [Monitoring](/operations/monitoring) - Set up observability
+- [Configuration](/operations/configuration) - Complete config reference
 - [Auditing](/security/auditing) - Configure logging

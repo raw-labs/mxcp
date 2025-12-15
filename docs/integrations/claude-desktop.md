@@ -380,6 +380,6 @@ Complete example with multiple projects:
 
 ## Next Steps
 
-- [dbt Integration](dbt) - Data transformation
-- [DuckDB Integration](duckdb) - SQL engine
+- [dbt Integration](/integrations/dbt) - Data transformation
+- [DuckDB Integration](/integrations/duckdb) - SQL engine
 - [Operations](/operations) - Production deployment

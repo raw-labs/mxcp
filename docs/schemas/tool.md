@@ -1,27 +1,32 @@
 ---
-title: "Resource Schema"
-description: "Complete YAML schema reference for MXCP resource definitions. URI patterns, parameters, return types, source, tests, and policies."
+title: "Tool Schema"
+description: "Complete YAML schema reference for MXCP tool definitions. Parameters, return types, source, tests, and policies."
 sidebar:
-  order: 7
+  order: 2
 ---
 
-> **Related Topics:** [Endpoints](/concepts/endpoints) (resource concepts) | [SQL Endpoints](/tutorials/sql-endpoints) (tutorial) | [Python Endpoints](/tutorials/python-endpoints) (tutorial) | [Type System](/concepts/type-system) (parameter types)
+> **Related Topics:** [Endpoints](/concepts/endpoints) (tool concepts) | [SQL Endpoints](/tutorials/sql-endpoints) (tutorial) | [Python Endpoints](/tutorials/python-endpoints) (tutorial) | [Type System](/concepts/type-system) (parameter types)
 
-This reference documents the complete YAML schema for resource definitions in MXCP.
+This reference documents the complete YAML schema for tool definitions in MXCP.
 
 ## Complete Example
 
 ```yaml
 mxcp: 1
-resource:
-  uri: "employee://{employee_id}/profile"
-  name: Employee Profile
-  description: Retrieve employee profile information by ID
+tool:
+  name: get_employee
+  description: Retrieve employee information by ID
   language: sql
-  mime_type: application/json
   tags:
     - hr
     - employee
+
+  annotations:
+    title: "Get Employee"
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: false
 
   parameters:
     - name: employee_id
@@ -42,18 +47,18 @@ resource:
         sensitive: true
       department:
         type: string
-      hire_date:
-        type: string
-        format: date
+      salary:
+        type: number
+        sensitive: true
 
   source:
-    file: ../sql/get_employee_profile.sql
+    file: ../sql/get_employee.sql
 
   policies:
     input:
       - condition: "user.role == 'guest'"
         action: deny
-        reason: "Guests cannot access employee profiles"
+        reason: "Guests cannot access employee data"
     output:
       - condition: "user.role != 'hr'"
         action: filter_sensitive_fields
@@ -76,92 +81,52 @@ resource:
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `mxcp` | integer | Yes | - | Schema version. Must be `1`. |
-| `resource` | object | Yes | - | Resource definition object. |
+| `tool` | object | Yes | - | Tool definition object. |
 | `metadata` | object | No | - | Custom metadata (not processed by MXCP). |
 
-## Resource Object
+## Tool Object
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `uri` | string | Yes | - | URI pattern with `{param}` placeholders. |
-| `name` | string | No | - | Human-readable display name. |
+| `name` | string | Yes | - | Unique identifier. Must start with letter/underscore, alphanumeric only. |
 | `description` | string | No | - | Human-readable description for AI clients. |
 | `language` | string | No | `"sql"` | Implementation language: `sql` or `python`. |
-| `mime_type` | string | No | `"application/json"` | Content type of the resource. |
 | `tags` | array | No | - | List of tags for categorization. |
-| `parameters` | array | No | - | URI parameter definitions. |
+| `annotations` | object | No | - | MCP tool annotations (hints for AI). |
+| `parameters` | array | No | - | Input parameter definitions. |
 | `return` | object | No | - | Return type definition. |
 | `source` | object | Yes | - | Implementation source (code or file). |
 | `policies` | object | No | - | Input and output policy rules. |
 | `tests` | array | No | - | Test case definitions. |
-| `enabled` | boolean | No | `true` | Whether the resource is enabled. |
+| `enabled` | boolean | No | `true` | Whether the tool is enabled. |
 
-## URI Patterns
+## Annotations Object
 
-Resources are accessed via URI patterns with parameter placeholders.
+Tool annotations provide hints to AI clients about the tool's behavior.
 
-### Basic Pattern
-
-```yaml
-uri: "user://{user_id}"
-```
-
-### Nested Pattern
-
-```yaml
-uri: "org://{org_id}/team/{team_id}/member/{member_id}"
-```
-
-### Pattern Rules
-
-- Use `{param_name}` for parameter placeholders
-- Parameter names must match entries in the `parameters` array
-- Use hierarchical paths for nested resources
-- Avoid query strings (use parameters instead)
-
-### Pattern Examples
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `title` | string | - | Display title for the tool. |
+| `readOnlyHint` | boolean | - | Hint that the tool only reads data. |
+| `destructiveHint` | boolean | - | Hint that the tool may delete or modify data. |
+| `idempotentHint` | boolean | - | Hint that repeated calls produce the same result. |
+| `openWorldHint` | boolean | - | Hint that the tool interacts with external systems. |
 
 ```yaml
-# Simple resource
-uri: "config://settings"
-
-# Single parameter
-uri: "user://{user_id}"
-
-# Multiple parameters
-uri: "order://{order_id}/item/{item_id}"
-
-# Hierarchical resource
-uri: "project://{project_id}/environment/{env_name}/config"
-```
-
-## MIME Types
-
-Common MIME types for resources:
-
-| MIME Type | Use Case |
-|-----------|----------|
-| `application/json` | Structured data (default) |
-| `text/plain` | Plain text content |
-| `text/markdown` | Markdown documents |
-| `text/html` | HTML content |
-| `application/xml` | XML data |
-| `text/csv` | CSV data |
-
-```yaml
-resource:
-  uri: "report://{report_id}"
-  mime_type: text/markdown
-  # ...
+annotations:
+  title: "Delete User"
+  readOnlyHint: false
+  destructiveHint: true
+  idempotentHint: false
 ```
 
 ## Parameters Array
 
-Each parameter defines a URI placeholder.
+Each parameter defines an input to the tool.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `name` | string | Yes | - | Parameter identifier (must match URI placeholder). |
+| `name` | string | Yes | - | Parameter identifier (snake_case). |
 | `type` | string | Yes | - | Data type: `string`, `integer`, `number`, `boolean`, `array`, `object`. |
 | `description` | string | No | - | Human-readable description. |
 | `default` | any | No | - | Default value (makes parameter optional). |
@@ -190,35 +155,73 @@ Each parameter defines a URI placeholder.
 | `exclusiveMaximum` | number | Maximum value (exclusive). |
 | `multipleOf` | number | Value must be multiple of this. |
 
+**Array constraints:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `items` | object | Type definition for array items. |
+| `minItems` | integer | Minimum array length. |
+| `maxItems` | integer | Maximum array length. |
+| `uniqueItems` | boolean | Whether items must be unique. |
+
+**Object constraints:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `properties` | object | Map of property names to type definitions. |
+| `required` | array | List of required property names. |
+| `additionalProperties` | boolean | Whether extra properties are allowed. |
+
 ### Parameter Examples
 
 ```yaml
 parameters:
-  # Required integer parameter
-  - name: user_id
-    type: integer
-    description: User's unique identifier
-    minimum: 1
-
-  # String with pattern
-  - name: slug
+  # Required string with validation
+  - name: email
     type: string
-    description: URL-friendly identifier
-    pattern: "^[a-z0-9-]+$"
-    minLength: 1
-    maxLength: 100
+    description: User email address
+    format: email
+    maxLength: 255
+
+  # Optional integer with range
+  - name: limit
+    type: integer
+    description: Maximum results
+    default: 10
+    minimum: 1
+    maximum: 100
 
   # Enum parameter
-  - name: format
+  - name: status
     type: string
-    description: Output format
-    enum: ["json", "xml", "csv"]
-    default: "json"
+    description: Order status
+    enum: ["pending", "shipped", "delivered"]
+
+  # Array parameter
+  - name: ids
+    type: array
+    description: List of IDs to fetch
+    items:
+      type: integer
+    minItems: 1
+    maxItems: 100
+
+  # Object parameter
+  - name: filters
+    type: object
+    description: Search filters
+    properties:
+      department:
+        type: string
+      min_salary:
+        type: number
+    required:
+      - department
 ```
 
 ## Return Object
 
-The return type defines the structure of the resource's content.
+The return type defines the structure of the tool's output.
 
 ```yaml
 return:
@@ -226,18 +229,14 @@ return:
   properties:
     id:
       type: integer
-    title:
+    name:
       type: string
-    content:
+    email:
       type: string
-    metadata:
-      type: object
-      properties:
-        created_at:
-          type: string
-          format: date-time
-        author:
-          type: string
+      sensitive: true
+    created_at:
+      type: string
+      format: date-time
 ```
 
 Same fields as parameters, minus `name` and `default`.
@@ -259,16 +258,16 @@ The source defines where the implementation lives.
 ```yaml
 source:
   code: |
-    SELECT id, title, content, created_at
-    FROM documents
-    WHERE id = $document_id
+    SELECT id, name, email
+    FROM users
+    WHERE id = $user_id
 ```
 
 ### File Source
 
 ```yaml
 source:
-  file: ../sql/get_document.sql
+  file: ../sql/get_user.sql
 ```
 
 ## Policies Object
@@ -280,13 +279,13 @@ policies:
   input:
     - condition: "user.role == 'guest'"
       action: deny
-      reason: "Guests cannot access this resource"
+      reason: "Guests cannot access this tool"
 
   output:
     - condition: "user.role != 'admin'"
       action: filter_fields
-      fields: ["internal_notes", "audit_log"]
-      reason: "Internal fields restricted"
+      fields: ["salary", "ssn"]
+      reason: "Sensitive fields restricted"
 ```
 
 ### Policy Rule Fields
@@ -311,35 +310,35 @@ See [Policies](/security/policies) for complete documentation.
 
 ## Tests Array
 
-Tests verify resource behavior.
+Tests verify tool behavior.
 
 ```yaml
 tests:
-  - name: get_document_success
-    description: Successfully retrieves a document
+  - name: get_user_success
+    description: Successfully retrieves a user
     arguments:
-      - key: document_id
+      - key: user_id
         value: 1
     result_contains:
       id: 1
-      title: "Welcome"
+      name: "Alice"
 
-  - name: get_document_not_found
-    description: Returns null for non-existent document
+  - name: get_user_not_found
+    description: Returns null for non-existent user
     arguments:
-      - key: document_id
+      - key: user_id
         value: 99999
     result: null
 
-  - name: admin_sees_internal_fields
-    description: Admin can see internal fields
+  - name: admin_sees_all_fields
+    description: Admin can see sensitive fields
     arguments:
-      - key: document_id
+      - key: user_id
         value: 1
     user_context:
       role: admin
     result_contains:
-      internal_notes: "Review scheduled"
+      salary: 75000
 ```
 
 ### Test Fields
@@ -365,48 +364,24 @@ tests:
 
 See [Testing](/quality/testing) for complete documentation.
 
-## Resource vs Tool
-
-| Aspect | Resource | Tool |
-|--------|----------|------|
-| Purpose | Retrieve data/content | Perform actions |
-| Access | Via URI pattern | Via name |
-| Semantics | Read-only by convention | Any operation |
-| Use case | Documents, configs, profiles | CRUD, calculations, API calls |
-
-### When to Use Resources
-
-- Static or semi-static content
-- Document retrieval
-- Configuration access
-- User profiles
-- File content
-
-### When to Use Tools
-
-- Data modifications
-- Complex calculations
-- External API calls
-- Multi-step operations
-
 ## Naming Conventions
 
-- **URI patterns**: Use hierarchical paths (e.g., `user://{id}/settings`)
-- **Parameter names**: Use `snake_case` (e.g., `user_id`, `document_slug`)
+- **Tool names**: Use `snake_case` (e.g., `get_user`, `search_orders`)
+- **Parameter names**: Use `snake_case` (e.g., `user_id`, `max_results`)
 - **File paths**: Relative to the YAML file location
 
 ## Validation
 
-Validate your resource definitions:
+Validate your tool definitions:
 
 ```bash
 mxcp validate
-mxcp validate resources/my-resource.yml
+mxcp validate tools/my-tool.yml
 ```
 
 ## Next Steps
 
-- [Endpoints](/concepts/endpoints) - Understand resource concepts
-- [SQL Endpoints Tutorial](/tutorials/sql-endpoints) - Build SQL resources
-- [Python Endpoints Tutorial](/tutorials/python-endpoints) - Build Python resources
+- [Endpoints](/concepts/endpoints) - Understand tool concepts
+- [SQL Endpoints Tutorial](/tutorials/sql-endpoints) - Build SQL tools
+- [Python Endpoints Tutorial](/tutorials/python-endpoints) - Build Python tools
 - [Testing](/quality/testing) - Write comprehensive tests

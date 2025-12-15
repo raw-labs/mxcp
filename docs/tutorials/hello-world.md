@@ -280,8 +280,8 @@ External files are recommended for:
 
 Now that you understand the basics:
 
-1. **[SQL Endpoints Tutorial](sql-endpoints)** - Build more complex queries
-2. **[Python Endpoints Tutorial](python-endpoints)** - Add Python logic
+1. **[SQL Endpoints Tutorial](/tutorials/sql-endpoints)** - Build more complex queries
+2. **[Python Endpoints Tutorial](/tutorials/python-endpoints)** - Add Python logic
 3. **[Endpoints Concept](/concepts/endpoints)** - Deep dive into endpoint types
 
 ## Common Issues

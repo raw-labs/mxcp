@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-> **Related Topics:** [Testing](testing) (run assertions) | [Linting](linting) (metadata quality) | [Type System](/concepts/type-system) (type definitions) | [YAML Schema](/reference/yaml-schema) (field reference)
+> **Related Topics:** [Testing](/quality/testing) (run assertions) | [Linting](/quality/linting) (metadata quality) | [Type System](/concepts/type-system) (type definitions) | [YAML Schemas](/schemas/) (field reference)
 
 Validation ensures your endpoint definitions are structurally correct before execution. It catches errors early in development.
 
@@ -336,6 +336,6 @@ mxcp validate --debug
 
 ## Next Steps
 
-- [Testing](testing) - Functional testing
-- [Linting](linting) - Metadata quality
+- [Testing](/quality/testing) - Functional testing
+- [Linting](/quality/linting) - Metadata quality
 - [Type System](/concepts/type-system) - Type reference

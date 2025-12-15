@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-> **Related Topics:** [Deployment](deployment) (production setup) | [Authentication](/security/authentication) (OAuth secrets) | [Project Structure](/concepts/project-structure) (config file location) | [Common Tasks](/reference/common-tasks#how-do-i-use-secrets) (quick how-to)
+> **Related Topics:** [Deployment](/operations/deployment) (production setup) | [Authentication](/security/authentication) (OAuth secrets) | [Project Structure](/concepts/project-structure) (config file location) | [Common Tasks](/reference/common-tasks#how-do-i-use-secrets) (quick how-to)
 
 MXCP uses two configuration files: site configuration for project settings and user configuration for secrets and authentication.
 
@@ -478,6 +478,6 @@ Comment complex configurations.
 
 ## Next Steps
 
-- [Deployment](deployment) - Deploy to production
-- [Monitoring](monitoring) - Set up observability
+- [Deployment](/operations/deployment) - Deploy to production
+- [Monitoring](/operations/monitoring) - Set up observability
 - [Authentication](/security/authentication) - Configure OAuth

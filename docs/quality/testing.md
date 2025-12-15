@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-> **Related Topics:** [Validation](validation) (check syntax before testing) | [Policies](/security/policies) (test access control) | [Evals](evals) (AI behavior testing) | [Common Tasks](/reference/common-tasks#how-do-i-add-tests-to-an-endpoint) (quick how-to)
+> **Related Topics:** [Validation](/quality/validation) (check syntax before testing) | [Policies](/security/policies) (test access control) | [Evals](/quality/evals) (AI behavior testing) | [Common Tasks](/reference/common-tasks#how-do-i-add-tests-to-an-endpoint) (quick how-to)
 
 MXCP provides built-in testing capabilities to verify endpoint functionality. Tests are defined directly in endpoint YAML files and run with `mxcp test`.
 
@@ -532,6 +532,6 @@ tool:
 
 ## Next Steps
 
-- [Linting](linting) - Metadata quality
-- [Evals](evals) - LLM behavior testing
+- [Linting](/quality/linting) - Metadata quality
+- [Evals](/quality/evals) - LLM behavior testing
 - [Policies](/security/policies) - Policy configuration

@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-> **Related Topics:** [Quickstart](/getting-started/quickstart) (first commands) | [Common Tasks](common-tasks) (quick how-to) | [Quality](/quality/) (validation, testing, linting)
+> **Related Topics:** [Quickstart](/getting-started/quickstart) (first commands) | [Common Tasks](/reference/common-tasks) (quick how-to) | [Quality](/quality/) (validation, testing, linting)
 
 Complete reference for all MXCP command-line interface commands.
 
@@ -486,6 +486,6 @@ Commands handle errors consistently:
 
 ## Next Steps
 
-- [SQL Reference](sql) - SQL capabilities
-- [Python Reference](python) - Runtime API
-- [Plugin Reference](plugins) - Plugin development
+- [SQL Reference](/reference/sql) - SQL capabilities
+- [Python Reference](/reference/python) - Runtime API
+- [Plugin Reference](/reference/plugins) - Plugin development

@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-> **Related Topics:** [Python Endpoints Tutorial](/tutorials/python-endpoints) (step-by-step guide) | [Plugins](plugins) (custom UDFs) | [Configuration](/operations/configuration) (secrets access) | [Type System](/concepts/type-system) (parameter types)
+> **Related Topics:** [Python Endpoints Tutorial](/tutorials/python-endpoints) (step-by-step guide) | [Plugins](/reference/plugins) (custom UDFs) | [Configuration](/operations/configuration) (secrets access) | [Type System](/concepts/type-system) (parameter types)
 
 Python endpoints have access to the `mxcp.runtime` module, which provides database access, configuration, secrets, and lifecycle management.
 
@@ -479,6 +479,6 @@ async def analyze_data(department: str, limit: int = 10) -> dict:
 
 ## Next Steps
 
-- [Plugin Reference](plugins) - Plugin development
+- [Plugin Reference](/reference/plugins) - Plugin development
 - [Tutorials](/tutorials/python-endpoints) - Python examples
 - [Type System](/concepts/type-system) - Type mapping

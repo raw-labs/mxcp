@@ -1,8 +1,8 @@
 ---
-title: "YAML Schema Reference"
+title: "YAML Schemas"
 description: "Overview of all MXCP YAML configuration files with links to detailed schema references for tools, resources, prompts, and configuration."
 sidebar:
-  order: 5
+  order: 1
 ---
 
 > **Related Topics:** [Endpoints](/concepts/endpoints) (endpoint types) | [Type System](/concepts/type-system) (parameter types) | [Configuration](/operations/configuration) (runtime config) | [Validation](/quality/validation) (check syntax)
@@ -13,11 +13,11 @@ This page provides an overview of all YAML configuration files in MXCP. Click th
 
 | Schema | File Location | Description |
 |--------|---------------|-------------|
-| [Tool Schema](/reference/schema-tool) | `tools/*.yml` | Tool endpoint definitions |
-| [Resource Schema](/reference/schema-resource) | `resources/*.yml` | Resource endpoint definitions |
-| [Prompt Schema](/reference/schema-prompt) | `prompts/*.yml` | Prompt endpoint definitions |
-| [Site Configuration](/reference/schema-site-config) | `mxcp-site.yml` | Project configuration |
-| [User Configuration](/reference/schema-user-config) | `~/.mxcp/config.yml` | User-level settings and secrets |
+| [Tool Schema](/schemas/tool) | `tools/*.yml` | Tool endpoint definitions |
+| [Resource Schema](/schemas/resource) | `resources/*.yml` | Resource endpoint definitions |
+| [Prompt Schema](/schemas/prompt) | `prompts/*.yml` | Prompt endpoint definitions |
+| [Site Configuration](/schemas/site-config) | `mxcp-site.yml` | Project configuration |
+| [User Configuration](/schemas/user-config) | `~/.mxcp/config.yml` | User-level settings and secrets |
 
 ## File Types Overview
 
@@ -25,7 +25,7 @@ This page provides an overview of all YAML configuration files in MXCP. Click th
 
 Endpoints are the core building blocks of MXCP. Each type has its own schema:
 
-**[Tools](/reference/schema-tool)** - Callable functions that AI agents can invoke:
+**[Tools](/schemas/tool)** - Callable functions that AI agents can invoke:
 
 ```yaml
 mxcp: 1
@@ -39,7 +39,7 @@ tool:
     file: ../sql/get_user.sql
 ```
 
-**[Resources](/reference/schema-resource)** - Data accessible via URI patterns:
+**[Resources](/schemas/resource)** - Data accessible via URI patterns:
 
 ```yaml
 mxcp: 1
@@ -50,7 +50,7 @@ resource:
     file: ../sql/user_profile.sql
 ```
 
-**[Prompts](/reference/schema-prompt)** - Templated conversation starters:
+**[Prompts](/schemas/prompt)** - Templated conversation starters:
 
 ```yaml
 mxcp: 1
@@ -71,7 +71,7 @@ prompt:
 
 ### Configuration Files
 
-**[Site Configuration](/reference/schema-site-config)** (`mxcp-site.yml`) - Project-level settings:
+**[Site Configuration](/schemas/site-config)** (`mxcp-site.yml`) - Project-level settings:
 
 ```yaml
 mxcp: 1
@@ -90,7 +90,7 @@ profiles:
       enabled: true
 ```
 
-**[User Configuration](/reference/schema-user-config)** (`~/.mxcp/config.yml`) - User-level secrets and auth:
+**[User Configuration](/schemas/user-config)** (`~/.mxcp/config.yml`) - User-level secrets and auth:
 
 ```yaml
 mxcp: 1
@@ -234,8 +234,8 @@ mxcp validate --debug
 
 ## Next Steps
 
-- [Tool Schema](/reference/schema-tool) - Complete tool reference
-- [Resource Schema](/reference/schema-resource) - Complete resource reference
-- [Prompt Schema](/reference/schema-prompt) - Complete prompt reference
-- [Site Configuration](/reference/schema-site-config) - Project configuration
-- [User Configuration](/reference/schema-user-config) - Secrets and authentication
+- [Tool Schema](/schemas/tool) - Complete tool reference
+- [Resource Schema](/schemas/resource) - Complete resource reference
+- [Prompt Schema](/schemas/prompt) - Complete prompt reference
+- [Site Configuration](/schemas/site-config) - Project configuration
+- [User Configuration](/schemas/user-config) - Secrets and authentication
