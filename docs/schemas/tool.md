@@ -84,6 +84,8 @@ tool:
 | `tool` | object | Yes | - | Tool definition object. |
 | `metadata` | object | No | - | Custom metadata (not processed by MXCP). |
 
+> **Note:** The `mxcp` field accepts both integer (`1`) and string (`"1"`) values - strings are automatically coerced to integers.
+
 ## Tool Object
 
 | Field | Type | Required | Default | Description |
@@ -268,6 +270,26 @@ source:
 ```yaml
 source:
   file: ../sql/get_user.sql
+```
+
+### Python Source
+
+For Python tools, the function name in the Python file must match the tool name:
+
+```yaml
+# tools/calculate_tax.yml
+tool:
+  name: calculate_tax      # Function name must match
+  language: python
+  source:
+    file: ../python/tax.py
+```
+
+```python
+# python/tax.py
+def calculate_tax(amount: float, rate: float) -> float:
+    """Function name must match tool name."""
+    return amount * rate
 ```
 
 ## Policies Object

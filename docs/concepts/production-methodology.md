@@ -21,9 +21,43 @@ Building MCP servers requires more than just connecting data to AI. Production s
 
 ## The MXCP Methodology
 
+```mermaid
+flowchart TB
+    subgraph Phase1["1 - Data Modeling"]
+        D1[dbt Models] --> D2[Data Quality Tests]
+        D2 --> D3[Data Contracts]
+    end
+
+    subgraph Phase2["2 - Service Design"]
+        S1[Type Definitions] --> S2[Security Policies]
+        S2 --> S3[Resource Structure]
+    end
+
+    subgraph Phase3["3 - Implementation"]
+        I1[SQL Endpoints]
+        I2[Python Endpoints]
+    end
+
+    subgraph Phase4["4 - Quality Assurance"]
+        Q1[Validation] --> Q2[Testing]
+        Q2 --> Q3[LLM Evals]
+    end
+
+    subgraph Phase5["5 - Production"]
+        P1[Configuration] --> P2[Authentication]
+        P2 --> P3[Drift Detection]
+        P3 --> P4[Audit Logging]
+    end
+
+    Phase1 --> Phase2
+    Phase2 --> Phase3
+    Phase3 --> Phase4
+    Phase4 --> Phase5
+```
+
 ### Phase 1: Data Modeling & Quality
 
-Before writing MCP endpoints, establish your data foundation.
+Before writing MCP endpoints, establish your data foundation with [dbt integration](/integrations/dbt).
 
 #### 1.1 Design Your Data Model
 
@@ -106,9 +140,11 @@ models:
 
 ### Phase 2: Service Design
 
-Design your MCP interface with production requirements in mind.
+Design your MCP interface with production requirements in mind. See [Project Structure](/concepts/project-structure) for file organization.
 
 #### 2.1 Define Clear Types
+
+Use the [MXCP type system](/concepts/type-system) for clear contracts:
 
 ```yaml
 parameters:
@@ -131,6 +167,8 @@ return:
 ```
 
 #### 2.2 Design Security Policies
+
+Define [access control policies](/security/policies) upfront:
 
 ```yaml
 policies:
@@ -158,7 +196,7 @@ resources/
 
 ### Phase 3: Implementation
 
-Choose the right tool for each job.
+Choose the right tool for each job. MXCP supports both [SQL](/reference/sql) and [Python](/reference/python) endpoints, backed by [DuckDB](/integrations/duckdb).
 
 #### 3.1 SQL for Data Operations
 
@@ -221,11 +259,15 @@ def load_model():
 
 def predict_churn(customer_id: str) -> dict:
     """Predict churn probability"""
-    features = db.execute("""
+    results = db.execute("""
         SELECT * FROM customer_360
         WHERE customer_id = $customer_id
-    """, {"customer_id": customer_id}).fetchone()
+    """, {"customer_id": customer_id})
 
+    if not results:
+        return {"error": "Customer not found"}
+
+    features = results[0]
     churn_probability = model.predict_proba([features])[0][1]
     risk_level = "high" if churn_probability > 0.7 else \
                  "medium" if churn_probability > 0.3 else "low"
@@ -239,13 +281,13 @@ def predict_churn(customer_id: str) -> dict:
 
 ### Phase 4: Quality Assurance
 
-Ensure reliability before deployment.
+Ensure reliability before deployment with [validation](/quality/validation), [testing](/quality/testing), and [LLM evals](/quality/evals).
 
 #### 4.1 Validation
 
 ```bash
 mxcp validate
-mxcp validate get_customer_metrics
+mxcp validate tools/get_customer_metrics.yml
 ```
 
 #### 4.2 Comprehensive Testing
@@ -293,7 +335,7 @@ tests:
 
 ### Phase 5: Production Operations
 
-Deploy with confidence.
+Deploy with confidence using proper [configuration](/operations/configuration), [authentication](/security/authentication), [drift detection](/operations/monitoring), and [audit logging](/security/auditing).
 
 #### 5.1 Environment Configuration
 
@@ -336,6 +378,8 @@ projects:
 
 #### 5.2 Monitoring & Drift Detection
 
+Use [drift detection](/operations/monitoring) to track schema and endpoint changes:
+
 ```bash
 # Create baseline
 mxcp drift-snapshot --profile production
@@ -350,33 +394,33 @@ mxcp log --since 1h --export-duckdb performance.db
 ## Best Practices
 
 ### 1. Start with Data
-- Model your data properly with dbt
+- Model your data properly with [dbt](/integrations/dbt)
 - Create materialized views for performance
 - Test data quality at the source
 - Document your data model
 
 ### 2. Design Before Implementation
-- Define types and contracts first
-- Plan security policies upfront
+- Define [types](/concepts/type-system) and contracts first
+- Plan [security policies](/security/policies) upfront
 - Consider performance implications
 - Design for testability
 
 ### 3. Choose Tools Wisely
-- SQL for data queries and aggregations
-- Python for business logic and integrations
-- dbt for data transformations
-- DuckDB for local caching
+- [SQL](/reference/sql) for data queries and aggregations
+- [Python](/reference/python) for business logic and integrations
+- [dbt](/integrations/dbt) for data transformations
+- [DuckDB](/integrations/duckdb) for local caching
 
 ### 4. Test Everything
-- Unit tests for each endpoint
-- Policy tests for security
+- [Unit tests](/quality/testing) for each endpoint
+- [Policy tests](/quality/testing#policy-testing) for security
 - Performance tests for scale
-- LLM evals for AI safety
+- [LLM evals](/quality/evals) for AI safety
 
 ### 5. Monitor Production
-- Enable audit logging
+- Enable [audit logging](/security/auditing)
 - Track performance metrics
-- Monitor schema drift
+- Monitor [schema drift](/operations/monitoring)
 - Alert on errors
 
 ## Migration Path

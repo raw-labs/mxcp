@@ -79,6 +79,8 @@ resource:
 | `resource` | object | Yes | - | Resource definition object. |
 | `metadata` | object | No | - | Custom metadata (not processed by MXCP). |
 
+> **Note:** The `mxcp` field accepts both integer (`1`) and string (`"1"`) values - strings are automatically coerced to integers.
+
 ## Resource Object
 
 | Field | Type | Required | Default | Description |
@@ -87,7 +89,7 @@ resource:
 | `name` | string | No | - | Human-readable display name. |
 | `description` | string | No | - | Human-readable description for AI clients. |
 | `language` | string | No | `"sql"` | Implementation language: `sql` or `python`. |
-| `mime_type` | string | No | `"application/json"` | Content type of the resource. |
+| `mime_type` | string | No | - | Content type of the resource. |
 | `tags` | array | No | - | List of tags for categorization. |
 | `parameters` | array | No | - | URI parameter definitions. |
 | `return` | object | No | - | Return type definition. |
@@ -115,6 +117,7 @@ uri: "org://{org_id}/team/{team_id}/member/{member_id}"
 ### Pattern Rules
 
 - Use `{param_name}` for parameter placeholders
+- **All parameters must be used in the URI** - parameters not in the URI will cause validation errors (use a tool instead if you need extra parameters)
 - Parameter names must match entries in the `parameters` array
 - Use hierarchical paths for nested resources
 - Avoid query strings (use parameters instead)
@@ -189,6 +192,23 @@ Each parameter defines a URI placeholder.
 | `exclusiveMinimum` | number | Minimum value (exclusive). |
 | `exclusiveMaximum` | number | Maximum value (exclusive). |
 | `multipleOf` | number | Value must be multiple of this. |
+
+**Array constraints:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `items` | object | Type definition for array items. |
+| `minItems` | integer | Minimum array length. |
+| `maxItems` | integer | Maximum array length. |
+| `uniqueItems` | boolean | Whether items must be unique. |
+
+**Object constraints:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `properties` | object | Map of property names to type definitions. |
+| `required` | array | List of required property names. |
+| `additionalProperties` | boolean | Whether extra properties are allowed. |
 
 ### Parameter Examples
 
@@ -269,6 +289,27 @@ source:
 ```yaml
 source:
   file: ../sql/get_document.sql
+```
+
+### Python Source
+
+For Python resources, the function name in the Python file must match the resource name (derived from the URI pattern):
+
+```yaml
+# resources/user_profile.yml
+resource:
+  uri: "user://{user_id}/profile"
+  name: user_profile          # Function name must match
+  language: python
+  source:
+    file: ../python/profiles.py
+```
+
+```python
+# python/profiles.py
+def user_profile(user_id: int) -> dict:
+    """Function name must match resource name."""
+    return {"id": user_id, "name": "Alice"}
 ```
 
 ## Policies Object

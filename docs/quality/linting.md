@@ -15,13 +15,17 @@ The MXCP linter checks your endpoint metadata quality, ensuring AI tools can und
 # Lint all endpoints
 mxcp lint
 
-# Lint specific endpoint
-mxcp lint --tool get_user
-mxcp lint --resource user-profile
+# Show only warnings (skip suggestions)
+mxcp lint --severity warning
 
-# JSON output
+# JSON output for automation
 mxcp lint --json-output
+
+# Debug mode
+mxcp lint --debug
 ```
+
+Note: The linter checks all endpoints at once. It does not support filtering by specific endpoint.
 
 ## What Gets Checked
 
@@ -55,31 +59,54 @@ mxcp lint --json-output
 
 ### Success
 
+```bash
+mxcp lint
+
+🔍 Lint Results
+   Checked 2 endpoint files
+
+🎉 All endpoints have excellent metadata!
 ```
-$ mxcp lint
 
-✓ tools/get_user.yml
-✓ tools/search_users.yml
+### Issues Found
 
-Lint complete: 2 passed, 0 warnings, 0 errors
+```bash
+mxcp lint
+
+🔍 Lint Results
+   Checked 3 endpoint files
+   • 2 files with suggestions
+   • 5 warnings
+
+📄 tools/get_user.yml
+  ⚠️  tool.description
+     Tool is missing a description
+     💡 Add a 'description' field to help LLMs understand what this endpoint does
+  ⚠️  tool.tests
+     Tool has no tests defined
+     💡 Add at least one test case to ensure the endpoint works correctly
+  ℹ️  tool.parameters[0].examples
+     Parameter 'user_id' has no examples
+     💡 Consider adding an 'examples' array to help LLMs understand valid inputs
+
+📄 tools/delete_user.yml
+  ℹ️  tool.tags
+     Tool has no tags
+     💡 Consider adding tags to help categorize and discover this endpoint
+  ℹ️  tool.annotations
+     Tool has no behavioral annotations
+     💡 Consider adding annotations like readOnlyHint, idempotentHint to help LLMs use the tool safely
+
+📚 Why this matters:
+   • Descriptions help LLMs understand your endpoints better
+   • Examples show LLMs how to use parameters correctly
+   • Tests ensure your endpoints work as expected
+   • Good metadata = better LLM performance!
 ```
 
-### Warnings
-
-```
-$ mxcp lint
-
-tools/get_user.yml:
-  ⚠ Parameter 'user_id' missing description
-  ⚠ No examples provided for parameter 'user_id'
-  ⚠ Consider adding tags for categorization
-
-tools/dangerous_delete.yml:
-  ⚠ Destructive operation should set destructiveHint: true
-  ⚠ Consider adding idempotentHint annotation
-
-Lint complete: 0 passed, 4 warnings, 0 errors
-```
+Severity levels:
+- `⚠️` Warning - Important issues (missing description, missing tests)
+- `ℹ️` Info - Suggestions for improvement (missing examples, tags, annotations)
 
 ### JSON Output
 
@@ -89,90 +116,125 @@ mxcp lint --json-output
 
 ```json
 {
-  "status": "warning",
-  "results": [
+  "status": "ok",
+  "result": [
     {
+      "severity": "warning",
       "path": "tools/get_user.yml",
-      "endpoint": "tool/get_user",
-      "issues": [
-        {
-          "severity": "warning",
-          "code": "missing-description",
-          "message": "Parameter 'user_id' missing description",
-          "line": 8
-        },
-        {
-          "severity": "warning",
-          "code": "missing-examples",
-          "message": "No examples provided for parameter 'user_id'",
-          "line": 8
-        }
-      ]
+      "location": "tool.description",
+      "message": "Tool is missing a description",
+      "suggestion": "Add a 'description' field to help LLMs understand what this endpoint does"
+    },
+    {
+      "severity": "info",
+      "path": "tools/get_user.yml",
+      "location": "tool.parameters[0].examples",
+      "message": "Parameter 'user_id' has no examples",
+      "suggestion": "Consider adding an 'examples' array to help LLMs understand valid inputs"
     }
   ]
 }
 ```
 
+Fields:
+- `status`: Command execution status (`ok` or `error`)
+- `result`: Array of lint issues
+  - `severity`: Issue severity (`warning` or `info`)
+  - `path`: Path to endpoint file
+  - `location`: YAML path to the problematic field
+  - `message`: Description of the issue
+  - `suggestion`: Recommended fix
+
 ## Lint Rules
 
-### Required Rules (Errors)
+Note: Structural errors (invalid types, missing required fields) are caught by `mxcp validate`, not the linter. The linter focuses on metadata quality.
 
-| Code | Description |
-|------|-------------|
-| `no-description` | Endpoint missing description |
-| `empty-description` | Description is empty or whitespace |
-| `invalid-type` | Type annotation is invalid |
+### Warning Rules
 
-### Recommended Rules (Warnings)
+| Location | Message |
+|----------|---------|
+| `tool.description` | Tool is missing a description |
+| `tool.tests` | Tool has no tests defined |
+| `resource.description` | Resource is missing a description |
 
-| Code | Description |
-|------|-------------|
-| `missing-description` | Parameter/return missing description |
-| `missing-examples` | Parameter missing examples |
-| `missing-tags` | Endpoint has no tags |
-| `missing-annotations` | Missing behavioral annotations |
-| `short-description` | Description too short (< 10 chars) |
-| `generic-description` | Description is too generic |
+### Info Rules (Suggestions)
 
-### Best Practice Rules (Suggestions)
-
-| Code | Description |
-|------|-------------|
-| `destructive-no-hint` | Destructive operation without hint |
-| `readonly-no-hint` | Read-only operation without hint |
-| `sensitive-no-mark` | Potentially sensitive field not marked |
-| `parameter-naming` | Non-standard parameter naming |
+| Location | Message |
+|----------|---------|
+| `*.parameters[n].examples` | Parameter has no examples |
+| `*.parameters[n].default` | Parameter has no default value |
+| `*.tags` | Endpoint has no tags |
+| `*.annotations` | Endpoint has no behavioral annotations |
 
 ## Fixing Common Issues
 
-### Missing Description
+### Missing Tool Description
 
 ```yaml
-# Before (warning)
-parameters:
-  - name: user_id
-    type: integer
+# Before (warning: tool.description)
+mxcp: 1
+tool:
+  name: get_user
+  parameters:
+    - name: user_id
+      type: integer
+      description: User ID
+  source:
+    code: "SELECT * FROM users WHERE id = $user_id"
 
 # After (fixed)
-parameters:
-  - name: user_id
-    type: integer
-    description: Unique identifier for the user
+mxcp: 1
+tool:
+  name: get_user
+  description: Retrieve user information by their unique identifier
+  parameters:
+    - name: user_id
+      type: integer
+      description: User ID
+  source:
+    code: "SELECT * FROM users WHERE id = $user_id"
+```
+
+### Missing Tests
+
+```yaml
+# Before (warning: tool.tests)
+mxcp: 1
+tool:
+  name: get_user
+  description: Get user by ID
+  # ... no tests defined
+
+# After (fixed)
+mxcp: 1
+tool:
+  name: get_user
+  description: Get user by ID
+  # ...
+  tests:
+    - name: get_existing_user
+      arguments:
+        - key: user_id
+          value: 1
+      result_contains:
+        id: 1
 ```
 
 ### Missing Examples
 
 ```yaml
-# Before (warning)
+# Before (info: tool.parameters[0].examples)
 parameters:
   - name: status
     type: string
+    description: User status filter
     enum: ["active", "inactive", "pending"]
 
 # After (fixed)
 parameters:
   - name: status
     type: string
+    description: User status filter
     enum: ["active", "inactive", "pending"]
     examples: ["active", "pending"]
 ```
@@ -180,20 +242,22 @@ parameters:
 ### Missing Tags
 
 ```yaml
-# Before (warning)
+# Before (info: tool.tags)
 tool:
   name: get_user
+  description: Get user by ID
 
 # After (fixed)
 tool:
   name: get_user
+  description: Get user by ID
   tags: ["users", "read"]
 ```
 
 ### Missing Annotations
 
 ```yaml
-# Before (warning)
+# Before (info: tool.annotations)
 tool:
   name: delete_user
   description: Delete a user permanently
@@ -209,33 +273,11 @@ tool:
     idempotentHint: false
 ```
 
-### Short Description
-
-```yaml
-# Before (warning)
-tool:
-  name: get_user
-  description: Gets user
-
-# After (fixed)
-tool:
-  name: get_user
-  description: Retrieve user information by their unique identifier. Returns profile, contact, and role data.
-```
-
 ### Sensitive Fields
 
-```yaml
-# Before (warning)
-return:
-  type: object
-  properties:
-    ssn:
-      type: string
-    password_hash:
-      type: string
+Mark fields containing sensitive data:
 
-# After (fixed)
+```yaml
 return:
   type: object
   properties:
@@ -252,26 +294,77 @@ return:
 ### Tool Descriptions
 
 **Good:**
-> "Search for users by department and role. Returns paginated results with user profiles including name, email, and team information."
+```yaml
+tool:
+  name: get_customer_orders
+  description: |
+    Retrieves order history for a specific customer.
+    Returns orders sorted by date (newest first).
+    Includes order items, totals, and shipping information.
+```
 
 **Bad:**
-> "Searches users"
+```yaml
+tool:
+  name: get_data
+  description: "Gets data"
+```
 
 ### Parameter Descriptions
 
 **Good:**
-> "Maximum number of results to return. Use with offset for pagination. Default is 10, maximum is 100."
+```yaml
+parameters:
+  - name: status
+    type: string
+    description: "Order status filter"
+    examples: ["pending", "shipped", "delivered", "cancelled"]
+    enum: ["pending", "shipped", "delivered", "cancelled"]
+
+  - name: date_from
+    type: string
+    format: date
+    description: "Start date for filtering orders (inclusive)"
+    examples: ["2024-01-01", "2024-06-15"]
+```
 
 **Bad:**
-> "The limit"
+```yaml
+parameters:
+  - name: limit
+    type: integer
+    description: "The limit"
+```
 
-### Return Descriptions
+### Return Type Descriptions
 
-**Good:**
-> "List of matching users sorted by relevance. Each user object includes id, name, email, and department."
+Describe complex return types thoroughly:
 
-**Bad:**
-> "User data"
+```yaml
+return:
+  type: object
+  description: "Customer order details"
+  properties:
+    order_id:
+      type: string
+      description: "Unique order identifier"
+    items:
+      type: array
+      description: "List of items in the order"
+      items:
+        type: object
+        description: "Individual order item"
+        properties:
+          sku:
+            type: string
+            description: "Product SKU"
+          quantity:
+            type: integer
+            description: "Number of units ordered"
+          price:
+            type: number
+            description: "Unit price at time of order"
+```
 
 ## Behavioral Annotations
 
@@ -311,7 +404,33 @@ Use for: API calls, external services
 
 ## CI/CD Integration
 
-### GitHub Actions
+### GitHub Actions (Complete Quality Workflow)
+
+```yaml
+name: MXCP Quality Checks
+on: [push, pull_request]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install mxcp
+
+      - name: Validate Endpoints
+        run: mxcp validate
+
+      - name: Run Tests
+        run: mxcp test
+
+      - name: Lint Endpoints
+        run: mxcp lint --severity warning
+```
+
+### Lint-Only Check
 
 ```yaml
 name: Lint
@@ -321,51 +440,52 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - run: pip install mxcp
       - name: Run linter
         run: mxcp lint --json-output > lint-results.json
-      - name: Check for errors
+      - name: Check for warnings
         run: |
-          if jq -e '.results[].issues[] | select(.severity == "error")' lint-results.json > /dev/null; then
-            echo "Lint errors found"
+          if jq -e '.result[] | select(.severity == "warning")' lint-results.json > /dev/null; then
+            echo "Lint warnings found"
             exit 1
           fi
 ```
 
-### Quality Gate
+### Quality Gate Script
 
 ```bash
 #!/bin/bash
-# Block on errors, warn on warnings
+# Block on too many warnings
 
 RESULT=$(mxcp lint --json-output)
 
-ERRORS=$(echo $RESULT | jq '[.results[].issues[] | select(.severity == "error")] | length')
-WARNINGS=$(echo $RESULT | jq '[.results[].issues[] | select(.severity == "warning")] | length')
+WARNINGS=$(echo "$RESULT" | jq '[.result[] | select(.severity == "warning")] | length')
+INFO=$(echo "$RESULT" | jq '[.result[] | select(.severity == "info")] | length')
 
-echo "Errors: $ERRORS, Warnings: $WARNINGS"
+echo "Warnings: $WARNINGS, Info: $INFO"
 
-if [ "$ERRORS" -gt 0 ]; then
+if [ "$WARNINGS" -gt 0 ]; then
+    echo "Lint warnings found - please fix before merging"
     exit 1
 fi
 
-if [ "$WARNINGS" -gt 10 ]; then
-    echo "Too many warnings"
+if [ "$INFO" -gt 20 ]; then
+    echo "Too many suggestions - consider improving metadata"
     exit 1
 fi
 ```
 
 ## Best Practices
 
-### 1. Fix Errors First
-Errors indicate real problems that will affect functionality.
+### 1. Fix Warnings First
+Warnings indicate important metadata gaps that affect LLM comprehension.
 
-### 2. Address Warnings
-Warnings improve AI comprehension significantly.
+### 2. Address Suggestions
+Info-level suggestions improve AI understanding significantly.
 
 ### 3. Be Specific
 Generic descriptions don't help AI understand your tools.

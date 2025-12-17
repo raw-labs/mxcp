@@ -283,27 +283,39 @@ Best for:
 - Local development
 - Process-based clients
 
-### HTTP
-REST API over HTTP:
-```bash
-mxcp serve --transport http --port 8000
-```
-
-Best for:
-- Web applications
-- Custom integrations
-- Debugging
-
 ### Streamable HTTP
-Server-sent events for real-time:
+HTTP with server-sent events for streaming:
 ```bash
 mxcp serve --transport streamable-http --port 8000
 ```
 
 Best for:
+- Web applications
+- Custom integrations
 - Streaming responses
-- Real-time updates
-- Long-running operations
+
+### SSE (Server-Sent Events) - Deprecated
+Legacy SSE transport (deprecated in MCP protocol version 2025-03-26):
+```bash
+mxcp serve --transport sse --port 8000
+```
+
+Use only for:
+- Backwards compatibility with older MCP clients
+- Prefer `streamable-http` for new integrations
+
+### Additional Options
+
+```bash
+# Enable/disable built-in SQL tools
+mxcp serve --sql-tools true
+
+# Read-only database mode
+mxcp serve --readonly
+
+# Stateless mode for serverless deployments
+mxcp serve --stateless
+```
 
 ## Custom Integrations
 
@@ -394,10 +406,10 @@ mcp-cli tools call get_user --user_id 123
 
 ```bash
 # Environment variable
-export MXCP_LOG_LEVEL=DEBUG
+export MXCP_DEBUG=true
 
 # CLI flag
-mxcp serve --log-level DEBUG
+mxcp serve --debug
 ```
 
 ### Check Server Status

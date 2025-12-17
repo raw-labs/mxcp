@@ -9,6 +9,24 @@ sidebar:
 
 MXCP's policy engine provides fine-grained access control for your endpoints. Policies can control who can call endpoints (input policies) and what data they can see (output policies).
 
+## How It Works
+
+```mermaid
+flowchart LR
+    Request --> Auth[Authentication]
+    Auth --> Input[Input Policies]
+    Input -->|deny?| Denied[Request Denied]
+    Input -->|pass| Exec[Execution]
+    Exec --> Output[Output Policies]
+    Output -->|filter/mask| Response
+```
+
+1. **Request arrives** with user context from authentication
+2. **Input policies** evaluate - any `deny` stops processing
+3. **Endpoint executes** if input policies pass
+4. **Output policies** filter/mask the response data
+5. **Response** returns to client
+
 ## Policy Types
 
 ### Input Policies
@@ -34,7 +52,7 @@ tool:
 
   policies:
     input:
-      - condition: "user.role != 'hr'"
+      - condition: "user.role != 'hr' && user.role != 'hr_manager'"
         action: deny
         reason: "HR role required"
 
@@ -300,6 +318,18 @@ input:
 
 ## Output Policy Actions
 
+### deny
+Block the response based on its content:
+
+```yaml
+output:
+  - condition: "response.email.endsWith('@sensitive.com')"
+    action: deny
+    reason: "Emails from sensitive.com must not be exposed"
+```
+
+This is useful when you can't determine access until after seeing the data.
+
 ### filter_fields
 Remove specific fields from the response:
 
@@ -320,6 +350,8 @@ output:
     action: filter_sensitive_fields
     reason: "PII access not authorized"
 ```
+
+> **Note:** This action requires fields to be marked with `sensitive: true` in your return type schema. See [Data Sensitivity Levels](#data-sensitivity-levels) for an example.
 
 ### mask_fields
 Replace field values with `"****"`:
@@ -510,6 +542,26 @@ tool:
         reason: "Contractor access limited"
 ```
 
+## Using Policies with Different Commands
+
+### With `mxcp serve`
+
+When running MXCP in server mode with authentication enabled, the user context is automatically populated from the OAuth token:
+
+```bash
+mxcp serve --profile production
+```
+
+The auth middleware extracts user information and makes it available to policies.
+
+### With `mxcp run`
+
+For command-line execution, provide user context manually with `--user-context`.
+
+### With `mxcp test`
+
+The test command supports user context in test definitions via `user_context:` field. Tests can validate both policy enforcement and filtered output.
+
 ## Testing Policies
 
 ### Command Line Testing
@@ -531,6 +583,20 @@ mxcp run tool employee_data \
 mxcp run tool employee_data \
   --param employee_id=123 \
   --user-context '{"role": "guest"}'
+
+# Load user context from file
+mxcp run tool employee_data \
+  --param employee_id=123 \
+  --user-context @user_context.json
+```
+
+Example `user_context.json`:
+```json
+{
+  "user_id": "456",
+  "role": "admin",
+  "permissions": ["employee.read", "pii.view"]
+}
 ```
 
 ### YAML Test Cases
@@ -574,35 +640,57 @@ Note: Policy denial tests cannot be directly tested via YAML test assertions. Us
 Policies are evaluated in order:
 
 1. **Input policies** - Top to bottom
-   - First `deny` stops execution
-   - `warn` actions continue
+   - First `deny` stops execution immediately
+   - Remaining policies are skipped
 
-2. **Endpoint execution** - If input policies pass
+2. **Endpoint execution** - Only if all input policies pass
 
 3. **Output policies** - Top to bottom
    - All matching policies applied
-   - Fields filtered cumulatively
+   - Fields filtered/masked cumulatively
 
 ## SQL User Functions
 
-Access user context in SQL queries:
+Access user context in SQL queries when running through `mxcp serve`:
 
 ```sql
 SELECT *
 FROM data
 WHERE
-  department = mxcp_user_role()
-  OR mxcp_user_role() = 'admin'
+  created_by = get_username()
+  OR get_user_provider() = 'admin'
 ```
 
 Available functions:
-- `mxcp_user_id()` - User ID
-- `mxcp_user_email()` - User email
-- `mxcp_user_role()` - User role
+- `get_username()` - User's display name
+- `get_user_email()` - User's email address
+- `get_user_provider()` - OAuth provider name (github, google, etc.)
+- `get_user_external_token()` - OAuth provider token for API calls
+- `get_request_header(name)` - Get a specific HTTP request header
+- `get_request_headers_json()` - Get all request headers as JSON
+
+**Note:** These functions are only available when endpoints are executed through `mxcp serve`. They return NULL when run via `mxcp run`.
 
 ## Best Practices
 
-### 1. Explicit Permission Checks
+### 1. Fail Secure
+Default to denying access when in doubt:
+
+```yaml
+# Good: Explicitly allow known roles
+input:
+  - condition: "!(user.role in ['admin', 'manager', 'user'])"
+    action: deny
+    reason: "Unknown role - access denied"
+
+# Avoid: Only denying specific roles (might miss new roles)
+input:
+  - condition: "user.role == 'guest'"
+    action: deny
+    reason: "Guests not allowed"
+```
+
+### 2. Explicit Permission Checks
 Require specific permissions:
 
 ```yaml
@@ -612,7 +700,7 @@ input:
     reason: "data.read permission required"
 ```
 
-### 2. Clear Reasons
+### 3. Clear Reasons
 Provide helpful error messages:
 
 ```yaml
@@ -623,7 +711,7 @@ reason: "Finance role required. Contact your manager for access."
 reason: "Denied"
 ```
 
-### 3. Layer Policies
+### 4. Layer Policies
 Use multiple policies for clarity:
 
 ```yaml
@@ -644,7 +732,7 @@ input:
     reason: "Missing data.read permission"
 ```
 
-### 4. Use Sensitive Markers
+### 5. Use Sensitive Markers
 Mark sensitive fields in schema:
 
 ```yaml
@@ -656,7 +744,7 @@ return:
       sensitive: true  # Easy to filter with filter_sensitive_fields
 ```
 
-### 5. Test Thoroughly
+### 6. Test Thoroughly
 Test all user roles and edge cases.
 
 ## Advanced Examples
@@ -705,6 +793,20 @@ output:
 
 ## Troubleshooting
 
+### Policy Not Being Applied
+
+1. Check that the endpoint YAML has valid syntax
+2. Verify the condition expression is valid CEL
+3. Check logs for policy evaluation errors
+4. Ensure user context is being passed correctly
+
+### CEL Expression Errors
+
+Common issues:
+- String comparisons are case-sensitive
+- Use `in` for list membership, not `contains`
+- Null checks should use `== null`, not `!exists`
+
 ### "Policy evaluation failed"
 - Check condition syntax
 - Verify user context fields exist
@@ -719,6 +821,12 @@ output:
 - Review policy conditions
 - Check user context values
 - Use `--debug` flag
+
+### Performance Considerations
+
+- Keep CEL expressions simple for better performance
+- Filter fields at the output stage rather than fetching and then denying
+- Consider caching policy evaluation results for repeated queries
 
 ## Next Steps
 

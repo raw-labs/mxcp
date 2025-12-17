@@ -56,16 +56,6 @@ db.execute(
 
 **Returns:** `list[dict]` - Query results
 
-### db.connection
-
-Access raw DuckDB connection for advanced operations.
-
-```python
-conn = db.connection
-# Use for advanced DuckDB operations
-# Warning: Not thread-safe in server mode
-```
-
 ## Configuration & Secrets
 
 ### config.get_secret()
@@ -106,36 +96,45 @@ project = config.get_setting("project")
 debug = config.get_setting("debug", default=False)
 extensions = config.get_setting("extensions", default=[])
 timeout = config.get_setting("timeout", default=30)
+
+# Nested key access (use dot notation)
+dbt_enabled = config.get_setting("dbt.enabled", default=False)
+db_path = config.get_setting("profiles.default.duckdb.path")
 ```
 
 **Parameters:**
-- `key` (str): Setting key
+- `key` (str): Setting key (supports dot notation for nested access)
 - `default` (any, optional): Default value if not found
 
 **Returns:** Setting value or default
 
 ### config.user_config
 
-Access full user configuration model.
+Access full user configuration as dictionary.
 
 ```python
 user_cfg = config.user_config
 if user_cfg:
-    active_project = user_cfg.projects[user_cfg.site]
-    active_profile = active_project.profiles[user_cfg.profile]
-    secret_names = [secret.name for secret in active_profile.secrets]
+    project_name = user_cfg.get("site")
+    projects = user_cfg.get("projects", {})
+    active_project = projects.get(project_name, {})
 ```
+
+**Returns:** `dict | None` - User configuration or None
 
 ### config.site_config
 
-Access full site configuration model.
+Access full site configuration as dictionary.
 
 ```python
 site_cfg = config.site_config
 if site_cfg:
-    secrets_list = site_cfg.secrets
-    default_duckdb = site_cfg.profiles[site_cfg.profile].duckdb.path
+    project = site_cfg.get("project")
+    profile = site_cfg.get("profile")
+    secrets = site_cfg.get("secrets", [])
 ```
+
+**Returns:** `dict | None` - Site configuration or None
 
 ## Plugin Access
 
@@ -254,22 +253,24 @@ def cleanup():
 
 ### Multiple Hooks
 
+You can register multiple functions for the same lifecycle event. Hooks are executed sequentially in the order they were registered (typically the order they appear in your code). If a hook raises an exception, it is logged but subsequent hooks still execute.
+
 ```python
 @on_init
 def setup_database():
-    print("Setting up database connections")
+    print("Setting up database connections")  # Runs first
 
 @on_init
 def setup_cache():
-    print("Warming up cache")
+    print("Warming up cache")  # Runs second
 
 @on_shutdown
 def close_database():
-    print("Closing database connections")
+    print("Closing database connections")  # Runs first on shutdown
 
 @on_shutdown
 def flush_logs():
-    print("Flushing log buffers")
+    print("Flushing log buffers")  # Runs second on shutdown
 ```
 
 ## Reload Management
@@ -324,13 +325,15 @@ return {"status": "Reload scheduled"}
 
 **Important Notes:**
 - Returns immediately (non-blocking)
+- Reload happens asynchronously after the current request completes
 - Only one reload processes at a time
 - Payload runs with connections closed
 - Cannot wait for completion from MCP tools
+- Only available when called from within MXCP endpoints
 
 **When NOT to Use:**
 
-For most database operations, use `db.execute()` directly:
+For most database operations, you don't need `reload_duckdb()`. Use `db.execute()` directly since DuckDB supports concurrent operations through its MVCC transactional model:
 
 ```python
 # Simple updates - no reload needed
@@ -383,6 +386,8 @@ def get_user(id: int) -> dict:
 
 ### Complex Types
 
+Nested structures are fully supported - objects can contain arrays, and arrays can contain objects:
+
 ```python
 # Nested objects
 def get_report() -> dict:
@@ -419,6 +424,8 @@ def my_endpoint(param: str) -> dict:
 
 ## Error Handling
 
+Handle errors gracefully by returning error information in your response rather than raising exceptions. Unhandled exceptions will result in MCP error responses to the client.
+
 ```python
 def safe_endpoint(id: int) -> dict:
     try:
@@ -431,6 +438,8 @@ def safe_endpoint(id: int) -> dict:
 ```
 
 ## Complete Example
+
+A full endpoint demonstrating lifecycle hooks, configuration, database access, plugins, and MCP logging:
 
 ```python
 from mxcp.runtime import db, config, plugins, on_init, on_shutdown, mcp

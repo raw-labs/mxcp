@@ -85,8 +85,8 @@ After completing these tutorials, explore:
 # Run with parameters
 mxcp run tool tool_name --param key=value
 
-# Run with JSON parameters
-mxcp run tool tool_name --params '{"key": "value"}'
+# Run with complex values from JSON file
+mxcp run tool tool_name --param data=@input.json
 
 # Run with user context (for policy testing)
 mxcp run tool tool_name --user-context '{"role": "admin"}'
@@ -120,3 +120,31 @@ mxcp serve --transport streamable-http --port 8000
 # Debug mode
 mxcp serve --debug
 ```
+
+## Testing with AI Tools
+
+Your MXCP server works with any MCP-compatible AI client:
+
+- **[Claude Desktop](https://claude.com/download)** - Anthropic's desktop app with native MCP support
+- **[Claude Code](https://code.claude.com/docs)** - CLI tool for developers
+- **Other MCP clients** - Any tool implementing the [Model Context Protocol](https://modelcontextprotocol.io/)
+
+### MCP Inspector
+
+For debugging and testing without an AI client, use the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector):
+
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+The Inspector provides:
+- **Resources Tab** - Browse available resources
+- **Tools Tab** - Test tools with custom inputs and view results
+- **Prompts Tab** - Test prompt templates
+- **Notifications** - View server logs and debug messages
+
+This is useful for:
+- Debugging tool implementations
+- Testing parameter validation
+- Verifying output formats
+- Development without an AI client

@@ -9,6 +9,32 @@ sidebar:
 
 MXCP supports OAuth 2.0 authentication to control who can access your MCP server. This guide covers configuring various OAuth providers.
 
+## How It Works
+
+When authentication is enabled:
+
+1. **Client connects** to your MCP server
+2. **Server redirects** to OAuth provider (GitHub, Google, etc.)
+3. **User authenticates** with the provider
+4. **Provider redirects back** with authorization code
+5. **Server exchanges** code for access token
+6. **User context** becomes available in policies and SQL
+
+All tools, resources, and prompts require valid authentication tokens when auth is enabled.
+
+### Protected Features
+
+When authentication is enabled, these features require valid tokens:
+- **Custom Endpoints**: All tools, resources, and prompts defined in your YAML files
+- **SQL Tools**: Built-in DuckDB querying and schema exploration tools
+
+### User Information Logging
+
+MXCP automatically logs user information for each authenticated request:
+- Username and user ID
+- OAuth provider (GitHub, Google, etc.)
+- User's display name and email (when available)
+
 ## Supported Providers
 
 | Provider | Use Case |
@@ -32,12 +58,31 @@ projects:
         auth:
           provider: github
           github:
-            client_id: your_client_id
-            client_secret: your_client_secret
+            client_id: "${GITHUB_CLIENT_ID}"
+            client_secret: "${GITHUB_CLIENT_SECRET}"
             callback_path: /callback
             auth_url: https://github.com/login/oauth/authorize
             token_url: https://github.com/login/oauth/access_token
 ```
+
+### Disable Authentication
+
+By default, authentication is disabled (`provider: none`):
+
+```yaml
+mxcp: 1
+projects:
+  my-project:
+    profiles:
+      default:
+        auth:
+          provider: none  # No authentication required
+```
+
+Use this for:
+- Local development
+- Internal tools with network-level security
+- Read-only public APIs
 
 ## GitHub Authentication
 
@@ -62,13 +107,15 @@ projects:
         auth:
           provider: github
           github:
-            client_id: Ov23li...
-            client_secret: your_client_secret
+            client_id: "${GITHUB_CLIENT_ID}"
+            client_secret: "${GITHUB_CLIENT_SECRET}"
             callback_path: /callback
             auth_url: https://github.com/login/oauth/authorize
             token_url: https://github.com/login/oauth/access_token
             scope: "read:user user:email"
 ```
+
+**Note:** The examples below for other providers show just the `auth` block for brevity. Place them at the same location: `projects.{project}.profiles.{profile}.auth`.
 
 ### 3. Available Scopes
 
@@ -96,11 +143,12 @@ For Jira and Confluence integration.
 ### 2. Configure MXCP
 
 ```yaml
+# In ~/.mxcp/config.yml
 auth:
   provider: atlassian
   atlassian:
-    client_id: your_client_id
-    client_secret: your_client_secret
+    client_id: "${ATLASSIAN_CLIENT_ID}"
+    client_secret: "${ATLASSIAN_CLIENT_SECRET}"
     callback_path: /callback
     auth_url: https://auth.atlassian.com/authorize
     token_url: https://auth.atlassian.com/oauth/token
@@ -115,6 +163,28 @@ auth:
 | `read:jira-work` | Read Jira issues |
 | `write:jira-work` | Create/update issues |
 | `read:confluence-content.all` | Read Confluence pages |
+| `offline_access` | Enable refresh tokens |
+
+### 4. Accessing Multiple Sites
+
+Atlassian OAuth grants access to all sites where your app is installed. To work with specific sites:
+
+1. **Get accessible resources** (returns cloud IDs):
+   ```bash
+   curl -H "Authorization: Bearer ACCESS_TOKEN" \
+        https://api.atlassian.com/oauth/token/accessible-resources
+   ```
+
+2. **Use the cloud ID** in API requests:
+   ```bash
+   # JIRA API
+   curl -H "Authorization: Bearer ACCESS_TOKEN" \
+        https://api.atlassian.com/ex/jira/{cloudid}/rest/api/2/project
+
+   # Confluence API
+   curl -H "Authorization: Bearer ACCESS_TOKEN" \
+        https://api.atlassian.com/ex/confluence/{cloudid}/rest/api/space
+   ```
 
 ## Salesforce Authentication
 
@@ -132,18 +202,29 @@ For CRM and enterprise integrations.
 ### 2. Configure MXCP
 
 ```yaml
+# In ~/.mxcp/config.yml
 auth:
   provider: salesforce
   salesforce:
-    client_id: your_consumer_key
-    client_secret: your_consumer_secret
+    client_id: "${SALESFORCE_CLIENT_ID}"
+    client_secret: "${SALESFORCE_CLIENT_SECRET}"
     callback_path: /callback
     auth_url: https://login.salesforce.com/services/oauth2/authorize
     token_url: https://login.salesforce.com/services/oauth2/token
     scope: "openid profile email api"
 ```
 
-### 3. Sandbox Environment
+### 3. Available Scopes
+
+| Scope | Access |
+|-------|--------|
+| `openid` | OpenID Connect authentication |
+| `profile` | User profile information |
+| `email` | User email address |
+| `api` | Access to Salesforce APIs |
+| `refresh_token` | Enable token refresh |
+
+### 4. Sandbox Environment
 
 For sandbox/test environments:
 
@@ -170,18 +251,29 @@ For Google Workspace organizations.
 ### 2. Configure MXCP
 
 ```yaml
+# In ~/.mxcp/config.yml
 auth:
   provider: google
   google:
-    client_id: your_client_id.apps.googleusercontent.com
-    client_secret: your_client_secret
+    client_id: "${GOOGLE_CLIENT_ID}"
+    client_secret: "${GOOGLE_CLIENT_SECRET}"
     callback_path: /callback
     auth_url: https://accounts.google.com/o/oauth2/v2/auth
     token_url: https://oauth2.googleapis.com/token
     scope: "openid email profile"
 ```
 
-### 3. Domain Restriction
+### 3. Available Scopes
+
+| Scope | Access |
+|-------|--------|
+| `openid` | OpenID Connect authentication |
+| `email` | User email address |
+| `profile` | User profile information |
+| `https://www.googleapis.com/auth/calendar.readonly` | Read calendar events |
+| `https://www.googleapis.com/auth/drive.readonly` | Read Drive files |
+
+### 4. Domain Restriction
 
 To restrict to a specific Google Workspace domain, validate the user's email domain in your policies:
 
@@ -191,6 +283,30 @@ policies:
     - condition: "!user.email.endsWith('@yourcompany.com')"
       action: deny
       reason: "Access restricted to company domain"
+```
+
+### 5. Working with Google APIs
+
+Once authenticated, use the user's token to access Google services from SQL:
+
+```sql
+-- List Google Calendar events
+SELECT *
+FROM read_json_auto(
+    'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+    headers = MAP {
+        'Authorization': 'Bearer ' || get_user_external_token()
+    }
+);
+
+-- Search Google Drive files
+SELECT *
+FROM read_json_auto(
+    'https://www.googleapis.com/drive/v3/files?q=name+contains+''report''',
+    headers = MAP {
+        'Authorization': 'Bearer ' || get_user_external_token()
+    }
+);
 ```
 
 ## Keycloak Authentication
@@ -212,16 +328,31 @@ For self-hosted identity management.
 ### 2. Configure MXCP
 
 ```yaml
+# In ~/.mxcp/config.yml
 auth:
   provider: keycloak
   keycloak:
-    client_id: mxcp-server
-    client_secret: your_client_secret
+    client_id: "${KEYCLOAK_CLIENT_ID}"
+    client_secret: "${KEYCLOAK_CLIENT_SECRET}"
     realm: myrealm
     server_url: https://keycloak.example.com
     callback_path: /callback
     scope: "openid profile email"
 ```
+
+**Note:** MXCP auto-constructs the OAuth URLs from `server_url` and `realm`:
+- Authorization: `{server_url}/realms/{realm}/protocol/openid-connect/auth`
+- Token: `{server_url}/realms/{realm}/protocol/openid-connect/token`
+
+### 3. Available Scopes
+
+| Scope | Access |
+|-------|--------|
+| `openid` | OpenID Connect authentication |
+| `profile` | User profile information |
+| `email` | User email address |
+| `roles` | User roles from Keycloak |
+| `offline_access` | Enable refresh tokens |
 
 ## Token Persistence
 
@@ -258,14 +389,16 @@ policies:
 
 ### Available User Fields
 
-| Field | Description |
-|-------|-------------|
-| `user.id` | Unique user identifier |
-| `user.email` | User's email address |
-| `user.name` | Display name |
-| `user.role` | User role (if configured) |
-| `user.permissions` | List of permissions |
-| `user.groups` | Group memberships |
+| Field | Source | Description |
+|-------|--------|-------------|
+| `user.id` | OAuth provider | Unique user identifier |
+| `user.email` | OAuth provider | User's email address |
+| `user.name` | OAuth provider | Display name |
+| `user.role` | `--user-context` or custom mapping | User role for access control |
+| `user.permissions` | `--user-context` or custom mapping | List of permissions |
+| `user.groups` | OAuth provider (if supported) | Group memberships |
+
+**Note:** Fields like `role` and `permissions` are not provided by most OAuth providers. Use `--user-context` for testing or implement custom role mapping in your application.
 
 ## Stateless Mode
 
@@ -284,9 +417,28 @@ In stateless mode:
 
 ## Reverse Proxy Configuration
 
-When running behind a reverse proxy:
+When running behind a reverse proxy, configure MXCP to trust forwarded headers.
+
+### Transport Configuration
+
+Configure trust_proxy in your transport settings:
+
+```yaml
+transport:
+  http:
+    host: 0.0.0.0
+    port: 8000
+    trust_proxy: true  # Trust X-Forwarded-Proto headers
+```
+
+When `trust_proxy: true`:
+- OAuth callback URLs use the scheme from `X-Forwarded-Proto`
+- Redirect URIs are constructed correctly for HTTPS
+- Required when running behind load balancers or reverse proxies
 
 ### nginx
+
+Basic configuration:
 
 ```nginx
 location / {
@@ -295,6 +447,35 @@ location / {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Complete SSL configuration:
+
+```nginx
+server {
+    listen 80;
+    server_name api.example.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.example.com;
+
+    ssl_certificate /path/to/certificate.crt;
+    ssl_certificate_key /path/to/private.key;
+
+    # Security headers
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }
 ```
 
@@ -419,30 +600,6 @@ Response:
 }
 ```
 
-### OAuth State Persistence
-
-By default, OAuth state is stored in memory and lost on server restart. Enable persistence for production:
-
-```yaml
-auth:
-  provider: github
-  persistence:
-    type: sqlite
-    path: "/var/lib/mxcp/oauth.db"
-```
-
-**What Gets Persisted:**
-- Access tokens and mappings to external provider tokens
-- Authorization codes (with automatic expiration cleanup)
-- Dynamically registered clients
-
-**Benefits:**
-- Session continuity across server restarts
-- Zero-downtime deployments
-- Better user experience during maintenance
-
-**Security:** Set file permissions to 600 on the OAuth database.
-
 ### Authorization Configuration
 
 Configure scope-based authorization to control endpoint access:
@@ -473,6 +630,10 @@ SELECT get_user_external_token() as token;
 SELECT get_username() as username;
 SELECT get_user_provider() as provider;
 SELECT get_user_email() as email;
+
+-- Access request headers
+SELECT get_request_header('X-Custom-Header') as custom_header;
+SELECT get_request_headers_json() as all_headers;
 ```
 
 **Use Cases:**
@@ -497,9 +658,11 @@ WHERE created_by = get_username();
 ```
 
 **Function Behavior:**
-- When authentication is disabled: Functions return empty strings
-- When user is not authenticated: Functions return empty strings
+- When authentication is disabled: Functions return NULL
+- When user is not authenticated: Functions return NULL
 - When user is authenticated: Functions return actual user data
+
+**Note:** These functions only work when running through `mxcp serve`. Direct CLI execution via `mxcp run` does not have access to these functions.
 
 ### Pre-Configured OAuth Clients
 

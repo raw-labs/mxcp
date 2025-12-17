@@ -101,8 +101,8 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - run: pip install mxcp
@@ -152,15 +152,16 @@ mxcp validate --json-output # JSON output
 
 ```bash
 mxcp test                  # Run all tests
-mxcp test --tool my_tool   # Test specific tool
+mxcp test tool my_tool     # Test specific tool
+mxcp test resource my_res  # Test specific resource
 mxcp test --json-output    # JSON output
 ```
 
 ### Linting
 
 ```bash
-mxcp lint                  # Check all
-mxcp lint --tool my_tool   # Check specific tool
+mxcp lint                  # Check all endpoints
+mxcp lint --severity warning  # Show warnings only
 mxcp lint --json-output    # JSON output
 ```
 
@@ -168,8 +169,8 @@ mxcp lint --json-output    # JSON output
 
 ```bash
 mxcp evals                 # Run all evals
-mxcp evals --suite my-eval # Run specific suite
-mxcp evals --model gpt-4   # Use specific model
+mxcp evals my_suite        # Run specific suite
+mxcp evals --model gpt-4o  # Use specific model
 ```
 
 ## Next Steps

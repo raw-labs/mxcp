@@ -276,13 +276,29 @@ External files are recommended for:
 - Syntax highlighting in editors
 - Reusable SQL across tools
 
-## Next Steps
+## Testing with AI Clients
 
-Now that you understand the basics:
+Your tool works with any MCP-compatible client:
 
-1. **[SQL Endpoints Tutorial](/tutorials/sql-endpoints)** - Build more complex queries
-2. **[Python Endpoints Tutorial](/tutorials/python-endpoints)** - Add Python logic
-3. **[Endpoints Concept](/concepts/endpoints)** - Deep dive into endpoint types
+**Connect to Claude Desktop** - Add to your Claude Desktop config:
+```json
+{
+  "mcpServers": {
+    "hello-mxcp": {
+      "command": "mxcp",
+      "args": ["serve"],
+      "cwd": "/path/to/hello-mxcp"
+    }
+  }
+}
+```
+
+**Use MCP Inspector** - Debug without an AI client:
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+The [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) lets you visually test tools, view parameters, and debug responses.
 
 ## Common Issues
 
@@ -298,3 +314,11 @@ Now that you understand the basics:
 - Check YAML syntax (indentation matters)
 - Ensure all required fields are present
 - Run `mxcp validate` for detailed errors
+
+## Next Steps
+
+Now that you understand the basics:
+
+1. **[SQL Endpoints Tutorial](/tutorials/sql-endpoints)** - Build more complex queries
+2. **[Python Endpoints Tutorial](/tutorials/python-endpoints)** - Add Python logic
+3. **[Endpoints Concept](/concepts/endpoints)** - Deep dive into endpoint types

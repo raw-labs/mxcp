@@ -6,6 +6,8 @@ sidebar:
 ---
 
 > **Related Topics:** [SQL Endpoints](/tutorials/sql-endpoints) (tutorial) | [SQL Reference](/reference/sql) (built-in functions) | [Configuration](/operations/configuration) (extensions setup) | [Common Tasks](/reference/common-tasks#how-do-i-use-duckdb-extensions) (quick how-to)
+>
+> **Official Documentation:** [DuckDB Docs](https://duckdb.org/docs/stable/) | [Extensions](https://duckdb.org/docs/extensions/overview) | [SQL Reference](https://duckdb.org/docs/sql/introduction)
 
 DuckDB serves as MXCP's SQL execution engine, providing fast, local-first data access with extensive connectivity options.
 
@@ -64,7 +66,11 @@ extensions:
 | `spatial` | Geospatial functions |
 | `fts` | Full-text search |
 
+For a complete list of available extensions, see the [DuckDB Extensions documentation](https://duckdb.org/docs/extensions/overview).
+
 ## Data Sources
+
+DuckDB extensions enable access to various data sources. Enable the appropriate extension before using its functions.
 
 ### Local Files
 
@@ -113,30 +119,37 @@ SELECT * FROM read_parquet('s3://private-bucket/data.parquet');
 Connect to PostgreSQL databases:
 
 ```sql
--- Attach PostgreSQL database
-ATTACH 'postgresql://user:pass@host:5432/db' AS pg;
+-- Attach PostgreSQL database (connection string format)
+ATTACH 'dbname=mydb host=localhost port=5432 user=postgres password=secret' AS pg (TYPE postgres);
+
+-- Or use PostgreSQL URI format
+ATTACH 'postgresql://user:pass@host:5432/db' AS pg (TYPE postgres);
 
 -- Query tables
-SELECT * FROM pg.schema.table;
+SELECT * FROM pg.public.users;
 
--- Scan specific table
-SELECT * FROM postgres_scan('connection_string', 'schema', 'table');
+-- Read-only connection
+ATTACH 'dbname=mydb host=localhost' AS pg_ro (TYPE postgres, READ_ONLY);
 ```
+
+**Note**: Avoid credentials in connection strings for production. Use [DuckDB secrets](https://duckdb.org/docs/stable/configuration/secrets_manager) instead.
 
 ### MySQL
 
 Connect to MySQL databases:
 
 ```sql
--- Attach MySQL database
-ATTACH 'mysql://user:pass@host:3306/db' AS mysql;
+-- Attach MySQL database (key=value format, NOT URI)
+ATTACH 'host=localhost user=root password=secret port=3306 database=mydb' AS mysql (TYPE mysql);
 
 -- Query tables
-SELECT * FROM mysql.table;
+SELECT * FROM mysql.users;
 
--- Scan specific table
-SELECT * FROM mysql_scan('connection_string', 'schema', 'table');
+-- Read-only connection
+ATTACH 'host=localhost database=mydb' AS mysql_ro (TYPE mysql, READ_ONLY);
 ```
+
+**Note**: MySQL uses `key=value` connection strings, not URI format.
 
 ### SQLite
 
@@ -386,37 +399,49 @@ WHERE event_time >= CURRENT_DATE - INTERVAL '7 days';
 Work with JSON data:
 
 ```sql
--- Parse JSON fields
+-- Extract string values (use ->> or json_extract_string)
 SELECT
   id,
-  json_extract(data, '$.name') as name,
-  json_extract(data, '$.nested.field') as nested_value
+  data ->> '$.name' as name,
+  data ->> '$.nested.field' as nested_value
+FROM read_json('data.json');
+
+-- Extract JSON values (use -> or json_extract, returns quoted strings)
+SELECT
+  id,
+  data -> '$.config' as config_json
 FROM read_json('data.json');
 
 -- Unnest arrays
 SELECT
   id,
-  unnest(json_extract(data, '$.items')) as item
+  unnest(data -> '$.items') as item
 FROM events;
 ```
 
 ### Full-Text Search
 
-Search text columns:
+Search text columns using the [FTS extension](https://duckdb.org/docs/stable/core_extensions/full_text_search):
 
 ```sql
--- Enable FTS extension
-INSTALL fts;
-LOAD fts;
-
--- Create index
+-- Create FTS index (parameters: table, id_column, text_columns...)
 PRAGMA create_fts_index('documents', 'doc_id', 'content');
 
--- Search
-SELECT *
-FROM documents
-WHERE fts_match('documents', 'search query');
+-- Search using BM25 scoring
+SELECT doc_id, content, score
+FROM (
+  SELECT *, fts_main_documents.match_bm25(doc_id, 'search query') AS score
+  FROM documents
+) sq
+WHERE score IS NOT NULL
+ORDER BY score DESC;
+
+-- Drop and recreate index after data changes
+PRAGMA drop_fts_index('documents');
+PRAGMA create_fts_index('documents', 'doc_id', 'content');
 ```
+
+**Note**: FTS indexes don't auto-update. Rebuild after data changes.
 
 ## Troubleshooting
 
@@ -516,7 +541,7 @@ extensions:
 
 ### 2. Use Secrets for Credentials
 
-Never hardcode credentials:
+Never hardcode credentials. See [Configuration](/operations/configuration#secrets) for details.
 
 ```yaml
 # Good: Use secrets
@@ -556,6 +581,20 @@ s3://bucket/
 PRAGMA enable_progress_bar;
 EXPLAIN ANALYZE SELECT * FROM large_table;
 ```
+
+### 6. Monitor Schema Changes
+
+Use drift detection to catch unexpected schema changes:
+
+```bash
+# Create baseline
+mxcp drift-snapshot
+
+# Check for changes
+mxcp drift-check
+```
+
+See [Drift Detection](/operations/drift-detection) for details.
 
 ## Next Steps
 

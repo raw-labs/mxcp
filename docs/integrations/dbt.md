@@ -6,6 +6,8 @@ sidebar:
 ---
 
 > **Related Topics:** [Configuration](/operations/configuration) (enable dbt) | [SQL Endpoints](/tutorials/sql-endpoints) (query dbt models) | [DuckDB Integration](/integrations/duckdb) (database engine) | [Common Tasks](/reference/common-tasks#how-do-i-integrate-with-dbt) (quick how-to)
+>
+> **Official Documentation:** [dbt Docs](https://docs.getdbt.com) | [dbt-duckdb Adapter](https://docs.getdbt.com/docs/core/connect-data-platform/duckdb-setup)
 
 dbt (data build tool) is the data quality layer in MXCP's production methodology. It transforms raw data into well-structured models that AI can consume reliably.
 
@@ -21,12 +23,18 @@ dbt serves as your data quality foundation:
 
 ## The dbt + MXCP Workflow
 
-```
-Raw Data → dbt Models → DuckDB Tables → MXCP Endpoints → AI Tools
-         ↓
-    Quality Tests
-    Data Contracts
-    Documentation
+```mermaid
+flowchart LR
+    subgraph Transform["dbt Layer"]
+        Raw["Raw Data"] --> Models["dbt Models"]
+        Models --> Tests["Quality Tests"]
+        Models --> Contracts["Data Contracts"]
+        Models --> Docs["Documentation"]
+    end
+
+    Models --> Tables["DuckDB Tables"]
+    Tables --> Endpoints["MXCP Endpoints"]
+    Endpoints --> AI["AI Tools"]
 ```
 
 This ensures:
@@ -48,6 +56,7 @@ profile: dev
 
 dbt:
   enabled: true
+  model_paths: ["models"]  # Paths to dbt model directories
 ```
 
 ### Generate Configuration
@@ -252,9 +261,105 @@ WHERE created_at > (SELECT MAX(created_at) FROM {{ this }})
 
 Use for: Large datasets, append-only data
 
+## Advanced Configuration
+
+### Indexes (DuckDB)
+
+DuckDB automatically creates zonemaps (min-max indexes) for all columns. For highly selective queries, you can create ART indexes using post-hooks:
+
+```sql
+-- models/marts/customer_summary.sql
+{{ config(
+    materialized='table',
+    post_hook="CREATE INDEX IF NOT EXISTS idx_customer_id ON {{ this }} (customer_id)"
+) }}
+
+SELECT * FROM {{ ref('int_customer_orders') }}
+```
+
+**Note**: DuckDB recommends avoiding explicit indexes unless you have highly selective queries. Indexes add overhead during inserts/updates and consume memory.
+
+### Post-Hooks
+
+Run SQL after model creation:
+
+```sql
+-- models/marts/optimized_table.sql
+{{ config(
+    materialized='table',
+    post_hook="PRAGMA optimize"
+) }}
+
+SELECT * FROM {{ ref('source_data') }}
+```
+
+### Data Contracts
+
+Enforce schema contracts for critical models:
+
+```yaml
+# models/schema.yml
+version: 2
+
+models:
+  - name: customer_summary
+    config:
+      materialized: table
+      contract:
+        enforced: true
+    columns:
+      - name: customer_id
+        data_type: int
+        constraints:
+          - type: not_null
+      - name: email
+        data_type: string
+      - name: total_spent
+        data_type: decimal
+```
+
+**Note**: Contracts are supported for table and view materializations. They validate schema before data is written.
+
+### dbt Packages
+
+Use dbt packages for extended functionality:
+
+```yaml
+# packages.yml
+packages:
+  - package: dbt-labs/dbt_utils
+    version: "1.3.0"
+```
+
+Install packages:
+
+```bash
+mxcp dbt deps
+```
+
+Use package tests:
+
+```yaml
+# models/schema.yml
+version: 2
+
+models:
+  - name: customer_summary
+    columns:
+      - name: total_spent
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+```
+
+**Note**: As of dbt 1.8+, use `data_tests` instead of `tests` (the old syntax still works but is deprecated).
+
 ## Data Quality Tests
 
 ### Built-in Tests
+
+dbt provides four built-in generic tests: `unique`, `not_null`, `accepted_values`, and `relationships`.
 
 ```yaml
 # models/schema.yml
@@ -264,16 +369,17 @@ models:
   - name: customer_summary
     columns:
       - name: customer_id
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: email
-        tests:
+        data_tests:
           - unique
           - not_null
-      - name: total_spent
-        tests:
-          - not_null
+      - name: customer_tier
+        data_tests:
+          - accepted_values:
+              values: ['high_value', 'medium_value', 'low_value']
 ```
 
 ### Custom Tests
@@ -292,11 +398,14 @@ models:
   - name: orders
     columns:
       - name: customer_id
-        tests:
+        data_tests:
           - relationships:
-              to: ref('customer_summary')
-              field: customer_id
+              arguments:
+                to: ref('customer_summary')
+                field: customer_id
 ```
+
+**Note**: As of dbt 1.10+, test arguments should be nested under the `arguments` property.
 
 ## Documentation
 
@@ -398,8 +507,9 @@ import pandas as pd
 def model(dbt, session):
     """Segment customers using Python logic."""
 
-    # Reference upstream dbt model
-    customer_df = dbt.ref("customer_summary")
+    # Reference upstream dbt model (returns DuckDB Relation)
+    # Convert to pandas DataFrame with .df()
+    customer_df = dbt.ref("customer_summary").df()
 
     # Complex Python logic
     def assign_segment(row):
@@ -417,6 +527,8 @@ def model(dbt, session):
     return customer_df
 ```
 
+**Note**: `dbt.ref()` returns a DuckDB Relation. Use `.df()` to convert to pandas DataFrame, `.pl()` for Polars, or `.arrow()` for Arrow Table.
+
 ### ML Preprocessing
 
 ```python
@@ -427,7 +539,7 @@ from sklearn.preprocessing import StandardScaler
 def model(dbt, session):
     """Create ML-ready feature vectors."""
 
-    df = dbt.ref("customer_summary")
+    df = dbt.ref("customer_summary").df()
 
     # Select numeric features
     features = ['order_count', 'total_spent', 'days_since_first_order']
@@ -448,7 +560,7 @@ import pandas as pd
 def model(dbt, session):
     """Generate text embeddings for products."""
 
-    products_df = dbt.ref("stg_products")
+    products_df = dbt.ref("stg_products").df()
 
     # Clean and combine text fields
     products_df['search_text'] = (
@@ -479,11 +591,11 @@ models:
       materialized: table
     columns:
       - name: customer_id
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: segment
-        tests:
+        data_tests:
           - accepted_values:
               values: ['champion', 'loyal', 'potential', 'new']
 ```
@@ -512,10 +624,11 @@ pip install dbt-duckdb pandas scikit-learn
 
 Chain SQL and Python models:
 
-```
-stg_customers.sql → int_customer_orders.sql → customer_segments.py → customer_summary.sql
-       ↓                    ↓                        ↓                      ↓
-   Raw cleanup         SQL joins            Python segmentation      Final formatting
+```mermaid
+flowchart LR
+    A["stg_customers.sql<br/><small>Raw cleanup</small>"] --> B["int_customer_orders.sql<br/><small>SQL joins</small>"]
+    B --> C["customer_segments.py<br/><small>Python segmentation</small>"]
+    C --> D["customer_summary.sql<br/><small>Final formatting</small>"]
 ```
 
 Reference Python models in SQL:
@@ -613,10 +726,10 @@ jobs:
 
 ### 1. Layer Your Models
 
-```
-staging/ → intermediate/ → marts/
-   ↓            ↓             ↓
-  Clean      Transform     AI-Ready
+```mermaid
+flowchart LR
+    A["staging/<br/><small>Clean</small>"] --> B["intermediate/<br/><small>Transform</small>"]
+    B --> C["marts/<br/><small>AI-Ready</small>"]
 ```
 
 ### 2. Test Early

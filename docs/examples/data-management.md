@@ -454,6 +454,8 @@ tool:
 
 ## Python Implementations
 
+### Users Module
+
 ```python
 # python/users.py
 from mxcp.runtime import db
@@ -552,6 +554,66 @@ def update_user(
         "user_id": user_id,
         "updated_fields": updated_fields
     }
+```
+
+### Documents Module
+
+```python
+# python/documents.py
+from mxcp.runtime import db
+from typing import Optional
+import json
+
+def upload_document(
+    title: str,
+    content: str,
+    mime_type: str = "text/plain",
+    tags: Optional[list] = None
+) -> dict:
+    # Get current user ID from context (would come from auth in production)
+    owner_id = 1  # Default owner for demo
+
+    # Get next document ID
+    next_id = db.execute("SELECT nextval('document_id_seq') as id")[0]["id"]
+
+    # Insert document
+    db.execute(
+        """
+        INSERT INTO documents (id, owner_id, title, content, mime_type, tags)
+        VALUES ($id, $owner_id, $title, $content, $mime_type, $tags)
+        """,
+        {
+            "id": next_id,
+            "owner_id": owner_id,
+            "title": title,
+            "content": content,
+            "mime_type": mime_type,
+            "tags": json.dumps(tags) if tags else "[]"
+        }
+    )
+
+    return {
+        "id": next_id,
+        "title": title,
+        "version": 1
+    }
+
+
+def get_document(document_id: int) -> dict:
+    results = db.execute(
+        """
+        SELECT d.*, u.name as owner_name
+        FROM documents d
+        JOIN users u ON d.owner_id = u.id
+        WHERE d.id = $id
+        """,
+        {"id": document_id}
+    )
+
+    if not results:
+        return {"error": f"Document {document_id} not found"}
+
+    return results[0]
 ```
 
 ## Document Management

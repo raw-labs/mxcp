@@ -17,6 +17,7 @@ Plugins are Python modules that:
 - Support automatic DuckDB type mapping
 - Access authenticated user context
 - Have lifecycle hooks for resource management
+- Support hot reload - plugins are re-initialized when configuration changes
 
 ## Quick Start
 
@@ -164,6 +165,7 @@ class MXCPPlugin(MXCPBasePlugin):
 | `float` | `DOUBLE` | `3.14` |
 | `bool` | `BOOLEAN` | `True` |
 | `bytes` | `BLOB` | `b"data"` |
+| `Decimal` | `DECIMAL` | `Decimal("123.45")` |
 
 ### Date/Time Types
 
@@ -184,6 +186,8 @@ class MXCPPlugin(MXCPBasePlugin):
 
 ### Struct Types
 
+Use a dataclass to define the struct schema, but return a dict with matching keys:
+
 ```python
 from dataclasses import dataclass
 
@@ -195,8 +199,11 @@ class UserInfo:
 
 @udf
 def create_user(self, name: str, age: int) -> UserInfo:
-    return UserInfo(name=name, age=age, active=True)
+    # Return a dict with keys matching the dataclass fields
+    return {"name": name, "age": age, "active": True}
 ```
+
+> **Note**: The dataclass defines the DuckDB STRUCT schema. At runtime, return a dict with matching keys, not a dataclass instance.
 
 ## Authentication Integration
 
@@ -259,6 +266,13 @@ async def fetch_user_repos(self) -> str:
 
 ## Lifecycle Management
 
+Plugins have a formal lifecycle that allows for graceful startup and shutdown:
+
+- **Initialization**: When the server starts, plugin instances are created via `__init__`
+- **Registration**: Each plugin instance is registered in a global registry
+- **Shutdown**: On server shutdown or reload, shutdown hooks are called to clean up resources
+- **Hot Reload**: During configuration reload, plugins are gracefully shut down and re-initialized
+
 ### Shutdown Hook (Override Method)
 
 ```python
@@ -279,28 +293,16 @@ class MXCPPlugin(MXCPBasePlugin):
         return self.client.get(endpoint).text
 ```
 
-### Shutdown Hook (Decorator)
+### Shutdown Behavior
 
-```python
-from mxcp.plugins import MXCPBasePlugin, udf, on_shutdown
-import tempfile
-import shutil
+Important notes about shutdown execution:
 
-class MXCPPlugin(MXCPBasePlugin):
-    def __init__(self, config: Dict[str, Any], user_context=None):
-        super().__init__(config, user_context)
-        self.temp_dir = tempfile.mkdtemp()
+- **Use `shutdown()` method**: Override the `shutdown()` method for cleanup logic that needs access to instance state (`self`)
+- **Reverse order**: Shutdown is called in reverse order of plugin registration (last registered, first called)
+- **Error resilience**: If shutdown raises an exception, it's logged but other plugins continue shutting down
+- **Hot reload**: Shutdown is triggered during configuration hot reloads
 
-    @on_shutdown
-    def cleanup_temp(self):
-        """Clean up temporary files."""
-        shutil.rmtree(self.temp_dir)
-
-    @on_shutdown
-    def log_shutdown(self):
-        """Log shutdown event."""
-        print(f"Plugin {self.__class__.__name__} shutting down")
-```
+> **Note**: The `@on_shutdown` decorator exists but is designed for module-level functions, not instance methods. For plugin cleanup, always override the `shutdown()` method instead.
 
 ## Advanced Examples
 

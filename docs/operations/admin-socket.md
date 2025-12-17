@@ -1,11 +1,13 @@
 ---
 title: "Admin Socket"
-description: "Local administration interface for MXCP. REST API over Unix socket for health checks, status monitoring, and configuration reload."
+description: "Local administration interface for MXCP. REST API over Unix socket for health checks, status monitoring, system metrics, and configuration reload."
 sidebar:
-  order: 5
+  order: 6
 ---
 
-The Admin Socket provides a local REST API over Unix socket for server administration. It enables health checks, status monitoring, and configuration reload without network exposure.
+> **Related Topics:** [Monitoring](/operations/monitoring) (telemetry) | [Deployment](/operations/deployment) (production setup) | [Auditing](/security/auditing) (audit logs)
+
+The Admin Socket provides a local REST API over Unix socket for server administration. It enables health checks, status monitoring, system metrics, and configuration reload without network exposure.
 
 ## Overview
 
@@ -14,6 +16,8 @@ The Admin Socket:
 - Provides REST endpoints for administration
 - Enables local monitoring and management
 - Supports configuration hot-reload
+- Exposes system metrics (CPU, memory, disk, network)
+- Provides audit log queries
 
 ## Configuration
 
@@ -79,17 +83,16 @@ curl --unix-socket /run/mxcp/mxcp.sock http://localhost/status
   "profile": "production",
   "mode": "readwrite",
   "debug": false,
-  "endpoints": {
-    "tools": 15,
-    "prompts": 5,
-    "resources": 8
-  },
   "reload": {
     "in_progress": false,
     "draining": false,
     "active_requests": 0,
     "last_reload": "2024-01-15T08:00:00Z",
-    "last_reload_status": "success"
+    "last_reload_status": "success",
+    "last_reload_error": null
+  },
+  "admin_socket": {
+    "path": "/run/mxcp/mxcp.sock"
   }
 }
 ```
@@ -106,8 +109,8 @@ curl --unix-socket /run/mxcp/mxcp.sock http://localhost/status
 | `profile` | Active profile name |
 | `mode` | Database mode (readwrite/readonly) |
 | `debug` | Debug mode enabled |
-| `endpoints` | Endpoint counts by type |
 | `reload` | Reload status information |
+| `admin_socket` | Admin socket metadata |
 
 ### POST /reload
 
@@ -142,7 +145,7 @@ curl --unix-socket /run/mxcp/mxcp.sock -X POST http://localhost/reload
 
 ### GET /config
 
-View current configuration (sanitized).
+View current configuration metadata (sanitized).
 
 ```bash
 curl --unix-socket /run/mxcp/mxcp.sock http://localhost/config
@@ -151,22 +154,300 @@ curl --unix-socket /run/mxcp/mxcp.sock http://localhost/config
 **Response:**
 ```json
 {
+  "status": "ok",
   "project": "my-project",
   "profile": "production",
-  "duckdb": {
-    "path": "/data/mxcp.duckdb",
-    "readonly": false
-  },
-  "extensions": ["httpfs", "parquet"],
+  "repository_path": "/app/mxcp",
+  "duckdb_path": "/data/mxcp.duckdb",
+  "readonly": false,
+  "debug": false,
   "endpoints": {
-    "tools": ["get_user", "search_users"],
-    "resources": ["user://"],
-    "prompts": ["analyze"]
-  }
+    "tools": 15,
+    "prompts": 5,
+    "resources": 8
+  },
+  "features": {
+    "sql_tools": false,
+    "audit_logging": true,
+    "telemetry": true
+  },
+  "transport": "streamable-http"
 }
 ```
 
-Sensitive values (secrets, credentials) are redacted.
+**Fields:**
+
+| Field | Description |
+|-------|-------------|
+| `project` | Project name from site config |
+| `profile` | Active profile name |
+| `repository_path` | Path to MXCP repository |
+| `duckdb_path` | Path to DuckDB database file |
+| `readonly` | Whether database is read-only |
+| `debug` | Debug logging enabled |
+| `endpoints` | Endpoint counts by type |
+| `features` | Enabled features |
+| `transport` | Active transport protocol |
+
+### GET /endpoints
+
+List all registered endpoints with metadata.
+
+```bash
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/endpoints
+```
+
+**Response:**
+```json
+{
+  "endpoints": [
+    {
+      "path": "tools/get_user.yml",
+      "type": "tool",
+      "name": "get_user",
+      "description": "Get user by ID",
+      "language": "sql",
+      "enabled": true,
+      "status": "ok",
+      "error": null
+    },
+    {
+      "path": "tools/broken.yml",
+      "type": null,
+      "name": null,
+      "description": null,
+      "language": null,
+      "enabled": false,
+      "status": "error",
+      "error": "Invalid YAML syntax at line 5"
+    }
+  ]
+}
+```
+
+## System Metrics Endpoints
+
+The admin API provides system-level metrics for monitoring.
+
+### GET /system/info
+
+Get basic system information.
+
+```bash
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/system/info
+```
+
+**Response:**
+```json
+{
+  "boot_time_seconds": 1705312800,
+  "cpu_count_physical": 4,
+  "cpu_count_logical": 8,
+  "memory_total_bytes": 17179869184
+}
+```
+
+### GET /system/cpu
+
+Get CPU usage statistics.
+
+```bash
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/system/cpu
+```
+
+**Response:**
+```json
+{
+  "percent": 25.5,
+  "per_cpu_percent": [30.0, 20.0, 25.0, 27.0, 24.0, 26.0, 23.0, 29.0],
+  "load_avg_1min": 1.5,
+  "load_avg_5min": 1.2,
+  "load_avg_15min": 1.0
+}
+```
+
+### GET /system/memory
+
+Get memory usage statistics.
+
+```bash
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/system/memory
+```
+
+**Response:**
+```json
+{
+  "total_bytes": 17179869184,
+  "available_bytes": 8589934592,
+  "used_bytes": 8589934592,
+  "free_bytes": 4294967296,
+  "percent": 50.0,
+  "swap_total_bytes": 4294967296,
+  "swap_used_bytes": 1073741824,
+  "swap_free_bytes": 3221225472,
+  "swap_percent": 25.0,
+  "mxcp_process_rss_bytes": 134217728,
+  "mxcp_process_vms_bytes": 536870912
+}
+```
+
+### GET /system/disk
+
+Get disk usage and I/O statistics.
+
+```bash
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/system/disk
+```
+
+**Response:**
+```json
+{
+  "total_bytes": 500107862016,
+  "used_bytes": 250053931008,
+  "free_bytes": 250053931008,
+  "percent": 50.0,
+  "read_bytes": 10737418240,
+  "write_bytes": 5368709120,
+  "read_count": 100000,
+  "write_count": 50000
+}
+```
+
+### GET /system/network
+
+Get network I/O statistics.
+
+```bash
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/system/network
+```
+
+**Response:**
+```json
+{
+  "bytes_sent": 1073741824,
+  "bytes_recv": 2147483648,
+  "packets_sent": 1000000,
+  "packets_recv": 2000000,
+  "errin": 0,
+  "errout": 0,
+  "dropin": 0,
+  "dropout": 0
+}
+```
+
+### GET /system/process
+
+Get MXCP process statistics.
+
+```bash
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/system/process
+```
+
+**Response:**
+```json
+{
+  "pid": 12345,
+  "status": "running",
+  "cpu_percent": 5.5,
+  "memory_rss_bytes": 134217728,
+  "memory_vms_bytes": 536870912,
+  "num_threads": 10,
+  "num_fds": 25
+}
+```
+
+## Audit Log Endpoints
+
+Query audit logs via the admin API.
+
+### GET /audit/query
+
+Query audit logs with filters.
+
+```bash
+# Get recent logs
+curl --unix-socket /run/mxcp/mxcp.sock "http://localhost/audit/query?limit=10"
+
+# Filter by operation
+curl --unix-socket /run/mxcp/mxcp.sock "http://localhost/audit/query?operation_name=get_user&operation_status=error"
+
+# Filter by time range
+curl --unix-socket /run/mxcp/mxcp.sock "http://localhost/audit/query?start_time=2024-01-15T00:00:00Z&end_time=2024-01-15T23:59:59Z"
+
+# Filter by trace ID
+curl --unix-socket /run/mxcp/mxcp.sock "http://localhost/audit/query?trace_id=abc123"
+```
+
+**Query Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `schema_name` | Filter by schema name |
+| `start_time` | Start time (ISO 8601) |
+| `end_time` | End time (ISO 8601) |
+| `operation_type` | Filter by type (tool, resource, prompt) |
+| `operation_name` | Filter by operation name |
+| `operation_status` | Filter by status (success, error) |
+| `user_id` | Filter by user ID |
+| `trace_id` | Filter by trace ID |
+| `limit` | Max records (1-1000, default 100) |
+| `offset` | Records to skip |
+
+**Response:**
+```json
+{
+  "records": [
+    {
+      "record_id": "abc123",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "schema_name": "mxcp.endpoints",
+      "schema_version": 1,
+      "operation_type": "tool",
+      "operation_name": "get_user",
+      "operation_status": "success",
+      "duration_ms": 125,
+      "caller_type": "http",
+      "user_id": "user@example.com",
+      "session_id": "session123",
+      "trace_id": "trace456",
+      "policy_decision": "allow",
+      "error_message": null
+    }
+  ],
+  "count": 1
+}
+```
+
+### GET /audit/stats
+
+Get audit log statistics.
+
+```bash
+curl --unix-socket /run/mxcp/mxcp.sock http://localhost/audit/stats
+```
+
+**Response:**
+```json
+{
+  "total_records": 1000,
+  "by_type": {
+    "tool": 800,
+    "resource": 150,
+    "prompt": 50
+  },
+  "by_status": {
+    "success": 950,
+    "error": 50
+  },
+  "by_policy": {
+    "allow": 900,
+    "deny": 50,
+    "n/a": 50
+  },
+  "earliest_timestamp": "2024-01-01T00:00:00Z",
+  "latest_timestamp": "2024-01-15T10:30:00Z"
+}
+```
 
 ## Error Responses
 
@@ -182,16 +463,9 @@ All error responses follow a consistent format:
 
 **HTTP Status Codes:**
 - `200`: Success
+- `403`: Access denied
+- `404`: Not found
 - `500`: Internal server error
-
-**Example Error:**
-```json
-{
-  "error": "internal_error",
-  "message": "Failed to retrieve status",
-  "detail": "NoneType object has no attribute 'reload_manager'"
-}
-```
 
 ## Client Examples
 
@@ -217,6 +491,8 @@ echo "Reload: $(echo $reload | jq -r '.status')"
 
 ### Python
 
+**Note:** Requires the `httpx` library. Install with `pip install httpx`.
+
 ```python
 import httpx
 
@@ -232,7 +508,15 @@ def get_status():
         # Server status
         status = client.get("/status").json()
         print(f"Uptime: {status['uptime']}")
-        print(f"Endpoints: {status['endpoints']}")
+        print(f"Profile: {status['profile']}")
+
+        # Configuration (includes endpoint counts)
+        config = client.get("/config").json()
+        print(f"Endpoints: {config['endpoints']}")
+
+        # System metrics
+        cpu = client.get("/system/cpu").json()
+        print(f"CPU: {cpu['percent']}%")
 
         # Trigger reload
         reload = client.post("/reload").json()
@@ -269,7 +553,6 @@ fi
 # Parse status
 VERSION=$(echo $STATUS | jq -r '.version')
 UPTIME=$(echo $STATUS | jq -r '.uptime')
-TOOLS=$(echo $STATUS | jq -r '.endpoints.tools')
 STATUS_OK=$(echo $STATUS | jq -r '.status')
 
 if [ "$STATUS_OK" != "ok" ]; then
@@ -284,13 +567,19 @@ if [ "$RELOAD_STATUS" = "error" ]; then
     exit 1
 fi
 
+# Get endpoint counts from /config
+CONFIG=$(curl -s --unix-socket $SOCKET http://localhost/config 2>/dev/null)
+TOOLS=$(echo $CONFIG | jq -r '.endpoints.tools')
+
 echo "OK: MXCP v$VERSION, uptime $UPTIME, $TOOLS tools"
 exit 0
 ```
 
 ### File Watcher for Auto-Reload
 
-Monitor configuration files and trigger reload automatically:
+Monitor configuration files and trigger reload automatically.
+
+**Note:** Requires the `httpx` and `watchdog` libraries. Install with `pip install httpx watchdog`.
 
 ```python
 #!/usr/bin/env python3
@@ -360,7 +649,7 @@ curl --unix-socket /run/mxcp/mxcp.sock http://localhost/openapi.json > admin-api
 
 ### Interactive Documentation
 
-The API includes Swagger UI and ReDoc interfaces for interactive exploration. Since the admin socket doesn't expose a network port, use these methods to access the documentation:
+The API includes Swagger UI and ReDoc interfaces. Since the admin socket doesn't expose a network port, use these methods:
 
 **Option 1: SSH Port Forwarding (Recommended)**
 
@@ -375,8 +664,6 @@ ssh -L 8080:/run/mxcp/mxcp.sock production-server
 
 **Option 2: socat Proxy**
 
-If SSH socket forwarding doesn't work (older SSH versions):
-
 ```bash
 # On the server - create TCP proxy to Unix socket
 socat TCP-LISTEN:8080,reuseaddr,fork UNIX-CONNECT:/run/mxcp/mxcp.sock &
@@ -387,29 +674,7 @@ ssh -L 8080:localhost:8080 production-server
 # Open http://localhost:8080/docs
 ```
 
-**Option 3: Local Development**
-
-For local development, you can temporarily expose the socket:
-
-```bash
-# Create temporary TCP proxy (not for production!)
-socat TCP-LISTEN:8080,reuseaddr,fork UNIX-CONNECT:/run/mxcp/mxcp.sock
-
-# Access directly at http://localhost:8080/docs
-```
-
-### Interactive Documentation Features
-
-The documentation interfaces allow you to:
-- Browse all available endpoints with descriptions
-- View request/response schemas with examples
-- Try endpoints directly (use caution in production)
-- Download the OpenAPI specification for code generation
-- View authentication requirements
-
-### Using the Schema
-
-Generate client code from the OpenAPI schema:
+### Generate Client Code
 
 ```bash
 # Download schema
@@ -542,11 +807,15 @@ The `/config` endpoint sanitizes sensitive data:
 # Check if admin is enabled
 env | grep MXCP_ADMIN
 
-# Check socket path
+# Look for this in server logs: "Admin API disabled, skipping"
+journalctl -u mxcp | grep -i admin
+
+# Verify directory exists and is writable
 ls -la /run/mxcp/
 
-# Check server logs
-journalctl -u mxcp | grep admin
+# Create directory if missing
+sudo mkdir -p /run/mxcp
+sudo chown mxcp:mxcp /run/mxcp
 ```
 
 ### "Permission denied"
@@ -575,6 +844,15 @@ test -S /run/mxcp/mxcp.sock && echo "Socket exists"
 lsof -U | grep mxcp
 ```
 
+### Stale Socket Files
+
+MXCP automatically removes stale socket files on startup. If needed, manually remove:
+
+```bash
+rm /run/mxcp/mxcp.sock
+systemctl restart mxcp
+```
+
 ### "Reload failed"
 
 ```bash
@@ -589,4 +867,4 @@ journalctl -u mxcp --since "5 minutes ago"
 
 - [Monitoring](/operations/monitoring) - OpenTelemetry integration
 - [Deployment](/operations/deployment) - Production deployment
-- [Configuration](/operations/configuration) - Configuration reference
+- [Auditing](/security/auditing) - Audit log configuration

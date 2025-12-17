@@ -9,6 +9,21 @@ sidebar:
 
 MXCP provides comprehensive audit logging to track all endpoint executions. Audit logs are essential for security, compliance, debugging, and understanding usage patterns.
 
+## How It Works
+
+```mermaid
+flowchart LR
+    Request[Request] --> Server[mxcp serve]
+    Server --> Exec[Endpoint Execution]
+    Exec --> Logger[Audit Logger]
+    Logger --> Queue[Async Queue]
+    Queue --> File[JSONL File]
+    File --> Query[mxcp log]
+    File --> Export[DuckDB/CSV]
+```
+
+The audit logger runs in a background thread with an async queue, ensuring zero impact on request latency.
+
 ## What Gets Logged
 
 When enabled, MXCP logs every execution with:
@@ -16,15 +31,23 @@ When enabled, MXCP logs every execution with:
 | Field | Description | Example |
 |-------|-------------|---------|
 | `timestamp` | UTC timestamp | `2024-01-15T10:30:45.123Z` |
-| `caller` | Request source | `http`, `stdio` |
-| `type` | Endpoint type | `tool`, `resource`, `prompt` |
-| `name` | Endpoint name | `get_user` |
-| `input_json` | Parameters (redacted) | `{"user_id": 123}` |
+| `caller_type` | Request source | `http`, `stdio` (see below) |
+| `operation_type` | Endpoint type | `tool`, `resource`, `prompt` |
+| `operation_name` | Endpoint name | `get_user` |
+| `input_data` | Parameters (redacted) | `{"user_id": 123}` |
 | `duration_ms` | Execution time | `145` |
-| `policy_decision` | Policy result | `allow`, `deny`, `warn` |
-| `reason` | Policy reason | `"Admin access required"` |
-| `status` | Execution result | `success`, `error` |
+| `policy_decision` | Policy result | `allow`, `deny`, `n/a` |
+| `policy_reason` | Policy reason | `"Admin access required"` |
+| `operation_status` | Execution result | `success`, `error` |
 | `error` | Error message | `"Connection timeout"` |
+| `user_id` | Authenticated user | `"john@example.com"` |
+| `session_id` | Session identifier | `"sess_abc123"` |
+
+### Caller Types
+
+The `caller_type` field indicates how the endpoint was invoked:
+- **http**: HTTP API request (when running `mxcp serve` with default transport)
+- **stdio**: Standard I/O protocol (when running `mxcp serve --transport stdio`)
 
 **Note**: Audit logging only occurs through `mxcp serve`. Direct CLI execution via `mxcp run` does not generate audit logs.
 
@@ -52,8 +75,8 @@ The log file is created automatically when the first event is logged.
 Audit logs use **JSONL (JSON Lines)** format - one JSON object per line:
 
 ```json
-{"timestamp":"2024-01-15T10:30:45.123Z","caller":"http","type":"tool","name":"get_user","input_json":"{\"user_id\":123}","duration_ms":145,"policy_decision":"allow","status":"success"}
-{"timestamp":"2024-01-15T10:30:46.456Z","caller":"http","type":"tool","name":"update_user","input_json":"{\"user_id\":123}","duration_ms":89,"policy_decision":"deny","reason":"Admin required","status":"error"}
+{"timestamp":"2024-01-15T10:30:45.123Z","caller_type":"http","operation_type":"tool","operation_name":"get_user","input_data":{"user_id":123},"duration_ms":145,"policy_decision":"allow","operation_status":"success"}
+{"timestamp":"2024-01-15T10:30:46.456Z","caller_type":"http","operation_type":"tool","operation_name":"update_user","input_data":{"user_id":123},"duration_ms":89,"policy_decision":"deny","policy_reason":"Admin required","operation_status":"error"}
 ```
 
 JSONL advantages:
@@ -117,11 +140,11 @@ mxcp log --status success
 # Denied requests
 mxcp log --policy deny
 
-# Warnings
-mxcp log --policy warn
-
 # Allowed requests
 mxcp log --policy allow
+
+# No policy applied
+mxcp log --policy n/a
 ```
 
 ### Combine Filters
@@ -195,10 +218,10 @@ duckdb audit.db
 
 **Top 10 most used tools:**
 ```sql
-SELECT name, COUNT(*) as count
+SELECT operation_name, COUNT(*) as count
 FROM logs
-WHERE type = 'tool'
-GROUP BY name
+WHERE operation_type = 'tool'
+GROUP BY operation_name
 ORDER BY count DESC
 LIMIT 10;
 ```
@@ -207,9 +230,9 @@ LIMIT 10;
 ```sql
 SELECT
   DATE_TRUNC('hour', timestamp) as hour,
-  COUNT(CASE WHEN status = 'error' THEN 1 END) as errors,
+  COUNT(CASE WHEN operation_status = 'error' THEN 1 END) as errors,
   COUNT(*) as total,
-  ROUND(100.0 * COUNT(CASE WHEN status = 'error' THEN 1 END) / COUNT(*), 2) as error_rate
+  ROUND(100.0 * COUNT(CASE WHEN operation_status = 'error' THEN 1 END) / COUNT(*), 2) as error_rate
 FROM logs
 GROUP BY hour
 ORDER BY hour DESC;
@@ -218,26 +241,26 @@ ORDER BY hour DESC;
 **Policy violations by endpoint:**
 ```sql
 SELECT
-  name,
+  operation_name,
   COUNT(*) as denials,
-  STRING_AGG(DISTINCT reason, ', ') as reasons
+  STRING_AGG(DISTINCT policy_reason, ', ') as reasons
 FROM logs
 WHERE policy_decision = 'deny'
-GROUP BY name
+GROUP BY operation_name
 ORDER BY denials DESC;
 ```
 
 **Average response time by tool:**
 ```sql
 SELECT
-  name,
+  operation_name,
   AVG(duration_ms) as avg_ms,
   MIN(duration_ms) as min_ms,
   MAX(duration_ms) as max_ms,
   COUNT(*) as calls
 FROM logs
-WHERE type = 'tool' AND status = 'success'
-GROUP BY name
+WHERE operation_type = 'tool' AND operation_status = 'success'
+GROUP BY operation_name
 ORDER BY avg_ms DESC;
 ```
 
@@ -250,7 +273,7 @@ Monitor logs in real-time using standard Unix tools:
 tail -f audit/logs.jsonl
 
 # Watch for errors
-tail -f audit/logs.jsonl | grep '"status":"error"'
+tail -f audit/logs.jsonl | grep '"operation_status":"error"'
 
 # Watch for policy denials
 tail -f audit/logs.jsonl | grep '"policy_decision":"deny"'
@@ -266,15 +289,34 @@ Fields marked as `sensitive: true` in your schema are automatically redacted:
 **Schema:**
 ```yaml
 parameters:
+  - name: username
+    type: string
+    description: User's username
   - name: api_key
     type: string
     sensitive: true
+    description: API key for authentication
+  - name: config
+    type: object
+    properties:
+      host:
+        type: string
+      password:
+        type: string
+        sensitive: true
 ```
 
 **Audit log entry:**
 ```json
 {
-  "input_json": "{\"api_key\":\"[REDACTED]\"}"
+  "input_data": {
+    "username": "john_doe",
+    "api_key": "[REDACTED]",
+    "config": {
+      "host": "example.com",
+      "password": "[REDACTED]"
+    }
+  }
 }
 ```
 
@@ -282,6 +324,8 @@ Redaction applies to:
 - Parameters marked sensitive
 - Nested fields marked sensitive
 - Any field containing `password`, `secret`, `token`, `key` (configurable)
+
+**Important**: Only fields explicitly marked with `sensitive: true` in the endpoint schema will be redacted. If no schema is provided or fields are not marked as sensitive, they will appear in plain text in the audit logs.
 
 ## Log Rotation
 
@@ -338,10 +382,10 @@ Configure Splunk to monitor the JSONL file or use HTTP Event Collector.
 
 ```bash
 # Count by status
-cat audit/logs.jsonl | jq -s 'group_by(.status) | map({status: .[0].status, count: length})'
+cat audit/logs.jsonl | jq -s 'group_by(.operation_status) | map({status: .[0].operation_status, count: length})'
 
 # Extract error messages
-cat audit/logs.jsonl | jq 'select(.status == "error") | {name, error}'
+cat audit/logs.jsonl | jq 'select(.operation_status == "error") | {name: .operation_name, error}'
 
 # Calculate average duration
 cat audit/logs.jsonl | jq -s 'map(.duration_ms) | add / length'
@@ -431,16 +475,9 @@ For better performance on large datasets:
 
 MXCP provides automated audit log cleanup to manage storage and comply with data retention policies.
 
-### Retention Configuration
+### Default Retention
 
-Configure retention in your audit schema:
-
-```yaml
-audit:
-  enabled: true
-  path: audit/logs.jsonl
-  retention_days: 90  # Keep records for 90 days
-```
+MXCP uses a default retention period of **90 days** for endpoint execution logs. Records older than this are automatically removed when you run the cleanup command.
 
 ### Manual Cleanup
 
@@ -502,6 +539,21 @@ User=mxcp
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now mxcp-audit-cleanup.timer
+```
+
+### Monitoring Cleanup
+
+View cleanup results:
+
+```bash
+# Check systemd logs
+journalctl -u mxcp-audit-cleanup.service
+
+# Run with debug output
+mxcp log-cleanup --debug
+
+# Get JSON output for monitoring
+mxcp log-cleanup --json | jq
 ```
 
 ### Cleanup Output

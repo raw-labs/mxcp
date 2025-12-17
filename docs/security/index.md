@@ -43,9 +43,9 @@ MXCP implements a layered security model:
 flowchart TB
     Request["Request"]
 
-    Auth["**Authentication**<br/>OAuth token validation<br/>Session verification<br/>User identity extraction"]
+    Auth["**Authentication**<br/>OAuth token validation<br/>User identity extraction"]
 
-    Input["**Input Policies**<br/>Role-based access control<br/>Permission checks<br/>Parameter validation"]
+    Input["**Input Policies**<br/>Role-based access control<br/>Permission checks<br/>Request blocking"]
 
     Exec["**Execution**<br/>SQL or Python code<br/>Database operations"]
 
@@ -78,8 +78,8 @@ projects:
         auth:
           provider: github
           github:
-            client_id: your_client_id
-            client_secret: your_client_secret
+            client_id: "${GITHUB_CLIENT_ID}"
+            client_secret: "${GITHUB_CLIENT_SECRET}"
 ```
 
 ### Add Policies

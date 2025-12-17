@@ -106,9 +106,11 @@ projects:
         auth:
           provider: github
           github:
-            client_id: Ov23li...
-            client_secret: "${GITHUB_SECRET}"
-            callback_path: /callback
+            client_id: "${GITHUB_CLIENT_ID}"
+            client_secret: "${GITHUB_CLIENT_SECRET}"
+            callback_path: /auth/github/callback
+            auth_url: https://github.com/login/oauth/authorize
+            token_url: https://github.com/login/oauth/access_token
 ```
 
 ## Common Schema Elements
@@ -120,6 +122,19 @@ All MXCP YAML files start with the schema version:
 ```yaml
 mxcp: 1    # Required, always 1
 ```
+
+### Value Interpolation
+
+User configuration supports dynamic value interpolation:
+
+| Syntax | Source | Example |
+|--------|--------|---------|
+| `${VAR}` | Environment variable | `${API_KEY}` |
+| `vault://path#key` | HashiCorp Vault | `vault://secret/db#password` |
+| `op://vault/item/field` | 1Password | `op://Private/api/token` |
+| `file://path` | Local file | `file:///etc/ssl/cert.pem` |
+
+See [User Configuration](/schemas/user-config) for complete interpolation documentation.
 
 ### Parameters
 
@@ -208,9 +223,27 @@ mxcp validate --debug
 |------|-----------------|
 | Tool | `mxcp`, `tool.name`, `tool.source` |
 | Resource | `mxcp`, `resource.uri`, `resource.source` |
-| Prompt | `mxcp`, `prompt.name`, `prompt.description`, `prompt.messages` |
+| Prompt | `mxcp`, `prompt.name`, `prompt.messages` |
 | Site Config | `mxcp`, `project`, `profile` |
 | User Config | `mxcp` |
+
+### Common Optional Fields
+
+All endpoint types (tools, resources, prompts) support these optional fields:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `description` | `null` | Human-readable description |
+| `enabled` | `true` | Set to `false` to disable the endpoint |
+| `tags` | `[]` | List of tags for categorization |
+| `tests` | `[]` | Inline test definitions |
+| `policies` | `null` | Access control policies |
+
+Tools and resources also support:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `language` | `"sql"` | Source language: `"sql"` or `"python"` |
 
 ### Data Types
 

@@ -266,13 +266,39 @@ Type `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}` and press Ente
 
 Access Claude Desktop's developer console:
 
-1. **macOS**: `Cmd + Option + I`
-2. **Windows/Linux**: `Ctrl + Shift + I`
+1. **macOS**: `Cmd + Option + Shift + I`
+2. **Windows/Linux**: `Ctrl + Shift + Alt + I`
 
 Look for:
 - Connection errors
 - Request/response timing
 - Error messages
+
+### Log Files
+
+Check MCP server logs for detailed error information:
+
+- **macOS**: `~/Library/Logs/Claude/mcp*.log`
+- **Windows**: `%APPDATA%\Claude\logs\mcp*.log`
+
+### Windows-Specific Issues
+
+If you see ENOENT errors referencing `${APPDATA}`, add the expanded path to the `env` key:
+
+```json
+{
+  "mcpServers": {
+    "my-project": {
+      "command": "mxcp",
+      "args": ["serve", "--transport", "stdio"],
+      "cwd": "C:\\path\\to\\project",
+      "env": {
+        "APPDATA": "C:\\Users\\YourUsername\\AppData\\Roaming"
+      }
+    }
+  }
+}
+```
 
 ## Best Practices
 
@@ -312,6 +338,9 @@ tool:
     type: string
   source:
     code: "SELECT 'Hello from MXCP!'"
+  tests:
+    - name: test_hello
+      result: "Hello from MXCP!"
 ```
 
 ### 4. Monitor Logs

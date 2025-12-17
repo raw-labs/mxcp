@@ -164,7 +164,6 @@ def user_lookup(email: str) -> dict:
 
 The `db` object provides:
 - `db.execute(sql, params)` - Execute SQL with parameters, returns `list[dict]`
-- `db.connection` - Raw DuckDB connection for advanced operations
 
 ## Step 3: Configuration and Secrets
 
@@ -684,7 +683,7 @@ from mxcp.runtime import db, config
 # Don't create your own connections
 ```
 
-### 5. Never Cache Database Connections
+### 5. Always Use the Runtime Proxy
 
 ```python
 # CORRECT - Access DB through runtime proxy
@@ -695,16 +694,12 @@ def get_user_data(user_id: int) -> dict:
     )
     return results[0] if results else None
 
-# INCORRECT - Don't store connections
-cached_conn = db.connection  # Never do this!
-
-class DataService:
-    def __init__(self):
-        # INCORRECT - Don't store in instances
-        self.conn = db.connection  # Will fail after reload
+# INCORRECT - Don't create your own connections
+import duckdb
+my_conn = duckdb.connect("data/db.duckdb")  # Never do this!
 ```
 
-The `db` proxy ensures your code uses the current active connection, even after configuration reloads.
+The `db` proxy ensures your code uses the properly managed connection pool, even after configuration reloads.
 
 ### 6. Handle Missing Data
 ```python

@@ -74,8 +74,11 @@ profiles:
 | `extensions` | array | No | - | DuckDB extensions to load. |
 | `dbt` | object | No | - | dbt integration configuration. |
 | `sql_tools` | object | No | - | Built-in SQL tools configuration. |
+| `plugin` | array | No | - | Plugin definitions. |
 | `paths` | object | No | - | Custom directory paths. |
 | `profiles` | object | No | - | Profile-specific configurations. |
+
+> **Note:** The `mxcp` field must be the integer `1`. Unlike endpoint definitions (tools, resources, prompts), site config does not auto-coerce string values.
 
 ## Project and Profile
 
@@ -93,6 +96,14 @@ The `profile` specifies which profile configuration to use. Switch profiles via:
 mxcp serve --profile production
 ```
 
+### Profile Resolution Priority
+
+The active profile is resolved in this order (highest to lowest priority):
+
+1. **CLI argument** (`--profile`) - explicit override for a single command
+2. **Environment variable** (`MXCP_PROFILE`) - session-level override
+3. **Site config** (`profile` field) - project default
+
 ## Secrets
 
 List secret names that the project uses. Actual secret values are defined in the user configuration.
@@ -107,12 +118,38 @@ secrets:
 Secrets are accessed in Python endpoints:
 
 ```python
-from mxcp.runtime import secrets
+from mxcp.runtime import config
 
-api_key = secrets.get("api_key")
+# Returns dict with secret parameters, or None if not found
+db_creds = config.get_secret("db_credentials")
+if db_creds:
+    host = db_creds.get("host")
+    password = db_creds.get("password")
 ```
 
 See [User Configuration Schema](/schemas/user-config) for defining secret values.
+
+## Plugins
+
+Register custom plugins to extend MXCP functionality.
+
+```yaml
+plugin:
+  - name: my_plugin
+    module: plugins.my_module
+    config: config/my_plugin.yml
+
+  - name: analytics
+    module: my_project.plugins.analytics
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Plugin identifier. |
+| `module` | string | Yes | Python module path to the plugin. |
+| `config` | string | No | Optional path to plugin configuration file. |
+
+See [Plugin Reference](/reference/plugins) for complete plugin documentation.
 
 ## Extensions
 
@@ -136,13 +173,13 @@ extensions:
     repo: community
 
   - name: postgres_scanner
-    repo: core
+    repo: core_nightly
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | Yes | Extension name. |
-| `repo` | string | No | Repository: `core`, `community`, or custom URL. |
+| `repo` | string | No | Repository: `community` or `core_nightly`. |
 
 ### Common Extensions
 
@@ -172,6 +209,7 @@ dbt:
   macro_paths: ["macros"]
   snapshot_paths: ["snapshots"]
   target_path: "target"
+  clean_targets: ["target", "dbt_packages"]
 ```
 
 | Field | Type | Default | Description |
@@ -184,6 +222,7 @@ dbt:
 | `macro_paths` | array | `["macros"]` | dbt macro directories. |
 | `snapshot_paths` | array | `["snapshots"]` | dbt snapshot directories. |
 | `target_path` | string | `"target"` | dbt target directory. |
+| `clean_targets` | array | `["target", "dbt_packages"]` | Directories to clean. |
 
 ### dbt Workflow
 
@@ -222,15 +261,20 @@ When enabled, provides these tools:
 
 ## Paths Configuration
 
-Customize directory paths for endpoint definitions.
+Customize directory paths for endpoint definitions and data storage.
 
 ```yaml
 paths:
   tools: tools           # Tool YAML files
   resources: resources   # Resource YAML files
   prompts: prompts       # Prompt YAML files
+  evals: evals           # Evaluation YAML files
   python: python         # Python implementation files
-  sql: sql              # SQL implementation files
+  plugins: plugins       # Plugin modules
+  sql: sql               # SQL implementation files
+  drift: drift           # Drift snapshots
+  audit: audit           # Audit logs
+  data: data             # Database files
 ```
 
 | Field | Type | Default | Description |
@@ -238,8 +282,13 @@ paths:
 | `tools` | string | `"tools"` | Tool definitions directory. |
 | `resources` | string | `"resources"` | Resource definitions directory. |
 | `prompts` | string | `"prompts"` | Prompt definitions directory. |
+| `evals` | string | `"evals"` | Evaluation definitions directory. |
 | `python` | string | `"python"` | Python implementations directory. |
+| `plugins` | string | `"plugins"` | Plugin modules directory. |
 | `sql` | string | `"sql"` | SQL implementations directory. |
+| `drift` | string | `"drift"` | Drift snapshot files directory. |
+| `audit` | string | `"audit"` | Audit log files directory. |
+| `data` | string | `"data"` | Database and data files directory. |
 
 All paths are relative to the project root.
 
@@ -292,11 +341,12 @@ duckdb:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `path` | string | `data/db-{profile}.duckdb` | Database file path. |
+| `path` | string | `{paths.data}/db-{profile}.duckdb` | Database file path. |
 | `readonly` | boolean | `false` | Open database in read-only mode. |
 
 **Path Behavior:**
-- If not specified, defaults to `data/db-{profile_name}.duckdb` (e.g., `data/db-default.duckdb`)
+- If not specified, defaults to `{paths.data}/db-{profile}.duckdb` (e.g., `data/db-default.duckdb`)
+- The `paths.data` value defaults to `"data"` but can be customized in the paths configuration
 - Relative paths are resolved from project root
 - Use absolute paths for production deployments
 - Override with `MXCP_DUCKDB_PATH` environment variable
@@ -310,7 +360,11 @@ drift:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `path` | string | `"./drift/snapshot.json"` | Drift snapshot file path. |
+| `path` | string | `{paths.drift}/drift-{profile}.json` | Drift snapshot file path. |
+
+**Path Behavior:**
+- If not specified, defaults to `{paths.drift}/drift-{profile}.json` (e.g., `drift/drift-default.json`)
+- The `paths.drift` value defaults to `"drift"` but can be customized in the paths configuration
 
 Use drift detection to track schema changes:
 
@@ -333,7 +387,12 @@ audit:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable audit logging. |
-| `path` | string | Auto-generated | Audit log file path (JSONL format). |
+| `path` | string | `{paths.audit}/logs-{profile}.jsonl` | Audit log file path (JSONL format). |
+
+**Path Behavior:**
+- If not specified, defaults to `{paths.audit}/logs-{profile}.jsonl` (e.g., `audit/logs-default.jsonl`)
+- The `paths.audit` value defaults to `"audit"` but can be customized in the paths configuration
+- Override enabled state with `MXCP_AUDIT_ENABLED` environment variable (`true`/`false`, `1`/`0`, `yes`/`no`)
 
 Query audit logs:
 
@@ -454,6 +513,14 @@ profiles:
 ```
 
 Environment variables are expanded at runtime.
+
+### MXCP Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `MXCP_PROFILE` | Override the active profile (takes precedence over `profile` in site config) |
+| `MXCP_DUCKDB_PATH` | Override DuckDB database path |
+| `MXCP_AUDIT_ENABLED` | Override audit logging (`true`/`false`, `1`/`0`, `yes`/`no`) |
 
 ## Validation
 

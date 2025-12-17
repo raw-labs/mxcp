@@ -14,12 +14,14 @@ MXCP provides built-in testing capabilities to verify endpoint functionality. Te
 Add tests to your endpoint definition:
 
 ```yaml
+mxcp: 1
 tool:
   name: get_user
   description: Get user by ID
   parameters:
     - name: user_id
       type: integer
+      description: The user's unique identifier
   return:
     type: object
   source:
@@ -35,12 +37,13 @@ tool:
         id: 1
         name: "Alice"
 
-    - name: get_nonexistent_user
-      description: Test fetching a non-existent user
+    - name: get_user_has_email
+      description: Test that user has email field
       arguments:
         - key: user_id
-          value: 99999
-      result: null
+          value: 1
+      result_contains:
+        email: "alice@example.com"
 ```
 
 ## Running Tests
@@ -52,12 +55,25 @@ mxcp test
 # Run tests for specific endpoint
 mxcp test tool get_user
 mxcp test resource user-profile
+mxcp test prompt my_prompt
 
 # JSON output
 mxcp test --json-output
 
 # Verbose output
 mxcp test --debug
+
+# Read-only database connection
+mxcp test --readonly
+
+# Run with user context (JSON string)
+mxcp test --user-context '{"role": "admin"}'
+
+# Run with user context (from file)
+mxcp test --user-context @contexts/admin.json
+
+# Run with request headers
+mxcp test --request-headers '{"Authorization": "Bearer token123"}'
 ```
 
 ## Test Structure
@@ -122,7 +138,7 @@ result:
 
 ### Contains
 
-Result must contain these fields/values:
+Result must contain these fields/values (partial object match):
 
 ```yaml
 result_contains:
@@ -130,12 +146,7 @@ result_contains:
   department: "Engineering"
 ```
 
-For arrays, checks if any item matches:
-
-```yaml
-result_contains:
-  - name: "Alice"
-```
+Note: For checking if an array contains a specific item, use `result_contains_item` instead.
 
 ### Excludes
 
@@ -148,13 +159,20 @@ result_not_contains:
   - internal_id
 ```
 
-### Null Check
+### Null/Empty Check
 
-Result should be null/empty:
+For endpoints that explicitly return null or empty arrays:
 
 ```yaml
+# Explicit null result
 result: null
+
+# Empty array result
+result: []
+result_length: 0
 ```
+
+Note: Endpoints returning `type: object` that find no matching rows will throw a "No results returned" error rather than returning null. Test error conditions via CLI instead.
 
 ### Array Item Match
 
@@ -168,6 +186,20 @@ result_contains_item:
 
 This passes if any item in the result array has `name: "Alice"` AND `status: "active"`.
 
+### Array Contains All
+
+Verify that all specified items exist in the array (in any order):
+
+```yaml
+result_contains_all:
+  - department: "Engineering"
+    role: "head"
+  - department: "Sales"
+    role: "head"
+```
+
+This passes if the result array contains items matching both criteria (partial matches).
+
 ### Array Length
 
 Validate the number of items in an array result:
@@ -177,6 +209,25 @@ result_length: 5
 ```
 
 Note: `result_length` only supports exact counts. For range validation, use application logic or multiple tests.
+
+### String Contains
+
+For string results, verify they contain a specific substring:
+
+```yaml
+tests:
+  - name: success_message
+    arguments:
+      - key: action
+        value: "create"
+    result_contains_text: "successfully created"
+
+  - name: error_message
+    arguments:
+      - key: action
+        value: "invalid"
+    result_contains_text: "error"
+```
 
 ### Combined Assertions
 
@@ -191,6 +242,54 @@ result_not_contains:
   - error
   - internal_error
 result_length: 1
+```
+
+## Testing Resources
+
+Resources can be tested the same way as tools:
+
+```yaml
+mxcp: 1
+resource:
+  uri: "users://{user_id}"
+  description: Get user profile by ID
+  parameters:
+    - name: user_id
+      type: string
+      description: User identifier
+  source:
+    code: |
+      SELECT id, name, email FROM users WHERE id = $user_id
+
+  tests:
+    - name: get_specific_user
+      description: Retrieve a specific user profile
+      arguments:
+        - key: user_id
+          value: "alice"
+      result_contains:
+        id: "alice"
+        email: "alice@example.com"
+```
+
+## Testing Complex Types
+
+For endpoints returning objects or arrays:
+
+```yaml
+tests:
+  - name: test_user_with_roles
+    description: Test user lookup with nested data
+    arguments:
+      - key: user_id
+        value: 123
+    result:
+      id: 123
+      name: "John Doe"
+      roles: ["user", "admin"]
+      profile:
+        department: "Engineering"
+        level: "Senior"
 ```
 
 ## Policy Testing
@@ -259,32 +358,53 @@ For automated error testing, consider using shell scripts or your CI/CD pipeline
 
 ### Success
 
-```
-$ mxcp test
+```bash
+mxcp test
 
-Testing tool/get_user...
-  ✓ get_existing_user
-  ✓ get_nonexistent_user
+🧪 Test Execution Summary
+   Tested 2 endpoints
+   • 2 passed
 
-Testing tool/search_users...
-  ✓ search_by_department
-  ✓ search_with_pagination
+✅ Passed tests:
 
-Tests: 4 passed, 0 failed
+  ✓ tool/get_user (tools/get_user.yml)
+    ✓ get_existing_user (0.05s)
+    ✓ get_nonexistent_user (0.03s)
+
+  ✓ tool/search_users (tools/search_users.yml)
+    ✓ search_by_department (0.04s)
+    ✓ search_with_pagination (0.06s)
+
+🎉 All tests passed!
+
+⏱️  Total time: 0.18s
 ```
 
 ### Failure
 
-```
-$ mxcp test
+```bash
+mxcp test
 
-Testing tool/get_user...
-  ✓ get_existing_user
-  ✗ get_wrong_name
-    Expected: name = "Alice"
-    Actual: name = "Bob"
+🧪 Test Execution Summary
+   Tested 2 endpoints
+   • 1 passed
+   • 1 failed
 
-Tests: 1 passed, 1 failed
+❌ Failed tests:
+
+  ✗ tool/get_user (tools/get_user.yml)
+    ✓ get_existing_user (0.05s)
+    ✗ get_wrong_name (0.03s)
+      Error: Expected name='Alice', got name='Bob'
+
+✅ Passed tests:
+
+  ✓ tool/search_users (tools/search_users.yml)
+    ✓ search_by_department (0.04s)
+
+💡 Tip: Review the errors above and fix the failing tests
+
+⏱️  Total time: 0.12s
 ```
 
 ### JSON Output
@@ -295,28 +415,50 @@ mxcp test --json-output
 
 ```json
 {
-  "status": "error",
-  "results": [
-    {
-      "endpoint": "tool/get_user",
-      "test": "get_existing_user",
-      "status": "passed"
-    },
-    {
-      "endpoint": "tool/get_user",
-      "test": "get_wrong_name",
-      "status": "failed",
-      "expected": {"name": "Alice"},
-      "actual": {"name": "Bob"}
-    }
-  ],
-  "summary": {
-    "passed": 1,
-    "failed": 1,
-    "total": 2
+  "status": "ok",
+  "result": {
+    "status": "failed",
+    "tests_run": 2,
+    "endpoints": [
+      {
+        "endpoint": "tool/get_user",
+        "path": "tools/get_user.yml",
+        "test_results": {
+          "status": "failed",
+          "tests_run": 2,
+          "tests": [
+            {
+              "name": "get_existing_user",
+              "description": "Test fetching an existing user",
+              "status": "passed",
+              "error": null,
+              "time": 0.05
+            },
+            {
+              "name": "get_wrong_name",
+              "description": "Test that should fail",
+              "status": "failed",
+              "error": "Expected name='Alice', got name='Bob'",
+              "time": 0.03
+            }
+          ]
+        }
+      }
+    ]
   }
 }
 ```
+
+Fields:
+- `status`: Command execution status (`ok` or `error`)
+- `result`: Test results object
+  - `status`: Overall test status (`ok`, `failed`, or `error`)
+  - `tests_run`: Total number of tests executed
+  - `endpoints`: List of endpoint test results
+    - `endpoint`: Endpoint identifier (e.g., `tool/get_user`)
+    - `path`: Path to endpoint file
+    - `test_results`: Test suite results
+      - `tests`: Individual test results with `name`, `description`, `status`, `error`, and `time`
 
 ## Test Data Setup
 
@@ -343,22 +485,27 @@ duckdb data/db-default.duckdb < sql/test_setup.sql
 mxcp test
 ```
 
-### Using Fixtures
+### Using Python Scripts
 
-For Python tests, use fixtures in your test module:
+For more complex setup, use a Python script with DuckDB directly:
 
 ```python
-# python/test_fixtures.py
-from mxcp.runtime import db
+# scripts/setup_test_data.py
+import duckdb
 
 def setup_test_data():
-    db.execute("""
+    conn = duckdb.connect("data/db-default.duckdb")
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS test_users AS
         SELECT * FROM (VALUES
             (1, 'Alice'),
             (2, 'Bob')
         ) AS t(id, name)
     """)
+    conn.close()
+
+if __name__ == "__main__":
+    setup_test_data()
 ```
 
 ## CI/CD Integration
@@ -373,8 +520,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - run: pip install mxcp
@@ -384,7 +531,7 @@ jobs:
       - name: Run tests
         run: mxcp test --json-output > test-results.json
       - name: Upload results
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: test-results.json
@@ -405,19 +552,60 @@ fi
 
 ## Best Practices
 
-### 1. Test Every Endpoint
+### 1. Choose the Right Assertion Type
+
+- `result` - For stable, predictable outputs
+- `result_contains` - For dynamic data with timestamps or generated IDs
+- `result_not_contains` - For security/policy testing
+- `result_contains_item` / `result_contains_all` - For array endpoints
+- `result_length` - When count matters
+
+```yaml
+tests:
+  # Handle dynamic data - don't check timestamps or auto-generated IDs
+  - name: order_created
+    result_contains:
+      status: "pending"
+      customer_id: "c123"
+    # Ignores: created_at, order_id
+
+  # Test empty results
+  - name: no_matching_results
+    arguments:
+      - key: filter
+        value: "non_existent"
+    result: []
+    result_length: 0
+```
+
+### 2. Test Every Endpoint
 Each endpoint should have at least one test.
 
-### 2. Test Edge Cases
+### 3. Test Edge Cases
 - Empty inputs
 - Invalid inputs
 - Boundary values
 - Null handling
 
-### 3. Test Policies
-If policies are defined, test all access levels.
+### 4. Test Policies
+If policies are defined, test all access levels:
 
-### 4. Use Descriptive Names
+```yaml
+tests:
+  - name: admin_sees_all
+    user_context:
+      role: admin
+    result_contains:
+      sensitive_field: "value"
+
+  - name: user_filtered
+    user_context:
+      role: user
+    result_not_contains:
+      - sensitive_field
+```
+
+### 5. Use Descriptive Names
 ```yaml
 # Good
 - name: search_returns_matching_users
@@ -428,10 +616,10 @@ If policies are defined, test all access levels.
 - name: search_test
 ```
 
-### 5. Keep Tests Independent
+### 6. Keep Tests Independent
 Tests should not depend on each other.
 
-### 6. Use Realistic Data
+### 7. Use Realistic Data
 Test with data similar to production.
 
 ## Complete Example
@@ -444,12 +632,15 @@ tool:
   parameters:
     - name: department
       type: string
+      description: Department to search in
       enum: ["Engineering", "Sales", "HR"]
     - name: role
       type: string
+      description: Filter by role (optional)
       default: null
     - name: limit
       type: integer
+      description: Maximum results to return
       minimum: 1
       maximum: 100
       default: 10
@@ -486,8 +677,8 @@ tool:
       arguments:
         - key: department
           value: "Engineering"
-      result_contains:
-        - department: "Engineering"
+      result_contains_item:
+        department: "Engineering"
 
     - name: search_with_role
       description: Filter by role
@@ -496,8 +687,8 @@ tool:
           value: "Engineering"
         - key: role
           value: "Senior"
-      result_contains:
-        - role: "Senior"
+      result_contains_item:
+        role: "Senior"
 
     - name: limit_results
       description: Respect limit parameter

@@ -328,8 +328,8 @@ tool:
 
     - name: status
       type: string
-      description: Filter by status
-      enum: ["pending", "completed", "cancelled"]
+      description: Filter by status (pending, completed, cancelled)
+      examples: ["pending", "completed", "cancelled"]
       default: null
 
   return:

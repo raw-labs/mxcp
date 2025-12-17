@@ -62,7 +62,7 @@ mxcp init --bootstrap       # With example endpoint
 # Server
 mxcp serve                  # Start server (default transport)
 mxcp serve --transport stdio # For Claude Desktop
-mxcp serve --transport http  # HTTP API
+mxcp serve --transport streamable-http  # HTTP API
 
 # Development
 mxcp validate               # Validate endpoints
@@ -141,6 +141,8 @@ SELECT * FROM users WHERE id = $user_id;
 | `array` | `list` | Array |
 | `object` | `dict` | STRUCT/JSON |
 
+See [Type System](/concepts/type-system) for format annotations, constraints, and sensitive data marking.
+
 ## Environment Variables
 
 ### Core
@@ -179,6 +181,7 @@ my-project/
 ├── python/           # Python code
 ├── plugins/          # DuckDB plugins
 ├── sql/              # SQL files
+├── data/             # DuckDB database files
 ├── evals/            # Evaluation suites
 ├── drift/            # Drift snapshots
 ├── audit/            # Audit logs

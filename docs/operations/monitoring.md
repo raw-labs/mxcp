@@ -1,13 +1,13 @@
 ---
 title: "Monitoring"
-description: "Monitor MXCP in production. OpenTelemetry, drift detection, Admin API, and health checks."
+description: "Monitor MXCP in production. OpenTelemetry tracing, metrics via spanmetrics, and audit log analysis."
 sidebar:
   order: 4
 ---
 
-> **Related Topics:** [Deployment](/operations/deployment) (production setup) | [Admin Socket](/operations/admin-socket) (health checks) | [Auditing](/security/auditing) (operation logs) | [Configuration](/operations/configuration) (OTEL settings)
+> **Related Topics:** [Deployment](/operations/deployment) (production setup) | [Admin Socket](/operations/admin-socket) (health checks) | [Auditing](/security/auditing) (operation logs) | [Drift Detection](/operations/drift-detection) (schema changes)
 
-This guide covers monitoring and observability for MXCP deployments, including tracing, metrics, drift detection, and the Admin API.
+This guide covers monitoring and observability for MXCP deployments, including tracing, metrics, and audit log analysis.
 
 ## Observability Signals
 
@@ -26,75 +26,53 @@ MXCP supports OpenTelemetry for distributed tracing and metrics.
 
 ### Configuration Methods
 
-#### Environment Variables
+#### Environment Variables (Recommended)
 
 ```bash
-# Enable tracing
-export OTEL_TRACES_EXPORTER=otlp
-export OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-
-# Enable metrics
-export OTEL_METRICS_EXPORTER=otlp
-export OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://prometheus:4317
-
-# Service name
+# Standard OpenTelemetry variables
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 export OTEL_SERVICE_NAME=mxcp-production
-
-# Resource attributes
-export OTEL_RESOURCE_ATTRIBUTES="deployment.environment=production,service.version=1.0.0"
-
-# Headers for authentication
+export OTEL_RESOURCE_ATTRIBUTES="environment=production,team=platform"
 export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer token"
+
+# MXCP-specific controls
+export MXCP_TELEMETRY_ENABLED=true
+export MXCP_TELEMETRY_TRACING_CONSOLE=false  # true for debugging
+export MXCP_TELEMETRY_METRICS_INTERVAL=60    # seconds
 ```
+
+**Precedence:** Environment variables override config file settings.
 
 #### Configuration File
 
 ```yaml
 # ~/.mxcp/config.yml
-telemetry:
-  enabled: true
-  service_name: mxcp-production
-
-  tracing:
-    enabled: true
-    exporter: otlp
-    endpoint: http://jaeger:4317
-
-  metrics:
-    enabled: true
-    exporter: otlp
-    endpoint: http://prometheus:4317
-    interval: 60  # seconds
+projects:
+  my-project:
+    profiles:
+      default:
+        telemetry:
+          enabled: true
+          endpoint: http://otel-collector:4318
+          service_name: mxcp-production
+          environment: production
+          headers:
+            Authorization: "Bearer ${OTEL_TOKEN}"
+          tracing:
+            enabled: true
+            console_export: false  # true for debugging
+          metrics:
+            enabled: true
+            export_interval: 60  # seconds
 ```
 
 ### MXCP-Specific Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MXCP_TELEMETRY_ENABLED` | Enable/disable telemetry | true |
+| `MXCP_TELEMETRY_ENABLED` | Enable/disable telemetry | false |
 | `MXCP_TELEMETRY_TRACING_CONSOLE` | Export traces to console | false |
 | `MXCP_TELEMETRY_METRICS_INTERVAL` | Metrics export interval (seconds) | 60 |
-
-### Jaeger Integration
-
-```yaml
-# docker-compose.yml
-version: '3.8'
-
-services:
-  mxcp:
-    build: .
-    environment:
-      - OTEL_TRACES_EXPORTER=otlp
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_SERVICE_NAME=mxcp
-
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    ports:
-      - "16686:16686"  # UI
-      - "4317:4317"    # OTLP gRPC
-```
 
 ### Quick Start with Jaeger
 
@@ -102,12 +80,13 @@ services:
 # Start Jaeger
 docker run -d --name jaeger \
   -p 16686:16686 \
-  -p 4317:4317 \
+  -p 4318:4318 \
+  -e COLLECTOR_OTLP_ENABLED=true \
   jaegertracing/all-in-one:latest
 
 # Configure MXCP
-export OTEL_TRACES_EXPORTER=otlp
-export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+export MXCP_TELEMETRY_ENABLED=true
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 export OTEL_SERVICE_NAME=mxcp
 
 # Start MXCP
@@ -116,606 +95,247 @@ mxcp serve
 # View traces at http://localhost:16686
 ```
 
-### Spans
+### Docker Compose Example
 
-MXCP creates spans for:
-- Tool executions
-- Resource reads
-- Prompt generations
-- Database queries
-- Policy evaluations
-- Authentication flows
+```yaml
+# docker-compose.yml
+services:
+  mxcp:
+    build: .
+    environment:
+      - MXCP_TELEMETRY_ENABLED=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=mxcp
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"  # UI
+      - "4318:4318"    # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+```
+
+## What Gets Traced
+
+MXCP automatically instruments:
+
+1. **Endpoint execution** - Overall request handling
+2. **Authentication** - Token validation, user context
+3. **Policy enforcement** - Input/output policy evaluation
+4. **Database operations** - SQL queries (hashed for privacy)
+5. **Python execution** - Function calls and timing
+
+### Trace Hierarchy
+
+```
+mxcp.endpoint.execute (155ms) — Root span with endpoint context
+├── mxcp.policy.enforce_input (5ms)
+├── mxcp.validation.input (2ms)
+├── mxcp.execution_engine.execute (138ms)
+│   ├── mxcp.duckdb.execute (120ms)
+│   └── mxcp.validation.output (3ms)
+└── mxcp.policy.enforce_output (20ms)
+```
 
 ### Span Attributes
 
+**Endpoint attributes (on `mxcp.endpoint.execute`):**
+
 | Attribute | Description |
 |-----------|-------------|
-| `mxcp.endpoint.type` | tool, resource, prompt |
-| `mxcp.endpoint.name` | Endpoint name |
-| `mxcp.user.id` | User identifier |
-| `mxcp.user.provider` | OAuth provider |
-| `mxcp.policy.decision` | allow, deny, warn |
-| `mxcp.policy.name` | Policy that triggered |
-| `mxcp.duration_ms` | Execution time |
-| `mxcp.result.row_count` | Number of rows returned |
-| `mxcp.error.type` | Error classification |
-| `mxcp.audit.id` | Correlation to audit log |
+| `mxcp.endpoint.name` | Tool/resource/prompt name |
+| `mxcp.endpoint.type` | "tool", "resource", or "prompt" |
+| `mxcp.auth.authenticated` | Whether user is authenticated |
+| `mxcp.auth.provider` | OAuth provider name |
+| `mxcp.session.id` | MCP session ID |
+| `mxcp.policy.decision` | "allow", "deny", "filter", "mask" |
+| `mxcp.policy.rules_evaluated` | Number of policy rules checked |
 
-### Metrics
+**Execution attributes (on `mxcp.execution_engine.execute`):**
 
-MXCP exports these metrics:
+| Attribute | Description |
+|-----------|-------------|
+| `mxcp.execution.language` | "sql" or "python" |
+| `mxcp.params.count` | Number of parameters passed |
+| `mxcp.has_input_schema` | Whether input validation was performed |
+| `mxcp.has_output_schema` | Whether output validation was performed |
+| `mxcp.result.count` | Number of rows/items returned |
 
-#### Direct Metrics
+**Database attributes (on `mxcp.duckdb.execute`):**
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `mxcp_requests_total` | Counter | Total requests by endpoint |
-| `mxcp_request_duration_seconds` | Histogram | Request duration |
-| `mxcp_errors_total` | Counter | Errors by type |
-| `mxcp_active_requests` | Gauge | Currently processing |
-| `mxcp_policy_decisions_total` | Counter | Policy decisions |
+| Attribute | Description |
+|-----------|-------------|
+| `db.system` | "duckdb" |
+| `db.statement.hash` | SHA256 hash of query (for privacy) |
+| `db.operation` | "SELECT", "INSERT", etc. |
+| `db.parameters.count` | Number of parameters |
+| `db.readonly` | Whether connection is readonly |
+| `db.rows_affected` | Result row count |
 
-#### Span Metrics (spanmetrics)
+## Metrics
 
-When using spanmetrics processor:
+### Direct Metrics
+
+MXCP exports these metrics directly:
+
+**Counters:**
+
+| Metric | Description |
+|--------|-------------|
+| `mxcp.endpoint.requests_total` | Total requests (labels: endpoint, status) |
+| `mxcp.endpoint.errors_total` | Errors by type (labels: endpoint, error_type) |
+| `mxcp.policy.evaluations_total` | Policy evaluations |
+| `mxcp.policy.denials_total` | Policy denials |
+
+**Gauges:**
+
+| Metric | Description |
+|--------|-------------|
+| `mxcp.endpoint.concurrent_executions` | Currently active requests |
+
+### Performance Metrics via Spanmetrics
+
+**Important:** MXCP follows modern observability patterns - performance metrics (latency histograms, percentiles) are derived from trace spans, not exported directly.
+
+Configure your OpenTelemetry Collector with the spanmetrics processor:
 
 ```yaml
-# otel-collector-config.yml
+# otel-collector-config.yaml
 processors:
   spanmetrics:
     metrics_exporter: prometheus
+    latency_histogram_buckets: [5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2s, 5s]
     dimensions:
       - name: mxcp.endpoint.name
       - name: mxcp.endpoint.type
+      - name: mxcp.execution.language
+      - name: mxcp.auth.provider
+      - name: mxcp.policy.decision
+
+service:
+  pipelines:
+    traces:
+      processors: [spanmetrics]
+      exporters: [otlp/tempo]
+    metrics/spanmetrics:
+      receivers: [spanmetrics]
+      exporters: [prometheus]
 ```
 
-### Privacy Considerations
+This generates:
+- `latency_bucket` - Latency histogram for P50/P95/P99 calculations
+- `calls_total` - Request rate by span
+- Error rates via `status_code="ERROR"`
 
-Telemetry data may contain sensitive information:
+### Why Spanmetrics?
 
-```yaml
-# Redact sensitive attributes
-telemetry:
-  tracing:
-    redact_attributes:
-      - mxcp.user.id
-      - mxcp.user.email
+- No manual timing code needed
+- Automatic percentile calculations
+- Perfect correlation between traces and metrics
+- Consistent across all operations
+
+## Privacy: What MXCP Doesn't Send
+
+MXCP telemetry is privacy-first and NEVER includes:
+
+- Actual SQL queries (only hashed signatures)
+- Parameter values (only parameter names/types)
+- Result data (only counts and types)
+- User credentials or tokens
+- Python code content
+- Any PII or sensitive business data
+
+## Correlation with Audit Logs
+
+When telemetry is enabled, audit logs include trace IDs for correlation:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:45Z",
+  "session_id": "73cb4ef4-a359-484f-a040-c1eb163abb57",
+  "trace_id": "a1b2c3d4e5f6g7h8",
+  "operation_name": "query_users",
+  "duration_ms": 125,
+  "status": "success"
+}
 ```
 
-Or disable specific attributes:
+Query by trace ID using grep on audit logs:
+```bash
+grep "a1b2c3d4e5f6g7h8" audit/logs.jsonl
+```
+
+Or export to DuckDB and query:
+```bash
+mxcp log --export-duckdb audit.db
+duckdb audit.db "SELECT * FROM logs WHERE trace_id = 'a1b2c3d4e5f6g7h8'"
+```
+
+## Production Backends
+
+MXCP works with any OpenTelemetry-compatible backend.
+
+### Grafana Tempo
 
 ```bash
-export MXCP_TELEMETRY_INCLUDE_USER_ID=false
-export MXCP_TELEMETRY_INCLUDE_ARGUMENTS=false
-```
-
-### Correlation with Audit Logs
-
-Traces include `mxcp.audit.id` to correlate with audit logs:
-
-```sql
--- Find audit entry for a specific trace
-SELECT * FROM audit_logs
-WHERE audit_id = 'a1b2c3d4-e5f6-7890';
-
--- Or in Jaeger, search by audit_id tag
-```
-
-### Production Backends
-
-#### Grafana Tempo
-
-```bash
-export OTEL_TRACES_EXPORTER=otlp
+export MXCP_TELEMETRY_ENABLED=true
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
 ```
 
-#### Datadog
+### Grafana Cloud
 
 ```bash
-export OTEL_TRACES_EXPORTER=otlp
+export MXCP_TELEMETRY_ENABLED=true
+export OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-us-central-0.grafana.net/otlp
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64-encoded-creds>"
+export OTEL_SERVICE_NAME=mxcp-prod
+```
+
+### Datadog
+
+```bash
+export MXCP_TELEMETRY_ENABLED=true
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 # Datadog agent listens on 4317 for OTLP
 ```
 
-#### Honeycomb
+### Honeycomb
 
 ```bash
-export OTEL_TRACES_EXPORTER=otlp
+export MXCP_TELEMETRY_ENABLED=true
 export OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
 export OTEL_EXPORTER_OTLP_HEADERS="x-honeycomb-team=YOUR_API_KEY"
 ```
 
-#### New Relic
+### New Relic
 
 ```bash
-export OTEL_TRACES_EXPORTER=otlp
+export MXCP_TELEMETRY_ENABLED=true
 export OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.nr-data.net:4317
 export OTEL_EXPORTER_OTLP_HEADERS="api-key=YOUR_LICENSE_KEY"
 ```
 
-## Drift Detection
+## Health Checks
 
-MXCP's drift detection system helps you monitor and track changes to your database schema and endpoint definitions across different environments and over time. This is crucial for maintaining consistency, catching unintended changes, and ensuring your AI applications work reliably across development, staging, and production environments.
-
-### What is Drift Detection?
-
-Drift detection compares the current state of your MXCP repository against a previously captured baseline snapshot to identify:
-
-- **Database Schema Changes**: Added, removed, or modified tables and columns
-- **Endpoint Changes**: Added, removed, or modified tools, resources, and prompts
-- **Validation Changes**: Changes in endpoint validation results
-- **Test Changes**: Changes in test results or test definitions
-
-### Why is Drift Detection Important?
-
-#### 1. Environment Consistency
-Ensure your development, staging, and production environments stay in sync:
-```bash
-# Generate baseline from production
-mxcp drift-snapshot --profile prod
-
-# Check if staging matches production
-mxcp drift-check --profile staging --baseline prod-snapshot.json
-```
-
-#### 2. Change Monitoring
-Detect unintended changes before they cause issues:
-- Schema modifications that break existing endpoints
-- Endpoint parameter changes that affect LLM integrations
-- Test failures that indicate breaking changes
-
-#### 3. Deployment Validation
-Verify deployments haven't introduced unexpected changes:
-```bash
-# Before deployment
-mxcp drift-snapshot --profile staging
-
-# After deployment
-mxcp drift-check --profile staging
-```
-
-#### 4. Compliance and Auditing
-Track all changes for compliance and debugging:
-- Maintain audit trails of schema evolution
-- Identify when and what changed between versions
-- Ensure changes follow approval processes
-
-### Configuration
-
-Add drift configuration to your `mxcp-site.yml`:
-
-```yaml
-mxcp: 1
-project: my_project
-profile: default
-
-profiles:
-  default:
-    duckdb:
-      path: "db-default.duckdb"
-    drift:
-      path: "drift-default.json"
-
-  staging:
-    duckdb:
-      path: "db-staging.duckdb"
-    drift:
-      path: "drift-staging.json"
-
-  production:
-    duckdb:
-      path: "db-production.duckdb"
-    drift:
-      path: "drift-production.json"
-```
-
-### Create Baseline
+Health checks are available via the admin socket. See [Admin Socket](/operations/admin-socket) for details.
 
 ```bash
-# Create snapshot for current state
-mxcp drift-snapshot --profile production
-```
-
-This creates a JSON file with:
-- Database schema (tables, columns)
-- Endpoint definitions
-- Validation results
-- Test results
-
-### Check for Drift
-
-```bash
-# Compare current state to baseline
-mxcp drift-check --profile production
-
-# With custom baseline
-mxcp drift-check --baseline snapshots/v1.0.0.json
-
-# JSON output for automation
-mxcp drift-check --json-output
-
-# Get detailed output
-mxcp drift-check --debug
-```
-
-### Snapshot Structure
-
-A drift snapshot contains comprehensive information about your MXCP repository state:
-
-```json
-{
-  "version": "1",
-  "generated_at": "2025-01-27T10:30:00.000Z",
-  "tables": [
-    {
-      "name": "users",
-      "columns": [
-        {
-          "name": "id",
-          "type": "INTEGER",
-          "nullable": false
-        },
-        {
-          "name": "email",
-          "type": "VARCHAR",
-          "nullable": false
-        }
-      ]
-    }
-  ],
-  "resources": [
-    {
-      "validation_results": {
-        "status": "ok",
-        "path": "tools/get_user.yml"
-      },
-      "test_results": {
-        "status": "ok",
-        "tests_run": 2,
-        "tests": [...]
-      },
-      "definition": {
-        "mxcp": "1",
-        "tool": {
-          "name": "get_user",
-          "description": "Get user by ID"
-        }
-      }
-    }
-  ]
-}
-```
-
-### Drift Report Structure
-
-When drift is detected, you get a detailed report:
-
-```json
-{
-  "version": "1",
-  "generated_at": "2025-01-27T10:35:00.000Z",
-  "baseline_snapshot_path": "drift-default.json",
-  "has_drift": true,
-  "summary": {
-    "tables_added": 1,
-    "tables_removed": 0,
-    "tables_modified": 1,
-    "resources_added": 2,
-    "resources_removed": 0,
-    "resources_modified": 1
-  },
-  "table_changes": [
-    {
-      "name": "orders",
-      "change_type": "added",
-      "columns_added": [...]
-    },
-    {
-      "name": "users",
-      "change_type": "modified",
-      "columns_added": [
-        {
-          "name": "created_at",
-          "type": "TIMESTAMP",
-          "nullable": true
-        }
-      ]
-    }
-  ],
-  "resource_changes": [
-    {
-      "path": "tools/new_tool.yml",
-      "endpoint": "tool/new_tool",
-      "change_type": "added"
-    },
-    {
-      "path": "tools/existing_tool.yml",
-      "endpoint": "tool/existing_tool",
-      "change_type": "modified",
-      "validation_changed": true,
-      "test_results_changed": false,
-      "definition_changed": true
-    }
-  ]
-}
-```
-
-### CI/CD Integration
-
-```yaml
-# .github/workflows/drift-check.yml
-name: Drift Detection
-on: [push, pull_request]
-
-jobs:
-  drift-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.11'
-      - run: pip install mxcp
-      - run: |
-          mxcp drift-check --baseline baseline.json
-          if [ $? -eq 1 ]; then
-            echo "Drift detected!"
-            exit 1
-          fi
-```
-
-### Use Cases
-
-#### Environment Synchronization
-
-Keep multiple environments in sync:
-
-```bash
-# Generate production baseline
-mxcp drift-snapshot --profile production
-
-# Check if development matches production
-mxcp drift-check --profile development --baseline drift-production.json
-
-# Check if staging matches production
-mxcp drift-check --profile staging --baseline drift-production.json
-```
-
-#### Pre-Deployment Validation
-
-Validate changes before deploying:
-
-```bash
-# Before making changes
-mxcp drift-snapshot --profile staging
-
-# After making changes, check what changed
-mxcp drift-check --profile staging
-
-# If drift is acceptable, update baseline
-mxcp drift-snapshot --profile staging --force
-```
-
-#### Schema Evolution Tracking
-
-Track how your schema evolves over time:
-
-```bash
-# Tag snapshots with versions
-mxcp drift-snapshot --profile production
-cp drift-production.json snapshots/v1-snapshot.json
-
-# Later, compare against historical snapshots
-mxcp drift-check --baseline snapshots/v1-snapshot.json
-```
-
-### Advanced Features
-
-#### Custom Baseline Paths
-
-Use different baselines for different comparisons:
-
-```bash
-# Compare against a specific environment
-mxcp drift-check --baseline environments/production-baseline.json
-
-# Compare against a specific version
-mxcp drift-check --baseline versions/v2.1.0-baseline.json
-
-# Compare against a feature branch baseline
-mxcp drift-check --baseline feature-baselines/new-feature.json
-```
-
-#### JSON Output for Automation
-
-Get machine-readable output for automation:
-
-```bash
-# Get JSON output
-mxcp drift-check --json-output > drift-report.json
-
-# Process with jq
-mxcp drift-check --json-output | jq '.summary'
-
-# Check if drift exists in scripts
-if mxcp drift-check --json-output | jq -r '.has_drift' | grep -q true; then
-  echo "Drift detected!"
-  exit 1
-fi
-```
-
-### Security Considerations
-
-- **Sensitive Data**: Snapshots may contain schema information; store securely
-- **Access Control**: Limit who can generate and modify baseline snapshots
-- **Encryption**: Encrypt snapshots if they contain sensitive metadata
-- **Audit Trails**: Log all drift detection activities for security auditing
-
-### Performance Considerations
-
-- **Large Schemas**: Drift detection time increases with schema size
-- **Frequent Checks**: Consider caching for frequently run drift checks
-- **CI/CD Optimization**: Run drift checks only on relevant file changes
-
-## Admin API
-
-Local administration interface over Unix socket.
-
-### Enable Admin API
-
-```bash
+# Enable admin socket
 export MXCP_ADMIN_ENABLED=true
 export MXCP_ADMIN_SOCKET=/run/mxcp/mxcp.sock
 
-mxcp serve
-```
-
-### Endpoints
-
-#### Health Check
-```bash
+# Health check
 curl --unix-socket /run/mxcp/mxcp.sock http://localhost/health
 ```
 
-Response:
-```json
-{
-  "status": "ok",
-  "timestamp": "2024-01-15T10:30:00Z"
-}
-```
-
-#### Server Status
-```bash
-curl --unix-socket /run/mxcp/mxcp.sock http://localhost/status
-```
-
-Response:
-```json
-{
-  "status": "ok",
-  "version": "0.9.0",
-  "uptime": "2h12m35s",
-  "uptime_seconds": 7955,
-  "pid": 12345,
-  "profile": "production",
-  "mode": "readwrite",
-  "debug": false,
-  "endpoints": {
-    "tools": 15,
-    "prompts": 5,
-    "resources": 8
-  },
-  "reload": {
-    "in_progress": false,
-    "draining": false,
-    "active_requests": 0,
-    "last_reload": "2024-01-15T08:00:00Z",
-    "last_reload_status": "success"
-  }
-}
-```
-
-#### Trigger Reload
-```bash
-curl --unix-socket /run/mxcp/mxcp.sock -X POST http://localhost/reload
-```
-
-Response:
-```json
-{
-  "status": "reload_initiated",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "reload_request_id": "a1b2c3d4-e5f6-7890",
-  "message": "Reload request queued. Use GET /status to check progress."
-}
-```
-
-#### Configuration
-```bash
-curl --unix-socket /run/mxcp/mxcp.sock http://localhost/config
-```
-
-### Python Client
-
-```python
-import httpx
-
-SOCKET_PATH = "/run/mxcp/mxcp.sock"
-
-transport = httpx.HTTPTransport(uds=SOCKET_PATH)
-with httpx.Client(transport=transport, base_url="http://localhost") as client:
-    # Health check
-    health = client.get("/health").json()
-    print(f"Status: {health['status']}")
-
-    # Server status
-    status = client.get("/status").json()
-    print(f"Uptime: {status['uptime']}")
-    print(f"Endpoints: {status['endpoints']}")
-
-    # Trigger reload
-    reload = client.post("/reload").json()
-    print(f"Reload: {reload['status']}")
-```
-
-### Security
-
-Admin API security:
-- Unix socket with 0600 permissions (owner only)
-- Disabled by default
-- No network exposure
-
-## Health Checks
-
-### HTTP Health Endpoint
-
-When running with HTTP transport:
-
-```bash
-curl http://localhost:8000/health
-```
-
-### Container Health Check
-
-```yaml
-# docker-compose.yml
-healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-  interval: 30s
-  timeout: 10s
-  retries: 3
-  start_period: 10s
-```
-
-### Kubernetes Probes
-
-```yaml
-livenessProbe:
-  httpGet:
-    path: /health
-    port: 8000
-  initialDelaySeconds: 10
-  periodSeconds: 10
-
-readinessProbe:
-  httpGet:
-    path: /health
-    port: 8000
-  initialDelaySeconds: 5
-  periodSeconds: 5
-```
-
 ## Audit Log Analysis
-
-Monitor operations through audit logs.
 
 ### Real-time Monitoring
 
 ```bash
 # Watch for errors
-tail -f audit/logs.jsonl | grep '"status":"error"'
+tail -f audit/logs.jsonl | grep '"operation_status":"error"'
 
 # Watch for policy denials
 tail -f audit/logs.jsonl | grep '"policy_decision":"deny"'
@@ -727,9 +347,6 @@ tail -f audit/logs.jsonl | grep '"policy_decision":"deny"'
 # Errors in last hour
 mxcp log --status error --since 1h
 
-# Most used tools
-mxcp log --type tool --since 24h | sort | uniq -c | sort -rn
-
 # Export for analysis
 mxcp log --export-duckdb audit.db
 ```
@@ -740,35 +357,37 @@ mxcp log --export-duckdb audit.db
 -- Error rate by hour
 SELECT
   DATE_TRUNC('hour', timestamp) as hour,
-  COUNT(CASE WHEN status = 'error' THEN 1 END) * 100.0 / COUNT(*) as error_rate
+  COUNT(CASE WHEN operation_status = 'error' THEN 1 END) * 100.0 / COUNT(*) as error_rate
 FROM logs
 GROUP BY hour
 ORDER BY hour DESC;
 
 -- Slowest endpoints
 SELECT
-  name,
+  operation_name,
   AVG(duration_ms) as avg_ms,
   MAX(duration_ms) as max_ms,
   COUNT(*) as calls
 FROM logs
-WHERE status = 'success'
-GROUP BY name
+WHERE operation_status = 'success'
+GROUP BY operation_name
 ORDER BY avg_ms DESC
 LIMIT 10;
 
 -- Policy violations
 SELECT
-  name,
-  reason,
+  operation_name,
+  policy_reason,
   COUNT(*) as denials
 FROM logs
 WHERE policy_decision = 'deny'
-GROUP BY name, reason
+GROUP BY operation_name, policy_reason
 ORDER BY denials DESC;
 ```
 
-## Metrics and Alerting
+## Alerting
+
+Configure alerts in your observability platform using spanmetrics-derived metrics.
 
 ### Key Metrics to Monitor
 
@@ -777,43 +396,20 @@ ORDER BY denials DESC;
 | Error rate | % of failed requests | > 5% |
 | Response time | P95 latency | > 1000ms |
 | Policy denials | Unauthorized attempts | > 10/min |
-| Reload failures | Config reload errors | Any |
 | Active requests | Concurrent requests | > 100 |
 
-### Prometheus Metrics
+### Example PromQL Queries
 
-If using OTEL metrics exporter:
+```promql
+# High error rate (using spanmetrics)
+sum(rate(calls_total{status_code="ERROR", span_name="mxcp.endpoint.execute"}[5m]))
+  / sum(rate(calls_total{span_name="mxcp.endpoint.execute"}[5m])) > 0.05
 
-```yaml
-# prometheus.yml
-scrape_configs:
-  - job_name: 'mxcp'
-    static_configs:
-      - targets: ['mxcp:8080']
-```
+# Slow requests (P95 latency using spanmetrics)
+histogram_quantile(0.95, rate(latency_bucket{span_name="mxcp.endpoint.execute"}[5m])) > 1
 
-### Alerting Rules
-
-```yaml
-# alerts.yml
-groups:
-  - name: mxcp
-    rules:
-      - alert: HighErrorRate
-        expr: sum(rate(mxcp_requests_total{status="error"}[5m])) / sum(rate(mxcp_requests_total[5m])) > 0.05
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "High error rate on MXCP"
-
-      - alert: HighLatency
-        expr: histogram_quantile(0.95, rate(mxcp_request_duration_seconds_bucket[5m])) > 1
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High latency on MXCP"
+# Policy denials
+rate(mxcp_policy_denials_total[5m]) > 0.1
 ```
 
 ## Monitoring Scripts
@@ -882,9 +478,9 @@ def analyze_logs(log_file, hours=24):
                 continue
 
             stats['total'] += 1
-            stats[entry['status']] += 1
+            stats[entry['operation_status']] += 1
 
-            if entry['status'] == 'error':
+            if entry['operation_status'] == 'error':
                 errors.append(entry)
 
     print(f"Stats (last {hours}h):")
@@ -896,15 +492,31 @@ def analyze_logs(log_file, hours=24):
     if errors:
         print(f"\nRecent errors:")
         for e in errors[-5:]:
-            print(f"  - {e['name']}: {e.get('error', 'Unknown')}")
+            print(f"  - {e['operation_name']}: {e.get('error', 'Unknown')}")
 
 if __name__ == '__main__':
     log_file = sys.argv[1] if len(sys.argv) > 1 else 'audit/logs.jsonl'
     analyze_logs(log_file)
 ```
 
+## Troubleshooting
+
+**Traces not appearing:**
+1. Verify `MXCP_TELEMETRY_ENABLED=true`
+2. Check collector endpoint: `curl -X POST http://collector:4318/v1/traces`
+3. Enable debug: `mxcp serve --debug`
+
+**Performance metrics missing:**
+- Spanmetrics processor must be configured in your collector
+- See the spanmetrics configuration above
+
+**Audit logs empty:**
+- Check `audit.enabled: true` in `mxcp-site.yml`
+- Verify `audit.path` directory is writable
+
 ## Next Steps
 
-- [Deployment](/operations/deployment) - Production deployment
+- [Admin Socket](/operations/admin-socket) - Health checks and status API
 - [Auditing](/security/auditing) - Audit log configuration
-- [Configuration](/operations/configuration) - Complete config reference
+- [Deployment](/operations/deployment) - Production deployment
+- [Drift Detection](/operations/drift-detection) - Schema change tracking

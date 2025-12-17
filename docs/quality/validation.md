@@ -15,11 +15,17 @@ Validation ensures your endpoint definitions are structurally correct before exe
 # Validate all endpoints
 mxcp validate
 
+# Validate a specific endpoint (use file path)
+mxcp validate tools/my_tool.yml
+
 # JSON output for automation
 mxcp validate --json-output
 
 # Debug mode for detailed errors
 mxcp validate --debug
+
+# Read-only database connection
+mxcp validate --readonly
 ```
 
 ## What Gets Validated
@@ -32,15 +38,20 @@ mxcp validate --debug
 ### Required Fields
 - `mxcp: 1` version field
 - Endpoint type (`tool`, `resource`, or `prompt`)
-- `name` or `uri` identifier
-- `description` field
-- `source` specification
+- `name` for tools/prompts, `uri` for resources
+- `source` specification (for tools and resources)
+- `description` for each parameter
 
 ### Type Definitions
-- Valid type names (`string`, `number`, etc.)
-- Correct format annotations
-- Valid constraints (`minimum`, `maximum`, etc.)
+- Valid type names (`string`, `number`, `integer`, `boolean`, `array`, `object`)
+- Valid format annotations (`email`, `uri`, `date`, `time`, `date-time`, `duration`, `timestamp`)
+- Valid language (`sql`, `python`)
 - Nested type structures
+
+### Parameter Names
+- Must match pattern `^[a-zA-Z_][a-zA-Z0-9_]*$`
+- Start with letter or underscore
+- Only alphanumeric and underscores allowed
 
 ### File References
 - Source files exist
@@ -56,31 +67,42 @@ mxcp validate --debug
 
 ### Success
 
-```
-$ mxcp validate
+```bash
+mxcp validate
 
-✓ tools/get_user.yml (tool/get_user)
-✓ tools/search_users.yml (tool/search_users)
-✓ resources/user-profile.yml (resource/users://{id})
+🔍 Validation Results
+   Validated 3 endpoint files
+   • 3 passed
 
-Validation complete: 3 passed, 0 failed
+✅ Passed validation:
+  ✓ tools/get_user.yml
+  ✓ tools/search_users.yml
+  ✓ resources/user-profile.yml
+
+🎉 All endpoints are valid!
 ```
 
 ### Failure
 
-```
-$ mxcp validate
+```bash
+mxcp validate
 
-✓ tools/get_user.yml (tool/get_user)
-✗ tools/broken.yml
-  Error: Missing required field 'description'
-  Line 3: tool:
-    name: broken_tool
-✗ tools/invalid_type.yml
-  Error: Invalid type 'strng', did you mean 'string'?
-  Line 8: type: strng
+🔍 Validation Results
+   Validated 3 endpoint files
+   • 1 passed
+   • 2 failed
 
-Validation complete: 1 passed, 2 failed
+❌ Failed validation:
+  ✗ tools/broken.yml
+    Error: tool.parameters.0: 'description' is a required property
+
+  ✗ tools/invalid_type.yml
+    Error: tool.parameters.0.type: 'strng' is not one of ['string', 'number', 'integer', 'boolean', 'array', 'object']
+
+✅ Passed validation:
+  ✓ tools/get_user.yml
+
+💡 Tip: Fix validation errors to ensure endpoints work correctly
 ```
 
 ### JSON Output
@@ -91,46 +113,65 @@ mxcp validate --json-output
 
 ```json
 {
-  "status": "error",
-  "results": [
-    {
-      "path": "tools/get_user.yml",
-      "endpoint": "tool/get_user",
-      "status": "ok"
-    },
-    {
-      "path": "tools/broken.yml",
-      "endpoint": null,
-      "status": "error",
-      "error": "Missing required field 'description'",
-      "line": 3
-    }
-  ],
-  "summary": {
-    "passed": 1,
-    "failed": 1,
-    "total": 2
+  "status": "ok",
+  "result": {
+    "status": "error",
+    "validated": [
+      {
+        "status": "ok",
+        "path": "tools/get_user.yml"
+      },
+      {
+        "status": "error",
+        "path": "tools/broken.yml",
+        "message": "tool.parameters.0: 'description' is a required property"
+      }
+    ]
   }
 }
 ```
 
+Fields:
+- `status`: Command execution status (`ok` or `error`)
+- `result`: Validation results object
+  - `status`: Overall validation status (`ok` or `error`)
+  - `validated`: List of validation results
+    - `status`: Individual result (`ok` or `error`)
+    - `path`: Path to endpoint file
+    - `message`: Error message (only present on errors)
+
 ## Common Validation Errors
 
-### Missing Required Fields
+### Missing Endpoint Type
 
 ```yaml
-# Error: Missing required field 'description'
+# Error: Endpoint definition must include a tool, resource, or prompt definition
+mxcp: 1
+# Missing: tool, resource, or prompt definition
+```
+
+Fix:
+```yaml
+mxcp: 1
 tool:
   name: my_tool
   source:
     code: "SELECT 1"
 ```
 
+### Missing Source Specification
+
+```yaml
+# Error: tool.source: {} is not valid under any of the given schemas
+tool:
+  name: my_tool
+  source: {}  # Missing code or file
+```
+
 Fix:
 ```yaml
 tool:
   name: my_tool
-  description: A tool that does something  # Added
   source:
     code: "SELECT 1"
 ```
@@ -138,10 +179,11 @@ tool:
 ### Invalid Type
 
 ```yaml
-# Error: Invalid type 'strng'
+# Error: 'strng' is not one of ['string', 'number', 'integer', 'boolean', 'array', 'object']
 parameters:
   - name: id
     type: strng  # Typo
+    description: User ID
 ```
 
 Fix:
@@ -149,16 +191,51 @@ Fix:
 parameters:
   - name: id
     type: string  # Corrected
+    description: User ID
 ```
+
+Common mistake - using `map` instead of `object`:
+```yaml
+# Error: 'map' is not one of ['string', 'number', 'integer', 'boolean', 'array', 'object']
+return:
+  type: map  # Wrong - use 'object'
+```
+
+Fix:
+```yaml
+return:
+  type: object  # Correct
+```
+
+### Invalid Parameter Name
+
+```yaml
+# Error: 'user-name' does not match '^[a-zA-Z_][a-zA-Z0-9_]*$'
+parameters:
+  - name: user-name  # Hyphens not allowed
+    type: string
+    description: Username
+```
+
+Fix:
+```yaml
+parameters:
+  - name: user_name  # Use underscores
+    type: string
+    description: Username
+```
+
+Parameter names must start with a letter or underscore and contain only alphanumeric characters and underscores.
 
 ### Invalid Format
 
 ```yaml
-# Error: Invalid format 'datetime' for type 'string'
+# Error: 'datetime' is not one of ['email', 'uri', 'date', 'time', 'date-time', 'duration', 'timestamp']
 parameters:
   - name: created
     type: string
     format: datetime  # Wrong
+    description: Creation date
 ```
 
 Fix:
@@ -166,7 +243,8 @@ Fix:
 parameters:
   - name: created
     type: string
-    format: date-time  # Correct format
+    format: date-time  # Correct (with hyphen)
+    description: Creation date
 ```
 
 ### File Not Found
@@ -179,80 +257,89 @@ source:
 
 Fix: Create the file or correct the path.
 
-### Invalid Constraint
+### Missing Parameter Description
 
 ```yaml
-# Error: minimum cannot be greater than maximum
+# Error: 'description' is a required property
 parameters:
-  - name: count
-    type: integer
-    minimum: 100
-    maximum: 10  # Invalid
-```
-
-Fix:
-```yaml
-parameters:
-  - name: count
-    type: integer
-    minimum: 10
-    maximum: 100  # Corrected
-```
-
-### Duplicate Names
-
-```yaml
-# Error: Duplicate parameter name 'id'
-parameters:
-  - name: id
-    type: integer
-  - name: id  # Duplicate
+  - name: user_id
     type: string
+    # Missing description
 ```
 
-Fix: Use unique parameter names.
+Fix:
+```yaml
+parameters:
+  - name: user_id
+    type: string
+    description: The unique user identifier
+```
 
-### Missing Return Type
+### Invalid Source
+
+Source must specify exactly one of `code` or `file`:
 
 ```yaml
-# Error: Return type required for tools
+# Error: tool.source: {'code': 'SELECT 1', 'file': 'query.sql'} is not valid under any of the given schemas
 tool:
   name: my_tool
-  description: Returns data
   source:
-    code: "SELECT * FROM data"
-  # Missing return type
+    code: "SELECT 1"
+    file: "query.sql"  # Can't have both
 ```
 
 Fix:
 ```yaml
 tool:
   name: my_tool
-  description: Returns data
-  return:
-    type: array
-    items:
-      type: object
   source:
-    code: "SELECT * FROM data"
+    code: "SELECT 1"  # Use either code or file
 ```
 
-## Validation Strictness
+### Invalid Language
 
-MXCP validates with different strictness levels:
+```yaml
+# Error: 'javascript' is not one of ['sql', 'python']
+tool:
+  name: my_tool
+  language: javascript  # Invalid
+  source:
+    code: "console.log('hello')"
+```
 
-### Required (Always Checked)
-- YAML syntax
-- Required fields
-- Type validity
-- File existence
+Fix:
+```yaml
+tool:
+  name: my_tool
+  language: python  # Use 'sql' or 'python'
+  source:
+    code: "print('hello')"
+```
 
-### Recommended (Warnings)
-- Description quality
-- Example presence
-- Type completeness
+## Validation vs Linting
 
-Use `mxcp lint` for recommended checks.
+MXCP separates structural checks from quality checks:
+
+### Validation (`mxcp validate`)
+Checks structural correctness - fails on errors:
+- Valid YAML syntax
+- Valid endpoint type (tool, resource, or prompt)
+- Valid type and format values
+- Valid parameter names
+- Source file existence
+- Required parameter descriptions
+
+### Linting (`mxcp lint`)
+Checks metadata quality - provides suggestions:
+- Missing endpoint descriptions
+- Missing return type descriptions
+- Missing examples on parameters
+- Missing default values
+- Missing test cases
+- Missing tags
+- Missing behavioral annotations (for tools)
+
+Use both: `mxcp validate && mxcp lint`
 
 ## CI/CD Integration
 
@@ -266,8 +353,8 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - run: pip install mxcp

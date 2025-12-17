@@ -36,9 +36,11 @@ projects:
         auth:
           provider: github
           github:
-            client_id: Ov23li...
+            client_id: "${GITHUB_CLIENT_ID}"
             client_secret: "${GITHUB_CLIENT_SECRET}"
-            callback_path: /callback
+            callback_path: /auth/github/callback
+            auth_url: https://github.com/login/oauth/authorize
+            token_url: https://github.com/login/oauth/access_token
             scope: "read:user user:email"
           persistence:
             type: sqlite
@@ -56,22 +58,24 @@ projects:
               password: "vault://secret/prod#password"
 
 vault:
+  enabled: true
   address: https://vault.example.com
-  token_path: ~/.vault-token
-  namespace: admin
+  token_env: VAULT_TOKEN
 
 onepassword:
-  service_account_token: "${OP_SERVICE_ACCOUNT_TOKEN}"
+  enabled: true
+  token_env: OP_SERVICE_ACCOUNT_TOKEN
 
 transport:
+  provider: streamable-http
   http:
     host: 0.0.0.0
     port: 8000
     stateless: false
 
 logging:
-  level: info
-  format: json
+  enabled: true
+  level: INFO
 ```
 
 ## Root Fields
@@ -82,8 +86,11 @@ logging:
 | `projects` | object | No | - | Project-specific configurations. |
 | `vault` | object | No | - | HashiCorp Vault global settings. |
 | `onepassword` | object | No | - | 1Password global settings. |
+| `models` | object | No | - | LLM model configurations. |
 | `transport` | object | No | - | Transport layer settings. |
 | `logging` | object | No | - | Logging configuration. |
+
+> **Note:** The `mxcp` field accepts both integer (`1`) and string (`"1"`) values - strings are automatically coerced to integers.
 
 ## Projects Configuration
 
@@ -103,7 +110,9 @@ projects:
 | Field | Type | Description |
 |-------|------|-------------|
 | `secrets` | array | Secret definitions for this profile. |
+| `plugin` | object | Plugin configuration for this profile. |
 | `auth` | object | Authentication configuration. |
+| `telemetry` | object | OpenTelemetry configuration for this profile. |
 
 ## Secrets Configuration
 
@@ -196,18 +205,50 @@ Secret values can come from multiple sources:
 | Environment | `${VAR_NAME}` | `"${API_KEY}"` |
 | Vault | `vault://path#key` | `"vault://secret/db#password"` |
 | 1Password | `op://vault/item/field` | `"op://Private/DB/password"` |
+| File | `file://path` | `"file:///etc/ssl/cert.pem"` |
+
+### File References
+
+Read secret values from local files using `file://` URLs:
+
+```yaml
+secrets:
+  - name: ssl_certificates
+    type: custom
+    parameters:
+      cert: "file:///etc/ssl/certs/server.crt"
+      key: "file:///etc/ssl/private/server.key"
+  - name: api_config
+    type: api
+    parameters:
+      api_key: "file://secrets/api_key.txt"  # Relative path
+```
+
+**File URL Format:**
+- Absolute paths: `file:///absolute/path/to/file`
+- Relative paths: `file://relative/path/to/file` (relative to current working directory)
+
+**Important Notes:**
+- File content is read when the configuration is loaded
+- Whitespace (including newlines) is automatically stripped
+- The file must exist and be readable when the configuration is loaded
+- Relative paths are resolved from the current working directory, not the config file location
+- Use appropriate file permissions to protect sensitive files
 
 ### Using Secrets in Python
 
 ```python
-from mxcp.runtime import secrets
+from mxcp.runtime import config
 
-# Get database credentials
-db = secrets.get("db_credentials")
-connection_string = f"postgresql://{db['username']}:{db['password']}@{db['host']}:{db['port']}/{db['database']}"
+# Get database credentials (returns dict with parameters, or None if not found)
+db_creds = config.get_secret("db_credentials")
+if db_creds:
+    connection_string = f"postgresql://{db_creds['username']}:{db_creds['password']}@{db_creds['host']}:{db_creds['port']}/{db_creds['database']}"
 
 # Get API key
-api_key = secrets.get("api_key")["api_key"]
+api_creds = config.get_secret("api_key")
+if api_creds:
+    api_key = api_creds.get("api_key")
 ```
 
 ## Authentication Configuration
@@ -218,9 +259,11 @@ Configure OAuth authentication for the MCP server.
 auth:
   provider: github              # Required: Provider name
   github:                       # Provider-specific config
-    client_id: Ov23li...
-    client_secret: "${GITHUB_SECRET}"
-    callback_path: /callback
+    client_id: "${GITHUB_CLIENT_ID}"
+    client_secret: "${GITHUB_CLIENT_SECRET}"
+    callback_path: /auth/github/callback
+    auth_url: https://github.com/login/oauth/authorize
+    token_url: https://github.com/login/oauth/access_token
     scope: "read:user user:email"
   persistence:                  # Optional: Token storage
     type: sqlite
@@ -237,13 +280,15 @@ auth:
 
 ### Auth Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `provider` | string | Yes | OAuth provider: `github`, `google`, `atlassian`, `salesforce`, `keycloak`. |
-| `<provider>` | object | Yes | Provider-specific configuration (see below). |
-| `persistence` | object | No | Token persistence settings. |
-| `authorization` | object | No | Authorization requirements. |
-| `clients` | array | No | Pre-configured OAuth clients. |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `provider` | string | `"none"` | OAuth provider: `none`, `github`, `google`, `atlassian`, `salesforce`, `keycloak`. |
+| `<provider>` | object | - | Provider-specific configuration (required when provider is not `none`). |
+| `persistence` | object | - | Token persistence settings. Auto-created when provider is not `none`. |
+| `authorization` | object | - | Authorization requirements. |
+| `clients` | array | - | Pre-configured OAuth clients. |
+
+> **Note:** When `provider` is set to anything other than `none`, persistence is automatically configured with SQLite at `~/.mxcp/oauth.db` if not explicitly specified.
 
 ### GitHub Provider
 
@@ -264,8 +309,8 @@ auth:
 | `client_id` | string | Yes | GitHub OAuth App client ID. |
 | `client_secret` | string | Yes | GitHub OAuth App client secret. |
 | `callback_path` | string | Yes | OAuth callback path (e.g., `/callback`). |
-| `auth_url` | string | No | Authorization URL. |
-| `token_url` | string | No | Token URL. |
+| `auth_url` | string | Yes | Authorization URL (e.g., `https://github.com/login/oauth/authorize`). |
+| `token_url` | string | Yes | Token URL (e.g., `https://github.com/login/oauth/access_token`). |
 | `scope` | string | No | OAuth scopes (space-separated). |
 
 ### Google Provider
@@ -350,10 +395,10 @@ persistence:
   path: ~/.mxcp/oauth.db
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `type` | string | Yes | Storage type: `sqlite`. |
-| `path` | string | Yes | Database file path. |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `type` | string | `"sqlite"` | Storage type: `sqlite`. |
+| `path` | string | `~/.mxcp/oauth.db` | Database file path. |
 
 ### Authorization Configuration
 
@@ -395,56 +440,106 @@ clients:
 
 ## Vault Configuration
 
-Global HashiCorp Vault settings.
+Global HashiCorp Vault settings for resolving `vault://` references in secrets.
 
 ```yaml
 vault:
+  enabled: true
   address: https://vault.example.com
-  token_path: ~/.vault-token
-  namespace: admin
-  auth_method: token
+  token_env: VAULT_TOKEN
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `address` | string | Yes | Vault server URL. |
-| `token_path` | string | No | Path to token file. |
-| `namespace` | string | No | Vault namespace. |
-| `auth_method` | string | No | Auth method: `token`, `approle`, `kubernetes`. |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Whether Vault integration is enabled. |
+| `address` | string | - | Vault server URL. |
+| `token_env` | string | - | Environment variable name containing the Vault token. |
 
-### AppRole Authentication
+### Requirements
 
-```yaml
-vault:
-  address: https://vault.example.com
-  auth_method: approle
-  role_id: "${VAULT_ROLE_ID}"
-  secret_id: "${VAULT_SECRET_ID}"
+```bash
+pip install "mxcp[vault]"
+# or
+pip install hvac
 ```
 
-### Kubernetes Authentication
+### Vault URL Format
+
+`vault://path/to/secret#key`
+
+- `path/to/secret`: The path to the secret in Vault
+- `key`: The specific key within that secret
+
+**Supported Secret Engines:**
+- KV Secrets Engine v2 (default)
+- KV Secrets Engine v1 (fallback)
+
+### Usage Example
+
+Set the Vault token in your environment:
+
+```bash
+export VAULT_TOKEN="your-vault-token"
+```
+
+Then reference Vault secrets in your configuration:
 
 ```yaml
-vault:
-  address: https://vault.example.com
-  auth_method: kubernetes
-  role: mxcp-role
+secrets:
+  - name: db_credentials
+    type: database
+    parameters:
+      password: "vault://secret/db#password"
 ```
 
 ## 1Password Configuration
 
-Global 1Password settings.
+Global 1Password settings for resolving `op://` references in secrets.
 
 ```yaml
 onepassword:
-  service_account_token: "${OP_SERVICE_ACCOUNT_TOKEN}"
+  enabled: true
+  token_env: OP_SERVICE_ACCOUNT_TOKEN
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `service_account_token` | string | Yes | 1Password service account token. |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Whether 1Password integration is enabled. |
+| `token_env` | string | - | Environment variable name containing the 1Password service account token. |
 
-Use 1Password references in secrets:
+### Requirements
+
+```bash
+pip install "mxcp[onepassword]"
+# or
+pip install onepassword-sdk
+```
+
+### 1Password URL Format
+
+`op://vault/item/field[?attribute=otp]`
+
+- `vault`: The name or ID of the vault in 1Password
+- `item`: The name or ID of the item in 1Password
+- `field`: The name or ID of the field within the item
+- `?attribute=otp`: Optional parameter to retrieve TOTP/OTP value
+
+**Examples:**
+- Basic field: `op://Private/Login Item/username`
+- Password field: `op://Private/Login Item/password`
+- TOTP/OTP: `op://Private/Login Item/totp?attribute=otp`
+- Using vault ID: `op://hfnjvi6aymbsnfc2gshk5b6o5q/Login Item/password`
+- Using item ID: `op://Private/j5hbqmr7nz3uqsw3j5qam2fgji/password`
+
+### Usage Example
+
+Set the 1Password service account token in your environment:
+
+```bash
+export OP_SERVICE_ACCOUNT_TOKEN="your-service-account-token"
+```
+
+Then reference 1Password secrets in your configuration:
 
 ```yaml
 secrets:
@@ -454,51 +549,211 @@ secrets:
       password: "op://Private/Database/password"
 ```
 
+## Models Configuration
+
+Configure LLM providers for AI-powered features.
+
+```yaml
+models:
+  default: claude
+  models:
+    claude:
+      type: claude
+      api_key: "${ANTHROPIC_API_KEY}"
+      timeout: 30
+      max_retries: 3
+    openai:
+      type: openai
+      api_key: "${OPENAI_API_KEY}"
+      base_url: https://api.openai.com/v1
+```
+
+### Models Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `default` | string | No | Default model identifier. |
+| `models` | object | No | Named model configurations. |
+
+### Model Configuration
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Model type: `claude` or `openai`. |
+| `api_key` | string | No | API key for the model provider. |
+| `base_url` | string | No | Custom API base URL. |
+| `timeout` | integer | No | Request timeout in seconds. |
+| `max_retries` | integer | No | Maximum retry attempts. |
+
 ## Transport Configuration
 
-Configure HTTP transport settings.
+Configure MCP transport settings.
 
 ```yaml
 transport:
+  provider: streamable-http
   http:
     host: 0.0.0.0
     port: 8000
+    scheme: http
     stateless: false
+    trust_proxy: false
 ```
+
+### Transport Fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `host` | string | `"127.0.0.1"` | Bind address. |
+| `provider` | string | `"streamable-http"` | Transport provider: `streamable-http`, `sse`, `stdio`. |
+| `http` | object | - | HTTP transport settings (see below). |
+
+### HTTP Transport Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `host` | string | `"localhost"` | Bind address. |
 | `port` | integer | `8000` | Listen port. |
+| `scheme` | string | `"http"` | URL scheme: `http` or `https`. |
+| `base_url` | string | - | Custom base URL (overrides host/port/scheme). |
 | `stateless` | boolean | `false` | Stateless mode (no sessions). |
+| `trust_proxy` | boolean | `false` | Trust proxy headers for client IP. |
 
 ## Logging Configuration
 
-Configure logging behavior.
+Configure file-based logging behavior.
 
 ```yaml
 logging:
-  level: info
-  format: json
+  enabled: true
+  path: ~/.mxcp/logs/mxcp.log
+  level: INFO
+  max_bytes: 10485760
+  backup_count: 5
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `level` | string | `"info"` | Log level: `debug`, `info`, `warning`, `error`. |
-| `format` | string | `"text"` | Log format: `text`, `json`. |
+| `enabled` | boolean | `true` | Whether file logging is enabled. |
+| `path` | string | - | Log file path. If not set, logs to stderr only. |
+| `level` | string | `"WARNING"` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
+| `max_bytes` | integer | `10485760` | Maximum log file size in bytes (10 MB default). |
+| `backup_count` | integer | `5` | Number of backup log files to keep. |
+
+## Telemetry Configuration
+
+Configure OpenTelemetry for tracing and metrics. This is configured per-profile.
+
+```yaml
+projects:
+  my-project:
+    profiles:
+      default:
+        telemetry:
+          enabled: true
+          endpoint: https://otel-collector.example.com:4318
+          service_name: mxcp-server
+          service_version: "1.0.0"
+          environment: production
+          headers:
+            Authorization: "Bearer ${OTEL_TOKEN}"
+          tracing:
+            enabled: true
+            console_export: false
+          metrics:
+            enabled: true
+            export_interval: 60
+```
+
+### Telemetry Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Whether telemetry is enabled. |
+| `endpoint` | string | - | OpenTelemetry collector endpoint. |
+| `headers` | object | - | Headers to send with telemetry requests. |
+| `service_name` | string | - | Service name for telemetry data. |
+| `service_version` | string | - | Service version for telemetry data. |
+| `environment` | string | - | Environment name (e.g., `production`, `staging`). |
+| `resource_attributes` | object | - | Additional resource attributes. |
+| `tracing` | object | - | Tracing configuration (see below). |
+| `metrics` | object | - | Metrics configuration (see below). |
+
+### Tracing Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Whether tracing is enabled. |
+| `console_export` | boolean | `false` | Export traces to console (for debugging). |
+
+### Metrics Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Whether metrics are enabled. |
+| `export_interval` | integer | `60` | Metrics export interval in seconds. |
 
 ## Environment Variables
 
-Use environment variables anywhere in the configuration:
+Use environment variables anywhere in the configuration with `${VAR_NAME}` syntax:
 
 ```yaml
 secrets:
   - name: api_key
     type: api
     parameters:
-      api_key: "${API_KEY}"              # Required variable
-      base_url: "${API_URL:-https://api.example.com}"  # With default
+      api_key: "${API_KEY}"
+      base_url: "${API_URL}"
 ```
+
+### MXCP Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `MXCP_CONFIG` | Path to user config file (default: `~/.mxcp/config.yml`) |
+| `MXCP_PROFILE` | Override the active profile |
+| `MXCP_DUCKDB_PATH` | Override DuckDB database path |
+| `MXCP_AUDIT_ENABLED` | Override audit logging (`true`/`false`, `1`/`0`, `yes`/`no`) |
+| `MXCP_DEBUG` | Enable debug logging |
+| `MXCP_READONLY` | Enable read-only mode |
+| `MXCP_DISABLE_ANALYTICS` | Disable analytics (set to `1`, `true`, or `yes`) |
+| `MXCP_ADMIN_ENABLED` | Enable local admin control socket |
+| `MXCP_ADMIN_SOCKET` | Path to admin socket (default: `/run/mxcp/mxcp.sock`) |
+
+### Telemetry Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `MXCP_TELEMETRY_ENABLED` | Enable OpenTelemetry |
+| `MXCP_TELEMETRY_TRACING_CONSOLE` | Export traces to console |
+| `MXCP_TELEMETRY_METRICS_INTERVAL` | Metrics export interval in seconds |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry collector endpoint |
+| `OTEL_SERVICE_NAME` | Service name for telemetry |
+| `OTEL_RESOURCE_ATTRIBUTES` | Additional resource attributes |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Headers for OTLP exporter |
+
+## Configuration Reload
+
+For long-running MCP servers, you can reload external configuration values without restarting:
+
+```bash
+# Send SIGHUP signal to reload external values
+kill -HUP <pid>
+```
+
+**What gets refreshed:**
+- ✅ Vault secrets (`vault://`)
+- ✅ File contents (`file://`)
+- ✅ Environment variables (`${VAR}`)
+- ✅ DuckDB connection (recreated to pick up database changes)
+- ✅ Python runtimes with updated configs
+
+**What does NOT change:**
+- ❌ Configuration file structure
+- ❌ OAuth provider settings
+- ❌ Server host/port settings
+- ❌ Registered endpoints
+
+The reload process waits up to 60 seconds synchronously. If new values cause errors, the server continues with old values.
 
 ## File Location
 

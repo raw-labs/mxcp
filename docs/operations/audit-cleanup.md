@@ -2,34 +2,16 @@
 title: "Audit Log Cleanup"
 description: "Manage audit log retention in MXCP. Retention policies, manual cleanup, and automated maintenance."
 sidebar:
-  order: 6
+  order: 7
 ---
 
 MXCP audit logs can grow over time. This guide covers retention policies, manual cleanup, and automated maintenance strategies.
 
-## Retention Configuration
+## Default Retention
 
-Configure retention in your profile:
+MXCP uses a default retention period of **90 days** for endpoint execution logs. Records older than this are automatically removed when you run the cleanup command.
 
-```yaml
-# mxcp-site.yml
-profiles:
-  production:
-    audit:
-      enabled: true
-      path: /var/log/mxcp/audit.jsonl
-      retention:
-        days: 90        # Keep logs for 90 days
-        max_size: 1GB   # Maximum log file size
-```
-
-### Retention Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `days` | Days to retain logs | 30 |
-| `max_size` | Maximum file size | 500MB |
-| `max_files` | Maximum rotated files | 10 |
+**Note:** The retention period is currently fixed at 90 days and is not configurable via `mxcp-site.yml`.
 
 ## Manual Cleanup
 
@@ -49,21 +31,48 @@ mxcp log-cleanup --profile production
 ### Output
 
 ```
-Audit Log Cleanup
-================
-Profile: production
-Retention: 90 days
-Max size: 1GB
+Applying retention policies...
 
-Actions:
-  - Deleted 15,234 records older than 90 days
-  - Rotated log file (exceeded 1GB)
-  - Removed 3 archived files
+Deleted records by schema:
+  mxcp.endpoints:1: 15234 records
 
-Current state:
-  - Active log: 245MB
-  - Total archived: 1.2GB
-  - Oldest record: 2024-01-15
+Total records deleted: 15234
+```
+
+Dry-run output:
+
+```
+DRY RUN: Analyzing what would be deleted...
+
+  mxcp.endpoints (retention: 90 days): 15234 records
+
+Total records that would be deleted: 15234
+
+Run without --dry-run to actually delete these records.
+```
+
+JSON output format (`--json`):
+
+```json
+{
+  "status": "success",
+  "message": "Deleted 15234 records",
+  "deleted_per_schema": {
+    "mxcp.endpoints:1": 15234
+  }
+}
+```
+
+Dry-run JSON:
+
+```json
+{
+  "status": "dry_run",
+  "message": "Would delete 15234 records",
+  "deleted_per_schema": {
+    "mxcp.endpoints:1": 15234
+  }
+}
 ```
 
 ### Direct DuckDB Cleanup
@@ -76,9 +85,9 @@ mxcp log --export-duckdb audit_analysis.duckdb
 
 # Query and clean up
 duckdb audit_analysis.duckdb << 'EOF'
--- Check log distribution
+-- Check log distribution (timestamp is stored as ISO string)
 SELECT
-  DATE_TRUNC('month', timestamp) as month,
+  DATE_TRUNC('month', timestamp::TIMESTAMP) as month,
   COUNT(*) as records
 FROM audit_logs
 GROUP BY month
@@ -86,7 +95,7 @@ ORDER BY month;
 
 -- Delete old records
 DELETE FROM audit_logs
-WHERE timestamp < CURRENT_DATE - INTERVAL '90 days';
+WHERE timestamp::TIMESTAMP < CURRENT_DATE - INTERVAL '90 days';
 EOF
 ```
 
@@ -185,19 +194,9 @@ volumes:
 
 ## Log Rotation
 
-### Built-in Rotation
+Audit logs are stored as JSONL files and do not have built-in rotation. Use external tools like `logrotate` to manage file sizes.
 
-MXCP rotates logs when they exceed `max_size`:
-
-```
-/var/log/mxcp/
-├── audit.jsonl           # Current log
-├── audit.jsonl.1.gz      # Previous (compressed)
-├── audit.jsonl.2.gz      # Older
-└── audit.jsonl.3.gz      # Oldest
-```
-
-### External Rotation with logrotate
+### Using logrotate
 
 Create `/etc/logrotate.d/mxcp`:
 
@@ -212,7 +211,7 @@ Create `/etc/logrotate.d/mxcp`:
     create 640 mxcp mxcp
     postrotate
         # Signal MXCP to reopen log files
-        kill -HUP $(cat /run/mxcp/mxcp.pid 2>/dev/null) 2>/dev/null || true
+        kill -HUP $(pgrep -f "mxcp serve") 2>/dev/null || true
     endscript
 }
 ```
@@ -275,15 +274,7 @@ Different regulations have different retention requirements:
 | PCI DSS | 1 year |
 | GDPR | As needed |
 
-Configure accordingly:
-
-```yaml
-profiles:
-  production:
-    audit:
-      retention:
-        days: 365  # 1 year for SOC 2
-```
+**Note:** The default 90-day retention may not meet all compliance requirements. For longer retention, consider archiving logs before they're deleted (see [Archiving Strategies](#archiving-strategies) above).
 
 ### Secure Deletion
 
@@ -318,15 +309,16 @@ echo "$TIMESTAMP: Deleted $DELETED audit records" >> /var/log/mxcp/cleanup-audit
 
 ## Best Practices
 
-### 1. Set Appropriate Retention
+### 1. Plan for Compliance Requirements
 
-Balance storage costs with compliance needs:
+The default 90-day retention period works for most operational use cases. For compliance requirements that need longer retention:
 
-```yaml
-audit:
-  retention:
-    days: 90      # 3 months for most use cases
-    max_size: 2GB # Prevent disk exhaustion
+```bash
+# Archive before cleanup
+mxcp log --export-duckdb /archive/audit-$(date +%Y%m%d).duckdb
+
+# Then run cleanup
+mxcp log-cleanup
 ```
 
 ### 2. Monitor Log Growth

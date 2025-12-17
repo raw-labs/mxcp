@@ -73,16 +73,19 @@ prompt:
 | `prompt` | object | Yes | - | Prompt definition object. |
 | `metadata` | object | No | - | Custom metadata (not processed by MXCP). |
 
+> **Note:** The `mxcp` field accepts both integer (`1`) and string (`"1"`) values - strings are automatically coerced to integers.
+
 ## Prompt Object
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `name` | string | Yes | - | Unique identifier. Must start with letter/underscore, alphanumeric only. |
-| `description` | string | Yes | - | Human-readable description (required for prompts). |
+| `description` | string | No | - | Human-readable description for AI clients. |
 | `tags` | array | No | - | List of tags for categorization. |
 | `parameters` | array | No | - | Template parameter definitions. |
 | `return` | object | No | - | Return type definition. |
 | `messages` | array | Yes | - | Message sequence with Jinja2 templates. |
+| `policies` | object | No | - | Input and output policy rules. |
 | `tests` | array | No | - | Test case definitions. |
 | `enabled` | boolean | No | `true` | Whether the prompt is enabled. |
 
@@ -92,12 +95,11 @@ Messages define the conversation structure.
 
 ### Message Object
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `role` | string | Yes | Message role: `system`, `user`, or `assistant`. |
-| `type` | string | Yes | Content type: `text` or `resource`. |
-| `prompt` | string | Conditional | Text content with Jinja2 templates (for `type: text`). |
-| `uri` | string | Conditional | Resource URI to embed (for `type: resource`). |
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `prompt` | string | Yes | - | Text content with Jinja2 templates, or resource URI when `type: resource`. |
+| `role` | string | No | - | Message role: `system`, `user`, or `assistant`. |
+| `type` | string | No | - | Content type: `text` or `resource`. |
 
 ### Text Messages
 
@@ -114,7 +116,7 @@ messages:
 
 ### Resource Messages
 
-Embed resource content directly into prompts:
+Embed resource content directly into prompts by setting `type: resource` and putting the URI in the `prompt` field:
 
 ```yaml
 messages:
@@ -124,12 +126,14 @@ messages:
 
   - role: user
     type: resource
-    uri: "file://{{ file_path }}"
+    prompt: "file://{{ file_path }}"
 
   - role: user
     type: text
     prompt: "Please review the code above for {{ review_focus }}."
 ```
+
+> **Note:** When `type: resource`, the `prompt` field contains the resource URI instead of text content.
 
 ### Multi-Turn Conversations
 
@@ -190,13 +194,17 @@ Common Jinja2 filters:
 
 | Filter | Description | Example |
 |--------|-------------|---------|
-| `join` | Join array elements | `{{ items \| join(', ') }}` |
-| `upper` | Uppercase | `{{ text \| upper }}` |
-| `lower` | Lowercase | `{{ text \| lower }}` |
-| `default` | Default value | `{{ value \| default('N/A') }}` |
-| `length` | Array/string length | `{{ items \| length }}` |
-| `first` | First element | `{{ items \| first }}` |
-| `last` | Last element | `{{ items \| last }}` |
+| `upper` | Convert to uppercase | `{{ text \| upper }}` |
+| `lower` | Convert to lowercase | `{{ text \| lower }}` |
+| `title` | Convert to titlecase | `{{ text \| title }}` |
+| `trim` | Strip leading/trailing whitespace | `{{ text \| trim }}` |
+| `default` | Provide fallback for undefined | `{{ value \| default('N/A') }}` |
+| `join` | Join array elements with separator | `{{ items \| join(', ') }}` |
+| `length` | Get array/string length | `{{ items \| length }}` |
+| `first` | Get first element | `{{ items \| first }}` |
+| `last` | Get last element | `{{ items \| last }}` |
+| `replace` | Replace substring | `{{ text \| replace('old', 'new') }}` |
+| `sort` | Sort an iterable | `{{ items \| sort }}` |
 
 ### Complex Template Example
 
@@ -248,7 +256,7 @@ Each parameter defines an input to the prompt template.
 | `minLength` | integer | Minimum string length. |
 | `maxLength` | integer | Maximum string length. |
 | `pattern` | string | Regex pattern to match. |
-| `format` | string | Format hint: `email`, `uri`, `date`, `time`, `date-time`. |
+| `format` | string | Format hint: `email`, `uri`, `date`, `time`, `date-time`, `duration`, `timestamp`. |
 
 **Number/Integer constraints:**
 
@@ -256,6 +264,9 @@ Each parameter defines an input to the prompt template.
 |-------|------|-------------|
 | `minimum` | number | Minimum value (inclusive). |
 | `maximum` | number | Maximum value (inclusive). |
+| `exclusiveMinimum` | number | Minimum value (exclusive). |
+| `exclusiveMaximum` | number | Maximum value (exclusive). |
+| `multipleOf` | number | Value must be multiple of this. |
 
 **Array constraints:**
 
@@ -264,6 +275,15 @@ Each parameter defines an input to the prompt template.
 | `items` | object | Type definition for array items. |
 | `minItems` | integer | Minimum array length. |
 | `maxItems` | integer | Maximum array length. |
+| `uniqueItems` | boolean | Whether items must be unique. |
+
+**Object constraints:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `properties` | object | Map of property names to type definitions. |
+| `required` | array | List of required property names. |
+| `additionalProperties` | boolean | Whether extra properties are allowed. |
 
 ### Parameter Examples
 
@@ -377,6 +397,35 @@ tests:
 | `result_not_contains` | array | Field names that must NOT exist. |
 
 See [Testing](/quality/testing) for complete documentation.
+
+## Policies Object
+
+Policies control access and data filtering for prompts.
+
+```yaml
+policies:
+  input:
+    - condition: "user.role == 'guest'"
+      action: deny
+      reason: "Guests cannot use this prompt"
+
+  output:
+    - condition: "user.role != 'admin'"
+      action: filter_fields
+      fields: ["internal_notes"]
+      reason: "Internal fields restricted"
+```
+
+### Policy Rule Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `condition` | string | Yes | CEL expression to evaluate. |
+| `action` | string | Yes | Action to take: `deny`, `filter_fields`, `mask_fields`, `filter_sensitive_fields`. |
+| `reason` | string | No | Human-readable reason. |
+| `fields` | array | No | Fields to filter/mask (for `filter_fields`, `mask_fields`). |
+
+See [Policies](/security/policies) for complete documentation.
 
 ## Common Patterns
 

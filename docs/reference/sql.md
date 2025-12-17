@@ -32,7 +32,7 @@ When authentication is enabled, these functions provide user information:
 | `get_user_provider()` | VARCHAR | OAuth provider (github, atlassian, etc.) |
 | `get_user_external_token()` | VARCHAR | User's OAuth token |
 
-All functions return empty string (`""`) when authentication is disabled or user is not authenticated.
+All functions return `NULL` when authentication is disabled or user is not authenticated.
 
 ### Examples
 
@@ -68,12 +68,14 @@ FROM documents;
 
 ### Request Header Functions
 
-HTTP transport exposes request headers:
+HTTP transport exposes request headers to DuckDB, allowing you to audit or forward them without extra plumbing:
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `get_request_header(name)` | VARCHAR | Specific header value |
-| `get_request_headers_json()` | VARCHAR | All headers as JSON |
+| `get_request_header(name)` | VARCHAR | Specific header value (NULL if missing) |
+| `get_request_headers_json()` | VARCHAR | All headers as JSON (NULL if no headers) |
+
+Only available when using HTTP transport (streamable-http, sse). Returns `NULL` for stdio transport.
 
 ```sql
 -- Forward authorization header
@@ -160,11 +162,14 @@ SELECT * FROM read_parquet('s3://bucket/data.parquet');
 JSON parsing and manipulation:
 
 ```sql
--- Parse JSON
+-- Extract JSON field (returns JSON type)
 SELECT json_extract(data, '$.name') as name FROM events;
 
--- JSON arrays
-SELECT unnest(json_extract(data, '$.items')) as item FROM orders;
+-- Extract as string
+SELECT data->>'$.name' as name FROM events;
+
+-- Unnest JSON arrays (convert to list first)
+SELECT unnest(from_json(data->'$.items', '["JSON"]')) as item FROM orders;
 ```
 
 ### parquet
@@ -265,27 +270,38 @@ SELECT * FROM subordinates;
 
 ### PIVOT and UNPIVOT
 
+Transform data between wide and long formats:
+
+- **PIVOT**: Converts rows to columns (long → wide). Takes distinct values from one column and creates new columns for each value.
+- **UNPIVOT**: Converts columns to rows (wide → long). Takes multiple columns and stacks them into key-value pairs.
+
 ```sql
--- Pivot data
+-- Pivot: Convert rows to columns
+-- Input: sales(product, month, amount) with months as rows
+-- Output: One row per product with jan, feb, mar as columns
 PIVOT sales ON month USING SUM(amount);
 
--- Unpivot data
-UNPIVOT monthly_data ON (jan, feb, mar) INTO
+-- Unpivot: Convert columns to rows
+-- Input: monthly_data with jan, feb, mar columns
+-- Output: Rows with (month, amount) pairs
+UNPIVOT monthly_data ON jan, feb, mar INTO
     NAME month
     VALUE amount;
 ```
 
 ### List Aggregations
 
+Aggregate values into arrays instead of scalar results. Useful for collecting related items or preserving ordering within groups.
+
 ```sql
--- Collect into arrays
+-- Collect names into arrays per department
 SELECT
     department,
     LIST(name) as employees
 FROM users
 GROUP BY department;
 
--- Array operations
+-- Collect with ordering (highest salaries first)
 SELECT
     department,
     ARRAY_AGG(salary ORDER BY salary DESC) as salaries
@@ -308,29 +324,33 @@ GROUP BY department;
 
 ### Complex Types
 
+DuckDB supports nested data structures for representing complex data:
+
 ```sql
--- Arrays
+-- Arrays: ordered collections of same-type values
 SELECT [1, 2, 3] as numbers;
 SELECT array_agg(name) as names FROM users;
 
--- Structs
+-- Structs: named fields (like objects/records)
 SELECT {'name': 'Alice', 'age': 30} as person;
 SELECT struct_pack(name := 'Alice', age := 30);
 
--- Maps
+-- Maps: key-value pairs with dynamic keys
 SELECT MAP {'key1': 'value1', 'key2': 'value2'};
 ```
 
 ### Type Casting
 
+Convert between types explicitly. Use `TRY_CAST` when the conversion might fail to avoid errors.
+
 ```sql
 -- Explicit cast
 SELECT CAST(age AS VARCHAR) as age_str FROM users;
 
--- Cast shorthand
+-- Cast shorthand (PostgreSQL-style)
 SELECT age::VARCHAR as age_str FROM users;
 
--- Try cast (returns NULL on failure)
+-- Try cast (returns NULL on failure instead of error)
 SELECT TRY_CAST(value AS INTEGER) FROM data;
 ```
 

@@ -34,8 +34,7 @@ CRUD operations and data handling:
 
 ### Basic Tool
 
-```yaml
-# tools/hello.yml
+```yaml title="tools/hello.yml"
 mxcp: 1
 tool:
   name: hello
@@ -52,8 +51,7 @@ tool:
 
 ### Resource with URI Template
 
-```yaml
-# resources/user.yml
+```yaml title="resources/user.yml"
 mxcp: 1
 resource:
   uri: users://{id}
@@ -81,12 +79,12 @@ resource:
 
 ### Python Endpoint
 
-```yaml
-# tools/analyze.yml
+```yaml title="tools/analyze.yml"
 mxcp: 1
 tool:
   name: analyze_text
   description: Analyze text sentiment
+  language: python
   parameters:
     - name: text
       type: string
@@ -100,14 +98,10 @@ tool:
         type: number
   source:
     file: ../python/analyze.py
-    function: analyze
 ```
 
-```python
-# python/analyze.py
-from mxcp.runtime import db
-
-def analyze(text: str) -> dict:
+```python title="python/analyze.py"
+def analyze_text(text: str) -> dict:
     # Simple sentiment analysis
     positive_words = ["good", "great", "excellent", "happy"]
     negative_words = ["bad", "poor", "terrible", "sad"]
@@ -131,12 +125,12 @@ def analyze(text: str) -> dict:
 
 ### Tool with Policy
 
-```yaml
-# tools/delete_user.yml
+```yaml title="tools/delete_user.yml"
 mxcp: 1
 tool:
   name: delete_user
   description: Delete a user (admin only)
+  language: python
   annotations:
     destructiveHint: true
   parameters:
@@ -156,32 +150,40 @@ tool:
         action: deny
         reason: "Only admins can delete users"
   source:
-    code: |
-      DELETE FROM users WHERE id = $user_id
-      RETURNING true as deleted, $user_id as user_id
+    file: ../python/delete_user.py
 ```
 
-### Resource with Filtering
+```python title="python/delete_user.py"
+from mxcp.runtime import db
 
-```yaml
-# resources/users.yml
+def delete_user(user_id: int) -> dict:
+    """Delete a user by ID."""
+    db.execute("DELETE FROM users WHERE id = $id", {"id": user_id})
+    return {"deleted": True, "user_id": user_id}
+```
+
+### Tool with Filtering
+
+```yaml title="tools/list_users.yml"
 mxcp: 1
-resource:
-  uri: users://list
-  name: User List
+tool:
+  name: list_users
   description: List users with filtering
   parameters:
     - name: department
       type: string
       default: null
+      description: Filter by department name
     - name: status
       type: string
       enum: ["active", "inactive", "all"]
       default: "all"
+      description: Filter by user status
     - name: limit
       type: integer
       default: 10
       maximum: 100
+      description: Maximum number of users to return
   return:
     type: array
     items:
@@ -198,13 +200,12 @@ resource:
 
 ### Prompt Template
 
-```yaml
-# prompts/summarize.yml
+```yaml title="prompts/summarize.yml"
 mxcp: 1
 prompt:
   name: summarize
   description: Create a summary of content
-  arguments:
+  parameters:
     - name: content
       type: string
       description: Content to summarize
@@ -212,28 +213,34 @@ prompt:
       type: string
       enum: ["brief", "detailed", "bullet"]
       default: "brief"
-  template: |
-    Please summarize the following content in a {{style}} style:
+      description: Summary style
+  messages:
+    - role: user
+      type: text
+      prompt: |
+        Please summarize the following content in a {{style}} style:
 
-    {{content}}
+        {{content}}
 
-    {% if style == "brief" %}
-    Keep the summary to 2-3 sentences.
-    {% elif style == "bullet" %}
-    Use bullet points for key takeaways.
-    {% else %}
-    Provide a comprehensive summary with context.
-    {% endif %}
+        {% if style == "brief" %}
+        Keep the summary to 2-3 sentences.
+        {% elif style == "bullet" %}
+        Use bullet points for key takeaways.
+        {% else %}
+        Provide a comprehensive summary with context.
+        {% endif %}
 ```
 
 ### External API Integration
 
-```yaml
-# tools/weather.yml
+External API calls use Python endpoints for proper secret handling:
+
+```yaml title="tools/weather.yml"
 mxcp: 1
 tool:
   name: get_weather
   description: Get current weather for a city
+  language: python
   parameters:
     - name: city
       type: string
@@ -248,20 +255,146 @@ tool:
       conditions:
         type: string
   source:
-    code: |
-      SELECT
-        $city as city,
-        main.temp as temperature,
-        weather[1].description as conditions
-      FROM read_json_auto(
-        'https://api.openweathermap.org/data/2.5/weather?q=' || $city || '&appid=' || get_secret('openweather')
-      )
+    file: ../python/weather.py
+```
+
+```python title="python/weather.py"
+from mxcp.runtime import config
+import urllib.request
+import json
+
+def get_weather(city: str) -> dict:
+    # Get API key from user config secrets
+    secret = config.get_secret("openweather")
+    if not secret:
+        return {"city": city, "temperature": 0, "conditions": "API key not configured"}
+
+    api_key = secret.get("api_key", "")
+    url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}"
+
+    with urllib.request.urlopen(url) as response:
+        data = json.loads(response.read())
+
+    return {
+        "city": city,
+        "temperature": data["main"]["temp"],
+        "conditions": data["weather"][0]["description"]
+    }
+```
+
+### Async Operations
+
+For concurrent API calls or I/O operations:
+
+```yaml title="tools/batch_lookup.yml"
+mxcp: 1
+tool:
+  name: batch_lookup
+  description: Look up multiple items concurrently
+  language: python
+  parameters:
+    - name: ids
+      type: array
+      items:
+        type: integer
+      description: IDs to look up
+  return:
+    type: array
+    items:
+      type: object
+  source:
+    file: ../python/batch.py
+```
+
+```python title="python/batch.py"
+import asyncio
+from mxcp.runtime import db
+
+async def batch_lookup(ids: list[int]) -> list[dict]:
+    """Look up multiple items concurrently."""
+
+    async def lookup_one(item_id: int) -> dict:
+        # Simulate async operation
+        await asyncio.sleep(0.1)
+        results = db.execute(
+            "SELECT * FROM items WHERE id = $id",
+            {"id": item_id}
+        )
+        return results[0] if results else {"id": item_id, "error": "Not found"}
+
+    # Process all IDs concurrently
+    return await asyncio.gather(*[lookup_one(id) for id in ids])
+```
+
+### Lifecycle Hooks
+
+Initialize resources (ML models, connections) at startup:
+
+```yaml title="tools/predict.yml"
+mxcp: 1
+tool:
+  name: predict_sentiment
+  description: Predict sentiment using ML model
+  language: python
+  parameters:
+    - name: text
+      type: string
+      description: Text to analyze for sentiment
+  return:
+    type: object
+    properties:
+      sentiment:
+        type: string
+      confidence:
+        type: number
+  source:
+    file: ../python/ml.py
+```
+
+```python title="python/ml.py"
+from mxcp.runtime import on_init, on_shutdown
+
+# Global model reference
+model = None
+
+@on_init
+def load_model():
+    """Load ML model when server starts."""
+    global model
+    # model = load_your_model_here()
+    model = {"loaded": True}  # Placeholder
+    print("ML model loaded")
+
+@on_shutdown
+def cleanup():
+    """Clean up when server stops."""
+    global model
+    model = None
+    print("ML model unloaded")
+
+def predict_sentiment(text: str) -> dict:
+    """Predict sentiment using the loaded model."""
+    if not model:
+        return {"sentiment": "unknown", "confidence": 0}
+
+    # Use model for prediction (placeholder logic)
+    positive_words = ["good", "great", "excellent", "love"]
+    negative_words = ["bad", "terrible", "hate", "awful"]
+
+    text_lower = text.lower()
+    pos = sum(1 for w in positive_words if w in text_lower)
+    neg = sum(1 for w in negative_words if w in text_lower)
+
+    if pos > neg:
+        return {"sentiment": "positive", "confidence": 0.8}
+    elif neg > pos:
+        return {"sentiment": "negative", "confidence": 0.8}
+    return {"sentiment": "neutral", "confidence": 0.5}
 ```
 
 ### Test-Driven Endpoint
 
-```yaml
-# tools/calculate.yml
+```yaml title="tools/calculate.yml"
 mxcp: 1
 tool:
   name: calculate_total

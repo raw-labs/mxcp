@@ -78,6 +78,7 @@ tool:
   parameters:
     - name: param_name
       type: string
+      description: Parameter description
   return:
     type: object
   source:
@@ -106,6 +107,7 @@ resource:
   parameters:
     - name: id
       type: integer
+      description: User ID
   return:
     type: object
   source:
@@ -244,9 +246,9 @@ tests:
 ### How do I validate my endpoints?
 
 ```bash
-mxcp validate              # All endpoints
-mxcp validate my_tool      # Specific endpoint
-mxcp validate --debug      # Detailed output
+mxcp validate                        # All endpoints
+mxcp validate tools/my_tool.yml      # Specific endpoint
+mxcp validate --debug                # Detailed output
 ```
 
 [Validation guide →](/quality/validation)
@@ -310,7 +312,8 @@ Access in Python:
 
 ```python
 from mxcp.runtime import config
-api_key = config.get_secret("api_key", "value")
+secret = config.get_secret("api_key")
+api_key = secret["value"] if secret else None
 ```
 
 [Configuration guide →](/operations/configuration)
@@ -386,7 +389,7 @@ mxcp drift-snapshot
 mxcp drift-check
 ```
 
-[Monitoring guide →](/operations/monitoring)
+[Drift detection guide →](/operations/drift-detection)
 
 ## Database
 
