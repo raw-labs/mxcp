@@ -73,8 +73,7 @@ models:
 
 #### 1.2 Implement dbt Models
 
-```sql
--- models/marts/customer_360.sql
+```sql title="models/marts/customer_360.sql"
 {{ config(
     materialized='table',
     indexes=[{'columns': ['customer_id'], 'unique': True}]
@@ -103,8 +102,7 @@ LEFT JOIN order_metrics o USING (customer_id)
 
 #### 1.3 Add Data Quality Tests
 
-```yaml
-# models/schema.yml
+```yaml title="models/schema.yml"
 models:
   - name: customer_360
     tests:
@@ -120,8 +118,7 @@ models:
 
 #### 1.4 Define Data Contracts
 
-```yaml
-# models/contracts/customer_360.yml
+```yaml title="models/contracts/customer_360.yml"
 models:
   - name: customer_360
     contract:
@@ -200,8 +197,7 @@ Choose the right tool for each job. MXCP supports both [SQL](/reference/sql) and
 
 #### 3.1 SQL for Data Operations
 
-```yaml
-# tools/get_customer_metrics.yml
+```yaml title="tools/get_customer_metrics.yml"
 mxcp: 1
 tool:
   name: get_customer_metrics
@@ -227,8 +223,7 @@ tool:
 
 #### 3.2 Python for Complex Logic
 
-```yaml
-# tools/predict_churn.yml
+```yaml title="tools/predict_churn.yml"
 mxcp: 1
 tool:
   name: predict_churn
@@ -244,8 +239,7 @@ tool:
     file: ../python/ml_predictions.py
 ```
 
-```python
-# python/ml_predictions.py
+```python title="python/ml_predictions.py"
 from mxcp.runtime import db, on_init
 import joblib
 
@@ -314,8 +308,7 @@ tests:
 
 #### 4.3 LLM Evaluation
 
-```yaml
-# evals/customer_tools.evals.yml
+```yaml title="evals/customer_tools.evals.yml"
 mxcp: 1
 suite: customer_tool_safety
 description: Test AI uses customer tools safely

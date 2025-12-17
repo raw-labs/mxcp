@@ -77,8 +77,7 @@ models:
 
 Create eval files in the `evals/` directory with `.evals.yml` or `-evals.yml` suffix:
 
-```yaml
-# evals/user-management.evals.yml
+```yaml title="evals/user-management.evals.yml"
 mxcp: 1
 suite: user_management
 description: Test AI interaction with user management tools
@@ -243,8 +242,7 @@ tests:
 
 ## Complete Example
 
-```yaml
-# evals/customer-service.evals.yml
+```yaml title="evals/customer-service.evals.yml"
 mxcp: 1
 suite: customer_service
 description: Test customer service AI interactions
@@ -297,8 +295,7 @@ tests:
 
 This example demonstrates testing role-based access with different tools for different permission levels:
 
-```yaml
-# evals/data-governance.evals.yml
+```yaml title="evals/data-governance.evals.yml"
 mxcp: 1
 suite: data_governance
 description: Ensure LLM respects data access policies

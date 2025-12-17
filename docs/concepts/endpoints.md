@@ -284,8 +284,7 @@ source:
 
 The Python file must contain a function matching the endpoint name. Access runtime services via imports from `mxcp.runtime`:
 
-```python
-# python/handler.py
+```python title="python/handler.py"
 from mxcp.runtime import db, config
 
 def get_user(user_id: int) -> dict:

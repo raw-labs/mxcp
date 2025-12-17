@@ -117,8 +117,8 @@ uri: "org://{org_id}/team/{team_id}/member/{member_id}"
 ### Pattern Rules
 
 - Use `{param_name}` for parameter placeholders
-- **All parameters must be used in the URI** - parameters not in the URI will cause validation errors (use a tool instead if you need extra parameters)
 - Parameter names must match entries in the `parameters` array
+- **All parameters must be used in the URI** - parameters not in the URI will cause validation errors (use a tool instead if you need extra parameters)
 - Use hierarchical paths for nested resources
 - Avoid query strings (use parameters instead)
 
@@ -295,8 +295,7 @@ source:
 
 For Python resources, the function name in the Python file must match the resource name (derived from the URI pattern):
 
-```yaml
-# resources/user_profile.yml
+```yaml title="resources/user_profile.yml"
 resource:
   uri: "user://{user_id}/profile"
   name: user_profile          # Function name must match
@@ -305,8 +304,7 @@ resource:
     file: ../python/profiles.py
 ```
 
-```python
-# python/profiles.py
+```python title="python/profiles.py"
 def user_profile(user_id: int) -> dict:
     """Function name must match resource name."""
     return {"id": user_id, "name": "Alice"}

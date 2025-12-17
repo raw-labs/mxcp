@@ -1,41 +1,41 @@
 ---
 title: "Analytics Example"
-description: "Complete MXCP example for business analytics. Sales reports, time-series analysis, aggregations, and real-time dashboards."
+description: "Build a sales analytics system with MXCP. Reports, dashboards, KPIs, and AI-assisted analysis."
 sidebar:
   order: 3
 ---
 
-This example demonstrates a business analytics MXCP project with sales reports, metrics, and time-series analysis.
+Build a sales analytics system that lets AI assistants generate reports, analyze products, and access real-time dashboards.
+
+## What You'll Learn
+
+- Creating parameterized report tools
+- Building dashboard resources
+- When to use tools vs resources for analytics
+- AI-assisted data analysis with prompts
 
 ## Project Structure
 
 ```
 analytics/
 ├── mxcp-site.yml
+├── sql/
+│   ├── setup.sql
+│   └── sales_report.sql
 ├── tools/
 │   ├── sales_report.yml
-│   ├── revenue_metrics.yml
 │   ├── product_performance.yml
-│   └── trend_analysis.yml
+│   └── daily_trends.yml
 ├── resources/
 │   ├── dashboard.yml
 │   └── kpis.yml
-├── sql/
-│   ├── setup.sql
-│   └── queries/
-│       ├── sales_summary.sql
-│       └── trends.sql
-└── models/
-    ├── staging/
-    │   └── stg_sales.sql
-    └── marts/
-        └── sales_metrics.sql
+└── prompts/
+    └── analyst.yml
 ```
 
 ## Configuration
 
-```yaml
-# mxcp-site.yml
+```yaml title="mxcp-site.yml"
 mxcp: 1
 project: analytics
 profile: default
@@ -45,18 +45,13 @@ profiles:
     duckdb:
       path: data/analytics.duckdb
 
-dbt:
-  enabled: true
-
 extensions:
   - json
-  - parquet
 ```
 
 ## Schema Setup
 
-```sql
--- sql/setup.sql
+```sql title="sql/setup.sql"
 CREATE TABLE products (
     id INTEGER PRIMARY KEY,
     name VARCHAR NOT NULL,
@@ -71,8 +66,7 @@ CREATE TABLE sales (
     unit_price DECIMAL(10, 2) NOT NULL,
     total DECIMAL(10, 2) NOT NULL,
     region VARCHAR NOT NULL,
-    sale_date DATE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    sale_date DATE NOT NULL
 );
 
 -- Sample data
@@ -89,21 +83,30 @@ INSERT INTO sales (id, product_id, quantity, unit_price, total, region, sale_dat
     (4, 1, 15, 99.99, 1499.85, 'West', '2024-01-18'),
     (5, 4, 50, 29.99, 1499.50, 'North', '2024-01-19'),
     (6, 2, 30, 49.99, 1499.70, 'East', '2024-01-20'),
-    (7, 3, 8, 199.99, 1599.92, 'South', '2024-01-21'),
-    (8, 1, 20, 99.99, 1999.80, 'North', '2024-02-01'),
-    (9, 4, 100, 29.99, 2999.00, 'West', '2024-02-02');
+    (7, 3, 8, 199.99, 1599.92, 'South', '2024-01-21');
 ```
+
+## Tools vs Resources for Analytics
+
+| Pattern | Type | Example | Why |
+|---------|------|---------|-----|
+| Reports with date ranges | **Tool** | Sales report | Requires input parameters |
+| Current state data | **Resource** | Dashboard | No parameters, always current |
+| Parameterized lookups | **Resource** | KPIs by period | URI-based access pattern |
+
+**Rule of thumb:** If users need to specify *what* data they want, use a tool. If they're accessing a *known data point*, use a resource.
 
 ## Tools
 
 ### Sales Report
 
-```yaml
-# tools/sales_report.yml
+Generate sales reports with flexible grouping.
+
+```yaml title="tools/sales_report.yml"
 mxcp: 1
 tool:
   name: sales_report
-  description: Generate sales report for a date range
+  description: Generate sales report for a date range, grouped by dimension
   tags: ["sales", "reports"]
   annotations:
     readOnlyHint: true
@@ -119,182 +122,75 @@ tool:
       description: End date (YYYY-MM-DD)
     - name: group_by
       type: string
-      enum: ["day", "week", "month", "region", "category"]
+      enum: ["day", "region", "category"]
       default: "day"
-      description: Grouping dimension
+      description: How to group results
 
   return:
-    type: object
-    properties:
-      summary:
-        type: object
-        properties:
-          total_revenue:
-            type: number
-          total_orders:
-            type: integer
-          avg_order_value:
-            type: number
-      breakdown:
-        type: array
-        items:
-          type: object
+    type: array
+    items:
+      type: object
+      properties:
+        dimension:
+          type: string
+        revenue:
+          type: number
+        orders:
+          type: integer
+        units:
+          type: number
 
   source:
-    code: |
-      WITH filtered_sales AS (
-        SELECT s.*, p.name as product_name, p.category
-        FROM sales s
-        JOIN products p ON s.product_id = p.id
-        WHERE s.sale_date >= $start_date::DATE
-          AND s.sale_date <= $end_date::DATE
-      ),
-      summary AS (
-        SELECT
-          ROUND(SUM(total), 2) as total_revenue,
-          COUNT(*) as total_orders,
-          ROUND(AVG(total), 2) as avg_order_value
-        FROM filtered_sales
-      ),
-      breakdown AS (
-        SELECT
-          CASE $group_by
-            WHEN 'day' THEN strftime(sale_date, '%Y-%m-%d')
-            WHEN 'week' THEN strftime(sale_date, '%Y-W%W')
-            WHEN 'month' THEN strftime(sale_date, '%Y-%m')
-            WHEN 'region' THEN region
-            WHEN 'category' THEN category
-          END as dimension,
-          ROUND(SUM(total), 2) as revenue,
-          COUNT(*) as orders,
-          SUM(quantity) as units
-        FROM filtered_sales
-        GROUP BY 1
-        ORDER BY 1
-      )
-      SELECT json_object(
-        'summary', (SELECT json_object(
-          'total_revenue', total_revenue,
-          'total_orders', total_orders,
-          'avg_order_value', avg_order_value
-        ) FROM summary),
-        'breakdown', (SELECT json_group_array(json_object(
-          'dimension', dimension,
-          'revenue', revenue,
-          'orders', orders,
-          'units', units
-        )) FROM breakdown)
-      ) as result
+    file: ../sql/sales_report.sql
 
   tests:
-    - name: monthly_report
+    - name: january_report
+      arguments:
+        - key: start_date
+          value: "2024-01-01"
+        - key: end_date
+          value: "2024-01-31"
+      result_length: 7
+
+    - name: group_by_region
       arguments:
         - key: start_date
           value: "2024-01-01"
         - key: end_date
           value: "2024-01-31"
         - key: group_by
-          value: "day"
-      result_contains:
-        summary:
-          total_orders: 7
+          value: "region"
+      result_contains_item:
+        dimension: "North"
 ```
 
-### Revenue Metrics
-
-```yaml
-# tools/revenue_metrics.yml
-mxcp: 1
-tool:
-  name: revenue_metrics
-  description: Get key revenue metrics and KPIs
-  tags: ["revenue", "kpis"]
-  annotations:
-    readOnlyHint: true
-
-  parameters:
-    - name: period
-      type: string
-      enum: ["today", "week", "month", "quarter", "year"]
-      default: "month"
-      description: Time period for metrics
-
-  return:
-    type: object
-    properties:
-      period:
-        type: string
-      revenue:
-        type: number
-      revenue_change:
-        type: number
-        description: Percentage change from previous period
-      orders:
-        type: integer
-      avg_order_value:
-        type: number
-      top_product:
-        type: string
-      top_region:
-        type: string
-
-  source:
-    code: |
-      WITH period_bounds AS (
-        SELECT
-          CASE $period
-            WHEN 'today' THEN CURRENT_DATE
-            WHEN 'week' THEN CURRENT_DATE - INTERVAL '7 days'
-            WHEN 'month' THEN CURRENT_DATE - INTERVAL '30 days'
-            WHEN 'quarter' THEN CURRENT_DATE - INTERVAL '90 days'
-            WHEN 'year' THEN CURRENT_DATE - INTERVAL '365 days'
-          END as start_date,
-          CURRENT_DATE as end_date
-      ),
-      current_period AS (
-        SELECT
-          ROUND(SUM(s.total), 2) as revenue,
-          COUNT(*) as orders,
-          ROUND(AVG(s.total), 2) as avg_order_value
-        FROM sales s, period_bounds pb
-        WHERE s.sale_date >= pb.start_date
-      ),
-      top_product AS (
-        SELECT p.name
-        FROM sales s
-        JOIN products p ON s.product_id = p.id, period_bounds pb
-        WHERE s.sale_date >= pb.start_date
-        GROUP BY p.name
-        ORDER BY SUM(s.total) DESC
-        LIMIT 1
-      ),
-      top_region AS (
-        SELECT region
-        FROM sales s, period_bounds pb
-        WHERE s.sale_date >= pb.start_date
-        GROUP BY region
-        ORDER BY SUM(total) DESC
-        LIMIT 1
-      )
-      SELECT
-        $period as period,
-        cp.revenue,
-        0.0 as revenue_change,
-        cp.orders,
-        cp.avg_order_value,
-        (SELECT name FROM top_product) as top_product,
-        (SELECT region FROM top_region) as top_region
-      FROM current_period cp
+```sql title="sql/sales_report.sql"
+SELECT
+  CASE $group_by
+    WHEN 'day' THEN strftime(sale_date, '%Y-%m-%d')
+    WHEN 'region' THEN region
+    WHEN 'category' THEN p.category
+  END as dimension,
+  ROUND(SUM(s.total), 2) as revenue,
+  COUNT(*) as orders,
+  SUM(s.quantity) as units
+FROM sales s
+JOIN products p ON s.product_id = p.id
+WHERE s.sale_date >= $start_date::DATE
+  AND s.sale_date <= $end_date::DATE
+GROUP BY 1
+ORDER BY revenue DESC
 ```
 
 ### Product Performance
 
-```yaml
-# tools/product_performance.yml
+Analyze which products are performing best.
+
+```yaml title="tools/product_performance.yml"
 mxcp: 1
 tool:
   name: product_performance
-  description: Analyze product sales performance
+  description: Analyze product sales performance, optionally filtered by category
   tags: ["products", "analysis"]
   annotations:
     readOnlyHint: true
@@ -307,6 +203,8 @@ tool:
     - name: limit
       type: integer
       default: 10
+      minimum: 1
+      maximum: 100
       description: Number of products to return
 
   return:
@@ -314,8 +212,6 @@ tool:
     items:
       type: object
       properties:
-        product_id:
-          type: integer
         product_name:
           type: string
         category:
@@ -323,340 +219,258 @@ tool:
         total_revenue:
           type: number
         units_sold:
-          type: integer
-        avg_price:
           type: number
-        order_count:
-          type: integer
 
   source:
     code: |
       SELECT
-        p.id as product_id,
         p.name as product_name,
         p.category,
-        ROUND(SUM(s.total), 2) as total_revenue,
-        SUM(s.quantity) as units_sold,
-        ROUND(AVG(s.unit_price), 2) as avg_price,
-        COUNT(*) as order_count
+        ROUND(COALESCE(SUM(s.total), 0), 2) as total_revenue,
+        COALESCE(SUM(s.quantity), 0) as units_sold
       FROM products p
       LEFT JOIN sales s ON p.id = s.product_id
       WHERE $category IS NULL OR p.category = $category
       GROUP BY p.id, p.name, p.category
-      ORDER BY total_revenue DESC NULLS LAST
+      ORDER BY total_revenue DESC
       LIMIT $limit
 
   tests:
     - name: all_products
       arguments: []
+      result_length: 4
 
-    - name: filter_by_category
+    - name: hardware_only
       arguments:
         - key: category
           value: "Hardware"
-      result_contains:
-        - category: "Hardware"
-```
-
-### Trend Analysis
-
-```yaml
-# tools/trend_analysis.yml
-mxcp: 1
-tool:
-  name: trend_analysis
-  description: Analyze sales trends over time
-  tags: ["trends", "analysis"]
-  annotations:
-    readOnlyHint: true
-
-  parameters:
-    - name: metric
-      type: string
-      enum: ["revenue", "orders", "units", "avg_order"]
-      default: "revenue"
-      description: Metric to analyze
-    - name: granularity
-      type: string
-      enum: ["daily", "weekly", "monthly"]
-      default: "daily"
-      description: Time granularity
-    - name: periods
-      type: integer
-      default: 30
-      description: Number of periods to analyze
-
-  return:
-    type: object
-    properties:
-      metric:
-        type: string
-      granularity:
-        type: string
-      trend_direction:
-        type: string
-        enum: ["up", "down", "stable"]
-      data_points:
-        type: array
-        items:
-          type: object
-          properties:
-            period:
-              type: string
-            value:
-              type: number
-
-  source:
-    file: ../sql/queries/trends.sql
-```
-
-```sql
--- sql/queries/trends.sql
-WITH date_series AS (
-  SELECT CASE $granularity
-    WHEN 'daily' THEN generate_series(
-      CURRENT_DATE - ($periods || ' days')::INTERVAL,
-      CURRENT_DATE,
-      '1 day'::INTERVAL
-    )::DATE
-    WHEN 'weekly' THEN generate_series(
-      CURRENT_DATE - ($periods * 7 || ' days')::INTERVAL,
-      CURRENT_DATE,
-      '7 days'::INTERVAL
-    )::DATE
-    WHEN 'monthly' THEN generate_series(
-      CURRENT_DATE - ($periods || ' months')::INTERVAL,
-      CURRENT_DATE,
-      '1 month'::INTERVAL
-    )::DATE
-  END as period_date
-),
-aggregated AS (
-  SELECT
-    CASE $granularity
-      WHEN 'daily' THEN sale_date
-      WHEN 'weekly' THEN date_trunc('week', sale_date)::DATE
-      WHEN 'monthly' THEN date_trunc('month', sale_date)::DATE
-    END as period_date,
-    CASE $metric
-      WHEN 'revenue' THEN SUM(total)
-      WHEN 'orders' THEN COUNT(*)
-      WHEN 'units' THEN SUM(quantity)
-      WHEN 'avg_order' THEN AVG(total)
-    END as value
-  FROM sales
-  GROUP BY 1
-),
-data_points AS (
-  SELECT
-    strftime(ds.period_date, '%Y-%m-%d') as period,
-    COALESCE(a.value, 0) as value
-  FROM date_series ds
-  LEFT JOIN aggregated a ON ds.period_date = a.period_date
-  ORDER BY ds.period_date
-),
-trend AS (
-  SELECT
-    CASE
-      WHEN LAST(value) OVER () > FIRST(value) OVER () * 1.05 THEN 'up'
-      WHEN LAST(value) OVER () < FIRST(value) OVER () * 0.95 THEN 'down'
-      ELSE 'stable'
-    END as direction
-  FROM data_points
-  LIMIT 1
-)
-SELECT json_object(
-  'metric', $metric,
-  'granularity', $granularity,
-  'trend_direction', (SELECT direction FROM trend),
-  'data_points', (SELECT json_group_array(json_object(
-    'period', period,
-    'value', ROUND(value, 2)
-  )) FROM data_points)
-) as result
+      result_contains_item:
+        category: "Hardware"
+      result_length: 2
 ```
 
 ## Resources
 
-### Dashboard Resource
+### Dashboard
 
-```yaml
-# resources/dashboard.yml
+Real-time dashboard data. No parameters needed - always returns current state.
+
+```yaml title="resources/dashboard.yml"
 mxcp: 1
 resource:
   uri: analytics://dashboard
   name: Analytics Dashboard
-  description: Real-time analytics dashboard data
-  mimeType: application/json
+  description: Current sales metrics and recent activity
 
   return:
     type: object
     properties:
-      timestamp:
+      total_revenue:
+        type: number
+      total_orders:
+        type: integer
+      avg_order_value:
+        type: number
+      top_region:
         type: string
-      kpis:
-        type: object
-      recent_orders:
-        type: array
-      top_products:
-        type: array
 
   source:
     code: |
-      SELECT json_object(
-        'timestamp', strftime(NOW(), '%Y-%m-%d %H:%M:%S'),
-        'kpis', (
-          SELECT json_object(
-            'today_revenue', COALESCE(SUM(CASE WHEN sale_date = CURRENT_DATE THEN total END), 0),
-            'mtd_revenue', COALESCE(SUM(CASE WHEN sale_date >= date_trunc('month', CURRENT_DATE) THEN total END), 0),
-            'today_orders', COUNT(CASE WHEN sale_date = CURRENT_DATE THEN 1 END),
-            'mtd_orders', COUNT(CASE WHEN sale_date >= date_trunc('month', CURRENT_DATE) THEN 1 END)
-          )
-          FROM sales
-        ),
-        'recent_orders', (
-          SELECT json_group_array(json_object(
-            'id', s.id,
-            'product', p.name,
-            'total', s.total,
-            'region', s.region
-          ))
-          FROM (SELECT * FROM sales ORDER BY created_at DESC LIMIT 5) s
-          JOIN products p ON s.product_id = p.id
-        ),
-        'top_products', (
-          SELECT json_group_array(json_object(
-            'name', p.name,
-            'revenue', ROUND(SUM(s.total), 2)
-          ))
-          FROM products p
-          JOIN sales s ON p.id = s.product_id
-          GROUP BY p.id, p.name
-          ORDER BY SUM(s.total) DESC
-          LIMIT 5
-        )
-      ) as dashboard
+      SELECT
+        ROUND(SUM(total), 2) as total_revenue,
+        COUNT(*) as total_orders,
+        ROUND(AVG(total), 2) as avg_order_value,
+        (
+          SELECT region FROM sales
+          GROUP BY region
+          ORDER BY SUM(total) DESC
+          LIMIT 1
+        ) as top_region
+      FROM sales
+
+  tests:
+    - name: dashboard_loads
+      arguments: []
+      result_contains:
+        total_orders: 7
 ```
 
-### KPI Resource
+### KPIs by Period
 
-```yaml
-# resources/kpis.yml
+Parameterized resource - access KPIs via URI pattern.
+
+```yaml title="resources/kpis.yml"
 mxcp: 1
 resource:
   uri: analytics://kpis/{period}
   name: KPI Metrics
-  description: Key performance indicators for a period
+  description: Key performance indicators for daily, weekly, or monthly periods
 
   parameters:
     - name: period
       type: string
       enum: ["daily", "weekly", "monthly"]
+      description: Time period for KPIs
 
   return:
     type: object
+    properties:
+      period:
+        type: string
+      revenue:
+        type: number
+      orders:
+        type: integer
 
   source:
     code: |
-      SELECT json_object(
-        'period', $period,
-        'revenue', ROUND(SUM(total), 2),
-        'orders', COUNT(*),
-        'units', SUM(quantity),
-        'avg_order', ROUND(AVG(total), 2)
-      ) as kpis
-      FROM sales
+      WITH latest AS (SELECT MAX(sale_date) as ref_date FROM sales)
+      SELECT
+        $period as period,
+        ROUND(SUM(total), 2) as revenue,
+        COUNT(*) as orders
+      FROM sales, latest
       WHERE sale_date >= CASE $period
-        WHEN 'daily' THEN CURRENT_DATE
-        WHEN 'weekly' THEN CURRENT_DATE - INTERVAL '7 days'
-        WHEN 'monthly' THEN CURRENT_DATE - INTERVAL '30 days'
+        WHEN 'daily' THEN ref_date
+        WHEN 'weekly' THEN ref_date - INTERVAL '7 days'
+        WHEN 'monthly' THEN ref_date - INTERVAL '30 days'
       END
+
+  tests:
+    - name: monthly_kpis
+      arguments:
+        - key: period
+          value: "monthly"
+      result_contains:
+        period: "monthly"
+        orders: 7
 ```
 
-## dbt Models
+### Daily Trends
 
-### Staging Model
+Time-series data showing sales by day.
 
-```sql
--- models/staging/stg_sales.sql
-{{ config(materialized='view') }}
+```yaml title="tools/daily_trends.yml"
+mxcp: 1
+tool:
+  name: daily_trends
+  description: Get daily sales trend for a date range
+  tags: ["trends", "time-series"]
+  annotations:
+    readOnlyHint: true
 
-SELECT
-    s.id as sale_id,
-    s.product_id,
-    p.name as product_name,
-    p.category,
-    s.quantity,
-    s.unit_price,
-    s.total,
-    s.region,
-    s.sale_date,
-    s.created_at
-FROM {{ source('raw', 'sales') }} s
-JOIN {{ source('raw', 'products') }} p ON s.product_id = p.id
+  parameters:
+    - name: start_date
+      type: string
+      format: date
+      description: Start date (YYYY-MM-DD)
+    - name: end_date
+      type: string
+      format: date
+      description: End date (YYYY-MM-DD)
+
+  return:
+    type: array
+    items:
+      type: object
+      properties:
+        date:
+          type: string
+        revenue:
+          type: number
+        orders:
+          type: integer
+
+  source:
+    code: |
+      SELECT
+        strftime(sale_date, '%Y-%m-%d') as date,
+        ROUND(SUM(total), 2) as revenue,
+        COUNT(*) as orders
+      FROM sales
+      WHERE sale_date >= $start_date::DATE
+        AND sale_date <= $end_date::DATE
+      GROUP BY sale_date
+      ORDER BY sale_date
+
+  tests:
+    - name: january_trend
+      arguments:
+        - key: start_date
+          value: "2024-01-15"
+        - key: end_date
+          value: "2024-01-21"
+      result_length: 7
 ```
 
-### Mart Model
+For more advanced time-series patterns (date generation, gap filling), see [DuckDB documentation](https://duckdb.org/docs/sql/functions/timestamp).
 
-```sql
--- models/marts/sales_metrics.sql
-{{ config(materialized='table') }}
+## Prompt
 
-SELECT
-    DATE_TRUNC('day', sale_date) as date,
-    category,
-    region,
-    COUNT(*) as order_count,
-    SUM(quantity) as units_sold,
-    ROUND(SUM(total), 2) as revenue,
-    ROUND(AVG(total), 2) as avg_order_value
-FROM {{ ref('stg_sales') }}
-GROUP BY 1, 2, 3
+Guide the AI to use analytics tools effectively.
+
+```yaml title="prompts/analyst.yml"
+mxcp: 1
+prompt:
+  name: analyst
+  description: Sales analytics assistant
+
+  parameters:
+    - name: question
+      type: string
+      description: The analytics question to answer
+
+  messages:
+    - role: user
+      type: text
+      prompt: |
+        You are a sales analytics assistant. Answer the user's question using the available tools.
+
+        **Available tools:**
+        - `sales_report`: Generate reports for date ranges, grouped by day/region/category
+        - `product_performance`: See which products sell best
+        - `daily_trends`: Get time-series data for trend analysis
+        - `analytics://dashboard`: Get current overall metrics
+        - `analytics://kpis/{period}`: Get KPIs for daily/weekly/monthly
+
+        **Approach:**
+        1. Start with the dashboard for context
+        2. Use specific tools to drill down
+        3. Summarize findings clearly
+
+        **User question:** {{question}}
 ```
 
 ## Running the Example
 
 ```bash
-# Initialize database
+# Setup
 mxcp query --file sql/setup.sql
-
-# Build dbt models (if using dbt)
-mxcp dbt run
-
-# Validate endpoints
 mxcp validate
-
-# Run tests
 mxcp test
 
-# Start server
-mxcp serve --transport stdio
-```
-
-## Example Queries
-
-```bash
-# Get sales report
+# Try the tools
 mxcp run tool sales_report \
   --param start_date=2024-01-01 \
   --param end_date=2024-01-31 \
   --param group_by=region
 
-# Get revenue metrics
-mxcp run tool revenue_metrics --param period=month
-
-# Analyze product performance
 mxcp run tool product_performance --param category=Hardware
 
-# Get trend analysis
-mxcp run tool trend_analysis \
-  --param metric=revenue \
-  --param granularity=daily \
-  --param periods=30
+mxcp run tool daily_trends \
+  --param start_date=2024-01-15 \
+  --param end_date=2024-01-21
+
+# Access resources
+mxcp run resource analytics://dashboard
+mxcp run resource "analytics://kpis/{period}" --param period=monthly
+
+# Start server
+mxcp serve
 ```
 
 ## Next Steps
 
-- [Customer Service Example](/examples/customer-service) - Support tools
+- [Customer Service Example](/examples/customer-service) - Policies and access control
 - [Data Management Example](/examples/data-management) - CRUD operations
-- [dbt Integration](/integrations/dbt) - Data transformation
+- [dbt Integration](/integrations/dbt) - Add data transformations to this project

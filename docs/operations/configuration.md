@@ -227,8 +227,7 @@ projects:
 
 **In Python endpoints**, access secrets via the runtime:
 
-```python
-# python/api_client.py
+```python title="python/api_client.py"
 from mxcp.runtime import config
 
 def call_external_api(query: str) -> dict:

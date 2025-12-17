@@ -107,8 +107,7 @@ profiles:
 
 Tools are defined in YAML files with parameters, return types, and SQL or Python source:
 
-```yaml
-# tools/search_users.yml
+```yaml title="tools/search_users.yml"
 mxcp: 1
 tool:
   name: search_users

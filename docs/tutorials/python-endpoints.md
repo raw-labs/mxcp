@@ -763,8 +763,7 @@ tool:
     file: ../python/calculations.py
 ```
 
-```python
-# python/calculations.py
+```python title="python/calculations.py"
 from mxcp.runtime import db
 
 def get_total() -> dict:

@@ -246,8 +246,7 @@ secrets:
 
 Use DuckDB features in MXCP endpoints:
 
-```yaml
-# tools/query_remote.yml
+```yaml title="tools/query_remote.yml"
 mxcp: 1
 tool:
   name: query_remote_data
@@ -273,8 +272,7 @@ tool:
 
 Join data from multiple sources:
 
-```yaml
-# tools/cross_source_report.yml
+```yaml title="tools/cross_source_report.yml"
 mxcp: 1
 tool:
   name: cross_source_report
@@ -358,8 +356,7 @@ JOIN table_b b ON a.id = b.a_id;
 
 Cache expensive remote queries:
 
-```yaml
-# tools/cached_query.yml
+```yaml title="tools/cached_query.yml"
 mxcp: 1
 tool:
   name: cached_analytics
@@ -376,8 +373,7 @@ tool:
 
 With dbt model:
 
-```sql
--- models/marts/cached_remote_data.sql
+```sql title="models/marts/cached_remote_data.sql"
 {{ config(materialized='table') }}
 
 SELECT *

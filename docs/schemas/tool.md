@@ -276,8 +276,7 @@ source:
 
 For Python tools, the function name in the Python file must match the tool name:
 
-```yaml
-# tools/calculate_tax.yml
+```yaml title="tools/calculate_tax.yml"
 tool:
   name: calculate_tax      # Function name must match
   language: python
@@ -285,8 +284,7 @@ tool:
     file: ../python/tax.py
 ```
 
-```python
-# python/tax.py
+```python title="python/tax.py"
 def calculate_tax(amount: float, rate: float) -> float:
     """Function name must match tool name."""
     return amount * rate

@@ -225,8 +225,7 @@ plugin:
     module: my_plugin   # Module in plugins/
 ```
 
-```python
-# plugins/my_plugin/__init__.py
+```python title="plugins/my_plugin/__init__.py"
 from mxcp.plugins import MXCPBasePlugin, udf
 
 class MXCPPlugin(MXCPBasePlugin):
@@ -391,8 +390,7 @@ tools/
 ```
 
 ### 3. Share Common Code
-```python
-# python/utils/validators.py
+```python title="python/utils/validators.py"
 def validate_email(email: str) -> bool:
     ...
 

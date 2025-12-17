@@ -328,8 +328,7 @@ mxcp serve --transport stdio
 
 Begin with a single tool to verify the connection:
 
-```yaml
-# tools/hello.yml
+```yaml title="tools/hello.yml"
 mxcp: 1
 tool:
   name: hello

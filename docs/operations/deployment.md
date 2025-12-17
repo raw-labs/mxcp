@@ -248,8 +248,7 @@ CMD ["mxcp", "serve", "--port", "8000"]
 
 MXCP binds to `localhost` by default. For Docker containers, you need to bind to all interfaces (`0.0.0.0`). Create a user config file:
 
-```yaml
-# config/config.yml
+```yaml title="config/config.yml"
 mxcp: 1
 
 transport:

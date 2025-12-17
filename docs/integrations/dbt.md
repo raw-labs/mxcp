@@ -154,8 +154,7 @@ my-project/
 
 Clean raw data:
 
-```sql
--- models/staging/stg_customers.sql
+```sql title="models/staging/stg_customers.sql"
 SELECT
     id as customer_id,
     TRIM(name) as customer_name,
@@ -169,8 +168,7 @@ WHERE email IS NOT NULL
 
 Apply business logic:
 
-```sql
--- models/intermediate/int_customer_orders.sql
+```sql title="models/intermediate/int_customer_orders.sql"
 SELECT
     c.customer_id,
     c.customer_name,
@@ -188,8 +186,7 @@ GROUP BY c.customer_id, c.customer_name, c.email
 
 Final models for MXCP endpoints:
 
-```sql
--- models/marts/customer_summary.sql
+```sql title="models/marts/customer_summary.sql"
 {{ config(materialized='table') }}
 
 SELECT
@@ -222,8 +219,7 @@ Control how models are stored:
 
 Creates a database view:
 
-```sql
--- models/marts/live_orders.sql
+```sql title="models/marts/live_orders.sql"
 {{ config(materialized='view') }}
 
 SELECT * FROM orders WHERE status = 'pending'
@@ -235,8 +231,7 @@ Use for: Real-time data, small datasets
 
 Creates a physical table:
 
-```sql
--- models/marts/customer_summary.sql
+```sql title="models/marts/customer_summary.sql"
 {{ config(materialized='table') }}
 
 SELECT * FROM {{ ref('int_customer_orders') }}
@@ -248,8 +243,7 @@ Use for: Frequently accessed data, complex calculations
 
 Updates only new rows:
 
-```sql
--- models/marts/order_history.sql
+```sql title="models/marts/order_history.sql"
 {{ config(materialized='incremental', unique_key='order_id') }}
 
 SELECT * FROM orders
@@ -267,8 +261,7 @@ Use for: Large datasets, append-only data
 
 DuckDB automatically creates zonemaps (min-max indexes) for all columns. For highly selective queries, you can create ART indexes using post-hooks:
 
-```sql
--- models/marts/customer_summary.sql
+```sql title="models/marts/customer_summary.sql"
 {{ config(
     materialized='table',
     post_hook="CREATE INDEX IF NOT EXISTS idx_customer_id ON {{ this }} (customer_id)"
@@ -283,8 +276,7 @@ SELECT * FROM {{ ref('int_customer_orders') }}
 
 Run SQL after model creation:
 
-```sql
--- models/marts/optimized_table.sql
+```sql title="models/marts/optimized_table.sql"
 {{ config(
     materialized='table',
     post_hook="PRAGMA optimize"
@@ -297,8 +289,7 @@ SELECT * FROM {{ ref('source_data') }}
 
 Enforce schema contracts for critical models:
 
-```yaml
-# models/schema.yml
+```yaml title="models/schema.yml"
 version: 2
 
 models:
@@ -339,8 +330,7 @@ mxcp dbt deps
 
 Use package tests:
 
-```yaml
-# models/schema.yml
+```yaml title="models/schema.yml"
 version: 2
 
 models:
@@ -361,8 +351,7 @@ models:
 
 dbt provides four built-in generic tests: `unique`, `not_null`, `accepted_values`, and `relationships`.
 
-```yaml
-# models/schema.yml
+```yaml title="models/schema.yml"
 version: 2
 
 models:
@@ -384,8 +373,7 @@ models:
 
 ### Custom Tests
 
-```sql
--- tests/assert_valid_emails.sql
+```sql title="tests/assert_valid_emails.sql"
 SELECT *
 FROM {{ ref('customer_summary') }}
 WHERE email NOT LIKE '%@%.%'
@@ -411,8 +399,7 @@ models:
 
 ### Model Documentation
 
-```yaml
-# models/schema.yml
+```yaml title="models/schema.yml"
 version: 2
 
 models:
@@ -447,8 +434,7 @@ mxcp dbt docs serve
 
 Reference dbt models in MXCP endpoints:
 
-```yaml
-# tools/get_customer.yml
+```yaml title="tools/get_customer.yml"
 mxcp: 1
 tool:
   name: get_customer
@@ -500,8 +486,7 @@ dbt supports Python models (dbt 1.3+) for complex transformations that are diffi
 
 ### Basic Python Model
 
-```python
-# models/marts/customer_segments.py
+```python title="models/marts/customer_segments.py"
 import pandas as pd
 
 def model(dbt, session):
@@ -531,8 +516,7 @@ def model(dbt, session):
 
 ### ML Preprocessing
 
-```python
-# models/marts/customer_features.py
+```python title="models/marts/customer_features.py"
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
@@ -553,8 +537,7 @@ def model(dbt, session):
 
 ### Text Processing
 
-```python
-# models/marts/product_embeddings.py
+```python title="models/marts/product_embeddings.py"
 import pandas as pd
 
 def model(dbt, session):
@@ -580,8 +563,7 @@ def model(dbt, session):
 
 Configure Python models in `schema.yml`:
 
-```yaml
-# models/schema.yml
+```yaml title="models/schema.yml"
 version: 2
 
 models:
@@ -633,8 +615,7 @@ flowchart LR
 
 Reference Python models in SQL:
 
-```sql
--- models/marts/customer_summary.sql
+```sql title="models/marts/customer_summary.sql"
 SELECT
     cs.*,
     seg.segment,
@@ -648,8 +629,7 @@ LEFT JOIN {{ ref('customer_segments') }} seg  -- Python model
 
 ### Materialize Frequently Used Data
 
-```sql
--- models/marts/search_index.sql
+```sql title="models/marts/search_index.sql"
 {{ config(materialized='table') }}
 
 SELECT
@@ -663,8 +643,7 @@ FROM {{ ref('customer_summary') }}
 
 ### Cache Remote Data
 
-```sql
--- models/staging/remote_data_cache.sql
+```sql title="models/staging/remote_data_cache.sql"
 {{ config(materialized='table') }}
 
 SELECT *
@@ -673,8 +652,7 @@ FROM read_parquet('https://example.com/data/*.parquet')
 
 ### Use Incremental Models
 
-```sql
--- models/marts/event_log.sql
+```sql title="models/marts/event_log.sql"
 {{ config(
     materialized='incremental',
     unique_key='event_id'

@@ -466,8 +466,7 @@ Fields:
 
 Create test data before running tests:
 
-```sql
--- sql/test_setup.sql
+```sql title="sql/test_setup.sql"
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
     name VARCHAR,
@@ -489,8 +488,7 @@ mxcp test
 
 For more complex setup, use a Python script with DuckDB directly:
 
-```python
-# scripts/setup_test_data.py
+```python title="scripts/setup_test_data.py"
 import duckdb
 
 def setup_test_data():

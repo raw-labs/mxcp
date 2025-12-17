@@ -48,8 +48,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ### How do I create a SQL tool?
 
-```yaml
-# tools/my-tool.yml
+```yaml title="tools/my-tool.yml"
 mxcp: 1
 tool:
   name: my_tool
@@ -68,8 +67,7 @@ tool:
 
 ### How do I create a Python tool?
 
-```yaml
-# tools/my-tool.yml
+```yaml title="tools/my-tool.yml"
 mxcp: 1
 tool:
   name: my_tool
@@ -85,8 +83,7 @@ tool:
     file: ../python/my_module.py
 ```
 
-```python
-# python/my_module.py
+```python title="python/my_module.py"
 from mxcp.runtime import db
 
 def my_tool(param_name: str) -> dict:
@@ -98,8 +95,7 @@ def my_tool(param_name: str) -> dict:
 
 ### How do I create a resource?
 
-```yaml
-# resources/user.yml
+```yaml title="resources/user.yml"
 mxcp: 1
 resource:
   uri: users://{id}

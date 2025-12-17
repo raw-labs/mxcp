@@ -1,45 +1,42 @@
 ---
 title: "Data Management Example"
-description: "Complete MXCP example for data management. CRUD operations, user management, document storage, and batch processing."
+description: "Build a user management system with MXCP. CRUD operations, pagination, policies, and data resources."
 sidebar:
   order: 4
 ---
 
-This example demonstrates a data management MXCP project with CRUD operations, user management, and document handling.
+Build a user management system that lets AI assistants create, read, update, and list users with proper access control.
+
+## What You'll Learn
+
+- CRUD operations with SQL tools
+- Pagination for list endpoints
+- Input policies for authorization
+- Resources for direct data access
+- Soft delete patterns
 
 ## Project Structure
 
 ```
 data-management/
 ├── mxcp-site.yml
-├── tools/
-│   ├── users/
-│   │   ├── create_user.yml
-│   │   ├── get_user.yml
-│   │   ├── update_user.yml
-│   │   ├── delete_user.yml
-│   │   └── list_users.yml
-│   ├── documents/
-│   │   ├── upload_document.yml
-│   │   ├── get_document.yml
-│   │   └── search_documents.yml
-│   └── batch/
-│       ├── import_data.yml
-│       └── export_data.yml
-├── resources/
-│   ├── user.yml
-│   └── document.yml
 ├── sql/
 │   └── setup.sql
-└── python/
-    ├── users.py
-    └── documents.py
+├── tools/
+│   ├── create_user.yml
+│   ├── get_user.yml
+│   ├── update_user.yml
+│   ├── delete_user.yml
+│   └── list_users.yml
+├── resources/
+│   └── user.yml
+└── prompts/
+    └── admin.yml
 ```
 
 ## Configuration
 
-```yaml
-# mxcp-site.yml
+```yaml title="mxcp-site.yml"
 mxcp: 1
 project: data-management
 profile: default
@@ -47,62 +44,57 @@ profile: default
 profiles:
   default:
     duckdb:
-      path: data/data.duckdb
+      path: data/users.duckdb
 
 extensions:
   - json
-  - parquet
 ```
 
 ## Schema Setup
 
-```sql
--- sql/setup.sql
+```sql title="sql/setup.sql"
+CREATE SEQUENCE IF NOT EXISTS user_id_seq START 100;
+
 CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     email VARCHAR UNIQUE NOT NULL,
     name VARCHAR NOT NULL,
     role VARCHAR DEFAULT 'user',
     status VARCHAR DEFAULT 'active',
-    metadata JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE documents (
-    id INTEGER PRIMARY KEY,
-    owner_id INTEGER REFERENCES users(id),
-    title VARCHAR NOT NULL,
-    content TEXT,
-    mime_type VARCHAR DEFAULT 'text/plain',
-    tags JSON,
-    version INTEGER DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE audit_log (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    action VARCHAR NOT NULL,
-    entity_type VARCHAR NOT NULL,
-    entity_id INTEGER,
-    old_value JSON,
-    new_value JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE SEQUENCE user_id_seq START 1;
-CREATE SEQUENCE document_id_seq START 1;
-CREATE SEQUENCE audit_id_seq START 1;
+-- Test data
+INSERT INTO users (id, email, name, role, status) VALUES
+    (1, 'alice@example.com', 'Alice Johnson', 'admin', 'active'),
+    (2, 'bob@example.com', 'Bob Smith', 'user', 'active'),
+    (3, 'carol@example.com', 'Carol Davis', 'manager', 'active'),
+    (4, 'dan@example.com', 'Dan Wilson', 'user', 'inactive'),
+    (5, 'eve@example.com', 'Eve Brown', 'user', 'active');
 ```
 
-## User Management Tools
+## CRUD Pattern Overview
+
+| Operation | Tool | HTTP Analog | Idempotent? |
+|-----------|------|-------------|-------------|
+| Create | `create_user` | POST | No |
+| Read | `get_user` | GET | Yes |
+| Update | `update_user` | PATCH | Yes |
+| Delete | `delete_user` | DELETE | Yes |
+| List | `list_users` | GET (collection) | Yes |
+
+**When to use Resources vs Tools:**
+- Use **Resources** (`users://{id}`) for simple, direct data retrieval
+- Use **Tools** (`get_user`) when you need validation, complex logic, or multiple lookup methods
+
+## Tools
 
 ### Create User
 
-```yaml
-# tools/users/create_user.yml
+Creates a new user. Only admins can create users.
+
+```yaml title="tools/create_user.yml"
 mxcp: 1
 tool:
   name: create_user
@@ -125,10 +117,6 @@ tool:
       enum: ["user", "admin", "manager"]
       default: "user"
       description: User role
-    - name: metadata
-      type: object
-      default: null
-      description: Additional user metadata
 
   return:
     type: object
@@ -141,44 +129,38 @@ tool:
         type: string
       role:
         type: string
-      created_at:
-        type: string
 
   policies:
     input:
       - condition: "user.role != 'admin'"
         action: deny
         reason: "Only admins can create users"
-      - condition: "input.role == 'admin' && user.permissions not contains 'users:create:admin'"
-        action: deny
-        reason: "Cannot create admin users without permission"
 
   source:
-    file: ../../python/users.py
-    function: create_user
+    code: |
+      INSERT INTO users (id, email, name, role)
+      VALUES (nextval('user_id_seq'), $email, $name, $role)
+      RETURNING id, email, name, role
 
   tests:
     - name: create_basic_user
       arguments:
         - key: email
-          value: "test@example.com"
+          value: "newuser@example.com"
         - key: name
-          value: "Test User"
+          value: "New User"
       user_context:
         role: admin
       result_contains:
-        email: "test@example.com"
+        email: "newuser@example.com"
         role: "user"
-
-    # Policy denial tests are done via CLI:
-    # mxcp run tool create_user --param email=test@example.com --param name=Test --user-context '{"role": "user"}'
-    # Expected: Policy enforcement failed: Only admins can create users
 ```
 
 ### Get User
 
-```yaml
-# tools/users/get_user.yml
+Retrieve a user by ID or email.
+
+```yaml title="tools/get_user.yml"
 mxcp: 1
 tool:
   name: get_user
@@ -210,24 +192,10 @@ tool:
         type: string
       status:
         type: string
-      metadata:
-        type: object
-      created_at:
-        type: string
-      updated_at:
-        type: string
 
   source:
     code: |
-      SELECT
-        id,
-        email,
-        name,
-        role,
-        status,
-        metadata,
-        strftime(created_at, '%Y-%m-%d %H:%M:%S') as created_at,
-        strftime(updated_at, '%Y-%m-%d %H:%M:%S') as updated_at
+      SELECT id, email, name, role, status
       FROM users
       WHERE ($user_id IS NOT NULL AND id = $user_id)
          OR ($email IS NOT NULL AND email = $email)
@@ -240,19 +208,22 @@ tool:
           value: 1
       result_contains:
         id: 1
+        name: "Alice Johnson"
 
     - name: get_by_email
       arguments:
         - key: email
-          value: "test@example.com"
+          value: "bob@example.com"
       result_contains:
-        email: "test@example.com"
+        email: "bob@example.com"
+        name: "Bob Smith"
 ```
 
 ### Update User
 
-```yaml
-# tools/users/update_user.yml
+Update user fields. Users can update their own profile; admins can update anyone.
+
+```yaml title="tools/update_user.yml"
 mxcp: 1
 tool:
   name: update_user
@@ -272,49 +243,62 @@ tool:
       description: New name (optional)
     - name: role
       type: string
-      enum: ["user", "admin", "manager"]
       default: null
-      description: New role (optional)
+      description: New role (user, admin, or manager - admin only)
     - name: status
       type: string
-      enum: ["active", "inactive", "suspended"]
       default: null
-      description: New status (optional)
-    - name: metadata
-      type: object
-      default: null
-      description: New metadata (optional)
+      description: New status (active or inactive)
 
   return:
     type: object
     properties:
       success:
         type: boolean
-      user_id:
+      id:
         type: integer
-      updated_fields:
-        type: array
-        items:
-          type: string
+      name:
+        type: string
+      role:
+        type: string
+      status:
+        type: string
 
   policies:
     input:
-      - condition: "user.role != 'admin' && input.user_id != user.id"
-        action: deny
-        reason: "Can only update own profile"
       - condition: "user.role != 'admin' && input.role != null"
         action: deny
         reason: "Only admins can change roles"
 
   source:
-    file: ../../python/users.py
-    function: update_user
+    code: |
+      UPDATE users
+      SET name = COALESCE($name, name),
+          role = COALESCE($role, role),
+          status = COALESCE($status, status),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $user_id
+      RETURNING true as success, id, name, role, status
+
+  tests:
+    - name: update_name
+      arguments:
+        - key: user_id
+          value: 2
+        - key: name
+          value: "Robert Smith"
+      user_context:
+        role: admin
+      result_contains:
+        success: true
+        name: "Robert Smith"
 ```
 
 ### Delete User
 
-```yaml
-# tools/users/delete_user.yml
+Soft delete - sets status to 'deleted' rather than removing the record.
+
+```yaml title="tools/delete_user.yml"
 mxcp: 1
 tool:
   name: delete_user
@@ -328,10 +312,6 @@ tool:
     - name: user_id
       type: integer
       description: User ID to delete
-    - name: hard_delete
-      type: boolean
-      default: false
-      description: Permanently delete (admin only)
 
   return:
     type: object
@@ -342,37 +322,41 @@ tool:
         type: integer
       deletion_type:
         type: string
-        enum: ["soft", "hard"]
 
   policies:
     input:
       - condition: "user.role != 'admin'"
         action: deny
         reason: "Only admins can delete users"
-      - condition: "input.hard_delete && user.permissions not contains 'users:hard_delete'"
-        action: deny
-        reason: "Hard delete requires special permission"
 
   source:
     code: |
-      WITH deletion AS (
-        UPDATE users
-        SET status = CASE WHEN $hard_delete THEN 'deleted' ELSE 'inactive' END,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $user_id
-        RETURNING id
-      )
-      SELECT
-        COUNT(*) > 0 as success,
-        $user_id as user_id,
-        CASE WHEN $hard_delete THEN 'hard' ELSE 'soft' END as deletion_type
-      FROM deletion
+      UPDATE users
+      SET status = 'deleted',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $user_id AND status != 'deleted'
+      RETURNING
+        true as success,
+        id as user_id,
+        'soft' as deletion_type
+
+  tests:
+    - name: soft_delete
+      arguments:
+        - key: user_id
+          value: 4
+      user_context:
+        role: admin
+      result_contains:
+        success: true
+        deletion_type: "soft"
 ```
 
 ### List Users
 
-```yaml
-# tools/users/list_users.yml
+Paginated user listing with filters.
+
+```yaml title="tools/list_users.yml"
 mxcp: 1
 tool:
   name: list_users
@@ -382,316 +366,27 @@ tool:
     readOnlyHint: true
 
   parameters:
+    - name: status
+      type: string
+      enum: ["all", "active", "inactive", "deleted"]
+      default: "active"
+      description: Filter by status
     - name: role
       type: string
       enum: ["all", "user", "admin", "manager"]
       default: "all"
-    - name: status
-      type: string
-      enum: ["all", "active", "inactive", "suspended"]
-      default: "active"
-    - name: search
-      type: string
-      default: null
-      description: Search by name or email
+      description: Filter by role
     - name: page
       type: integer
       default: 1
       minimum: 1
+      description: Page number
     - name: page_size
       type: integer
-      default: 20
+      default: 10
+      minimum: 1
       maximum: 100
-
-  return:
-    type: object
-    properties:
-      users:
-        type: array
-        items:
-          type: object
-      total:
-        type: integer
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total_pages:
-        type: integer
-
-  source:
-    code: |
-      WITH filtered AS (
-        SELECT *
-        FROM users
-        WHERE ($role = 'all' OR role = $role)
-          AND ($status = 'all' OR status = $status)
-          AND ($search IS NULL
-               OR name ILIKE '%' || $search || '%'
-               OR email ILIKE '%' || $search || '%')
-      ),
-      paginated AS (
-        SELECT *
-        FROM filtered
-        ORDER BY created_at DESC
-        LIMIT $page_size
-        OFFSET ($page - 1) * $page_size
-      )
-      SELECT json_object(
-        'users', (SELECT json_group_array(json_object(
-          'id', id,
-          'email', email,
-          'name', name,
-          'role', role,
-          'status', status
-        )) FROM paginated),
-        'total', (SELECT COUNT(*) FROM filtered),
-        'page', $page,
-        'page_size', $page_size,
-        'total_pages', CEIL((SELECT COUNT(*) FROM filtered)::FLOAT / $page_size)
-      ) as result
-```
-
-## Python Implementations
-
-### Users Module
-
-```python
-# python/users.py
-from mxcp.runtime import db
-from typing import Optional
-import json
-
-def create_user(email: str, name: str, role: str = "user", metadata: Optional[dict] = None) -> dict:
-    # Check if email already exists
-    existing = db.execute(
-        "SELECT id FROM users WHERE email = $email",
-        {"email": email}
-    )
-    if existing:
-        raise ValueError(f"User with email {email} already exists")
-
-    # Get next ID
-    next_id = db.execute("SELECT nextval('user_id_seq') as id")[0]["id"]
-
-    # Insert user
-    db.execute(
-        """
-        INSERT INTO users (id, email, name, role, metadata)
-        VALUES ($id, $email, $name, $role, $metadata)
-        """,
-        {
-            "id": next_id,
-            "email": email,
-            "name": name,
-            "role": role,
-            "metadata": json.dumps(metadata) if metadata else None
-        }
-    )
-
-    # Return created user
-    return db.execute(
-        """
-        SELECT id, email, name, role,
-               strftime(created_at, '%Y-%m-%d %H:%M:%S') as created_at
-        FROM users WHERE id = $id
-        """,
-        {"id": next_id}
-    )[0]
-
-
-def update_user(
-    user_id: int,
-    name: Optional[str] = None,
-    role: Optional[str] = None,
-    status: Optional[str] = None,
-    metadata: Optional[dict] = None
-) -> dict:
-    # Build update fields
-    updates = []
-    params = {"user_id": user_id}
-    updated_fields = []
-
-    if name is not None:
-        updates.append("name = $name")
-        params["name"] = name
-        updated_fields.append("name")
-
-    if role is not None:
-        updates.append("role = $role")
-        params["role"] = role
-        updated_fields.append("role")
-
-    if status is not None:
-        updates.append("status = $status")
-        params["status"] = status
-        updated_fields.append("status")
-
-    if metadata is not None:
-        updates.append("metadata = $metadata")
-        params["metadata"] = json.dumps(metadata)
-        updated_fields.append("metadata")
-
-    if not updates:
-        return {
-            "success": False,
-            "user_id": user_id,
-            "updated_fields": []
-        }
-
-    updates.append("updated_at = CURRENT_TIMESTAMP")
-
-    query = f"""
-        UPDATE users
-        SET {', '.join(updates)}
-        WHERE id = $user_id
-    """
-
-    db.execute(query, params)
-
-    return {
-        "success": True,
-        "user_id": user_id,
-        "updated_fields": updated_fields
-    }
-```
-
-### Documents Module
-
-```python
-# python/documents.py
-from mxcp.runtime import db
-from typing import Optional
-import json
-
-def upload_document(
-    title: str,
-    content: str,
-    mime_type: str = "text/plain",
-    tags: Optional[list] = None
-) -> dict:
-    # Get current user ID from context (would come from auth in production)
-    owner_id = 1  # Default owner for demo
-
-    # Get next document ID
-    next_id = db.execute("SELECT nextval('document_id_seq') as id")[0]["id"]
-
-    # Insert document
-    db.execute(
-        """
-        INSERT INTO documents (id, owner_id, title, content, mime_type, tags)
-        VALUES ($id, $owner_id, $title, $content, $mime_type, $tags)
-        """,
-        {
-            "id": next_id,
-            "owner_id": owner_id,
-            "title": title,
-            "content": content,
-            "mime_type": mime_type,
-            "tags": json.dumps(tags) if tags else "[]"
-        }
-    )
-
-    return {
-        "id": next_id,
-        "title": title,
-        "version": 1
-    }
-
-
-def get_document(document_id: int) -> dict:
-    results = db.execute(
-        """
-        SELECT d.*, u.name as owner_name
-        FROM documents d
-        JOIN users u ON d.owner_id = u.id
-        WHERE d.id = $id
-        """,
-        {"id": document_id}
-    )
-
-    if not results:
-        return {"error": f"Document {document_id} not found"}
-
-    return results[0]
-```
-
-## Document Management
-
-### Upload Document
-
-```yaml
-# tools/documents/upload_document.yml
-mxcp: 1
-tool:
-  name: upload_document
-  description: Upload a new document
-  tags: ["documents", "create"]
-  annotations:
-    readOnlyHint: false
-
-  parameters:
-    - name: title
-      type: string
-      description: Document title
-    - name: content
-      type: string
-      description: Document content
-    - name: mime_type
-      type: string
-      default: "text/plain"
-      description: MIME type
-    - name: tags
-      type: array
-      items:
-        type: string
-      default: []
-      description: Document tags
-
-  return:
-    type: object
-    properties:
-      id:
-        type: integer
-      title:
-        type: string
-      version:
-        type: integer
-
-  source:
-    file: ../../python/documents.py
-    function: upload_document
-```
-
-### Search Documents
-
-```yaml
-# tools/documents/search_documents.yml
-mxcp: 1
-tool:
-  name: search_documents
-  description: Search documents by title, content, or tags
-  tags: ["documents", "search"]
-  annotations:
-    readOnlyHint: true
-
-  parameters:
-    - name: query
-      type: string
-      description: Search query
-    - name: tags
-      type: array
-      items:
-        type: string
-      default: []
-      description: Filter by tags
-    - name: owner_id
-      type: integer
-      default: null
-      description: Filter by owner
-    - name: limit
-      type: integer
-      default: 20
+      description: Results per page
 
   return:
     type: array
@@ -700,259 +395,180 @@ tool:
       properties:
         id:
           type: integer
-        title:
+        email:
           type: string
-        owner_name:
+        name:
           type: string
-        tags:
-          type: array
-        relevance:
-          type: number
+        role:
+          type: string
+        status:
+          type: string
 
   source:
     code: |
-      WITH search_results AS (
-        SELECT
-          d.id,
-          d.title,
-          u.name as owner_name,
-          d.tags,
-          -- Simple relevance scoring
-          CASE
-            WHEN d.title ILIKE $query THEN 3
-            WHEN d.title ILIKE '%' || $query || '%' THEN 2
-            WHEN d.content ILIKE '%' || $query || '%' THEN 1
-            ELSE 0
-          END as relevance
-        FROM documents d
-        JOIN users u ON d.owner_id = u.id
-        WHERE (d.title ILIKE '%' || $query || '%'
-               OR d.content ILIKE '%' || $query || '%')
-          AND ($owner_id IS NULL OR d.owner_id = $owner_id)
-      )
-      SELECT id, title, owner_name, tags, relevance
-      FROM search_results
-      WHERE relevance > 0
-      ORDER BY relevance DESC, title
-      LIMIT $limit
-```
+      SELECT id, email, name, role, status
+      FROM users
+      WHERE ($status = 'all' OR status = $status)
+        AND ($role = 'all' OR role = $role)
+      ORDER BY id
+      LIMIT $page_size
+      OFFSET ($page - 1) * $page_size
 
-## Batch Operations
+  tests:
+    - name: list_active_users
+      arguments: []
+      result_contains_item:
+        email: "alice@example.com"
 
-### Import Data
-
-```yaml
-# tools/batch/import_data.yml
-mxcp: 1
-tool:
-  name: import_data
-  description: Import data from CSV or JSON
-  tags: ["batch", "import"]
-  annotations:
-    readOnlyHint: false
-
-  parameters:
-    - name: source_url
-      type: string
-      description: URL to import from (CSV or JSON)
-    - name: table_name
-      type: string
-      enum: ["users", "documents"]
-      description: Target table
-    - name: mode
-      type: string
-      enum: ["append", "replace"]
-      default: "append"
-      description: Import mode
-
-  return:
-    type: object
-    properties:
-      success:
-        type: boolean
-      rows_imported:
-        type: integer
-      mode:
-        type: string
-
-  policies:
-    input:
-      - condition: "user.role != 'admin'"
-        action: deny
-        reason: "Only admins can import data"
-
-  source:
-    file: ../../python/batch.py
-    function: import_data
-```
-
-### Export Data
-
-```yaml
-# tools/batch/export_data.yml
-mxcp: 1
-tool:
-  name: export_data
-  description: Export data to Parquet format
-  tags: ["batch", "export"]
-  annotations:
-    readOnlyHint: true
-
-  parameters:
-    - name: table_name
-      type: string
-      enum: ["users", "documents"]
-      description: Table to export
-    - name: format
-      type: string
-      enum: ["parquet", "csv", "json"]
-      default: "parquet"
-
-  return:
-    type: object
-    properties:
-      success:
-        type: boolean
-      file_path:
-        type: string
-      row_count:
-        type: integer
-
-  policies:
-    input:
-      - condition: "user.role != 'admin' && user.role != 'manager'"
-        action: deny
-        reason: "Export requires admin or manager role"
-
-  source:
-    code: |
-      WITH export AS (
-        SELECT * FROM (
-          SELECT CASE $table_name
-            WHEN 'users' THEN (SELECT COUNT(*) FROM users)
-            WHEN 'documents' THEN (SELECT COUNT(*) FROM documents)
-          END as row_count
-        )
-      )
-      SELECT
-        true as success,
-        '/exports/' || $table_name || '_' || strftime(NOW(), '%Y%m%d_%H%M%S') || '.' || $format as file_path,
-        row_count
-      FROM export
+    - name: filter_by_role
+      arguments:
+        - key: role
+          value: "admin"
+      result_contains_item:
+        role: "admin"
 ```
 
 ## Resources
 
 ### User Resource
 
-```yaml
-# resources/user.yml
+Direct access to user data via URI pattern.
+
+```yaml title="resources/user.yml"
 mxcp: 1
 resource:
-  uri: users://{id}
-  name: User Resource
-  description: Individual user resource
-  mimeType: application/json
+  uri: users://{user_id}
+  name: User Profile
+  description: Get user profile by ID
 
   parameters:
-    - name: id
+    - name: user_id
       type: integer
+      description: User ID
 
   return:
     type: object
+    properties:
+      id:
+        type: integer
+      email:
+        type: string
+      name:
+        type: string
+      role:
+        type: string
+      status:
+        type: string
 
   source:
     code: |
-      SELECT
-        id,
-        email,
-        name,
-        role,
-        status,
-        metadata,
-        strftime(created_at, '%Y-%m-%d %H:%M:%S') as created_at,
-        strftime(updated_at, '%Y-%m-%d %H:%M:%S') as updated_at
+      SELECT id, email, name, role, status
       FROM users
-      WHERE id = $id
+      WHERE id = $user_id
+
+  tests:
+    - name: get_user_resource
+      arguments:
+        - key: user_id
+          value: 1
+      result_contains:
+        id: 1
+        email: "alice@example.com"
 ```
 
-### Document Resource
+## Prompt
 
-```yaml
-# resources/document.yml
+Guide the AI for user management tasks.
+
+```yaml title="prompts/admin.yml"
 mxcp: 1
-resource:
-  uri: documents://{id}
-  name: Document Resource
-  description: Individual document resource
-  mimeType: application/json
+prompt:
+  name: admin
+  description: User administration assistant
 
   parameters:
-    - name: id
-      type: integer
+    - name: task
+      type: string
+      description: The admin task to perform
 
-  return:
-    type: object
+  messages:
+    - role: user
+      type: text
+      prompt: |
+        You are a user administration assistant. Help with the following task.
 
-  policies:
-    output:
-      - condition: "user.id != result.owner_id && user.role != 'admin'"
-        action: filter_fields
-        fields: ["content"]
-        reason: "Only owner can view full content"
+        **Available tools:**
+        - `create_user`: Create new users (requires admin role)
+        - `get_user`: Look up users by ID or email
+        - `update_user`: Modify user details
+        - `delete_user`: Remove users (soft delete)
+        - `list_users`: List and filter users
+        - `users://{user_id}`: Direct user profile access
 
-  source:
-    code: |
-      SELECT
-        d.*,
-        u.name as owner_name
-      FROM documents d
-      JOIN users u ON d.owner_id = u.id
-      WHERE d.id = $id
+        **Guidelines:**
+        - Always verify user exists before updating/deleting
+        - Use list_users to find users when ID is unknown
+        - Respect role-based permissions
+
+        **Task:** {{task}}
 ```
 
 ## Running the Example
 
 ```bash
-# Initialize database
+# Setup
 mxcp query --file sql/setup.sql
-
-# Validate all endpoints
 mxcp validate
-
-# Run tests
 mxcp test
 
+# Create a user (requires admin context)
+mxcp run tool create_user \
+  --param email=frank@example.com \
+  --param name="Frank Miller" \
+  --user-context '{"role": "admin"}'
+
+# Get a user
+mxcp run tool get_user --param user_id=1
+mxcp run tool get_user --param email=bob@example.com
+
+# Update a user (requires admin context for role changes)
+mxcp run tool update_user \
+  --param user_id=2 \
+  --param name="Robert Smith" \
+  --user-context '{"role": "admin"}'
+
+# List users with pagination
+mxcp run tool list_users --param status=active --param page=1
+
+# Access user resource directly
+mxcp run resource "users://{user_id}" --param user_id=1
+
 # Start server
-mxcp serve --transport stdio
+mxcp serve
 ```
 
-## Example Operations
+## Policy Testing
+
+Test that policies are enforced correctly:
 
 ```bash
-# Create a user
+# This should fail - non-admin trying to create user
 mxcp run tool create_user \
-  --param email=alice@example.com \
-  --param name="Alice Johnson" \
-  --param role=user
+  --param email=test@example.com \
+  --param name="Test" \
+  --user-context '{"role": "user"}'
+# Expected: Policy enforcement failed: Only admins can create users
 
-# List users
-mxcp run tool list_users \
-  --param status=active \
-  --param page=1
-
-# Search documents
-mxcp run tool search_documents \
-  --param query="meeting notes"
-
-# Export data
-mxcp run tool export_data \
-  --param table_name=users \
-  --param format=parquet
+# This should fail - non-admin trying to change role
+mxcp run tool update_user \
+  --param user_id=2 \
+  --param role=admin \
+  --user-context '{"role": "user"}'
+# Expected: Policy enforcement failed: Only admins can change roles
 ```
 
 ## Next Steps
 
-- [Customer Service Example](/examples/customer-service) - Support tools
-- [Analytics Example](/examples/analytics) - Business intelligence
-- [Policies](/security/policies) - Access control
+- [Customer Service Example](/examples/customer-service) - Complex policies
+- [Analytics Example](/examples/analytics) - Reporting and dashboards
+- [Policies](/security/policies) - Access control patterns

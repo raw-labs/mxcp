@@ -48,8 +48,7 @@ projects:
 
 ### 3. Create Plugin Module
 
-```python
-# plugins/my_plugin/__init__.py
+```python title="plugins/my_plugin/__init__.py"
 from typing import Dict, Any
 from mxcp.plugins import MXCPBasePlugin, udf
 
