@@ -54,6 +54,24 @@ class StoredSession(Session):
     created_at: float
 
 
+class ClientRecord(SdkBaseModel):
+    """Persisted OAuth client record (configured or dynamically registered).
+
+    Note: this represents OAuth client metadata for issuer-mode only. It must not be
+    confused with MXCP permissions. The `scope` field is stored as client metadata
+    (useful for compatibility/inspection) but is not used to drive upstream IdP scopes.
+    """
+
+    client_id: str
+    client_secret: str | None = None
+    redirect_uris: list[str]
+    grant_types: list[str]
+    response_types: list[str]
+    scope: str | None = None
+    client_name: str | None = None
+    created_at: float
+
+
 class TokenStore(Protocol):
     """Abstract interface for token persistence.
 
@@ -91,6 +109,15 @@ class TokenStore(Protocol):
     async def delete_session_by_token(self, access_token: str) -> None: ...
 
     async def cleanup_expired(self) -> dict[str, int]: ...
+
+    # OAuth client registry (for Dynamic Client Registration)
+    async def store_client(self, record: ClientRecord) -> None: ...
+
+    async def load_client(self, client_id: str) -> ClientRecord | None: ...
+
+    async def list_clients(self) -> list[ClientRecord]: ...
+
+    async def delete_client(self, client_id: str) -> None: ...
 
 
 class SqliteTokenStore(TokenStore):
@@ -217,6 +244,37 @@ class SqliteTokenStore(TokenStore):
             self._executor, self._sync_delete_session_by_hash, hashed
         )
 
+    # ── OAuth clients ──────────────────────────────────────────────────────────
+    async def store_client(self, record: ClientRecord) -> None:
+        payload = {
+            "client_id": record.client_id,
+            "client_secret": self._encrypt(record.client_secret),
+            "redirect_uris": json.dumps(record.redirect_uris),
+            "grant_types": json.dumps(record.grant_types),
+            "response_types": json.dumps(record.response_types),
+            "scope": record.scope,
+            "client_name": record.client_name,
+            "created_at": record.created_at,
+        }
+        await asyncio.get_running_loop().run_in_executor(
+            self._executor, self._sync_store_client, payload
+        )
+
+    async def load_client(self, client_id: str) -> ClientRecord | None:
+        return await asyncio.get_running_loop().run_in_executor(
+            self._executor, self._sync_load_client, client_id
+        )
+
+    async def list_clients(self) -> list[ClientRecord]:
+        return await asyncio.get_running_loop().run_in_executor(
+            self._executor, self._sync_list_clients
+        )
+
+    async def delete_client(self, client_id: str) -> None:
+        await asyncio.get_running_loop().run_in_executor(
+            self._executor, self._sync_delete_client, client_id
+        )
+
     # ── Cleanup ────────────────────────────────────────────────────────────────
     async def cleanup_expired(self) -> dict[str, int]:
         return await asyncio.get_running_loop().run_in_executor(
@@ -297,6 +355,20 @@ class SqliteTokenStore(TokenStore):
             """
         )
         self._ensure_scopes_column()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS oauth_clients (
+                client_id TEXT PRIMARY KEY,
+                client_secret TEXT,
+                redirect_uris TEXT NOT NULL,
+                grant_types TEXT NOT NULL,
+                response_types TEXT NOT NULL,
+                scope TEXT,
+                client_name TEXT,
+                created_at REAL NOT NULL
+            )
+            """
+        )
         self._conn.commit()
 
     def _ensure_scopes_column(self) -> None:
@@ -516,6 +588,65 @@ class SqliteTokenStore(TokenStore):
             )
             self._conn.commit()
 
+    # ── OAuth client helpers ───────────────────────────────────────────────────
+    def _sync_store_client(self, payload: dict[str, Any]) -> None:
+        assert self._conn is not None
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT OR REPLACE INTO oauth_clients
+                (client_id, client_secret, redirect_uris, grant_types, response_types, scope, client_name, created_at)
+                VALUES (:client_id, :client_secret, :redirect_uris, :grant_types, :response_types, :scope, :client_name, :created_at)
+                """,
+                payload,
+            )
+            self._conn.commit()
+
+    def _sync_load_client(self, client_id: str) -> ClientRecord | None:
+        assert self._conn is not None
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM oauth_clients WHERE client_id = ? LIMIT 1", (client_id,)
+            ).fetchone()
+            if not row:
+                return None
+            return ClientRecord(
+                client_id=row["client_id"],
+                client_secret=self._decrypt(row["client_secret"]),
+                redirect_uris=json.loads(row["redirect_uris"]),
+                grant_types=json.loads(row["grant_types"]),
+                response_types=json.loads(row["response_types"]),
+                scope=row["scope"],
+                client_name=row["client_name"],
+                created_at=row["created_at"],
+            )
+
+    def _sync_list_clients(self) -> list[ClientRecord]:
+        assert self._conn is not None
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM oauth_clients").fetchall()
+            records: list[ClientRecord] = []
+            for row in rows:
+                records.append(
+                    ClientRecord(
+                        client_id=row["client_id"],
+                        client_secret=self._decrypt(row["client_secret"]),
+                        redirect_uris=json.loads(row["redirect_uris"]),
+                        grant_types=json.loads(row["grant_types"]),
+                        response_types=json.loads(row["response_types"]),
+                        scope=row["scope"],
+                        client_name=row["client_name"],
+                        created_at=row["created_at"],
+                    )
+                )
+            return records
+
+    def _sync_delete_client(self, client_id: str) -> None:
+        assert self._conn is not None
+        with self._lock:
+            self._conn.execute("DELETE FROM oauth_clients WHERE client_id = ?", (client_id,))
+            self._conn.commit()
+
     def _sync_cleanup_expired(self) -> dict[str, int]:
         assert self._conn is not None
         counts = {"states": 0, "auth_codes": 0, "sessions": 0}
@@ -648,6 +779,7 @@ class SqliteTokenStore(TokenStore):
 
 __all__ = [
     "AuthCodeRecord",
+    "ClientRecord",
     "SqliteTokenStore",
     "StateRecord",
     "StoredSession",
