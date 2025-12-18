@@ -1458,6 +1458,8 @@ The authentication system is designed to be extensible. Future OAuth providers c
 
 Legacy note: older `ExternalOAuthHandler` / `GeneralOAuthAuthorizationServer` implementations may exist in the codebase as reference, but issuer-mode is the supported integration path.
 
+Scope semantics note: MXCP treats OAuth provider scopes (what MXCP requests from Google/Keycloak/etc.) and MXCP permissions (what tools/policies require) as separate concepts. OAuth client-supplied `scope` values (from dynamic client registration or `/authorize` requests) are ignored for upstream provider authorization; MXCP derives internal permissions from IdP scopes/claims via mapping.
+
 ## See Also
 
 - **[SQL Reference](../reference/sql)** - Quick reference for authentication SQL functions

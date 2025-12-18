@@ -80,6 +80,12 @@ class GoogleProviderAdapter(ProviderAdapter):
         code_challenge_method: str | None = None,
         extra_params: Mapping[str, str] | None = None,
     ) -> str:
+        # `scopes` here are upstream *provider scopes* (Google OAuth scopes), not
+        # MXCP permissions. In issuer-mode we deliberately do not forward any OAuth
+        # client-requested scopes to the provider; this adapter is expected to be
+        # called with an empty list until the redesigned required/optional provider
+        # scope config + mapping layer is introduced. When empty, we fall back to
+        # the provider-configured default scopes.
         scope_str = " ".join(scopes) if scopes else self.scope
         params = [
             ("client_id", self.client_id),

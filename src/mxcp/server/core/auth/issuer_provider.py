@@ -49,6 +49,10 @@ class IssuerOAuthAuthorizationServer(
         self._clients: dict[str, OAuthClientInformationFull] = dict(clients or {})
         self._lock = asyncio.Lock()
         self._store_initialized = False
+        # Track which dynamically-registered clients we've already warned about.
+        # In issuer-mode, client-provided OAuth scopes (DCR metadata or /authorize params)
+        # must not influence upstream IdP scope requests.
+        self._warned_dcr_scopes: set[str] = set()
 
     async def initialize(self) -> None:
         """Initialize underlying storage for tokens/state."""
@@ -71,6 +75,14 @@ class IssuerOAuthAuthorizationServer(
         if client_info.client_id is None:
             raise AuthorizeError("invalid_request", "Client ID is required")
         async with self._lock:
+            # DCR may include a `scope` field. We accept it as client metadata but do
+            # not use it to request upstream provider scopes (those come from server
+            # configuration and will later be mapped to MXCP permissions).
+            if client_info.client_id not in self._warned_dcr_scopes and client_info.scope:
+                self._warned_dcr_scopes.add(client_info.client_id)
+                logger.warning(
+                    "Dynamic client registration included scopes; ignoring for provider authorization"
+                )
             self._clients[client_info.client_id] = client_info
 
     # ----- authorize -----
@@ -92,9 +104,14 @@ class IssuerOAuthAuthorizationServer(
         ):
             raise AuthorizeError("invalid_request", "Redirect URI not registered for client")
 
-        scopes: list[str] = params.scopes or (
-            client.scope.split() if client and client.scope else []
-        )
+        # IMPORTANT: We intentionally ignore OAuth client requested scopes (from the
+        # /authorize request). In MXCP issuer-mode, downstream provider scopes are
+        # derived from server/provider configuration (and later mapped into MXCP
+        # permissions). Client-supplied `scope` must not influence what we request
+        # from the upstream IdP.
+        if params.scopes:
+            logger.warning("OAuth authorize request included scopes; ignoring")
+        scopes: list[str] = []
 
         pkce_method = "S256" if params.code_challenge else None
         authorize_url, _ = await self.auth_service.authorize(
