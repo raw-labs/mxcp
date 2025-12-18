@@ -5,10 +5,11 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
+from starlette.exceptions import HTTPException
+
 from mxcp.sdk.auth.contracts import ProviderAdapter, ProviderError
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.telemetry import record_counter, traced_operation
-from starlette.exceptions import HTTPException
 
 from .context import reset_user_context, set_user_context
 from .models import UserContextModel
