@@ -131,6 +131,88 @@ DuckDB memory usage scales with query complexity. For large analytical queries, 
 
 ## Docker Deployment
 
+### Official MXCP Image
+
+The recommended approach for Docker deployments is to use the official MXCP base image from GitHub Container Registry:
+
+```
+ghcr.io/raw-labs/mxcp:latest
+```
+
+**What's included:**
+
+| Component | Details |
+|-----------|---------|
+| Base | Python 3.11 slim |
+| MXCP | Pre-installed with Vault and 1Password integrations |
+| User | Non-root `mxcp` user (UID 1000) |
+| Tools | curl for health checks |
+| Admin socket | Enabled by default at `/run/mxcp/mxcp.sock` |
+| Security | Vulnerability-scanned, minimal attack surface |
+
+**Available tags:**
+
+- `latest` - Latest stable release
+- `0.10.0`, `0.9.0`, etc. - Specific stable versions
+- `0.10.0-rc12`, etc. - Pre-release versions
+
+### Using the Official Image (Recommended)
+
+**Option 1: Mount your MXCP site (development)**
+
+```bash
+docker run -d \
+  --name mxcp \
+  -p 8000:8000 \
+  -v $(pwd)/my-mxcp-site:/mxcp-site:ro \
+  -v mxcp-data:/mxcp-site/data \
+  -v mxcp-audit:/mxcp-site/audit \
+  ghcr.io/raw-labs/mxcp:latest
+```
+
+**Option 2: Extend the image (production)**
+
+```dockerfile
+FROM ghcr.io/raw-labs/mxcp:latest
+
+# Copy your MXCP site
+COPY --chown=mxcp:mxcp . /mxcp-site/
+
+# Install additional Python dependencies (optional)
+COPY --chown=mxcp:mxcp requirements.txt /tmp/
+RUN /mxcp-site/.venv/bin/pip install -r /tmp/requirements.txt && \
+    rm /tmp/requirements.txt
+```
+
+Build and run:
+
+```bash
+docker build -t my-mxcp-app .
+docker run -p 8000:8000 my-mxcp-app
+```
+
+**Directory structure in the official image:**
+
+```
+/mxcp-site/              # Working directory (mount your site here)
+├── mxcp-site.yml        # MXCP site configuration
+├── mxcp-config.yml      # User configuration (optional)
+├── tools/               # Tool definitions
+├── resources/           # Resource definitions
+├── prompts/             # Prompt definitions
+├── python/              # Python endpoints
+├── sql/                 # SQL files
+├── data/                # DuckDB databases (writable)
+├── audit/               # Audit logs (writable)
+└── drift/               # Drift snapshots (writable)
+
+/run/mxcp/mxcp.sock      # Admin socket for health checks
+```
+
+### Building Your Own Image
+
+If you need a custom base image, you can build from scratch:
+
 ### Basic Dockerfile
 
 ```dockerfile
