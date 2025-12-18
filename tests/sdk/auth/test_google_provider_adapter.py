@@ -128,3 +128,10 @@ async def test_exchange_code_error(
             code_verifier=None,
             scopes=["openid"],
         )
+
+
+def test_callback_path_property_matches_config(
+    google_config: GoogleAuthConfigModel,
+) -> None:
+    adapter = GoogleProviderAdapter(google_config)
+    assert adapter.callback_path == google_config.callback_path

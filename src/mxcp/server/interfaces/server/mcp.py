@@ -463,9 +463,9 @@ class RAWMCP:
         """Initialize OAuth authentication using profile-specific auth config."""
         auth_config = self.active_profile.auth
         self.oauth_handler = None  # legacy path disabled for Phase 2
-        # The server-side provider adapter includes HTTP callback route details
-        # (e.g. callback_path/build_callback_url) beyond the SDK ProviderAdapter protocol,
-        # so we keep the attribute permissively typed.
+        # The server-side provider adapter exposes HTTP callback route details
+        # (callback_path) beyond the SDK ProviderAdapter protocol, so we keep the
+        # attribute permissively typed.
         self.provider_adapter = cast(
             Any,
             create_provider_adapter(
@@ -480,6 +480,10 @@ class RAWMCP:
             logger.info("OAuth authentication disabled")
             return
 
+        url_builder = create_url_builder(self.user_config)
+        callback_path = self.provider_adapter.callback_path
+        callback_url = url_builder.build_callback_url(callback_path, host=self.host, port=self.port)
+
         # Build token store and session manager for issuer-mode
         persistence = auth_config.persistence
         db_path = (
@@ -489,9 +493,6 @@ class RAWMCP:
         )
         token_store = SqliteTokenStore(db_path, allow_plaintext_tokens=True)
         self.session_manager = SessionManager(token_store)
-
-        # Build callback URL and client registry
-        callback_url = self.provider_adapter.build_callback_url()
         client_registry: dict[str, list[str]] = {
             client.client_id: list(client.redirect_uris or [])
             for client in auth_config.clients or []
@@ -511,8 +512,6 @@ class RAWMCP:
             clients=clients,
         )
 
-        # Use URL builder for OAuth endpoints
-        url_builder = create_url_builder(self.user_config)
         base_url = url_builder.get_base_url(host=self.host, port=self.port)
 
         auth_config_dict = translate_auth_config(auth_config)

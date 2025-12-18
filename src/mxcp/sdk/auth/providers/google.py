@@ -14,8 +14,7 @@ from pydantic import ConfigDict, ValidationError
 from mxcp.sdk.models import SdkBaseModel
 
 from ..contracts import GrantResult, ProviderAdapter, ProviderError, UserInfo
-from ..models import GoogleAuthConfigModel, HttpTransportConfigModel
-from ..url_utils import URLBuilder
+from ..models import GoogleAuthConfigModel
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +59,6 @@ class GoogleProviderAdapter(ProviderAdapter):
     def __init__(
         self,
         google_config: GoogleAuthConfigModel,
-        transport_config: HttpTransportConfigModel | None = None,
-        *,
-        host: str = "localhost",
-        port: int = 8000,
     ):
         self.client_id = google_config.client_id
         self.client_secret = google_config.client_secret
@@ -74,9 +69,6 @@ class GoogleProviderAdapter(ProviderAdapter):
             or "https://www.googleapis.com/auth/calendar.readonly openid profile email"
         )
         self._callback_path = google_config.callback_path
-        self.host = host
-        self.port = port
-        self.url_builder = URLBuilder(transport_config)
 
     def build_authorize_url(
         self,
@@ -282,12 +274,6 @@ class GoogleProviderAdapter(ProviderAdapter):
         raise ProviderError("invalid_token", f"Failed to revoke token: {resp.status_code}", 400)
 
     # ── helpers ──────────────────────────────────────────────────────────────
-    def build_callback_url(self) -> str:
-        """Public helper to build callback URL for router registration."""
-        return self.url_builder.build_callback_url(
-            self._callback_path, host=self.host, port=self.port
-        )
-
     @property
     def callback_path(self) -> str:
         return self._callback_path

@@ -174,12 +174,6 @@ def create_provider_adapter(
     if provider == "none":
         return None
 
-    transport_config = None
-    if user_config:
-        transport_config = translate_transport_config(
-            user_config.transport.http if user_config.transport else None
-        )
-
     if provider == "google":
         google_config = user_auth_config.google
         if not google_config:
@@ -187,6 +181,6 @@ def create_provider_adapter(
         google_model = GoogleAuthConfigModel.model_validate(
             google_config.model_dump(exclude_none=True)
         )
-        return GoogleProviderAdapter(google_model, transport_config, host=host, port=port)
+        return GoogleProviderAdapter(google_model)
 
     raise ValueError(f"Unsupported provider for adapter: {provider}")
