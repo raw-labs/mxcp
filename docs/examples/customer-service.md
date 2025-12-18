@@ -5,7 +5,46 @@ sidebar:
   order: 2
 ---
 
-This example demonstrates a complete customer service MXCP project with customer lookup, order management, and policy-protected sensitive data.
+Build an AI-powered customer service system that enables support agents to look up customers, track orders, and manage support tickets—all through natural language with AI assistants.
+
+## The Problem
+
+Customer service teams juggle multiple systems: CRMs for customer data, order management platforms, ticketing systems, and refund workflows. Each context switch slows resolution times and increases error rates. Support agents need quick, unified access to customer information while respecting data privacy policies.
+
+## The Solution
+
+This MXCP project creates a unified interface that AI assistants can use to:
+
+- **Search and retrieve customer profiles** with automatic PII protection based on user role
+- **Track orders** with filtering by status
+- **Create and manage support tickets** linked to customers and orders
+- **Process refunds** with admin-only authorization
+
+The key features demonstrated:
+
+| Feature | What It Shows |
+|---------|---------------|
+| Policy-protected fields | Phone numbers hidden from non-support roles |
+| Input validation policies | Only admins can process refunds |
+| SQL + Python hybrid | Complex refund logic in Python, queries in SQL |
+| Prompt templates | Consistent support response generation |
+| Safety evaluations | Automated testing of AI behavior boundaries |
+
+## What You'll Learn
+
+- Creating search tools with relevance-ranked results
+- Implementing role-based output filtering
+- Building write operations with input policies
+- Mixing SQL and Python endpoints
+- Testing policy enforcement
+- Writing safety evaluations for AI behavior
+
+## Prerequisites
+
+- Python 3.10+
+- MXCP installed (`pip install mxcp`)
+- Basic understanding of SQL
+- Completed the [Quickstart guide](/quickstart/) (recommended)
 
 ## Project Structure
 

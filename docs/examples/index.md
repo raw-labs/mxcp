@@ -5,7 +5,36 @@ sidebar:
   order: 1
 ---
 
-Learn MXCP through complete, working examples that demonstrate real-world patterns and best practices.
+Learn MXCP through complete, working examples that demonstrate real-world patterns and best practices. Each example is a fully functional project you can run locally or use as a starting point for your own applications.
+
+## Getting Started with Examples
+
+Each example follows the same structure and can be run with these commands:
+
+```bash
+# Clone or create the project structure
+# Initialize the database
+mxcp query --file sql/setup.sql
+
+# Validate configuration
+mxcp validate
+
+# Run tests
+mxcp test
+
+# Start the server
+mxcp serve
+```
+
+### Prerequisites
+
+Before running any example, ensure you have:
+
+- Python 3.10+ installed
+- MXCP installed (`pip install mxcp`)
+- An AI client that supports MCP (Claude Code, Claude Desktop, or any MCP-compatible application)
+
+New to MXCP? Start with the [Quickstart guide](/quickstart/) to get up and running in minutes.
 
 ## Example Projects
 

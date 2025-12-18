@@ -5,15 +5,47 @@ sidebar:
   order: 4
 ---
 
-Build a user management system that lets AI assistants create, read, update, and list users with proper access control.
+Build a user management system that lets AI assistants create, read, update, and delete users through natural language—with proper authorization controls at every step.
+
+## The Problem
+
+Managing user data through traditional admin interfaces is time-consuming. Administrators often need to perform bulk operations, look up users by various criteria, or make changes across multiple accounts. Manual processes are error-prone, and building custom admin tools takes developer time away from core product work.
+
+## The Solution
+
+This MXCP project provides a complete user management API that AI assistants can use:
+
+- **Full CRUD operations**: Create, read, update, and delete users via natural language
+- **Flexible lookups**: Find users by ID or email
+- **Paginated listing**: Browse users with filters for status and role
+- **Role-based authorization**: Only admins can create users or change roles
+- **Soft delete pattern**: Users are marked as deleted, not removed from the database
+
+Key architectural decisions:
+
+| Capability | Implementation | Why |
+|------------|----------------|-----|
+| User creation | Tool with input policy | Admins only, with role validation |
+| User lookup | Tool with multiple parameters | Flexible ID or email lookup |
+| Direct access | Resource with URI template | Simple `users://{id}` pattern |
+| Role changes | Policy-protected update | Prevent unauthorized privilege escalation |
+| Deletion | Soft delete via status field | Maintain audit trail and enable recovery |
 
 ## What You'll Learn
 
-- CRUD operations with SQL tools
-- Pagination for list endpoints
-- Input policies for authorization
-- Resources for direct data access
-- Soft delete patterns
+- Implementing CRUD operations with SQL tools
+- Building paginated list endpoints with filters
+- Using input policies for authorization
+- Creating resources for direct URI-based access
+- Implementing soft delete patterns
+- Testing policy enforcement
+
+## Prerequisites
+
+- Python 3.10+
+- MXCP installed (`pip install mxcp`)
+- Basic understanding of SQL and CRUD patterns
+- Completed the [Quickstart guide](/quickstart/) (recommended)
 
 ## Project Structure
 

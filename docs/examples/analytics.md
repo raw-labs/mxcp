@@ -5,14 +5,45 @@ sidebar:
   order: 3
 ---
 
-Build a sales analytics system that lets AI assistants generate reports, analyze products, and access real-time dashboards.
+Build a sales analytics system that lets AI assistants generate reports, analyze product performance, and access real-time dashboards through natural language queries.
+
+## The Problem
+
+Business analysts spend significant time writing repetitive SQL queries, building one-off reports, and explaining data to stakeholders. Meanwhile, executives want instant answers to questions like "How did sales perform last quarter?" or "Which products are underperforming?" Traditional BI tools require training and don't integrate well with AI assistants.
+
+## The Solution
+
+This MXCP project creates an analytics layer that AI assistants can query naturally:
+
+- **Flexible sales reports** with customizable grouping (by day, region, or category)
+- **Product performance analysis** with optional filtering
+- **Real-time dashboards** as resources for instant access
+- **KPI tracking** with period-based URI patterns
+- **Trend analysis** for time-series data
+
+The key design patterns:
+
+| Pattern | Implementation | Use Case |
+|---------|----------------|----------|
+| Parameterized reports | Tools with enum parameters | "Show sales by region for Q1" |
+| Static dashboards | Resources without parameters | "What's our current performance?" |
+| URI-templated resources | `analytics://kpis/{period}` | "Show weekly KPIs" |
+| Time-series analysis | Date range tools | "How are sales trending this month?" |
 
 ## What You'll Learn
 
-- Creating parameterized report tools
-- Building dashboard resources
-- When to use tools vs resources for analytics
-- AI-assisted data analysis with prompts
+- Creating parameterized report tools with flexible grouping
+- Building dashboard resources for real-time metrics
+- Deciding when to use tools vs resources for analytics
+- Implementing URI-templated resources for pattern-based access
+- AI-assisted data analysis with analyst prompts
+
+## Prerequisites
+
+- Python 3.10+
+- MXCP installed (`pip install mxcp`)
+- Basic understanding of SQL aggregations
+- Completed the [Quickstart guide](/quickstart/) (recommended)
 
 ## Project Structure
 
