@@ -24,7 +24,7 @@ from pydantic import AnyUrl, ValidationError
 
 from mxcp.sdk.auth.auth_service import AuthService
 from mxcp.sdk.auth.session_manager import SessionManager
-from mxcp.sdk.auth.storage import StoredSession
+from mxcp.sdk.auth.storage import ClientRecord, StoredSession
 
 OAuthTokenType = Any
 OAuthToken: Any = provider_module.OAuthToken  # type: ignore[attr-defined]
@@ -46,7 +46,9 @@ class IssuerOAuthAuthorizationServer(
     ) -> None:
         self.auth_service = auth_service
         self.session_manager = session_manager
-        self._clients: dict[str, OAuthClientInformationFull] = dict(clients or {})
+        # Bootstrap clients (e.g. pre-configured clients from config). These will be
+        # persisted to the TokenStore on first initialization and then cleared.
+        self._bootstrap_clients: dict[str, OAuthClientInformationFull] = dict(clients or {})
         self._lock = asyncio.Lock()
         self._store_initialized = False
         # Track which dynamically-registered clients we've already warned about.
@@ -66,12 +68,52 @@ class IssuerOAuthAuthorizationServer(
             await self.session_manager.token_store.close()
         finally:
             self._store_initialized = False
+            self._bootstrap_clients = {}
+
+    def _oauth_client_to_client_record(
+        self, client_info: OAuthClientInformationFull
+    ) -> ClientRecord:
+        if not client_info.client_id:
+            raise ValueError("client_id is required")
+        redirect_uris = [str(u) for u in (client_info.redirect_uris or [])]
+        return ClientRecord(
+            client_id=client_info.client_id,
+            client_secret=client_info.client_secret,
+            redirect_uris=redirect_uris,
+            grant_types=list(client_info.grant_types or []),
+            response_types=list(client_info.response_types or []),
+            scope=client_info.scope,
+            client_name=client_info.client_name,
+            created_at=time.time(),
+        )
+
+    def _client_record_to_oauth_client(
+        self, record: ClientRecord
+    ) -> OAuthClientInformationFull | None:
+        try:
+            redirect_uris = [AnyUrl(uri) for uri in (record.redirect_uris or [])]
+        except ValidationError:
+            return None
+        return OAuthClientInformationFull(
+            client_id=record.client_id,
+            client_secret=record.client_secret,
+            redirect_uris=redirect_uris,
+            grant_types=record.grant_types,
+            response_types=record.response_types,
+            scope=record.scope,
+            client_name=record.client_name,
+        )
 
     # ----- client registration -----
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
-        return self._clients.get(client_id)
+        await self._ensure_store_initialized()
+        record = await self.session_manager.token_store.load_client(client_id)
+        if not record:
+            return None
+        return self._client_record_to_oauth_client(record)
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
+        await self._ensure_store_initialized()
         if client_info.client_id is None:
             raise AuthorizeError("invalid_request", "Client ID is required")
         async with self._lock:
@@ -83,7 +125,9 @@ class IssuerOAuthAuthorizationServer(
                 logger.warning(
                     "Dynamic client registration included scopes; ignoring for provider authorization"
                 )
-            self._clients[client_info.client_id] = client_info
+            await self.session_manager.token_store.store_client(
+                self._oauth_client_to_client_record(client_info)
+            )
 
     # ----- authorize -----
     async def authorize(
@@ -317,4 +361,14 @@ class IssuerOAuthAuthorizationServer(
             if self._store_initialized:
                 return
             await self.session_manager.token_store.initialize()
+            # Persist any pre-configured clients passed at construction time. This makes
+            # configured clients available via TokenStore lookups and ensures DCR clients
+            # survive process restarts.
+            if self._bootstrap_clients:
+                for client in self._bootstrap_clients.values():
+                    if client.client_id:
+                        await self.session_manager.token_store.store_client(
+                            self._oauth_client_to_client_record(client)
+                        )
+                self._bootstrap_clients = {}
             self._store_initialized = True

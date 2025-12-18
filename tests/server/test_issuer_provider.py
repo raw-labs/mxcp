@@ -120,3 +120,99 @@ async def test_authorize_ignores_client_requested_scopes(tmp_path: Path) -> None
     # not see client-provided scopes (nor the client-registered scope) forwarded.
     assert "evil.scope" not in authorize_url
     assert "dummy.read" not in authorize_url
+
+
+@pytest.mark.asyncio
+async def test_dcr_client_persists_across_restart(tmp_path: Path) -> None:
+    """DCR-registered clients must survive process restarts (TokenStore-backed)."""
+    db_path = tmp_path / "oauth.db"
+
+    # First "process": register a DCR client and persist it.
+    adapter1 = DummyProviderAdapter()
+    token_store1 = SqliteTokenStore(db_path, allow_plaintext_tokens=True)
+    session_manager1 = SessionManager(token_store1)
+    auth_service1 = AuthService(
+        provider_adapter=adapter1,
+        session_manager=session_manager1,
+        callback_url="https://server/callback",
+    )
+    server1 = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service1,
+        session_manager=session_manager1,
+    )
+
+    dcr_client = OAuthClientInformationFull(
+        client_id="dcr-client-1",
+        client_secret="secret",
+        redirect_uris=[AnyUrl("https://client/app")],
+        grant_types=["authorization_code"],
+        response_types=["code"],
+        scope="client-metadata-scope",
+        client_name="DCR Client",
+    )
+    await server1.register_client(dcr_client)
+    await token_store1.close()
+
+    # Second "process": new TokenStore + SessionManager, should be able to load client.
+    adapter2 = DummyProviderAdapter()
+    token_store2 = SqliteTokenStore(db_path, allow_plaintext_tokens=True)
+    session_manager2 = SessionManager(token_store2)
+    auth_service2 = AuthService(
+        provider_adapter=adapter2,
+        session_manager=session_manager2,
+        callback_url="https://server/callback",
+    )
+    server2 = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service2,
+        session_manager=session_manager2,
+    )
+
+    loaded = await server2.get_client("dcr-client-1")
+    assert loaded is not None
+    assert loaded.client_id == "dcr-client-1"
+    assert loaded.client_secret == "secret"
+
+    # Verify the loaded client can complete authorize().
+    params = AuthorizationParams(
+        state=None,
+        scopes=["ignored"],
+        code_challenge="test_challenge",
+        redirect_uri=AnyUrl("https://client/app"),
+        redirect_uri_provided_explicitly=True,
+    )
+    authorize_url = await server2.authorize(loaded, params)
+    assert "state=" in authorize_url
+    await token_store2.close()
+
+
+@pytest.mark.asyncio
+async def test_config_clients_are_bootstrapped_into_token_store(tmp_path: Path) -> None:
+    """Configured clients passed in constructor are persisted and retrievable."""
+    adapter = DummyProviderAdapter()
+    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
+    session_manager = SessionManager(token_store)
+    auth_service = AuthService(
+        provider_adapter=adapter,
+        session_manager=session_manager,
+        callback_url="https://server/callback",
+    )
+
+    configured = OAuthClientInformationFull(
+        client_id="client-1",
+        client_secret="secret",
+        redirect_uris=[AnyUrl("https://client/app")],
+        grant_types=["authorization_code"],
+        response_types=["code"],
+        scope="dummy.read",
+    )
+
+    server = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service,
+        session_manager=session_manager,
+        clients={configured.client_id or "": configured},
+    )
+
+    loaded = await server.get_client("client-1")
+    assert loaded is not None
+    assert loaded.client_id == "client-1"
+    await token_store.close()
