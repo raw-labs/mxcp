@@ -75,10 +75,18 @@ class IssuerOAuthAuthorizationServer(
     ) -> ClientRecord:
         if not client_info.client_id:
             raise ValueError("client_id is required")
+        token_endpoint_auth_method = client_info.token_endpoint_auth_method
+        if token_endpoint_auth_method is None:
+            # MCP token endpoint middleware requires a concrete auth method; infer a
+            # safe default when clients/config omit it.
+            token_endpoint_auth_method = (
+                "client_secret_post" if client_info.client_secret else "none"
+            )
         redirect_uris = [str(u) for u in (client_info.redirect_uris or [])]
         return ClientRecord(
             client_id=client_info.client_id,
             client_secret=client_info.client_secret,
+            token_endpoint_auth_method=token_endpoint_auth_method,
             redirect_uris=redirect_uris,
             grant_types=list(client_info.grant_types or []),
             response_types=list(client_info.response_types or []),
@@ -97,6 +105,7 @@ class IssuerOAuthAuthorizationServer(
         return OAuthClientInformationFull(
             client_id=record.client_id,
             client_secret=record.client_secret,
+            token_endpoint_auth_method=record.token_endpoint_auth_method,
             redirect_uris=redirect_uris,
             grant_types=record.grant_types,
             response_types=record.response_types,

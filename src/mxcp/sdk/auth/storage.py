@@ -64,6 +64,10 @@ class ClientRecord(SdkBaseModel):
 
     client_id: str
     client_secret: str | None = None
+    # How the client authenticates to the token endpoint (RFC 7591).
+    # This is required by the MCP token endpoint middleware; if unset, callers
+    # may fail with "Unsupported auth method: None".
+    token_endpoint_auth_method: str | None = None
     redirect_uris: list[str]
     grant_types: list[str]
     response_types: list[str]
@@ -249,6 +253,7 @@ class SqliteTokenStore(TokenStore):
         payload = {
             "client_id": record.client_id,
             "client_secret": self._encrypt(record.client_secret),
+            "token_endpoint_auth_method": record.token_endpoint_auth_method,
             "redirect_uris": json.dumps(record.redirect_uris),
             "grant_types": json.dumps(record.grant_types),
             "response_types": json.dumps(record.response_types),
@@ -360,6 +365,7 @@ class SqliteTokenStore(TokenStore):
             CREATE TABLE IF NOT EXISTS oauth_clients (
                 client_id TEXT PRIMARY KEY,
                 client_secret TEXT,
+                token_endpoint_auth_method TEXT,
                 redirect_uris TEXT NOT NULL,
                 grant_types TEXT NOT NULL,
                 response_types TEXT NOT NULL,
@@ -369,6 +375,7 @@ class SqliteTokenStore(TokenStore):
             )
             """
         )
+        self._ensure_oauth_client_columns()
         self._conn.commit()
 
     def _ensure_scopes_column(self) -> None:
@@ -403,6 +410,17 @@ class SqliteTokenStore(TokenStore):
             cursor.execute("ALTER TABLE states ADD COLUMN provider_code_verifier TEXT")
         if "client_state" not in columns:
             cursor.execute("ALTER TABLE states ADD COLUMN client_state TEXT")
+
+    def _ensure_oauth_client_columns(self) -> None:
+        """Add missing oauth_client columns when upgrading existing db."""
+        assert self._conn is not None
+        cursor = self._conn.cursor()
+        cursor.execute("PRAGMA table_info(oauth_clients)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "token_endpoint_auth_method" not in columns:
+            cursor.execute(
+                "ALTER TABLE oauth_clients ADD COLUMN token_endpoint_auth_method TEXT"
+            )
 
     # State helpers
     def _sync_store_state(self, payload: dict[str, Any]) -> None:
@@ -595,8 +613,8 @@ class SqliteTokenStore(TokenStore):
             self._conn.execute(
                 """
                 INSERT OR REPLACE INTO oauth_clients
-                (client_id, client_secret, redirect_uris, grant_types, response_types, scope, client_name, created_at)
-                VALUES (:client_id, :client_secret, :redirect_uris, :grant_types, :response_types, :scope, :client_name, :created_at)
+                (client_id, client_secret, token_endpoint_auth_method, redirect_uris, grant_types, response_types, scope, client_name, created_at)
+                VALUES (:client_id, :client_secret, :token_endpoint_auth_method, :redirect_uris, :grant_types, :response_types, :scope, :client_name, :created_at)
                 """,
                 payload,
             )
@@ -613,6 +631,7 @@ class SqliteTokenStore(TokenStore):
             return ClientRecord(
                 client_id=row["client_id"],
                 client_secret=self._decrypt(row["client_secret"]),
+                token_endpoint_auth_method=row["token_endpoint_auth_method"],
                 redirect_uris=json.loads(row["redirect_uris"]),
                 grant_types=json.loads(row["grant_types"]),
                 response_types=json.loads(row["response_types"]),
@@ -631,6 +650,7 @@ class SqliteTokenStore(TokenStore):
                     ClientRecord(
                         client_id=row["client_id"],
                         client_secret=self._decrypt(row["client_secret"]),
+                        token_endpoint_auth_method=row["token_endpoint_auth_method"],
                         redirect_uris=json.loads(row["redirect_uris"]),
                         grant_types=json.loads(row["grant_types"]),
                         response_types=json.loads(row["response_types"]),

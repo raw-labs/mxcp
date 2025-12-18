@@ -171,6 +171,7 @@ async def test_dcr_client_persists_across_restart(tmp_path: Path) -> None:
     assert loaded is not None
     assert loaded.client_id == "dcr-client-1"
     assert loaded.client_secret == "secret"
+    assert loaded.token_endpoint_auth_method == "client_secret_post"
 
     # Verify the loaded client can complete authorize().
     params = AuthorizationParams(
@@ -215,4 +216,5 @@ async def test_config_clients_are_bootstrapped_into_token_store(tmp_path: Path) 
     loaded = await server.get_client("client-1")
     assert loaded is not None
     assert loaded.client_id == "client-1"
+    assert loaded.token_endpoint_auth_method == "client_secret_post"
     await token_store.close()
