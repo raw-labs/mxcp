@@ -73,3 +73,50 @@ async def test_end_to_end_authorize_to_token(tmp_path: Path) -> None:
     await server.revoke_token(access)
     revoked = await server.load_access_token(token.access_token)
     assert revoked is None
+
+
+@pytest.mark.asyncio
+async def test_authorize_ignores_client_requested_scopes(tmp_path: Path) -> None:
+    """Issuer-mode must not forward client-requested OAuth scopes upstream.
+
+    The `scope` parameter on the MXCP authorize request is treated as client input
+    and must not influence what the upstream provider is asked for.
+    """
+    adapter = DummyProviderAdapter()
+    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
+    session_manager = SessionManager(token_store)
+    auth_service = AuthService(
+        provider_adapter=adapter,
+        session_manager=session_manager,
+        callback_url="https://server/callback",
+    )
+
+    client = OAuthClientInformationFull(
+        client_id="client-1",
+        client_secret="secret",
+        redirect_uris=[AnyUrl("https://client/app")],
+        grant_types=["authorization_code"],
+        response_types=["code"],
+        scope="dummy.read",
+    )
+    assert client.client_id is not None
+
+    server = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service,
+        session_manager=session_manager,
+        clients={client.client_id: client},
+    )
+
+    params = AuthorizationParams(
+        state=None,
+        scopes=["evil.scope"],
+        code_challenge="test_challenge",
+        redirect_uri=AnyUrl("https://client/app"),
+        redirect_uri_provided_explicitly=True,
+    )
+
+    authorize_url = await server.authorize(client, params)
+    # DummyProviderAdapter encodes the scopes passed into the authorize URL. We must
+    # not see client-provided scopes (nor the client-registered scope) forwarded.
+    assert "evil.scope" not in authorize_url
+    assert "dummy.read" not in authorize_url
