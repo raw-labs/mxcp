@@ -41,8 +41,6 @@ async def test_session_manager_happy_path(
     )
 
     middleware = AuthenticationMiddleware(
-        oauth_handler=None,
-        oauth_server=None,
         session_manager=session_manager,
         provider_adapter=provider,
         token_getter=lambda: session.access_token,
@@ -60,8 +58,6 @@ async def test_session_manager_invalid_token_returns_none(
 ) -> None:
     # Invalid token should fail auth and return None.
     middleware = AuthenticationMiddleware(
-        oauth_handler=None,
-        oauth_server=None,
         session_manager=session_manager,
         provider_adapter=provider,
         token_getter=lambda: "unknown",
@@ -76,8 +72,6 @@ async def test_session_manager_missing_token_returns_none(
 ) -> None:
     # Missing token should fail auth and return None.
     middleware = AuthenticationMiddleware(
-        oauth_handler=None,
-        oauth_server=None,
         session_manager=session_manager,
         provider_adapter=provider,
         token_getter=lambda: None,

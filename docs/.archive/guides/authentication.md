@@ -1451,10 +1451,12 @@ auth:
 
 The authentication system is designed to be extensible. Future OAuth providers can be added by:
 
-1. Implementing the `ExternalOAuthHandler` interface in a new provider file
-2. Adding provider-specific configuration to the schema
-3. Updating the `create_oauth_handler` factory function
+1. Implementing the issuer-mode `ProviderAdapter` contract (see `mxcp.sdk.auth.contracts.ProviderAdapter`)
+2. Adding provider-specific configuration to the schema/config models
+3. Updating the `create_provider_adapter` factory function
 4. Adding documentation following the same structure as existing providers
+
+Legacy note: older `ExternalOAuthHandler` / `GeneralOAuthAuthorizationServer` implementations may exist in the codebase as reference, but issuer-mode is the supported integration path.
 
 ## See Also
 

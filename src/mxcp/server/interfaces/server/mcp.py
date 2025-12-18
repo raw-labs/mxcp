@@ -579,8 +579,6 @@ class RAWMCP:
 
         # Initialize authentication middleware
         self.auth_middleware = AuthenticationMiddleware(
-            self.oauth_handler,
-            cast(Any, self.oauth_server),
             session_manager=self.session_manager,
             provider_adapter=getattr(self, "provider_adapter", None),
             token_getter=lambda: (
