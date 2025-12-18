@@ -1,20 +1,13 @@
 ---
 title: "Python Reference"
-description: "Quick reference for mxcp.runtime module APIs available in Python endpoints."
-keywords:
-  - mxcp python
-  - python runtime
-  - mxcp.runtime
-  - python endpoints
-  - db.execute
-  - config.get_secret
-sidebar_position: 5
-slug: /reference/python
+description: "Python runtime API reference for MXCP. Database access, configuration, plugins, and lifecycle hooks."
+sidebar:
+  order: 4
 ---
 
-# Python Reference
+> **Related Topics:** [Python Endpoints Tutorial](/tutorials/python-endpoints) (step-by-step guide) | [Plugins](/reference/plugins) (custom UDFs) | [Configuration](/operations/configuration) (secrets access) | [Type System](/concepts/type-system) (parameter types)
 
-Python endpoints in MXCP have access to the `mxcp.runtime` module, which provides functions for database access, configuration, secrets, and plugins. This reference provides a quick lookup of available APIs.
+Python endpoints have access to the `mxcp.runtime` module, which provides database access, configuration, secrets, and lifecycle management.
 
 ## Quick Example
 
@@ -24,19 +17,20 @@ from mxcp.runtime import db, config, plugins, on_init, on_shutdown, reload_duckd
 def my_endpoint(param: str) -> dict:
     # Query database
     results = db.execute("SELECT * FROM users WHERE name = $name", {"name": param})
-    
+
     # Access secrets
     api_key_params = config.get_secret("api_key")
-    
+
     # Get configuration
     project = config.get_setting("project")
-    
+
     return {"users": results, "project": project}
 ```
 
 ## Database Access
 
-### `db.execute(query, params=None)`
+### db.execute()
+
 Execute SQL query and return results as list of dictionaries.
 
 ```python
@@ -48,65 +42,105 @@ result = db.execute(
     "SELECT * FROM orders WHERE customer_id = $id AND status = $status",
     {"id": 123, "status": "pending"}
 )
+
+# Insert/Update (returns affected rows)
+db.execute(
+    "INSERT INTO logs (message, timestamp) VALUES ($msg, NOW())",
+    {"msg": "Event occurred"}
+)
 ```
 
-### `db.connection`
-Access raw DuckDB connection. Use with caution in server mode (not thread-safe).
+**Parameters:**
+- `query` (str): SQL query to execute
+- `params` (dict, optional): Named parameters
 
-```python
-conn = db.connection
-# Use for advanced DuckDB operations
-```
+**Returns:** `list[dict]` - Query results
 
 ## Configuration & Secrets
 
-### `config.get_secret(name)`
-Get secret parameters as dictionary. Returns `None` if not found.
+### config.get_secret()
+
+Get secret parameters as dictionary.
 
 ```python
-# Returns entire parameters dict
+# Value-type secrets
 secret_params = config.get_secret("api_key")
-# For value-type secrets: {"value": "secret-value"}
-# For HTTP secrets: {"BEARER_TOKEN": "...", "EXTRA_HTTP_HEADERS": {...}}
+# Returns: {"value": "secret-value"}
 
-# Extract value from value-type secret
 api_key = secret_params["value"] if secret_params else None
+
+# HTTP secrets
+http_secret = config.get_secret("http_auth")
+# Returns: {"BEARER_TOKEN": "...", "EXTRA_HTTP_HEADERS": {...}}
+
+# Check if secret exists
+if config.get_secret("optional_secret"):
+    # Secret is configured
+    pass
 ```
 
-### `config.get_setting(key, default=None)`
+**Parameters:**
+- `name` (str): Secret name
+
+**Returns:** `dict | None` - Secret parameters or None
+
+### config.get_setting()
+
 Get configuration value from site config.
 
 ```python
+# Get required setting
 project = config.get_setting("project")
+
+# Get with default
 debug = config.get_setting("debug", default=False)
 extensions = config.get_setting("extensions", default=[])
+timeout = config.get_setting("timeout", default=30)
+
+# Nested key access (use dot notation)
+dbt_enabled = config.get_setting("dbt.enabled", default=False)
+db_path = config.get_setting("profiles.default.duckdb.path")
 ```
 
-### `config.user_config`
-Access the full `UserConfigModel` instance. Use attributes or `model_dump()` to inspect nested data.
+**Parameters:**
+- `key` (str): Setting key (supports dot notation for nested access)
+- `default` (any, optional): Default value if not found
+
+**Returns:** Setting value or default
+
+### config.user_config
+
+Access full user configuration as dictionary.
 
 ```python
 user_cfg = config.user_config
 if user_cfg:
-    active_project = user_cfg.projects[user_cfg_site]
-    active_profile = active_project.profiles[user_cfg.profile]
-    secret_names = [secret.name for secret in active_profile.secrets]
+    project_name = user_cfg.get("site")
+    projects = user_cfg.get("projects", {})
+    active_project = projects.get(project_name, {})
 ```
 
-### `config.site_config`
-Access the full `SiteConfigModel` instance. Use attribute access or `model_dump()` if you need a dictionary.
+**Returns:** `dict | None` - User configuration or None
+
+### config.site_config
+
+Access full site configuration as dictionary.
 
 ```python
 site_cfg = config.site_config
 if site_cfg:
-    secrets_list = site_cfg.secrets
-    default_duckdb = site_cfg.profiles[site_cfg.profile].duckdb.path
+    project = site_cfg.get("project")
+    profile = site_cfg.get("profile")
+    secrets = site_cfg.get("secrets", [])
 ```
+
+**Returns:** `dict | None` - Site configuration or None
 
 ## Plugin Access
 
-### `plugins.get(name)`
-Get plugin instance by name. Returns `None` if not found.
+### plugins.get()
+
+Get plugin instance by name.
 
 ```python
 my_plugin = plugins.get("custom_plugin")
@@ -114,17 +148,29 @@ if my_plugin:
     result = my_plugin.process_data(data)
 ```
 
-### `plugins.list()`
+**Parameters:**
+- `name` (str): Plugin instance name
+
+**Returns:** Plugin instance or None
+
+### plugins.list()
+
 Get list of available plugin names.
 
 ```python
 available = plugins.list()
 # Returns: ["plugin1", "plugin2", ...]
+
+for name in plugins.list():
+    plugin = plugins.get(name)
+    print(f"Plugin: {name}")
 ```
+
+**Returns:** `list[str]` - Plugin names
 
 ## MCP Logging & Progress
 
-The `mxcp.runtime.mcp` proxy exposes the same async APIs that FastMCP tools receive (`debug`, `info`, `warning`, `error`, `progress`). When your endpoint runs inside FastMCP the calls are forwarded to the client; during CLI/tests they fall back to regular server logging so you can use one API everywhere.
+The `mxcp.runtime.mcp` proxy provides MCP-aware logging. When running in FastMCP, calls are forwarded to the client; during CLI/tests they fall back to server logging.
 
 ```python
 from mxcp.runtime import mcp
@@ -133,48 +179,105 @@ async def run_job() -> None:
     await mcp.info("Starting ingestion")
     await mcp.progress(1, 4, "Fetched source metadata")
     await mcp.warning("External API is slow today")
-    await mcp.progress(4, 4, "Done ✅")
+    await mcp.progress(4, 4, "Done")
 ```
 
-> **Tip:** synchronous endpoints can wrap calls with `asyncio.run(mcp.info(...))` if they need to emit MCP logs from a regular function.
+### Logging Functions
+
+```python
+# Log levels
+await mcp.debug("Debug message")
+await mcp.info("Info message")
+await mcp.warning("Warning message")
+await mcp.error("Error message")
+
+# Progress reporting
+await mcp.progress(current=1, total=10, message="Processing item 1")
+```
+
+### Synchronous Usage
+
+For synchronous endpoints:
+
+```python
+import asyncio
+
+def sync_endpoint(data: str) -> dict:
+    asyncio.run(mcp.info("Processing data"))
+    return {"result": process(data)}
+```
 
 ## Lifecycle Hooks
 
-### `@on_init`
+### @on_init
+
 Register function to run when server starts.
 
 ```python
+from mxcp.runtime import on_init
+
 @on_init
 def setup():
-    # Initialize resources
     print("Server starting up")
+    # Initialize resources
+    # Load caches
+    # Connect to services
 ```
 
-### `@on_shutdown`
+**Use Cases:**
+- Warm up caches
+- Initialize connections
+- Validate configuration
+- Load static data
+
+### @on_shutdown
+
 Register function to run when server stops.
 
 ```python
+from mxcp.runtime import on_shutdown
+
 @on_shutdown
 def cleanup():
-    # Clean up resources
     print("Server shutting down")
+    # Close connections
+    # Flush buffers
+    # Clean up resources
+```
+
+**Use Cases:**
+- Close database connections
+- Flush log buffers
+- Release external resources
+- Save state
+
+### Multiple Hooks
+
+You can register multiple functions for the same lifecycle event. Hooks are executed sequentially in the order they were registered (typically the order they appear in your code). If a hook raises an exception, it is logged but subsequent hooks still execute.
+
+```python
+@on_init
+def setup_database():
+    print("Setting up database connections")  # Runs first
+
+@on_init
+def setup_cache():
+    print("Warming up cache")  # Runs second
+
+@on_shutdown
+def close_database():
+    print("Closing database connections")  # Runs first on shutdown
+
+@on_shutdown
+def flush_logs():
+    print("Flushing log buffers")  # Runs second on shutdown
 ```
 
 ## Reload Management
 
-### `reload_duckdb(payload_func=None, description="")`
-Request an asynchronous system reload with an optional payload function.
+### reload_duckdb()
 
-This feature allows Python endpoints to trigger a safe reload of the MXCP server, optionally executing custom logic like rebuilding the DuckDB database with new data. The reload process:
-1. Queues the reload request and returns immediately
-2. Active requests are drained (allowed to complete)
-3. Runtime components (Python hooks + DuckDB) are shut down
-4. Your payload function runs (if provided)
-5. Runtime components are restarted with fresh configuration
-
-**Important:** For most database updates, you don't need to use `reload_duckdb`. You can perform database operations directly using the `db` proxy without triggering any reload. This is the recommended approach since DuckDB supports concurrent operations through its MVCC transactional model.
-
-Only use `reload_duckdb` when you need external tools to have exclusive access to the database file.
+Request an asynchronous system reload.
 
 ```python
 from mxcp.runtime import reload_duckdb
@@ -185,13 +288,9 @@ def replace_database():
     """Payload function - runs with all connections closed."""
     # Run dbt to rebuild models
     subprocess.run(["dbt", "run"], check=True)
-    
+
     # Or copy a new database file
     shutil.copy("/data/updated.duckdb", "/app/data.duckdb")
-    
-    # Or fetch and load new data
-    fetch_latest_data()
-    load_into_duckdb()
 
 # Schedule reload with database replacement
 reload_duckdb(
@@ -199,47 +298,196 @@ reload_duckdb(
     description="Replacing database with updated version"
 )
 
-# Or just reload configuration (refreshes secrets, env vars, etc.)
+# Or just reload configuration
 reload_duckdb()
 
 # Return immediately - reload happens asynchronously
 return {"status": "Reload scheduled"}
 ```
 
+**Parameters:**
+- `payload_func` (callable, optional): Function to run during reload
+- `description` (str, optional): Description for logging
+
+**Reload Process:**
+1. Queues reload request
+2. Active requests are drained
+3. Runtime shuts down (Python hooks + DuckDB)
+4. Payload function runs (if provided)
+5. Runtime restarts with fresh configuration
+
 **Use Cases:**
-- Updating DuckDB data without server restart
-- Running ETL pipelines on demand
-- Refreshing materialized views
-- Swapping in pre-built database files
-- Reloading configuration after secret rotation
+- Update DuckDB data without restart
+- Run ETL pipelines on demand
+- Refresh materialized views
+- Swap in pre-built database files
+- Reload configuration after secret rotation
 
 **Important Notes:**
-- This function returns immediately (non-blocking)
-- The reload happens asynchronously after the current request completes
-- The payload function runs with all connections closed
-- Only one reload can be processing at a time
-- From MCP tools, you cannot wait for completion - check status indirectly
+- Returns immediately (non-blocking)
+- Reload happens asynchronously after the current request completes
+- Only one reload processes at a time
+- Payload runs with connections closed
+- Cannot wait for completion from MCP tools
 - Only available when called from within MXCP endpoints
 
-## Context Availability
+**When NOT to Use:**
 
-The runtime context is automatically set when your function is called by MXCP. All functions are thread-safe and maintain proper isolation between concurrent requests.
+For most database operations, you don't need `reload_duckdb()`. Use `db.execute()` directly since DuckDB supports concurrent operations through its MVCC transactional model:
+
+```python
+# Simple updates - no reload needed
+db.execute("INSERT INTO users VALUES ($name)", {"name": "Alice"})
+db.execute("UPDATE stats SET value = $value", {"value": 100})
+```
+
+Only use `reload_duckdb()` when external tools need exclusive database access.
 
 ## Type Compatibility
 
-Python return values must match the declared endpoint return type:
+Python return values must match declared endpoint return types:
 
-| YAML Type | Python Return |
-|-----------|---------------|
-| `array`   | `list[dict]`  |
-| `object`  | `dict`        |
-| `string`  | `str`         |
-| `integer` | `int`         |
-| `number`  | `float`       |
-| `boolean` | `bool`        |
+| YAML Type | Python Type | Example |
+|-----------|-------------|---------|
+| `string` | `str` | `"hello"` |
+| `integer` | `int` | `42` |
+| `number` | `float` | `3.14` |
+| `boolean` | `bool` | `True` |
+| `array` | `list` | `[1, 2, 3]` |
+| `object` | `dict` | `{"key": "value"}` |
 
-## See Also
+### Type Examples
 
-- [Python Endpoints Guide](../features/python-endpoints.md)
-- [Configuration Guide](../guides/configuration.md)
-- [Plugin Development](plugins.md) 
+```python
+# String return
+def get_name(id: int) -> str:
+    return "Alice"
+
+# Integer return
+def get_count() -> int:
+    return 42
+
+# Number return
+def get_average() -> float:
+    return 3.14
+
+# Boolean return
+def is_valid(id: int) -> bool:
+    return True
+
+# Array return
+def get_users() -> list:
+    return [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+
+# Object return
+def get_user(id: int) -> dict:
+    return {"id": id, "name": "Alice", "active": True}
+```
+
+### Complex Types
+
+Nested structures are fully supported - objects can contain arrays, and arrays can contain objects:
+
+```python
+# Nested objects
+def get_report() -> dict:
+    return {
+        "summary": {
+            "total": 100,
+            "average": 42.5
+        },
+        "items": [
+            {"id": 1, "value": 10},
+            {"id": 2, "value": 20}
+        ]
+    }
+
+# Arrays of objects
+def get_orders() -> list:
+    return [
+        {"id": 1, "items": ["a", "b"]},
+        {"id": 2, "items": ["c", "d"]}
+    ]
+```
+
+## Context Availability
+
+The runtime context is automatically set when MXCP calls your function:
+
+```python
+def my_endpoint(param: str) -> dict:
+    # db, config, plugins are all available
+    # Context is thread-safe and isolated between requests
+    users = db.execute("SELECT * FROM users")
+    return {"users": users}
+```
+
+## Error Handling
+
+Handle errors gracefully by returning error information in your response rather than raising exceptions. Unhandled exceptions will result in MCP error responses to the client.
+
+```python
+def safe_endpoint(id: int) -> dict:
+    try:
+        result = db.execute("SELECT * FROM users WHERE id = $id", {"id": id})
+        if not result:
+            return {"error": "User not found", "id": id}
+        return result[0]
+    except Exception as e:
+        return {"error": str(e)}
+```
+
+## Complete Example
+
+A full endpoint demonstrating lifecycle hooks, configuration, database access, plugins, and MCP logging:
+
+```python
+from mxcp.runtime import db, config, plugins, on_init, on_shutdown, mcp
+import asyncio
+
+# Initialization
+@on_init
+def setup():
+    print("Starting up...")
+
+@on_shutdown
+def cleanup():
+    print("Shutting down...")
+
+# Main endpoint
+async def analyze_data(department: str, limit: int = 10) -> dict:
+    await mcp.info(f"Analyzing {department}")
+
+    # Get configuration
+    threshold = config.get_setting("threshold", default=100)
+
+    # Query database
+    await mcp.progress(1, 3, "Fetching data")
+    employees = db.execute(
+        "SELECT * FROM employees WHERE department = $dept LIMIT $limit",
+        {"dept": department, "limit": limit}
+    )
+
+    # Process with plugin
+    await mcp.progress(2, 3, "Processing")
+    analytics = plugins.get("analytics")
+    if analytics:
+        stats = analytics.calculate_stats(employees)
+    else:
+        stats = {"count": len(employees)}
+
+    # Return results
+    await mcp.progress(3, 3, "Complete")
+    return {
+        "department": department,
+        "employees": employees,
+        "stats": stats,
+        "threshold": threshold
+    }
+```
+
+## Next Steps
+
+- [Plugin Reference](/reference/plugins) - Plugin development
+- [Tutorials](/tutorials/python-endpoints) - Python examples
+- [Type System](/concepts/type-system) - Type mapping

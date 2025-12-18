@@ -1,0 +1,444 @@
+---
+title: "Project Structure"
+description: "MXCP project directory structure, file organization, and naming conventions. How to organize tools, resources, prompts, and implementations."
+sidebar:
+  order: 4
+---
+
+> **Related Topics:** [Configuration](/operations/configuration) (site and user config) | [Endpoints](/concepts/endpoints) (tool, resource, prompt files) | [Quickstart](/getting-started/quickstart) (`mxcp init` details)
+
+MXCP enforces an organized directory structure to improve project maintainability and enable auto-discovery of endpoints. This guide explains the structure and best practices for organizing your project.
+
+**Why this structure matters:**
+- **Auto-discovery** - MXCP finds all endpoints automatically by scanning directories
+- **Separation of concerns** - Definitions (YAML) separate from implementations (SQL/Python)
+- **Multi-environment** - Profiles allow different configs per environment
+- **Scalability** - Subdirectories keep large projects organized
+
+## Minimal Project
+
+The simplest MXCP project needs just two files:
+
+```
+my-project/
+├── mxcp-site.yml       # Project configuration
+└── tools/
+    └── hello.yml       # At least one endpoint
+```
+
+```yaml
+# mxcp-site.yml (minimal)
+mxcp: 1
+project: my-project
+profile: default
+```
+
+## Standard Structure
+
+A complete MXCP project follows this structure:
+
+```
+my-mxcp-project/
+├── mxcp-site.yml       # Project configuration (required)
+├── tools/              # MCP tool definitions (.yml files)
+├── resources/          # MCP resource definitions (.yml files)
+├── prompts/            # MCP prompt definitions (.yml files)
+├── evals/              # Evaluation definitions (.yml files)
+├── python/             # Python endpoints and shared code
+├── plugins/            # MXCP plugins for DuckDB
+├── sql/                # SQL implementation files
+├── data/               # Database files (DuckDB)
+├── drift/              # Schema drift detection snapshots
+├── audit/              # Audit logs (when enabled)
+├── models/             # dbt models (if using dbt)
+└── target/             # dbt target directory (if using dbt)
+```
+
+## Configuration File
+
+### mxcp-site.yml
+
+The root configuration file that defines your project:
+
+```yaml
+mxcp: 1
+project: my-project
+profile: default
+
+# Secrets used by this project
+secrets:
+  - db_credentials
+  - api_key
+
+# DuckDB extensions to load
+extensions:
+  - httpfs
+  - parquet
+  - name: h3
+    repo: community
+
+# dbt integration
+dbt:
+  enabled: true
+  model_paths: ["models"]
+
+# SQL tools (disabled by default)
+sql_tools:
+  enabled: false
+
+# Profile-specific settings
+profiles:
+  default:
+    duckdb:
+      path: db.duckdb
+      readonly: false
+    drift:
+      path: drift/snapshot.json
+    audit:
+      enabled: true
+      path: audit/logs.jsonl
+```
+
+## Endpoint Directories
+
+### tools/
+
+Contains tool endpoint definitions. Each `.yml` file defines one tool:
+
+```
+tools/
+├── hello-world.yml      # Simple tool
+├── sales-report.yml     # Data query tool
+├── user-management.yml  # CRUD operations
+└── analytics/           # Subdirectories are supported
+    ├── daily-stats.yml
+    └── monthly-report.yml
+```
+
+**Key rules:**
+- Files must have `.yml` or `.yaml` extension
+- Tool name comes from the `name` field, not the filename
+- Subdirectories are scanned recursively
+
+### resources/
+
+Contains resource endpoint definitions:
+
+```
+resources/
+├── user-profile.yml
+├── config-settings.yml
+└── documents/
+    └── document.yml
+```
+
+Resource URIs are defined in the file, not the structure.
+
+### prompts/
+
+Contains prompt template definitions:
+
+```
+prompts/
+├── data-analysis.yml
+├── report-generation.yml
+└── customer-service.yml
+```
+
+### evals/
+
+Contains evaluation test suites:
+
+```
+evals/
+├── sales-evals.yml
+├── user-management-evals.yml
+└── comprehensive.evals.yml
+```
+
+Eval files should have `-evals.yml` or `.evals.yml` suffix.
+
+## Implementation Directories
+
+### python/
+
+Contains Python implementations and shared modules:
+
+```
+python/
+├── math_tools.py         # Tool implementations
+├── api_handlers.py       # API integration code
+├── utils/                # Shared utilities
+│   ├── __init__.py
+│   ├── validators.py
+│   └── formatters.py
+└── services/             # Business logic
+    ├── __init__.py
+    └── customer_service.py
+```
+
+Python files are referenced from tool definitions:
+```yaml
+source:
+  file: ../python/math_tools.py
+```
+
+### sql/
+
+Contains SQL implementation files:
+
+```
+sql/
+├── hello-world.sql       # Simple queries
+├── sales_report.sql      # Complex queries
+├── common/               # Shared SQL
+│   └── aggregations.sql
+└── migrations/           # Schema migrations (manual)
+    └── 001_initial.sql
+```
+
+SQL files are referenced from tool definitions:
+```yaml
+source:
+  file: ../sql/sales_report.sql
+```
+
+### plugins/
+
+Contains MXCP plugins that extend DuckDB:
+
+```
+plugins/
+├── my_plugin/
+│   └── __init__.py
+├── cipher_plugin/
+│   └── __init__.py
+└── custom_functions.py
+```
+
+Plugins must be configured in `mxcp-site.yml` and contain a class named `MXCPPlugin`:
+
+```yaml
+# mxcp-site.yml
+plugin:
+  - name: myutil        # Instance name
+    module: my_plugin   # Module in plugins/
+```
+
+```python title="plugins/my_plugin/__init__.py"
+from mxcp.plugins import MXCPBasePlugin, udf
+
+class MXCPPlugin(MXCPBasePlugin):
+    @udf
+    def my_function(self, value: str) -> str:
+        return value.upper()
+```
+
+Functions are called as `{function}_{instance_name}`:
+```sql
+SELECT my_function_myutil('hello');  -- Returns 'HELLO'
+```
+
+## Auto-Generated Directories
+
+### drift/
+
+Contains drift detection snapshots:
+
+```
+drift/
+├── drift-default.json    # Default profile
+├── drift-staging.json    # Staging profile
+└── drift-prod.json       # Production profile
+```
+
+Generated by `mxcp drift-snapshot`, compared by `mxcp drift-check`.
+
+### audit/
+
+Contains audit logs when enabled:
+
+```
+audit/
+├── logs.jsonl             # Main audit log
+└── logs-2024-01.jsonl     # Archived logs
+```
+
+JSONL format allows streaming and analysis.
+
+## dbt Integration
+
+When using dbt, add these directories:
+
+```
+my-mxcp-project/
+├── mxcp-site.yml
+├── dbt_project.yml       # dbt configuration
+├── profiles.yml          # dbt profiles (or use ~/.dbt/)
+├── models/               # dbt models
+│   ├── staging/
+│   │   └── stg_sales.sql
+│   └── marts/
+│       └── fct_daily_sales.sql
+└── target/               # dbt output (gitignored)
+    └── compiled/
+```
+
+MXCP tools query tables created by dbt:
+```sql
+-- Tool queries dbt-created table
+SELECT * FROM fct_daily_sales
+WHERE date >= $start_date
+```
+
+## File Naming Conventions
+
+### Endpoint Files
+- Use `kebab-case`: `sales-report.yml`, `user-profile.yml`
+- Match endpoint name when practical
+- Group related endpoints in subdirectories
+
+### SQL Files
+- Use `snake_case` or `kebab-case`: `sales_report.sql`
+- Match the tool/resource name
+- Use descriptive names for complex queries
+
+### Python Files
+- Use `snake_case`: `api_handlers.py`
+- Group by functionality
+- Use `__init__.py` for packages
+
+### Plugins
+- Use `snake_case` for module names
+- Class must be named `MXCPPlugin`
+
+## Path References
+
+### Relative Paths
+
+Paths in YAML files are relative to the YAML file location:
+
+```yaml
+# In tools/analytics/daily-report.yml
+source:
+  file: ../../sql/analytics/daily_report.sql
+```
+
+### Absolute Paths
+
+Avoid absolute paths - they break portability.
+
+### Path Resolution
+
+MXCP resolves paths from:
+1. The YAML file's directory
+2. The project root (for some config options)
+3. User home directory (for user config)
+
+## Environment-Specific Organization
+
+Use profiles for environment differences:
+
+```yaml
+# mxcp-site.yml
+profiles:
+  development:
+    duckdb:
+      path: dev.duckdb
+    audit:
+      enabled: false
+
+  staging:
+    duckdb:
+      path: staging.duckdb
+    audit:
+      enabled: true
+      path: audit/staging-logs.jsonl
+
+  production:
+    duckdb:
+      path: prod.duckdb
+      readonly: true
+    audit:
+      enabled: true
+      path: /var/log/mxcp/audit.jsonl
+```
+
+## Best Practices
+
+### 1. Keep Implementations Separate
+```
+# Good
+tools/sales-report.yml   # Definition
+sql/sales_report.sql     # Implementation
+
+# Avoid
+tools/sales-report.yml   # Definition with inline SQL
+```
+
+### 2. Use Subdirectories for Large Projects
+```
+tools/
+├── sales/
+│   ├── daily-report.yml
+│   └── monthly-summary.yml
+├── inventory/
+│   ├── stock-check.yml
+│   └── reorder-alert.yml
+└── customers/
+    └── customer-lookup.yml
+```
+
+### 3. Share Common Code
+```python title="python/utils/validators.py"
+def validate_email(email: str) -> bool:
+    ...
+
+# python/customer_tools.py
+from utils.validators import validate_email
+```
+
+### 4. Version Control
+```txt
+# .gitignore
+*.duckdb
+*.duckdb.wal
+target/
+audit/*.jsonl
+drift/*.json
+__pycache__/
+.venv/
+```
+
+### 5. Document Structure
+Add a README explaining your project organization:
+```markdown
+# Project Structure
+
+- `tools/` - MCP tool definitions
+- `sql/` - SQL implementations
+- `python/` - Python code
+- `models/` - dbt models for data transformation
+```
+
+## Initializing a Project
+
+Use `mxcp init` to create the structure:
+
+```bash
+# Create empty structure
+mxcp init
+
+# Create with examples
+mxcp init --bootstrap
+```
+
+The `--bootstrap` flag creates:
+- Example SQL tool (`tools/hello-world.yml` + `sql/hello-world.sql`)
+- Complete directory structure
+
+## Next Steps
+
+- [Configuration](/operations/configuration) - Detailed configuration options
+- [Endpoints](/concepts/endpoints) - Endpoint definition format
+- [dbt Integration](/integrations/dbt) - Using dbt with MXCP

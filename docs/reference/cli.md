@@ -1,68 +1,119 @@
 ---
 title: "CLI Reference"
-description: "Complete command-line interface reference for MXCP. All commands, options, and usage examples for the mxcp CLI tool."
-keywords:
-  - mxcp cli
-  - command line interface
-  - cli commands
-  - mxcp serve
-  - mxcp run
-  - mxcp validate
-sidebar_position: 1
-slug: /reference/cli
+description: "Complete command-line interface reference for MXCP. All commands, options, and usage examples."
+sidebar:
+  order: 2
 ---
 
-# MXCP CLI Reference
+> **Related Topics:** [Quickstart](/getting-started/quickstart) (first commands) | [Common Tasks](/reference/common-tasks) (quick how-to) | [Quality](/quality/) (validation, testing, linting)
 
-This document provides a comprehensive reference for all MXCP command-line interface (CLI) commands and their options.
+Complete reference for all MXCP command-line interface commands.
 
-## Directory Structure Requirements
+## Quick Reference
 
-MXCP enforces an organized directory structure to improve project maintainability and developer experience. All commands expect your project to follow this structure:
+| Command | Description | Category |
+|---------|-------------|----------|
+| [`mxcp init`](#mxcp-init) | Initialize a new MXCP project | Development |
+| [`mxcp serve`](#mxcp-serve) | Start the MCP server | Development |
+| [`mxcp run`](#mxcp-run) | Execute an endpoint | Development |
+| [`mxcp query`](#mxcp-query) | Execute SQL directly | Development |
+| [`mxcp validate`](#mxcp-validate) | Validate endpoint definitions | Quality |
+| [`mxcp test`](#mxcp-test) | Run endpoint tests | Quality |
+| [`mxcp lint`](#mxcp-lint) | Check metadata quality | Quality |
+| [`mxcp evals`](#mxcp-evals) | Run LLM evaluations | Quality |
+| [`mxcp list`](#mxcp-list) | List available endpoints | Operations |
+| [`mxcp drift-snapshot`](#mxcp-drift-snapshot) | Create drift detection baseline | Operations |
+| [`mxcp drift-check`](#mxcp-drift-check) | Check for drift from baseline | Operations |
+| [`mxcp log`](#mxcp-log) | Query audit logs | Operations |
+| [`mxcp log-cleanup`](#mxcp-log-cleanup) | Apply audit retention policies | Operations |
+| [`mxcp dbt-config`](#mxcp-dbt-config) | Generate dbt configuration files | dbt Integration |
+| [`mxcp dbt`](#mxcp-dbt) | Wrapper for dbt CLI with secret injection | dbt Integration |
+
+## Project Structure
+
+MXCP expects a specific directory structure:
 
 ```
-mxcp-project/
-├── mxcp-site.yml       # Project configuration (required)
-├── tools/              # MCP tool definitions (.yml files)
-├── resources/          # MCP resource definitions (.yml files)  
-├── prompts/            # MCP prompt definitions (.yml files)
-├── evals/              # Evaluation definitions (.yml files)
-├── python/             # Python endpoints and shared code
-├── plugins/            # MXCP plugins for DuckDB
-├── sql/                # SQL implementation files
-├── drift/              # Schema drift detection snapshots
-├── audit/              # Audit logs (when enabled)
-├── models/             # dbt models (if using dbt)
-└── target/             # dbt target directory (if using dbt)
+my-project/
+├── mxcp-site.yml        # Project configuration (required)
+├── tools/               # Tool endpoint definitions
+│   ├── get_user.yml
+│   └── search.yml
+├── resources/           # Resource endpoint definitions
+│   └── user-profile.yml
+├── prompts/             # Prompt endpoint definitions
+│   └── analyze.yml
+├── sql/                 # SQL source files
+│   ├── queries/
+│   └── migrations/
+├── python/              # Python source files
+│   └── handlers.py
+├── plugins/             # Custom plugins
+│   └── my_plugin/
+├── evals/               # LLM evaluation suites
+│   └── safety.evals.yml
+├── drift/               # Drift detection snapshots
+│   └── snapshot.json
+├── data/                # DuckDB database files
+├── audit/               # Audit logs (when enabled)
+├── models/              # dbt models (if using dbt)
+└── target/              # dbt target directory (if using dbt)
 ```
 
-**Key Rules:**
-- **Tools** must be defined in `tools/*.yml` files
-- **Resources** must be defined in `resources/*.yml` files
-- **Prompts** must be defined in `prompts/*.yml` files
-- **SQL implementations** should be in `sql/*.sql` files and referenced via relative paths
-- Files in wrong directories are ignored by discovery commands
+### Directory Requirements
 
-Use `mxcp init --bootstrap` to create a properly structured project.
+| Directory | Purpose | Auto-discovered |
+|-----------|---------|-----------------|
+| `tools/` | Tool endpoint YAML files | Yes |
+| `resources/` | Resource endpoint YAML files | Yes |
+| `prompts/` | Prompt endpoint YAML files | Yes |
+| `sql/` | SQL source files (referenced by endpoints) | No |
+| `python/` | Python source files (referenced by endpoints) | No |
+| `plugins/` | Custom plugin modules | No |
+| `evals/` | LLM evaluation suite files (`*.evals.yml`) | Yes |
+| `data/` | DuckDB database files | No |
+| `audit/` | Audit logs (when auditing enabled) | No |
+| `models/` | dbt models (if using dbt integration) | No |
+| `target/` | dbt target directory (if using dbt integration) | No |
+
+### Key Rules
+
+1. **mxcp-site.yml** must exist in the project root
+2. **Endpoint files** must use `.yml` or `.yaml` extension
+3. **Eval files** must use `.evals.yml` suffix
+4. **SQL/Python files** are referenced via `source.file` in endpoints
+5. **Plugins** are referenced by module name in `mxcp-site.yml`
 
 ## Common Options
 
-Most commands support these common options:
+Most commands support these options:
 
-- `--profile`: Override the profile name from mxcp-site.yml
-- `--json-output`: Output results in JSON format
-- `--debug`: Show detailed debug information
-- `--readonly`: Open database connection in read-only mode
+| Option | Description |
+|--------|-------------|
+| `--profile` | Override profile from mxcp-site.yml |
+| `--json-output` | Output results in JSON format |
+| `--debug` | Show detailed debug information |
+| `--readonly` | Open database in read-only mode |
 
-## Commands
+---
 
-### `mxcp init`
+## Development Commands
 
-Initialize a new MXCP repository.
+### mxcp init
+
+Initialize a new MXCP project.
 
 ```bash
 mxcp init [FOLDER] [OPTIONS]
 ```
+
+**Description:**
+
+Creates a new MXCP repository by:
+1. Creating a `mxcp-site.yml` file with project and profile configuration
+2. Creating standard directory structure (tools/, resources/, prompts/, etc.)
+3. Optionally creating example endpoint files with `--bootstrap`
+4. Generating a `server_config.json` for Claude Desktop integration
 
 **Arguments:**
 - `FOLDER`: Target directory (default: current directory)
@@ -75,183 +126,178 @@ mxcp init [FOLDER] [OPTIONS]
 
 **Examples:**
 ```bash
-mxcp init                    # Initialize in current directory
-mxcp init my-project        # Initialize in my-project directory
-mxcp init --project=test    # Initialize with specific project name
-mxcp init --bootstrap       # Initialize with example endpoint
+mxcp init                     # Initialize in current directory
+mxcp init my-project          # Initialize in new directory
+mxcp init --bootstrap         # Include example endpoint
+mxcp init --project=analytics # Custom project name
 ```
 
-### `mxcp serve`
+### mxcp serve
 
-Start the MXCP MCP server to expose endpoints via HTTP or stdio.
+Start the MCP server to expose endpoints via HTTP or stdio.
 
 ```bash
 mxcp serve [OPTIONS]
 ```
 
+**Description:**
+
+Starts a server that exposes your MXCP endpoints as an MCP-compatible interface. By default, it uses the transport configuration from your user config. The server validates all endpoints at startup and **fails if any endpoints have errors** - use `--ignore-errors` to start anyway with invalid endpoints skipped.
+
 **Options:**
-- `--profile`: Profile name to use
-- `--transport`: Transport protocol to use (streamable-http, sse, or stdio) - defaults to user config setting
-- `--port`: Port number for HTTP transport - defaults to user config setting
+- `--transport`: Protocol (`streamable-http`, `sse`, `stdio`)
+- `--port`: Port for HTTP transport
+- `--sql-tools`: Enable/disable SQL tools (`true`/`false`)
+- `--stateless`: Enable stateless HTTP mode (for serverless deployments)
+- `--readonly`: Open database in read-only mode
+- `--ignore-errors`: Start server even if some endpoints have validation errors
+- `--json-output`: Output startup errors in JSON format (useful for CI/CD)
 - `--debug`: Show detailed debug information
-- `--sql-tools`: Enable or disable built-in SQL querying and schema exploration tools (true/false)
-- `--readonly`: Open database connection in read-only mode
-- `--stateless`: Enable stateless HTTP mode for Claude.ai and serverless deployments
-- `--ignore-errors`: Start server even if some endpoints have validation errors (by default, the server fails to start if any endpoints are invalid)
-- `--json-output`: Output startup errors in JSON format (only used when startup fails due to validation errors)
-
-**Strict Validation (Default Behavior):**
-
-By default, `mxcp serve` validates all endpoints at startup and **fails if any endpoints have errors**. This ensures you're aware of configuration issues before the server starts. Common validation errors include:
-
-- Invalid YAML syntax in endpoint definitions
-- Missing required fields (name, description, etc.)
-- SQL syntax errors in queries
-- Invalid parameter or return type definitions
-
-If you want to start the server anyway and skip invalid endpoints, use the `--ignore-errors` flag.
 
 **Examples:**
 ```bash
-mxcp serve                   # Use transport settings from user config
-mxcp serve --port 9000       # Override port from user config
-mxcp serve --transport stdio # Override transport from user config
-mxcp serve --profile dev     # Use the 'dev' profile configuration
-mxcp serve --sql-tools true  # Enable built-in SQL querying tools
-mxcp serve --sql-tools false # Disable built-in SQL querying tools
-mxcp serve --readonly        # Open database connection in read-only mode
-mxcp serve --stateless       # Enable stateless HTTP mode
-mxcp serve --ignore-errors   # Start even if some endpoints are invalid
-mxcp serve --json-output     # Output validation errors as JSON (useful for CI/CD)
+mxcp serve                              # Default transport
+mxcp serve --transport stdio            # For Claude Desktop
+mxcp serve --transport streamable-http  # HTTP API
+mxcp serve --port 9000                  # Custom port
+mxcp serve --sql-tools true             # Enable SQL tools
+mxcp serve --stateless                  # Stateless mode (HTTP)
+mxcp serve --ignore-errors              # Start even if endpoints invalid
+mxcp serve --json-output                # JSON format for CI/CD
 ```
 
-### `mxcp run`
+### mxcp run
 
-Run an endpoint (tool, resource, or prompt).
+Execute an endpoint (tool, resource, or prompt).
 
 ```bash
 mxcp run ENDPOINT_TYPE NAME [OPTIONS]
 ```
 
+**Description:**
+
+Executes a single endpoint with the specified parameters. Supports both simple values and complex JSON values from files. User context can be provided for testing policy-protected endpoints.
+
 **Arguments:**
-- `ENDPOINT_TYPE`: Type of endpoint (tool, resource, or prompt)
-- `NAME`: Name of the endpoint to run
+- `ENDPOINT_TYPE`: `tool`, `resource`, or `prompt`
+- `NAME`: Endpoint name
 
 **Options:**
-- `--param`, `-p`: Parameter in format name=value or name=@file.json for complex values
-- `--profile`: Profile name to use
+- `--param`, `-p`: Parameter (`name=value` or `name=@file.json`)
+- `--user-context`, `-u`: User context JSON or `@file.json`
+- `--request-headers`: Request headers JSON or `@file.json`
+- `--skip-output-validation`: Skip return type validation
+- `--readonly`: Open database in read-only mode
 - `--json-output`: Output in JSON format
 - `--debug`: Show detailed debug information
-- `--skip-output-validation`: Skip output validation against the return type definition
-- `--readonly`: Open database connection in read-only mode
 
 **Examples:**
 ```bash
-mxcp run tool my_tool --param name=value
-mxcp run tool my_tool --param complex=@data.json
-mxcp run tool my_tool --readonly
+mxcp run tool get_user --param user_id=123
+mxcp run tool search --param query=test --param limit=10
+mxcp run resource "users://{id}" --param id=alice
+mxcp run prompt analyze --param data="sample"
+mxcp run tool my_tool --user-context '{"role": "admin"}'
+mxcp run tool my_tool --request-headers '{"Authorization": "Bearer token"}'
+mxcp run tool my_tool --param data=@input.json
 ```
 
-### `mxcp query`
+**Note:** For resources, use the full URI template (e.g., `users://{id}`) and provide parameters with `--param`.
 
-Execute a SQL query directly against the database.
+### mxcp query
+
+Execute SQL directly against the database.
 
 ```bash
 mxcp query [SQL] [OPTIONS]
 ```
 
+**Description:**
+
+Executes a SQL query directly against the database. The query can be provided as an argument or from a file. Parameters can be provided for parameterized queries.
+
 **Arguments:**
-- `SQL`: SQL query to execute (optional if --file is provided)
+- `SQL`: SQL query (optional if `--file` provided)
 
 **Options:**
 - `--file`: Path to SQL file
-- `--param`, `-p`: Parameter in format name=value or name=@file.json for complex values
-- `--profile`: Profile name to use
+- `--param`, `-p`: Parameter (`name=value` or `name=@file.json`)
+- `--readonly`: Open database in read-only mode
 - `--json-output`: Output in JSON format
 - `--debug`: Show detailed debug information
-- `--readonly`: Open database connection in read-only mode
 
 **Examples:**
 ```bash
-mxcp query "SELECT * FROM users WHERE age > 18" --param age=18
-mxcp query --file complex_query.sql --param start_date=@dates.json
-mxcp query "SELECT * FROM sales" --profile production --json-output
-mxcp query "SELECT * FROM users" --readonly
+mxcp query "SELECT * FROM users"
+mxcp query "SELECT * FROM users WHERE age > \$age" --param age=18
+mxcp query --file reports/monthly.sql
+mxcp query --file query.sql --param start=@dates.json
 ```
 
-### `mxcp validate`
+---
 
-Validates endpoint YAML files for correctness.
+## Quality Commands
 
-> 📖 For comprehensive validation, testing, and quality best practices, see the [Quality & Testing Guide](../guides/quality.md).
+> **See Also:** [Quality & Testing Guide](/quality/) for comprehensive testing best practices.
 
-**Usage:**
+### mxcp validate
+
+Validate endpoint definitions for correctness.
+
 ```bash
 mxcp validate [ENDPOINT] [OPTIONS]
 ```
 
+**Description:**
+
+Validates the schema and configuration of endpoints, including YAML syntax, required fields, SQL syntax errors, and parameter/return type definitions. If no endpoint is specified, all endpoints are validated.
+
 **Arguments:**
-- `ENDPOINT`: Name of endpoint to validate (optional)
+- `ENDPOINT`: Specific endpoint to validate (optional)
 
 **Options:**
-- `--profile`: Profile name to use
+- `--readonly`: Open database in read-only mode
 - `--json-output`: Output in JSON format
 - `--debug`: Show detailed debug information
-- `--readonly`: Open database connection in read-only mode
 
 **Examples:**
 ```bash
-mxcp validate                    # Validate all endpoints
-mxcp validate my_endpoint       # Validate specific endpoint
-mxcp validate --json-output     # Output results in JSON format
-mxcp validate --readonly        # Open database connection in read-only mode
+mxcp validate                        # Validate all
+mxcp validate tools/get_user.yml     # Validate specific endpoint
+mxcp validate --json-output          # JSON output
 ```
 
-### `mxcp test`
+### mxcp test
 
-Runs tests for endpoints to verify they work correctly.
+Run endpoint tests.
 
-> 📖 Learn how to write comprehensive tests and use assertion types in the [Quality & Testing Guide](../guides/quality.md#testing).
-
-**Usage:**
 ```bash
 mxcp test [ENDPOINT_TYPE] [NAME] [OPTIONS]
 ```
 
+**Description:**
+
+Executes test cases defined in endpoint configurations. If no endpoint type and name are provided, runs all tests. User context can be provided for testing policy-protected endpoints.
+
 **Arguments:**
-- `ENDPOINT_TYPE`: Type of endpoint to test (tool, resource, or prompt)
-- `NAME`: Name of the specific endpoint to test
+- `ENDPOINT_TYPE`: `tool`, `resource`, or `prompt` (optional)
+- `NAME`: Endpoint name (optional)
 
 **Options:**
-- `--user-context, -u`: User context as JSON string or @file.json for testing policy-protected endpoints
-- `--profile`: Profile name to use
-- `--json-output`: Output results in JSON format
+- `--user-context`, `-u`: User context JSON or `@file.json`
+- `--request-headers`: Request headers JSON or `@file.json`
+- `--readonly`: Open database in read-only mode
+- `--json-output`: Output in JSON format
 - `--debug`: Show detailed debug information
-- `--readonly`: Open database connection in read-only mode
 
 **Examples:**
-
 ```bash
-# Run all tests
-mxcp test
-
-# Test a specific endpoint
-mxcp test tool my_tool
-
-# Test with user context for policy testing
-mxcp test tool employee_info --user-context '{"role": "admin", "user_id": "admin123"}'
-
-# Test with context from file
-mxcp test --user-context @contexts/hr_user.json
-
-# Run tests with debugging
-mxcp test --debug
-
-# Run all tests in JSON output
-mxcp test --json-output
-
-# Test specific endpoint with user override
-mxcp test resource user_list --user-context '{"permissions": ["user.read", "user.write"]}'
+mxcp test                                    # Run all tests
+mxcp test tool get_user                      # Test specific endpoint
+mxcp test --user-context '{"role":"admin"}'  # Test with user context
+mxcp test --user-context @admin.json         # Context from file
+mxcp test --request-headers '{"Authorization":"Bearer token"}'  # With headers
+mxcp test --debug                            # Verbose output
 ```
 
 **User Context in Tests:**
@@ -275,111 +321,91 @@ tests:
       salary: 100000  # Admin can see salary
 ```
 
-### `mxcp lint`
+### mxcp lint
 
-Checks endpoints for metadata quality issues and suggests improvements for better LLM performance.
+Check endpoints for metadata quality issues.
 
-> 📖 See the [Quality & Testing Guide](../guides/quality.md#linting) for metadata best practices and LLM optimization tips.
-
-**Usage:**
 ```bash
 mxcp lint [OPTIONS]
 ```
 
+**Description:**
+
+Analyzes your endpoints and suggests improvements to make them more effective for LLM usage. Good metadata is crucial for LLM performance - it helps the model understand what each endpoint does, valid parameter values, expected output structures, and safety considerations.
+
+**Checks Performed:**
+- Missing descriptions on endpoints, parameters, and return types
+- Missing test cases
+- Missing parameter examples
+- Missing type descriptions in nested structures
+- Missing tags for categorization
+- Missing behavioral annotations (readOnlyHint, idempotentHint, etc.)
+- Missing default values on optional parameters
+
 **Options:**
-- `--profile`: Profile name to use
+- `--severity`: Minimum level (`all`, `warning`, `info`)
 - `--json-output`: Output in JSON format
 - `--debug`: Show detailed debug information
-- `--severity`: Minimum severity level to report (all, warning, info) - default: all
 
 **Examples:**
 ```bash
-mxcp lint                    # Check all endpoints for metadata issues
-mxcp lint --severity warning # Show only warnings (skip info-level suggestions)
-mxcp lint --json-output      # Output results in JSON format
+mxcp lint                      # Check all endpoints
+mxcp lint --severity warning   # Only warnings
+mxcp lint --json-output        # JSON output
 ```
 
-**Description:**
-The lint command analyzes your endpoints and suggests improvements to make them more effective for LLM usage. It checks for:
+### mxcp evals
 
-- **Missing descriptions** on endpoints, parameters, and return types
-- **Missing test cases** to ensure endpoint reliability
-- **Missing parameter examples** to guide LLM usage
-- **Missing type descriptions** in nested structures
-- **Missing tags** for better categorization
+Run LLM evaluations.
 
-### `mxcp evals`
-
-Runs LLM evaluation tests to verify how AI models interact with your endpoints.
-
-> 📖 Learn about writing and running evals in the [Quality & Testing Guide](../guides/quality.md#llm-evaluation-evals).
-
-**Usage:**
 ```bash
 mxcp evals [SUITE_NAME] [OPTIONS]
 ```
 
-**Arguments:**
-- `SUITE_NAME`: Name of the eval suite to run (optional)
-
-**Options:**
-- `--user-context, -u`: User context as JSON string or @file.json
-- `--model, -m`: Override model to use for evaluation
-- `--profile`: Profile name to use
-- `--json-output`: Output results in JSON format
-- `--debug`: Show detailed debug information
-
-**Examples:**
-```bash
-# Run all eval suites
-mxcp evals
-
-# Run specific eval suite
-mxcp evals customer_analysis
-
-# Override model for testing
-mxcp evals --model gpt-4-turbo
-
-# Run with user context
-mxcp evals --user-context '{"role": "admin", "permissions": ["read:all"]}'
-
-# Load context from file
-mxcp evals --user-context @contexts/analyst.json
-
-# JSON output for CI/CD
-mxcp evals --json-output
-```
-
 **Description:**
-The evals command executes evaluation tests that verify LLM behavior. Unlike regular tests that execute endpoints directly, evals:
+
+Executes evaluation tests that verify LLM behavior with your endpoints. Unlike regular tests that execute endpoints directly, evals:
 
 1. Send prompts to an LLM
 2. Verify the LLM calls appropriate tools
 3. Check that responses contain expected information
 4. Ensure safety by verifying destructive operations aren't called inappropriately
 
-Eval files should have the suffix `-evals.yml` or `.evals.yml` and are automatically discovered in your repository.
-- **Missing default values** on optional parameters
-- **Missing behavioral annotations** on tools
+Eval files should have the suffix `-evals.yml` or `.evals.yml` and are automatically discovered.
 
-The command reports issues at three severity levels:
-- **Warning**: Important metadata that significantly improves LLM understanding
-- **Info**: Nice-to-have metadata that further enhances the experience
+**Arguments:**
+- `SUITE_NAME`: Specific eval suite (optional)
 
-Good metadata is crucial for LLM performance because it helps the model understand:
-- What each endpoint does and when to use it
-- Valid parameter values and formats
-- Expected output structures
-- Safety considerations (e.g., read-only vs destructive operations)
+**Options:**
+- `--user-context`, `-u`: User context JSON or `@file.json`
+- `--model`, `-m`: Override model for evaluation
+- `--json-output`: Output in JSON format
+- `--debug`: Show detailed debug information
 
-### `mxcp list`
+**Examples:**
+```bash
+mxcp evals                           # Run all evals
+mxcp evals customer_service          # Run specific suite
+mxcp evals --model gpt-4-turbo       # Use specific model
+mxcp evals --user-context @user.json # With user context
+```
 
-List all available endpoints.
+---
+
+## Operations Commands
+
+### mxcp list
+
+List available endpoints.
 
 ```bash
 mxcp list [OPTIONS]
 ```
 
+**Description:**
+
+Discovers and lists all endpoints in the current repository, grouped by type (tools, resources, prompts). Shows both valid endpoints and any files with parsing errors.
+
 **Options:**
 - `--profile`: Profile name to use
 - `--json-output`: Output in JSON format
@@ -387,110 +413,101 @@ mxcp list [OPTIONS]
 
 **Examples:**
 ```bash
-mxcp list                    # List all endpoints
-mxcp list --json-output     # Output in JSON format
-mxcp list --profile dev     # List endpoints in dev profile
+mxcp list                 # List all endpoints
+mxcp list --json-output   # JSON format
+mxcp list --profile prod  # From specific profile
 ```
 
-### `mxcp drift-snapshot`
+### mxcp drift-snapshot
 
-Generate a drift snapshot of the current state for change detection.
+Create a drift detection baseline.
 
 ```bash
 mxcp drift-snapshot [OPTIONS]
 ```
 
+**Description:**
+
+Creates a snapshot of the current state of your MXCP repository for change detection. The snapshot is used to detect drift between different environments or over time.
+
+**Captures:**
+- Database schema (tables, columns)
+- Endpoint definitions (tools, resources, prompts)
+- Validation results
+- Test results
+
+> **See Also:** [Drift Detection](/operations/drift-detection) for comprehensive guide.
+
 **Options:**
-- `--profile`: Profile name to use
-- `--force`: Overwrite existing snapshot file
-- `--dry-run`: Show what would be done without writing the snapshot file
+- `--force`: Overwrite existing snapshot
+- `--dry-run`: Show what would be done
 - `--json-output`: Output in JSON format
 - `--debug`: Show detailed debug information
 
 **Examples:**
 ```bash
-mxcp drift-snapshot                    # Generate snapshot using default profile
-mxcp drift-snapshot --profile prod     # Generate snapshot using prod profile
-mxcp drift-snapshot --force           # Overwrite existing snapshot
-mxcp drift-snapshot --dry-run         # Show what would be done
-mxcp drift-snapshot --json-output     # Output results in JSON format
+mxcp drift-snapshot                # Create snapshot
+mxcp drift-snapshot --force        # Overwrite existing
+mxcp drift-snapshot --dry-run      # Preview only
+mxcp drift-snapshot --profile prod # From specific profile
 ```
 
-**Description:**
-Creates a snapshot of the current state of your MXCP repository, including:
-- Database schema (tables and columns)
-- Endpoint definitions (tools, resources, prompts)
-- Validation results
-- Test results
+### mxcp drift-check
 
-The snapshot is used as a baseline to detect drift between different environments or over time. For more information, see the [Drift Detection Guide](../features/drift-detection.md).
-
-### `mxcp drift-check`
-
-Check for drift between current state and baseline snapshot.
+Check for drift from baseline.
 
 ```bash
 mxcp drift-check [OPTIONS]
 ```
 
+**Description:**
+
+Compares the current state of your database and endpoints against a previously generated baseline snapshot to detect any changes. Reports added, removed, or modified tables, columns, and endpoints.
+
 **Options:**
-- `--profile`: Profile name to use
-- `--baseline`: Path to baseline snapshot file (defaults to profile drift path)
+- `--baseline`: Path to baseline snapshot file
+- `--readonly`: Open database in read-only mode
 - `--json-output`: Output in JSON format
-- `--debug`: Show detailed debug information
-- `--readonly`: Open database connection in read-only mode
+- `--debug`: Show detailed change information
+
+**Exit Codes:**
+- `0`: No drift detected
+- `1`: Drift detected
 
 **Examples:**
 ```bash
-mxcp drift-check                           # Check against default baseline
-mxcp drift-check --baseline path/to/snap   # Check against specific baseline
-mxcp drift-check --json-output             # Output results in JSON format
-mxcp drift-check --debug                   # Show detailed change information
-mxcp drift-check --readonly                # Open database in read-only mode
+mxcp drift-check                            # Check default baseline
+mxcp drift-check --baseline prod-snapshot   # Specific baseline
+mxcp drift-check --json-output              # JSON output
 ```
 
-**Description:**
-Compares the current state of your database and endpoints against a previously generated baseline snapshot to detect any changes. Reports:
-- Added, removed, or modified database tables and columns
-- Added, removed, or modified endpoints
-- Changes in validation or test results
+### mxcp log
 
-Exit code is 1 if drift is detected, 0 if no drift. For more information, see the [Drift Detection Guide](../features/drift-detection.md).
-
-### `mxcp log`
-
-Query MXCP audit logs for tool, resource, and prompt executions.
+Query audit logs.
 
 ```bash
 mxcp log [OPTIONS]
 ```
 
-**Options:**
-- `--profile`: Profile name to use
-- `--tool`: Filter by specific tool name
-- `--resource`: Filter by specific resource URI
-- `--prompt`: Filter by specific prompt name
-- `--type`: Filter by event type (tool, resource, or prompt)
-- `--policy`: Filter by policy decision (allow, deny, warn, or n/a)
-- `--status`: Filter by execution status (success or error)
-- `--since`: Show logs since specified time (e.g., 10m, 2h, 1d)
-- `--limit`: Maximum number of results (default: 100)
-- `--export-csv`: Export results to CSV file
-- `--export-duckdb`: Export all logs to DuckDB database file
-- `--json`: Output in JSON format
-- `--debug`: Show detailed debug information
+**Description:**
 
-**Examples:**
-```bash
-mxcp log                           # Show recent logs
-mxcp log --tool my_tool            # Filter by specific tool
-mxcp log --policy denied           # Show blocked executions
-mxcp log --since 10m               # Logs from last 10 minutes
-mxcp log --since 2h --status error # Errors from last 2 hours
-mxcp log --export-csv audit.csv    # Export to CSV file
-mxcp log --export-duckdb audit.db  # Export to DuckDB database
-mxcp log --json                    # Output as JSON
-```
+Queries the audit logs to show execution history for tools, resources, and prompts. Audit logging must be enabled in your profile configuration. Logs are stored in JSONL format for concurrent access while the server is running.
+
+> **See Also:** [Auditing Guide](/security/auditing) for comprehensive guide.
+
+**Options:**
+- `--tool`: Filter by tool name
+- `--resource`: Filter by resource URI
+- `--prompt`: Filter by prompt name
+- `--type`: Filter by type (`tool`, `resource`, `prompt`)
+- `--policy`: Filter by decision (`allow`, `deny`, `warn`, `n/a`)
+- `--status`: Filter by status (`success`, `error`)
+- `--since`: Time range (`10m`, `2h`, `1d`)
+- `--limit`: Maximum results (default: 100)
+- `--export-csv`: Export to CSV file
+- `--export-duckdb`: Export to DuckDB file
+- `--json`: JSON output
+- `--debug`: Show detailed debug information
 
 **Time Formats:**
 - `10s` - 10 seconds
@@ -498,145 +515,180 @@ mxcp log --json                    # Output as JSON
 - `2h` - 2 hours
 - `1d` - 1 day
 
-**Description:**
-Queries the audit logs to show execution history for tools, resources, and prompts. Audit logging must be enabled in your profile configuration. The command displays results in a tabular format by default, showing timestamp, type, name, status, policy decision, duration, and caller. 
+**Examples:**
+```bash
+mxcp log                              # Recent logs
+mxcp log --tool get_user              # Filter by tool
+mxcp log --policy deny                # Blocked executions
+mxcp log --since 1h                   # Last hour
+mxcp log --since 1d --status error    # Errors today
+mxcp log --export-csv audit.csv       # Export to CSV
+mxcp log --export-duckdb audit.duckdb # Export to DuckDB
+```
 
-Audit logs are stored in JSONL (JSON Lines) format, which allows concurrent reading while the server is running - no database locking issues. The `--export-duckdb` option allows you to convert the logs to a DuckDB database for complex SQL analysis.
+### mxcp log-cleanup
 
-For more information, see the [Audit Logging Guide](../features/auditing.md).
-
-### `mxcp log-cleanup`
-
-Apply retention policies to remove old audit records.
+Apply audit retention policies.
 
 ```bash
 mxcp log-cleanup [OPTIONS]
 ```
 
+**Description:**
+
+Deletes audit records older than their schema's retention policy. Each audit schema can define a `retention_days` value specifying how long records should be kept. This command is designed to be run periodically via cron or systemd timer.
+
 **Options:**
-- `--profile`: Profile name to use
-- `--dry-run`: Show what would be deleted without actually deleting
+- `--dry-run`: Show what would be deleted
 - `--json`: Output in JSON format
 - `--debug`: Show detailed debug information
 
 **Examples:**
 ```bash
-mxcp log-cleanup                  # Apply retention policies
-mxcp log-cleanup --dry-run        # Preview what would be deleted
-mxcp log-cleanup --profile prod   # Use specific profile
-mxcp log-cleanup --json           # Output results as JSON
+mxcp log-cleanup                # Apply retention
+mxcp log-cleanup --dry-run      # Preview only
+mxcp log-cleanup --profile prod # Specific profile
 
 # Schedule with cron (daily at 2 AM)
-0 2 * * * /usr/bin/mxcp log-cleanup
+# 0 2 * * * /usr/bin/mxcp log-cleanup
+
+# Systemd timer example - see mxcp-log-cleanup.service
 ```
 
-**Description:**
-Deletes audit records older than their schema's retention policy. Each audit schema can define a `retention_days` value specifying how long records should be kept. This command is designed to be run periodically via cron or systemd timer.
+---
 
-The `--dry-run` option shows what would be deleted without making changes, useful for testing retention policies before deploying automated cleanup.
+## dbt Integration Commands
 
-For more information, see the [Audit Cleanup Guide](../guides/audit-cleanup.md).
+> **See Also:** [dbt Integration](/integrations/dbt) for comprehensive guide.
 
-### `mxcp dbt-config`
+### mxcp dbt-config
 
-Generate or patch dbt side-car files (dbt_project.yml + profiles.yml).
+Generate dbt configuration files.
 
 ```bash
 mxcp dbt-config [OPTIONS]
 ```
 
+**Description:**
+
+Generates or patches dbt side-car files (`dbt_project.yml` + `profiles.yml`). Default mode writes `env_var()` templates so secrets stay out of YAML. Use `--embed-secrets` to flatten secrets directly into `profiles.yml` (not recommended for production).
+
 **Options:**
-- `--profile`: Override the profile name from mxcp-site.yml
-- `--dry-run`: Show what would be written without making changes
-- `--force`: Overwrite existing profile without confirmation
-- `--embed-secrets`: Embed secrets directly in profiles.yml
+- `--profile`: Override profile from mxcp-site.yml
+- `--dry-run`: Show what would be written
+- `--force`: Overwrite existing files
+- `--embed-secrets`: Embed secrets in profiles.yml
 - `--debug`: Show detailed debug information
 
 **Examples:**
 ```bash
-mxcp dbt-config                    # Generate dbt configuration files
-mxcp dbt-config --dry-run         # Show what would be written
-mxcp dbt-config --embed-secrets   # Embed secrets in profiles.yml
+mxcp dbt-config                         # Generate config
+mxcp dbt-config --dry-run               # Preview only
+mxcp dbt-config --embed-secrets --force # With secrets
 ```
 
-### `mxcp dbt`
+### mxcp dbt
 
-Wrapper for dbt CLI that injects secrets as environment variables.
+Wrapper for dbt CLI with secret injection.
 
 ```bash
 mxcp dbt [DBT_COMMAND] [OPTIONS]
 ```
 
-**Arguments:**
-- `DBT_COMMAND`: Any valid dbt command and its options
+**Description:**
+
+Injects secrets as environment variables then delegates to the real dbt CLI. This allows dbt to access secrets defined in your MXCP configuration without exposing them in `profiles.yml`.
 
 **Options:**
+- `--profile`: Override profile from mxcp-site.yml
 - `--debug`: Show detailed debug information
 
 **Examples:**
 ```bash
-mxcp dbt run --select my_model
-mxcp dbt test
-mxcp dbt docs generate
+mxcp dbt run                      # Run all models
+mxcp dbt run --select my_model    # Specific model
+mxcp dbt test                     # Run tests
+mxcp dbt docs generate            # Generate docs
+mxcp dbt docs serve               # Serve docs
+mxcp dbt run --profile prod       # Use prod profile
 ```
+
+---
 
 ## Output Formats
 
 ### JSON Output
 
-When using `--json-output`, commands return structured JSON with the following format:
+When using `--json-output`:
 
 ```json
 {
-  "status": "ok" | "error",
-  "result": <command-specific result>,
-  "error": <error message if status is "error">,
-  "traceback": <traceback if debug is enabled>
+  "status": "ok",
+  "result": {},
+  "error": null
+}
+```
+
+With errors:
+
+```json
+{
+  "status": "error",
+  "result": null,
+  "error": "Error message",
+  "traceback": "..."
 }
 ```
 
 ### Human-Readable Output
 
-By default, commands output results in a human-readable format:
-
-- Success messages are shown in standard output
-- Error messages are shown in standard error
-- Debug information (when enabled) includes detailed error traces
-- Lists and tables are formatted for easy reading
-
-## Error Handling
-
-All commands handle errors consistently:
-
-1. Invalid arguments or options show usage information
-2. Runtime errors show descriptive messages
-3. With `--debug`, full tracebacks are included
-4. With `--json-output`, errors are returned in JSON format
+Default output uses formatted text with:
+- Success messages to stdout
+- Error messages to stderr
+- Tables and lists formatted for readability
 
 ## Environment Variables
 
-The following environment variables can be used to configure MXCP:
-
 ### Core Configuration
-- `MXCP_DEBUG`: Enable debug logging (equivalent to --debug)
-- `MXCP_PROFILE`: Set default profile (equivalent to --profile)
-- `MXCP_READONLY`: Enable read-only mode (equivalent to --readonly)
-- `MXCP_DUCKDB_PATH`: Override the DuckDB file location from configuration
-- `MXCP_CONFIG_PATH`: Path to user config file (default: `~/.mxcp/config.yml`)
-- `MXCP_ADMIN_ENABLED`: Enable admin socket (default: true)
-- `MXCP_ADMIN_SOCKET`: Admin socket path
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MXCP_DEBUG` | Enable debug logging | false |
+| `MXCP_PROFILE` | Default profile | - |
+| `MXCP_READONLY` | Read-only mode | false |
+| `MXCP_DUCKDB_PATH` | Override DuckDB path | - |
+| `MXCP_CONFIG_PATH` | User config path | ~/.mxcp/config.yml |
+
+### Admin Socket
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MXCP_ADMIN_ENABLED` | Enable admin socket | true |
+| `MXCP_ADMIN_SOCKET` | Admin socket path | - |
 
 ### Telemetry (OpenTelemetry)
 
-**Standard OTEL variables:**
-- `OTEL_EXPORTER_OTLP_ENDPOINT`: OTLP collector endpoint (e.g., `http://otel-collector:4318`)
-- `OTEL_SERVICE_NAME`: Service name for telemetry (default: `mxcp`)
-- `OTEL_RESOURCE_ATTRIBUTES`: Resource attributes (format: `key1=value1,key2=value2`)
-- `OTEL_EXPORTER_OTLP_HEADERS`: Headers for OTLP exporter (format: `key1=value1,key2=value2`)
+| Variable | Description |
+|----------|-------------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint |
+| `OTEL_SERVICE_NAME` | Service name (default: mxcp) |
+| `OTEL_RESOURCE_ATTRIBUTES` | Resource attributes |
+| `OTEL_EXPORTER_OTLP_HEADERS` | OTLP headers |
+| `MXCP_TELEMETRY_ENABLED` | Enable/disable telemetry |
+| `MXCP_TELEMETRY_TRACING_CONSOLE` | Console trace export |
+| `MXCP_TELEMETRY_METRICS_INTERVAL` | Metrics interval (seconds) |
 
-**MXCP-specific variables:**
-- `MXCP_TELEMETRY_ENABLED`: Enable/disable telemetry (`true`/`false`)
-- `MXCP_TELEMETRY_TRACING_CONSOLE`: Enable console trace export for debugging (`true`/`false`)
-- `MXCP_TELEMETRY_METRICS_INTERVAL`: Metrics export interval in seconds (default: `60`)
+## Error Handling
 
-For more details on environment variables and their usage, see the [Configuration Guide](../guides/configuration.md) and [Observability Guide](../guides/observability.md). 
+Commands handle errors consistently:
+
+1. Invalid arguments show usage information
+2. Runtime errors show descriptive messages
+3. `--debug` includes full tracebacks
+4. `--json-output` returns errors in JSON format
+
+## Next Steps
+
+- [SQL Reference](/reference/sql) - SQL capabilities
+- [Python Reference](/reference/python) - Runtime API
+- [Plugin Reference](/reference/plugins) - Plugin development

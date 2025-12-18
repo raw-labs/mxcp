@@ -1,0 +1,61 @@
+---
+title: "Guides"
+description: "In-depth guides for configuring, deploying, and operating MXCP in production. Learn authentication, observability, testing, and operational best practices."
+sidebar:
+  order: 0
+---
+
+This section contains in-depth guides for configuring, deploying, and operating MXCP in production environments.
+
+## Getting Started
+
+### [Production Methodology](./production-methodology)
+Learn the structured approach to building reliable, production-ready MCP servers with MXCP. Understand the methodology that separates hobby projects from enterprise-grade systems.
+
+### [Configuration Guide](./configuration)
+Complete guide to MXCP configuration including user settings, repository configuration, endpoint definitions, environment variables, and secret management.
+
+## Security & Authentication
+
+### [Authentication](./authentication)
+Set up OAuth authentication with GitHub, Atlassian, Salesforce, or custom providers. Secure your endpoints with enterprise-grade authentication and session management.
+
+## Integration & Data
+
+### [Integrations](./integrations)
+Connect MXCP with AI platforms (Claude Desktop, OpenAI), data transformation tools (dbt), and diverse data sources through DuckDB.
+
+## Quality & Testing
+
+### [Quality & Testing Guide](./quality)
+Best practices for ensuring endpoint quality through validation, testing, and linting. Learn how to write tests, run LLM evaluations, and maintain high-quality metadata.
+
+## Operations
+
+### [Running MXCP in Production](./operational)
+Practical guide for deploying and operating MXCP servers in production environments. Covers deployment patterns, configuration, and monitoring.
+
+### [Observability Guide](./observability)
+Understanding what MXCP emits for monitoring and how to configure observability features including logging, metrics, and tracing.
+
+### [Audit Log Cleanup](./audit-cleanup)
+Manage audit log retention and configure automated cleanup to comply with data retention policies.
+
+### [Admin API](./admin-socket)
+Local administration interface for MXCP via REST over Unix socket. Query server status and trigger reloads without network access.
+
+## Quick Reference
+
+| Guide | Purpose | Time |
+|-------|---------|------|
+| [Production Methodology](./production-methodology) | Understand the MXCP approach | 10 min |
+| [Configuration](./configuration) | Set up your project | 15 min |
+| [Authentication](./authentication) | Add OAuth security | 20 min |
+| [Quality & Testing](./quality) | Ensure endpoint quality | 15 min |
+| [Operational](./operational) | Deploy to production | 20 min |
+
+## Next Steps
+
+- New to MXCP? Start with the [Quickstart Guide](../getting-started/quickstart)
+- Need API details? Check the [CLI Reference](../reference/cli)
+- Looking for features? See the [Features Overview](../features/)
