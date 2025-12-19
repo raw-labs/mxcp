@@ -64,10 +64,10 @@ class GoogleProviderAdapter(ProviderAdapter):
         self.client_secret = google_config.client_secret
         self.auth_url = google_config.auth_url
         self.token_url = google_config.token_url
-        self.scope = (
-            google_config.scope
-            or "https://www.googleapis.com/auth/calendar.readonly openid profile email"
-        )
+        # OAuth 2.0 provider scope string to request at Google's /authorize endpoint.
+        # This is required by config (no SDK-side defaults) to avoid accidental
+        # privilege expansion and to keep consent UX predictable.
+        self.scope = google_config.scope
         self._callback_path = google_config.callback_path
 
     def build_authorize_url(
@@ -81,11 +81,14 @@ class GoogleProviderAdapter(ProviderAdapter):
         extra_params: Mapping[str, str] | None = None,
     ) -> str:
         # `scopes` here are upstream *provider scopes* (Google OAuth scopes), not
-        # MXCP permissions. In issuer-mode we deliberately do not forward any OAuth
-        # client-requested scopes to the provider; this adapter is expected to be
-        # called with an empty list until the redesigned required/optional provider
-        # scope config + mapping layer is introduced. When empty, we fall back to
-        # the provider-configured default scopes.
+        # MXCP permissions.
+        #
+        # Issuer-mode policy: OAuth client-requested scopes (from MCP clients) must not
+        # influence what we request from the upstream IdP. The set of provider scopes
+        # comes from server/provider configuration and will later be mapped to MXCP
+        # permissions.
+        #
+        # If `scopes` is empty, we fall back to the configured provider scope string.
         scope_str = " ".join(scopes) if scopes else self.scope
         params = [
             ("client_id", self.client_id),
@@ -93,7 +96,14 @@ class GoogleProviderAdapter(ProviderAdapter):
             ("response_type", "code"),
             ("scope", scope_str),
             ("state", state),
+            # Google-specific: `access_type=offline` requests a refresh token.
+            #
+            # Note: Google may return a refresh token only on the first consent or when
+            # forcing consent via `prompt=consent` (and other account/app-specific rules).
             ("access_type", "offline"),
+            # Google-specific: `prompt=consent` forces a consent screen. This improves
+            # the likelihood of receiving a refresh token (offline access) but may
+            # increase user friction; keep this explicit.
             ("prompt", "consent"),
         ]
         if code_challenge:
@@ -123,37 +133,7 @@ class GoogleProviderAdapter(ProviderAdapter):
         if code_verifier:
             payload["code_verifier"] = code_verifier
 
-        async with create_mcp_http_client() as client:
-            resp = await client.post(
-                self.token_url,
-                data=payload,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-
-        if resp.status_code != 200:
-            description = ""
-            try:
-                description = resp.text
-            except Exception:
-                description = "Unknown error"
-            raise ProviderError("invalid_grant", description, status_code=resp.status_code)
-
-        data: dict[str, Any] = resp.json()
-        try:
-            token = _GoogleTokenResponse.model_validate(data)
-        except ValidationError as exc:
-            raise ProviderError(
-                "invalid_grant",
-                "Invalid token response payload",
-                status_code=resp.status_code,
-            ) from exc
-
-        if token.error is not None:
-            raise ProviderError(
-                token.error or "invalid_grant",
-                token.error_description or "Failed to exchange code",
-                status_code=resp.status_code,
-            )
+        token = await self._request_token(payload=payload, context="exchange_code")
 
         access_token = token.access_token
         refresh_token = token.refresh_token
@@ -163,15 +143,23 @@ class GoogleProviderAdapter(ProviderAdapter):
             raise ProviderError("invalid_grant", "No access_token in response", status_code=400)
 
         user_profile = await self._fetch_user_profile(access_token)
-        user_scopes = list(scopes) if scopes is not None else []
         expires_at = time.time() + float(expires_in) if expires_in else None
 
         token_type = token.token_type if token.token_type is not None else "Bearer"
+        # OAuth scope semantics:
+        # - The token endpoint `scope` field is OPTIONAL. When absent, it generally means
+        #   the granted scopes are identical to those requested at the authorize step.
+        # - Do NOT interpret missing `scope` as “zero scopes”.
+        #
+        # In issuer-mode, the `scopes` argument is expected to reflect the provider
+        # scopes used at /authorize (from configuration), not scopes supplied by the
+        # OAuth client.
+        granted_scopes = token.scope.split() if token.scope else list(scopes or [])
         return GrantResult(
             access_token=access_token,
             refresh_token=refresh_token,
             expires_at=expires_at,
-            provider_scopes_granted=user_scopes or (token.scope.split() if token.scope else []),
+            provider_scopes_granted=granted_scopes,
             raw_profile=user_profile,
             token_type=token_type,
         )
@@ -188,37 +176,7 @@ class GoogleProviderAdapter(ProviderAdapter):
         if scopes:
             payload["scope"] = " ".join(scopes)
 
-        async with create_mcp_http_client() as client:
-            resp = await client.post(
-                self.token_url,
-                data=payload,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-
-        if resp.status_code != 200:
-            description = ""
-            try:
-                description = resp.text
-            except Exception:
-                description = "Unknown error"
-            raise ProviderError("invalid_grant", description, status_code=resp.status_code)
-
-        data: dict[str, Any] = resp.json()
-        try:
-            token = _GoogleTokenResponse.model_validate(data)
-        except ValidationError as exc:
-            raise ProviderError(
-                "invalid_grant",
-                "Invalid refresh response payload",
-                status_code=resp.status_code,
-            ) from exc
-
-        if token.error is not None:
-            raise ProviderError(
-                token.error or "invalid_grant",
-                token.error_description or "Failed to refresh token",
-                status_code=resp.status_code,
-            )
+        token = await self._request_token(payload=payload, context="refresh_token")
 
         access_token = token.access_token
         expires_in = token.expires_in
@@ -269,15 +227,33 @@ class GoogleProviderAdapter(ProviderAdapter):
 
     async def revoke_token(self, *, token: str, token_type_hint: str | None = None) -> bool:
         async with create_mcp_http_client() as client:
+            # RFC 7009 token revocation: send token (and optional token_type_hint)
+            # as application/x-www-form-urlencoded. Google may ignore token_type_hint,
+            # but including it is safe and standards-aligned.
+            data: dict[str, str] = {"token": token}
+            if token_type_hint:
+                data["token_type_hint"] = token_type_hint
             resp = await client.post(
                 "https://oauth2.googleapis.com/revoke",
-                params={"token": token},
+                data=data,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
         if resp.status_code in {200, 400}:
             # 400 for invalid token per Google docs; treat as already revoked
             return True
-        raise ProviderError("invalid_token", f"Failed to revoke token: {resp.status_code}", 400)
+        logger.warning(
+            "Google revoke endpoint returned unexpected status",
+            extra={
+                "provider": self.provider_name,
+                "endpoint": "revoke",
+                "status_code": resp.status_code,
+            },
+        )
+        raise ProviderError(
+            "invalid_token",
+            "Google token revocation failed",
+            status_code=resp.status_code,
+        )
 
     # ── helpers ──────────────────────────────────────────────────────────────
     @property
@@ -292,18 +268,52 @@ class GoogleProviderAdapter(ProviderAdapter):
             )
 
         if resp.status_code != 200:
-            description = ""
-            try:
-                description = resp.text
-            except Exception:
-                description = "Unknown error"
+            logger.warning(
+                "Google userinfo endpoint returned non-200",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
+            )
             raise ProviderError(
                 "invalid_token",
-                f"Google UserInfo failed: {description}",
+                "Google userinfo request failed",
                 status_code=resp.status_code,
             )
 
-        payload: dict[str, Any] = resp.json()
+        try:
+            payload = resp.json()
+        except Exception as exc:
+            logger.warning(
+                "Google userinfo endpoint returned invalid JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_token",
+                "Google userinfo response was invalid",
+                status_code=resp.status_code,
+            ) from exc
+
+        if not isinstance(payload, dict):
+            logger.warning(
+                "Google userinfo endpoint returned non-object JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_token",
+                "Google userinfo response was invalid",
+                status_code=resp.status_code,
+            )
+
         try:
             _GoogleUserInfoResponse.model_validate(payload)
         except ValidationError as exc:
@@ -313,3 +323,122 @@ class GoogleProviderAdapter(ProviderAdapter):
                 status_code=resp.status_code,
             ) from exc
         return payload
+
+    async def _request_token(
+        self,
+        *,
+        payload: Mapping[str, str],
+        context: str,
+    ) -> _GoogleTokenResponse:
+        """Request tokens from Google's token endpoint.
+
+        OAuth notes:
+        - The token endpoint MAY return structured OAuth errors (`error`,
+          `error_description`) in either 4xx responses or (rarely) 200 responses.
+        - We log only the OAuth error code (not description/body) to avoid leaking
+          sensitive information.
+        """
+        async with create_mcp_http_client() as client:
+            resp = await client.post(
+                self.token_url,
+                data=payload,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+        return self._parse_token_response(resp, context=context)
+
+    def _parse_token_response(self, resp: Any, *, context: str) -> _GoogleTokenResponse:
+        if resp.status_code != 200:
+            error_code = self._try_extract_oauth_error_code(resp)
+            logger.warning(
+                "Google token endpoint returned non-200",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                    "provider_error": error_code,
+                },
+            )
+            raise ProviderError(
+                error_code or "invalid_grant",
+                "Google token request failed",
+                status_code=resp.status_code,
+            )
+
+        try:
+            data = resp.json()
+        except Exception as exc:
+            logger.warning(
+                "Google token endpoint returned invalid JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            ) from exc
+
+        if not isinstance(data, dict):
+            logger.warning(
+                "Google token endpoint returned non-object JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            )
+
+        try:
+            token = _GoogleTokenResponse.model_validate(data)
+        except ValidationError as exc:
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            ) from exc
+
+        if token.error is not None:
+            # The token endpoint returned an OAuth error in a 200 response.
+            logger.warning(
+                "Google token endpoint returned OAuth error",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                    "provider_error": token.error,
+                },
+            )
+            raise ProviderError(
+                token.error or "invalid_grant",
+                "Google token request failed",
+                status_code=resp.status_code,
+            )
+
+        return token
+
+    def _try_extract_oauth_error_code(self, resp: Any) -> str | None:
+        """Best-effort extraction of OAuth `error` code from a response.
+
+        We intentionally ignore `error_description` because it may contain
+        sensitive details and should not be propagated into logs.
+        """
+        try:
+            payload = resp.json()
+        except Exception:
+            return None
+        if not isinstance(payload, dict):
+            return None
+        error = payload.get("error")
+        return error if isinstance(error, str) and error else None

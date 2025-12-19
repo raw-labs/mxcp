@@ -164,7 +164,12 @@ class IssuerOAuthAuthorizationServer(
         # from the upstream IdP.
         if params.scopes:
             logger.warning("OAuth authorize request included scopes; ignoring")
-        scopes: list[str] = []
+        # Provider scopes come from server/provider configuration. We store them in
+        # the issued state so that, if the upstream token endpoint omits the `scope`
+        # field (which is allowed by OAuth 2.0), we can still treat the granted
+        # scopes as “the requested scopes” rather than incorrectly assuming zero.
+        scope_str = getattr(self.auth_service.provider_adapter, "scope", "")
+        scopes: list[str] = scope_str.split() if isinstance(scope_str, str) and scope_str else []
 
         pkce_method = "S256" if params.code_challenge else None
         authorize_url, _ = await self.auth_service.authorize(

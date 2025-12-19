@@ -102,7 +102,12 @@ class GoogleAuthConfigModel(SdkBaseModel):
 
     client_id: str
     client_secret: str
-    scope: str | None = None
+    # OAuth 2.0 scope string to request at the provider's /authorize endpoint.
+    #
+    # Intentionally required: the SDK provider adapter must not invent default
+    # scopes (which could silently broaden permissions). Defaults, if any, belong
+    # in higher-level configuration or templates.
+    scope: str
     callback_path: str
     auth_url: str
     token_url: str
