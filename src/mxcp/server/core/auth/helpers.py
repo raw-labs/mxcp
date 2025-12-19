@@ -2,6 +2,7 @@
 
 from mxcp.sdk.auth.contracts import ProviderAdapter
 from mxcp.sdk.auth.models import (
+    AtlassianAuthConfigModel,
     AuthConfigModel,
     AuthorizationConfigModel,
     AuthPersistenceConfigModel,
@@ -9,6 +10,7 @@ from mxcp.sdk.auth.models import (
     HttpTransportConfigModel,
     OAuthClientConfigModel,
 )
+from mxcp.sdk.auth.providers.atlassian import AtlassianProviderAdapter
 from mxcp.sdk.auth.providers.google import GoogleProviderAdapter
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.server.core.config.models import (
@@ -89,6 +91,15 @@ def create_provider_adapter(
     provider = user_auth_config.provider
     if provider == "none":
         return None
+
+    if provider == "atlassian":
+        atlassian_config = user_auth_config.atlassian
+        if not atlassian_config:
+            raise ValueError("Atlassian provider selected but no Atlassian configuration found")
+        atlassian_model = AtlassianAuthConfigModel.model_validate(
+            atlassian_config.model_dump(exclude_none=True)
+        )
+        return AtlassianProviderAdapter(atlassian_model)
 
     if provider == "google":
         google_config = user_auth_config.google

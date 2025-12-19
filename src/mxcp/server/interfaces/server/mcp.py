@@ -493,16 +493,11 @@ class RAWMCP:
         )
         token_store = SqliteTokenStore(db_path, allow_plaintext_tokens=True)
         self.session_manager = SessionManager(token_store)
-        client_registry: dict[str, list[str]] = {
-            client.client_id: list(client.redirect_uris or [])
-            for client in auth_config.clients or []
-        }
 
         self.auth_service = AuthService(
             provider_adapter=self.provider_adapter,
             session_manager=self.session_manager,
             callback_url=callback_url,
-            client_registry=client_registry,
         )
 
         clients = self._build_oauth_clients(auth_config.clients or [])

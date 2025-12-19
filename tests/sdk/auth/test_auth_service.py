@@ -20,16 +20,10 @@ async def auth_service(tmp_path: Path) -> AsyncGenerator[AuthService, None]:
     await store.initialize()
     session_manager = SessionManager(store)
     provider = DummyProviderAdapter(expected_code_verifier=None)
-    client_registry = {
-        "client-1": ["http://client/*"],
-        "client-2": ["http://other/*"],
-    }
     service = AuthService(
         provider_adapter=provider,
         session_manager=session_manager,
         callback_url="http://localhost/auth/callback",
-        client_registry=client_registry,
-        allowed_redirect_patterns=["http://localhost/*"],
     )
     yield service
     await store.close()
@@ -230,27 +224,33 @@ async def test_no_challenge_allows_token_exchange_without_verifier(
 
 
 @pytest.mark.asyncio
-async def test_authorize_rejects_unknown_client(auth_service: AuthService) -> None:
-    with pytest.raises(ProviderError):
-        await auth_service.authorize(
-            client_id="unknown-client",
-            redirect_uri="http://client/app",
-            scopes=["dummy.read"],
-            code_challenge=None,
-            code_challenge_method=None,
-        )
+async def test_authorize_stores_state_for_unknown_client(auth_service: AuthService) -> None:
+    # Redirect/client validation happens in IssuerOAuthAuthorizationServer.authorize(),
+    # not in AuthService.
+    _, state_record = await auth_service.authorize(
+        client_id="unknown-client",
+        redirect_uri="http://client/app",
+        scopes=["dummy.read"],
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    assert state_record.client_id == "unknown-client"
+    assert state_record.redirect_uri == "http://client/app"
 
 
 @pytest.mark.asyncio
-async def test_authorize_rejects_bad_redirect(auth_service: AuthService) -> None:
-    with pytest.raises(ProviderError):
-        await auth_service.authorize(
-            client_id="client-1",
-            redirect_uri="http://evil/app",
-            scopes=["dummy.read"],
-            code_challenge=None,
-            code_challenge_method=None,
-        )
+async def test_authorize_stores_state_for_any_redirect_uri(auth_service: AuthService) -> None:
+    # Redirect/client validation happens in IssuerOAuthAuthorizationServer.authorize(),
+    # not in AuthService.
+    _, state_record = await auth_service.authorize(
+        client_id="client-1",
+        redirect_uri="http://evil/app",
+        scopes=["dummy.read"],
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    assert state_record.client_id == "client-1"
+    assert state_record.redirect_uri == "http://evil/app"
 
 
 @pytest.mark.asyncio
@@ -321,8 +321,6 @@ async def test_authorize_allows_dcr_pattern_when_client_unknown(tmp_path: Path) 
         provider_adapter=provider,
         session_manager=session_manager,
         callback_url="http://localhost/auth/callback",
-        client_registry={},  # no pre-registered clients
-        allowed_redirect_patterns=["http://localhost/*"],
     )
 
     try:
@@ -341,7 +339,8 @@ async def test_authorize_allows_dcr_pattern_when_client_unknown(tmp_path: Path) 
 
 
 @pytest.mark.asyncio
-async def test_authorize_rejects_dcr_pattern_mismatch(tmp_path: Path) -> None:
+async def test_authorize_accepts_any_redirect_uri_and_client_id(tmp_path: Path) -> None:
+    """Redirect validation is enforced by IssuerOAuthAuthorizationServer, not AuthService."""
     store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
     await store.initialize()
     session_manager = SessionManager(store)
@@ -350,35 +349,6 @@ async def test_authorize_rejects_dcr_pattern_mismatch(tmp_path: Path) -> None:
         provider_adapter=provider,
         session_manager=session_manager,
         callback_url="http://localhost/auth/callback",
-        client_registry={},  # no pre-registered clients
-        allowed_redirect_patterns=["http://localhost/*"],
-    )
-
-    with pytest.raises(ProviderError):
-        await service.authorize(
-            client_id="dynamic-client",
-            redirect_uri="http://evil/app",
-            scopes=["dummy.read"],
-            code_challenge=None,
-            code_challenge_method=None,
-        )
-
-    await store.close()
-
-
-@pytest.mark.asyncio
-async def test_authorize_allows_all_when_no_allowlists(tmp_path: Path) -> None:
-    store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
-    await store.initialize()
-    session_manager = SessionManager(store)
-    provider = DummyProviderAdapter(expected_code_verifier=None)
-    # No registry, no allowed patterns → allow all (legacy behavior)
-    service = AuthService(
-        provider_adapter=provider,
-        session_manager=session_manager,
-        callback_url="http://localhost/auth/callback",
-        client_registry={},
-        allowed_redirect_patterns=None,
     )
 
     try:

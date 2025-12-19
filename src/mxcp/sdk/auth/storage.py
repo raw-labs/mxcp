@@ -418,9 +418,7 @@ class SqliteTokenStore(TokenStore):
         cursor.execute("PRAGMA table_info(oauth_clients)")
         columns = [row[1] for row in cursor.fetchall()]
         if "token_endpoint_auth_method" not in columns:
-            cursor.execute(
-                "ALTER TABLE oauth_clients ADD COLUMN token_endpoint_auth_method TEXT"
-            )
+            cursor.execute("ALTER TABLE oauth_clients ADD COLUMN token_endpoint_auth_method TEXT")
 
     # State helpers
     def _sync_store_state(self, payload: dict[str, Any]) -> None:

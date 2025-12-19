@@ -1,261 +1,439 @@
-"""Atlassian OAuth provider implementation for MXCP authentication."""
+"""Atlassian OAuth ProviderAdapter implementation for issuer-mode auth."""
+
+from __future__ import annotations
 
 import logging
-import secrets
-from typing import Any, cast
+import time
+from collections.abc import Mapping, Sequence
+from typing import Any
+from urllib.parse import urlencode
 
-from mcp.server.auth.provider import AuthorizationParams
 from mcp.shared._httpx_utils import create_mcp_http_client
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse, Response
+from pydantic import ConfigDict, ValidationError
 
-from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
-from ..models import (
-    AtlassianAuthConfigModel,
-    ExternalUserInfoModel,
-    HttpTransportConfigModel,
-    StateMetaModel,
-    UserContextModel,
-)
-from ..url_utils import URLBuilder
+from mxcp.sdk.models import SdkBaseModel
+
+from ..contracts import GrantResult, ProviderAdapter, ProviderError, UserInfo
+from ..models import AtlassianAuthConfigModel
 
 logger = logging.getLogger(__name__)
 
 
-class AtlassianOAuthHandler(ExternalOAuthHandler):
-    """Atlassian OAuth provider implementation for JIRA and Confluence Cloud."""
+class _AtlassianTokenResponse(SdkBaseModel):
+    """Minimal token endpoint response (successful or error)."""
 
-    def __init__(
-        self,
-        atlassian_config: AtlassianAuthConfigModel,
-        transport_config: HttpTransportConfigModel | None = None,
-        host: str = "localhost",
-        port: int = 8000,
-    ):
-        """Initialize Atlassian OAuth handler.
+    model_config = ConfigDict(extra="ignore", frozen=True)
 
-        Args:
-            atlassian_config: Atlassian-specific OAuth configuration
-            transport_config: HTTP transport configuration for URL building
-            host: The server host for callback URLs
-            port: The server port for callback URLs
-        """
-        logger.info(f"AtlassianOAuthHandler init: {atlassian_config}")
+    access_token: str | None = None
+    refresh_token: str | None = None
+    expires_in: float | None = None
+    scope: str | None = None
+    token_type: str | None = None
 
-        # Required fields are enforced by Pydantic model structure
+    error: str | None = None
+    error_description: str | None = None
+
+
+class _AtlassianMeResponse(SdkBaseModel):
+    """Minimal `/me` response used to normalize UserInfo."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    account_id: str | None = None
+    email: str | None = None
+    name: str | None = None
+    picture: str | None = None
+    nickname: str | None = None
+    scope: str | None = None
+
+
+class AtlassianProviderAdapter(ProviderAdapter):
+    """Atlassian OAuth ProviderAdapter that uses real HTTP calls."""
+
+    provider_name = "atlassian"
+
+    def __init__(self, atlassian_config: AtlassianAuthConfigModel):
         self.client_id = atlassian_config.client_id
         self.client_secret = atlassian_config.client_secret
-
-        # Atlassian OAuth endpoints are standardized
         self.auth_url = atlassian_config.auth_url
         self.token_url = atlassian_config.token_url
-
-        # Use configured scope or default
-        self.scope = (
-            atlassian_config.scope
-            or "read:me read:jira-work read:jira-user read:confluence-content.all read:confluence-user offline_access"
-        )
-
+        # OAuth 2.0 provider scope string to request at Atlassian's /authorize endpoint.
+        # Intentionally required by config (no SDK-side defaults) to avoid accidental
+        # privilege expansion and to keep consent UX predictable.
+        self.scope = atlassian_config.scope
         self._callback_path = atlassian_config.callback_path
-        self.host = host
-        self.port = port
 
-        # Initialize URL builder for proper scheme detection
-        self.url_builder = URLBuilder(transport_config)
+    def build_authorize_url(
+        self,
+        *,
+        redirect_uri: str,
+        state: str,
+        scopes: Sequence[str],
+        code_challenge: str | None = None,
+        code_challenge_method: str | None = None,
+        extra_params: Mapping[str, str] | None = None,
+    ) -> str:
+        # `scopes` are upstream provider scopes (Atlassian 3LO scopes), not MXCP
+        # permissions.
+        #
+        # Issuer-mode policy: OAuth client-requested scopes (from MCP clients) must not
+        # influence what we request from the upstream IdP. Provider scopes come from
+        # server/provider configuration and will later be mapped to MXCP permissions.
+        scope_str = " ".join(scopes) if scopes else self.scope
 
-        # State storage for OAuth flow
-        self._state_store: dict[str, StateMetaModel] = {}
+        params: list[tuple[str, str]] = [
+            # Atlassian 3LO requires `audience=api.atlassian.com` so that the resulting
+            # access token is valid for calling Atlassian APIs via api.atlassian.com.
+            ("audience", "api.atlassian.com"),
+            ("client_id", self.client_id),
+            ("redirect_uri", redirect_uri),
+            ("response_type", "code"),
+            ("scope", scope_str),
+            ("state", state),
+            # Atlassian-specific: `prompt=consent` forces the consent screen. This may
+            # affect refresh token issuance and re-consent behavior. Keep explicit.
+            ("prompt", "consent"),
+        ]
+        if code_challenge:
+            params.append(("code_challenge", code_challenge))
+        if code_challenge_method:
+            params.append(("code_challenge_method", code_challenge_method))
+        if extra_params:
+            params.extend(extra_params.items())
 
-    # ----- authorize -----
-    def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
-        state = params.state or secrets.token_hex(16)
+        query_string = urlencode(params, doseq=True)
+        return f"{self.auth_url}?{query_string}"
 
-        # Use URL builder to construct callback URL with proper scheme detection
-        full_callback_url = self.url_builder.build_callback_url(
-            self._callback_path, host=self.host, port=self.port
-        )
-
-        # Store the original redirect URI and callback URL in state for later use
-        self._state_store[state] = StateMetaModel(
-            redirect_uri=str(params.redirect_uri),
-            code_challenge=params.code_challenge,
-            redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
-            client_id=client_id,
-            callback_url=full_callback_url,
-        )
-
-        logger.info(
-            f"Atlassian OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
-        )
-
-        # Atlassian requires specific parameters
-        return (
-            f"{self.auth_url}?"
-            f"audience=api.atlassian.com&"
-            f"client_id={self.client_id}&"
-            f"scope={self.scope}&"
-            f"redirect_uri={full_callback_url}&"
-            f"state={state}&"
-            f"response_type=code&"
-            f"prompt=consent"
-        )
-
-    # ----- state helpers -----
-    def _get_state_metadata(self, state: str) -> StateMetaModel:
-        try:
-            return self._state_store[state]
-        except KeyError:
-            raise HTTPException(400, "Invalid state parameter") from None
-
-    def _pop_state(self, state: str) -> None:
-        self._state_store.pop(state, None)
-
-    def cleanup_state(self, state: str) -> None:
-        """Clean up state and associated callback URL after OAuth flow completion."""
-        self._pop_state(state)
-
-    # ----- code exchange -----
     async def exchange_code(
-        self, code: str, state: str
-    ) -> tuple[ExternalUserInfoModel, StateMetaModel]:
-        # Validate state parameter and get metadata
-        state_meta = self._get_state_metadata(state)
+        self,
+        *,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str | None = None,
+        scopes: Sequence[str] | None = None,
+    ) -> GrantResult:
+        payload: dict[str, Any] = {
+            "grant_type": "authorization_code",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "code": code,
+            "redirect_uri": redirect_uri,
+        }
+        if code_verifier:
+            # PKCE: include verifier when the authorize request used a challenge.
+            payload["code_verifier"] = code_verifier
 
-        # Use the stored callback URL from state metadata
-        full_callback_url = state_meta.callback_url
-        if not full_callback_url:
-            # Fallback to constructing it using URL builder
-            full_callback_url = self.url_builder.build_callback_url(
-                self._callback_path, host=self.host, port=self.port
-            )
+        token = await self._request_token(payload=payload, context="exchange_code")
 
-        logger.info(
-            f"Atlassian OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}"
+        access_token = token.access_token
+        refresh_token = token.refresh_token
+        expires_in = token.expires_in
+        if not access_token:
+            raise ProviderError("invalid_grant", "No access_token in response", status_code=400)
+
+        raw_profile = await self._fetch_me(access_token)
+        expires_at = time.time() + float(expires_in) if expires_in else None
+
+        # OAuth scope semantics:
+        # - The token endpoint `scope` field is OPTIONAL. When absent, it generally means
+        #   the granted scopes are identical to those requested at the authorize step.
+        # - Do NOT interpret missing `scope` as “zero scopes”.
+        granted_scopes = token.scope.split() if token.scope else list(scopes or [])
+        token_type = token.token_type if token.token_type is not None else "Bearer"
+
+        return GrantResult(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=expires_at,
+            provider_scopes_granted=granted_scopes,
+            raw_profile=raw_profile,
+            token_type=token_type,
         )
 
-        async with create_mcp_http_client() as client:
-            resp = await client.post(
-                self.token_url,
-                json={
-                    "grant_type": "authorization_code",
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "code": code,
-                    "redirect_uri": full_callback_url,
-                },
-                headers={"Content-Type": "application/json"},
-            )
-        if resp.status_code != 200:
-            logger.error(f"Atlassian token exchange failed: {resp.status_code} {resp.text}")
-            raise HTTPException(400, "Failed to exchange code for token")
-        payload = resp.json()
-        if "error" in payload:
-            logger.error(f"Atlassian token exchange error: {payload}")
-            raise HTTPException(400, payload.get("error_description", payload["error"]))
+    async def refresh_token(
+        self, *, refresh_token: str, scopes: Sequence[str] | None = None
+    ) -> GrantResult:
+        payload: dict[str, Any] = {
+            "grant_type": "refresh_token",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "refresh_token": refresh_token,
+        }
+        if scopes:
+            payload["scope"] = " ".join(scopes)
 
-        # Get user info to extract the actual user ID
-        access_token = payload["access_token"]
-        user_profile = await self._fetch_user_profile(access_token)
+        token = await self._request_token(payload=payload, context="refresh_token")
 
-        # Use Atlassian's 'account_id' field as the unique identifier
-        user_id = user_profile.get("account_id", "")
+        access_token = token.access_token
+        expires_in = token.expires_in
+        if not access_token:
+            raise ProviderError("invalid_grant", "No access_token in refresh response", 400)
+
+        expires_at = time.time() + float(expires_in) if expires_in else None
+        granted_scopes = (token.scope.split() if token.scope else []) or list(scopes or [])
+        token_type = token.token_type if token.token_type is not None else "Bearer"
+
+        return GrantResult(
+            access_token=access_token,
+            refresh_token=token.refresh_token if token.refresh_token is not None else refresh_token,
+            expires_at=expires_at,
+            provider_scopes_granted=granted_scopes,
+            raw_profile=None,
+            token_type=token_type,
+        )
+
+    async def fetch_user_info(self, *, access_token: str) -> UserInfo:
+        profile = await self._fetch_me(access_token)
+        try:
+            parsed = _AtlassianMeResponse.model_validate(profile)
+        except ValidationError as exc:
+            raise ProviderError(
+                "invalid_token",
+                "Atlassian profile response was invalid",
+                status_code=400,
+            ) from exc
+
+        user_id = parsed.account_id or ""
         if not user_id:
-            logger.error("Atlassian user profile missing 'account_id' field")
-            raise HTTPException(400, "Invalid user profile: missing user ID")
+            raise ProviderError("invalid_token", "Atlassian profile missing account_id", 400)
 
-        # Don't clean up state here - let handle_callback do it after getting metadata
-        logger.info(f"Atlassian OAuth token exchange successful for user: {user_id}")
+        email = parsed.email
+        username = parsed.nickname or (email.split("@")[0] if email else None) or user_id
 
-        user_info = ExternalUserInfoModel(
-            id=user_id,
-            scopes=[],
-            raw_token=access_token,
-            provider="atlassian",
+        return UserInfo(
+            provider=self.provider_name,
+            user_id=user_id,
+            username=username,
+            email=email,
+            name=parsed.name,
+            avatar_url=parsed.picture,
+            raw_profile=profile,
+            provider_scopes_granted=parsed.scope.split() if parsed.scope else None,
         )
 
-        return user_info, state_meta
+    async def revoke_token(self, *, token: str, token_type_hint: str | None = None) -> bool:
+        async with create_mcp_http_client() as client:
+            # RFC 7009 token revocation: send token as form body.
+            #
+            # Atlassian 3LO revocation requires client authentication. We use
+            # form-encoded client_id/client_secret to avoid adding extra auth machinery
+            # here; do not log any of these values.
+            #
+            # Note: `token_type_hint` is part of RFC 7009. Atlassian may ignore it, but
+            # including it is safe and standards-aligned.
+            data: dict[str, str] = {
+                "token": token,
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+            }
+            if token_type_hint:
+                data["token_type_hint"] = token_type_hint
+            resp = await client.post(
+                "https://auth.atlassian.com/oauth/revoke",
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
 
-    # ----- callback -----
+        if resp.status_code in {200, 204}:
+            return True
+        logger.warning(
+            "Atlassian revoke endpoint returned unexpected status",
+            extra={
+                "provider": self.provider_name,
+                "endpoint": "revoke",
+                "status_code": resp.status_code,
+            },
+        )
+        raise ProviderError(
+            "invalid_token",
+            "Atlassian token revocation failed",
+            status_code=resp.status_code,
+        )
+
+    # ── helpers ──────────────────────────────────────────────────────────────
     @property
-    def callback_path(self) -> str:  # noqa: D401
+    def callback_path(self) -> str:
         return self._callback_path
 
-    async def on_callback(
-        self, request: Request, provider: "GeneralOAuthAuthorizationServer"
-    ) -> Response:  # noqa: E501
-        code = request.query_params.get("code")
-        state = request.query_params.get("state")
-        if not code or not state:
-            raise HTTPException(400, "Missing code or state")
-        try:
-            redirect_uri = await provider.handle_callback(code, state)
-            return RedirectResponse(redirect_uri)
-        except HTTPException:
-            raise
-        except Exception as exc:
-            logger.error("Atlassian callback failed", exc_info=exc)
-            return HTMLResponse(status_code=500, content="oauth_failure")
-
-    # ----- user context -----
-    async def get_user_context(self, token: str) -> UserContextModel:
-        """Get standardized user context from Atlassian.
-
-        Args:
-            token: Atlassian OAuth access token
-
-        Returns:
-            UserContextModel with Atlassian user information
-
-        Raises:
-            HTTPException: If token is invalid or user info cannot be retrieved
-        """
-        try:
-            user_profile = await self._fetch_user_profile(token)
-
-            # Extract Atlassian-specific fields and map to standard UserContextModel
-            return UserContextModel(
-                provider="atlassian",
-                user_id=str(user_profile.get("account_id", "")),
-                username=user_profile.get(
-                    "nickname", f"user_{user_profile.get('account_id', 'unknown')}"
-                ),
-                email=user_profile.get("email"),
-                name=user_profile.get("name"),
-                avatar_url=user_profile.get("picture"),
-                raw_profile=user_profile,
-                external_token=token,
-            )
-        except Exception as e:
-            logger.error(f"Failed to get Atlassian user context: {e}")
-            raise HTTPException(500, f"Failed to retrieve user information: {e}") from e
-
-    # ----- private helper -----
-    async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
-        """Fetch raw user profile from Atlassian User Identity API (private implementation detail)."""
-        logger.info(f"Fetching Atlassian user profile with token: {token[:10]}...")
-
+    async def _fetch_me(self, token: str) -> dict[str, Any]:
         async with create_mcp_http_client() as client:
             resp = await client.get(
                 "https://api.atlassian.com/me",
                 headers={"Authorization": f"Bearer {token}"},
             )
 
-        logger.info(f"Atlassian User Identity API response: {resp.status_code}")
-
         if resp.status_code != 200:
-            error_body = ""
-            try:
-                error_body = resp.text
-                logger.error(f"Atlassian User Identity API error {resp.status_code}: {error_body}")
-            except Exception:
-                logger.error(
-                    f"Atlassian User Identity API error {resp.status_code}: Unable to read response body"
-                )
-            raise ValueError(f"Atlassian API error: {resp.status_code} - {error_body}")
+            logger.warning(
+                "Atlassian /me endpoint returned non-200",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_token",
+                "Atlassian userinfo request failed",
+                status_code=resp.status_code,
+            )
 
-        user_data = cast(dict[str, Any], resp.json())
-        logger.info(
-            f"Successfully fetched Atlassian user profile for account_id: {user_data.get('account_id', 'unknown')}"
-        )
-        return user_data
+        try:
+            payload = resp.json()
+        except Exception as exc:
+            logger.warning(
+                "Atlassian /me endpoint returned invalid JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_token",
+                "Atlassian userinfo response was invalid",
+                status_code=resp.status_code,
+            ) from exc
+
+        if not isinstance(payload, dict):
+            logger.warning(
+                "Atlassian /me endpoint returned non-object JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_token",
+                "Atlassian userinfo response was invalid",
+                status_code=resp.status_code,
+            )
+
+        try:
+            _AtlassianMeResponse.model_validate(payload)
+        except ValidationError as exc:
+            raise ProviderError(
+                "invalid_token",
+                "Invalid userinfo payload",
+                status_code=resp.status_code,
+            ) from exc
+
+        return payload
+
+    async def _request_token(
+        self,
+        *,
+        payload: Mapping[str, Any],
+        context: str,
+    ) -> _AtlassianTokenResponse:
+        """Request tokens from Atlassian's token endpoint.
+
+        OAuth notes:
+        - The token endpoint MAY return structured OAuth errors (`error`,
+          `error_description`) in non-200 responses or (rarely) 200 responses.
+        - We log only the OAuth error code (not description/body) to avoid leaking
+          sensitive information.
+        """
+        async with create_mcp_http_client() as client:
+            resp = await client.post(
+                self.token_url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+        return self._parse_token_response(resp, context=context)
+
+    def _parse_token_response(self, resp: Any, *, context: str) -> _AtlassianTokenResponse:
+        if resp.status_code != 200:
+            error_code = self._try_extract_oauth_error_code(resp)
+            logger.warning(
+                "Atlassian token endpoint returned non-200",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                    "provider_error": error_code,
+                },
+            )
+            raise ProviderError(
+                error_code or "invalid_grant",
+                "Atlassian token request failed",
+                status_code=resp.status_code,
+            )
+
+        try:
+            data = resp.json()
+        except Exception as exc:
+            logger.warning(
+                "Atlassian token endpoint returned invalid JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            ) from exc
+
+        if not isinstance(data, dict):
+            logger.warning(
+                "Atlassian token endpoint returned non-object JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            )
+
+        try:
+            token = _AtlassianTokenResponse.model_validate(data)
+        except ValidationError as exc:
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            ) from exc
+
+        if token.error is not None:
+            logger.warning(
+                "Atlassian token endpoint returned OAuth error",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                    "provider_error": token.error,
+                },
+            )
+            raise ProviderError(
+                token.error or "invalid_grant",
+                "Atlassian token request failed",
+                status_code=resp.status_code,
+            )
+
+        return token
+
+    def _try_extract_oauth_error_code(self, resp: Any) -> str | None:
+        """Best-effort extraction of OAuth `error` code from a response.
+
+        We intentionally ignore `error_description` because it may contain
+        sensitive details and should not be propagated into logs.
+        """
+        try:
+            payload = resp.json()
+        except Exception:
+            return None
+        if not isinstance(payload, dict):
+            return None
+        error = payload.get("error")
+        return error if isinstance(error, str) and error else None

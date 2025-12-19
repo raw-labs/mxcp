@@ -8,7 +8,6 @@ import logging
 import secrets
 import time
 from collections.abc import Mapping, Sequence
-from fnmatch import fnmatch
 
 from mxcp.sdk.auth.contracts import GrantResult, ProviderAdapter, ProviderError
 from mxcp.sdk.auth.session_manager import SessionManager
@@ -39,14 +38,10 @@ class AuthService:
         provider_adapter: ProviderAdapter,
         session_manager: SessionManager,
         callback_url: str,
-        client_registry: Mapping[str, Sequence[str]] | None = None,
-        allowed_redirect_patterns: Sequence[str] | None = None,
     ):
         self.provider_adapter = provider_adapter
         self.session_manager = session_manager
         self.callback_url = callback_url.rstrip("/")
-        self.client_registry = {k: list(v) for k, v in (client_registry or {}).items()}
-        self.allowed_redirect_patterns = list(allowed_redirect_patterns or [])
 
     async def authorize(
         self,
@@ -60,7 +55,9 @@ class AuthService:
         extra_params: Mapping[str, str] | None = None,
     ) -> tuple[str, StateRecord]:
         """Create state and return provider authorize URL."""
-        self._validate_client_redirect(client_id, redirect_uri)
+        # Redirect URI validation is enforced by IssuerOAuthAuthorizationServer.authorize()
+        # against persisted OAuth clients (TokenStore). AuthService should not depend on
+        # in-memory client registries for security decisions.
 
         # Generate PKCE pair for provider (Google) if needed
         # The MCP client's code_challenge is for MXCP ↔ MCP client flow
@@ -128,8 +125,12 @@ class AuthService:
             logger.warning("handle_callback: state not found or expired")
             raise ProviderError("invalid_state", "State not found or expired", status_code=400)
 
-        # Re-validate client and redirect from the stored state.
-        self._validate_client_redirect(state_record.client_id, state_record.redirect_uri)
+        if not state_record.redirect_uri:
+            raise ProviderError(
+                "invalid_state",
+                "State record missing redirect_uri",
+                status_code=400,
+            )
 
         # Use the provider's code_verifier (for Google), not the MCP client's
         grant: GrantResult = await self.provider_adapter.exchange_code(
@@ -256,34 +257,6 @@ class AuthService:
 
         if not valid:
             raise ProviderError("invalid_grant", "PKCE verification failed", status_code=400)
-
-    def _validate_client_redirect(self, client_id: str | None, redirect_uri: str | None) -> None:
-        """Ensure client is registered and redirect URI matches allowed patterns."""
-        if not client_id or not redirect_uri:
-            # Backward-compatible: if no allowlists configured, allow all.
-            if not self.client_registry and not self.allowed_redirect_patterns:
-                return
-            raise ProviderError("invalid_request", "client_id and redirect_uri are required", 400)
-
-        patterns = self.client_registry.get(client_id)
-        if patterns is None:
-            # DCR-friendly: fall back to global allowed patterns if provided.
-            if not self.allowed_redirect_patterns:
-                # If no allowlists at all, allow all (legacy behavior).
-                if not self.client_registry:
-                    return
-                raise ProviderError(
-                    "invalid_client", f"Unknown client_id {client_id}", status_code=400
-                )
-            patterns = self.allowed_redirect_patterns
-
-        matched = any(fnmatch(redirect_uri, pattern) for pattern in patterns)
-        if not matched:
-            raise ProviderError(
-                "invalid_request",
-                f"redirect_uri not allowed for client {client_id}",
-                status_code=400,
-            )
 
 
 __all__ = ["AccessTokenResponse", "AuthService"]

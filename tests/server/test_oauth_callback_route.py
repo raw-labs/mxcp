@@ -131,7 +131,6 @@ def issuer_mode_server(
         provider_adapter=_ProviderAdapterStub(),
         session_manager=session_manager,
         callback_url="http://localhost/oauth/callback",
-        client_registry={},
     )
     oauth_server = IssuerOAuthAuthorizationServer(
         auth_service=auth_service,
