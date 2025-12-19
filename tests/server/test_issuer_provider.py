@@ -3,6 +3,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 from mcp.server.auth.provider import AuthorizationParams
+from mcp.server.auth.provider import AuthorizeError
 from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyUrl
 
@@ -218,3 +219,106 @@ async def test_config_clients_are_bootstrapped_into_token_store(tmp_path: Path) 
     assert loaded.client_id == "client-1"
     assert loaded.token_endpoint_auth_method == "client_secret_post"
     await token_store.close()
+
+
+@pytest.mark.asyncio
+async def test_authorize_rejects_unregistered_redirect_uri(tmp_path: Path) -> None:
+    adapter = DummyProviderAdapter()
+    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
+    session_manager = SessionManager(token_store)
+    auth_service = AuthService(
+        provider_adapter=adapter,
+        session_manager=session_manager,
+        callback_url="https://server/callback",
+    )
+
+    client = OAuthClientInformationFull(
+        client_id="client-1",
+        client_secret="secret",
+        redirect_uris=[AnyUrl("https://client/app")],
+        grant_types=["authorization_code"],
+        response_types=["code"],
+        scope="dummy.read",
+    )
+    assert client.client_id is not None
+
+    server = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service,
+        session_manager=session_manager,
+        clients={client.client_id: client},
+    )
+
+    params = AuthorizationParams(
+        state=None,
+        scopes=["ignored"],
+        code_challenge="test_challenge",
+        redirect_uri=AnyUrl("https://client/other"),
+        redirect_uri_provided_explicitly=True,
+    )
+
+    with pytest.raises(AuthorizeError):
+        await server.authorize(client, params)
+
+
+@pytest.mark.asyncio
+async def test_authorize_rejects_unknown_client_id_even_if_object_provided(tmp_path: Path) -> None:
+    """Authorization must use TokenStore as source of truth for client registration."""
+    adapter = DummyProviderAdapter()
+    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
+    session_manager = SessionManager(token_store)
+    auth_service = AuthService(
+        provider_adapter=adapter,
+        session_manager=session_manager,
+        callback_url="https://server/callback",
+    )
+
+    server = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service,
+        session_manager=session_manager,
+        clients={},  # no configured clients
+    )
+
+    client = OAuthClientInformationFull(
+        client_id="unknown-client",
+        client_secret="secret",
+        redirect_uris=[AnyUrl("https://client/app")],
+        grant_types=["authorization_code"],
+        response_types=["code"],
+        scope="dummy.read",
+    )
+    assert client.client_id is not None
+
+    params = AuthorizationParams(
+        state=None,
+        scopes=["ignored"],
+        code_challenge="test_challenge",
+        redirect_uri=AnyUrl("https://client/app"),
+        redirect_uri_provided_explicitly=True,
+    )
+
+    with pytest.raises(AuthorizeError):
+        await server.authorize(client, params)
+
+
+@pytest.mark.asyncio
+async def test_register_client_requires_redirect_uris(tmp_path: Path) -> None:
+    adapter = DummyProviderAdapter()
+    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
+    session_manager = SessionManager(token_store)
+    auth_service = AuthService(
+        provider_adapter=adapter,
+        session_manager=session_manager,
+        callback_url="https://server/callback",
+    )
+    server = IssuerOAuthAuthorizationServer(auth_service=auth_service, session_manager=session_manager)
+
+    bad_client = OAuthClientInformationFull(
+        client_id="dcr-client-1",
+        client_secret="secret",
+        redirect_uris=None,
+        grant_types=["authorization_code"],
+        response_types=["code"],
+        scope="client-metadata-scope",
+    )
+    with pytest.raises(AuthorizeError):
+        await server.register_client(bad_client)

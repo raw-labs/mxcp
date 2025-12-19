@@ -126,6 +126,12 @@ class IssuerOAuthAuthorizationServer(
         if client_info.client_id is None:
             raise AuthorizeError("invalid_request", "Client ID is required")
         async with self._lock:
+            if not client_info.redirect_uris:
+                # Security: issuer-mode must bind clients to explicit redirect URIs
+                # (either via config or DCR). Without registered redirect URIs, we
+                # cannot safely validate redirects.
+                raise AuthorizeError("invalid_request", "redirect_uris is required")
+
             # DCR may include a `scope` field. We accept it as client metadata but do
             # not use it to request upstream provider scopes (those come from server
             # configuration and will later be mapped to MXCP permissions).
@@ -149,12 +155,20 @@ class IssuerOAuthAuthorizationServer(
         if client.client_id is None:
             raise AuthorizeError("unauthorized_client", "Client ID is missing")
 
-        redirect_uri_str = str(params.redirect_uri)
-        if (
-            params.redirect_uri_provided_explicitly
-            and client.redirect_uris
-            and redirect_uri_str not in [str(u) for u in client.redirect_uris]
-        ):
+        # IMPORTANT: persisted client registration is the source of truth.
+        # Re-load from TokenStore to enforce strict redirect binding.
+        persisted = await self.get_client(client.client_id)
+        if not persisted:
+            raise AuthorizeError("unauthorized_client", "Client not found")
+        if not persisted.redirect_uris:
+            raise AuthorizeError("invalid_request", "Client has no registered redirect URIs")
+
+        redirect_uri_str = str(params.redirect_uri) if params.redirect_uri else ""
+        if not redirect_uri_str:
+            raise AuthorizeError("invalid_request", "Missing redirect URI")
+
+        registered_redirects = [str(u) for u in (persisted.redirect_uris or [])]
+        if redirect_uri_str not in registered_redirects:
             raise AuthorizeError("invalid_request", "Redirect URI not registered for client")
 
         # IMPORTANT: We intentionally ignore OAuth client requested scopes (from the
