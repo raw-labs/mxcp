@@ -11,12 +11,20 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from cryptography.fernet import Fernet, InvalidToken
 
 from mxcp.sdk.auth.contracts import Session, UserInfo
 from mxcp.sdk.models import SdkBaseModel
+
+# RFC 7591 / RFC 6749 token endpoint client auth methods supported by MCP.
+TokenEndpointAuthMethod = Literal[
+    "none",
+    "client_secret_post",
+    "client_secret_basic",
+    "private_key_jwt",
+]
 
 
 class StateRecord(SdkBaseModel):
@@ -67,7 +75,7 @@ class ClientRecord(SdkBaseModel):
     # How the client authenticates to the token endpoint (RFC 7591).
     # This is required by the MCP token endpoint middleware; if unset, callers
     # may fail with "Unsupported auth method: None".
-    token_endpoint_auth_method: str | None = None
+    token_endpoint_auth_method: TokenEndpointAuthMethod | None = None
     redirect_uris: list[str]
     grant_types: list[str]
     response_types: list[str]
@@ -626,17 +634,28 @@ class SqliteTokenStore(TokenStore):
             ).fetchone()
             if not row:
                 return None
-            return ClientRecord(
-                client_id=row["client_id"],
-                client_secret=self._decrypt(row["client_secret"]),
-                token_endpoint_auth_method=row["token_endpoint_auth_method"],
-                redirect_uris=json.loads(row["redirect_uris"]),
-                grant_types=json.loads(row["grant_types"]),
-                response_types=json.loads(row["response_types"]),
-                scope=row["scope"],
-                client_name=row["client_name"],
-                created_at=row["created_at"],
-            )
+            try:
+                return ClientRecord(
+                    client_id=row["client_id"],
+                    client_secret=self._decrypt(row["client_secret"]),
+                    token_endpoint_auth_method=row["token_endpoint_auth_method"],
+                    redirect_uris=json.loads(row["redirect_uris"]),
+                    grant_types=json.loads(row["grant_types"]),
+                    response_types=json.loads(row["response_types"]),
+                    scope=row["scope"],
+                    client_name=row["client_name"],
+                    created_at=row["created_at"],
+                )
+            except Exception as exc:
+                # Fail-closed: treat invalid persisted client rows as missing.
+                # This prevents corrupted/legacy values from being interpreted as valid
+                # OAuth client metadata.
+                self._logger.warning(
+                    "Failed to load stored OAuth client record; treating as missing",
+                    extra={"client_id": row["client_id"]},
+                    exc_info=exc,
+                )
+                return None
 
     def _sync_list_clients(self) -> list[ClientRecord]:
         assert self._conn is not None
@@ -644,19 +663,27 @@ class SqliteTokenStore(TokenStore):
             rows = self._conn.execute("SELECT * FROM oauth_clients").fetchall()
             records: list[ClientRecord] = []
             for row in rows:
-                records.append(
-                    ClientRecord(
-                        client_id=row["client_id"],
-                        client_secret=self._decrypt(row["client_secret"]),
-                        token_endpoint_auth_method=row["token_endpoint_auth_method"],
-                        redirect_uris=json.loads(row["redirect_uris"]),
-                        grant_types=json.loads(row["grant_types"]),
-                        response_types=json.loads(row["response_types"]),
-                        scope=row["scope"],
-                        client_name=row["client_name"],
-                        created_at=row["created_at"],
+                try:
+                    records.append(
+                        ClientRecord(
+                            client_id=row["client_id"],
+                            client_secret=self._decrypt(row["client_secret"]),
+                            token_endpoint_auth_method=row["token_endpoint_auth_method"],
+                            redirect_uris=json.loads(row["redirect_uris"]),
+                            grant_types=json.loads(row["grant_types"]),
+                            response_types=json.loads(row["response_types"]),
+                            scope=row["scope"],
+                            client_name=row["client_name"],
+                            created_at=row["created_at"],
+                        )
                     )
-                )
+                except Exception as exc:
+                    self._logger.warning(
+                        "Skipping invalid stored OAuth client record",
+                        extra={"client_id": row["client_id"]},
+                        exc_info=exc,
+                    )
+                    continue
             return records
 
     def _sync_delete_client(self, client_id: str) -> None:

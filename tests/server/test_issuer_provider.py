@@ -10,8 +10,9 @@ from pydantic import AnyUrl
 from mxcp.sdk.auth.auth_service import AuthService
 from mxcp.sdk.auth.providers.dummy import DummyProviderAdapter
 from mxcp.sdk.auth.session_manager import SessionManager
-from mxcp.sdk.auth.storage import SqliteTokenStore
+from mxcp.sdk.auth.storage import ClientRecord, SqliteTokenStore
 from mxcp.server.core.auth.issuer_provider import IssuerOAuthAuthorizationServer
+from sqlite3 import connect
 
 
 @pytest.mark.asyncio
@@ -322,6 +323,47 @@ async def test_register_client_requires_redirect_uris(tmp_path: Path) -> None:
     )
     with pytest.raises(AuthorizeError):
         await server.register_client(bad_client)
+
+
+@pytest.mark.asyncio
+async def test_get_client_fails_closed_on_invalid_token_endpoint_auth_method(tmp_path: Path) -> None:
+    adapter = DummyProviderAdapter()
+    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
+    session_manager = SessionManager(token_store)
+    auth_service = AuthService(
+        provider_adapter=adapter,
+        session_manager=session_manager,
+        callback_url="https://server/callback",
+    )
+    server = IssuerOAuthAuthorizationServer(auth_service=auth_service, session_manager=session_manager)
+
+    await token_store.initialize()
+
+    # Simulate corrupted/legacy DB state by inserting an invalid auth method directly
+    # into sqlite, bypassing ClientRecord validation.
+    with connect(tmp_path / "oauth.db") as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO oauth_clients
+            (client_id, client_secret, token_endpoint_auth_method, redirect_uris, grant_types, response_types, scope, client_name, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "client-1",
+                "secret",
+                "bogus",
+                '["https://client/app"]',
+                '["authorization_code"]',
+                '["code"]',
+                "dummy.read",
+                None,
+                0.0,
+            ),
+        )
+        conn.commit()
+
+    loaded = await server.get_client("client-1")
+    assert loaded is None
 
 
 @pytest.mark.asyncio
