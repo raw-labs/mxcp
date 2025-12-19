@@ -1,4 +1,16 @@
-"""OAuth persistence backends for MXCP authentication."""
+"""LEGACY persistence backends for the handler-based auth stack.
+
+This module supports the older `mxcp.sdk.auth.base.GeneralOAuthAuthorizationServer`
+implementation and persists provider-facing tokens, auth codes, and client metadata.
+
+## Status
+
+This module is **legacy** relative to the issuer-mode stack which uses
+`mxcp.sdk.auth.storage.TokenStore` (see `SqliteTokenStore`) and is driven by
+`mxcp.sdk.auth.auth_service.AuthService` / `mxcp.sdk.auth.session_manager.SessionManager`.
+
+Prefer extending `TokenStore` rather than adding new features here.
+"""
 
 import asyncio
 import json

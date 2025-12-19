@@ -1,4 +1,25 @@
-"""Contracts and shared types for the MXCP authentication stack."""
+"""Contracts and shared types for the MXCP authentication stack.
+
+This module defines the stable interfaces between:
+- **Issuer orchestration** (MXCP) and **provider integrations** (IdP adapters)
+- the rest of the SDK/server code that consumes normalized auth results
+
+## Design boundaries (important)
+
+- **Downstream OAuth** (MCP client ↔ MXCP): handled by the MCP auth framework.
+  PKCE verification for the token endpoint is performed *upstream* of
+  `mxcp.sdk.auth.auth_service.AuthService.exchange_token()`.
+
+- **Upstream OAuth** (MXCP ↔ IdP): implemented by `ProviderAdapter` methods.
+  Provider PKCE support is expressed via `ProviderAdapter.pkce_methods_supported`
+  (capability, not configuration).
+
+## Security invariants (“do not break”)
+
+- Never log tokens, secrets, or PII in provider adapters or error paths.
+- `ProviderError.error` should be a stable OAuth-style error code suitable for clients.
+  Keep `description` high-level; do not propagate provider response bodies.
+"""
 
 from __future__ import annotations
 

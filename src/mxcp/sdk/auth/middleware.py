@@ -1,4 +1,20 @@
-"""Authentication middleware for MXCP endpoints."""
+"""Authentication middleware for MXCP endpoints.
+
+This module validates MXCP access tokens (issuer-mode) and sets a request-scoped
+`UserContextModel`.
+
+## Design notes
+
+- The middleware should primarily rely on the **MXCP session** stored in the
+  `TokenStore` (via `SessionManager`). Calling the upstream IdP on every request
+  introduces availability and latency coupling; if enabled, it should be a conscious
+  policy decision.
+
+## Security invariants (“do not break”)
+
+- Never log tokens, secrets, email addresses, or user identifiers.
+- Avoid attaching sensitive values to traces/metrics.
+"""
 
 import logging
 from collections.abc import Callable

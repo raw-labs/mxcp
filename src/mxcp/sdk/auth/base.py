@@ -1,4 +1,22 @@
-"""OAuth provider implementations for MXCP authentication."""
+"""LEGACY OAuth handler-based authentication stack.
+
+This module contains the older auth implementation based on:
+- `ExternalOAuthHandler` implementations per provider
+- `GeneralOAuthAuthorizationServer` bridging those handlers to MCP
+- `mxcp.sdk.auth.persistence` for token/code/client persistence
+
+## Status
+
+This stack is **legacy** relative to the issuer-mode auth stack implemented via:
+- `mxcp.sdk.auth.contracts.ProviderAdapter`
+- `mxcp.sdk.auth.auth_service.AuthService`
+- `mxcp.sdk.auth.session_manager.SessionManager`
+- `mxcp.sdk.auth.storage.TokenStore`
+- `mxcp.server.core.auth.issuer_provider.IssuerOAuthAuthorizationServer`
+
+Do not extend this module for new work unless explicitly required. Prefer the
+issuer-mode stack and update server wiring accordingly.
+"""
 
 import asyncio
 import logging
