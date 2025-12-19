@@ -59,19 +59,28 @@ class AuthService:
         # against persisted OAuth clients (TokenStore). AuthService should not depend on
         # in-memory client registries for security decisions.
 
-        # Generate PKCE pair for provider (Google) if needed
-        # The MCP client's code_challenge is for MXCP ↔ MCP client flow
-        # We need our own PKCE pair for MXCP ↔ Google flow
+        # PKCE note (two threat models):
+        # - client ↔ MXCP PKCE protects the MXCP /token exchange from interception of the
+        #   *MXCP* authorization code.
+        # - MXCP ↔ provider PKCE protects the provider token exchange from interception of the
+        #   *provider* authorization code delivered to our callback.
+        #
+        # These are independent. If the upstream provider supports PKCE, we enable it as
+        # defense-in-depth regardless of whether the downstream MCP client uses PKCE.
         provider_code_verifier: str | None = None
         provider_code_challenge: str | None = None
         provider_code_challenge_method: str | None = None
 
-        if code_challenge:  # If MCP client uses PKCE, we should too with Google
-            # Generate code_verifier (43-128 chars, base64url)
+        supports_s256 = any(
+            method.upper() == "S256" for method in self.provider_adapter.pkce_methods_supported
+        )
+        if supports_s256:
+            # Generate provider code_verifier (43-128 chars, base64url).
+            # Never log this value (or the derived challenge).
             provider_code_verifier = (
                 base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("utf-8").rstrip("=")
             )
-            # Generate code_challenge using S256
+            # Generate provider code_challenge using S256.
             challenge_bytes = hashlib.sha256(provider_code_verifier.encode("utf-8")).digest()
             provider_code_challenge = (
                 base64.urlsafe_b64encode(challenge_bytes).decode("utf-8").rstrip("=")
@@ -86,7 +95,7 @@ class AuthService:
             redirect_uri=redirect_uri,
             code_challenge=code_challenge,  # MCP client's challenge (for MXCP ↔ client)
             code_challenge_method=code_challenge_method,
-            provider_code_verifier=provider_code_verifier,  # Our verifier (for MXCP ↔ Google)
+            provider_code_verifier=provider_code_verifier,  # Our verifier (for MXCP ↔ provider)
             client_state=client_state,  # Original state from MCP client
             scopes=scopes,
         )
@@ -95,7 +104,7 @@ class AuthService:
             redirect_uri=self.callback_url,
             state=state_record.state,
             scopes=scopes,
-            code_challenge=provider_code_challenge,  # Use our challenge for Google
+            code_challenge=provider_code_challenge,  # Use our challenge for provider PKCE
             code_challenge_method=provider_code_challenge_method,
             extra_params=extra_params,
         )

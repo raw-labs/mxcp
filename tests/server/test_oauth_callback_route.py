@@ -48,6 +48,7 @@ class _ProviderAdapterStub:
     """
 
     provider_name = "stub"
+    pkce_methods_supported: Sequence[str] = []
 
     def build_authorize_url(
         self,
