@@ -311,7 +311,9 @@ async def test_register_client_requires_redirect_uris(tmp_path: Path) -> None:
         session_manager=session_manager,
         callback_url="https://server/callback",
     )
-    server = IssuerOAuthAuthorizationServer(auth_service=auth_service, session_manager=session_manager)
+    server = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service, session_manager=session_manager
+    )
 
     bad_client = OAuthClientInformationFull(
         client_id="dcr-client-1",
@@ -326,7 +328,9 @@ async def test_register_client_requires_redirect_uris(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_client_fails_closed_on_invalid_token_endpoint_auth_method(tmp_path: Path) -> None:
+async def test_get_client_fails_closed_on_invalid_token_endpoint_auth_method(
+    tmp_path: Path,
+) -> None:
     adapter = DummyProviderAdapter()
     token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
     session_manager = SessionManager(token_store)
@@ -335,7 +339,9 @@ async def test_get_client_fails_closed_on_invalid_token_endpoint_auth_method(tmp
         session_manager=session_manager,
         callback_url="https://server/callback",
     )
-    server = IssuerOAuthAuthorizationServer(auth_service=auth_service, session_manager=session_manager)
+    server = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service, session_manager=session_manager
+    )
 
     await token_store.initialize()
 
@@ -429,7 +435,9 @@ async def test_revoke_token_rejects_unexpected_type(tmp_path: Path) -> None:
         session_manager=session_manager,
         callback_url="https://server/callback",
     )
-    server = IssuerOAuthAuthorizationServer(auth_service=auth_service, session_manager=session_manager)
+    server = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service, session_manager=session_manager
+    )
 
     # Type checker would prevent this; runtime should fail fast.
     with pytest.raises(TypeError):

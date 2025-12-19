@@ -25,7 +25,9 @@ class _FakeResponseJsonError(_FakeResponse):
 
 
 class _FakeClient:
-    def __init__(self, *, post_response: _FakeResponse, get_response: _FakeResponse | None = None) -> None:
+    def __init__(
+        self, *, post_response: _FakeResponse, get_response: _FakeResponse | None = None
+    ) -> None:
         self._post_response = post_response
         self._get_response = get_response or _FakeResponse(200, {"account_id": "acct-1"})
 
@@ -59,7 +61,9 @@ def atlassian_config() -> AtlassianAuthConfigModel:
     )
 
 
-def test_build_authorize_url_includes_required_params(atlassian_config: AtlassianAuthConfigModel) -> None:
+def test_build_authorize_url_includes_required_params(
+    atlassian_config: AtlassianAuthConfigModel,
+) -> None:
     adapter = AtlassianProviderAdapter(atlassian_config)
     url = adapter.build_authorize_url(
         redirect_uri="https://server/atlassian/callback",
@@ -82,7 +86,9 @@ def test_build_authorize_url_includes_required_params(atlassian_config: Atlassia
 
 
 @pytest.mark.asyncio
-async def test_exchange_code_happy_path(monkeypatch: MonkeyPatch, atlassian_config: AtlassianAuthConfigModel) -> None:
+async def test_exchange_code_happy_path(
+    monkeypatch: MonkeyPatch, atlassian_config: AtlassianAuthConfigModel
+) -> None:
     post_response = _FakeResponse(
         200,
         {"access_token": "at", "refresh_token": "rt", "expires_in": 3600, "token_type": "Bearer"},
@@ -93,7 +99,9 @@ async def test_exchange_code_happy_path(monkeypatch: MonkeyPatch, atlassian_conf
     )
 
     adapter = AtlassianProviderAdapter(atlassian_config)
-    monkeypatch.setattr(adapter, "_fetch_me", lambda token: asyncio.sleep(0, {"account_id": "acct-1"}))
+    monkeypatch.setattr(
+        adapter, "_fetch_me", lambda token: asyncio.sleep(0, {"account_id": "acct-1"})
+    )
 
     grant = await adapter.exchange_code(
         code="code",
@@ -126,7 +134,9 @@ async def test_exchange_code_prefers_provider_scope_when_returned(
     )
 
     adapter = AtlassianProviderAdapter(atlassian_config)
-    monkeypatch.setattr(adapter, "_fetch_me", lambda token: asyncio.sleep(0, {"account_id": "acct-1"}))
+    monkeypatch.setattr(
+        adapter, "_fetch_me", lambda token: asyncio.sleep(0, {"account_id": "acct-1"})
+    )
 
     grant = await adapter.exchange_code(
         code="code",
@@ -186,4 +196,3 @@ async def test_revoke_token_propagates_status_code(
 def test_callback_path_property_matches_config(atlassian_config: AtlassianAuthConfigModel) -> None:
     adapter = AtlassianProviderAdapter(atlassian_config)
     assert adapter.callback_path == atlassian_config.callback_path
-
