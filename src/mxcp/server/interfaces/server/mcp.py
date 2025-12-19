@@ -2077,7 +2077,7 @@ class RAWMCP:
         # Register OAuth Protected Resource metadata endpoint
         @self.mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])  # type: ignore[misc]
         async def oauth_protected_resource_metadata(request: Any) -> Any:
-            """Handle OAuth Protected Resource metadata requests (RFC 8693)"""
+            """Handle OAuth 2.0 Protected Resource Metadata requests (RFC 9728)."""
 
             # Use URL builder with request context for proper scheme detection
             url_builder = create_url_builder(self.user_config)
