@@ -51,6 +51,8 @@ class AtlassianProviderAdapter(ProviderAdapter):
     """Atlassian OAuth ProviderAdapter that uses real HTTP calls."""
 
     provider_name = "atlassian"
+    # OAuth: Atlassian 3LO supports PKCE with S256 for the authorization code flow.
+    pkce_methods_supported = ["S256"]
 
     def __init__(self, atlassian_config: AtlassianAuthConfigModel):
         self.client_id = atlassian_config.client_id

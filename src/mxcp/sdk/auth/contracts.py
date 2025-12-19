@@ -64,6 +64,12 @@ class ProviderAdapter(Protocol):
     """Interface all provider adapters must implement."""
 
     provider_name: str
+    # Upstream (MXCP ↔ IdP) PKCE capability.
+    #
+    # OAuth note: This is a provider capability, not user configuration. When empty,
+    # AuthService should not attempt upstream PKCE. When it contains "S256",
+    # AuthService may always enable upstream PKCE as defense-in-depth.
+    pkce_methods_supported: Sequence[str]
 
     def build_authorize_url(
         self,

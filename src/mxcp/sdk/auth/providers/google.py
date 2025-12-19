@@ -55,6 +55,8 @@ class GoogleProviderAdapter(ProviderAdapter):
     """Google OAuth ProviderAdapter that uses real HTTP calls."""
 
     provider_name = "google"
+    # OAuth: Google supports PKCE with S256 for the authorization code flow.
+    pkce_methods_supported = ["S256"]
 
     def __init__(
         self,

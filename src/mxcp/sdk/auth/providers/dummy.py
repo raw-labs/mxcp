@@ -12,6 +12,8 @@ class DummyProviderAdapter(ProviderAdapter):
     """In-process provider adapter used for tests and demos."""
 
     provider_name = "dummy"
+    # OAuth: dummy provider supports PKCE S256 so AuthService can exercise upstream PKCE.
+    pkce_methods_supported = ["S256"]
 
     def __init__(
         self,

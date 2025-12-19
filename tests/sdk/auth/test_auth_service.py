@@ -14,6 +14,10 @@ from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import SqliteTokenStore
 
 
+class _NoPkceDummyProvider(DummyProviderAdapter):
+    pkce_methods_supported: list[str] = []
+
+
 @pytest_asyncio.fixture
 async def auth_service(tmp_path: Path) -> AsyncGenerator[AuthService, None]:
     store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
@@ -32,6 +36,60 @@ async def auth_service(tmp_path: Path) -> AsyncGenerator[AuthService, None]:
 def _s256_challenge(verifier: str) -> str:
     digest = hashlib.sha256(verifier.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("utf-8")
+
+
+@pytest.mark.asyncio
+async def test_upstream_pkce_is_generated_even_without_downstream_pkce(tmp_path: Path) -> None:
+    store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
+    await store.initialize()
+    session_manager = SessionManager(store)
+    provider = DummyProviderAdapter(expected_code_verifier=None)
+    service = AuthService(
+        provider_adapter=provider,
+        session_manager=session_manager,
+        callback_url="http://localhost/auth/callback",
+    )
+
+    try:
+        authorize_url, state_record = await service.authorize(
+            client_id="client-1",
+            redirect_uri="http://client/app",
+            scopes=["dummy.read"],
+            code_challenge=None,
+            code_challenge_method=None,
+        )
+        assert state_record.provider_code_verifier
+        assert "code_challenge=" in authorize_url
+        assert "code_challenge_method=S256" in authorize_url
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_upstream_pkce_not_used_when_provider_does_not_support_it(tmp_path: Path) -> None:
+    store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
+    await store.initialize()
+    session_manager = SessionManager(store)
+    provider = _NoPkceDummyProvider(expected_code_verifier=None)
+    service = AuthService(
+        provider_adapter=provider,
+        session_manager=session_manager,
+        callback_url="http://localhost/auth/callback",
+    )
+
+    try:
+        authorize_url, state_record = await service.authorize(
+            client_id="client-1",
+            redirect_uri="http://client/app",
+            scopes=["dummy.read"],
+            code_challenge=None,
+            code_challenge_method=None,
+        )
+        assert state_record.provider_code_verifier is None
+        assert "code_challenge=" not in authorize_url
+        assert "code_challenge_method=" not in authorize_url
+    finally:
+        await store.close()
 
 
 @pytest.mark.asyncio
