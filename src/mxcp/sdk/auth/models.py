@@ -1,4 +1,16 @@
-"""Pydantic models for the auth module."""
+"""Pydantic models for the auth module.
+
+These types are used for server/user configuration and normalized auth data.
+
+## Security-relevant configuration fields
+
+- OAuth client **redirect URIs**: affect redirect binding and open-redirect risk.
+- Provider **scope** strings: affect what permissions are requested from the upstream IdP.
+- Provider **callback_path**: controls which HTTP route receives IdP callbacks.
+
+Treat changes to these fields as security-sensitive and ensure they are covered by
+tests and documented behavior.
+"""
 
 from typing import Any, Literal
 

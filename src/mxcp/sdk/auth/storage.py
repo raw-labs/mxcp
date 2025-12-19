@@ -1,4 +1,22 @@
-"""Token storage implementations for the refactored auth stack."""
+"""Token storage implementations for the issuer-mode auth stack.
+
+This module is **security critical**. It persists:
+- OAuth **state** (one-time, expiring)
+- MXCP **authorization codes** (one-time, expiring)
+- MXCP **sessions** (opaque access/refresh tokens + user info)
+- OAuth **client registrations** (preconfigured + DCR), used for redirect binding
+
+## Storage invariants (“do not break”)
+
+- **State** and **auth codes** must be consumed/deleted on use and rejected when expired.
+- **Sessions** must be keyed by a hashed access token and must not be returned once expired.
+- **Client registrations** are persisted and are the source of truth for redirect validation.
+
+## At-rest protection
+
+Implementations should store tokens hashed and/or encrypted. Do not log token values,
+secrets, SQL queries, or user identifiers.
+"""
 
 from __future__ import annotations
 

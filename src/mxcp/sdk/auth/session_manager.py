@@ -1,4 +1,23 @@
-"""Session manager built on top of the TokenStore."""
+"""Session lifecycle orchestration built on top of `TokenStore`.
+
+`SessionManager` is the *coordinator* for issuer-mode auth lifecycles:
+- create/consume **state** (CSRF + redirect binding + PKCE metadata)
+- create/load/delete **authorization codes** (short-lived, one-time)
+- issue/load/revoke **sessions** (access/refresh tokens bound to user+provider)
+
+## Design boundary
+
+The `TokenStore` is the authority for one-time use and expiry semantics.
+`SessionManager` should orchestrate lifecycles and shape records, but should not
+re-implement store-level security decisions.
+
+## Security invariants (“do not break”)
+
+- **States** must be one-time use and expiring.
+- **Auth codes** must be one-time use and expiring.
+- **Sessions** must not be returned once expired; revocation must remove them.
+- Never log tokens, secrets, email addresses, or user identifiers.
+"""
 
 from __future__ import annotations
 

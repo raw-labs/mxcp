@@ -28,13 +28,14 @@ When authentication is enabled, the following features require authentication:
 
 ### User Information Logging
 
-When OAuth authentication is enabled, MXCP automatically logs detailed user information for each authenticated request, including:
+When OAuth authentication is enabled, MXCP logs **operational authentication events** (for example, whether a request was authenticated and which provider was used).
 
-- Username and user ID
-- OAuth provider (e.g., GitHub, Atlassian)
-- User's display name and email (when available)
+For security and privacy reasons, MXCP **does not intentionally log sensitive data** such as:
+- Access tokens or refresh tokens
+- Client secrets
+- Email addresses or other personally identifying information (PII)
 
-This information appears in the server logs whenever an authenticated user executes any tool, resource, or prompt.
+If you need user-level auditing, use the dedicated audit logging features rather than relying on application logs.
 
 ## Supported Providers
 
