@@ -355,13 +355,14 @@ class IssuerOAuthAuthorizationServer(
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
         await self._ensure_store_initialized()
-        token_value = token.token if isinstance(token, AccessToken | RefreshToken) else str(token)
         if isinstance(token, AccessToken):
-            await self.session_manager.revoke_session(token_value)
+            await self.session_manager.revoke_session(token.token)
             return
+        if not isinstance(token, RefreshToken):
+            raise TypeError(f"Unsupported token type: {type(token)!r}")
 
         # For refresh tokens, find the session and remove it by access token
-        session = await self.session_manager.token_store.load_session_by_refresh_token(token_value)
+        session = await self.session_manager.token_store.load_session_by_refresh_token(token.token)
         if session:
             await self.session_manager.revoke_session(session.access_token)
 

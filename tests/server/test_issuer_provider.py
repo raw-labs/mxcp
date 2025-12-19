@@ -322,3 +322,73 @@ async def test_register_client_requires_redirect_uris(tmp_path: Path) -> None:
     )
     with pytest.raises(AuthorizeError):
         await server.register_client(bad_client)
+
+
+@pytest.mark.asyncio
+async def test_revoke_token_refresh_token_revokes_session(tmp_path: Path) -> None:
+    adapter = DummyProviderAdapter()
+    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
+    session_manager = SessionManager(token_store)
+    auth_service = AuthService(
+        provider_adapter=adapter,
+        session_manager=session_manager,
+        callback_url="https://server/callback",
+    )
+
+    # Configure a client so authorize() succeeds and persists it into TokenStore.
+    client = OAuthClientInformationFull(
+        client_id="client-1",
+        client_secret="secret",
+        redirect_uris=[AnyUrl("https://client/app")],
+        grant_types=["authorization_code"],
+        response_types=["code"],
+        scope="dummy.read",
+    )
+    assert client.client_id is not None
+
+    server = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service,
+        session_manager=session_manager,
+        clients={client.client_id: client},
+    )
+
+    params = AuthorizationParams(
+        state=None,
+        scopes=["dummy.read"],
+        code_challenge="test_challenge",
+        redirect_uri=AnyUrl("https://client/app"),
+        redirect_uri_provided_explicitly=True,
+    )
+    authorize_url = await server.authorize(client, params)
+    state = parse_qs(urlparse(authorize_url).query)["state"][0]
+    redirect_uri = await server.handle_callback("TEST_CODE_OK", state)
+    code = parse_qs(urlparse(redirect_uri).query)["code"][0]
+    loaded = await server.load_authorization_code(client, code)
+    assert loaded is not None
+    token = await server.exchange_authorization_code(client, loaded)
+    assert token.refresh_token is not None
+
+    refresh = await server.load_refresh_token(client, token.refresh_token)
+    assert refresh is not None
+
+    # Revoke via refresh token and ensure the session is removed.
+    await server.revoke_token(refresh)
+    access = await server.load_access_token(token.access_token)
+    assert access is None
+
+
+@pytest.mark.asyncio
+async def test_revoke_token_rejects_unexpected_type(tmp_path: Path) -> None:
+    adapter = DummyProviderAdapter()
+    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
+    session_manager = SessionManager(token_store)
+    auth_service = AuthService(
+        provider_adapter=adapter,
+        session_manager=session_manager,
+        callback_url="https://server/callback",
+    )
+    server = IssuerOAuthAuthorizationServer(auth_service=auth_service, session_manager=session_manager)
+
+    # Type checker would prevent this; runtime should fail fast.
+    with pytest.raises(TypeError):
+        await server.revoke_token("not-a-token")  # type: ignore[arg-type]
