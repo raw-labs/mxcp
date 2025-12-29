@@ -9,9 +9,11 @@ from mxcp.sdk.auth.models import (
     GoogleAuthConfigModel,
     HttpTransportConfigModel,
     OAuthClientConfigModel,
+    SalesforceAuthConfigModel,
 )
 from mxcp.sdk.auth.providers.atlassian import AtlassianProviderAdapter
 from mxcp.sdk.auth.providers.google import GoogleProviderAdapter
+from mxcp.sdk.auth.providers.salesforce import SalesforceProviderAdapter
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.server.core.config.models import (
     UserAuthConfigModel,
@@ -109,5 +111,14 @@ def create_provider_adapter(
             google_config.model_dump(exclude_none=True)
         )
         return GoogleProviderAdapter(google_model)
+
+    if provider == "salesforce":
+        salesforce_config = user_auth_config.salesforce
+        if not salesforce_config:
+            raise ValueError("Salesforce provider selected but no Salesforce configuration found")
+        salesforce_model = SalesforceAuthConfigModel.model_validate(
+            salesforce_config.model_dump(exclude_none=True)
+        )
+        return SalesforceProviderAdapter(salesforce_model)
 
     raise ValueError(f"Unsupported provider for adapter: {provider}")
