@@ -670,8 +670,7 @@ class SqliteTokenStore(TokenStore):
                 # OAuth client metadata.
                 self._logger.warning(
                     "Failed to load stored OAuth client record; treating as missing",
-                    extra={"client_id": row["client_id"]},
-                    exc_info=exc,
+                    extra={"client_id": row["client_id"], "error": type(exc).__name__},
                 )
                 return None
 
@@ -698,8 +697,7 @@ class SqliteTokenStore(TokenStore):
                 except Exception as exc:
                     self._logger.warning(
                         "Skipping invalid stored OAuth client record",
-                        extra={"client_id": row["client_id"]},
-                        exc_info=exc,
+                        extra={"client_id": row["client_id"], "error": type(exc).__name__},
                     )
                     continue
             return records
