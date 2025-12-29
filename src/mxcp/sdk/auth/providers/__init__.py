@@ -5,7 +5,7 @@ This module contains concrete implementations of OAuth providers.
 
 from .atlassian import AtlassianProviderAdapter
 from .dummy import DummyProviderAdapter
-from .github import GitHubOAuthHandler
+from .github import GitHubProviderAdapter
 from .google import GoogleProviderAdapter
 from .keycloak import KeycloakOAuthHandler
 from .salesforce import SalesforceProviderAdapter
@@ -13,7 +13,7 @@ from .salesforce import SalesforceProviderAdapter
 __all__ = [
     "AtlassianProviderAdapter",
     "DummyProviderAdapter",
-    "GitHubOAuthHandler",
+    "GitHubProviderAdapter",
     "GoogleProviderAdapter",
     "KeycloakOAuthHandler",
     "SalesforceProviderAdapter",
