@@ -6,12 +6,14 @@ from mxcp.sdk.auth.models import (
     AuthConfigModel,
     AuthorizationConfigModel,
     AuthPersistenceConfigModel,
+    GitHubAuthConfigModel,
     GoogleAuthConfigModel,
     HttpTransportConfigModel,
     OAuthClientConfigModel,
     SalesforceAuthConfigModel,
 )
 from mxcp.sdk.auth.providers.atlassian import AtlassianProviderAdapter
+from mxcp.sdk.auth.providers.github import GitHubProviderAdapter
 from mxcp.sdk.auth.providers.google import GoogleProviderAdapter
 from mxcp.sdk.auth.providers.salesforce import SalesforceProviderAdapter
 from mxcp.sdk.auth.url_utils import URLBuilder
@@ -111,6 +113,15 @@ def create_provider_adapter(
             google_config.model_dump(exclude_none=True)
         )
         return GoogleProviderAdapter(google_model)
+
+    if provider == "github":
+        github_config = user_auth_config.github
+        if not github_config:
+            raise ValueError("GitHub provider selected but no GitHub configuration found")
+        github_model = GitHubAuthConfigModel.model_validate(
+            github_config.model_dump(exclude_none=True)
+        )
+        return GitHubProviderAdapter(github_model)
 
     if provider == "salesforce":
         salesforce_config = user_auth_config.salesforce
