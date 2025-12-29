@@ -715,15 +715,12 @@ class SqliteTokenStore(TokenStore):
         counts = {"states": 0, "auth_codes": 0, "sessions": 0}
         now = time.time()
         with self._lock:
-            for table, key in [
-                ("states", "states"),
-                ("auth_codes", "auth_codes"),
-                ("sessions", "sessions"),
-            ]:
+            for table in counts:
                 cur = self._conn.execute(
-                    f"DELETE FROM {table} WHERE expires_at IS NOT NULL AND expires_at < ?", (now,)
+                    f"DELETE FROM {table} WHERE expires_at IS NOT NULL AND expires_at < ?",
+                    (now,),
                 )
-                counts[key if key in counts else table] = cur.rowcount
+                counts[table] = cur.rowcount
             self._conn.commit()
         return counts
 
