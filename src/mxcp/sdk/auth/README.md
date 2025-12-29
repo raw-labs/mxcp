@@ -38,13 +38,9 @@ The key idea is that **the IdP callback always returns to MXCP**, and then **MXC
 - **Request auth**: `mxcp.sdk.auth.middleware.AuthenticationMiddleware`
   - Loads sessions by access token and sets user context.
 
-### Legacy stack (do not extend)
+### Legacy stack
 
-There is an older handler-based stack in:
-- `mxcp.sdk.auth.base` (`ExternalOAuthHandler`, `GeneralOAuthAuthorizationServer`)
-- `mxcp.sdk.auth.persistence`
-
-The server wiring for issuer-mode uses the **new stack**; the legacy stack remains only for compatibility with older provider handlers.
+The legacy handler-based stack has been removed. Only the ProviderAdapter-based issuer-mode stack is supported.
 
 ## OAuth flows (issuer-mode)
 

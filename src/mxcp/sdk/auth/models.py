@@ -156,11 +156,7 @@ class AuthorizationConfigModel(SdkBaseModel):
 
 
 class AuthConfigModel(SdkBaseModel):
-    """Minimal authentication configuration for the OAuth server.
-
-    This type only contains fields needed by GeneralOAuthAuthorizationServer.
-    Provider-specific configs are passed directly to their respective handlers.
-    """
+    """Minimal authentication configuration for the OAuth server (issuer-mode)."""
 
     # Override frozen=True since this is a config object
     model_config = ConfigDict(extra="forbid", frozen=False)
