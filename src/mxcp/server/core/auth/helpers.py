@@ -9,12 +9,14 @@ from mxcp.sdk.auth.models import (
     GitHubAuthConfigModel,
     GoogleAuthConfigModel,
     HttpTransportConfigModel,
+    KeycloakAuthConfigModel,
     OAuthClientConfigModel,
     SalesforceAuthConfigModel,
 )
 from mxcp.sdk.auth.providers.atlassian import AtlassianProviderAdapter
 from mxcp.sdk.auth.providers.github import GitHubProviderAdapter
 from mxcp.sdk.auth.providers.google import GoogleProviderAdapter
+from mxcp.sdk.auth.providers.keycloak import KeycloakProviderAdapter
 from mxcp.sdk.auth.providers.salesforce import SalesforceProviderAdapter
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.server.core.config.models import (
@@ -122,6 +124,15 @@ def create_provider_adapter(
             github_config.model_dump(exclude_none=True)
         )
         return GitHubProviderAdapter(github_model)
+
+    if provider == "keycloak":
+        keycloak_config = user_auth_config.keycloak
+        if not keycloak_config:
+            raise ValueError("Keycloak provider selected but no Keycloak configuration found")
+        keycloak_model = KeycloakAuthConfigModel.model_validate(
+            keycloak_config.model_dump(exclude_none=True)
+        )
+        return KeycloakProviderAdapter(keycloak_model)
 
     if provider == "salesforce":
         salesforce_config = user_auth_config.salesforce
