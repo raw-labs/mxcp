@@ -188,7 +188,9 @@ async def test_fetch_user_info_requires_sub(
     monkeypatch: MonkeyPatch, keycloak_config: KeycloakAuthConfigModel
 ) -> None:
     adapter = KeycloakProviderAdapter(keycloak_config)
-    monkeypatch.setattr(adapter, "_fetch_user_profile", lambda token: asyncio.sleep(0, {"email": "e"}))
+    monkeypatch.setattr(
+        adapter, "_fetch_user_profile", lambda token: asyncio.sleep(0, {"email": "e"})
+    )
     with pytest.raises(ProviderError):
         await adapter.fetch_user_info(access_token="at")
 

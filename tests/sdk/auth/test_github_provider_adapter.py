@@ -115,9 +115,7 @@ async def test_exchange_code_happy_path(
     )
 
     adapter = GitHubProviderAdapter(github_config)
-    monkeypatch.setattr(
-        adapter, "_fetch_user_profile", lambda token: asyncio.sleep(0, {"id": 123})
-    )
+    monkeypatch.setattr(adapter, "_fetch_user_profile", lambda token: asyncio.sleep(0, {"id": 123}))
 
     grant = await adapter.exchange_code(
         code="code",
@@ -189,7 +187,13 @@ async def test_fetch_user_info_happy_path(
 ) -> None:
     get_response = _FakeResponse(
         200,
-        {"id": 123, "email": "user@example.com", "login": "user", "avatar_url": "pic", "scope": "repo,gist"},
+        {
+            "id": 123,
+            "email": "user@example.com",
+            "login": "user",
+            "avatar_url": "pic",
+            "scope": "repo,gist",
+        },
     )
     post_response = _FakeResponse(200, {})
     fake_client = _FakeClient(post_response=post_response, get_response=get_response)
@@ -231,5 +235,7 @@ def test_callback_path_property_matches_config(
 
 def test_revoke_uses_basic_auth_header(github_config: GitHubAuthConfigModel) -> None:
     adapter = GitHubProviderAdapter(github_config)
-    basic = base64.b64encode(f"{github_config.client_id}:{github_config.client_secret}".encode()).decode()
+    basic = base64.b64encode(
+        f"{github_config.client_id}:{github_config.client_secret}".encode()
+    ).decode()
     assert basic  # sanity check header generation mirrors adapter path
