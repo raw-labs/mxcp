@@ -7,7 +7,7 @@ from .atlassian import AtlassianProviderAdapter
 from .dummy import DummyProviderAdapter
 from .github import GitHubProviderAdapter
 from .google import GoogleProviderAdapter
-from .keycloak import KeycloakOAuthHandler
+from .keycloak import KeycloakProviderAdapter
 from .salesforce import SalesforceProviderAdapter
 
 __all__ = [
@@ -15,6 +15,6 @@ __all__ = [
     "DummyProviderAdapter",
     "GitHubProviderAdapter",
     "GoogleProviderAdapter",
-    "KeycloakOAuthHandler",
+    "KeycloakProviderAdapter",
     "SalesforceProviderAdapter",
 ]
