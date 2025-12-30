@@ -26,7 +26,9 @@ class AccessTokenResponse(SdkBaseModel):
     refresh_token: str | None = None
     provider_access_token: str | None = None
     provider_refresh_token: str | None = None
-    provider_expires_at: float | None = None
+    provider_expires_at: float | None = (
+        None  # Unix timestamp (seconds since epoch) when provider token expires
+    )
 
 
 class AuthService:

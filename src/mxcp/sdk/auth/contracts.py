@@ -44,9 +44,13 @@ class GrantResult(SdkBaseModel):
 
     access_token: str
     refresh_token: str | None = None
-    expires_at: float | None = None
-    refresh_expires_in: float | None = None
-    refresh_expires_at: float | None = None
+    expires_at: float | None = (
+        None  # Unix timestamp (seconds since epoch) when access token expires
+    )
+    refresh_expires_in: float | None = None  # Duration in seconds until refresh token expires
+    refresh_expires_at: float | None = (
+        None  # Unix timestamp (seconds since epoch) when refresh token expires
+    )
     provider_scopes_granted: list[str] | None = None
     raw_profile: dict[str, Any] | None = None
     token_type: str = "Bearer"
@@ -76,11 +80,19 @@ class Session(SdkBaseModel):
     refresh_token: str | None = None
     provider_access_token: str | None = None
     provider_refresh_token: str | None = None
-    provider_expires_at: float | None = None
-    provider_refresh_expires_at: float | None = None
-    provider_refresh_backoff_until: float | None = None
-    expires_at: float | None = None
-    issued_at: float | None = None
+    provider_expires_at: float | None = (
+        None  # Unix timestamp (seconds since epoch) when provider access token expires
+    )
+    provider_refresh_expires_at: float | None = (
+        None  # Unix timestamp (seconds since epoch) when provider refresh token expires
+    )
+    provider_refresh_backoff_until: float | None = (
+        None  # Unix timestamp (seconds since epoch) until refresh retry is allowed
+    )
+    expires_at: float | None = (
+        None  # Unix timestamp (seconds since epoch) when MXCP access token expires
+    )
+    issued_at: float | None = None  # Unix timestamp (seconds since epoch) when session was created
     scopes: list[str] | None = None
 
 
