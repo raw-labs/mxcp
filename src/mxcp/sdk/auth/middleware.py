@@ -17,6 +17,7 @@ This module validates MXCP access tokens (issuer-mode) and sets a request-scoped
 """
 
 import logging
+import time
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -42,6 +43,9 @@ class AuthenticationMiddleware:
         session_manager: SessionManager | None = None,
         provider_adapter: ProviderAdapter | None = None,
         token_getter: Callable[[], str | None],
+        provider_token_skew_seconds: int = 120,
+        refresh_backoff_seconds: int = 30,
+        fetch_userinfo_after_refresh: bool = False,
     ):
         """Initialize authentication middleware.
 
@@ -49,10 +53,16 @@ class AuthenticationMiddleware:
             session_manager: Session manager for issuer-mode auth (None if auth is disabled)
             provider_adapter: Provider adapter for optionally refreshing user info (may be None)
             token_getter: Callable returning the access token string (or None)
+            provider_token_skew_seconds: Time skew to consider provider tokens near expiry
+            refresh_backoff_seconds: Backoff window after refresh failures
+            fetch_userinfo_after_refresh: If True, fetch userinfo once after refresh
         """
         self.session_manager = session_manager
         self.provider_adapter = provider_adapter
         self.token_getter = token_getter
+        self.provider_token_skew_seconds = provider_token_skew_seconds
+        self.refresh_backoff_seconds = refresh_backoff_seconds
+        self.fetch_userinfo_after_refresh = fetch_userinfo_after_refresh
 
         self.auth_enabled = session_manager is not None
 
@@ -173,20 +183,46 @@ class AuthenticationMiddleware:
             span.set_attribute("mxcp.auth.provider", provider)
 
         user_info = session.user_info
+        refreshed = False
 
-        if self.provider_adapter and session.provider_access_token:
-            try:
-                user_info = await self.provider_adapter.fetch_user_info(
-                    access_token=session.provider_access_token
-                )
-            except ProviderError as exc:
-                logger.warning(f"Failed to fetch user info from provider: {exc}")
-                record_counter(
-                    "mxcp.auth.attempts_total",
-                    attributes={"provider": provider, "status": "error"},
-                    description="Total authentication attempts",
-                )
+        if self.provider_adapter:
+            session, refreshed = await self._refresh_provider_tokens_if_needed(
+                session, provider, span=span
+            )
+            if session is None:
                 return None
+
+            if self.fetch_userinfo_after_refresh and refreshed and session.provider_access_token:
+                try:
+                    user_info = await self.provider_adapter.fetch_user_info(
+                        access_token=session.provider_access_token
+                    )
+                except ProviderError as exc:
+                    logger.warning(
+                        "Failed to refresh user info after provider token refresh",
+                        extra={"provider": provider, "error": exc.error},
+                    )
+                    record_counter(
+                        "mxcp.auth.userinfo_refresh_total",
+                        attributes={"provider": provider, "status": "error"},
+                        description="Total provider userinfo refresh attempts",
+                    )
+                else:
+                    record_counter(
+                        "mxcp.auth.userinfo_refresh_total",
+                        attributes={"provider": provider, "status": "success"},
+                        description="Total provider userinfo refresh attempts",
+                    )
+                    if self.session_manager:
+                        session = await self.session_manager.persist_provider_tokens(
+                            session,
+                            provider_access_token=session.provider_access_token,
+                            provider_refresh_token=session.provider_refresh_token,
+                            provider_expires_at=session.provider_expires_at,
+                            provider_refresh_expires_at=session.provider_refresh_expires_at,
+                            provider_refresh_backoff_until=session.provider_refresh_backoff_until,
+                            user_info=user_info,
+                        )
 
         user_context = UserContextModel(
             provider=user_info.provider,
@@ -210,3 +246,110 @@ class AuthenticationMiddleware:
         )
 
         return user_context
+
+    async def _refresh_provider_tokens_if_needed(
+        self, session: Any, provider: str, span: Any | None = None
+    ) -> tuple[Any | None, bool]:
+        """Refresh provider tokens when near expiry with skew and backoff handling."""
+        if not self.provider_adapter or not self.session_manager:
+            return session, False
+
+        now = time.time()
+
+        backoff_until = getattr(session, "provider_refresh_backoff_until", None)
+        if backoff_until and backoff_until > now:
+            logger.info(
+                "Skipping provider token refresh due to backoff",
+                extra={"provider": provider},
+            )
+            if span:
+                span.set_attribute("mxcp.auth.provider_refresh_skipped_backoff", True)
+            return session, False
+
+        expires_at = getattr(session, "provider_expires_at", None)
+        refresh_token = getattr(session, "provider_refresh_token", None)
+        access_token = getattr(session, "provider_access_token", None)
+        refresh_expires_at = getattr(session, "provider_refresh_expires_at", None)
+
+        needs_refresh = access_token is None
+        if expires_at is not None and expires_at - now < self.provider_token_skew_seconds:
+            needs_refresh = True
+
+        if not needs_refresh:
+            return session, False
+
+        if refresh_expires_at is not None and refresh_expires_at <= now:
+            logger.warning(
+                "Provider refresh token expired; re-auth required",
+                extra={"provider": provider},
+            )
+            await self.session_manager.persist_provider_tokens(
+                session,
+                provider_access_token=None,
+                provider_refresh_token=None,
+                provider_expires_at=None,
+                provider_refresh_expires_at=refresh_expires_at,
+                provider_refresh_backoff_until=now + self.refresh_backoff_seconds,
+            )
+            return None, False
+
+        if not refresh_token:
+            logger.warning(
+                "Provider access token expired and no refresh token available",
+                extra={"provider": provider},
+            )
+            return None, False
+
+        record_counter(
+            "mxcp.auth.provider_refresh_total",
+            attributes={"provider": provider, "status": "attempt"},
+            description="Total provider token refresh attempts",
+        )
+        try:
+            grant = await self.provider_adapter.refresh_token(
+                refresh_token=refresh_token, scopes=session.scopes or []
+            )
+        except ProviderError as exc:
+            logger.warning(
+                "Provider token refresh failed; requiring re-auth",
+                extra={"provider": provider, "error": exc.error, "status_code": exc.status_code},
+            )
+            backoff_until = now + self.refresh_backoff_seconds
+            drop_refresh = exc.error == "invalid_grant" or exc.status_code in {400, 401}
+            await self.session_manager.persist_provider_tokens(
+                session,
+                provider_access_token=None,
+                provider_refresh_token=None if drop_refresh else refresh_token,
+                provider_expires_at=None,
+                provider_refresh_expires_at=refresh_expires_at,
+                provider_refresh_backoff_until=backoff_until,
+            )
+            record_counter(
+                "mxcp.auth.provider_refresh_total",
+                attributes={"provider": provider, "status": "failure"},
+                description="Total provider token refresh attempts",
+            )
+            if span:
+                span.set_attribute("mxcp.auth.provider_refresh_error", exc.error)
+            return None, False
+
+        new_refresh_expires_at = grant.refresh_expires_at
+        if new_refresh_expires_at is None and grant.refresh_expires_in is not None:
+            new_refresh_expires_at = now + grant.refresh_expires_in
+
+        updated_session = await self.session_manager.persist_provider_tokens(
+            session,
+            provider_access_token=grant.access_token,
+            provider_refresh_token=grant.refresh_token or refresh_token,
+            provider_expires_at=grant.expires_at,
+            provider_refresh_expires_at=new_refresh_expires_at,
+            provider_refresh_backoff_until=None,
+        )
+        record_counter(
+            "mxcp.auth.provider_refresh_total",
+            attributes={"provider": provider, "status": "success"},
+            description="Total provider token refresh attempts",
+        )
+        if span:
+            span.set_attribute("mxcp.auth.provider_refreshed", True)
+        return updated_session, True

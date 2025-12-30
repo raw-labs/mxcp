@@ -380,12 +380,15 @@ class SqliteTokenStore(TokenStore):
                 provider_access_token TEXT,
                 provider_refresh_token TEXT,
                 provider_expires_at REAL,
+                provider_refresh_expires_at REAL,
+                provider_refresh_backoff_until REAL,
                 expires_at REAL,
                 created_at REAL NOT NULL
             )
             """
         )
         self._ensure_scopes_column()
+        self._ensure_provider_refresh_columns()
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS oauth_clients (
@@ -412,6 +415,17 @@ class SqliteTokenStore(TokenStore):
         columns = [row[1] for row in cursor.fetchall()]
         if "scopes" not in columns:
             cursor.execute("ALTER TABLE sessions ADD COLUMN scopes TEXT")
+
+    def _ensure_provider_refresh_columns(self) -> None:
+        """Add provider refresh metadata columns if missing."""
+        assert self._conn is not None
+        cursor = self._conn.cursor()
+        cursor.execute("PRAGMA table_info(sessions)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "provider_refresh_expires_at" not in columns:
+            cursor.execute("ALTER TABLE sessions ADD COLUMN provider_refresh_expires_at REAL")
+        if "provider_refresh_backoff_until" not in columns:
+            cursor.execute("ALTER TABLE sessions ADD COLUMN provider_refresh_backoff_until REAL")
 
     def _ensure_auth_code_columns(self) -> None:
         """Add missing auth_code columns when upgrading existing db."""
@@ -559,10 +573,12 @@ class SqliteTokenStore(TokenStore):
                 INSERT OR REPLACE INTO sessions
                 (access_token_hash, access_token_encrypted, refresh_token_hash, refresh_token_encrypted,
                  session_id, provider, user_info, scopes, provider_access_token, provider_refresh_token,
-                 provider_expires_at, expires_at, created_at)
+                 provider_expires_at, provider_refresh_expires_at, provider_refresh_backoff_until,
+                 expires_at, created_at)
                 VALUES (:access_token_hash, :access_token_encrypted, :refresh_token_hash, :refresh_token_encrypted,
                         :session_id, :provider, :user_info, :scopes, :provider_access_token, :provider_refresh_token,
-                        :provider_expires_at, :expires_at, :created_at)
+                        :provider_expires_at, :provider_refresh_expires_at, :provider_refresh_backoff_until,
+                        :expires_at, :created_at)
                 """,
                 payload,
             )
@@ -759,6 +775,8 @@ class SqliteTokenStore(TokenStore):
                 else None
             ),
             provider_expires_at=row["provider_expires_at"],
+            provider_refresh_expires_at=row["provider_refresh_expires_at"],
+            provider_refresh_backoff_until=row["provider_refresh_backoff_until"],
             expires_at=row["expires_at"],
             created_at=row["created_at"],
             issued_at=row["created_at"],
@@ -830,6 +848,8 @@ class SqliteTokenStore(TokenStore):
             "provider_access_token": self._encrypt(record.provider_access_token),
             "provider_refresh_token": self._encrypt(record.provider_refresh_token),
             "provider_expires_at": record.provider_expires_at,
+            "provider_refresh_expires_at": record.provider_refresh_expires_at,
+            "provider_refresh_backoff_until": record.provider_refresh_backoff_until,
             "expires_at": record.expires_at,
             "created_at": record.created_at,
         }

@@ -45,6 +45,8 @@ class GrantResult(SdkBaseModel):
     access_token: str
     refresh_token: str | None = None
     expires_at: float | None = None
+    refresh_expires_in: float | None = None
+    refresh_expires_at: float | None = None
     provider_scopes_granted: list[str] | None = None
     raw_profile: dict[str, Any] | None = None
     token_type: str = "Bearer"
@@ -75,6 +77,8 @@ class Session(SdkBaseModel):
     provider_access_token: str | None = None
     provider_refresh_token: str | None = None
     provider_expires_at: float | None = None
+    provider_refresh_expires_at: float | None = None
+    provider_refresh_backoff_until: float | None = None
     expires_at: float | None = None
     issued_at: float | None = None
     scopes: list[str] | None = None

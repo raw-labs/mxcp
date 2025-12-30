@@ -135,6 +135,8 @@ class SessionManager:
         provider_access_token: str | None,
         provider_refresh_token: str | None,
         provider_expires_at: float | None,
+        provider_refresh_expires_at: float | None = None,
+        provider_refresh_backoff_until: float | None = None,
         scopes: Sequence[str] | None,
         access_token: str | None = None,
         refresh_token: str | None = None,
@@ -151,6 +153,8 @@ class SessionManager:
             provider_access_token=provider_access_token,
             provider_refresh_token=provider_refresh_token,
             provider_expires_at=provider_expires_at,
+            provider_refresh_expires_at=provider_refresh_expires_at,
+            provider_refresh_backoff_until=provider_refresh_backoff_until,
             expires_at=now
             + (
                 access_token_ttl_seconds
@@ -163,6 +167,31 @@ class SessionManager:
         )
         await self.token_store.store_session(session)
         return session
+
+    async def persist_provider_tokens(
+        self,
+        session: StoredSession,
+        *,
+        provider_access_token: str | None,
+        provider_refresh_token: str | None,
+        provider_expires_at: float | None,
+        provider_refresh_expires_at: float | None = None,
+        provider_refresh_backoff_until: float | None = None,
+        user_info: UserInfo | None = None,
+    ) -> StoredSession:
+        """Persist rotated provider tokens atomically via the token store."""
+        updated = session.model_copy(
+            update={
+                "provider_access_token": provider_access_token,
+                "provider_refresh_token": provider_refresh_token,
+                "provider_expires_at": provider_expires_at,
+                "provider_refresh_expires_at": provider_refresh_expires_at,
+                "provider_refresh_backoff_until": provider_refresh_backoff_until,
+                "user_info": user_info or session.user_info,
+            }
+        )
+        await self.token_store.store_session(updated)
+        return updated
 
     async def get_session(self, access_token: str) -> StoredSession | None:
         return await self.token_store.load_session_by_token(access_token)

@@ -155,12 +155,17 @@ class AuthService:
         if grant.expires_at:
             access_ttl = max(0, int(grant.expires_at - time.time()))
 
+        refresh_expires_at = grant.refresh_expires_at
+        if refresh_expires_at is None and grant.refresh_expires_in is not None:
+            refresh_expires_at = time.time() + grant.refresh_expires_in
+
         session = await self.session_manager.issue_session(
             provider=self.provider_adapter.provider_name,
             user_info=user_info,
             provider_access_token=grant.access_token,
             provider_refresh_token=grant.refresh_token,
             provider_expires_at=grant.expires_at,
+            provider_refresh_expires_at=refresh_expires_at,
             scopes=grant.provider_scopes_granted,
             access_token_ttl_seconds=access_ttl,
         )

@@ -21,12 +21,16 @@ class DummyProviderAdapter(ProviderAdapter):
         expected_code: str = "TEST_CODE_OK",
         expected_code_verifier: str | None = None,
         issued_scopes: Sequence[str] | None = None,
+        access_token_ttl: int = 3600,
+        refresh_expires_in: int | None = None,
     ):
         self.expected_code = expected_code
         self.expected_code_verifier = expected_code_verifier
         self.issued_scopes = list(issued_scopes) if issued_scopes is not None else ["dummy.read"]
         self._access_token = "DUMMY_ACCESS_TOKEN"
         self._refresh_token = "DUMMY_REFRESH_TOKEN"
+        self.access_token_ttl = access_token_ttl
+        self.refresh_expires_in = refresh_expires_in
 
     def build_authorize_url(
         self,
@@ -73,7 +77,9 @@ class DummyProviderAdapter(ProviderAdapter):
         return GrantResult(
             access_token=self._access_token,
             refresh_token=self._refresh_token,
-            expires_at=now + 3600,
+            expires_at=now + self.access_token_ttl,
+            refresh_expires_in=self.refresh_expires_in,
+            refresh_expires_at=(now + self.refresh_expires_in) if self.refresh_expires_in else None,
             provider_scopes_granted=granted_scopes,
             raw_profile={"dummy": True},
         )
@@ -91,7 +97,9 @@ class DummyProviderAdapter(ProviderAdapter):
         return GrantResult(
             access_token=self._access_token,
             refresh_token=self._refresh_token,
-            expires_at=now + 3600,
+            expires_at=now + self.access_token_ttl,
+            refresh_expires_in=self.refresh_expires_in,
+            refresh_expires_at=(now + self.refresh_expires_in) if self.refresh_expires_in else None,
             provider_scopes_granted=granted_scopes,
             raw_profile={"dummy": True, "refreshed": True},
         )
