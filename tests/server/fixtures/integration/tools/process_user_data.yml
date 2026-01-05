@@ -63,6 +63,7 @@ tool:
                   description: Country
   return:
     type: object
+    description: Analysis results and original data
     properties:
       original_data:
         type: object

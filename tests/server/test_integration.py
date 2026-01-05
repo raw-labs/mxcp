@@ -128,6 +128,7 @@ class MCPTestClient:
                 "name": tool.name,
                 "description": tool.description if hasattr(tool, "description") else None,
                 "inputSchema": tool.inputSchema if hasattr(tool, "inputSchema") else {},
+                "outputSchema": tool.outputSchema if hasattr(tool, "outputSchema") else {},
             }
             for tool in tools
         ]
@@ -873,6 +874,22 @@ def check_all_secrets() -> dict:
                 assert echo_tool is not None, "echo_message tool not found"
                 assert echo_tool["description"] == "Echo a message"
                 assert len(echo_tool.get("inputSchema", {}).get("properties", {})) == 1
+
+                # Validate output schema (object) descriptions for process_user_data
+                pud_tool = next((t for t in tools if t["name"] == "process_user_data"), None)
+                assert pud_tool is not None, "process_user_data tool not found"
+                output_schema = pud_tool.get("outputSchema", {}) or {}
+                assert output_schema.get("type") == "object"
+                assert output_schema.get("description") == "Analysis results and original data"
+
+                props = output_schema.get("properties", {}) or {}
+                assert "original_data" in props
+                assert (
+                    props["original_data"].get("description")
+                    == "The original user data that was processed"
+                )
+                assert "analysis" in props
+                assert props["analysis"].get("description") == "Analysis results"
 
     @pytest.mark.asyncio
     async def test_parameter_optionality_in_mcp_schema(self, integration_fixture_dir):
