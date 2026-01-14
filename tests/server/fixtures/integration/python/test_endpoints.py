@@ -124,6 +124,27 @@ def process_user_data(user_data: dict[str, Any]) -> dict[str, Any]:
     return {"original_data": user_data, "analysis": analysis, "processing_status": "success"}
 
 
+def count_item_keys(items: list[Any]) -> dict[str, Any]:
+    """Count keys in each item after input validation/parsing.
+
+    This is used as a regression test for `additionalProperties` handling: if extra
+    keys are dropped during schema validation, the counts will be smaller than expected.
+    """
+    normalized: list[dict[str, Any]] = []
+    for item in items:
+        if hasattr(item, "model_dump"):
+            normalized.append(item.model_dump())
+        else:
+            normalized.append(item)
+
+    return {"counts": [len(obj) for obj in normalized]}
+
+
+def count_item_keys_strict(items: list[Any]) -> dict[str, Any]:
+    """Same behavior as `count_item_keys`, but used with a strict input schema."""
+    return count_item_keys(items)
+
+
 def check_optional_params(
     required_param: str,
     optional_param: str,

@@ -406,6 +406,55 @@ class TestIntegration:
                 assert result["length"] == 11
 
     @pytest.mark.asyncio
+    async def test_additional_properties_preserved_in_array_items(self, integration_fixture_dir):
+        """Integration regression test: `additionalProperties=true` preserves extra keys.
+
+        This asserts end-to-end behavior (MCP -> server schema validation/parsing -> tool call):
+        object keys not declared in `properties` are accepted and retained when
+        `additionalProperties` is `true`.
+        """
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                result = await client.call_tool(
+                    "count_item_keys",
+                    {
+                        "items": [
+                            {"objid": 1, "extra": "x"},
+                            {"objid": 2, "a": 1, "b": 2},
+                        ]
+                    },
+                )
+
+                # Expect extras to be preserved: {"objid": ..., <extra...>}
+                assert result["counts"] == [2, 3]
+
+    @pytest.mark.asyncio
+    async def test_additional_properties_false_rejects_in_array_items(
+        self, integration_fixture_dir
+    ):
+        """Integration regression test: `additionalProperties=false` rejects extra keys."""
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                ok = await client.call_tool(
+                    "count_item_keys_strict",
+                    {"items": [{"objid": 1}, {"objid": 2}]},
+                )
+                assert ok["counts"] == [1, 1]
+
+                err = await client.call_tool(
+                    "count_item_keys_strict",
+                    {"items": [{"objid": 1, "extra": "x"}]},
+                )
+                assert isinstance(err.get("result"), str)
+                assert err["result"].startswith("Error executing tool count_item_keys_strict")
+                assert "items.0.extra" in err["result"]
+                assert "Extra inputs are not permitted" in err["result"]
+
+    @pytest.mark.asyncio
     async def test_secret_access(self, integration_fixture_dir):
         """Test that Python endpoints can access secrets."""
         with ServerProcess(integration_fixture_dir) as server:
