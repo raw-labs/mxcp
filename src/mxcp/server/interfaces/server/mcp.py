@@ -982,20 +982,18 @@ class RAWMCP:
 
             # Create the model with proper configuration
 
-            # Create model with fields and config
-            # Note: In Pydantic v2, __config__ is not supported in create_model
-            # Instead, we create the model and then set the config
+            # Create model with fields and config.
+            # In Pydantic v2, model configuration is provided via a ConfigDict.
             # JSON Schema semantics: if additionalProperties is omitted, extra keys are allowed.
             extra_mode: Literal["allow", "forbid"] = "allow"
             if schema_def.additionalProperties is False:
                 extra_mode = "forbid"
 
-            if extra_mode:
-                final_type = create_model(  # type: ignore[call-overload]
-                    self._sanitize_model_name(model_name),
-                    __config__=ConfigDict(extra=extra_mode),
-                    **model_fields,
-                )
+            final_type = create_model(  # type: ignore[call-overload]
+                self._sanitize_model_name(model_name),
+                __config__=ConfigDict(extra=extra_mode),
+                **model_fields,
+            )
 
             self._model_cache[cache_key] = final_type
             return final_type
