@@ -179,7 +179,7 @@ parameters:
 |------------|-------------|
 | `properties` | Schema for object properties |
 | `required` | List of required properties |
-| `additionalProperties` | Allow undefined properties |
+| `additionalProperties` | Allow (and preserve) undefined properties. Default: `true` (if omitted). Use `false` to reject unknown keys. |
 
 ```yaml
 - name: address

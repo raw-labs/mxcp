@@ -208,7 +208,26 @@ Each parameter defines a URI placeholder.
 |-------|------|-------------|
 | `properties` | object | Map of property names to type definitions. |
 | `required` | array | List of required property names. |
-| `additionalProperties` | boolean | Whether extra properties are allowed. |
+| `additionalProperties` | boolean | Whether extra (unspecified) object properties are accepted and preserved. Default: `true` (if omitted). Use `false` to reject unknown keys. |
+
+**Note:** If `additionalProperties` is omitted, MXCP treats it as `true` (extra keys are allowed and preserved). Set `additionalProperties: false` to forbid unknown keys.
+
+```yaml
+# Allow unknown keys (default behavior)
+type: object
+properties:
+  objid:
+    type: integer
+required: ["objid"]
+
+# Forbid unknown keys
+type: object
+properties:
+  objid:
+    type: integer
+required: ["objid"]
+additionalProperties: false
+```
 
 ### Parameter Examples
 
