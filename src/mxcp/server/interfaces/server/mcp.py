@@ -986,7 +986,7 @@ class RAWMCP:
             # Note: In Pydantic v2, __config__ is not supported in create_model
             # Instead, we create the model and then set the config
             # JSON Schema semantics: if additionalProperties is omitted, extra keys are allowed.
-            extra_mode: str = "allow"
+            extra_mode: Literal["allow", "forbid"] = "allow"
             if schema_def.additionalProperties is False:
                 extra_mode = "forbid"
 
