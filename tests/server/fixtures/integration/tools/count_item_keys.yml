@@ -1,0 +1,26 @@
+mxcp: 1
+tool:
+  name: count_item_keys
+  description: Count keys in each item (regression test for additionalProperties)
+  language: python
+  source:
+    file: ../python/test_endpoints.py
+  parameters:
+    - name: items
+      type: array
+      items:
+        type: object
+        properties:
+          objid:
+            type: integer
+            description: Object ID (objid).
+        required: ["objid"]
+        additionalProperties: true
+  return:
+    type: object
+    properties:
+      counts:
+        type: array
+        items:
+          type: integer
+    required: ["counts"]
