@@ -22,7 +22,7 @@ from mcp.server.fastmcp import Context as FastMCPContextRuntime
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import OAuthClientInformationFull
 from mcp.types import ToolAnnotations
-from pydantic import AnyHttpUrl, ConfigDict, AnyUrl, Field, ValidationError, create_model
+from pydantic import AnyHttpUrl, AnyUrl, ConfigDict, Field, ValidationError, create_model
 from starlette.responses import JSONResponse, RedirectResponse
 
 from mxcp.sdk.audit import AuditLogger
