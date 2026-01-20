@@ -5,7 +5,7 @@ description: "How MXCP issuer-mode OAuth works and how to safely maintain it."
 
 ## Goals of this guide
 
-This guide is for contributors who need to **maintain or extend MXCP authentication** without being OAuth specialists.
+This guide is for contributors who need to **maintain or extend MXCP authentication**.
 
 It focuses on:
 - **Architecture**: which components own which responsibilities
@@ -13,7 +13,41 @@ It focuses on:
 - **Extension points**: how to add a provider or a storage backend safely
 - **Debugging**: how to diagnose common failure modes quickly
 
-It intentionally does **not** try to teach OAuth from scratch.
+## Quick step-by-step OAuth flow
+
+These are the calls involved in the OAuth flow:
+* `/register`: the client registers itself with a `client_id` in an IdP. It's optional since the client can be pre-registered in the IdP, and configured in the client. (For example our MXCP server config implies we've registered it as an app in the IdP.)
+* `/authorize`: the client initiates the flow. That call contains its `client_id`, a `redirect_uri` and optionally a `state` and a `code_challenge` if using PKCE.
+  - `state` is eventually returned by the IdP as it redirects the browser to `redirect_uri`. The `state` lets the client confirm the data belongs to the correct request
+  - For PKCE, the client generates a random `code_verifier` and derives a `code_challenge` from it. The IdP stores the challenge and later verifies it when the client sends the `code_verifier` at `/token`, proving possession of the original verifier.
+  The IdP redirects the browser to the client's `redirect_uri` with a `code`
+  (nothing to do with `code_challenge`) that is meant to be exchanged for the final access token by `/token`.
+* `/token` is called with the authorization code (the `code` returned by the redirection that occurred during `/authorize`). The client also sends the `code_verifier` if using PKCE, which is used by the IdP to validate the call against the initial `code_challenge`. It then returns the access token.
+
+## MXCP issuer implementation
+
+1. When the client registers dynamically (DCR, Dynamic Client Registration), it calls `/register` and sends a `client_id` it generated along with a list of its `redirect_uris`. That step binds the client (identified by `client_id`) to allowed redirect URIs.
+  * During the flow, a single `redirect_uri` is used. It's chosen by the client when it calls `/authorize` and has to match one of the registered URIs. It is where the MXCP server will eventually send the MXCP _authorization code_ (`auth_code`). That authorization code is eventually turned into the MXCP access token (the one appearing in the HTTP Authorization header in the end), by a call to `/token`. 
+2. The client calls `/authorize` with its `client_id` and a `redirect_uri`. MXCP validates `redirect_uri` against the stored client record. From then on,
+the goal of MXCP is to redirect the client's browser to the IdP's `/authorize`.
+  * The `/authorize` step optionally involves a safety check using a _state_. The MCP client can add a `state` to its `/authorize` call. That state is eventually returned to the client who can use it to verify the message belongs to the particular request it initiated. It is a string it generates. MXCP stores it as `client_state`, and eventually returns it to the client like the protocol expects.
+  * MXCP itself generates a `state`, another OAuth `state` string but for the MXCP/IdP side. It's stored as `state` in the code. That state is one-time and
+  consumed on callback (see below).
+  * In a regular OAuth flow involving a client and an IdP, the client communicates its `redirect_uri` to the IdP. The IdP eventually redirects the browser to that `redirect_uri`, passing the client's `state` and the IdP's generated `code`.
+  * `code` is an IdP-generated short-lived code that can eventually be exchanged
+  for an access token.
+  * With MXCP in the picture, the client's call to MXCP's `/authorize` instead redirects the browser to the IdP's `/authorize`, but with MXCP's details (its `client_id`, its `state`, its `code_challenge` if the IdP supports PKCE, and with its _MXCP_ `callback_url`, the one configured with the `callback_path` config knob). Meaning the IdP's answer to the `/authorize` redirects the user's browser to the MXCP callback, with the MXCP supplied `state` and the IdP's `code`.
+3. Upon getting its own callback called, MXCP will redirect the browser to the
+   original client's callback:
+   1. Validates the `state` (its own, now sent by the IdP). It consumes it and deletes it.
+   2. Calls the IdP to exchange the `code` for an access token using the IdP's `/token` call.
+   3. Fetches user info from the provider.
+   4. Issues and persists an MXCP session (it contains the MXCP `access_token`, and the IdP's refresh and access tokens).
+   5. Creates and persist an MXCP `auth_code`, which is meant to play the role of the OAuth `code` sent to the MCP client.
+   6. Redirects the browser to the client's `redirect_uri` with the `code` (`auth_code`) and the original client's `state` (`client_state`).
+4. The client's callback is called with the client's original `state` (if it was present) and MXCP's `code`.
+  * The client calls MXCP's `/token` with MXCP's auth code, but also its `client_id` and `redirect_uri` (they're used to validate the call on the
+  server/MXCP side). MXCP returns the `access_token` it generated earlier, and a `refresh_token`.
 
 ## Mental model
 
@@ -105,7 +139,7 @@ If you change code touching these rules, require a careful review.
   - State must be consumed (deleted) on first use.
   - Expired state must be rejected.
 - **Auth codes are one-time use**
-  - Auth codes must be deleted on redemption.
+  - Auth codes must be deleted on redemption (when the `auth_code` is exchanged for an `access_token` during the call to `/token`).
   - Expired auth codes must be rejected.
 - **Redirect URI binding is strict**
   - `redirect_uri` must be validated against persisted client registration.
@@ -113,6 +147,7 @@ If you change code touching these rules, require a careful review.
 - **Issuer-mode scopes policy**
   - OAuth client-requested scopes must **not** influence upstream IdP scopes.
   - Upstream IdP scopes come from server/provider configuration.
+  - Client-supplied scopes may be stored as metadata (DCR or `/authorize`) but are not used for IdP authorization.
 - **PKCE boundaries are explicit**
   - Downstream PKCE: client ↔ MXCP token endpoint.
   - Upstream PKCE: MXCP ↔ IdP token exchange (provider capability).
@@ -199,6 +234,10 @@ We keep the `TokenStore` single-op contract as the required API and add optional
     - `bulk_store_sessions` / `bulk_delete_sessions_by_hash` persist/delete all items; results match looping single-op calls.
     - Fallback parity: when bulk is absent, wrapper falls back to single-op (ideally in one transaction) with identical outcomes.
 
+
+### Standard DCR support (RFC 7591)
+
+Today `register_client()` requires a client-supplied `client_id`. For standard DCR behavior, MXCP should mint a `client_id` (and optionally a client secret) when it is omitted, return it in the DCR response, and persist it. We can keep accepting client-supplied IDs for backward compatibility, but the server-generated path should be the default when `client_id` is missing.
 
 ### Recommended userinfo refresh policy
 
