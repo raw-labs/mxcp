@@ -54,6 +54,16 @@ class _GitHubUserResponse(SdkBaseModel):
         return str(self.id)
 
 
+class _GitHubEmailEntry(SdkBaseModel):
+    """Minimal `/user/emails` response entry used to resolve email."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    email: str | None = None
+    primary: bool | None = None
+    verified: bool | None = None
+
+
 class GitHubProviderAdapter(ProviderAdapter):
     """GitHub OAuth ProviderAdapter that uses real HTTP calls."""
 
@@ -186,11 +196,15 @@ class GitHubProviderAdapter(ProviderAdapter):
 
         username = parsed.login or user_id
 
+        email = parsed.email
+        if not email:
+            email = await self._fetch_user_email(access_token)
+
         return UserInfo(
             provider=self.provider_name,
             user_id=user_id,
             username=username,
-            email=parsed.email,
+            email=email,
             name=parsed.name,
             avatar_url=parsed.avatar_url,
             raw_profile=profile,
@@ -297,6 +311,62 @@ class GitHubProviderAdapter(ProviderAdapter):
                 status_code=resp.status_code,
             ) from exc
         return payload
+
+    async def _fetch_user_email(self, token: str) -> str | None:
+        async with create_mcp_http_client() as client:
+            resp = await client.get(
+                "https://api.github.com/user/emails",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github+json",
+                },
+            )
+
+        if resp.status_code != 200:
+            logger.warning(
+                "GitHub user emails endpoint returned non-200",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "user_emails",
+                    "status_code": resp.status_code,
+                },
+            )
+            return None
+
+        try:
+            payload = resp.json()
+        except Exception:
+            logger.warning(
+                "GitHub user emails response was not valid JSON",
+                extra={"provider": self.provider_name, "endpoint": "user_emails"},
+            )
+            return None
+
+        if not isinstance(payload, list):
+            logger.warning(
+                "GitHub user emails response was not a list",
+                extra={"provider": self.provider_name, "endpoint": "user_emails"},
+            )
+            return None
+
+        entries: list[_GitHubEmailEntry] = []
+        for item in payload:
+            try:
+                entries.append(_GitHubEmailEntry.model_validate(item))
+            except ValidationError:
+                continue
+
+        for entry in entries:
+            if entry.primary and entry.verified and entry.email:
+                return entry.email
+        for entry in entries:
+            if entry.verified and entry.email:
+                return entry.email
+        for entry in entries:
+            if entry.email:
+                return entry.email
+
+        return None
 
     async def _request_token(
         self,

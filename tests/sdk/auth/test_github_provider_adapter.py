@@ -12,12 +12,12 @@ from mxcp.sdk.auth.providers.github import GitHubProviderAdapter
 
 
 class _FakeResponse:
-    def __init__(self, status_code: int, payload: dict[str, object], text: str = "") -> None:
+    def __init__(self, status_code: int, payload: object, text: str = "") -> None:
         self.status_code = status_code
         self._payload = payload
         self.text = text
 
-    def json(self) -> dict[str, object]:
+    def json(self) -> object:
         return self._payload
 
 
@@ -32,9 +32,13 @@ class _FakeClient:
         *,
         post_response: _FakeResponse,
         get_response: _FakeResponse | None = None,
+        get_email_response: _FakeResponse | None = None,
     ) -> None:
         self._post_response = post_response
         self._get_response = get_response or _FakeResponse(200, {"id": 123})
+        self._get_email_response = get_email_response or _FakeResponse(200, [])
+        self.user_calls = 0
+        self.email_calls = 0
 
     async def __aenter__(self) -> "_FakeClient":
         return self
@@ -51,6 +55,11 @@ class _FakeClient:
         return self._post_response
 
     async def get(self, *args: Any, **kwargs: Any) -> _FakeResponse:
+        url = args[0] if args else ""
+        if "user/emails" in str(url):
+            self.email_calls += 1
+            return self._get_email_response
+        self.user_calls += 1
         return self._get_response
 
 
@@ -208,6 +217,99 @@ async def test_fetch_user_info_happy_path(
     assert user_info.username == "user"
     assert user_info.avatar_url == "pic"
     assert user_info.provider_scopes_granted == ["repo", "gist"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_user_info_skips_email_lookup_when_present(
+    monkeypatch: MonkeyPatch, github_config: GitHubAuthConfigModel
+) -> None:
+    get_response = _FakeResponse(
+        200,
+        {
+            "id": 123,
+            "email": "user@example.com",
+            "login": "user",
+        },
+    )
+    post_response = _FakeResponse(200, {})
+    get_email_response = _FakeResponse(500, {"message": "nope"})
+    fake_client = _FakeClient(
+        post_response=post_response,
+        get_response=get_response,
+        get_email_response=get_email_response,
+    )
+    monkeypatch.setattr(
+        "mxcp.sdk.auth.providers.github.create_mcp_http_client", lambda: fake_client
+    )
+    adapter = GitHubProviderAdapter(github_config)
+
+    user_info = await adapter.fetch_user_info(access_token="at")
+    assert user_info.email == "user@example.com"
+    assert fake_client.email_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_fetch_user_info_falls_back_to_email_endpoint(
+    monkeypatch: MonkeyPatch, github_config: GitHubAuthConfigModel
+) -> None:
+    get_response = _FakeResponse(
+        200,
+        {
+            "id": 123,
+            "email": None,
+            "login": "user",
+        },
+    )
+    post_response = _FakeResponse(200, {})
+    get_email_response = _FakeResponse(
+        200,
+        [
+            {"email": "primary@example.com", "primary": True, "verified": True},
+            {"email": "other@example.com", "primary": False, "verified": True},
+        ],
+    )
+    fake_client = _FakeClient(
+        post_response=post_response,
+        get_response=get_response,
+        get_email_response=get_email_response,
+    )
+    monkeypatch.setattr(
+        "mxcp.sdk.auth.providers.github.create_mcp_http_client", lambda: fake_client
+    )
+    adapter = GitHubProviderAdapter(github_config)
+
+    user_info = await adapter.fetch_user_info(access_token="at")
+    assert user_info.email == "primary@example.com"
+    assert fake_client.email_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_user_info_email_endpoint_unauthorized(
+    monkeypatch: MonkeyPatch, github_config: GitHubAuthConfigModel
+) -> None:
+    get_response = _FakeResponse(
+        200,
+        {
+            "id": 123,
+            "email": None,
+            "login": "user",
+        },
+    )
+    post_response = _FakeResponse(200, {})
+    get_email_response = _FakeResponse(401, {"message": "Unauthorized"})
+    fake_client = _FakeClient(
+        post_response=post_response,
+        get_response=get_response,
+        get_email_response=get_email_response,
+    )
+    monkeypatch.setattr(
+        "mxcp.sdk.auth.providers.github.create_mcp_http_client", lambda: fake_client
+    )
+    adapter = GitHubProviderAdapter(github_config)
+
+    user_info = await adapter.fetch_user_info(access_token="at")
+    assert user_info.email is None
+    assert fake_client.email_calls == 1
 
 
 @pytest.mark.asyncio
