@@ -263,11 +263,19 @@ Today `register_client()` requires a client-supplied `client_id`. For standard D
   - Cached userinfo is used when refresh is not needed.
   - Optional userinfo-on-refresh path runs once when enabled.
 
+### Recommended MXCP token/session policy
+
+- Access token TTL: short-lived, and no longer than the provider access token TTL when it is known.
+- Refresh token TTL: longer-lived, and no longer than the provider refresh token TTL when it is known.
+- Session TTL: extend on refresh (sliding sessions), but enforce a hard max lifetime to avoid indefinite sessions.
+- Provider token coupling: if MXCP must call upstream IdPs, do not allow MXCP sessions to outlive provider refresh token validity.
+
 ### Current gaps / TODO (implementation status)
 
 - Middleware today still re-fetches provider userinfo per request; the above refresh/userinfo policy is not yet implemented.
 - Provider token refresh is not yet wired: add the expiry check + refresh path in `mxcp.sdk.auth.middleware.AuthenticationMiddleware`, and persist updates via `SessionManager`/`TokenStore`.
 - When adding it, cover tests in `tests/sdk/auth/test_middleware.py` per the cases listed above.
+- MXCP access/refresh token lifetime is currently tied to the session TTL (which is derived from the provider access token expiry when available). Refresh token redemption does not extend the session and can fail once the access token expiry has passed, which makes refresh largely ineffective. Consider decoupling access/refresh lifetimes and extending session expiry on refresh (with a max lifetime bound).
 
 ## Debugging playbook
 
