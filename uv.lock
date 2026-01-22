@@ -1477,7 +1477,7 @@ wheels = [
 
 [[package]]
 name = "mxcp"
-version = "0.11.0rc1"
+version = "0.11.0rc2"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -1574,7 +1574,7 @@ requires-dist = [
     { name = "hvac", marker = "extra == 'vault'", specifier = ">=2.0.0" },
     { name = "jinja2", specifier = ">=3.1.3" },
     { name = "makefun" },
-    { name = "mcp", specifier = ">=1.22,<1.24" },
+    { name = "mcp", specifier = ">=1.22,<1.26" },
     { name = "mypy", marker = "extra == 'all'" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "onepassword-sdk", marker = "extra == 'all'", specifier = ">=0.3.0" },
