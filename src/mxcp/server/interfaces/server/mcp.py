@@ -491,7 +491,17 @@ class RAWMCP:
             if persistence and persistence.path
             else Path.home() / ".mxcp" / "oauth.db"
         )
-        token_store = SqliteTokenStore(db_path, allow_plaintext_tokens=True)
+        encryption_key = None
+        if persistence and persistence.auth_encryption_key:
+            encryption_key = persistence.auth_encryption_key
+        else:
+            logger.warning(
+                "Auth token storage encryption key not configured; "
+                "tokens will be stored in plaintext (intended for local dev only)."
+            )
+        token_store = SqliteTokenStore(
+            db_path, encryption_key=encryption_key, allow_plaintext_tokens=True
+        )
         self.session_manager = SessionManager(token_store)
 
         self.auth_service = AuthService(

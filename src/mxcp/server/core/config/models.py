@@ -299,6 +299,7 @@ class UserAuthPersistenceConfigModel(BaseModel):
 
     type: Literal["sqlite"] = "sqlite"
     path: str = Field(default_factory=lambda: str(Path.home() / ".mxcp" / "oauth.db"))
+    auth_encryption_key: str | None = None
 
 
 class UserAuthorizationConfigModel(BaseModel):

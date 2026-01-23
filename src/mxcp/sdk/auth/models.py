@@ -141,6 +141,7 @@ class AuthPersistenceConfigModel(SdkBaseModel):
 
     type: Literal["sqlite"] | None = None
     path: str | None = None
+    auth_encryption_key: str | None = None
 
 
 class AuthorizationConfigModel(SdkBaseModel):

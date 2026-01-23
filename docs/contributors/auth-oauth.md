@@ -248,6 +248,17 @@ Today `register_client()` requires a client-supplied `client_id`. For standard D
 - MXCP access/refresh token lifetime is currently tied to the session TTL (which is derived from the provider access token expiry when available). Refresh token redemption does not extend the session and can fail once the access token expiry has passed, which makes refresh largely ineffective. Consider decoupling access/refresh lifetimes and extending session expiry on refresh (with a max lifetime bound).
 - Token storage encryption is not wired by default. `SqliteTokenStore` supports `encryption_key`, but server wiring uses `allow_plaintext_tokens=True` with no key. Add config/env support for a Fernet key, pass it into `SqliteTokenStore`, and require explicit opt-in to plaintext for local dev only (with a loud warning). Document how to generate/provide the key.
 
+#### Phase 1: enable token encryption via config
+
+- Add `auth.persistence.auth_encryption_key` (Fernet key) to user config.
+- Wire the value into `SqliteTokenStore(encryption_key=...)` during server startup.
+- If the key is missing, keep plaintext storage but emit a clear warning that it is for local dev only.
+- Generate a Fernet key (example):
+  - ```python
+    from cryptography.fernet import Fernet
+    print(Fernet.generate_key().decode())
+    ```
+
 ## Debugging playbook
 
 ### Fast checks
