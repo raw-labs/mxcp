@@ -1330,12 +1330,9 @@ class RAWMCP:
                 },
             ) as span:
                 try:
-                    logger.info(f"Calling {log_name} {name} with: {kwargs}")
+                    logger.info("Calling %s %s", log_name, name)
                     if user_context:
-                        logger.info(
-                            f"Authenticated user: {user_context.username} (provider: {user_context.provider})"
-                        )
-                        # Add auth attributes to span
+                        logger.info("Authenticated request (provider: %s)", user_context.provider)
                         if span:
                             span.set_attribute("mxcp.auth.authenticated", True)
                             span.set_attribute("mxcp.auth.provider", user_context.provider)
@@ -1381,10 +1378,15 @@ class RAWMCP:
                     logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                     return result
 
-                except Exception as e:
+                except Exception:
                     status = "error"
-                    error_msg = str(e)
-                    logger.error(f"Error executing {log_name} {name}:\n{traceback.format_exc()}")
+                    error_msg = "error"
+                    logger.error(
+                        "Error executing %s %s:\n%s",
+                        log_name,
+                        name,
+                        traceback.format_exc(),
+                    )
                     raise
                 finally:
                     # Calculate duration

@@ -107,30 +107,6 @@ The legacy handler-based stack has been removed. Only the ProviderAdapter-based 
   - ensures one-time use of the auth code
   - returns MXCP access token (and refresh token)
 
-### Sequence diagram
-
-```mermaid
-sequenceDiagram
-participant Client
-participant MXCP_Issuer
-participant IdP
-
-Client->>MXCP_Issuer: GET /authorize (client_id, redirect_uri, state?, code_challenge?)
-MXCP_Issuer->>MXCP_Issuer: validate client + redirect_uri (persisted client)
-MXCP_Issuer->>MXCP_Issuer: create StateRecord (one-time, expires)
-MXCP_Issuer-->>Client: 302 IdP /authorize (state=mxcp_state, redirect_uri=mxcp_callback)
-Client->>IdP: GET /authorize
-IdP-->>Client: 302 MXCP callback (code, state)
-Client->>MXCP_Issuer: GET /callback (code, state)
-MXCP_Issuer->>MXCP_Issuer: consume state (one-time)
-MXCP_Issuer->>IdP: POST /token (code, upstream PKCE verifier if used)
-IdP-->>MXCP_Issuer: access_token (+ refresh_token)
-MXCP_Issuer->>MXCP_Issuer: issue session + issue MXCP auth_code
-MXCP_Issuer-->>Client: 302 client redirect_uri (code=mxcp_auth_code, state=client_state?)
-Client->>MXCP_Issuer: POST /token (mxcp_auth_code, PKCE verifier)
-MXCP_Issuer-->>Client: access_token (+ refresh_token)
-```
-
 ## Security invariants (“do not break”)
 
 If you change code touching these rules, require a careful review.
@@ -163,12 +139,6 @@ If you change code touching these rules, require a careful review.
 ### Add a new provider (IdP)
 
 Implement `ProviderAdapter` under `mxcp.sdk.auth.providers`:
-- Implement:
-  - `build_authorize_url()`
-  - `exchange_code()`
-  - `refresh_token()`
-  - `fetch_user_info()`
-  - `revoke_token()`
 - Raise `ProviderError(error, description, status_code)` for expected failures.
 - Never log response bodies, tokens, secrets, or PII.
 
@@ -276,6 +246,7 @@ Today `register_client()` requires a client-supplied `client_id`. For standard D
 - Provider token refresh is not yet wired: add the expiry check + refresh path in `mxcp.sdk.auth.middleware.AuthenticationMiddleware`, and persist updates via `SessionManager`/`TokenStore`.
 - When adding it, cover tests in `tests/sdk/auth/test_middleware.py` per the cases listed above.
 - MXCP access/refresh token lifetime is currently tied to the session TTL (which is derived from the provider access token expiry when available). Refresh token redemption does not extend the session and can fail once the access token expiry has passed, which makes refresh largely ineffective. Consider decoupling access/refresh lifetimes and extending session expiry on refresh (with a max lifetime bound).
+- Token storage encryption is not wired by default. `SqliteTokenStore` supports `encryption_key`, but server wiring uses `allow_plaintext_tokens=True` with no key. Add config/env support for a Fernet key, pass it into `SqliteTokenStore`, and require explicit opt-in to plaintext for local dev only (with a loud warning). Document how to generate/provide the key.
 
 ## Debugging playbook
 

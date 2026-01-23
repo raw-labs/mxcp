@@ -89,7 +89,7 @@ class AuthenticationMiddleware:
                     )
                     return None
 
-                logger.info("Access token found in request context")
+                logger.info("Access token present in request context")
                 if span:
                     span.set_attribute("mxcp.auth.has_token", True)
 
@@ -97,10 +97,8 @@ class AuthenticationMiddleware:
                     token_value, span=span, provider_override=provider
                 )
 
-            except Exception as e:
-                logger.error(f"Authentication check failed: {e}")
-                if span:
-                    span.set_attribute("mxcp.auth.error", str(e))
+            except Exception:
+                logger.error("Authentication check failed")
                 record_counter(
                     "mxcp.auth.attempts_total",
                     attributes={"provider": provider, "status": "error"},
@@ -126,16 +124,16 @@ class AuthenticationMiddleware:
             if self.auth_enabled:
                 user_context = await self.check_authentication()
                 if user_context:
-                    # Log authentication status without PII
                     logger.info(
-                        f"Executing {func.__name__} for authenticated user "
-                        f"(provider: {user_context.provider})"
+                        "Executing %s for authenticated request (provider: %s)",
+                        func.__name__,
+                        user_context.provider,
                     )
                 else:
-                    logger.error(f"Authentication required but failed for {func.__name__}")
+                    logger.error("Authentication required but failed for %s", func.__name__)
                     raise HTTPException(401, "Authentication required")
             else:
-                logger.debug(f"Executing {func.__name__} (authentication disabled)")
+                logger.debug("Executing %s (authentication disabled)", func.__name__)
 
             # Set the user context in the context variable
             context_token = set_user_context(user_context)
@@ -179,8 +177,8 @@ class AuthenticationMiddleware:
                 user_info = await self.provider_adapter.fetch_user_info(
                     access_token=session.provider_access_token
                 )
-            except ProviderError as exc:
-                logger.warning(f"Failed to fetch user info from provider: {exc}")
+            except ProviderError:
+                logger.warning("Failed to fetch user info from provider")
                 record_counter(
                     "mxcp.auth.attempts_total",
                     attributes={"provider": provider, "status": "error"},
@@ -201,7 +199,6 @@ class AuthenticationMiddleware:
 
         if span:
             span.set_attribute("mxcp.auth.authenticated", True)
-            span.set_attribute("mxcp.auth.user_id", user_context.user_id)
 
         record_counter(
             "mxcp.auth.attempts_total",
