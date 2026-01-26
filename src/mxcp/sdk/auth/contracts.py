@@ -46,7 +46,6 @@ class GrantResult(SdkBaseModel):
     refresh_token: str | None = None
     expires_at: float | None = None
     provider_scopes_granted: list[str] | None = None
-    raw_profile: dict[str, Any] | None = None
     token_type: str = "Bearer"
 
 

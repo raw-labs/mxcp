@@ -133,7 +133,6 @@ class GitHubProviderAdapter(ProviderAdapter):
         if not access_token:
             raise ProviderError("invalid_grant", "No access_token in response", status_code=400)
 
-        user_profile = await self._fetch_user_profile(access_token)
         expires_at = time.time() + float(expires_in) if expires_in is not None else None
         granted_scopes = token.scope.split(",") if token.scope else list(scopes or [])
         token_type = token.token_type if token.token_type is not None else "Bearer"
@@ -143,7 +142,6 @@ class GitHubProviderAdapter(ProviderAdapter):
             refresh_token=refresh_token,
             expires_at=expires_at,
             provider_scopes_granted=granted_scopes,
-            raw_profile=user_profile,
             token_type=token_type,
         )
 
@@ -175,7 +173,6 @@ class GitHubProviderAdapter(ProviderAdapter):
             refresh_token=token.refresh_token if token.refresh_token is not None else refresh_token,
             expires_at=expires_at,
             provider_scopes_granted=granted_scopes,
-            raw_profile=None,
             token_type=token_type,
         )
 

@@ -75,7 +75,6 @@ class DummyProviderAdapter(ProviderAdapter):
             refresh_token=self._refresh_token,
             expires_at=now + 3600,
             provider_scopes_granted=granted_scopes,
-            raw_profile={"dummy": True},
         )
 
     async def refresh_token(
@@ -93,7 +92,6 @@ class DummyProviderAdapter(ProviderAdapter):
             refresh_token=self._refresh_token,
             expires_at=now + 3600,
             provider_scopes_granted=granted_scopes,
-            raw_profile={"dummy": True, "refreshed": True},
         )
 
     async def fetch_user_info(self, *, access_token: str) -> UserInfo:
