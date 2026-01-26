@@ -1,11 +1,12 @@
 ---
-title: "Auth & OAuth (Maintainer Guide)"
-description: "How MXCP issuer-mode OAuth works and how to safely maintain it."
+title: "Auth & OAuth Internals (Maintainers)"
+description: "Internal OAuth architecture and invariants for maintaining MXCP issuer-mode auth."
 ---
 
-## Goals of this guide
+This guide is for contributors who maintain or extend MXCP authentication. For user-facing setup,
+see [Authentication](/security/authentication).
 
-This guide is for contributors who need to **maintain or extend MXCP authentication**.
+## Goals of this guide
 
 It focuses on:
 - **Architecture**: which components own which responsibilities
@@ -13,7 +14,7 @@ It focuses on:
 - **Extension points**: how to add a provider or a storage backend safely
 - **Debugging**: how to diagnose common failure modes quickly
 
-## Quick step-by-step OAuth flow
+## OAuth flow overview
 
 These are the calls involved in the OAuth flow:
 * `/register`: the client registers itself with a `client_id` in an IdP. It's optional since the client can be pre-registered in the IdP, and configured in the client. (For example our MXCP server config implies we've registered it as an app in the IdP.)
@@ -27,7 +28,7 @@ These are the calls involved in the OAuth flow:
 ## MXCP issuer implementation
 
 1. When the client registers dynamically (DCR, Dynamic Client Registration), it calls `/register` and sends a `client_id` it generated along with a list of its `redirect_uris`. That step binds the client (identified by `client_id`) to allowed redirect URIs.
-  * During the flow, a single `redirect_uri` is used. It's chosen by the client when it calls `/authorize` and has to match one of the registered URIs. It is where the MXCP server will eventually send the MXCP _authorization code_ (`auth_code`). That authorization code is eventually turned into the MXCP access token (the one appearing in the HTTP Authorization header in the end), by a call to `/token`. 
+  * During the flow, a single `redirect_uri` is used. It's chosen by the client when it calls `/authorize` and has to match one of the registered URIs. It is where the MXCP server will eventually send the MXCP _authorization code_ (`auth_code`). That authorization code is eventually turned into the MXCP access token (the one appearing in the HTTP Authorization header in the end), by a call to `/token`.
 2. The client calls `/authorize` with its `client_id` and a `redirect_uri`. MXCP validates `redirect_uri` against the stored client record. From then on,
 the goal of MXCP is to redirect the client's browser to the IdP's `/authorize`.
   * The `/authorize` step optionally involves a safety check using a _state_. The MCP client can add a `state` to its `/authorize` call. That state is eventually returned to the client who can use it to verify the message belongs to the particular request it initiated. It is a string it generates. MXCP stores it as `client_state`, and eventually returns it to the client like the protocol expects.
@@ -142,7 +143,7 @@ Implement `ProviderAdapter` under `mxcp.sdk.auth.providers`:
 - Raise `ProviderError(error, description, status_code)` for expected failures.
 - Never log response bodies, tokens, secrets, or PII.
 
-Tests to add:
+Coverage expectations:
 - `tests/sdk/auth/test_<provider>_provider_adapter.py`
   - authorize URL parameter correctness
   - token error parsing (non-200, invalid JSON, OAuth error objects)
@@ -155,8 +156,8 @@ Implement the `TokenStore` protocol:
 - Honor TTL on reads and delete expired records.
 - Ensure async safety (thread-safe if wrapping sync I/O).
 
-Tests to add:
-- extend `tests/sdk/auth/test_token_store.py` for backend parity.
+Coverage expectations:
+- Extend `tests/sdk/auth/test_token_store.py` for backend parity.
 
 ### Where to look
 - State handling: `mxcp.sdk.auth.session_manager.SessionManager` and `mxcp.sdk.auth.storage.TokenStore`

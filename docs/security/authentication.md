@@ -705,3 +705,4 @@ auth:
 - [Policies](/security/policies) - Configure access control
 - [Auditing](/security/auditing) - Track authentication events
 - [Configuration](/operations/configuration) - More configuration options
+- [Auth & OAuth Internals (Maintainers)](/contributing/auth-oauth) - Maintainer notes and internal implementation details
