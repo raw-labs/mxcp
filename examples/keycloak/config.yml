@@ -12,8 +12,6 @@ projects:
       dev:
         auth:
           provider: keycloak
-          persistence:
-            auth_encryption_key: zfsliV_E9bAWfbhogscRRNUp0BJ1Bm60tofEHRuR0Do=
           keycloak:
             client_id: "${KEYCLOAK_CLIENT_ID}"
             client_secret: "${KEYCLOAK_CLIENT_SECRET}"
