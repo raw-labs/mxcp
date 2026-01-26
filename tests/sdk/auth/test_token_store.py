@@ -238,14 +238,8 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
 
     loaded_a = await store.load_session_by_token("token-a")
     loaded_b = await store.load_session_by_token("token-b")
-    assert (
-        loaded_a is not None
-        and loaded_a.session_id == "session-a"
-    )
-    assert (
-        loaded_b is not None
-        and loaded_b.session_id == "session-b"
-    )
+    assert loaded_a is not None and loaded_a.session_id == "session-a"
+    assert loaded_b is not None and loaded_b.session_id == "session-b"
 
     loaded_a_by_id = await store.load_session_by_id("session-a")
     loaded_b_by_id = await store.load_session_by_id("session-b")
