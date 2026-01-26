@@ -119,7 +119,7 @@ class AuthService:
         return authorize_url, state_record
 
     async def handle_callback(
-        self, *, code: str, state: str, code_verifier: str | None = None
+        self, *, code: str, state: str
     ) -> tuple[AuthCodeRecord, StoredSession, str | None]:
         """Process provider callback, creating session and issuing auth code.
 
@@ -141,7 +141,7 @@ class AuthService:
                 status_code=400,
             )
 
-        # Use the provider's code_verifier (for Google), not the MCP client's
+        # Use the provider's code_verifier from state for upstream PKCE.
         grant: GrantResult = await self.provider_adapter.exchange_code(
             code=code,
             redirect_uri=self.callback_url,
@@ -232,40 +232,5 @@ class AuthService:
             provider_refresh_token=session.provider_refresh_token,
             provider_expires_at=session.provider_expires_at,
         )
-
-    def _verify_pkce(self, code_record: AuthCodeRecord, code_verifier: str | None) -> None:
-        """Enforce PKCE at MXCP auth-code redemption time.
-
-        Note: In issuer mode, PKCE verification is handled upstream by the MCP
-        token handler before exchange_token() is called. This method is kept
-        for potential future use cases or testing scenarios where direct PKCE
-        verification might be needed.
-        """
-        if not code_record.code_challenge:
-            return
-        if code_verifier is None:
-            raise ProviderError(
-                "invalid_grant",
-                "code_verifier is required for this authorization code",
-                status_code=400,
-            )
-
-        method = (code_record.code_challenge_method or "plain").upper()
-        if method == "PLAIN":
-            valid = code_verifier == code_record.code_challenge
-        elif method == "S256":
-            digest = hashlib.sha256(code_verifier.encode("utf-8")).digest()
-            computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("utf-8")
-            valid = computed == code_record.code_challenge
-        else:
-            raise ProviderError(
-                "invalid_request",
-                f"Unsupported code_challenge_method {code_record.code_challenge_method}",
-                status_code=400,
-            )
-
-        if not valid:
-            raise ProviderError("invalid_grant", "PKCE verification failed", status_code=400)
-
 
 __all__ = ["AccessTokenResponse", "AuthService"]

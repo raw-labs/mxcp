@@ -100,7 +100,6 @@ async def test_full_auth_flow_pkce_s256(auth_service: AuthService) -> None:
     auth_code, session, _client_state = await auth_service.handle_callback(
         code="TEST_CODE_OK",
         state=state_record.state,
-        code_verifier=verifier,
     )
 
     assert session.provider_access_token is not None
@@ -130,7 +129,7 @@ async def test_full_auth_flow_pkce_s256(auth_service: AuthService) -> None:
 async def test_invalid_state_rejected(auth_service: AuthService) -> None:
     # Rejects callbacks with unknown/expired state.
     with pytest.raises(ProviderError):
-        await auth_service.handle_callback(code="TEST_CODE_OK", state="unknown", code_verifier=None)
+        await auth_service.handle_callback(code="TEST_CODE_OK", state="unknown")
 
 
 @pytest.mark.asyncio
@@ -145,7 +144,7 @@ async def test_exchange_token_does_not_validate_pkce_verifier(auth_service: Auth
         code_challenge_method="S256",
     )
     auth_code, _, _client_state = await auth_service.handle_callback(
-        code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
+        code="TEST_CODE_OK", state=state_record.state
     )
 
     # Downstream PKCE (client ↔ MXCP token endpoint) is verified by the MCP framework
@@ -174,7 +173,7 @@ async def test_token_exchange_second_redemption_rejected(auth_service: AuthServi
         code_challenge_method="S256",
     )
     auth_code, _, _client_state = await auth_service.handle_callback(
-        code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
+        code="TEST_CODE_OK", state=state_record.state
     )
 
     await auth_service.exchange_token(
@@ -204,7 +203,7 @@ async def test_token_exchange_requires_pkce_missing_verifier(auth_service: AuthS
         code_challenge_method="S256",
     )
     auth_code, _, _client_state = await auth_service.handle_callback(
-        code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
+        code="TEST_CODE_OK", state=state_record.state
     )
 
     # PKCE verification is performed upstream by the MCP token handler, so the
@@ -228,7 +227,7 @@ async def test_plain_pkce_validation(auth_service: AuthService) -> None:
         code_challenge_method="plain",
     )
     auth_code, _, _client_state = await auth_service.handle_callback(
-        code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
+        code="TEST_CODE_OK", state=state_record.state
     )
 
     await auth_service.exchange_token(
@@ -259,7 +258,7 @@ async def test_no_challenge_allows_token_exchange_without_verifier(
         code_challenge_method=None,
     )
     auth_code, session, _client_state = await auth_service.handle_callback(
-        code="TEST_CODE_OK", state=state_record.state, code_verifier="verifier"
+        code="TEST_CODE_OK", state=state_record.state
     )
 
     token_response = await auth_service.exchange_token(
@@ -312,7 +311,7 @@ async def test_exchange_rejects_wrong_client_or_redirect(auth_service: AuthServi
         code_challenge_method="S256",
     )
     auth_code, _, _client_state = await auth_service.handle_callback(
-        code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
+        code="TEST_CODE_OK", state=state_record.state
     )
 
     with pytest.raises(ProviderError):
@@ -344,7 +343,7 @@ async def test_access_token_ttl_aligns_to_provider(auth_service: AuthService) ->
         code_challenge_method="S256",
     )
     auth_code, session, _client_state = await auth_service.handle_callback(
-        code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
+        code="TEST_CODE_OK", state=state_record.state
     )
     token_response = await auth_service.exchange_token(
         auth_code=auth_code.code,

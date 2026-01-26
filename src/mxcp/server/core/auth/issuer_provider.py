@@ -202,7 +202,7 @@ class IssuerOAuthAuthorizationServer(
         await self._ensure_store_initialized()
         logger.info("IssuerProvider.handle_callback: received callback")
         auth_code, _session, client_state = await self.auth_service.handle_callback(
-            code=code, state=state, code_verifier=None
+            code=code, state=state
         )
         redirect_uri = auth_code.redirect_uri or ""
         # Never return the internal MXCP/IdP state to the client. If the MCP client did not
