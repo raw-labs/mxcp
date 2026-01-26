@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import logging
 import time
 from collections.abc import Mapping, Sequence
@@ -206,35 +205,6 @@ class GitHubProviderAdapter(ProviderAdapter):
             avatar_url=parsed.avatar_url,
             raw_profile=profile,
             provider_scopes_granted=parsed.scope.split(",") if parsed.scope else None,
-        )
-
-    async def revoke_token(self, *, token: str, token_type_hint: str | None = None) -> bool:
-        # GitHub token revocation requires Basic auth with client credentials.
-        basic = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
-        async with create_mcp_http_client() as client:
-            resp = await client.post(
-                f"https://api.github.com/applications/{self.client_id}/token",
-                headers={
-                    "Accept": "application/vnd.github+json",
-                    "Authorization": f"Basic {basic}",
-                },
-                json={"access_token": token},
-            )
-        if resp.status_code in {200, 204, 404}:
-            # 404 means token not found; treat as already revoked.
-            return True
-        logger.warning(
-            "GitHub revoke endpoint returned unexpected status",
-            extra={
-                "provider": self.provider_name,
-                "endpoint": "revoke",
-                "status_code": resp.status_code,
-            },
-        )
-        raise ProviderError(
-            "invalid_token",
-            "GitHub token revocation failed",
-            status_code=resp.status_code,
         )
 
     # ── helpers ──────────────────────────────────────────────────────────────

@@ -224,36 +224,6 @@ class GoogleProviderAdapter(ProviderAdapter):
             provider_scopes_granted=parsed.scope.split() if parsed.scope else None,
         )
 
-    async def revoke_token(self, *, token: str, token_type_hint: str | None = None) -> bool:
-        async with create_mcp_http_client() as client:
-            # RFC 7009 token revocation: send token (and optional token_type_hint)
-            # as application/x-www-form-urlencoded. Google may ignore token_type_hint,
-            # but including it is safe and standards-aligned.
-            data: dict[str, str] = {"token": token}
-            if token_type_hint:
-                data["token_type_hint"] = token_type_hint
-            resp = await client.post(
-                "https://oauth2.googleapis.com/revoke",
-                data=data,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-        if resp.status_code in {200, 400}:
-            # 400 for invalid token per Google docs; treat as already revoked
-            return True
-        logger.warning(
-            "Google revoke endpoint returned unexpected status",
-            extra={
-                "provider": self.provider_name,
-                "endpoint": "revoke",
-                "status_code": resp.status_code,
-            },
-        )
-        raise ProviderError(
-            "invalid_token",
-            "Google token revocation failed",
-            status_code=resp.status_code,
-        )
-
     # ── helpers ──────────────────────────────────────────────────────────────
     @property
     def callback_path(self) -> str:

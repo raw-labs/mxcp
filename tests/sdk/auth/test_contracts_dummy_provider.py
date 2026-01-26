@@ -95,20 +95,3 @@ async def test_fetch_user_info_rejects_unknown_token() -> None:
         await adapter.fetch_user_info(access_token="UNKNOWN")
     assert excinfo.value.error == "invalid_token"
     assert excinfo.value.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_revoke_token_accepts_known_tokens_and_rejects_unknown() -> None:
-    # Revoke succeeds for known token and rejects unknown.
-    adapter = DummyProviderAdapter()
-    grant = await adapter.exchange_code(
-        code="TEST_CODE_OK",
-        redirect_uri="http://localhost/callback",
-    )
-
-    assert await adapter.revoke_token(token=grant.access_token)
-
-    with pytest.raises(ProviderError) as excinfo:
-        await adapter.revoke_token(token="totally-unknown")
-    assert excinfo.value.error == "invalid_token"
-    assert excinfo.value.status_code == 400

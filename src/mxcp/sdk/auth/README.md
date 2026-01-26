@@ -133,7 +133,6 @@ Implement `ProviderAdapter` under `mxcp.sdk.auth.providers`:
   - `exchange_code()`
   - `refresh_token()`
   - `fetch_user_info()`
-  - `revoke_token()`
 - Raise `ProviderError(error, description, status_code)` for expected failures.
 - Never log response bodies, tokens, secrets, or PII.
 

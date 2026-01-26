@@ -120,9 +120,6 @@ class ProviderAdapter(Protocol):
     async def fetch_user_info(self, *, access_token: str) -> UserInfo:
         """Fetch user information associated with a provider access token."""
 
-    async def revoke_token(self, *, token: str, token_type_hint: str | None = None) -> bool:
-        """Revoke a provider token if supported."""
-
 
 class ScopeMapper(Protocol):
     """Placeholder for future scope mapping; implemented in later phases."""

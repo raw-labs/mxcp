@@ -32,7 +32,7 @@ Use this as the implementation playbook to rebuild auth cleanly.
    - Provide provider access token and user info to the request context (no extra session lookup if verifier already loaded it).
 
 ## Components & contracts
-- **ProviderAdapter (IdP client)**: build_authorize_url(redirect_uri, state, scopes, code_challenge); exchange_code(code, redirect_uri, code_verifier); refresh_token; fetch_user_info; revoke_token. Surface ProviderError with status.
+- **ProviderAdapter (IdP client)**: build_authorize_url(redirect_uri, state, scopes, code_challenge); exchange_code(code, redirect_uri, code_verifier); refresh_token; fetch_user_info. Surface ProviderError with status.
 - **SessionManager**: owns sessions (mxcp_token hash → Session), auth codes, OAuth states. Mutations under one lock; avoid holding lock during storage I/O. Expose: create_session, get_session, delete_session, create/consume_state, store/consume_auth_code. Avoid duplicating expiry rules already enforced by the store.
 - **TokenStore** (authority for expiry/one-time use): async protocol; default SQLite impl. Hash MXCP tokens, encrypt provider tokens. Schema versioned; WAL recommended. Persist sessions, auth codes (and optionally state) so restarts/HA don’t drop in-flight flows. Expose store/load/consume auth code with expiry (one-time); if persisting state, store/consume with expiry. `cleanup_expired_*` should return identifiers removed so caches (if added) can evict reliably.
 - **FastMCP bridge (OAuthAuthorizationServerProvider)**: implements authorize/callback/token endpoints. Authorize must use MXCP callback URL; PKCE enforced; returns provider authorize URL. load/exchange access token should carry enough context (client_id, scopes, expires_at, provider token if safe) so middleware needn’t re-fetch.
@@ -59,7 +59,6 @@ Use this as the implementation playbook to rebuild auth cleanly.
 - `exchange_code(code, redirect_uri, code_verifier) -> GrantResult`.
 - `refresh_token(refresh_token, scopes) -> GrantResult`.
 - `fetch_user_info(access_token) -> UserInfo`.
-- `revoke_token(token, token_type_hint=None) -> bool`.
 - Errors: raise `ProviderError(error, error_description, status_code)`; callers surface status appropriately.
 
 ## Test/dummy provider (required for flow tests)
@@ -68,7 +67,6 @@ Use this as the implementation playbook to rebuild auth cleanly.
   - `exchange_code` accepts a known code (e.g., `TEST_CODE_OK`, optionally with a matching PKCE verifier) and returns fixed `GrantResult` (access token, optional refresh, scopes, user_id); rejects anything else to test error paths.
   - `fetch_user_info` returns a fixed `UserInfo` when the access token matches the issued one; raises ProviderError otherwise.
   - `refresh_token` can return a rotated token for refresh-path tests or raise NotImplemented if unused.
-  - `revoke_token` returns True.
 - Use this dummy to drive end-to-end tests without a real IdP: client hits `/authorize`, follows redirect URL, then calls MXCP callback directly with `code`+`state` (no external callback server). The dummy’s `exchange_code` returns tokens without outbound calls.
 - For browser-like redirect tests, you may add a tiny fake IdP HTTP endpoint that just redirects to MXCP callback with `code`/`state`, but keep this optional.
 

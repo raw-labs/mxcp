@@ -200,37 +200,6 @@ class KeycloakProviderAdapter(ProviderAdapter):
             provider_scopes_granted=parsed.scope.split() if parsed.scope else None,
         )
 
-    async def revoke_token(self, *, token: str, token_type_hint: str | None = None) -> bool:
-        data: dict[str, str] = {
-            "token": token,
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-        }
-        if token_type_hint:
-            data["token_type_hint"] = token_type_hint
-        async with create_mcp_http_client() as client:
-            resp = await client.post(
-                self.revoke_url,
-                data=data,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-        if resp.status_code in {200, 400}:
-            # 400 for invalid token; treat as already revoked.
-            return True
-        logger.warning(
-            "Keycloak revoke endpoint returned unexpected status",
-            extra={
-                "provider": self.provider_name,
-                "endpoint": "revoke",
-                "status_code": resp.status_code,
-            },
-        )
-        raise ProviderError(
-            "invalid_token",
-            "Keycloak token revocation failed",
-            status_code=resp.status_code,
-        )
-
     # ── helpers ──────────────────────────────────────────────────────────────
     @property
     def callback_path(self) -> str:

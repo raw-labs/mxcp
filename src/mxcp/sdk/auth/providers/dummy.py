@@ -109,9 +109,3 @@ class DummyProviderAdapter(ProviderAdapter):
             raw_profile={"provider": "dummy"},
             provider_scopes_granted=list(self.issued_scopes),
         )
-
-    async def revoke_token(self, *, token: str, token_type_hint: str | None = None) -> bool:
-        """Always report successful revocation."""
-        if token not in {self._access_token, self._refresh_token}:
-            raise ProviderError("invalid_token", "Token not recognized", status_code=400)
-        return True

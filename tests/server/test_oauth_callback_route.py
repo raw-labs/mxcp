@@ -81,11 +81,6 @@ class _ProviderAdapterStub:
     async def fetch_user_info(self, *, access_token: str) -> UserInfo:  # pragma: no cover
         raise AssertionError("fetch_user_info should not be called in these tests")
 
-    async def revoke_token(
-        self, *, token: str, token_type_hint: str | None = None
-    ) -> bool:  # pragma: no cover
-        raise AssertionError("revoke_token should not be called in these tests")
-
 
 @pytest.fixture(scope="session", autouse=True)
 def set_mxcp_config_env() -> None:

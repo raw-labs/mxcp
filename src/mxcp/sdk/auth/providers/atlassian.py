@@ -210,45 +210,6 @@ class AtlassianProviderAdapter(ProviderAdapter):
             provider_scopes_granted=parsed.scope.split() if parsed.scope else None,
         )
 
-    async def revoke_token(self, *, token: str, token_type_hint: str | None = None) -> bool:
-        async with create_mcp_http_client() as client:
-            # RFC 7009 token revocation: send token as form body.
-            #
-            # Atlassian 3LO revocation requires client authentication. We use
-            # form-encoded client_id/client_secret to avoid adding extra auth machinery
-            # here; do not log any of these values.
-            #
-            # Note: `token_type_hint` is part of RFC 7009. Atlassian may ignore it, but
-            # including it is safe and standards-aligned.
-            data: dict[str, str] = {
-                "token": token,
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-            }
-            if token_type_hint:
-                data["token_type_hint"] = token_type_hint
-            resp = await client.post(
-                "https://auth.atlassian.com/oauth/revoke",
-                data=data,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-
-        if resp.status_code in {200, 204}:
-            return True
-        logger.warning(
-            "Atlassian revoke endpoint returned unexpected status",
-            extra={
-                "provider": self.provider_name,
-                "endpoint": "revoke",
-                "status_code": resp.status_code,
-            },
-        )
-        raise ProviderError(
-            "invalid_token",
-            "Atlassian token revocation failed",
-            status_code=resp.status_code,
-        )
-
     # ── helpers ──────────────────────────────────────────────────────────────
     @property
     def callback_path(self) -> str:

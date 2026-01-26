@@ -163,17 +163,3 @@ async def test_exchange_code_invalid_json_raises_provider_error(
             code_verifier=None,
             scopes=["s1"],
         )
-
-
-@pytest.mark.parametrize("case", _cases(), ids=lambda c: c.name)
-@pytest.mark.asyncio
-async def test_revoke_token_propagates_status_code(
-    case: _ProviderCase, monkeypatch: MonkeyPatch
-) -> None:
-    fake_client = FakeAsyncHttpClient(post_response=FakeResponse(500, {}))
-    patch_http_client(monkeypatch, case.create_client_path, fake_client)
-
-    adapter = case.adapter_factory()
-    with pytest.raises(ProviderError) as exc:
-        await adapter.revoke_token(token="t")
-    assert exc.value.status_code == 500
