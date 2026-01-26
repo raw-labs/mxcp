@@ -134,7 +134,7 @@ async def test_invalid_state_rejected(auth_service: AuthService) -> None:
 
 
 @pytest.mark.asyncio
-async def test_token_exchange_requires_pkce_wrong_verifier(auth_service: AuthService) -> None:
+async def test_exchange_token_does_not_validate_pkce_verifier(auth_service: AuthService) -> None:
     verifier = "good"
     challenge = _s256_challenge(verifier)
     authorize_url, state_record = await auth_service.authorize(
@@ -148,8 +148,10 @@ async def test_token_exchange_requires_pkce_wrong_verifier(auth_service: AuthSer
         code="TEST_CODE_OK", state=state_record.state, code_verifier=verifier
     )
 
-    # PKCE verification is performed upstream by the MCP token handler. The
-    # AuthService.exchange_token path assumes the verifier was validated already.
+    # Downstream PKCE (client ↔ MXCP token endpoint) is verified by the MCP framework
+    # token handler *before* AuthService.exchange_token() is called. AuthService focuses
+    # on auth-code validity, client/redirect binding, and one-time use. Therefore, a
+    # "wrong" verifier here is intentionally ignored and the exchange still succeeds.
     token = await auth_service.exchange_token(
         auth_code=auth_code.code,
         code_verifier="bad",
