@@ -184,7 +184,8 @@ class AuthenticationMiddleware:
                     attributes={"provider": provider, "status": "error"},
                     description="Total authentication attempts",
                 )
-                return None
+                if user_info is None:
+                    return None
 
         user_context = UserContextModel(
             provider=user_info.provider,
