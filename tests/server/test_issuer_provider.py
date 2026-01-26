@@ -2,6 +2,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+import pytest_asyncio
+from cryptography.fernet import Fernet
 from mcp.server.auth.provider import AuthorizationParams
 from mcp.server.auth.provider import AuthorizeError
 from mcp.shared.auth import OAuthClientInformationFull
@@ -10,15 +12,20 @@ from pydantic import AnyUrl
 from mxcp.sdk.auth.auth_service import AuthService
 from mxcp.sdk.auth.providers.dummy import DummyProviderAdapter
 from mxcp.sdk.auth.session_manager import SessionManager
-from mxcp.sdk.auth.storage import ClientRecord, SqliteTokenStore
+from mxcp.sdk.auth.storage import SqliteTokenStore
 from mxcp.server.core.auth.issuer_provider import IssuerOAuthAuthorizationServer
 from sqlite3 import connect
 
 
-@pytest.mark.asyncio
-async def test_end_to_end_authorize_to_token(tmp_path: Path) -> None:
+ConfiguredIssuerEnv = tuple[IssuerOAuthAuthorizationServer, OAuthClientInformationFull, Path]
+
+
+@pytest_asyncio.fixture
+async def configured_issuer_env(tmp_path: Path):
+    """Configured IssuerOAuthAuthorizationServer with a persisted client and initialized store."""
+    db_path = tmp_path / "oauth.db"
     adapter = DummyProviderAdapter()
-    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
+    token_store = SqliteTokenStore(db_path, encryption_key=Fernet.generate_key())
     session_manager = SessionManager(token_store)
     auth_service = AuthService(
         provider_adapter=adapter,
@@ -41,6 +48,43 @@ async def test_end_to_end_authorize_to_token(tmp_path: Path) -> None:
         session_manager=session_manager,
         clients={client.client_id: client},
     )
+    await server.initialize()
+    try:
+        yield server, client, db_path
+    finally:
+        await server.close()
+
+
+NoClientIssuerEnv = tuple[IssuerOAuthAuthorizationServer, Path]
+
+
+@pytest_asyncio.fixture
+async def no_client_issuer_env(tmp_path: Path):
+    """IssuerOAuthAuthorizationServer with initialized store and no configured clients."""
+    db_path = tmp_path / "oauth.db"
+    adapter = DummyProviderAdapter()
+    token_store = SqliteTokenStore(db_path, encryption_key=Fernet.generate_key())
+    session_manager = SessionManager(token_store)
+    auth_service = AuthService(
+        provider_adapter=adapter,
+        session_manager=session_manager,
+        callback_url="https://server/callback",
+    )
+    server = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service,
+        session_manager=session_manager,
+        clients={},
+    )
+    await server.initialize()
+    try:
+        yield server, db_path
+    finally:
+        await server.close()
+
+
+@pytest.mark.asyncio
+async def test_end_to_end_authorize_to_token(configured_issuer_env: ConfiguredIssuerEnv) -> None:
+    server, client, _db_path = configured_issuer_env
 
     params = AuthorizationParams(
         state=None,
@@ -78,36 +122,15 @@ async def test_end_to_end_authorize_to_token(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_authorize_ignores_client_requested_scopes(tmp_path: Path) -> None:
+async def test_authorize_ignores_client_requested_scopes(
+    configured_issuer_env: ConfiguredIssuerEnv,
+) -> None:
     """Issuer-mode must not forward client-requested OAuth scopes upstream.
 
     The `scope` parameter on the MXCP authorize request is treated as client input
     and must not influence what the upstream provider is asked for.
     """
-    adapter = DummyProviderAdapter()
-    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
-    session_manager = SessionManager(token_store)
-    auth_service = AuthService(
-        provider_adapter=adapter,
-        session_manager=session_manager,
-        callback_url="https://server/callback",
-    )
-
-    client = OAuthClientInformationFull(
-        client_id="client-1",
-        client_secret="secret",
-        redirect_uris=[AnyUrl("https://client/app")],
-        grant_types=["authorization_code"],
-        response_types=["code"],
-        scope="dummy.read",
-    )
-    assert client.client_id is not None
-
-    server = IssuerOAuthAuthorizationServer(
-        auth_service=auth_service,
-        session_manager=session_manager,
-        clients={client.client_id: client},
-    )
+    server, client, _db_path = configured_issuer_env
 
     params = AuthorizationParams(
         state=None,
@@ -128,20 +151,18 @@ async def test_authorize_ignores_client_requested_scopes(tmp_path: Path) -> None
 async def test_dcr_client_persists_across_restart(tmp_path: Path) -> None:
     """DCR-registered clients must survive process restarts (TokenStore-backed)."""
     db_path = tmp_path / "oauth.db"
+    encryption_key = Fernet.generate_key()
 
     # First "process": register a DCR client and persist it.
-    adapter1 = DummyProviderAdapter()
-    token_store1 = SqliteTokenStore(db_path, allow_plaintext_tokens=True)
+    token_store1 = SqliteTokenStore(db_path, encryption_key=encryption_key)
     session_manager1 = SessionManager(token_store1)
     auth_service1 = AuthService(
-        provider_adapter=adapter1,
+        provider_adapter=DummyProviderAdapter(),
         session_manager=session_manager1,
         callback_url="https://server/callback",
     )
-    server1 = IssuerOAuthAuthorizationServer(
-        auth_service=auth_service1,
-        session_manager=session_manager1,
-    )
+    server1 = IssuerOAuthAuthorizationServer(auth_service=auth_service1, session_manager=session_manager1)
+    await server1.initialize()
 
     dcr_client = OAuthClientInformationFull(
         client_id="dcr-client-1",
@@ -152,102 +173,60 @@ async def test_dcr_client_persists_across_restart(tmp_path: Path) -> None:
         scope="client-metadata-scope",
         client_name="DCR Client",
     )
-    await server1.register_client(dcr_client)
-    await token_store1.close()
+    try:
+        await server1.register_client(dcr_client)
+    finally:
+        await server1.close()
 
     # Second "process": new TokenStore + SessionManager, should be able to load client.
-    adapter2 = DummyProviderAdapter()
-    token_store2 = SqliteTokenStore(db_path, allow_plaintext_tokens=True)
+    token_store2 = SqliteTokenStore(db_path, encryption_key=encryption_key)
     session_manager2 = SessionManager(token_store2)
     auth_service2 = AuthService(
-        provider_adapter=adapter2,
+        provider_adapter=DummyProviderAdapter(),
         session_manager=session_manager2,
         callback_url="https://server/callback",
     )
-    server2 = IssuerOAuthAuthorizationServer(
-        auth_service=auth_service2,
-        session_manager=session_manager2,
-    )
+    server2 = IssuerOAuthAuthorizationServer(auth_service=auth_service2, session_manager=session_manager2)
+    await server2.initialize()
 
-    loaded = await server2.get_client("dcr-client-1")
-    assert loaded is not None
-    assert loaded.client_id == "dcr-client-1"
-    assert loaded.client_secret == "secret"
-    assert loaded.token_endpoint_auth_method == "client_secret_post"
+    try:
+        loaded = await server2.get_client("dcr-client-1")
+        assert loaded is not None
+        assert loaded.client_id == "dcr-client-1"
+        assert loaded.client_secret == "secret"
+        assert loaded.token_endpoint_auth_method == "client_secret_post"
 
-    # Verify the loaded client can complete authorize().
-    params = AuthorizationParams(
-        state=None,
-        scopes=["ignored"],
-        code_challenge="test_challenge",
-        redirect_uri=AnyUrl("https://client/app"),
-        redirect_uri_provided_explicitly=True,
-    )
-    authorize_url = await server2.authorize(loaded, params)
-    assert "state=" in authorize_url
-    await token_store2.close()
+        # Verify the loaded client can complete authorize().
+        params = AuthorizationParams(
+            state=None,
+            scopes=["ignored"],
+            code_challenge="test_challenge",
+            redirect_uri=AnyUrl("https://client/app"),
+            redirect_uri_provided_explicitly=True,
+        )
+        authorize_url = await server2.authorize(loaded, params)
+        assert "state=" in authorize_url
+    finally:
+        await server2.close()
 
 
 @pytest.mark.asyncio
-async def test_config_clients_are_bootstrapped_into_token_store(tmp_path: Path) -> None:
+async def test_config_clients_are_bootstrapped_into_token_store(
+    configured_issuer_env: ConfiguredIssuerEnv,
+) -> None:
     """Configured clients passed in constructor are persisted and retrievable."""
-    adapter = DummyProviderAdapter()
-    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
-    session_manager = SessionManager(token_store)
-    auth_service = AuthService(
-        provider_adapter=adapter,
-        session_manager=session_manager,
-        callback_url="https://server/callback",
-    )
-
-    configured = OAuthClientInformationFull(
-        client_id="client-1",
-        client_secret="secret",
-        redirect_uris=[AnyUrl("https://client/app")],
-        grant_types=["authorization_code"],
-        response_types=["code"],
-        scope="dummy.read",
-    )
-
-    server = IssuerOAuthAuthorizationServer(
-        auth_service=auth_service,
-        session_manager=session_manager,
-        clients={configured.client_id or "": configured},
-    )
-
+    server, _client, _db_path = configured_issuer_env
     loaded = await server.get_client("client-1")
     assert loaded is not None
     assert loaded.client_id == "client-1"
     assert loaded.token_endpoint_auth_method == "client_secret_post"
-    await token_store.close()
 
 
 @pytest.mark.asyncio
-async def test_authorize_rejects_unregistered_redirect_uri(tmp_path: Path) -> None:
-    adapter = DummyProviderAdapter()
-    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
-    session_manager = SessionManager(token_store)
-    auth_service = AuthService(
-        provider_adapter=adapter,
-        session_manager=session_manager,
-        callback_url="https://server/callback",
-    )
-
-    client = OAuthClientInformationFull(
-        client_id="client-1",
-        client_secret="secret",
-        redirect_uris=[AnyUrl("https://client/app")],
-        grant_types=["authorization_code"],
-        response_types=["code"],
-        scope="dummy.read",
-    )
-    assert client.client_id is not None
-
-    server = IssuerOAuthAuthorizationServer(
-        auth_service=auth_service,
-        session_manager=session_manager,
-        clients={client.client_id: client},
-    )
+async def test_authorize_rejects_unregistered_redirect_uri(
+    configured_issuer_env: ConfiguredIssuerEnv,
+) -> None:
+    server, client, _db_path = configured_issuer_env
 
     params = AuthorizationParams(
         state=None,
@@ -262,22 +241,11 @@ async def test_authorize_rejects_unregistered_redirect_uri(tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio
-async def test_authorize_rejects_unknown_client_id_even_if_object_provided(tmp_path: Path) -> None:
+async def test_authorize_rejects_unknown_client_id_even_if_object_provided(
+    no_client_issuer_env: NoClientIssuerEnv,
+) -> None:
     """Authorization must use TokenStore as source of truth for client registration."""
-    adapter = DummyProviderAdapter()
-    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
-    session_manager = SessionManager(token_store)
-    auth_service = AuthService(
-        provider_adapter=adapter,
-        session_manager=session_manager,
-        callback_url="https://server/callback",
-    )
-
-    server = IssuerOAuthAuthorizationServer(
-        auth_service=auth_service,
-        session_manager=session_manager,
-        clients={},  # no configured clients
-    )
+    server, _db_path = no_client_issuer_env
 
     client = OAuthClientInformationFull(
         client_id="unknown-client",
@@ -302,18 +270,10 @@ async def test_authorize_rejects_unknown_client_id_even_if_object_provided(tmp_p
 
 
 @pytest.mark.asyncio
-async def test_register_client_requires_redirect_uris(tmp_path: Path) -> None:
-    adapter = DummyProviderAdapter()
-    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
-    session_manager = SessionManager(token_store)
-    auth_service = AuthService(
-        provider_adapter=adapter,
-        session_manager=session_manager,
-        callback_url="https://server/callback",
-    )
-    server = IssuerOAuthAuthorizationServer(
-        auth_service=auth_service, session_manager=session_manager
-    )
+async def test_register_client_requires_redirect_uris(
+    no_client_issuer_env: NoClientIssuerEnv,
+) -> None:
+    server, _db_path = no_client_issuer_env
 
     bad_client = OAuthClientInformationFull(
         client_id="dcr-client-1",
@@ -329,25 +289,13 @@ async def test_register_client_requires_redirect_uris(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_get_client_fails_closed_on_invalid_token_endpoint_auth_method(
-    tmp_path: Path,
+    no_client_issuer_env: NoClientIssuerEnv,
 ) -> None:
-    adapter = DummyProviderAdapter()
-    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
-    session_manager = SessionManager(token_store)
-    auth_service = AuthService(
-        provider_adapter=adapter,
-        session_manager=session_manager,
-        callback_url="https://server/callback",
-    )
-    server = IssuerOAuthAuthorizationServer(
-        auth_service=auth_service, session_manager=session_manager
-    )
-
-    await token_store.initialize()
+    server, db_path = no_client_issuer_env
 
     # Simulate corrupted/legacy DB state by inserting an invalid auth method directly
     # into sqlite, bypassing ClientRecord validation.
-    with connect(tmp_path / "oauth.db") as conn:
+    with connect(db_path) as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO oauth_clients
@@ -373,32 +321,10 @@ async def test_get_client_fails_closed_on_invalid_token_endpoint_auth_method(
 
 
 @pytest.mark.asyncio
-async def test_revoke_token_refresh_token_revokes_session(tmp_path: Path) -> None:
-    adapter = DummyProviderAdapter()
-    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
-    session_manager = SessionManager(token_store)
-    auth_service = AuthService(
-        provider_adapter=adapter,
-        session_manager=session_manager,
-        callback_url="https://server/callback",
-    )
-
-    # Configure a client so authorize() succeeds and persists it into TokenStore.
-    client = OAuthClientInformationFull(
-        client_id="client-1",
-        client_secret="secret",
-        redirect_uris=[AnyUrl("https://client/app")],
-        grant_types=["authorization_code"],
-        response_types=["code"],
-        scope="dummy.read",
-    )
-    assert client.client_id is not None
-
-    server = IssuerOAuthAuthorizationServer(
-        auth_service=auth_service,
-        session_manager=session_manager,
-        clients={client.client_id: client},
-    )
+async def test_revoke_token_refresh_token_revokes_session(
+    configured_issuer_env: ConfiguredIssuerEnv,
+) -> None:
+    server, client, _db_path = configured_issuer_env
 
     params = AuthorizationParams(
         state=None,
@@ -426,18 +352,10 @@ async def test_revoke_token_refresh_token_revokes_session(tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_revoke_token_rejects_unexpected_type(tmp_path: Path) -> None:
-    adapter = DummyProviderAdapter()
-    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
-    session_manager = SessionManager(token_store)
-    auth_service = AuthService(
-        provider_adapter=adapter,
-        session_manager=session_manager,
-        callback_url="https://server/callback",
-    )
-    server = IssuerOAuthAuthorizationServer(
-        auth_service=auth_service, session_manager=session_manager
-    )
+async def test_revoke_token_rejects_unexpected_type(
+    no_client_issuer_env: NoClientIssuerEnv,
+) -> None:
+    server, _db_path = no_client_issuer_env
 
     # Type checker would prevent this; runtime should fail fast.
     with pytest.raises(TypeError):

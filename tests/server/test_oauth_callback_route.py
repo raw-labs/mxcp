@@ -28,6 +28,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from mxcp.sdk.auth.auth_service import AuthService
@@ -123,7 +124,8 @@ def issuer_mode_server(
     )
 
     # Use a temp sqlite database so tests do not touch ~/.mxcp/oauth.db.
-    token_store = SqliteTokenStore(tmp_path / "oauth.db", allow_plaintext_tokens=True)
+    token_store = SqliteTokenStore(tmp_path / "oauth.db", encryption_key=Fernet.generate_key())
+    asyncio.run(token_store.initialize())
     session_manager = SessionManager(token_store)
 
     # AuthService is required by IssuerOAuthAuthorizationServer. For these tests we only
@@ -181,7 +183,6 @@ def test_callback_provider_error_with_state_redirects_back_to_client(
 
     # Persist an MXCP-generated state that records the *client* redirect URI and its
     # original client_state. This is the only safe source of the redirect target.
-    asyncio.run(token_store.initialize())
     state_record = asyncio.run(
         session_manager.create_state(
             client_id="client_1",

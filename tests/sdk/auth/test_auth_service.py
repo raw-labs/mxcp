@@ -1,17 +1,14 @@
 import base64
 import hashlib
-from collections.abc import AsyncGenerator
-from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from cryptography.fernet import Fernet
 
 from mxcp.sdk.auth.auth_service import AuthService
 from mxcp.sdk.auth.contracts import ProviderError
 from mxcp.sdk.auth.providers.dummy import DummyProviderAdapter
 from mxcp.sdk.auth.session_manager import SessionManager
-from mxcp.sdk.auth.storage import SqliteTokenStore
+from mxcp.sdk.auth.storage import TokenStore
 
 
 class _NoPkceDummyProvider(DummyProviderAdapter):
@@ -19,18 +16,14 @@ class _NoPkceDummyProvider(DummyProviderAdapter):
 
 
 @pytest_asyncio.fixture
-async def auth_service(tmp_path: Path) -> AsyncGenerator[AuthService, None]:
-    store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
-    await store.initialize()
-    session_manager = SessionManager(store)
+async def auth_service(token_store: TokenStore) -> AuthService:
+    session_manager = SessionManager(token_store)
     provider = DummyProviderAdapter(expected_code_verifier=None)
-    service = AuthService(
+    return AuthService(
         provider_adapter=provider,
         session_manager=session_manager,
         callback_url="http://localhost/auth/callback",
     )
-    yield service
-    await store.close()
 
 
 def _s256_challenge(verifier: str) -> str:
@@ -39,10 +32,10 @@ def _s256_challenge(verifier: str) -> str:
 
 
 @pytest.mark.asyncio
-async def test_upstream_pkce_is_generated_even_without_downstream_pkce(tmp_path: Path) -> None:
-    store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
-    await store.initialize()
-    session_manager = SessionManager(store)
+async def test_upstream_pkce_is_generated_even_without_downstream_pkce(
+    token_store: TokenStore,
+) -> None:
+    session_manager = SessionManager(token_store)
     provider = DummyProviderAdapter(expected_code_verifier=None)
     service = AuthService(
         provider_adapter=provider,
@@ -50,26 +43,23 @@ async def test_upstream_pkce_is_generated_even_without_downstream_pkce(tmp_path:
         callback_url="http://localhost/auth/callback",
     )
 
-    try:
-        authorize_url, state_record = await service.authorize(
-            client_id="client-1",
-            redirect_uri="http://client/app",
-            scopes=["dummy.read"],
-            code_challenge=None,
-            code_challenge_method=None,
-        )
-        assert state_record.provider_code_verifier
-        assert "code_challenge=" in authorize_url
-        assert "code_challenge_method=S256" in authorize_url
-    finally:
-        await store.close()
+    authorize_url, state_record = await service.authorize(
+        client_id="client-1",
+        redirect_uri="http://client/app",
+        scopes=["dummy.read"],
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    assert state_record.provider_code_verifier
+    assert "code_challenge=" in authorize_url
+    assert "code_challenge_method=S256" in authorize_url
 
 
 @pytest.mark.asyncio
-async def test_upstream_pkce_not_used_when_provider_does_not_support_it(tmp_path: Path) -> None:
-    store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
-    await store.initialize()
-    session_manager = SessionManager(store)
+async def test_upstream_pkce_not_used_when_provider_does_not_support_it(
+    token_store: TokenStore,
+) -> None:
+    session_manager = SessionManager(token_store)
     provider = _NoPkceDummyProvider(expected_code_verifier=None)
     service = AuthService(
         provider_adapter=provider,
@@ -77,19 +67,16 @@ async def test_upstream_pkce_not_used_when_provider_does_not_support_it(tmp_path
         callback_url="http://localhost/auth/callback",
     )
 
-    try:
-        authorize_url, state_record = await service.authorize(
-            client_id="client-1",
-            redirect_uri="http://client/app",
-            scopes=["dummy.read"],
-            code_challenge=None,
-            code_challenge_method=None,
-        )
-        assert state_record.provider_code_verifier is None
-        assert "code_challenge=" not in authorize_url
-        assert "code_challenge_method=" not in authorize_url
-    finally:
-        await store.close()
+    authorize_url, state_record = await service.authorize(
+        client_id="client-1",
+        redirect_uri="http://client/app",
+        scopes=["dummy.read"],
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    assert state_record.provider_code_verifier is None
+    assert "code_challenge=" not in authorize_url
+    assert "code_challenge_method=" not in authorize_url
 
 
 @pytest.mark.asyncio
@@ -370,10 +357,8 @@ async def test_access_token_ttl_aligns_to_provider(auth_service: AuthService) ->
 
 
 @pytest.mark.asyncio
-async def test_authorize_allows_dcr_pattern_when_client_unknown(tmp_path: Path) -> None:
-    store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
-    await store.initialize()
-    session_manager = SessionManager(store)
+async def test_authorize_allows_dcr_pattern_when_client_unknown(token_store: TokenStore) -> None:
+    session_manager = SessionManager(token_store)
     provider = DummyProviderAdapter(expected_code_verifier=None)
     service = AuthService(
         provider_adapter=provider,
@@ -381,27 +366,22 @@ async def test_authorize_allows_dcr_pattern_when_client_unknown(tmp_path: Path) 
         callback_url="http://localhost/auth/callback",
     )
 
-    try:
-        _, state_record = await service.authorize(
-            client_id="dynamic-client",
-            redirect_uri="http://localhost/app",
-            scopes=["dummy.read"],
-            code_challenge=None,
-            code_challenge_method=None,
-        )
-        # Should store client_id and redirect_uri
-        assert state_record.client_id == "dynamic-client"
-        assert state_record.redirect_uri == "http://localhost/app"
-    finally:
-        await store.close()
+    _, state_record = await service.authorize(
+        client_id="dynamic-client",
+        redirect_uri="http://localhost/app",
+        scopes=["dummy.read"],
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    # Should store client_id and redirect_uri
+    assert state_record.client_id == "dynamic-client"
+    assert state_record.redirect_uri == "http://localhost/app"
 
 
 @pytest.mark.asyncio
-async def test_authorize_accepts_any_redirect_uri_and_client_id(tmp_path: Path) -> None:
+async def test_authorize_accepts_any_redirect_uri_and_client_id(token_store: TokenStore) -> None:
     """Redirect validation is enforced by IssuerOAuthAuthorizationServer, not AuthService."""
-    store = SqliteTokenStore(tmp_path / "auth.db", encryption_key=Fernet.generate_key())
-    await store.initialize()
-    session_manager = SessionManager(store)
+    session_manager = SessionManager(token_store)
     provider = DummyProviderAdapter(expected_code_verifier=None)
     service = AuthService(
         provider_adapter=provider,
@@ -409,15 +389,12 @@ async def test_authorize_accepts_any_redirect_uri_and_client_id(tmp_path: Path) 
         callback_url="http://localhost/auth/callback",
     )
 
-    try:
-        _, state_record = await service.authorize(
-            client_id="any-client",
-            redirect_uri="http://evil/app",
-            scopes=["dummy.read"],
-            code_challenge=None,
-            code_challenge_method=None,
-        )
-        assert state_record.client_id == "any-client"
-        assert state_record.redirect_uri == "http://evil/app"
-    finally:
-        await store.close()
+    _, state_record = await service.authorize(
+        client_id="any-client",
+        redirect_uri="http://evil/app",
+        scopes=["dummy.read"],
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    assert state_record.client_id == "any-client"
+    assert state_record.redirect_uri == "http://evil/app"
