@@ -135,7 +135,6 @@ class SessionManager:
         provider_access_token: str | None,
         provider_refresh_token: str | None,
         provider_expires_at: float | None,
-        scopes: Sequence[str] | None,
         access_token: str | None = None,
         refresh_token: str | None = None,
         session_id: str | None = None,
@@ -159,7 +158,6 @@ class SessionManager:
             ),
             created_at=now,
             issued_at=now,
-            scopes=list(scopes) if scopes is not None else None,
         )
         await self.token_store.store_session(session)
         return session

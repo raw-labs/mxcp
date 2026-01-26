@@ -299,10 +299,11 @@ class IssuerOAuthAuthorizationServer(
             return None
         if not client or not client.client_id:
             raise TokenError("invalid_client", "Client ID missing for refresh token")
+        provider_scopes = session.user_info.provider_scopes_granted or []
         return RefreshToken(
             token=refresh_token,
             client_id=client.client_id if client else "",
-            scopes=session.scopes or [],
+            scopes=provider_scopes,
             expires_at=int(session.expires_at) if session.expires_at else None,
         )
 
@@ -325,7 +326,8 @@ class IssuerOAuthAuthorizationServer(
 
         # Rotate session
         await self.session_manager.revoke_session(session.access_token)
-        new_session = await self._issue_rotated_session(session, scopes or session.scopes or [])
+        provider_scopes = session.user_info.provider_scopes_granted or []
+        new_session = await self._issue_rotated_session(session)
 
         return OAuthToken(
             access_token=new_session.access_token,
@@ -334,7 +336,7 @@ class IssuerOAuthAuthorizationServer(
             expires_in=(
                 int(new_session.expires_at - time.time()) if new_session.expires_at else None
             ),
-            scope=" ".join(scopes or session.scopes or []),
+            scope=" ".join(scopes or provider_scopes),
         )
 
     # ----- access token verification -----
@@ -346,10 +348,11 @@ class IssuerOAuthAuthorizationServer(
         if session.expires_at and session.expires_at < time.time():
             await self.session_manager.revoke_session(session.access_token)
             return None
+        provider_scopes = session.user_info.provider_scopes_granted or []
         return AccessToken(
             token=session.access_token,
             client_id="",
-            scopes=session.scopes or [],
+            scopes=provider_scopes,
             expires_at=int(session.expires_at) if session.expires_at else None,
         )
 
@@ -367,9 +370,7 @@ class IssuerOAuthAuthorizationServer(
             await self.session_manager.revoke_session(session.access_token)
 
     # ----- helpers -----
-    async def _issue_rotated_session(
-        self, session: StoredSession, scopes: list[str]
-    ) -> StoredSession:
+    async def _issue_rotated_session(self, session: StoredSession) -> StoredSession:
         ttl_seconds: int | None = None
         if session.expires_at:
             ttl_seconds = max(0, int(session.expires_at - time.time()))
@@ -379,7 +380,6 @@ class IssuerOAuthAuthorizationServer(
             provider_access_token=session.provider_access_token,
             provider_refresh_token=session.provider_refresh_token,
             provider_expires_at=session.provider_expires_at,
-            scopes=scopes,
             access_token_ttl_seconds=ttl_seconds,
         )
 

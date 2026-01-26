@@ -30,7 +30,6 @@ async def test_session_manager_happy_path(
         provider_access_token=provider._access_token,
         provider_refresh_token=provider._refresh_token,
         provider_expires_at=user_info.raw_profile.get("exp") if user_info.raw_profile else None,
-        scopes=user_info.provider_scopes_granted,
     )
 
     middleware = AuthenticationMiddleware(
@@ -57,7 +56,6 @@ async def test_provider_failure_falls_back_to_session_user_info(
         provider_access_token=provider._access_token,
         provider_refresh_token=provider._refresh_token,
         provider_expires_at=user_info.raw_profile.get("exp") if user_info.raw_profile else None,
-        scopes=user_info.provider_scopes_granted,
     )
 
     async def _raise_provider_error(*_args: object, **_kwargs: object) -> None:

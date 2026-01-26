@@ -117,7 +117,6 @@ async def test_session_store_and_load_with_encryption(token_store: TokenStore) -
         expires_at=now + 600,
         created_at=now,
         issued_at=now,
-        scopes=["s1"],
     )
 
     await store.store_session(session)
@@ -138,41 +137,6 @@ async def test_session_store_and_load_with_encryption(token_store: TokenStore) -
     assert row is not None
     assert row["access_token_encrypted"] != "mcp_token"
     assert row["refresh_token_encrypted"] != "mcp_refresh"
-
-
-@pytest.mark.asyncio
-async def test_session_scopes_are_preserved(token_store: TokenStore) -> None:
-    # Session scopes should survive a reload and not be replaced by provider scopes.
-    store = token_store
-
-    now = time.time()
-    user_info = UserInfo(
-        provider="dummy",
-        user_id="user-1",
-        username="user-1",
-        provider_scopes_granted=["provider.scope"],
-    )
-    session = StoredSession(
-        session_id="session-1",
-        provider="dummy",
-        user_info=user_info,
-        access_token="mxcp_token",
-        refresh_token="mxcp_refresh",
-        provider_access_token="provider_token",
-        provider_refresh_token="provider_refresh",
-        provider_expires_at=now + 300,
-        expires_at=now + 600,
-        created_at=now,
-        issued_at=now,
-        scopes=["mxcp.read"],
-    )
-
-    await store.store_session(session)
-    loaded = await store.load_session_by_token("mxcp_token")
-
-    assert loaded is not None
-    assert loaded.scopes == ["mxcp.read"]
-    assert loaded.user_info.provider_scopes_granted == ["provider.scope"]
 
 
 @pytest.mark.asyncio
@@ -254,7 +218,6 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
         expires_at=now + 400,
         created_at=now,
         issued_at=now,
-        scopes=["mxcp.a"],
     )
     session_b = StoredSession(
         session_id="session-b",
@@ -268,7 +231,6 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
         expires_at=now + 600,
         created_at=now,
         issued_at=now,
-        scopes=["mxcp.b"],
     )
 
     await store.store_session(session_a)
@@ -279,12 +241,10 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
     assert (
         loaded_a is not None
         and loaded_a.session_id == "session-a"
-        and loaded_a.scopes == ["mxcp.a"]
     )
     assert (
         loaded_b is not None
         and loaded_b.session_id == "session-b"
-        and loaded_b.scopes == ["mxcp.b"]
     )
 
     loaded_a_by_id = await store.load_session_by_id("session-a")
@@ -314,7 +274,6 @@ async def test_session_store_requires_encryption_key_by_default(tmp_path: Path) 
         expires_at=now + 10,
         created_at=now,
         issued_at=now,
-        scopes=None,
     )
 
     with pytest.raises(ValueError, match="Token encryption key is required"):
@@ -347,7 +306,6 @@ async def test_session_store_plaintext_opt_in(
         expires_at=now + 10,
         created_at=now,
         issued_at=now,
-        scopes=None,
     )
 
     await store.store_session(session)
@@ -444,7 +402,6 @@ async def test_session_store_accepts_string_fernet_key(tmp_path: Path) -> None:
         expires_at=now + 10,
         created_at=now,
         issued_at=now,
-        scopes=None,
     )
 
     await store.store_session(session)
@@ -502,7 +459,6 @@ async def test_session_expiry_and_cleanup(tmp_path: Path) -> None:
         expires_at=now - 1,
         created_at=now - 10,
         issued_at=now - 10,
-        scopes=None,
     )
     await store.store_session(session)
 
@@ -532,7 +488,6 @@ async def test_load_session_by_refresh_token(token_store: TokenStore) -> None:
         expires_at=now + 600,
         created_at=now,
         issued_at=now,
-        scopes=["read"],
     )
 
     await store.store_session(session)
@@ -572,7 +527,6 @@ async def test_load_session_by_refresh_token_no_refresh_token(token_store: Token
         expires_at=now + 600,
         created_at=now,
         issued_at=now,
-        scopes=None,
     )
 
     await store.store_session(session)
@@ -602,7 +556,6 @@ async def test_load_session_by_refresh_token_expired(tmp_path: Path) -> None:
         expires_at=now - 1,
         created_at=now - 10,
         issued_at=now - 10,
-        scopes=None,
     )
     await store.store_session(session)
 

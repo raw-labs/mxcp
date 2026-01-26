@@ -76,7 +76,6 @@ class Session(SdkBaseModel):
     provider_expires_at: float | None = None
     expires_at: float | None = None
     issued_at: float | None = None
-    scopes: list[str] | None = None
 
 
 @runtime_checkable

@@ -376,7 +376,6 @@ class SqliteTokenStore(TokenStore):
                 session_id TEXT NOT NULL UNIQUE,
                 provider TEXT NOT NULL,
                 user_info TEXT NOT NULL,
-                scopes TEXT,
                 provider_access_token TEXT,
                 provider_refresh_token TEXT,
                 provider_expires_at REAL,
@@ -385,7 +384,6 @@ class SqliteTokenStore(TokenStore):
             )
             """
         )
-        self._ensure_scopes_column()
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS oauth_clients (
@@ -403,15 +401,6 @@ class SqliteTokenStore(TokenStore):
         )
         self._ensure_oauth_client_columns()
         self._conn.commit()
-
-    def _ensure_scopes_column(self) -> None:
-        """Add scopes column if the table was created before scopes were persisted."""
-        assert self._conn is not None
-        cursor = self._conn.cursor()
-        cursor.execute("PRAGMA table_info(sessions)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if "scopes" not in columns:
-            cursor.execute("ALTER TABLE sessions ADD COLUMN scopes TEXT")
 
     def _ensure_auth_code_columns(self) -> None:
         """Add missing auth_code columns when upgrading existing db."""
@@ -558,10 +547,10 @@ class SqliteTokenStore(TokenStore):
                 """
                 INSERT OR REPLACE INTO sessions
                 (access_token_hash, access_token_encrypted, refresh_token_hash, refresh_token_encrypted,
-                 session_id, provider, user_info, scopes, provider_access_token, provider_refresh_token,
+                 session_id, provider, user_info, provider_access_token, provider_refresh_token,
                  provider_expires_at, expires_at, created_at)
                 VALUES (:access_token_hash, :access_token_encrypted, :refresh_token_hash, :refresh_token_encrypted,
-                        :session_id, :provider, :user_info, :scopes, :provider_access_token, :provider_refresh_token,
+                        :session_id, :provider, :user_info, :provider_access_token, :provider_refresh_token,
                         :provider_expires_at, :expires_at, :created_at)
                 """,
                 payload,
@@ -729,8 +718,6 @@ class SqliteTokenStore(TokenStore):
     def _row_to_session(self, row: sqlite3.Row) -> StoredSession:
         user_info_dict = json.loads(row["user_info"])
         user_info = UserInfo.model_validate(user_info_dict)
-        scopes_json = row["scopes"]
-        scopes = json.loads(scopes_json) if scopes_json else None
 
         # access_token_encrypted is NOT NULL in schema, so _decrypt should never return None
         access_token = self._decrypt(row["access_token_encrypted"])
@@ -762,7 +749,6 @@ class SqliteTokenStore(TokenStore):
             expires_at=row["expires_at"],
             created_at=row["created_at"],
             issued_at=row["created_at"],
-            scopes=scopes,
         )
 
     def _hash_token(self, token: str) -> str:
@@ -826,7 +812,6 @@ class SqliteTokenStore(TokenStore):
             "session_id": record.session_id,
             "provider": record.provider,
             "user_info": record.user_info.model_dump_json(),
-            "scopes": json.dumps(record.scopes) if record.scopes is not None else None,
             "provider_access_token": self._encrypt(record.provider_access_token),
             "provider_refresh_token": self._encrypt(record.provider_refresh_token),
             "provider_expires_at": record.provider_expires_at,

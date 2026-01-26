@@ -85,14 +85,13 @@ async def test_issue_get_and_revoke_session(session_manager: SessionManager) -> 
         provider_access_token="provider_token",
         provider_refresh_token="provider_refresh",
         provider_expires_at=time.time() + 300,
-        scopes=["s1"],
     )
 
     loaded = await session_manager.get_session(session.access_token)
     assert loaded is not None
     assert loaded.session_id == session.session_id
     assert loaded.provider_access_token == "provider_token"
-    assert loaded.scopes == ["s1"]
+    assert loaded.user_info.provider_scopes_granted == ["s1"]
 
     await session_manager.revoke_session(session.access_token)
     assert await session_manager.get_session(session.access_token) is None
@@ -107,7 +106,6 @@ async def test_cleanup_expired_session(session_manager: SessionManager) -> None:
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        scopes=None,
         access_token_ttl_seconds=0,
     )
 
@@ -134,7 +132,6 @@ async def test_issue_and_load_session(session_manager: SessionManager) -> None:
         provider_access_token="prov-token",
         provider_refresh_token="prov-refresh",
         provider_expires_at=now + 100,
-        scopes=["a"],
     )
 
     loaded = await session_manager.get_session(session.access_token)
@@ -154,7 +151,6 @@ async def test_expired_session_returns_none(session_manager: SessionManager) -> 
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        scopes=None,
         access_token_ttl_seconds=-1,
     )
 
