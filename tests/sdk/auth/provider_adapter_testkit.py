@@ -81,4 +81,3 @@ def patch_http_client(monkeypatch: Any, create_client_path: str, fake_client: An
     """Patch a provider adapter module's `create_mcp_http_client`."""
 
     monkeypatch.setattr(create_client_path, lambda: fake_client)
-

@@ -7,7 +7,11 @@ from pytest import MonkeyPatch
 from mxcp.sdk.auth.contracts import ProviderError
 from mxcp.sdk.auth.models import GoogleAuthConfigModel
 from mxcp.sdk.auth.providers.google import GoogleProviderAdapter
-from tests.sdk.auth.provider_adapter_testkit import FakeAsyncHttpClient, FakeResponse, patch_http_client
+from tests.sdk.auth.provider_adapter_testkit import (
+    FakeAsyncHttpClient,
+    FakeResponse,
+    patch_http_client,
+)
 
 
 @pytest.fixture
@@ -49,7 +53,9 @@ async def test_exchange_code_happy_path(
         {"access_token": "at", "refresh_token": "rt", "expires_in": 3600, "token_type": "Bearer"},
     )
     fake_client = FakeAsyncHttpClient(post_response=post_response)
-    patch_http_client(monkeypatch, "mxcp.sdk.auth.providers.google.create_mcp_http_client", fake_client)
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.google.create_mcp_http_client", fake_client
+    )
 
     adapter = GoogleProviderAdapter(google_config)
     monkeypatch.setattr(
@@ -82,7 +88,9 @@ async def test_exchange_code_prefers_provider_scope_when_returned(
         },
     )
     fake_client = FakeAsyncHttpClient(post_response=post_response)
-    patch_http_client(monkeypatch, "mxcp.sdk.auth.providers.google.create_mcp_http_client", fake_client)
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.google.create_mcp_http_client", fake_client
+    )
 
     adapter = GoogleProviderAdapter(google_config)
     monkeypatch.setattr(
@@ -104,7 +112,9 @@ async def test_exchange_code_error(
 ) -> None:
     post_response = FakeResponse(400, {"error": "bad"}, text="bad")
     fake_client = FakeAsyncHttpClient(post_response=post_response)
-    patch_http_client(monkeypatch, "mxcp.sdk.auth.providers.google.create_mcp_http_client", fake_client)
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.google.create_mcp_http_client", fake_client
+    )
 
     adapter = GoogleProviderAdapter(google_config)
     monkeypatch.setattr(

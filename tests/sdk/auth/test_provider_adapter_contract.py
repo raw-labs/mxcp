@@ -177,4 +177,3 @@ async def test_revoke_token_propagates_status_code(
     with pytest.raises(ProviderError) as exc:
         await adapter.revoke_token(token="t")
     assert exc.value.status_code == 500
-

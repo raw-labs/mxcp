@@ -1,2 +1,1 @@
 """Namespace for test subpackages."""
-

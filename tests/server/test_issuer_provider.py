@@ -161,7 +161,9 @@ async def test_dcr_client_persists_across_restart(tmp_path: Path) -> None:
         session_manager=session_manager1,
         callback_url="https://server/callback",
     )
-    server1 = IssuerOAuthAuthorizationServer(auth_service=auth_service1, session_manager=session_manager1)
+    server1 = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service1, session_manager=session_manager1
+    )
     await server1.initialize()
 
     dcr_client = OAuthClientInformationFull(
@@ -186,7 +188,9 @@ async def test_dcr_client_persists_across_restart(tmp_path: Path) -> None:
         session_manager=session_manager2,
         callback_url="https://server/callback",
     )
-    server2 = IssuerOAuthAuthorizationServer(auth_service=auth_service2, session_manager=session_manager2)
+    server2 = IssuerOAuthAuthorizationServer(
+        auth_service=auth_service2, session_manager=session_manager2
+    )
     await server2.initialize()
 
     try:

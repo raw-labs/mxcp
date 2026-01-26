@@ -8,7 +8,11 @@ from pytest import MonkeyPatch
 from mxcp.sdk.auth.contracts import ProviderError
 from mxcp.sdk.auth.models import GitHubAuthConfigModel
 from mxcp.sdk.auth.providers.github import GitHubProviderAdapter
-from tests.sdk.auth.provider_adapter_testkit import FakeAsyncHttpClient, FakeResponse, patch_http_client
+from tests.sdk.auth.provider_adapter_testkit import (
+    FakeAsyncHttpClient,
+    FakeResponse,
+    patch_http_client,
+)
 
 
 @pytest.fixture
@@ -62,7 +66,9 @@ async def test_exchange_code_happy_path(
         {"access_token": "at", "refresh_token": "rt", "scope": "repo,gist", "token_type": "Bearer"},
     )
     fake_client = FakeAsyncHttpClient(post_response=post_response)
-    patch_http_client(monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client)
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client
+    )
 
     adapter = GitHubProviderAdapter(github_config)
     monkeypatch.setattr(adapter, "_fetch_user_profile", lambda token: asyncio.sleep(0, {"id": 123}))
@@ -84,7 +90,9 @@ async def test_refresh_token_happy_path(
 ) -> None:
     post_response = FakeResponse(200, {"access_token": "new-at", "scope": "repo"})
     fake_client = FakeAsyncHttpClient(post_response=post_response)
-    patch_http_client(monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client)
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client
+    )
 
     adapter = GitHubProviderAdapter(github_config)
     grant = await adapter.refresh_token(refresh_token="rt", scopes=["repo"])
@@ -103,7 +111,9 @@ async def test_fetch_user_info_requires_id(
         post_response=post_response,
         default_get_response=get_response,
     )
-    patch_http_client(monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client)
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client
+    )
     adapter = GitHubProviderAdapter(github_config)
 
     with pytest.raises(ProviderError):
@@ -129,7 +139,9 @@ async def test_fetch_user_info_happy_path(
         post_response=post_response,
         default_get_response=get_response,
     )
-    patch_http_client(monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client)
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client
+    )
     adapter = GitHubProviderAdapter(github_config)
 
     user_info = await adapter.fetch_user_info(access_token="at")
@@ -159,7 +171,9 @@ async def test_fetch_user_info_skips_email_lookup_when_present(
         get_responses={"user/emails": get_email_response},
         default_get_response=get_response,
     )
-    patch_http_client(monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client)
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client
+    )
     adapter = GitHubProviderAdapter(github_config)
 
     user_info = await adapter.fetch_user_info(access_token="at")
@@ -192,7 +206,9 @@ async def test_fetch_user_info_falls_back_to_email_endpoint(
         get_responses={"user/emails": get_email_response},
         default_get_response=get_response,
     )
-    patch_http_client(monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client)
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client
+    )
     adapter = GitHubProviderAdapter(github_config)
 
     user_info = await adapter.fetch_user_info(access_token="at")
@@ -219,7 +235,9 @@ async def test_fetch_user_info_email_endpoint_unauthorized(
         get_responses={"user/emails": get_email_response},
         default_get_response=get_response,
     )
-    patch_http_client(monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client)
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.github.create_mcp_http_client", fake_client
+    )
     adapter = GitHubProviderAdapter(github_config)
 
     user_info = await adapter.fetch_user_info(access_token="at")

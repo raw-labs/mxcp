@@ -7,7 +7,11 @@ from pytest import MonkeyPatch
 from mxcp.sdk.auth.contracts import ProviderError
 from mxcp.sdk.auth.models import SalesforceAuthConfigModel
 from mxcp.sdk.auth.providers.salesforce import SalesforceProviderAdapter
-from tests.sdk.auth.provider_adapter_testkit import FakeAsyncHttpClient, FakeResponse, patch_http_client
+from tests.sdk.auth.provider_adapter_testkit import (
+    FakeAsyncHttpClient,
+    FakeResponse,
+    patch_http_client,
+)
 
 
 @pytest.fixture
