@@ -12,7 +12,7 @@ license = "BUSL-1.1"
 requires-python = ">=3.10"
 dependencies = [
     # MCP Framework
-    "mcp>=1.22,<1.26",  # Official MCP Python SDK
+    "mcp>=1.22,<1.27",  # Official MCP Python SDK
     "aiohttp>=3.8.0",  # HTTP transport for MCP
     "aiofiles>=23.2.1",  # Async file I/O for audit backend
     "starlette>=0.27.0",  # HTTP server framework
