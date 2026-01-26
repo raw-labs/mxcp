@@ -178,14 +178,13 @@ class AuthenticationMiddleware:
                     access_token=session.provider_access_token
                 )
             except ProviderError:
-                logger.warning("Failed to fetch user info from provider")
-                record_counter(
-                    "mxcp.auth.attempts_total",
-                    attributes={"provider": provider, "status": "error"},
-                    description="Total authentication attempts",
-                )
-                if user_info is None:
-                    return None
+                logger.warning("Failed to fetch user info from provider; using cached session data")
+                if span:
+                    span.set_attribute("mxcp.auth.user_info_source", "session")
+        elif span:
+            span.set_attribute("mxcp.auth.user_info_source", "session")
+        if span and user_info is not session.user_info:
+            span.set_attribute("mxcp.auth.user_info_source", "provider")
 
         user_context = UserContextModel(
             provider=user_info.provider,
