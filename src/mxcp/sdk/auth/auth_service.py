@@ -204,9 +204,11 @@ class AuthService:
             )
 
         # Enforce client and redirect binding if provided or stored.
-        if code_record.client_id and client_id and client_id != code_record.client_id:
+        if code_record.client_id and (not client_id or client_id != code_record.client_id):
             raise ProviderError("invalid_grant", "Client mismatch for authorization code", 400)
-        if redirect_uri and code_record.redirect_uri and redirect_uri != code_record.redirect_uri:
+        if code_record.redirect_uri and (
+            not redirect_uri or redirect_uri != code_record.redirect_uri
+        ):
             raise ProviderError("invalid_grant", "Redirect URI mismatch", 400)
 
         # PKCE verification is handled upstream by the MCP token handler
