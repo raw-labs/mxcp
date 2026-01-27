@@ -29,7 +29,6 @@ from mxcp.sdk.auth.providers.keycloak import KeycloakProviderAdapter
 from mxcp.sdk.auth.providers.salesforce import SalesforceProviderAdapter
 from tests.sdk.auth.provider_adapter_testkit import (
     FakeAsyncHttpClient,
-    FakeResponse,
     FakeResponseJsonError,
     patch_http_client,
 )
