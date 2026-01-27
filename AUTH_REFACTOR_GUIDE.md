@@ -17,14 +17,15 @@ Use this as the implementation playbook to rebuild auth cleanly.
    - Redirect client to provider authorize URL.
 
 2) **Callback (provider → MXCP callback)**
-   - Validate `state` (consume once) and required params (`code`, optional `code_verifier`).
-   - PKCE: verify code_verifier against stored challenge when present.
+   - Validate `state` (consume once) and required params (`code`).
+   - Provider PKCE: use the stored provider verifier to exchange the IdP code.
    - Exchange code with provider adapter using MXCP callback URL.
    - Create Session (mxcp_token opaque, hashed; store provider tokens, scopes, expiry).
    - Issue MXCP auth code (short-lived, one-time) mapped to session_id.
    - Redirect to client redirect_uri with `code` (MXCP auth code) and original `state`.
 
 3) **Token exchange (client → MXCP)**
+   - MCP token handler verifies client PKCE (code_verifier vs stored code_challenge).
    - Validate MXCP auth code (one-time, not expired); return MXCP access token (+ optional refresh) with scopes/expiry.
 
 4) **Protected resource/middleware**
@@ -35,12 +36,12 @@ Use this as the implementation playbook to rebuild auth cleanly.
 - **ProviderAdapter (IdP client)**: build_authorize_url(redirect_uri, state, scopes, code_challenge); exchange_code(code, redirect_uri, code_verifier); refresh_token; fetch_user_info. Surface ProviderError with status.
 - **SessionManager**: owns sessions (mxcp_token hash → Session), auth codes, OAuth states. Mutations under one lock; avoid holding lock during storage I/O. Expose: create_session, get_session, delete_session, create/consume_state, store/consume_auth_code. Avoid duplicating expiry rules already enforced by the store.
 - **TokenStore** (authority for expiry/one-time use): async protocol; default SQLite impl. Hash MXCP tokens, encrypt provider tokens. Schema versioned; WAL recommended. Persist sessions, auth codes (and optionally state) so restarts/HA don’t drop in-flight flows. Expose store/load/consume auth code with expiry (one-time); if persisting state, store/consume with expiry. `cleanup_expired_*` should return identifiers removed so caches (if added) can evict reliably.
-- **FastMCP bridge (OAuthAuthorizationServerProvider)**: implements authorize/callback/token endpoints. Authorize must use MXCP callback URL; PKCE enforced; returns provider authorize URL. load/exchange access token should carry enough context (client_id, scopes, expires_at, provider token if safe) so middleware needn’t re-fetch.
+- **FastMCP bridge (OAuthAuthorizationServerProvider)**: implements authorize/callback/token endpoints. Authorize must use MXCP callback URL; client PKCE is enforced by the MCP token handler using the stored challenge; returns provider authorize URL. load/exchange access token should carry enough context (client_id, scopes, expires_at, provider token if safe) so middleware needn’t re-fetch.
 - **Middleware**: uses context token from verifier; if provider token/user context is already present, avoid redundant session lookups unless needed. Fetch user info via adapter; set UserContext; enforce scopes if needed.
 - **Config models**: AuthConfig, ProviderConfig, PersistenceConfig; validated early. Avoid dict `.get` on models—use attributes/model_dump.
 
 ## Security/robustness
-- PKCE required for public clients; verify on code exchange.
+- PKCE required for public clients; client PKCE is verified in the MCP token handler, provider PKCE is enforced during the IdP exchange.
 - State and auth codes are one-time and expiring; consume on use.
 - Tokens: MXCP access tokens are opaque; hash before storage. Provider tokens encrypted if key provided; fail closed on bad key.
 - Callback vs client redirect URLs never conflated. MXCP callback is what IdP calls; client redirect is final hop.

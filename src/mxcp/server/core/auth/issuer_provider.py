@@ -259,6 +259,7 @@ class IssuerOAuthAuthorizationServer(
             scopes=code_record.scopes or [],
             expires_at=code_record.expires_at,
             client_id=client_id,
+            # Returned for MCP token handler PKCE verification.
             code_challenge=code_record.code_challenge or "",
             redirect_uri=redirect_uri or AnyUrl("http://localhost"),  # pragma: allowlist secret
             redirect_uri_provided_explicitly=bool(code_record.redirect_uri),
@@ -271,7 +272,6 @@ class IssuerOAuthAuthorizationServer(
         # PKCE verification is handled by the MCP token handler before this method is called
         token_response = await self.auth_service.exchange_token(
             auth_code=authorization_code.code,
-            code_verifier=None,  # Not used - PKCE verified upstream
             client_id=client.client_id if client else None,
             redirect_uri=str(authorization_code.redirect_uri),
         )

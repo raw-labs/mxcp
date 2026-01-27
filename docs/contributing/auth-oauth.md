@@ -23,7 +23,7 @@ These are the calls involved in the OAuth flow:
   - For PKCE, the client generates a random `code_verifier` and derives a `code_challenge` from it. The IdP stores the challenge and later verifies it when the client sends the `code_verifier` at `/token`, proving possession of the original verifier.
   The IdP redirects the browser to the client's `redirect_uri` with a `code`
   (nothing to do with `code_challenge`) that is meant to be exchanged for the final access token by `/token`.
-* `/token` is called with the authorization code (the `code` returned by the redirection that occurred during `/authorize`). The client also sends the `code_verifier` if using PKCE, which is used by the IdP to validate the call against the initial `code_challenge`. It then returns the access token.
+* `/token` is called with the authorization code (the `code` returned by the redirection that occurred during `/authorize`). The client also sends the `code_verifier` if using PKCE, which is used by the token handler to validate the call against the initial `code_challenge`. It then returns the access token.
 
 ## MXCP issuer implementation
 
@@ -47,8 +47,7 @@ the goal of MXCP is to redirect the client's browser to the IdP's `/authorize`.
    5. Creates and persist an MXCP `auth_code`, which is meant to play the role of the OAuth `code` sent to the MCP client.
    6. Redirects the browser to the client's `redirect_uri` with the `code` (`auth_code`) and the original client's `state` (`client_state`).
 4. The client's callback is called with the client's original `state` (if it was present) and MXCP's `code`.
-  * The client calls MXCP's `/token` with MXCP's auth code, but also its `client_id` and `redirect_uri` (they're used to validate the call on the
-  server/MXCP side). MXCP returns the `access_token` it generated earlier, and a `refresh_token`.
+  * The client calls MXCP's `/token` with MXCP's auth code, its `client_id`, and `redirect_uri` (used to validate the call on the server/MXCP side) plus its PKCE `code_verifier`. MCP's token handler validates the verifier against the stored `code_challenge`, then MXCP returns the `access_token` it generated earlier, and a `refresh_token`.
 
 ## Mental model
 
@@ -89,6 +88,8 @@ The legacy handler-based stack has been removed. Only the ProviderAdapter-based 
   - downstream PKCE fields (client ↔ MXCP)
   - upstream PKCE verifier (MXCP ↔ IdP), if used
   - the original client `state` (returned back to the client)
+- The downstream `code_challenge` is stored so the MCP token handler can verify the
+  client `code_verifier` during the `/token` exchange.
 - MXCP redirects the browser to the IdP `/authorize`, using **MXCP callback URL**.
 
 ### 2) Callback (IdP → MXCP callback)
@@ -102,7 +103,7 @@ The legacy handler-based stack has been removed. Only the ProviderAdapter-based 
 
 ### 3) /token exchange (client → MXCP)
 
-- Input: MXCP auth code + (possibly) downstream PKCE verifier.
+- Input: MXCP auth code + downstream PKCE verifier.
 - Token endpoint verifies PKCE (per MCP framework) and then MXCP:
   - validates code binding (client_id / redirect_uri)
   - ensures one-time use of the auth code

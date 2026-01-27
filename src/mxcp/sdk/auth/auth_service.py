@@ -88,8 +88,9 @@ class AuthService:
             provider_code_challenge_method = "S256"
 
         # First touchpoint for a new client request: persist a one-time state
-        # (client/redirect/PKCE/scopes). No session is created until the IdP
-        # callback succeeds.
+        # (client/redirect/PKCE/scopes). The client PKCE challenge is stored so
+        # the MCP token handler can verify code_verifier during /token exchange.
+        # No session is created until the IdP callback succeeds.
         state_record = await self.session_manager.create_state(
             client_id=client_id,
             redirect_uri=redirect_uri,
@@ -182,19 +183,17 @@ class AuthService:
         self,
         *,
         auth_code: str,
-        code_verifier: str | None = None,
         client_id: str | None = None,
         redirect_uri: str | None = None,
     ) -> AccessTokenResponse:
         """Exchange an auth code for MXCP tokens.
 
-        Note: PKCE verification is handled upstream by the MCP token handler
+        Note: Client PKCE verification is handled upstream by the MCP token handler
         before this method is called. This method focuses on business logic:
         validating the code, checking client/redirect binding, and issuing tokens.
 
         Args:
             auth_code: The authorization code to exchange
-            code_verifier: Deprecated - PKCE is verified upstream by MCP framework
             client_id: Client ID for validation
             redirect_uri: Redirect URI for validation
         """
