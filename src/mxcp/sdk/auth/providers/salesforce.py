@@ -1,263 +1,389 @@
-"""Salesforce OAuth provider implementation for MXCP authentication."""
+"""Salesforce OAuth ProviderAdapter implementation for issuer-mode auth."""
+
+from __future__ import annotations
 
 import logging
-import secrets
-from typing import Any, cast
+import time
+from collections.abc import Mapping, Sequence
+from typing import Any
+from urllib.parse import urlencode
 
-from mcp.server.auth.provider import AuthorizationParams
+import httpx
 from mcp.shared._httpx_utils import create_mcp_http_client
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse, Response
+from pydantic import ConfigDict, ValidationError
 
-from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
-from ..models import (
-    ExternalUserInfoModel,
-    HttpTransportConfigModel,
-    SalesforceAuthConfigModel,
-    StateMetaModel,
-    UserContextModel,
-)
-from ..url_utils import URLBuilder
+from mxcp.sdk.models import SdkBaseModel
+
+from ..contracts import GrantResult, ProviderAdapter, ProviderError, UserInfo
+from ..models import SalesforceAuthConfigModel
 
 logger = logging.getLogger(__name__)
 
 
-class SalesforceOAuthHandler(ExternalOAuthHandler):
-    """Salesforce OAuth provider implementation for Salesforce Cloud."""
+class _SalesforceTokenResponse(SdkBaseModel):
+    """Minimal token endpoint response (successful or error)."""
 
-    def __init__(
-        self,
-        salesforce_config: SalesforceAuthConfigModel,
-        transport_config: HttpTransportConfigModel | None = None,
-        host: str = "localhost",
-        port: int = 8000,
-    ):
-        """Initialize Salesforce OAuth handler.
+    model_config = ConfigDict(extra="ignore", frozen=True)
 
-        Args:
-            salesforce_config: Salesforce-specific OAuth configuration
-            transport_config: HTTP transport configuration for URL building
-            host: The server host for callback URLs
-            port: The server port for callback URLs
-        """
-        logger.info(f"SalesforceOAuthHandler init: {salesforce_config}")
+    access_token: str | None = None
+    refresh_token: str | None = None
+    expires_in: float | None = None
+    scope: str | None = None
+    token_type: str | None = None
 
-        # Required fields are enforced by Pydantic model structure
+    error: str | None = None
+    error_description: str | None = None
+
+
+class _SalesforceUserInfoResponse(SdkBaseModel):
+    """Minimal userinfo response used to normalize UserInfo."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    user_id: str | None = None
+    username: str | None = None
+    email: str | None = None
+    name: str | None = None
+    photos: Mapping[str, Any] | None = None
+    scope: str | None = None
+
+    @property
+    def resolved_user_id(self) -> str:
+        return self.user_id or ""
+
+
+class SalesforceProviderAdapter(ProviderAdapter):
+    """Salesforce OAuth ProviderAdapter that uses real HTTP calls."""
+
+    provider_name = "salesforce"
+    # PKCE support is not assumed; enable only when confirmed.
+    pkce_methods_supported: Sequence[str] = []
+
+    def __init__(self, salesforce_config: SalesforceAuthConfigModel):
         self.client_id = salesforce_config.client_id
         self.client_secret = salesforce_config.client_secret
-
-        # Salesforce OAuth endpoints
         self.auth_url = salesforce_config.auth_url
         self.token_url = salesforce_config.token_url
-
-        # Use configured scope or default
-        self.scope = salesforce_config.scope or "api refresh_token openid profile email"
-
+        # Provider scope comes from configuration (no SDK-side defaults).
+        self.scope = salesforce_config.scope
         self._callback_path = salesforce_config.callback_path
-        self.host = host
-        self.port = port
 
-        # Initialize URL builder for proper scheme detection
-        self.url_builder = URLBuilder(transport_config)
+    def build_authorize_url(
+        self,
+        *,
+        redirect_uri: str,
+        state: str,
+        code_challenge: str | None = None,
+        code_challenge_method: str | None = None,
+        extra_params: Mapping[str, str] | None = None,
+    ) -> str:
+        # Provider scopes come from configuration; client-requested scopes do not alter them.
+        scope_str = self.scope
+        params: list[tuple[str, str]] = [
+            ("client_id", self.client_id),
+            ("redirect_uri", redirect_uri),
+            ("response_type", "code"),
+            ("scope", scope_str),
+            ("state", state),
+        ]
+        if code_challenge:
+            params.append(("code_challenge", code_challenge))
+        if code_challenge_method:
+            params.append(("code_challenge_method", code_challenge_method))
+        if extra_params:
+            params.extend(extra_params.items())
+        query_string = urlencode(params, doseq=True)
+        return f"{self.auth_url}?{query_string}"
 
-        # State storage for OAuth flow
-        self._state_store: dict[str, StateMetaModel] = {}
-
-    # ----- authorize -----
-    def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
-        state = params.state or secrets.token_hex(16)
-
-        # Use URL builder to construct callback URL with proper scheme detection
-        full_callback_url = self.url_builder.build_callback_url(
-            self._callback_path, host=self.host, port=self.port
-        )
-
-        # Store the original redirect URI and callback URL in state for later use
-        self._state_store[state] = StateMetaModel(
-            redirect_uri=str(params.redirect_uri),
-            code_challenge=params.code_challenge,
-            redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
-            client_id=client_id,
-            callback_url=full_callback_url,
-        )
-
-        logger.info(
-            f"Salesforce OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
-        )
-
-        # Salesforce OAuth parameters
-        return (
-            f"{self.auth_url}?"
-            f"client_id={self.client_id}&"
-            f"redirect_uri={full_callback_url}&"
-            f"scope={self.scope}&"
-            f"response_type=code&"
-            f"state={state}"
-        )
-
-    # ----- state helpers -----
-    def _get_state_metadata(self, state: str) -> StateMetaModel:
-        try:
-            return self._state_store[state]
-        except KeyError:
-            raise HTTPException(400, "Invalid state parameter") from None
-
-    def _pop_state(self, state: str) -> None:
-        self._state_store.pop(state, None)
-
-    def cleanup_state(self, state: str) -> None:
-        """Clean up state after OAuth flow completion."""
-        self._pop_state(state)
-
-    # ----- code exchange -----
     async def exchange_code(
-        self, code: str, state: str
-    ) -> tuple[ExternalUserInfoModel, StateMetaModel]:
-        meta = self._get_state_metadata(state)
+        self,
+        *,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str | None = None,
+        scopes: Sequence[str],
+    ) -> GrantResult:
+        payload: dict[str, str] = {
+            "grant_type": "authorization_code",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "code": code,
+            "redirect_uri": redirect_uri,
+        }
+        if code_verifier:
+            payload["code_verifier"] = code_verifier
 
-        # Use the stored callback URL for consistency
-        full_callback_url = meta.callback_url
-        if not full_callback_url:
-            # Fallback to constructing it using URL builder
-            full_callback_url = self.url_builder.build_callback_url(
-                self._callback_path, host=self.host, port=self.port
-            )
+        token = await self._request_token(payload=payload, context="exchange_code")
+        access_token = token.access_token
+        refresh_token = token.refresh_token
+        expires_in = token.expires_in
 
-        logger.info(
-            f"Salesforce OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}"
+        if not access_token:
+            raise ProviderError("invalid_grant", "No access_token in response", status_code=400)
+
+        expires_at = time.time() + float(expires_in) if expires_in is not None else None
+        granted_scopes = token.scope.split() if token.scope else list(scopes)
+        token_type = token.token_type if token.token_type is not None else "Bearer"
+
+        return GrantResult(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=expires_at,
+            provider_scopes_granted=granted_scopes,
+            token_type=token_type,
         )
 
-        async with create_mcp_http_client() as client:
-            resp = await client.post(
-                self.token_url,
-                data={
-                    "grant_type": "authorization_code",
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "code": code,
-                    "redirect_uri": full_callback_url,
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-        if resp.status_code != 200:
-            logger.error(f"Salesforce token exchange failed: {resp.status_code} {resp.text}")
-            raise HTTPException(400, "Failed to exchange code for token")
-        payload = resp.json()
-        if "error" in payload:
-            logger.error(f"Salesforce token exchange error: {payload}")
-            raise HTTPException(400, payload.get("error_description", payload["error"]))
+    async def refresh_token(self, *, refresh_token: str, scopes: Sequence[str]) -> GrantResult:
+        payload: dict[str, str] = {
+            "grant_type": "refresh_token",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "refresh_token": refresh_token,
+        }
+        if scopes:
+            payload["scope"] = " ".join(scopes)
 
-        # Get user info to extract the actual user ID
-        access_token = payload["access_token"]
-        user_profile = await self._fetch_user_profile(access_token)
+        token = await self._request_token(payload=payload, context="refresh_token")
+        access_token = token.access_token
+        expires_in = token.expires_in
+        if not access_token:
+            raise ProviderError("invalid_grant", "No access_token in refresh response", 400)
 
-        # Use Salesforce's 'user_id' field as the unique identifier
-        user_id = user_profile.get("user_id", "")
+        granted_scopes = (token.scope.split() if token.scope else []) or list(scopes)
+        expires_at = time.time() + float(expires_in) if expires_in is not None else None
+        token_type = token.token_type if token.token_type is not None else "Bearer"
+
+        return GrantResult(
+            access_token=access_token,
+            refresh_token=token.refresh_token if token.refresh_token is not None else refresh_token,
+            expires_at=expires_at,
+            provider_scopes_granted=granted_scopes,
+            token_type=token_type,
+        )
+
+    async def fetch_user_info(self, *, access_token: str) -> UserInfo:
+        profile = await self._fetch_user_profile(access_token)
+        try:
+            parsed = _SalesforceUserInfoResponse.model_validate(profile)
+        except ValidationError as exc:
+            raise ProviderError(
+                "invalid_token",
+                "Salesforce profile response was invalid",
+                status_code=400,
+            ) from exc
+
+        user_id = parsed.resolved_user_id
         if not user_id:
-            logger.error("Salesforce user profile missing 'user_id' field")
-            raise HTTPException(400, "Invalid user profile: missing user ID")
+            raise ProviderError("invalid_token", "Salesforce profile missing user_id", 400)
 
-        # Don't clean up state here - let handle_callback do it after getting metadata
-        logger.info(f"Salesforce OAuth token exchange successful for user: {user_id}")
+        username = parsed.username or (parsed.email.split("@")[0] if parsed.email else user_id)
+        photos = parsed.photos or {}
+        avatar_url = photos.get("picture") if isinstance(photos, Mapping) else None
 
-        user_info = ExternalUserInfoModel(
-            id=user_id,
-            scopes=[],
-            raw_token=access_token,
-            provider="salesforce",
+        return UserInfo(
+            provider=self.provider_name,
+            user_id=user_id,
+            username=username or user_id,
+            email=parsed.email,
+            name=parsed.name,
+            avatar_url=avatar_url,
+            raw_profile=profile,
+            provider_scopes_granted=parsed.scope.split() if parsed.scope else [],
         )
 
-        return user_info, meta
-
-    # ----- callback -----
+    # ── helpers ──────────────────────────────────────────────────────────────
     @property
-    def callback_path(self) -> str:  # noqa: D401
+    def callback_path(self) -> str:
         return self._callback_path
 
-    async def on_callback(
-        self, request: Request, provider: GeneralOAuthAuthorizationServer
-    ) -> Response:  # noqa: E501
-        code = request.query_params.get("code")
-        state = request.query_params.get("state")
-        if not code or not state:
-            raise HTTPException(400, "Missing code or state")
-        try:
-            redirect_uri = await provider.handle_callback(code, state)
-            return RedirectResponse(redirect_uri)
-        except HTTPException:
-            raise
-        except Exception as exc:
-            logger.error("Salesforce callback failed", exc_info=exc)
-            return HTMLResponse(status_code=500, content="oauth_failure")
-
-    # ----- user context -----
-    async def get_user_context(self, token: str) -> UserContextModel:
-        """Get standardized user context from Salesforce.
-
-        Args:
-            token: Salesforce OAuth access token
-
-        Returns:
-            UserContextModel with Salesforce user information
-
-        Raises:
-            HTTPException: If token is invalid or user info cannot be retrieved
-        """
-        try:
-            user_profile = await self._fetch_user_profile(token)
-
-            # Extract Salesforce-specific fields and map to standard UserContextModel
-            return UserContextModel(
-                provider="salesforce",
-                user_id=str(user_profile.get("user_id", "")),
-                username=user_profile.get(
-                    "username", f"user_{user_profile.get('user_id', 'unknown')}"
-                ),
-                email=user_profile.get("email"),
-                name=user_profile.get("display_name") or user_profile.get("name"),
-                avatar_url=user_profile.get("photos", {}).get("picture"),
-                raw_profile=user_profile,
-                external_token=token,
-            )
-        except Exception as e:
-            logger.error(f"Failed to get Salesforce user context: {e}")
-            raise HTTPException(500, f"Failed to retrieve user information: {e}") from e
-
-    # ----- private helper -----
     async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
-        """Fetch raw user profile from Salesforce UserInfo endpoint (private implementation detail)."""
-        logger.info(f"Fetching Salesforce user profile with token: {token[:10]}...")
-
-        # First get the identity URL from the token response
         async with create_mcp_http_client() as client:
-            # Get token info to find the identity URL
-            await client.get(
-                "https://login.salesforce.com/services/oauth2/token",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-
-            # If token info doesn't work, try the standard userinfo endpoint
-            resp = await client.get(
-                "https://login.salesforce.com/services/oauth2/userinfo",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-
-        logger.info(f"Salesforce UserInfo API response: {resp.status_code}")
+            try:
+                resp = await client.get(
+                    "https://login.salesforce.com/services/oauth2/userinfo",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            except httpx.RequestError as exc:
+                logger.warning(
+                    "Salesforce userinfo endpoint request failed",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "userinfo",
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                raise ProviderError(
+                    "temporarily_unavailable",
+                    "Salesforce userinfo request failed",
+                    status_code=503,
+                ) from exc
 
         if resp.status_code != 200:
-            error_body = ""
-            try:
-                error_body = resp.text
-                logger.error(f"Salesforce UserInfo API error {resp.status_code}: {error_body}")
-            except Exception:
-                logger.error(
-                    f"Salesforce UserInfo API error {resp.status_code}: Unable to read response body"
-                )
-            raise ValueError(f"Salesforce API error: {resp.status_code} - {error_body}")
+            logger.warning(
+                "Salesforce userinfo endpoint returned non-200",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_token",
+                "Salesforce userinfo request failed",
+                status_code=resp.status_code,
+            )
 
-        user_data = cast(dict[str, Any], resp.json())
-        logger.info(
-            f"Successfully fetched Salesforce user profile for user_id: {user_data.get('user_id', 'unknown')}"
-        )
-        return user_data
+        try:
+            payload = resp.json()
+        except Exception as exc:
+            logger.warning(
+                "Salesforce userinfo endpoint returned invalid JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_token",
+                "Salesforce userinfo response was invalid",
+                status_code=resp.status_code,
+            ) from exc
+
+        if not isinstance(payload, dict):
+            logger.warning(
+                "Salesforce userinfo endpoint returned non-object JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_token",
+                "Salesforce userinfo response was invalid",
+                status_code=resp.status_code,
+            )
+        return payload
+
+    async def _request_token(
+        self,
+        *,
+        payload: Mapping[str, str],
+        context: str,
+    ) -> _SalesforceTokenResponse:
+        async with create_mcp_http_client() as client:
+            try:
+                resp = await client.post(
+                    self.token_url,
+                    data=payload,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+            except httpx.RequestError as exc:
+                logger.warning(
+                    "Salesforce token endpoint request failed",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "token",
+                        "context": context,
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                raise ProviderError(
+                    "temporarily_unavailable",
+                    "Salesforce token request failed",
+                    status_code=503,
+                ) from exc
+        return self._parse_token_response(resp, context=context)
+
+    def _parse_token_response(self, resp: Any, *, context: str) -> _SalesforceTokenResponse:
+        if resp.status_code != 200:
+            error_code = self._try_extract_oauth_error_code(resp)
+            logger.warning(
+                "Salesforce token endpoint returned non-200",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                    "provider_error": error_code,
+                },
+            )
+            raise ProviderError(
+                error_code or "invalid_grant",
+                "Salesforce token request failed",
+                status_code=resp.status_code,
+            )
+
+        try:
+            data = resp.json()
+        except Exception as exc:
+            logger.warning(
+                "Salesforce token endpoint returned invalid JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            ) from exc
+
+        if not isinstance(data, dict):
+            logger.warning(
+                "Salesforce token endpoint returned non-object JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            )
+
+        try:
+            token = _SalesforceTokenResponse.model_validate(data)
+        except ValidationError as exc:
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            ) from exc
+
+        if token.error is not None:
+            logger.warning(
+                "Salesforce token endpoint returned OAuth error",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                    "provider_error": token.error,
+                },
+            )
+            raise ProviderError(
+                token.error or "invalid_grant",
+                "Salesforce token request failed",
+                status_code=resp.status_code,
+            )
+
+        return token
+
+    def _try_extract_oauth_error_code(self, resp: Any) -> str | None:
+        """Best-effort extraction of OAuth `error` code from a response."""
+        try:
+            payload = resp.json()
+        except Exception:
+            return None
+        if not isinstance(payload, dict):
+            return None
+        error = payload.get("error")
+        return error if isinstance(error, str) and error else None

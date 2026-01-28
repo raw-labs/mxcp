@@ -1,309 +1,395 @@
-"""Keycloak OAuth provider implementation for MXCP authentication."""
+"""Keycloak OAuth ProviderAdapter implementation for issuer-mode auth."""
 
-import base64
-import hashlib
+from __future__ import annotations
+
 import logging
-import secrets
-from typing import Any, cast
+import time
+from collections.abc import Mapping, Sequence
+from typing import Any
 from urllib.parse import urlencode
 
-from mcp.server.auth.provider import AuthorizationParams
+import httpx
 from mcp.shared._httpx_utils import create_mcp_http_client
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse, Response
+from pydantic import ConfigDict, ValidationError
 
-from ..base import ExternalOAuthHandler, GeneralOAuthAuthorizationServer
-from ..models import (
-    ExternalUserInfoModel,
-    HttpTransportConfigModel,
-    KeycloakAuthConfigModel,
-    StateMetaModel,
-    UserContextModel,
-)
-from ..url_utils import URLBuilder
+from mxcp.sdk.models import SdkBaseModel
+
+from ..contracts import GrantResult, ProviderAdapter, ProviderError, UserInfo
+from ..models import KeycloakAuthConfigModel
 
 logger = logging.getLogger(__name__)
 
 
-class KeycloakStateMetaModel(StateMetaModel):
-    """Extended state metadata for Keycloak OAuth flow with PKCE support."""
+class _KeycloakTokenResponse(SdkBaseModel):
+    """Minimal token endpoint response (successful or error)."""
 
-    keycloak_code_verifier: str | None = None  # For Keycloak token exchange
+    model_config = ConfigDict(extra="ignore", frozen=True)
 
+    access_token: str | None = None
+    refresh_token: str | None = None
+    expires_in: float | None = None
+    scope: str | None = None
+    token_type: str | None = None
 
-def _generate_pkce_pair() -> tuple[str, str]:
-    """Generate PKCE code verifier and challenge pair.
-
-    Returns:
-        Tuple of (code_verifier, code_challenge)
-    """
-    # Generate a cryptographically random code_verifier (43-128 chars)
-    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("utf-8").rstrip("=")
-
-    # Generate code_challenge using S256 method
-    challenge_bytes = hashlib.sha256(code_verifier.encode("utf-8")).digest()
-    code_challenge = base64.urlsafe_b64encode(challenge_bytes).decode("utf-8").rstrip("=")
-
-    return code_verifier, code_challenge
+    error: str | None = None
+    error_description: str | None = None
 
 
-class KeycloakOAuthHandler(ExternalOAuthHandler):
-    """Keycloak OAuth provider implementation."""
+class _KeycloakUserInfoResponse(SdkBaseModel):
+    """Minimal userinfo response used to normalize UserInfo."""
 
-    def __init__(
-        self,
-        keycloak_config: KeycloakAuthConfigModel,
-        transport_config: HttpTransportConfigModel | None = None,
-        host: str = "localhost",
-        port: int = 8000,
-    ):
-        """Initialize Keycloak OAuth handler.
+    model_config = ConfigDict(extra="ignore", frozen=True)
 
-        Args:
-            keycloak_config: Keycloak-specific OAuth configuration
-            transport_config: HTTP transport configuration for URL building
-            host: The server host for callback URLs
-            port: The server port for callback URLs
-        """
-        logger.info(f"KeycloakOAuthHandler init: {keycloak_config}")
+    sub: str | None = None
+    preferred_username: str | None = None
+    email: str | None = None
+    name: str | None = None
+    picture: str | None = None
+    scope: str | None = None
 
-        # Required fields are enforced by Pydantic model structure
+    @property
+    def resolved_user_id(self) -> str:
+        return self.sub or ""
+
+
+class KeycloakProviderAdapter(ProviderAdapter):
+    """Keycloak OAuth ProviderAdapter using real HTTP calls."""
+
+    provider_name = "keycloak"
+    # Keycloak supports PKCE S256; enable capability so AuthService can drive upstream PKCE.
+    pkce_methods_supported: Sequence[str] = ["S256"]
+
+    def __init__(self, keycloak_config: KeycloakAuthConfigModel):
         self.client_id = keycloak_config.client_id
         self.client_secret = keycloak_config.client_secret
         self.realm = keycloak_config.realm
         self.server_url = keycloak_config.server_url.rstrip("/")
-        self.scope = keycloak_config.scope or "openid profile email"
+        self.scope = keycloak_config.scope
         self._callback_path = keycloak_config.callback_path
 
-        # Construct Keycloak OAuth endpoints
         realm_base = f"{self.server_url}/realms/{self.realm}/protocol/openid-connect"
         self.auth_url = f"{realm_base}/auth"
         self.token_url = f"{realm_base}/token"
         self.userinfo_url = f"{realm_base}/userinfo"
+        self.revoke_url = f"{realm_base}/revoke"
 
-        self.host = host
-        self.port = port
-
-        # Create URL builder
-        self.url_builder = URLBuilder(transport_config)
-
-        # Internal state management
-        self._state_store: dict[str, KeycloakStateMetaModel] = {}
-
-    @property
-    def callback_path(self) -> str:
-        """Return the callback path for OAuth flow."""
-        return self._callback_path
-
-    def get_authorize_url(self, client_id: str, params: AuthorizationParams) -> str:
-        """Generate the authorization URL for Keycloak."""
-        state = params.state or secrets.token_hex(16)
-
-        # Use URL builder to construct callback URL with proper scheme detection
-        full_callback_url = self.url_builder.build_callback_url(
-            self._callback_path, host=self.host, port=self.port
-        )
-
-        # Generate PKCE pair for Keycloak (always required)
-        keycloak_code_verifier, keycloak_code_challenge = _generate_pkce_pair()
-
-        # Store the original redirect URI, callback URL, and both PKCE flows
-        self._state_store[state] = KeycloakStateMetaModel(
-            redirect_uri=str(params.redirect_uri),
-            code_challenge=params.code_challenge,  # MCP client's original (for internal MCP flow)
-            redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
-            client_id=client_id,
-            callback_url=full_callback_url,
-            keycloak_code_verifier=keycloak_code_verifier,  # For Keycloak token exchange
-        )
-
-        logger.info(
-            f"Keycloak OAuth authorize URL: client_id={self.client_id}, redirect_uri={full_callback_url}, scope={self.scope}"
-        )
-
-        # Prepare authorization parameters
-        auth_params = {
-            "client_id": self.client_id,
-            "response_type": "code",
-            "redirect_uri": full_callback_url,
-            "scope": self.scope,
-            "state": state,
-            "code_challenge": keycloak_code_challenge,  # Always use our generated challenge for Keycloak
-            "code_challenge_method": "S256",
-        }
-
-        # Note: prompt and login_hint are not standard AuthorizationParams attributes
-        # They would need to be passed through a different mechanism if needed
-
-        # Construct the full authorization URL
-        auth_url = f"{self.auth_url}?{urlencode(auth_params)}"
-        logger.debug(f"Generated authorization URL: {auth_url}")
-
-        return auth_url
+    def build_authorize_url(
+        self,
+        *,
+        redirect_uri: str,
+        state: str,
+        code_challenge: str | None = None,
+        code_challenge_method: str | None = None,
+        extra_params: Mapping[str, str] | None = None,
+    ) -> str:
+        scope_str = self.scope
+        params: list[tuple[str, str]] = [
+            ("client_id", self.client_id),
+            ("response_type", "code"),
+            ("redirect_uri", redirect_uri),
+            ("scope", scope_str),
+            ("state", state),
+        ]
+        if code_challenge:
+            params.append(("code_challenge", code_challenge))
+        if code_challenge_method:
+            params.append(("code_challenge_method", code_challenge_method))
+        elif code_challenge:
+            # Keycloak requires method when a challenge is present; default to S256.
+            params.append(("code_challenge_method", "S256"))
+        if extra_params:
+            params.extend(extra_params.items())
+        query_string = urlencode(params, doseq=True)
+        return f"{self.auth_url}?{query_string}"
 
     async def exchange_code(
-        self, code: str, state: str
-    ) -> tuple[ExternalUserInfoModel, KeycloakStateMetaModel]:
-        """Exchange authorization code for tokens."""
-        # Validate state parameter and get metadata
-        state_meta = self._get_state_metadata(state)
-
-        # Use the stored callback URL from state metadata
-        full_callback_url = state_meta.callback_url
-        if not full_callback_url:
-            # Fallback to constructing it using URL builder
-            full_callback_url = self.url_builder.build_callback_url(
-                self._callback_path, host=self.host, port=self.port
-            )
-
-        logger.info(
-            f"Keycloak OAuth token exchange: code={code[:10]}..., redirect_uri={full_callback_url}"
-        )
-
-        # Prepare token exchange request
-        token_data = {
+        self,
+        *,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str | None = None,
+        scopes: Sequence[str],
+    ) -> GrantResult:
+        payload: dict[str, str] = {
             "grant_type": "authorization_code",
             "code": code,
             "client_id": self.client_id,
             "client_secret": self.client_secret,
-            "redirect_uri": full_callback_url,
+            "redirect_uri": redirect_uri,
         }
+        if code_verifier:
+            payload["code_verifier"] = code_verifier
 
-        # Add Keycloak-specific PKCE code_verifier (required for PKCE flow)
-        if state_meta.keycloak_code_verifier:
-            token_data["code_verifier"] = state_meta.keycloak_code_verifier
-            logger.debug("Added Keycloak PKCE code_verifier to token exchange request")
+        token = await self._request_token(payload=payload, context="exchange_code")
 
-        # Exchange code for tokens
-        async with create_mcp_http_client() as client:
-            response = await client.post(
-                self.token_url,
-                data=token_data,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-
-            if response.status_code != 200:
-                logger.error(f"Token exchange failed: {response.status_code} - {response.text}")
-                raise HTTPException(400, "Failed to exchange authorization code")
-
-            token_response = response.json()
-
-        # Extract the access token
-        access_token = token_response.get("access_token")
+        access_token = token.access_token
+        refresh_token = token.refresh_token
+        expires_in = token.expires_in
         if not access_token:
-            raise HTTPException(400, "No access token received")
+            raise ProviderError("invalid_grant", "No access_token in response", status_code=400)
 
-            # Get user info using the access token
-        user_profile = await self._get_user_info(access_token)
+        expires_at = time.time() + float(expires_in) if expires_in is not None else None
+        granted_scopes = token.scope.split() if token.scope else list(scopes)
+        token_type = token.token_type if token.token_type is not None else "Bearer"
 
-        # Map Keycloak claims to ExternalUserInfo
-        # Keycloak typically uses 'sub' as the unique user identifier
-        user_id = user_profile.get("sub", "")
-
-        # Extract scopes from the token response or use default
-        scopes = token_response.get("scope", self.scope).split()
-
-        logger.info(f"Keycloak OAuth token exchange successful for user: {user_id}")
-
-        user_info = ExternalUserInfoModel(
-            id=user_id, scopes=scopes, raw_token=access_token, provider="keycloak"
+        return GrantResult(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=expires_at,
+            provider_scopes_granted=granted_scopes,
+            token_type=token_type,
         )
 
-        return user_info, state_meta
+    async def refresh_token(self, *, refresh_token: str, scopes: Sequence[str]) -> GrantResult:
+        payload: dict[str, str] = {
+            "grant_type": "refresh_token",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "refresh_token": refresh_token,
+        }
+        if scopes:
+            payload["scope"] = " ".join(scopes)
 
-    async def _get_user_info(self, access_token: str) -> dict[str, Any]:
-        """Get user information from Keycloak userinfo endpoint."""
-        async with create_mcp_http_client() as client:
-            response = await client.get(
-                self.userinfo_url, headers={"Authorization": f"Bearer {access_token}"}
-            )
+        token = await self._request_token(payload=payload, context="refresh_token")
+        access_token = token.access_token
+        expires_in = token.expires_in
+        if not access_token:
+            raise ProviderError("invalid_grant", "No access_token in refresh response", 400)
 
-            if response.status_code != 200:
-                logger.error(f"Failed to get user info: {response.status_code}")
-                raise HTTPException(400, "Failed to get user information")
+        granted_scopes = (token.scope.split() if token.scope else []) or list(scopes)
+        expires_at = time.time() + float(expires_in) if expires_in is not None else None
+        token_type = token.token_type if token.token_type is not None else "Bearer"
 
-            return cast(dict[str, Any], response.json())
+        return GrantResult(
+            access_token=access_token,
+            refresh_token=token.refresh_token if token.refresh_token is not None else refresh_token,
+            expires_at=expires_at,
+            provider_scopes_granted=granted_scopes,
+            token_type=token_type,
+        )
 
-    def _get_state_metadata(self, state: str) -> KeycloakStateMetaModel:
-        """Return metadata stored for a given state."""
-        state_meta = self._state_store.get(state)
-        if not state_meta:
-            raise HTTPException(400, "Invalid state parameter")
-        return state_meta
-
-    def cleanup_state(self, state: str) -> None:
-        """Clean up state after successful authentication."""
-        self._state_store.pop(state, None)
-
-    async def on_callback(
-        self, request: Request, provider: "GeneralOAuthAuthorizationServer"
-    ) -> Response:
-        """Handle the OAuth callback from Keycloak."""
-        # Extract code and state from query parameters
-        code = request.query_params.get("code")
-        state = request.query_params.get("state")
-        error = request.query_params.get("error")
-
-        # Handle errors from Keycloak
-        if error:
-            error_description = request.query_params.get("error_description", "Unknown error")
-            logger.error(f"Keycloak OAuth error: {error} - {error_description}")
-            return HTMLResponse(
-                content=f"<h1>Authentication Failed</h1><p>{error_description}</p>", status_code=400
-            )
-
-        if not code or not state:
-            return HTMLResponse(
-                content="<h1>Authentication Failed</h1><p>Missing code or state parameter</p>",
+    async def fetch_user_info(self, *, access_token: str) -> UserInfo:
+        profile = await self._fetch_user_profile(access_token)
+        try:
+            parsed = _KeycloakUserInfoResponse.model_validate(profile)
+        except ValidationError as exc:
+            raise ProviderError(
+                "invalid_token",
+                "Keycloak profile response was invalid",
                 status_code=400,
+            ) from exc
+
+        user_id = parsed.resolved_user_id
+        if not user_id:
+            raise ProviderError("invalid_token", "Keycloak profile missing sub", status_code=400)
+
+        username = parsed.preferred_username or (
+            parsed.email.split("@")[0] if parsed.email else user_id
+        )
+
+        return UserInfo(
+            provider=self.provider_name,
+            user_id=user_id,
+            username=username,
+            email=parsed.email,
+            name=parsed.name,
+            avatar_url=parsed.picture,
+            raw_profile=profile,
+            provider_scopes_granted=parsed.scope.split() if parsed.scope else [],
+        )
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+    @property
+    def callback_path(self) -> str:
+        return self._callback_path
+
+    async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
+        async with create_mcp_http_client() as client:
+            try:
+                resp = await client.get(
+                    self.userinfo_url,
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            except httpx.RequestError as exc:
+                logger.warning(
+                    "Keycloak userinfo endpoint request failed",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "userinfo",
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                raise ProviderError(
+                    "temporarily_unavailable",
+                    "Keycloak userinfo request failed",
+                    status_code=503,
+                ) from exc
+
+        if resp.status_code != 200:
+            logger.warning(
+                "Keycloak userinfo endpoint returned non-200",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_token",
+                "Keycloak userinfo request failed",
+                status_code=resp.status_code,
             )
 
         try:
-            # Handle the callback and get the redirect URL
-            redirect_url = await provider.handle_callback(code, state)
-            return RedirectResponse(url=redirect_url)
-        except HTTPException as e:
-            logger.error(f"Callback handling failed: {e.detail}")
-            return HTMLResponse(
-                content=f"<h1>Authentication Failed</h1><p>{e.detail}</p>",
-                status_code=e.status_code,
+            payload = resp.json()
+        except Exception as exc:
+            logger.warning(
+                "Keycloak userinfo endpoint returned invalid JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
             )
-        except Exception as e:
-            logger.error(f"Unexpected error during callback: {e}")
-            return HTMLResponse(
-                content="<h1>Authentication Failed</h1><p>An unexpected error occurred</p>",
-                status_code=500,
+            raise ProviderError(
+                "invalid_token",
+                "Keycloak userinfo response was invalid",
+                status_code=resp.status_code,
+            ) from exc
+
+        if not isinstance(payload, dict):
+            logger.warning(
+                "Keycloak userinfo endpoint returned non-object JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "userinfo",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_token",
+                "Keycloak userinfo response was invalid",
+                status_code=resp.status_code,
+            )
+        return payload
+
+    async def _request_token(
+        self,
+        *,
+        payload: Mapping[str, str],
+        context: str,
+    ) -> _KeycloakTokenResponse:
+        async with create_mcp_http_client() as client:
+            try:
+                resp = await client.post(
+                    self.token_url,
+                    data=payload,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+            except httpx.RequestError as exc:
+                logger.warning(
+                    "Keycloak token endpoint request failed",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "token",
+                        "context": context,
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                raise ProviderError(
+                    "temporarily_unavailable",
+                    "Keycloak token request failed",
+                    status_code=503,
+                ) from exc
+        return self._parse_token_response(resp, context=context)
+
+    def _parse_token_response(self, resp: Any, *, context: str) -> _KeycloakTokenResponse:
+        if resp.status_code != 200:
+            error_code = self._try_extract_oauth_error_code(resp)
+            logger.warning(
+                "Keycloak token endpoint returned non-200",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                    "provider_error": error_code,
+                },
+            )
+            raise ProviderError(
+                error_code or "invalid_grant",
+                "Keycloak token request failed",
+                status_code=resp.status_code,
             )
 
-    async def get_user_context(self, token: str) -> UserContextModel:
-        """Get standardized user context from Keycloak.
-
-        Args:
-            token: OAuth access token for the user
-
-        Returns:
-            UserContextModel with standardized user information
-
-        Raises:
-            HTTPException: If token is invalid or user info cannot be retrieved
-        """
         try:
-            # Get user info from Keycloak
-            user_profile = await self._get_user_info(token)
-
-            # Map Keycloak claims to UserContextModel
-            # Keycloak uses standard OIDC claims
-            return UserContextModel(
-                provider="keycloak",
-                user_id=user_profile.get("sub", ""),
-                username=user_profile.get("preferred_username", user_profile.get("email", "")),
-                email=user_profile.get("email"),
-                name=user_profile.get("name"),
-                avatar_url=user_profile.get("picture"),
-                raw_profile=user_profile,
-                external_token=token,
+            data = resp.json()
+        except Exception as exc:
+            logger.warning(
+                "Keycloak token endpoint returned invalid JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                },
             )
-        except Exception as e:
-            logger.error(f"Failed to get user context: {e}")
-            raise HTTPException(401, "Failed to get user information") from e
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            ) from exc
+
+        if not isinstance(data, dict):
+            logger.warning(
+                "Keycloak token endpoint returned non-object JSON",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            )
+
+        try:
+            token = _KeycloakTokenResponse.model_validate(data)
+        except ValidationError as exc:
+            raise ProviderError(
+                "invalid_grant",
+                "Invalid token response payload",
+                status_code=resp.status_code,
+            ) from exc
+
+        if token.error is not None:
+            logger.warning(
+                "Keycloak token endpoint returned OAuth error",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "token",
+                    "context": context,
+                    "status_code": resp.status_code,
+                    "provider_error": token.error,
+                },
+            )
+            raise ProviderError(
+                token.error or "invalid_grant",
+                "Keycloak token request failed",
+                status_code=resp.status_code,
+            )
+
+        return token
+
+    def _try_extract_oauth_error_code(self, resp: Any) -> str | None:
+        try:
+            payload = resp.json()
+        except Exception:
+            return None
+        if not isinstance(payload, dict):
+            return None
+        error = payload.get("error")
+        return error if isinstance(error, str) and error else None

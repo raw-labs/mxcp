@@ -28,13 +28,14 @@ When authentication is enabled, the following features require authentication:
 
 ### User Information Logging
 
-When OAuth authentication is enabled, MXCP automatically logs detailed user information for each authenticated request, including:
+When OAuth authentication is enabled, MXCP logs **operational authentication events** (for example, whether a request was authenticated and which provider was used).
 
-- Username and user ID
-- OAuth provider (e.g., GitHub, Atlassian)
-- User's display name and email (when available)
+For security and privacy reasons, MXCP **does not intentionally log sensitive data** such as:
+- Access tokens or refresh tokens
+- Client secrets
+- Email addresses or other personally identifying information (PII)
 
-This information appears in the server logs whenever an authenticated user executes any tool, resource, or prompt.
+If you need user-level auditing, use the dedicated audit logging features rather than relying on application logs.
 
 ## Supported Providers
 
@@ -115,7 +116,7 @@ projects:
 
 - `client_id`: Your GitHub OAuth app client ID
 - `client_secret`: Your GitHub OAuth app client secret
-- `scope`: OAuth scope to request (default: "user:email")
+- `scope`: OAuth scope to request (omit or use an empty string for no scopes)
 - `callback_path`: Callback path for OAuth flow (default: "/github/callback")
 - `auth_url`: GitHub authorization URL
 - `token_url`: GitHub token exchange URL
@@ -631,7 +632,7 @@ projects:
 - `client_secret`: Your Keycloak client secret
 - `realm`: The Keycloak realm name where your client is configured
 - `server_url`: Base URL of your Keycloak server (without `/auth` suffix)
-- `scope`: OAuth scopes to request (default: "openid profile email")
+- `scope`: OAuth scopes to request (omit or use an empty string for no scopes)
 - `callback_path`: Callback path for OAuth flow (default: "/keycloak/callback")
 
 #### Advanced Keycloak Features
@@ -1451,10 +1452,14 @@ auth:
 
 The authentication system is designed to be extensible. Future OAuth providers can be added by:
 
-1. Implementing the `ExternalOAuthHandler` interface in a new provider file
-2. Adding provider-specific configuration to the schema
-3. Updating the `create_oauth_handler` factory function
+1. Implementing the issuer-mode `ProviderAdapter` contract (see `mxcp.sdk.auth.contracts.ProviderAdapter`)
+2. Adding provider-specific configuration to the schema/config models
+3. Updating the `create_provider_adapter` factory function
 4. Adding documentation following the same structure as existing providers
+
+Legacy note: older `ExternalOAuthHandler` / `GeneralOAuthAuthorizationServer` implementations may exist in the codebase as reference, but issuer-mode is the supported integration path.
+
+Scope semantics note: MXCP treats OAuth provider scopes (what MXCP requests from Google/Keycloak/etc.) and MXCP permissions (what tools/policies require) as separate concepts. OAuth client-supplied `scope` values (from dynamic client registration or `/authorize` requests) are ignored for upstream provider authorization; MXCP derives internal permissions from IdP scopes/claims via mapping.
 
 ## See Also
 

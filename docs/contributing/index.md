@@ -180,6 +180,12 @@ uv run pytest -v
 - Update examples if affected by your changes
 - Follow existing documentation style
 
+## Maintainer Guides
+
+Internal implementation notes for contributors working on core subsystems:
+
+- [Auth & OAuth Internals (Maintainers)](/contributing/auth-oauth)
+
 ## Test Fixtures
 
 Each test has its own complete repository fixture. This ensures test isolation and reproducibility.

@@ -9,9 +9,10 @@ This package provides comprehensive authentication functionality including:
 ## Key Components
 
 ### OAuth Providers
-- `GeneralOAuthAuthorizationServer`: Core OAuth server implementation
-- `ExternalOAuthHandler`: Protocol for OAuth provider integrations
-- Provider-specific configs: `GitHubAuthConfig`, `AtlassianAuthConfig`, etc.
+- `ProviderAdapter`: Provider integration contract for issuer-mode auth
+- `AuthService`: Issuer-mode coordinator for authorize/callback/token exchange
+- `SessionManager`: Token/session lifecycle manager
+- Provider-specific configs: `GoogleAuthConfig`, `GitHubAuthConfig`, etc.
 
 ### User Context
 - `UserContext`: Represents authenticated user with roles and permissions
@@ -58,11 +59,16 @@ github_config = GitHubAuthConfigModel(
 ```
 """
 
-from .base import (
-    ExternalOAuthHandler,
-    GeneralOAuthAuthorizationServer,
-)
+from .auth_service import AccessTokenResponse, AuthService
 from .context import get_user_context, reset_user_context, set_user_context
+from .contracts import (
+    GrantResult,
+    ProviderAdapter,
+    ProviderError,
+    ScopeMapper,
+    Session,
+    UserInfo,
+)
 from .middleware import AuthenticationMiddleware
 from .models import (
     AtlassianAuthConfigModel,
@@ -79,6 +85,14 @@ from .models import (
     StateMetaModel,
     UserContextModel,
 )
+from .session_manager import SessionManager
+from .storage import (
+    AuthCodeRecord,
+    SqliteTokenStore,
+    StateRecord,
+    StoredSession,
+    TokenStore,
+)
 
 __all__ = [
     # Types
@@ -94,11 +108,25 @@ __all__ = [
     "AuthorizationConfigModel",
     "StateMetaModel",
     # Core classes
-    "ExternalOAuthHandler",
     "ExternalUserInfoModel",
     "UserContextModel",
-    "GeneralOAuthAuthorizationServer",
+    "AccessTokenResponse",
+    "AuthService",
     "AuthenticationMiddleware",
+    # Contracts
+    "GrantResult",
+    "ProviderAdapter",
+    "ProviderError",
+    "ScopeMapper",
+    "Session",
+    "UserInfo",
+    "SessionManager",
+    # Storage
+    "AuthCodeRecord",
+    "SqliteTokenStore",
+    "StateRecord",
+    "StoredSession",
+    "TokenStore",
     # Context management
     "get_user_context",
     "set_user_context",
