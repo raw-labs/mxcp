@@ -282,15 +282,6 @@ class GoogleProviderAdapter(ProviderAdapter):
                 "Google userinfo response was invalid",
                 status_code=resp.status_code,
             )
-
-        try:
-            _GoogleUserInfoResponse.model_validate(payload)
-        except ValidationError as exc:
-            raise ProviderError(
-                "invalid_token",
-                "Invalid userinfo payload",
-                status_code=resp.status_code,
-            ) from exc
         return payload
 
     async def _request_token(

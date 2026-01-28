@@ -269,15 +269,6 @@ class AtlassianProviderAdapter(ProviderAdapter):
                 status_code=resp.status_code,
             )
 
-        try:
-            _AtlassianMeResponse.model_validate(payload)
-        except ValidationError as exc:
-            raise ProviderError(
-                "invalid_token",
-                "Invalid userinfo payload",
-                status_code=resp.status_code,
-            ) from exc
-
         return payload
 
     async def _request_token(

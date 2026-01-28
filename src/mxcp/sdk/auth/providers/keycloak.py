@@ -258,15 +258,6 @@ class KeycloakProviderAdapter(ProviderAdapter):
                 "Keycloak userinfo response was invalid",
                 status_code=resp.status_code,
             )
-
-        try:
-            _KeycloakUserInfoResponse.model_validate(payload)
-        except ValidationError as exc:
-            raise ProviderError(
-                "invalid_token",
-                "Invalid userinfo payload",
-                status_code=resp.status_code,
-            ) from exc
         return payload
 
     async def _request_token(
