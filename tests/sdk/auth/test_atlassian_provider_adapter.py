@@ -33,7 +33,6 @@ def test_build_authorize_url_includes_required_params(
     url = adapter.build_authorize_url(
         redirect_uri="https://server/atlassian/callback",
         state="abc",
-        scopes=[],
         code_challenge="cc",
         code_challenge_method="S256",
         extra_params={"foo": "bar"},

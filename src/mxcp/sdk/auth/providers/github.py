@@ -75,8 +75,8 @@ class GitHubProviderAdapter(ProviderAdapter):
         self.client_secret = github_config.client_secret
         self.auth_url = github_config.auth_url
         self.token_url = github_config.token_url
-        # Preserve legacy default scope behavior if none provided.
-        self.scope = github_config.scope or "user:email"
+        # Provider scope comes from configuration (no SDK-side defaults).
+        self.scope = github_config.scope
         self._callback_path = github_config.callback_path
 
     def build_authorize_url(
@@ -84,13 +84,12 @@ class GitHubProviderAdapter(ProviderAdapter):
         *,
         redirect_uri: str,
         state: str,
-        scopes: Sequence[str],
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
         extra_params: Mapping[str, str] | None = None,
     ) -> str:
         # Provider scopes come from configuration; client-requested scopes do not alter them.
-        scope_str = " ".join(scopes) if scopes else self.scope
+        scope_str = self.scope
         params: list[tuple[str, str]] = [
             ("client_id", self.client_id),
             ("redirect_uri", redirect_uri),

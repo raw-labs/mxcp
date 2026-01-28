@@ -6,12 +6,11 @@ from mxcp.sdk.auth.providers.dummy import DummyProviderAdapter
 
 def test_authorize_url_includes_core_params() -> None:
     # Authorize URL includes state, redirect, scopes, PKCE, and extra params.
-    adapter = DummyProviderAdapter()
+    adapter = DummyProviderAdapter(scope="one two")
 
     url = adapter.build_authorize_url(
         redirect_uri="http://localhost/callback",
         state="STATE123",
-        scopes=["one", "two"],
         code_challenge="challenge",
         code_challenge_method="S256",
         extra_params={"foo": "bar"},

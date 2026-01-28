@@ -1,5 +1,7 @@
 """Authentication helper functions for translating between MXCP config models and SDK auth types."""
 
+from typing import Any, cast
+
 from mxcp.sdk.auth.contracts import ProviderAdapter
 from mxcp.sdk.auth.models import (
     AtlassianAuthConfigModel,
@@ -74,6 +76,12 @@ def translate_transport_config(
     )
 
 
+def _model_dump_with_scope(config: Any) -> dict[str, Any]:
+    data = cast(dict[str, Any], config.model_dump(exclude_none=True))
+    data.setdefault("scope", "")
+    return data
+
+
 def create_url_builder(user_config: UserConfigModel) -> URLBuilder:
     """Create a URL builder from user configuration.
 
@@ -103,7 +111,7 @@ def create_provider_adapter(
         if not atlassian_config:
             raise ValueError("Atlassian provider selected but no Atlassian configuration found")
         atlassian_model = AtlassianAuthConfigModel.model_validate(
-            atlassian_config.model_dump(exclude_none=True)
+            _model_dump_with_scope(atlassian_config)
         )
         return AtlassianProviderAdapter(atlassian_model)
 
@@ -111,18 +119,14 @@ def create_provider_adapter(
         google_config = user_auth_config.google
         if not google_config:
             raise ValueError("Google provider selected but no Google configuration found")
-        google_model = GoogleAuthConfigModel.model_validate(
-            google_config.model_dump(exclude_none=True)
-        )
+        google_model = GoogleAuthConfigModel.model_validate(_model_dump_with_scope(google_config))
         return GoogleProviderAdapter(google_model)
 
     if provider == "github":
         github_config = user_auth_config.github
         if not github_config:
             raise ValueError("GitHub provider selected but no GitHub configuration found")
-        github_model = GitHubAuthConfigModel.model_validate(
-            github_config.model_dump(exclude_none=True)
-        )
+        github_model = GitHubAuthConfigModel.model_validate(_model_dump_with_scope(github_config))
         return GitHubProviderAdapter(github_model)
 
     if provider == "keycloak":
@@ -130,7 +134,7 @@ def create_provider_adapter(
         if not keycloak_config:
             raise ValueError("Keycloak provider selected but no Keycloak configuration found")
         keycloak_model = KeycloakAuthConfigModel.model_validate(
-            keycloak_config.model_dump(exclude_none=True)
+            _model_dump_with_scope(keycloak_config)
         )
         return KeycloakProviderAdapter(keycloak_model)
 
@@ -139,7 +143,7 @@ def create_provider_adapter(
         if not salesforce_config:
             raise ValueError("Salesforce provider selected but no Salesforce configuration found")
         salesforce_model = SalesforceAuthConfigModel.model_validate(
-            salesforce_config.model_dump(exclude_none=True)
+            _model_dump_with_scope(salesforce_config)
         )
         return SalesforceProviderAdapter(salesforce_model)
 

@@ -19,7 +19,7 @@ def github_config() -> GitHubAuthConfigModel:
     return GitHubAuthConfigModel(
         client_id="cid",
         client_secret="secret",
-        scope=None,
+        scope="repo gist",
         callback_path="/github/callback",
         auth_url="https://github.com/login/oauth/authorize",
         token_url="https://github.com/login/oauth/access_token",
@@ -33,7 +33,6 @@ def test_build_authorize_url_includes_required_params(
     url = adapter.build_authorize_url(
         redirect_uri="https://server/github/callback",
         state="abc",
-        scopes=["repo", "gist"],
         code_challenge="cc",
         code_challenge_method="S256",
         extra_params={"foo": "bar"},
@@ -43,17 +42,23 @@ def test_build_authorize_url_includes_required_params(
     assert query["scope"] == ["repo gist"]
 
 
-def test_build_authorize_url_falls_back_to_default_scope(
-    github_config: GitHubAuthConfigModel,
-) -> None:
-    adapter = GitHubProviderAdapter(github_config)
+def test_build_authorize_url_uses_configured_scope_when_empty() -> None:
+    adapter = GitHubProviderAdapter(
+        GitHubAuthConfigModel(
+            client_id="cid",
+            client_secret="secret",
+            scope="",
+            callback_path="/github/callback",
+            auth_url="https://github.com/login/oauth/authorize",
+            token_url="https://github.com/login/oauth/access_token",
+        )
+    )
     url = adapter.build_authorize_url(
         redirect_uri="https://server/github/callback",
         state="abc",
-        scopes=[],
     )
-    query = parse_qs(urlsplit(url).query)
-    assert query["scope"] == ["user:email"]
+    query = parse_qs(urlsplit(url).query, keep_blank_values=True)
+    assert query["scope"] == [""]
 
 
 @pytest.mark.asyncio

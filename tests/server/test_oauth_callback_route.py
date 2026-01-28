@@ -56,7 +56,6 @@ class _ProviderAdapterStub:
         *,
         redirect_uri: str,
         state: str,
-        scopes: Sequence[str],
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
         extra_params: Mapping[str, str] | None = None,

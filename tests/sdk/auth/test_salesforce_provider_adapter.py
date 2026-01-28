@@ -19,7 +19,7 @@ def salesforce_config() -> SalesforceAuthConfigModel:
     return SalesforceAuthConfigModel(
         client_id="cid",
         client_secret="secret",
-        scope=None,
+        scope="api",
         callback_path="/salesforce/callback",
         auth_url="https://login.salesforce.com/services/oauth2/authorize",
         token_url="https://login.salesforce.com/services/oauth2/token",
@@ -33,7 +33,6 @@ def test_build_authorize_url_includes_required_params(
     url = adapter.build_authorize_url(
         redirect_uri="https://server/salesforce/callback",
         state="abc",
-        scopes=["api"],
         code_challenge="cc",
         code_challenge_method="S256",
         extra_params={"foo": "bar"},
@@ -43,17 +42,23 @@ def test_build_authorize_url_includes_required_params(
     assert query["scope"] == ["api"]
 
 
-def test_build_authorize_url_falls_back_to_default_scope(
-    salesforce_config: SalesforceAuthConfigModel,
-) -> None:
-    adapter = SalesforceProviderAdapter(salesforce_config)
+def test_build_authorize_url_uses_configured_scope_when_empty() -> None:
+    adapter = SalesforceProviderAdapter(
+        SalesforceAuthConfigModel(
+            client_id="cid",
+            client_secret="secret",
+            scope="",
+            callback_path="/salesforce/callback",
+            auth_url="https://login.salesforce.com/services/oauth2/authorize",
+            token_url="https://login.salesforce.com/services/oauth2/token",
+        )
+    )
     url = adapter.build_authorize_url(
         redirect_uri="https://server/salesforce/callback",
         state="abc",
-        scopes=[],
     )
-    query = parse_qs(urlsplit(url).query)
-    assert query["scope"] == ["api refresh_token openid profile email"]
+    query = parse_qs(urlsplit(url).query, keep_blank_values=True)
+    assert query["scope"] == [""]
 
 
 @pytest.mark.asyncio

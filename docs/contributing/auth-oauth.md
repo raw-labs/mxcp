@@ -125,6 +125,7 @@ If you change code touching these rules, require a careful review.
 - **Issuer-mode scopes policy**
   - OAuth client-requested scopes must **not** influence upstream IdP scopes.
   - Upstream IdP scopes come from server/provider configuration.
+  - When provider scope config is omitted or empty, MXCP requests no scopes upstream.
   - Client-supplied scopes may be stored as metadata (DCR or `/authorize`) but are not used for IdP authorization.
   - When a provider token response omits `scope` (allowed by OAuth), MXCP treats the
     granted scopes as the configured provider scopes used at `/authorize` rather than
@@ -155,7 +156,7 @@ Coverage expectations:
 - `tests/sdk/auth/test_<provider>_provider_adapter.py`
   - authorize URL parameter correctness
   - token error parsing (non-200, invalid JSON, OAuth error objects)
-  - scope semantics (provider `scope` field optional)
+  - scope semantics (omitted/empty provider scope → no scopes requested)
 
 ### Add a new storage backend
 

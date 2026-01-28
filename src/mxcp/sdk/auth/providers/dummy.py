@@ -21,10 +21,12 @@ class DummyProviderAdapter(ProviderAdapter):
         expected_code: str = "TEST_CODE_OK",
         expected_code_verifier: str | None = None,
         issued_scopes: Sequence[str] | None = None,
+        scope: str = "",
     ):
         self.expected_code = expected_code
         self.expected_code_verifier = expected_code_verifier
         self.issued_scopes = list(issued_scopes) if issued_scopes is not None else []
+        self.scope = scope
         self._access_token = "DUMMY_ACCESS_TOKEN"
         self._refresh_token = "DUMMY_REFRESH_TOKEN"
 
@@ -33,7 +35,6 @@ class DummyProviderAdapter(ProviderAdapter):
         *,
         redirect_uri: str,
         state: str,
-        scopes: Sequence[str],
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
         extra_params: Mapping[str, str] | None = None,
@@ -42,7 +43,7 @@ class DummyProviderAdapter(ProviderAdapter):
         parts = [
             f"state={state}",
             f"redirect_uri={redirect_uri}",
-            f"scope={' '.join(scopes)}",
+            f"scope={self.scope}",
         ]
         if code_challenge:
             parts.append(f"code_challenge={code_challenge}")

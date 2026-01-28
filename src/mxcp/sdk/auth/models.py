@@ -58,7 +58,12 @@ class GitHubAuthConfigModel(SdkBaseModel):
 
     client_id: str
     client_secret: str
-    scope: str | None = None
+    # OAuth 2.0 scope string to request at the provider's /authorize endpoint.
+    #
+    # Intentionally required: the SDK provider adapter must not invent default
+    # scopes (which could silently broaden permissions). Defaults, if any, belong
+    # in higher-level configuration or templates.
+    scope: str
     callback_path: str
     auth_url: str
     token_url: str
@@ -91,7 +96,12 @@ class SalesforceAuthConfigModel(SdkBaseModel):
 
     client_id: str
     client_secret: str
-    scope: str | None = None
+    # OAuth 2.0 scope string to request at the provider's /authorize endpoint.
+    #
+    # Intentionally required: the SDK provider adapter must not invent default
+    # scopes (which could silently broaden permissions). Defaults, if any, belong
+    # in higher-level configuration or templates.
+    scope: str
     callback_path: str
     auth_url: str
     token_url: str
@@ -107,7 +117,12 @@ class KeycloakAuthConfigModel(SdkBaseModel):
     client_secret: str
     realm: str
     server_url: str
-    scope: str | None = None
+    # OAuth 2.0 scope string to request at the provider's /authorize endpoint.
+    #
+    # Intentionally required: the SDK provider adapter must not invent default
+    # scopes (which could silently broaden permissions). Defaults, if any, belong
+    # in higher-level configuration or templates.
+    scope: str
     callback_path: str
 
 

@@ -21,7 +21,7 @@ def keycloak_config() -> KeycloakAuthConfigModel:
         client_secret="secret",
         realm="master",
         server_url="https://kc.example.com",
-        scope=None,
+        scope="openid profile",
         callback_path="/keycloak/callback",
     )
 
@@ -33,7 +33,6 @@ def test_build_authorize_url_includes_required_params(
     url = adapter.build_authorize_url(
         redirect_uri="https://server/keycloak/callback",
         state="abc",
-        scopes=["openid", "profile"],
         code_challenge="cc",
         code_challenge_method="S256",
         extra_params={"foo": "bar"},
@@ -51,7 +50,6 @@ def test_build_authorize_url_defaults_method_when_challenge_present(
     url = adapter.build_authorize_url(
         redirect_uri="https://server/keycloak/callback",
         state="abc",
-        scopes=["openid"],
         code_challenge="cc",
         code_challenge_method=None,
     )
@@ -60,17 +58,23 @@ def test_build_authorize_url_defaults_method_when_challenge_present(
     assert query["code_challenge_method"] == ["S256"]
 
 
-def test_build_authorize_url_falls_back_to_default_scope(
-    keycloak_config: KeycloakAuthConfigModel,
-) -> None:
-    adapter = KeycloakProviderAdapter(keycloak_config)
+def test_build_authorize_url_uses_configured_scope_when_empty() -> None:
+    adapter = KeycloakProviderAdapter(
+        KeycloakAuthConfigModel(
+            client_id="cid",
+            client_secret="secret",
+            realm="master",
+            server_url="https://kc.example.com",
+            scope="",
+            callback_path="/keycloak/callback",
+        )
+    )
     url = adapter.build_authorize_url(
         redirect_uri="https://server/keycloak/callback",
         state="abc",
-        scopes=[],
     )
-    query = parse_qs(urlsplit(url).query)
-    assert query["scope"] == ["openid profile email"]
+    query = parse_qs(urlsplit(url).query, keep_blank_values=True)
+    assert query["scope"] == [""]
 
 
 @pytest.mark.asyncio

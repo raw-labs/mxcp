@@ -104,7 +104,6 @@ class AuthService:
         authorize_url = self.provider_adapter.build_authorize_url(
             redirect_uri=self.callback_url,
             state=state_record.state,
-            scopes=scopes,
             code_challenge=provider_code_challenge,  # Use our challenge for provider PKCE
             code_challenge_method=provider_code_challenge_method,
             extra_params=extra_params,

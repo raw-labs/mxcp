@@ -116,7 +116,7 @@ projects:
 
 - `client_id`: Your GitHub OAuth app client ID
 - `client_secret`: Your GitHub OAuth app client secret
-- `scope`: OAuth scope to request (default: "user:email")
+- `scope`: OAuth scope to request (omit or use an empty string for no scopes)
 - `callback_path`: Callback path for OAuth flow (default: "/github/callback")
 - `auth_url`: GitHub authorization URL
 - `token_url`: GitHub token exchange URL
@@ -632,7 +632,7 @@ projects:
 - `client_secret`: Your Keycloak client secret
 - `realm`: The Keycloak realm name where your client is configured
 - `server_url`: Base URL of your Keycloak server (without `/auth` suffix)
-- `scope`: OAuth scopes to request (default: "openid profile email")
+- `scope`: OAuth scopes to request (omit or use an empty string for no scopes)
 - `callback_path`: Callback path for OAuth flow (default: "/keycloak/callback")
 
 #### Advanced Keycloak Features

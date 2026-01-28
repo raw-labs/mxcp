@@ -78,21 +78,12 @@ class GoogleProviderAdapter(ProviderAdapter):
         *,
         redirect_uri: str,
         state: str,
-        scopes: Sequence[str],
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
         extra_params: Mapping[str, str] | None = None,
     ) -> str:
-        # `scopes` here are upstream *provider scopes* (Google OAuth scopes), not
-        # MXCP permissions.
-        #
-        # Issuer-mode policy: OAuth client-requested scopes (from MCP clients) must not
-        # influence what we request from the upstream IdP. The set of provider scopes
-        # comes from server/provider configuration and will later be mapped to MXCP
-        # permissions.
-        #
-        # If `scopes` is empty, we fall back to the configured provider scope string.
-        scope_str = " ".join(scopes) if scopes else self.scope
+        # Provider scopes are configured; client-requested scopes do not alter them.
+        scope_str = self.scope
         params = [
             ("client_id", self.client_id),
             ("redirect_uri", redirect_uri),

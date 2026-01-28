@@ -71,7 +71,6 @@ class AtlassianProviderAdapter(ProviderAdapter):
         *,
         redirect_uri: str,
         state: str,
-        scopes: Sequence[str],
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
         extra_params: Mapping[str, str] | None = None,
@@ -82,7 +81,7 @@ class AtlassianProviderAdapter(ProviderAdapter):
         # Issuer-mode policy: OAuth client-requested scopes (from MCP clients) must not
         # influence what we request from the upstream IdP. Provider scopes come from
         # server/provider configuration and will later be mapped to MXCP permissions.
-        scope_str = " ".join(scopes) if scopes else self.scope
+        scope_str = self.scope
 
         params: list[tuple[str, str]] = [
             # Atlassian 3LO requires `audience=api.atlassian.com` so that the resulting

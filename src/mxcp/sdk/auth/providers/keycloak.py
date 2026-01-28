@@ -64,7 +64,7 @@ class KeycloakProviderAdapter(ProviderAdapter):
         self.client_secret = keycloak_config.client_secret
         self.realm = keycloak_config.realm
         self.server_url = keycloak_config.server_url.rstrip("/")
-        self.scope = keycloak_config.scope or "openid profile email"
+        self.scope = keycloak_config.scope
         self._callback_path = keycloak_config.callback_path
 
         realm_base = f"{self.server_url}/realms/{self.realm}/protocol/openid-connect"
@@ -78,12 +78,11 @@ class KeycloakProviderAdapter(ProviderAdapter):
         *,
         redirect_uri: str,
         state: str,
-        scopes: Sequence[str],
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
         extra_params: Mapping[str, str] | None = None,
     ) -> str:
-        scope_str = " ".join(scopes) if scopes else self.scope
+        scope_str = self.scope
         params: list[tuple[str, str]] = [
             ("client_id", self.client_id),
             ("response_type", "code"),

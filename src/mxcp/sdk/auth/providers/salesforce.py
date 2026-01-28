@@ -64,8 +64,8 @@ class SalesforceProviderAdapter(ProviderAdapter):
         self.client_secret = salesforce_config.client_secret
         self.auth_url = salesforce_config.auth_url
         self.token_url = salesforce_config.token_url
-        # Preserve legacy default scope behavior if none provided.
-        self.scope = salesforce_config.scope or "api refresh_token openid profile email"
+        # Provider scope comes from configuration (no SDK-side defaults).
+        self.scope = salesforce_config.scope
         self._callback_path = salesforce_config.callback_path
 
     def build_authorize_url(
@@ -73,13 +73,12 @@ class SalesforceProviderAdapter(ProviderAdapter):
         *,
         redirect_uri: str,
         state: str,
-        scopes: Sequence[str],
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
         extra_params: Mapping[str, str] | None = None,
     ) -> str:
         # Provider scopes come from configuration; client-requested scopes do not alter them.
-        scope_str = " ".join(scopes) if scopes else self.scope
+        scope_str = self.scope
         params: list[tuple[str, str]] = [
             ("client_id", self.client_id),
             ("redirect_uri", redirect_uri),

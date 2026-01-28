@@ -113,6 +113,7 @@ If you change code touching these rules, require a careful review.
 - **Issuer-mode scopes policy**
   - OAuth client-requested scopes must **not** influence upstream IdP scopes.
   - Upstream IdP scopes come from server/provider configuration.
+  - When provider scope config is omitted or empty, MXCP requests no scopes upstream.
 - **PKCE boundaries are explicit**
   - Downstream PKCE: client ↔ MXCP token endpoint.
   - Upstream PKCE: MXCP ↔ IdP token exchange (provider capability).
@@ -140,7 +141,7 @@ Tests to add:
 - `tests/sdk/auth/test_<provider>_provider_adapter.py`
   - authorize URL parameter correctness
   - token error parsing (non-200, invalid JSON, OAuth error objects)
-  - scope semantics (provider `scope` field optional)
+  - scope semantics (omitted/empty provider scope → no scopes requested)
 
 ### Add a new storage backend
 

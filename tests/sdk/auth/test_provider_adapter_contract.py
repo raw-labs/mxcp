@@ -65,7 +65,7 @@ def _cases() -> list[_ProviderCase]:
                 GitHubAuthConfigModel(
                     client_id="cid",
                     client_secret="secret",
-                    scope=None,
+                    scope="",
                     callback_path="/github/callback",
                     auth_url="https://github.com/login/oauth/authorize",
                     token_url="https://github.com/login/oauth/access_token",
@@ -97,7 +97,7 @@ def _cases() -> list[_ProviderCase]:
                     client_secret="secret",
                     realm="master",
                     server_url="https://kc.example.com",
-                    scope=None,
+                    scope="",
                     callback_path="/keycloak/callback",
                 )
             ),
@@ -110,7 +110,7 @@ def _cases() -> list[_ProviderCase]:
                 SalesforceAuthConfigModel(
                     client_id="cid",
                     client_secret="secret",
-                    scope=None,
+                    scope="",
                     callback_path="/salesforce/callback",
                     auth_url="https://login.salesforce.com/services/oauth2/authorize",
                     token_url="https://login.salesforce.com/services/oauth2/token",
@@ -134,7 +134,6 @@ def test_build_authorize_url_includes_boundary_params(case: _ProviderCase) -> No
     url = adapter.build_authorize_url(
         redirect_uri="https://server/callback",
         state="STATE",
-        scopes=["s1"],
         code_challenge="cc",
         code_challenge_method="S256",
         extra_params={"foo": "bar"},
