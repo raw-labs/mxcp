@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import urlencode
 
+import httpx
 from mcp.shared._httpx_utils import create_mcp_http_client
 from pydantic import ConfigDict, ValidationError
 
@@ -229,10 +230,25 @@ class GoogleProviderAdapter(ProviderAdapter):
 
     async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
         async with create_mcp_http_client() as client:
-            resp = await client.get(
-                "https://www.googleapis.com/oauth2/v2/userinfo",
-                headers={"Authorization": f"Bearer {token}"},
-            )
+            try:
+                resp = await client.get(
+                    "https://www.googleapis.com/oauth2/v2/userinfo",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            except httpx.RequestError as exc:
+                logger.warning(
+                    "Google userinfo endpoint request failed",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "userinfo",
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                raise ProviderError(
+                    "temporarily_unavailable",
+                    "Google userinfo request failed",
+                    status_code=503,
+                ) from exc
 
         if resp.status_code != 200:
             logger.warning(
@@ -297,11 +313,27 @@ class GoogleProviderAdapter(ProviderAdapter):
           sensitive information.
         """
         async with create_mcp_http_client() as client:
-            resp = await client.post(
-                self.token_url,
-                data=payload,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
+            try:
+                resp = await client.post(
+                    self.token_url,
+                    data=payload,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+            except httpx.RequestError as exc:
+                logger.warning(
+                    "Google token endpoint request failed",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "token",
+                        "context": context,
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                raise ProviderError(
+                    "temporarily_unavailable",
+                    "Google token request failed",
+                    status_code=503,
+                ) from exc
         return self._parse_token_response(resp, context=context)
 
     def _parse_token_response(self, resp: Any, *, context: str) -> _GoogleTokenResponse:

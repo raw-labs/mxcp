@@ -135,6 +135,9 @@ If you change code touching these rules, require a careful review.
 - **No sensitive logging**
   - Never log tokens, secrets, emails, or user identifiers.
   - Avoid logging raw exception messages if they may contain sensitive data.
+- **Session-first request auth**
+  - Middleware must treat provider user-info refresh as best-effort.
+  - Provider failures must never block session-based authentication.
 - **Token persistence policy**
   - MXCP access tokens should be stored hashed.
   - Provider tokens should be encrypted at rest when persistence is enabled.
@@ -145,6 +148,7 @@ If you change code touching these rules, require a careful review.
 
 Implement `ProviderAdapter` under `mxcp.sdk.auth.providers`:
 - Raise `ProviderError(error, description, status_code)` for expected failures.
+- Normalize transport/network failures into `ProviderError` (do not leak HTTP client exceptions).
 - Never log response bodies, tokens, secrets, or PII.
 
 Coverage expectations:

@@ -75,6 +75,36 @@ async def test_provider_failure_falls_back_to_session_user_info(
 
 
 @pytest.mark.asyncio
+async def test_provider_exception_falls_back_to_session_user_info(
+    session_manager: SessionManager, provider: DummyProviderAdapter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Unexpected provider errors should still fall back to stored session user info.
+    user_info = await provider.fetch_user_info(access_token=provider._access_token)
+    session = await session_manager.issue_session(
+        provider=provider.provider_name,
+        user_info=user_info,
+        provider_access_token=provider._access_token,
+        provider_refresh_token=provider._refresh_token,
+        provider_expires_at=user_info.raw_profile.get("exp") if user_info.raw_profile else None,
+    )
+
+    async def _raise_unexpected(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("network error")
+
+    monkeypatch.setattr(provider, "fetch_user_info", _raise_unexpected)
+
+    middleware = AuthenticationMiddleware(
+        session_manager=session_manager,
+        provider_adapter=provider,
+        token_getter=lambda: session.access_token,
+    )
+
+    user_context = await middleware.check_authentication()
+    assert user_context is not None
+    assert user_context.user_id == user_info.user_id
+
+
+@pytest.mark.asyncio
 async def test_session_manager_invalid_token_returns_none(
     session_manager: SessionManager, provider: DummyProviderAdapter
 ) -> None:

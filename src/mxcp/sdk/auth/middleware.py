@@ -181,6 +181,16 @@ class AuthenticationMiddleware:
                 logger.warning("Failed to fetch user info from provider; using cached session data")
                 if span:
                     span.set_attribute("mxcp.auth.user_info_source", "session")
+            except Exception as exc:
+                logger.warning(
+                    "Failed to fetch user info from provider; using cached session data",
+                    extra={
+                        "provider": provider,
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                if span:
+                    span.set_attribute("mxcp.auth.user_info_source", "session")
         elif span:
             span.set_attribute("mxcp.auth.user_info_source", "session")
         if span and user_info is not session.user_info:

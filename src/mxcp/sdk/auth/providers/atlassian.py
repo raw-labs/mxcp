@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import urlencode
 
+import httpx
 from mcp.shared._httpx_utils import create_mcp_http_client
 from pydantic import ConfigDict, ValidationError
 
@@ -215,10 +216,25 @@ class AtlassianProviderAdapter(ProviderAdapter):
 
     async def _fetch_me(self, token: str) -> dict[str, Any]:
         async with create_mcp_http_client() as client:
-            resp = await client.get(
-                "https://api.atlassian.com/me",
-                headers={"Authorization": f"Bearer {token}"},
-            )
+            try:
+                resp = await client.get(
+                    "https://api.atlassian.com/me",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            except httpx.RequestError as exc:
+                logger.warning(
+                    "Atlassian /me endpoint request failed",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "userinfo",
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                raise ProviderError(
+                    "temporarily_unavailable",
+                    "Atlassian userinfo request failed",
+                    status_code=503,
+                ) from exc
 
         if resp.status_code != 200:
             logger.warning(
@@ -284,11 +300,27 @@ class AtlassianProviderAdapter(ProviderAdapter):
           sensitive information.
         """
         async with create_mcp_http_client() as client:
-            resp = await client.post(
-                self.token_url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-            )
+            try:
+                resp = await client.post(
+                    self.token_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+            except httpx.RequestError as exc:
+                logger.warning(
+                    "Atlassian token endpoint request failed",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "token",
+                        "context": context,
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                raise ProviderError(
+                    "temporarily_unavailable",
+                    "Atlassian token request failed",
+                    status_code=503,
+                ) from exc
         return self._parse_token_response(resp, context=context)
 
     def _parse_token_response(self, resp: Any, *, context: str) -> _AtlassianTokenResponse:

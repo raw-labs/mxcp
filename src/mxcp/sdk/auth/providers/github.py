@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import urlencode
 
+import httpx
 from mcp.shared._httpx_utils import create_mcp_http_client
 from pydantic import ConfigDict, ValidationError
 
@@ -212,13 +213,28 @@ class GitHubProviderAdapter(ProviderAdapter):
 
     async def _fetch_user_profile(self, token: str) -> dict[str, Any]:
         async with create_mcp_http_client() as client:
-            resp = await client.get(
-                "https://api.github.com/user",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/vnd.github+json",
-                },
-            )
+            try:
+                resp = await client.get(
+                    "https://api.github.com/user",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/vnd.github+json",
+                    },
+                )
+            except httpx.RequestError as exc:
+                logger.warning(
+                    "GitHub user endpoint request failed",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "user",
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                raise ProviderError(
+                    "temporarily_unavailable",
+                    "GitHub userinfo request failed",
+                    status_code=503,
+                ) from exc
 
         if resp.status_code != 200:
             logger.warning(
@@ -270,13 +286,24 @@ class GitHubProviderAdapter(ProviderAdapter):
 
     async def _fetch_user_email(self, token: str) -> str | None:
         async with create_mcp_http_client() as client:
-            resp = await client.get(
-                "https://api.github.com/user/emails",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/vnd.github+json",
-                },
-            )
+            try:
+                resp = await client.get(
+                    "https://api.github.com/user/emails",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/vnd.github+json",
+                    },
+                )
+            except httpx.RequestError as exc:
+                logger.warning(
+                    "GitHub user emails endpoint request failed",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "user_emails",
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                return None
 
         if resp.status_code != 200:
             logger.warning(
@@ -331,14 +358,30 @@ class GitHubProviderAdapter(ProviderAdapter):
         context: str,
     ) -> _GitHubTokenResponse:
         async with create_mcp_http_client() as client:
-            resp = await client.post(
-                self.token_url,
-                data=payload,
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Accept": "application/json",
-                },
-            )
+            try:
+                resp = await client.post(
+                    self.token_url,
+                    data=payload,
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Accept": "application/json",
+                    },
+                )
+            except httpx.RequestError as exc:
+                logger.warning(
+                    "GitHub token endpoint request failed",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "token",
+                        "context": context,
+                        "error_type": exc.__class__.__name__,
+                    },
+                )
+                raise ProviderError(
+                    "temporarily_unavailable",
+                    "GitHub token request failed",
+                    status_code=503,
+                ) from exc
         return self._parse_token_response(resp, context=context)
 
     def _parse_token_response(self, resp: Any, *, context: str) -> _GitHubTokenResponse:
