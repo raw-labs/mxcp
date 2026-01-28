@@ -24,7 +24,7 @@ class DummyProviderAdapter(ProviderAdapter):
     ):
         self.expected_code = expected_code
         self.expected_code_verifier = expected_code_verifier
-        self.issued_scopes = list(issued_scopes) if issued_scopes is not None else ["dummy.read"]
+        self.issued_scopes = list(issued_scopes) if issued_scopes is not None else []
         self._access_token = "DUMMY_ACCESS_TOKEN"
         self._refresh_token = "DUMMY_REFRESH_TOKEN"
 
@@ -59,7 +59,7 @@ class DummyProviderAdapter(ProviderAdapter):
         code: str,
         redirect_uri: str,
         code_verifier: str | None = None,
-        scopes: Sequence[str] | None = None,
+        scopes: Sequence[str],
     ) -> GrantResult:
         """Return fixed tokens when the expected code (and PKCE) are presented."""
         if code != self.expected_code:
@@ -68,7 +68,8 @@ class DummyProviderAdapter(ProviderAdapter):
         if self.expected_code_verifier is not None and code_verifier != self.expected_code_verifier:
             raise ProviderError("invalid_grant", "PKCE verification failed", status_code=400)
 
-        granted_scopes = list(scopes) if scopes is not None else list(self.issued_scopes)
+        granted_scopes = list(scopes)
+        self.issued_scopes = granted_scopes
         now = time.time()
         return GrantResult(
             access_token=self._access_token,
@@ -77,15 +78,14 @@ class DummyProviderAdapter(ProviderAdapter):
             provider_scopes_granted=granted_scopes,
         )
 
-    async def refresh_token(
-        self, *, refresh_token: str, scopes: Sequence[str] | None = None
-    ) -> GrantResult:
+    async def refresh_token(self, *, refresh_token: str, scopes: Sequence[str]) -> GrantResult:
         """Rotate the access token when a valid refresh token is supplied."""
         if refresh_token != self._refresh_token:
             raise ProviderError("invalid_grant", "Unknown refresh token", status_code=400)
 
         self._access_token = f"{self._access_token}_refreshed"
-        granted_scopes = list(scopes) if scopes is not None else list(self.issued_scopes)
+        granted_scopes = list(scopes)
+        self.issued_scopes = granted_scopes
         now = time.time()
         return GrantResult(
             access_token=self._access_token,

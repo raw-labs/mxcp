@@ -69,13 +69,12 @@ class _ProviderAdapterStub:
         code: str,
         redirect_uri: str,
         code_verifier: str | None = None,
-        scopes: Sequence[str] | None = None,
+        scopes: Sequence[str],
     ) -> GrantResult:  # pragma: no cover
         raise AssertionError("exchange_code should not be called in these tests")
 
-    async def refresh_token(
-        self, *, refresh_token: str, scopes: Sequence[str] | None = None
-    ) -> GrantResult:  # pragma: no cover
+    async def refresh_token(self, *, refresh_token: str, scopes: Sequence[str]) -> GrantResult:
+        # pragma: no cover
         raise AssertionError("refresh_token should not be called in these tests")
 
     async def fetch_user_info(self, *, access_token: str) -> UserInfo:  # pragma: no cover

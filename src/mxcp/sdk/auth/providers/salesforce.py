@@ -101,7 +101,7 @@ class SalesforceProviderAdapter(ProviderAdapter):
         code: str,
         redirect_uri: str,
         code_verifier: str | None = None,
-        scopes: Sequence[str] | None = None,
+        scopes: Sequence[str],
     ) -> GrantResult:
         payload: dict[str, str] = {
             "grant_type": "authorization_code",
@@ -122,7 +122,7 @@ class SalesforceProviderAdapter(ProviderAdapter):
             raise ProviderError("invalid_grant", "No access_token in response", status_code=400)
 
         expires_at = time.time() + float(expires_in) if expires_in is not None else None
-        granted_scopes = token.scope.split() if token.scope else list(scopes or [])
+        granted_scopes = token.scope.split() if token.scope else list(scopes)
         token_type = token.token_type if token.token_type is not None else "Bearer"
 
         return GrantResult(
@@ -133,9 +133,7 @@ class SalesforceProviderAdapter(ProviderAdapter):
             token_type=token_type,
         )
 
-    async def refresh_token(
-        self, *, refresh_token: str, scopes: Sequence[str] | None = None
-    ) -> GrantResult:
+    async def refresh_token(self, *, refresh_token: str, scopes: Sequence[str]) -> GrantResult:
         payload: dict[str, str] = {
             "grant_type": "refresh_token",
             "client_id": self.client_id,
@@ -151,7 +149,7 @@ class SalesforceProviderAdapter(ProviderAdapter):
         if not access_token:
             raise ProviderError("invalid_grant", "No access_token in refresh response", 400)
 
-        granted_scopes = (token.scope.split() if token.scope else []) or list(scopes or [])
+        granted_scopes = (token.scope.split() if token.scope else []) or list(scopes)
         expires_at = time.time() + float(expires_in) if expires_in is not None else None
         token_type = token.token_type if token.token_type is not None else "Bearer"
 
@@ -190,7 +188,7 @@ class SalesforceProviderAdapter(ProviderAdapter):
             name=parsed.name,
             avatar_url=avatar_url,
             raw_profile=profile,
-            provider_scopes_granted=parsed.scope.split() if parsed.scope else None,
+            provider_scopes_granted=parsed.scope.split() if parsed.scope else [],
         )
 
     # ── helpers ──────────────────────────────────────────────────────────────

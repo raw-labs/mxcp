@@ -61,7 +61,7 @@ async def test_state_expiry(token_store: TokenStore) -> None:
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=None,
+        scopes=[],
         expires_at=time.time() - 1,
         created_at=time.time() - 2,
     )
@@ -363,7 +363,7 @@ async def test_auth_code_load_expires_on_read(token_store: TokenStore) -> None:
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=None,
+        scopes=[],
         expires_at=now - 1,
         created_at=now - 2,
     )
@@ -423,7 +423,7 @@ async def test_store_can_reinitialize_after_close(tmp_path: Path) -> None:
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=None,
+        scopes=[],
         expires_at=now + 5,
         created_at=now,
     )

@@ -126,6 +126,9 @@ If you change code touching these rules, require a careful review.
   - OAuth client-requested scopes must **not** influence upstream IdP scopes.
   - Upstream IdP scopes come from server/provider configuration.
   - Client-supplied scopes may be stored as metadata (DCR or `/authorize`) but are not used for IdP authorization.
+  - When a provider token response omits `scope` (allowed by OAuth), MXCP treats the
+    granted scopes as the configured provider scopes used at `/authorize` rather than
+    interpreting the omission as “no scopes”.
 - **PKCE boundaries are explicit**
   - Downstream PKCE: client ↔ MXCP token endpoint.
   - Upstream PKCE: MXCP ↔ IdP token exchange (provider capability).

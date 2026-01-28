@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from cryptography.fernet import Fernet, InvalidToken
+from pydantic import Field
 
 from mxcp.sdk.auth.contracts import Session, UserInfo
 from mxcp.sdk.models import SdkBaseModel
@@ -55,7 +56,7 @@ class StateRecord(SdkBaseModel):
     code_challenge_method: str | None = None
     provider_code_verifier: str | None = None  # Code verifier for provider (Google) PKCE
     client_state: str | None = None  # Original state from MCP client (returned in redirect)
-    scopes: list[str] | None = None
+    scopes: list[str] = Field(default_factory=list)
     expires_at: float
     created_at: float
 
@@ -69,7 +70,7 @@ class AuthCodeRecord(SdkBaseModel):
     redirect_uri: str | None = None
     code_challenge: str | None = None
     code_challenge_method: str | None = None
-    scopes: list[str] | None = None
+    scopes: list[str] = Field(default_factory=list)
     expires_at: float
     created_at: float
 
@@ -199,7 +200,7 @@ class SqliteTokenStore(TokenStore):
             "code_challenge_method": record.code_challenge_method,
             "provider_code_verifier": record.provider_code_verifier,
             "client_state": record.client_state,
-            "scopes": json.dumps(record.scopes or []),
+            "scopes": json.dumps(record.scopes),
             "expires_at": record.expires_at,
             "created_at": record.created_at,
         }
@@ -221,7 +222,7 @@ class SqliteTokenStore(TokenStore):
             "redirect_uri": record.redirect_uri,
             "code_challenge": record.code_challenge,
             "code_challenge_method": record.code_challenge_method,
-            "scopes": json.dumps(record.scopes or []),
+            "scopes": json.dumps(record.scopes),
             "expires_at": record.expires_at,
             "created_at": record.created_at,
         }

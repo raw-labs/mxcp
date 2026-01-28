@@ -41,7 +41,7 @@ async def test_state_expiry_respected(session_manager: SessionManager) -> None:
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=None,
+        scopes=[],
         ttl_seconds=0,
     )
 
@@ -165,7 +165,7 @@ async def test_cleanup_clears_expired_items(session_manager: SessionManager) -> 
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=None,
+        scopes=[],
         ttl_seconds=-1,
     )
     await session_manager.create_auth_code(
@@ -174,7 +174,7 @@ async def test_cleanup_clears_expired_items(session_manager: SessionManager) -> 
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=None,
+        scopes=[],
         ttl_seconds=-1,
     )
 

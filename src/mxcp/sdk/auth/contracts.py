@@ -26,6 +26,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol, runtime_checkable
 
+from pydantic import Field
+
 from mxcp.sdk.models import SdkBaseModel
 
 
@@ -45,7 +47,7 @@ class GrantResult(SdkBaseModel):
     access_token: str
     refresh_token: str | None = None
     expires_at: float | None = None
-    provider_scopes_granted: list[str] | None = None
+    provider_scopes_granted: list[str] = Field(default_factory=list)
     token_type: str = "Bearer"
 
 
@@ -59,7 +61,7 @@ class UserInfo(SdkBaseModel):
     name: str | None = None
     avatar_url: str | None = None
     raw_profile: dict[str, Any] | None = None
-    provider_scopes_granted: list[str] | None = None
+    provider_scopes_granted: list[str] = Field(default_factory=list)
     mxcp_scopes: list[str] | None = None
 
 
@@ -108,13 +110,11 @@ class ProviderAdapter(Protocol):
         code: str,
         redirect_uri: str,
         code_verifier: str | None = None,
-        scopes: Sequence[str] | None = None,
+        scopes: Sequence[str],
     ) -> GrantResult:
         """Exchange an authorization code for provider tokens."""
 
-    async def refresh_token(
-        self, *, refresh_token: str, scopes: Sequence[str] | None = None
-    ) -> GrantResult:
+    async def refresh_token(self, *, refresh_token: str, scopes: Sequence[str]) -> GrantResult:
         """Refresh provider tokens."""
 
     async def fetch_user_info(self, *, access_token: str) -> UserInfo:

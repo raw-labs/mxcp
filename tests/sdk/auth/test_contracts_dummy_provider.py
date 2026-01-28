@@ -56,6 +56,7 @@ async def test_exchange_rejects_wrong_code() -> None:
         await adapter.exchange_code(
             code="BAD_CODE",
             redirect_uri="http://localhost/callback",
+            scopes=[],
         )
     assert excinfo.value.error == "invalid_grant"
     assert excinfo.value.status_code == 400
@@ -71,6 +72,7 @@ async def test_exchange_rejects_wrong_pkce() -> None:
             code="TEST_CODE_OK",
             redirect_uri="http://localhost/callback",
             code_verifier="wrong",
+            scopes=[],
         )
     assert excinfo.value.error == "invalid_grant"
     assert excinfo.value.status_code == 400
@@ -80,8 +82,8 @@ async def test_exchange_rejects_wrong_pkce() -> None:
 async def test_refresh_rotates_access_token() -> None:
     # Refresh rotates the access token and keeps the refresh token stable.
     adapter = DummyProviderAdapter()
-    first = await adapter.refresh_token(refresh_token="DUMMY_REFRESH_TOKEN", scopes=None)
-    second = await adapter.refresh_token(refresh_token="DUMMY_REFRESH_TOKEN", scopes=None)
+    first = await adapter.refresh_token(refresh_token="DUMMY_REFRESH_TOKEN", scopes=[])
+    second = await adapter.refresh_token(refresh_token="DUMMY_REFRESH_TOKEN", scopes=[])
 
     assert second.access_token != first.access_token
     assert second.refresh_token == "DUMMY_REFRESH_TOKEN"

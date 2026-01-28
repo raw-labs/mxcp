@@ -62,7 +62,7 @@ class SessionManager:
         code_challenge_method: str | None,
         provider_code_verifier: str | None = None,
         client_state: str | None = None,
-        scopes: Sequence[str] | None = None,
+        scopes: Sequence[str],
         ttl_seconds: int | None = None,
     ) -> StateRecord:
         state = secrets.token_urlsafe(16)
@@ -75,7 +75,7 @@ class SessionManager:
             code_challenge_method=code_challenge_method,
             provider_code_verifier=provider_code_verifier,
             client_state=client_state,
-            scopes=list(scopes) if scopes is not None else None,
+            scopes=list(scopes),
             expires_at=now + (ttl_seconds if ttl_seconds is not None else self.state_ttl_seconds),
             created_at=now,
         )
@@ -98,7 +98,7 @@ class SessionManager:
         redirect_uri: str | None,
         code_challenge: str | None,
         code_challenge_method: str | None,
-        scopes: Sequence[str] | None = None,
+        scopes: Sequence[str],
         ttl_seconds: int | None = None,
     ) -> AuthCodeRecord:
         code = f"mcp_{secrets.token_hex(16)}"
@@ -110,7 +110,7 @@ class SessionManager:
             redirect_uri=redirect_uri,
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
-            scopes=list(scopes) if scopes is not None else None,
+            scopes=list(scopes),
             expires_at=now
             + (ttl_seconds if ttl_seconds is not None else self.auth_code_ttl_seconds),
             created_at=now,

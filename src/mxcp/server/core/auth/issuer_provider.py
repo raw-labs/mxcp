@@ -256,7 +256,7 @@ class IssuerOAuthAuthorizationServer(
 
         return AuthorizationCode(
             code=code_record.code,
-            scopes=code_record.scopes or [],
+            scopes=code_record.scopes,
             expires_at=code_record.expires_at,
             client_id=client_id,
             # Returned for MCP token handler PKCE verification.
@@ -299,7 +299,7 @@ class IssuerOAuthAuthorizationServer(
             return None
         if not client or not client.client_id:
             raise TokenError("invalid_client", "Client ID missing for refresh token")
-        provider_scopes = session.user_info.provider_scopes_granted or []
+        provider_scopes = session.user_info.provider_scopes_granted
         return RefreshToken(
             token=refresh_token,
             client_id=client.client_id if client else "",
@@ -326,7 +326,7 @@ class IssuerOAuthAuthorizationServer(
 
         # Rotate session
         await self.session_manager.revoke_session(session.access_token)
-        provider_scopes = session.user_info.provider_scopes_granted or []
+        provider_scopes = session.user_info.provider_scopes_granted
         new_session = await self._issue_rotated_session(session)
 
         return OAuthToken(
@@ -348,7 +348,7 @@ class IssuerOAuthAuthorizationServer(
         if session.expires_at and session.expires_at < time.time():
             await self.session_manager.revoke_session(session.access_token)
             return None
-        provider_scopes = session.user_info.provider_scopes_granted or []
+        provider_scopes = session.user_info.provider_scopes_granted
         return AccessToken(
             token=session.access_token,
             client_id="",
