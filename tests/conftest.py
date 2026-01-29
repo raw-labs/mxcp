@@ -3,12 +3,36 @@ Global pytest configuration and fixtures.
 """
 
 import os
+from collections.abc import AsyncGenerator, Generator
+from pathlib import Path
 
 import pytest
+from cryptography.fernet import Fernet
+from pytest import FixtureRequest
+
+from mxcp.sdk.auth.storage import SqliteTokenStore, TokenStore
+
+
+def _sqlite_store_factory(tmp_path: Path) -> TokenStore:
+    db_path = tmp_path / "auth.db"
+    key = Fernet.generate_key()
+    store = SqliteTokenStore(db_path, encryption_key=key)
+    return store
+
+
+@pytest.fixture(params=[_sqlite_store_factory], ids=["sqlite"])
+async def token_store(request: FixtureRequest, tmp_path: Path) -> AsyncGenerator[TokenStore, None]:
+    """Parametrized token store fixture to exercise all backends uniformly."""
+    store: TokenStore = request.param(tmp_path)
+    await store.initialize()
+    try:
+        yield store
+    finally:
+        await store.close()
 
 
 @pytest.fixture(autouse=True)
-def disable_analytics(request):
+def disable_analytics(request: FixtureRequest) -> Generator[None, None, None]:
     """Disable PostHog analytics for all tests except analytics unit tests.
 
     This prevents tests from accidentally sending real analytics events
@@ -18,7 +42,7 @@ def disable_analytics(request):
     manage the environment variable themselves and mock the PostHog client.
     """
     # Skip for analytics tests - they manage env var and mock PostHog themselves
-    if "test_analytics" in request.fspath.basename:
+    if "test_analytics" in request.node.path.name:
         yield
         return
 

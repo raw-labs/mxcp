@@ -1,4 +1,8 @@
 mxcp: 1
+transport:
+  http:
+    port: 8000
+    host: 0.0.0.0
 
 projects:
   salesforce-demo:

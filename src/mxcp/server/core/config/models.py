@@ -299,6 +299,7 @@ class UserAuthPersistenceConfigModel(BaseModel):
 
     type: Literal["sqlite"] = "sqlite"
     path: str = Field(default_factory=lambda: str(Path.home() / ".mxcp" / "oauth.db"))
+    auth_encryption_key: str | None = None
 
 
 class UserAuthorizationConfigModel(BaseModel):
@@ -323,7 +324,8 @@ class UserAtlassianAuthConfigModel(BaseModel):
 
     client_id: str
     client_secret: str
-    scope: str | None = None
+    # Required: provider scopes must be explicit in user config; we avoid SDK-side defaults.
+    scope: str
     callback_path: str
     auth_url: str
     token_url: str
@@ -356,7 +358,8 @@ class UserGoogleAuthConfigModel(BaseModel):
 
     client_id: str
     client_secret: str
-    scope: str | None = None
+    # Required: provider scopes must be explicit in user config; we avoid SDK-side defaults.
+    scope: str
     callback_path: str
     auth_url: str
     token_url: str

@@ -1,0 +1,132 @@
+import pytest
+import pytest_asyncio
+
+from mxcp.sdk.auth.contracts import ProviderError
+from mxcp.sdk.auth.middleware import AuthenticationMiddleware
+from mxcp.sdk.auth.providers.dummy import DummyProviderAdapter
+from mxcp.sdk.auth.session_manager import SessionManager
+from mxcp.sdk.auth.storage import TokenStore
+
+
+@pytest_asyncio.fixture
+async def session_manager(token_store: TokenStore) -> SessionManager:
+    return SessionManager(token_store)
+
+
+@pytest_asyncio.fixture
+async def provider() -> DummyProviderAdapter:
+    return DummyProviderAdapter()
+
+
+@pytest.mark.asyncio
+async def test_session_manager_happy_path(
+    session_manager: SessionManager, provider: DummyProviderAdapter
+) -> None:
+    # SessionManager + ProviderAdapter path: valid token yields user context.
+    user_info = await provider.fetch_user_info(access_token=provider._access_token)
+    session = await session_manager.issue_session(
+        provider=provider.provider_name,
+        user_info=user_info,
+        provider_access_token=provider._access_token,
+        provider_refresh_token=provider._refresh_token,
+        provider_expires_at=user_info.raw_profile.get("exp") if user_info.raw_profile else None,
+    )
+
+    middleware = AuthenticationMiddleware(
+        session_manager=session_manager,
+        provider_adapter=provider,
+        token_getter=lambda: session.access_token,
+    )
+
+    user_context = await middleware.check_authentication()
+    assert user_context is not None
+    assert user_context.user_id == user_info.user_id
+    assert user_context.external_token == provider._access_token
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_falls_back_to_session_user_info(
+    session_manager: SessionManager, provider: DummyProviderAdapter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Provider failure should fall back to stored session user info.
+    user_info = await provider.fetch_user_info(access_token=provider._access_token)
+    session = await session_manager.issue_session(
+        provider=provider.provider_name,
+        user_info=user_info,
+        provider_access_token=provider._access_token,
+        provider_refresh_token=provider._refresh_token,
+        provider_expires_at=user_info.raw_profile.get("exp") if user_info.raw_profile else None,
+    )
+
+    async def _raise_provider_error(*_args: object, **_kwargs: object) -> None:
+        raise ProviderError("invalid_token", "provider unavailable", status_code=401)
+
+    monkeypatch.setattr(provider, "fetch_user_info", _raise_provider_error)
+
+    middleware = AuthenticationMiddleware(
+        session_manager=session_manager,
+        provider_adapter=provider,
+        token_getter=lambda: session.access_token,
+    )
+
+    user_context = await middleware.check_authentication()
+    assert user_context is not None
+    assert user_context.user_id == user_info.user_id
+
+
+@pytest.mark.asyncio
+async def test_provider_exception_falls_back_to_session_user_info(
+    session_manager: SessionManager, provider: DummyProviderAdapter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Unexpected provider errors should still fall back to stored session user info.
+    user_info = await provider.fetch_user_info(access_token=provider._access_token)
+    session = await session_manager.issue_session(
+        provider=provider.provider_name,
+        user_info=user_info,
+        provider_access_token=provider._access_token,
+        provider_refresh_token=provider._refresh_token,
+        provider_expires_at=user_info.raw_profile.get("exp") if user_info.raw_profile else None,
+    )
+
+    async def _raise_unexpected(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("network error")
+
+    monkeypatch.setattr(provider, "fetch_user_info", _raise_unexpected)
+
+    middleware = AuthenticationMiddleware(
+        session_manager=session_manager,
+        provider_adapter=provider,
+        token_getter=lambda: session.access_token,
+    )
+
+    user_context = await middleware.check_authentication()
+    assert user_context is not None
+    assert user_context.user_id == user_info.user_id
+
+
+@pytest.mark.asyncio
+async def test_session_manager_invalid_token_returns_none(
+    session_manager: SessionManager, provider: DummyProviderAdapter
+) -> None:
+    # Invalid token should fail auth and return None.
+    middleware = AuthenticationMiddleware(
+        session_manager=session_manager,
+        provider_adapter=provider,
+        token_getter=lambda: "unknown",
+    )
+
+    assert await middleware.check_authentication() is None
+
+
+@pytest.mark.asyncio
+async def test_session_manager_missing_token_returns_none(
+    session_manager: SessionManager, provider: DummyProviderAdapter
+) -> None:
+    # Missing token should fail auth and return None.
+    middleware = AuthenticationMiddleware(
+        session_manager=session_manager,
+        provider_adapter=provider,
+        token_getter=lambda: None,
+    )
+
+    assert await middleware.check_authentication() is None

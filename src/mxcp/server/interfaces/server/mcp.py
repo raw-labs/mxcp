@@ -16,17 +16,21 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeVar, cast
 
 import uvicorn
 from makefun import create_function
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import Context as FastMCPContextRuntime
 from mcp.server.fastmcp import FastMCP
+from mcp.shared.auth import OAuthClientInformationFull
 from mcp.types import ToolAnnotations
-from pydantic import AnyHttpUrl, ConfigDict, Field, create_model
-from starlette.responses import JSONResponse
+from pydantic import AnyHttpUrl, AnyUrl, ConfigDict, Field, ValidationError, create_model
+from starlette.responses import JSONResponse, RedirectResponse
 
 from mxcp.sdk.audit import AuditLogger
-from mxcp.sdk.auth import GeneralOAuthAuthorizationServer
+from mxcp.sdk.auth.auth_service import AuthService
 from mxcp.sdk.auth.context import get_user_context
 from mxcp.sdk.auth.middleware import AuthenticationMiddleware
+from mxcp.sdk.auth.session_manager import SessionManager
+from mxcp.sdk.auth.storage import SqliteTokenStore
 from mxcp.sdk.core import PACKAGE_VERSION
 from mxcp.sdk.core.analytics import track_endpoint_execution
 from mxcp.sdk.mcp import FastMCPLogProxy
@@ -39,10 +43,11 @@ from mxcp.sdk.telemetry import (
 )
 from mxcp.server.admin import AdminAPIRunner
 from mxcp.server.core.auth.helpers import (
-    create_oauth_handler,
+    create_provider_adapter,
     create_url_builder,
     translate_auth_config,
 )
+from mxcp.server.core.auth.issuer_provider import IssuerOAuthAuthorizationServer
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
 from mxcp.server.core.config.site_config import get_active_profile, load_site_config
 from mxcp.server.core.config.user_config import load_user_config
@@ -457,47 +462,107 @@ class RAWMCP:
     def _initialize_oauth(self) -> None:
         """Initialize OAuth authentication using profile-specific auth config."""
         auth_config = self.active_profile.auth
-        self.oauth_handler = create_oauth_handler(
-            auth_config,
-            host=self.host,
-            port=self.port,
-            user_config=self.user_config,
+        self.oauth_handler = None  # legacy path disabled for Phase 2
+        # The server-side provider adapter exposes HTTP callback route details
+        # (callback_path) beyond the SDK ProviderAdapter protocol, so we keep the
+        # attribute permissively typed.
+        self.provider_adapter = cast(
+            Any,
+            create_provider_adapter(
+                auth_config, host=self.host, port=self.port, user_config=self.user_config
+            ),
         )
+        self.session_manager: SessionManager | None = None
         self.oauth_server = None
         self.auth_settings = None
 
-        if self.oauth_handler:
-            auth_config_dict = translate_auth_config(auth_config)
-            user_config_dict = self.user_config.model_dump(mode="python")
-            self.oauth_server = GeneralOAuthAuthorizationServer(
-                self.oauth_handler, auth_config_dict, user_config_dict
-            )
-
-            # Use URL builder for OAuth endpoints
-            url_builder = create_url_builder(self.user_config)
-            base_url = url_builder.get_base_url(host=self.host, port=self.port)
-
-            # Get authorization configuration
-            auth_authorization = auth_config.authorization
-            required_scopes = auth_authorization.required_scopes if auth_authorization else []
-
-            logger.info(
-                f"Authorization configured - required scopes: {required_scopes or 'none (authentication only)'}"
-            )
-
-            self.auth_settings = AuthSettings(
-                issuer_url=cast(AnyHttpUrl, base_url),
-                resource_server_url=None,
-                client_registration_options=ClientRegistrationOptions(
-                    enabled=True,
-                    valid_scopes=None,  # Accept any scope
-                    default_scopes=required_scopes if required_scopes else None,
-                ),
-                required_scopes=required_scopes if required_scopes else None,
-            )
-            logger.info(f"OAuth authentication enabled with provider: {auth_config.provider}")
-        else:
+        if not self.provider_adapter:
             logger.info("OAuth authentication disabled")
+            return
+
+        url_builder = create_url_builder(self.user_config)
+        callback_path = self.provider_adapter.callback_path
+        callback_url = url_builder.build_callback_url(callback_path, host=self.host, port=self.port)
+
+        # Build token store and session manager for issuer-mode
+        persistence = auth_config.persistence
+        db_path = (
+            Path(persistence.path)
+            if persistence and persistence.path
+            else Path.home() / ".mxcp" / "oauth.db"
+        )
+        encryption_key = None
+        if persistence and persistence.auth_encryption_key:
+            encryption_key = persistence.auth_encryption_key
+        else:
+            logger.warning(
+                "Auth token storage encryption key not configured; "
+                "tokens will be stored in plaintext (intended for local dev only)."
+            )
+        token_store = SqliteTokenStore(
+            db_path, encryption_key=encryption_key, allow_plaintext_tokens=True
+        )
+        self.session_manager = SessionManager(token_store)
+
+        self.auth_service = AuthService(
+            provider_adapter=self.provider_adapter,
+            session_manager=self.session_manager,
+            callback_url=callback_url,
+        )
+
+        clients = self._build_oauth_clients(auth_config.clients or [])
+        self.oauth_server = IssuerOAuthAuthorizationServer(
+            auth_service=self.auth_service,
+            session_manager=self.session_manager,
+            clients=clients,
+        )
+
+        base_url = url_builder.get_base_url(host=self.host, port=self.port)
+
+        auth_config_dict = translate_auth_config(auth_config)
+        auth_authorization = auth_config_dict.authorization
+        required_scopes = auth_authorization.required_scopes if auth_authorization else []
+
+        self.auth_settings = AuthSettings(
+            issuer_url=cast(AnyHttpUrl, base_url),
+            resource_server_url=None,
+            client_registration_options=ClientRegistrationOptions(
+                enabled=True,
+                valid_scopes=None,  # Accept any scope
+                default_scopes=required_scopes if required_scopes else None,
+            ),
+            required_scopes=required_scopes if required_scopes else None,
+        )
+        logger.info(f"OAuth authentication enabled with provider: {auth_config.provider}")
+
+    def _build_oauth_clients(
+        self,
+        clients_config: list[Any],
+    ) -> dict[str, OAuthClientInformationFull]:
+        clients: dict[str, OAuthClientInformationFull] = {}
+        for client in clients_config:
+            redirect_uris: list[AnyUrl] = []
+            for uri in client.redirect_uris or []:
+                try:
+                    redirect_uris.append(AnyUrl(uri))
+                except ValidationError as ve:
+                    logger.warning(
+                        f"Skipping malformed redirect URI for client {client.client_id}: {uri} ({ve})"
+                    )
+            if not redirect_uris and client.redirect_uris:
+                logger.error(f"Skipping client {client.client_id}: no valid redirect URIs")
+                continue
+
+            clients[client.client_id] = OAuthClientInformationFull(
+                client_id=client.client_id,
+                client_secret=client.client_secret,
+                redirect_uris=redirect_uris or None,
+                grant_types=client.grant_types or ["authorization_code"],
+                response_types=["code"],
+                scope=" ".join(client.scopes) if client.scopes else None,
+                client_name=client.name,
+            )
+        return clients
 
     def _initialize_fastmcp(self) -> None:
         """Initialize the FastMCP server."""
@@ -518,10 +583,16 @@ class RAWMCP:
         self.mcp = FastMCP(**fastmcp_kwargs)
 
         # Initialize authentication middleware
-        self.auth_middleware = AuthenticationMiddleware(self.oauth_handler, self.oauth_server)
+        self.auth_middleware = AuthenticationMiddleware(
+            session_manager=self.session_manager,
+            provider_adapter=getattr(self, "provider_adapter", None),
+            token_getter=lambda: (
+                access_token.token if (access_token := get_access_token()) else None
+            ),
+        )
 
         # Register OAuth routes if enabled
-        if self.oauth_handler and self.oauth_server:
+        if self.oauth_server:
             self._register_oauth_routes()
 
     async def _run_admin_api_and_transport(self, transport: str) -> None:
@@ -1269,12 +1340,9 @@ class RAWMCP:
                 },
             ) as span:
                 try:
-                    logger.info(f"Calling {log_name} {name} with: {kwargs}")
+                    logger.info("Calling %s %s", log_name, name)
                     if user_context:
-                        logger.info(
-                            f"Authenticated user: {user_context.username} (provider: {user_context.provider})"
-                        )
-                        # Add auth attributes to span
+                        logger.info("Authenticated request (provider: %s)", user_context.provider)
                         if span:
                             span.set_attribute("mxcp.auth.authenticated", True)
                             span.set_attribute("mxcp.auth.provider", user_context.provider)
@@ -1320,10 +1388,15 @@ class RAWMCP:
                     logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                     return result
 
-                except Exception as e:
+                except Exception:
                     status = "error"
-                    error_msg = str(e)
-                    logger.error(f"Error executing {log_name} {name}:\n{traceback.format_exc()}")
+                    error_msg = "error"
+                    logger.error(
+                        "Error executing %s %s:\n%s",
+                        log_name,
+                        name,
+                        traceback.format_exc(),
+                    )
                     raise
                 finally:
                     # Calculate duration
@@ -1967,24 +2040,56 @@ class RAWMCP:
 
     def _register_oauth_routes(self) -> None:
         """Register OAuth callback routes."""
-        if self.oauth_handler is None:
-            logger.warning("OAuth handler not configured, skipping OAuth routes")
+        if self.oauth_server is None or getattr(self, "provider_adapter", None) is None:
+            logger.warning("OAuth provider not configured, skipping OAuth routes")
             return
 
-        callback_path = self.oauth_handler.callback_path
+        callback_path = self.provider_adapter.callback_path
         logger.info(f"Registering OAuth callback route: {callback_path}")
 
-        # Use custom_route to register the callback
         @self.mcp.custom_route(callback_path, methods=["GET"])  # type: ignore[misc]
         async def oauth_callback(request: Any) -> Any:
-            if self.oauth_handler is None or self.oauth_server is None:
+            if self.oauth_server is None:
                 raise RuntimeError("OAuth not configured")
-            return await self.oauth_handler.on_callback(request, self.oauth_server)
+            code = request.query_params.get("code")
+            state = request.query_params.get("state")
+            error = request.query_params.get("error")
+
+            if error:
+                # If we can resolve the stored state, redirect back to the MCP client's
+                # redirect_uri with standard OAuth error parameters. This keeps browser
+                # UX intact (the client app regains control of the flow).
+                if state and isinstance(self.oauth_server, IssuerOAuthAuthorizationServer):
+                    try:
+                        redirect_uri = await self.oauth_server.handle_callback_error(
+                            state=state,
+                            error=error,
+                            error_description=request.query_params.get("error_description"),
+                        )
+                        if redirect_uri:
+                            return RedirectResponse(redirect_uri)
+                    except Exception:
+                        # Fall back to safe JSON below when state resolution fails.
+                        pass
+
+                return JSONResponse(
+                    content={
+                        "error": error,
+                        "error_description": request.query_params.get("error_description"),
+                    },
+                    status_code=400,
+                )
+
+            if not code or not state:
+                return JSONResponse(content={"error": "invalid_request"}, status_code=400)
+
+            redirect_uri = await self.oauth_server.handle_callback(code, state)
+            return RedirectResponse(redirect_uri)
 
         # Register OAuth Protected Resource metadata endpoint
         @self.mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])  # type: ignore[misc]
         async def oauth_protected_resource_metadata(request: Any) -> Any:
-            """Handle OAuth Protected Resource metadata requests (RFC 8693)"""
+            """Handle OAuth 2.0 Protected Resource Metadata requests (RFC 9728)."""
 
             # Use URL builder with request context for proper scheme detection
             url_builder = create_url_builder(self.user_config)

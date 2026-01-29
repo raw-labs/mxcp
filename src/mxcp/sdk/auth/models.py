@@ -1,4 +1,16 @@
-"""Pydantic models for the auth module."""
+"""Pydantic models for the auth module.
+
+These types are used for server/user configuration and normalized auth data.
+
+## Security-relevant configuration fields
+
+- OAuth client **redirect URIs**: affect redirect binding and open-redirect risk.
+- Provider **scope** strings: affect what permissions are requested from the upstream IdP.
+- Provider **callback_path**: controls which HTTP route receives IdP callbacks.
+
+Treat changes to these fields as security-sensitive and ensure they are covered by
+tests and documented behavior.
+"""
 
 from typing import Any, Literal
 
@@ -46,7 +58,12 @@ class GitHubAuthConfigModel(SdkBaseModel):
 
     client_id: str
     client_secret: str
-    scope: str | None = None
+    # OAuth 2.0 scope string to request at the provider's /authorize endpoint.
+    #
+    # Intentionally required: the SDK provider adapter must not invent default
+    # scopes (which could silently broaden permissions). Defaults, if any, belong
+    # in higher-level configuration or templates.
+    scope: str
     callback_path: str
     auth_url: str
     token_url: str
@@ -60,7 +77,12 @@ class AtlassianAuthConfigModel(SdkBaseModel):
 
     client_id: str
     client_secret: str
-    scope: str | None = None
+    # OAuth 2.0 scope string to request at the provider's /authorize endpoint.
+    #
+    # Intentionally required: the SDK provider adapter must not invent default
+    # scopes (which could silently broaden permissions). Defaults, if any, belong
+    # in higher-level configuration or templates.
+    scope: str
     callback_path: str
     auth_url: str
     token_url: str
@@ -74,7 +96,12 @@ class SalesforceAuthConfigModel(SdkBaseModel):
 
     client_id: str
     client_secret: str
-    scope: str | None = None
+    # OAuth 2.0 scope string to request at the provider's /authorize endpoint.
+    #
+    # Intentionally required: the SDK provider adapter must not invent default
+    # scopes (which could silently broaden permissions). Defaults, if any, belong
+    # in higher-level configuration or templates.
+    scope: str
     callback_path: str
     auth_url: str
     token_url: str
@@ -90,7 +117,12 @@ class KeycloakAuthConfigModel(SdkBaseModel):
     client_secret: str
     realm: str
     server_url: str
-    scope: str | None = None
+    # OAuth 2.0 scope string to request at the provider's /authorize endpoint.
+    #
+    # Intentionally required: the SDK provider adapter must not invent default
+    # scopes (which could silently broaden permissions). Defaults, if any, belong
+    # in higher-level configuration or templates.
+    scope: str
     callback_path: str
 
 
@@ -102,7 +134,12 @@ class GoogleAuthConfigModel(SdkBaseModel):
 
     client_id: str
     client_secret: str
-    scope: str | None = None
+    # OAuth 2.0 scope string to request at the provider's /authorize endpoint.
+    #
+    # Intentionally required: the SDK provider adapter must not invent default
+    # scopes (which could silently broaden permissions). Defaults, if any, belong
+    # in higher-level configuration or templates.
+    scope: str
     callback_path: str
     auth_url: str
     token_url: str
@@ -119,6 +156,7 @@ class AuthPersistenceConfigModel(SdkBaseModel):
 
     type: Literal["sqlite"] | None = None
     path: str | None = None
+    auth_encryption_key: str | None = None
 
 
 class AuthorizationConfigModel(SdkBaseModel):
@@ -134,11 +172,7 @@ class AuthorizationConfigModel(SdkBaseModel):
 
 
 class AuthConfigModel(SdkBaseModel):
-    """Minimal authentication configuration for the OAuth server.
-
-    This type only contains fields needed by GeneralOAuthAuthorizationServer.
-    Provider-specific configs are passed directly to their respective handlers.
-    """
+    """Minimal authentication configuration for the OAuth server (issuer-mode)."""
 
     # Override frozen=True since this is a config object
     model_config = ConfigDict(extra="forbid", frozen=False)

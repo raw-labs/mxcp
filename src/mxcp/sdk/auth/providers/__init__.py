@@ -3,16 +3,18 @@
 This module contains concrete implementations of OAuth providers.
 """
 
-from .atlassian import AtlassianOAuthHandler
-from .github import GitHubOAuthHandler
-from .google import GoogleOAuthHandler
-from .keycloak import KeycloakOAuthHandler
-from .salesforce import SalesforceOAuthHandler
+from .atlassian import AtlassianProviderAdapter
+from .dummy import DummyProviderAdapter
+from .github import GitHubProviderAdapter
+from .google import GoogleProviderAdapter
+from .keycloak import KeycloakProviderAdapter
+from .salesforce import SalesforceProviderAdapter
 
 __all__ = [
-    "AtlassianOAuthHandler",
-    "GitHubOAuthHandler",
-    "GoogleOAuthHandler",
-    "KeycloakOAuthHandler",
-    "SalesforceOAuthHandler",
+    "AtlassianProviderAdapter",
+    "DummyProviderAdapter",
+    "GitHubProviderAdapter",
+    "GoogleProviderAdapter",
+    "KeycloakProviderAdapter",
+    "SalesforceProviderAdapter",
 ]
