@@ -23,6 +23,7 @@ from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyUrl, ValidationError
 
 from mxcp.sdk.auth.auth_service import AuthService
+from mxcp.sdk.auth.contracts import ProviderError
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import ClientRecord, StoredSession
 
@@ -294,8 +295,7 @@ class IssuerOAuthAuthorizationServer(
         )
         if not session:
             return None
-        if session.expires_at and session.expires_at < time.time():
-            await self.session_manager.revoke_session(session.access_token)
+        if session.refresh_expires_at and session.refresh_expires_at < time.time():
             return None
         if not client or not client.client_id:
             raise TokenError("invalid_client", "Client ID missing for refresh token")
@@ -304,7 +304,7 @@ class IssuerOAuthAuthorizationServer(
             token=refresh_token,
             client_id=client.client_id if client else "",
             scopes=provider_scopes,
-            expires_at=int(session.expires_at) if session.expires_at else None,
+            expires_at=int(session.refresh_expires_at) if session.refresh_expires_at else None,
         )
 
     async def exchange_refresh_token(
@@ -313,6 +313,7 @@ class IssuerOAuthAuthorizationServer(
         refresh_token: RefreshToken,
         scopes: list[str],
     ) -> OAuthTokenType:
+        logger.debug(f"IssuerProvider.exchange_refresh_token: exchanging refresh token: {refresh_token.token}")
         await self._ensure_store_initialized()
         session = await self.session_manager.token_store.load_session_by_refresh_token(
             refresh_token.token
@@ -320,21 +321,53 @@ class IssuerOAuthAuthorizationServer(
         if not session:
             raise TokenError("invalid_grant", "Refresh token not found")
 
-        if session.expires_at and session.expires_at < time.time():
-            await self.session_manager.revoke_session(session.access_token)
+        if session.refresh_expires_at and session.refresh_expires_at < time.time():
             raise TokenError("invalid_grant", "Refresh token expired")
+
+        if not session.provider_refresh_token:
+            raise TokenError("invalid_grant", "Provider refresh token missing")
+
+        try:
+            grant = await self.auth_service.provider_adapter.refresh_token(
+                refresh_token=session.provider_refresh_token,
+                scopes=scopes or session.scopes or [],
+            )
+        except ProviderError as exc:
+            logger.warning("Provider refresh token exchange failed", exc_info=exc)
+            raise TokenError("invalid_grant", "Provider refresh failed") from exc
+
+        provider_refresh_token = (
+            grant.refresh_token
+            if grant.refresh_token is not None
+            else session.provider_refresh_token
+        )
+        refresh_expires_at = (
+            grant.refresh_expires_at
+            if grant.refresh_expires_at is not None
+            else session.refresh_expires_at
+        )
 
         # Rotate session
         await self.session_manager.revoke_session(session.access_token)
         provider_scopes = session.user_info.provider_scopes_granted
-        new_session = await self._issue_rotated_session(session)
+        new_session = await self._issue_rotated_session(
+            session,
+            provider_scopes,
+            provider_access_token=grant.access_token,
+            provider_refresh_token=provider_refresh_token,
+            provider_expires_at=grant.expires_at,
+            access_expires_at=grant.expires_at,
+            refresh_expires_at=refresh_expires_at,
+        )
 
         return OAuthToken(
             access_token=new_session.access_token,
             refresh_token=new_session.refresh_token,
             token_type="Bearer",
             expires_in=(
-                int(new_session.expires_at - time.time()) if new_session.expires_at else None
+                int(new_session.access_expires_at - time.time())
+                if new_session.access_expires_at
+                else None
             ),
             scope=" ".join(scopes or provider_scopes),
         )
@@ -345,15 +378,14 @@ class IssuerOAuthAuthorizationServer(
         session = await self.session_manager.get_session(token)
         if not session:
             return None
-        if session.expires_at and session.expires_at < time.time():
-            await self.session_manager.revoke_session(session.access_token)
+        if session.access_expires_at and session.access_expires_at < time.time():
             return None
         provider_scopes = session.user_info.provider_scopes_granted
         return AccessToken(
             token=session.access_token,
             client_id="",
             scopes=provider_scopes,
-            expires_at=int(session.expires_at) if session.expires_at else None,
+            expires_at=int(session.access_expires_at) if session.access_expires_at else None,
         )
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
@@ -370,17 +402,26 @@ class IssuerOAuthAuthorizationServer(
             await self.session_manager.revoke_session(session.access_token)
 
     # ----- helpers -----
-    async def _issue_rotated_session(self, session: StoredSession) -> StoredSession:
-        ttl_seconds: int | None = None
-        if session.expires_at:
-            ttl_seconds = max(0, int(session.expires_at - time.time()))
+    async def _issue_rotated_session(
+        self,
+        session: StoredSession,
+        scopes: list[str],
+        *,
+        provider_access_token: str | None = None,
+        provider_refresh_token: str | None = None,
+        provider_expires_at: float | None = None,
+        access_expires_at: float | None = None,
+        refresh_expires_at: float | None = None,
+    ) -> StoredSession:
         return await self.session_manager.issue_session(
             provider=session.provider,
             user_info=session.user_info,
-            provider_access_token=session.provider_access_token,
-            provider_refresh_token=session.provider_refresh_token,
-            provider_expires_at=session.provider_expires_at,
-            access_token_ttl_seconds=ttl_seconds,
+            provider_access_token=provider_access_token or session.provider_access_token,
+            provider_refresh_token=provider_refresh_token or session.provider_refresh_token,
+            provider_expires_at=provider_expires_at or session.provider_expires_at,
+            scopes=scopes,
+            access_expires_at=access_expires_at,
+            refresh_expires_at=refresh_expires_at,
         )
 
     async def _ensure_store_initialized(self) -> None:

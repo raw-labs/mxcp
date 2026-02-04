@@ -47,6 +47,7 @@ class GrantResult(SdkBaseModel):
     access_token: str
     refresh_token: str | None = None
     expires_at: float | None = None
+    refresh_expires_at: float | None = None
     provider_scopes_granted: list[str] = Field(default_factory=list)
     token_type: str = "Bearer"
 
@@ -76,7 +77,8 @@ class Session(SdkBaseModel):
     provider_access_token: str | None = None
     provider_refresh_token: str | None = None
     provider_expires_at: float | None = None
-    expires_at: float | None = None
+    access_expires_at: float | None = None
+    refresh_expires_at: float | None = None
     issued_at: float | None = None
 
 

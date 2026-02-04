@@ -114,7 +114,8 @@ async def test_session_store_and_load_with_encryption(token_store: TokenStore) -
         provider_access_token="provider_token",
         provider_refresh_token="provider_refresh",
         provider_expires_at=now + 300,
-        expires_at=now + 600,
+        access_expires_at=now + 600,
+        refresh_expires_at=now + 1200,
         created_at=now,
         issued_at=now,
     )
@@ -215,7 +216,8 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
         provider_access_token="provider-a",
         provider_refresh_token=None,
         provider_expires_at=now + 300,
-        expires_at=now + 400,
+        access_expires_at=now + 400,
+        refresh_expires_at=now + 800,
         created_at=now,
         issued_at=now,
     )
@@ -228,7 +230,8 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
         provider_access_token=None,
         provider_refresh_token="provider-refresh-b",
         provider_expires_at=now + 500,
-        expires_at=now + 600,
+        access_expires_at=now + 600,
+        refresh_expires_at=None,
         created_at=now,
         issued_at=now,
     )
@@ -265,7 +268,8 @@ async def test_session_store_requires_encryption_key_by_default(tmp_path: Path) 
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now + 10,
+        access_expires_at=now + 10,
+        refresh_expires_at=None,
         created_at=now,
         issued_at=now,
     )
@@ -297,7 +301,8 @@ async def test_session_store_plaintext_opt_in(
         provider_access_token="provider_plain",
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now + 10,
+        access_expires_at=now + 10,
+        refresh_expires_at=now + 20,
         created_at=now,
         issued_at=now,
     )
@@ -393,7 +398,8 @@ async def test_session_store_accepts_string_fernet_key(tmp_path: Path) -> None:
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now + 10,
+        access_expires_at=now + 10,
+        refresh_expires_at=None,
         created_at=now,
         issued_at=now,
     )
@@ -450,7 +456,8 @@ async def test_session_expiry_and_cleanup(tmp_path: Path) -> None:
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now - 1,
+        access_expires_at=now - 1,
+        refresh_expires_at=None,
         created_at=now - 10,
         issued_at=now - 10,
     )
@@ -479,7 +486,8 @@ async def test_load_session_by_refresh_token(token_store: TokenStore) -> None:
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now + 600,
+        access_expires_at=now + 600,
+        refresh_expires_at=now + 1200,
         created_at=now,
         issued_at=now,
     )
@@ -518,7 +526,8 @@ async def test_load_session_by_refresh_token_no_refresh_token(token_store: Token
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now + 600,
+        access_expires_at=now + 600,
+        refresh_expires_at=None,
         created_at=now,
         issued_at=now,
     )
@@ -547,7 +556,8 @@ async def test_load_session_by_refresh_token_expired(tmp_path: Path) -> None:
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now - 1,
+        access_expires_at=now + 600,
+        refresh_expires_at=now - 1,
         created_at=now - 10,
         issued_at=now - 10,
     )

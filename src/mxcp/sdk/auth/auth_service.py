@@ -164,7 +164,8 @@ class AuthService:
             provider_access_token=grant.access_token,
             provider_refresh_token=grant.refresh_token,
             provider_expires_at=grant.expires_at,
-            access_token_ttl_seconds=access_ttl,
+            access_expires_at=grant.expires_at,
+            refresh_expires_at=grant.refresh_expires_at
         )
 
         auth_code = await self.session_manager.create_auth_code(
@@ -223,8 +224,8 @@ class AuthService:
             )
 
         expires_in = None
-        if session.expires_at:
-            expires_in = max(0, int(session.expires_at - time.time()))
+        if session.access_expires_at:
+            expires_in = max(0, int(session.access_expires_at - time.time()))
 
         return AccessTokenResponse(
             access_token=session.access_token,

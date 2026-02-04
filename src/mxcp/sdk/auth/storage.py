@@ -380,11 +380,13 @@ class SqliteTokenStore(TokenStore):
                 provider_access_token TEXT,
                 provider_refresh_token TEXT,
                 provider_expires_at REAL,
-                expires_at REAL,
+                access_expires_at REAL,
+                refresh_expires_at REAL,
                 created_at REAL NOT NULL
             )
             """
         )
+        self._ensure_session_expiry_columns()
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS oauth_clients (
@@ -402,6 +404,17 @@ class SqliteTokenStore(TokenStore):
         )
         self._ensure_oauth_client_columns()
         self._conn.commit()
+
+    def _ensure_session_expiry_columns(self) -> None:
+        """Add session expiry columns when upgrading existing db."""
+        assert self._conn is not None
+        cursor = self._conn.cursor()
+        cursor.execute("PRAGMA table_info(sessions)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "access_expires_at" not in columns:
+            cursor.execute("ALTER TABLE sessions ADD COLUMN access_expires_at REAL")
+        if "refresh_expires_at" not in columns:
+            cursor.execute("ALTER TABLE sessions ADD COLUMN refresh_expires_at REAL")
 
     def _ensure_auth_code_columns(self) -> None:
         """Add missing auth_code columns when upgrading existing db."""
@@ -549,10 +562,10 @@ class SqliteTokenStore(TokenStore):
                 INSERT OR REPLACE INTO sessions
                 (access_token_hash, access_token_encrypted, refresh_token_hash, refresh_token_encrypted,
                  session_id, provider, user_info, provider_access_token, provider_refresh_token,
-                 provider_expires_at, expires_at, created_at)
+                 provider_expires_at, access_expires_at, refresh_expires_at, created_at)
                 VALUES (:access_token_hash, :access_token_encrypted, :refresh_token_hash, :refresh_token_encrypted,
                         :session_id, :provider, :user_info, :provider_access_token, :provider_refresh_token,
-                        :provider_expires_at, :expires_at, :created_at)
+                        :provider_expires_at, :access_expires_at, :refresh_expires_at, :created_at)
                 """,
                 payload,
             )
@@ -566,12 +579,13 @@ class SqliteTokenStore(TokenStore):
             ).fetchone()
             if not row:
                 return None
-
-            if self._is_expired_row(row):
-                self._conn.execute(
-                    "DELETE FROM sessions WHERE access_token_hash = ?", (access_token_hash,)
-                )
-                self._conn.commit()
+            if self._is_access_expired_row(row):
+                refresh_expired = self._is_refresh_expired_row(row)
+                if not row["refresh_token_hash"] or refresh_expired:
+                    self._conn.execute(
+                        "DELETE FROM sessions WHERE access_token_hash = ?", (access_token_hash,)
+                    )
+                    self._conn.commit()
                 return None
 
             return self._row_to_session(row)
@@ -584,12 +598,14 @@ class SqliteTokenStore(TokenStore):
             ).fetchone()
             if not row:
                 return None
-
-            if self._is_expired_row(row):
-                self._conn.execute(
-                    "DELETE FROM sessions WHERE access_token_hash = ?", (row["access_token_hash"],)
-                )
-                self._conn.commit()
+            if self._is_access_expired_row(row):
+                refresh_expired = self._is_refresh_expired_row(row)
+                if not row["refresh_token_hash"] or refresh_expired:
+                    self._conn.execute(
+                        "DELETE FROM sessions WHERE access_token_hash = ?",
+                        (row["access_token_hash"],),
+                    )
+                    self._conn.commit()
                 return None
 
             return self._row_to_session(row)
@@ -602,12 +618,13 @@ class SqliteTokenStore(TokenStore):
             ).fetchone()
             if not row:
                 return None
-
-            if self._is_expired_row(row):
-                self._conn.execute(
-                    "DELETE FROM sessions WHERE access_token_hash = ?", (row["access_token_hash"],)
-                )
-                self._conn.commit()
+            if self._is_refresh_expired_row(row):
+                if self._is_access_expired_row(row):
+                    self._conn.execute(
+                        "DELETE FROM sessions WHERE access_token_hash = ?",
+                        (row["access_token_hash"],),
+                    )
+                    self._conn.commit()
                 return None
 
             return self._row_to_session(row)
@@ -703,18 +720,31 @@ class SqliteTokenStore(TokenStore):
         counts = {"states": 0, "auth_codes": 0, "sessions": 0}
         now = time.time()
         with self._lock:
-            for table in counts:
+            for table in ("states", "auth_codes"):
                 cur = self._conn.execute(
                     f"DELETE FROM {table} WHERE expires_at IS NOT NULL AND expires_at < ?",
                     (now,),
                 )
                 counts[table] = cur.rowcount
+            session_cur = self._conn.execute(
+                """
+                DELETE FROM sessions
+                WHERE access_expires_at IS NOT NULL
+                  AND access_expires_at < ?
+                  AND (refresh_expires_at IS NULL OR refresh_expires_at < ?)
+                """,
+                (now, now),
+            )
+            counts["sessions"] = session_cur.rowcount
             self._conn.commit()
         return counts
 
     # ── Utility helpers ────────────────────────────────────────────────────────
-    def _is_expired_row(self, row: sqlite3.Row) -> bool:
-        return row["expires_at"] is not None and row["expires_at"] < time.time()
+    def _is_access_expired_row(self, row: sqlite3.Row) -> bool:
+        return row["access_expires_at"] is not None and row["access_expires_at"] < time.time()
+
+    def _is_refresh_expired_row(self, row: sqlite3.Row) -> bool:
+        return row["refresh_expires_at"] is not None and row["refresh_expires_at"] < time.time()
 
     def _row_to_session(self, row: sqlite3.Row) -> StoredSession:
         user_info_dict = json.loads(row["user_info"])
@@ -747,7 +777,8 @@ class SqliteTokenStore(TokenStore):
                 else None
             ),
             provider_expires_at=row["provider_expires_at"],
-            expires_at=row["expires_at"],
+            access_expires_at=row["access_expires_at"],
+            refresh_expires_at=row["refresh_expires_at"],
             created_at=row["created_at"],
             issued_at=row["created_at"],
         )
@@ -803,8 +834,8 @@ class SqliteTokenStore(TokenStore):
     def _serialize_session(self, record: StoredSession) -> dict[str, Any]:
         access_token = record.access_token
         refresh_token = record.refresh_token
-        if record.expires_at is None:
-            raise ValueError("Session expires_at is required for persistence.")
+        if record.access_expires_at is None:
+            raise ValueError("Session access_expires_at is required for persistence.")
         return {
             "access_token_hash": self._hash_token(access_token),
             "access_token_encrypted": self._encrypt(access_token) or "",
@@ -816,7 +847,8 @@ class SqliteTokenStore(TokenStore):
             "provider_access_token": self._encrypt(record.provider_access_token),
             "provider_refresh_token": self._encrypt(record.provider_refresh_token),
             "provider_expires_at": record.provider_expires_at,
-            "expires_at": record.expires_at,
+            "access_expires_at": record.access_expires_at,
+            "refresh_expires_at": record.refresh_expires_at,
             "created_at": record.created_at,
         }
 

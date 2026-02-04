@@ -135,12 +135,16 @@ class SessionManager:
         provider_access_token: str | None,
         provider_refresh_token: str | None,
         provider_expires_at: float | None,
+        access_expires_at: float | None = None,
+        refresh_expires_at: float | None = None,
         access_token: str | None = None,
         refresh_token: str | None = None,
         session_id: str | None = None,
-        access_token_ttl_seconds: int | None = None,
     ) -> StoredSession:
         now = time.time()
+        effective_access_expires_at = access_expires_at
+        if effective_access_expires_at is None:
+            effective_access_expires_at = now + self.access_token_ttl_seconds
         session = StoredSession(
             session_id=session_id or secrets.token_hex(16),
             provider=provider,
@@ -150,12 +154,8 @@ class SessionManager:
             provider_access_token=provider_access_token,
             provider_refresh_token=provider_refresh_token,
             provider_expires_at=provider_expires_at,
-            expires_at=now
-            + (
-                access_token_ttl_seconds
-                if access_token_ttl_seconds is not None
-                else self.access_token_ttl_seconds
-            ),
+            access_expires_at=effective_access_expires_at,
+            refresh_expires_at=refresh_expires_at,
             created_at=now,
             issued_at=now,
         )

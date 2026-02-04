@@ -100,13 +100,14 @@ async def test_issue_get_and_revoke_session(session_manager: SessionManager) -> 
 @pytest.mark.asyncio
 async def test_cleanup_expired_session(session_manager: SessionManager) -> None:
     # Cleanup removes expired sessions.
+    now = time.time()
     session = await session_manager.issue_session(
         provider="dummy",
         user_info=UserInfo(provider="dummy", user_id="u", username="u"),
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        access_token_ttl_seconds=0,
+        access_expires_at=now - 1,
     )
 
     await asyncio.sleep(0.05)
@@ -151,7 +152,7 @@ async def test_expired_session_returns_none(session_manager: SessionManager) -> 
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        access_token_ttl_seconds=-1,
+        access_expires_at=time.time() - 1,
     )
 
     assert await session_manager.get_session(session.access_token) is None
