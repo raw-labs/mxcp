@@ -365,8 +365,6 @@ class SqliteTokenStore(TokenStore):
             )
             """
         )
-        self._ensure_auth_code_columns()
-        self._ensure_state_columns()
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -386,7 +384,6 @@ class SqliteTokenStore(TokenStore):
             )
             """
         )
-        self._ensure_session_expiry_columns()
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS oauth_clients (
@@ -402,52 +399,7 @@ class SqliteTokenStore(TokenStore):
             )
             """
         )
-        self._ensure_oauth_client_columns()
         self._conn.commit()
-
-    def _ensure_session_expiry_columns(self) -> None:
-        """Add session expiry columns when upgrading existing db."""
-        assert self._conn is not None
-        cursor = self._conn.cursor()
-        cursor.execute("PRAGMA table_info(sessions)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if "access_expires_at" not in columns:
-            cursor.execute("ALTER TABLE sessions ADD COLUMN access_expires_at REAL")
-        if "refresh_expires_at" not in columns:
-            cursor.execute("ALTER TABLE sessions ADD COLUMN refresh_expires_at REAL")
-
-    def _ensure_auth_code_columns(self) -> None:
-        """Add missing auth_code columns when upgrading existing db."""
-        assert self._conn is not None
-        cursor = self._conn.cursor()
-        cursor.execute("PRAGMA table_info(auth_codes)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if "code_challenge" not in columns:
-            cursor.execute("ALTER TABLE auth_codes ADD COLUMN code_challenge TEXT")
-        if "code_challenge_method" not in columns:
-            cursor.execute("ALTER TABLE auth_codes ADD COLUMN code_challenge_method TEXT")
-        if "client_id" not in columns:
-            cursor.execute("ALTER TABLE auth_codes ADD COLUMN client_id TEXT")
-
-    def _ensure_state_columns(self) -> None:
-        """Add missing state columns when upgrading existing db."""
-        assert self._conn is not None
-        cursor = self._conn.cursor()
-        cursor.execute("PRAGMA table_info(states)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if "provider_code_verifier" not in columns:
-            cursor.execute("ALTER TABLE states ADD COLUMN provider_code_verifier TEXT")
-        if "client_state" not in columns:
-            cursor.execute("ALTER TABLE states ADD COLUMN client_state TEXT")
-
-    def _ensure_oauth_client_columns(self) -> None:
-        """Add missing oauth_client columns when upgrading existing db."""
-        assert self._conn is not None
-        cursor = self._conn.cursor()
-        cursor.execute("PRAGMA table_info(oauth_clients)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if "token_endpoint_auth_method" not in columns:
-            cursor.execute("ALTER TABLE oauth_clients ADD COLUMN token_endpoint_auth_method TEXT")
 
     # State helpers
     def _sync_store_state(self, payload: dict[str, Any]) -> None:
@@ -478,25 +430,14 @@ class SqliteTokenStore(TokenStore):
             self._conn.execute("DELETE FROM states WHERE state = ?", (state,))
             self._conn.commit()
 
-            # Handle provider_code_verifier and client_state which may not exist in older databases
-            from contextlib import suppress
-
-            provider_code_verifier = None
-            with suppress(KeyError, IndexError):
-                provider_code_verifier = row["provider_code_verifier"]
-
-            client_state = None
-            with suppress(KeyError, IndexError):
-                client_state = row["client_state"]
-
             return StateRecord(
                 state=row["state"],
                 client_id=row["client_id"],
                 redirect_uri=row["redirect_uri"],
                 code_challenge=row["code_challenge"],
                 code_challenge_method=row["code_challenge_method"],
-                provider_code_verifier=provider_code_verifier,
-                client_state=client_state,
+                provider_code_verifier=row["provider_code_verifier"],
+                client_state=row["client_state"],
                 scopes=json.loads(row["scopes"]),
                 expires_at=row["expires_at"],
                 created_at=row["created_at"],

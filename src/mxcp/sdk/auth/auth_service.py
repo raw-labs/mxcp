@@ -154,10 +154,6 @@ class AuthService:
         # We have provider user info; this is the right place to derive MXCP scopes
         # (via a shared mapper) and persist them in the session.
 
-        access_ttl = None
-        if grant.expires_at:
-            access_ttl = max(0, int(grant.expires_at - time.time()))
-
         session = await self.session_manager.issue_session(
             provider=self.provider_adapter.provider_name,
             user_info=user_info,
@@ -165,7 +161,7 @@ class AuthService:
             provider_refresh_token=grant.refresh_token,
             provider_expires_at=grant.expires_at,
             access_expires_at=grant.expires_at,
-            refresh_expires_at=grant.refresh_expires_at
+            refresh_expires_at=grant.refresh_expires_at,
         )
 
         auth_code = await self.session_manager.create_auth_code(

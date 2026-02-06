@@ -313,7 +313,9 @@ class IssuerOAuthAuthorizationServer(
         refresh_token: RefreshToken,
         scopes: list[str],
     ) -> OAuthTokenType:
-        logger.debug(f"IssuerProvider.exchange_refresh_token: exchanging refresh token: {refresh_token.token}")
+        logger.debug(
+            f"IssuerProvider.exchange_refresh_token: exchanging refresh token: {refresh_token.token}"
+        )
         await self._ensure_store_initialized()
         session = await self.session_manager.token_store.load_session_by_refresh_token(
             refresh_token.token
