@@ -23,7 +23,7 @@ from typing import Any
 
 from starlette.exceptions import HTTPException
 
-from mxcp.sdk.auth.contracts import ProviderAdapter, ProviderError
+from mxcp.sdk.auth.contracts import ProviderAdapter
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.telemetry import record_counter, traced_operation
 
@@ -171,30 +171,6 @@ class AuthenticationMiddleware:
             span.set_attribute("mxcp.auth.provider", provider)
 
         user_info = session.user_info
-
-        if self.provider_adapter and session.provider_access_token:
-            try:
-                user_info = await self.provider_adapter.fetch_user_info(
-                    access_token=session.provider_access_token
-                )
-            except ProviderError:
-                logger.warning("Failed to fetch user info from provider; using cached session data")
-                if span:
-                    span.set_attribute("mxcp.auth.user_info_source", "session")
-            except Exception as exc:
-                logger.warning(
-                    "Failed to fetch user info from provider; using cached session data",
-                    extra={
-                        "provider": provider,
-                        "error_type": exc.__class__.__name__,
-                    },
-                )
-                if span:
-                    span.set_attribute("mxcp.auth.user_info_source", "session")
-        elif span:
-            span.set_attribute("mxcp.auth.user_info_source", "session")
-        if span and user_info is not session.user_info:
-            span.set_attribute("mxcp.auth.user_info_source", "provider")
 
         user_context = UserContextModel(
             provider=user_info.provider,
