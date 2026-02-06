@@ -327,10 +327,12 @@ class IssuerOAuthAuthorizationServer(
         if not session.provider_refresh_token:
             raise TokenError("invalid_grant", "Provider refresh token missing")
 
+        provider_scopes = session.user_info.provider_scopes_granted
+
         try:
             grant = await self.auth_service.provider_adapter.refresh_token(
                 refresh_token=session.provider_refresh_token,
-                scopes=scopes or session.scopes or [],
+                scopes=provider_scopes,
             )
         except ProviderError as exc:
             logger.warning("Provider refresh token exchange failed", exc_info=exc)
@@ -349,10 +351,8 @@ class IssuerOAuthAuthorizationServer(
 
         # Rotate session
         await self.session_manager.revoke_session(session.access_token)
-        provider_scopes = session.user_info.provider_scopes_granted
         new_session = await self._issue_rotated_session(
             session,
-            provider_scopes,
             provider_access_token=grant.access_token,
             provider_refresh_token=provider_refresh_token,
             provider_expires_at=grant.expires_at,
@@ -405,7 +405,6 @@ class IssuerOAuthAuthorizationServer(
     async def _issue_rotated_session(
         self,
         session: StoredSession,
-        scopes: list[str],
         *,
         provider_access_token: str | None = None,
         provider_refresh_token: str | None = None,
@@ -419,7 +418,6 @@ class IssuerOAuthAuthorizationServer(
             provider_access_token=provider_access_token or session.provider_access_token,
             provider_refresh_token=provider_refresh_token or session.provider_refresh_token,
             provider_expires_at=provider_expires_at or session.provider_expires_at,
-            scopes=scopes,
             access_expires_at=access_expires_at,
             refresh_expires_at=refresh_expires_at,
         )
