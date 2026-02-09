@@ -62,9 +62,8 @@ the goal of MXCP is to redirect the client's browser to the IdP's `/authorize`.
    1. Validates the `state` (its own, now sent by the IdP). It consumes it and deletes it.
    2. Calls the IdP to exchange the `code` for an access token using the IdP's `/token` call.
    3. Fetches user info from the provider.
-   4. Derives MXCP client-facing scopes using the scope mapper.
-   5. Issues and persists an MXCP session (it contains the MXCP `access_token` and refresh token, the IdP's tokens, provider granted scopes, and MXCP scopes).
-   6. Creates and persists an MXCP `auth_code`, which is meant to play the role of the OAuth `code` sent to the MCP client, and stores **MXCP scopes** on it.
+   4. Derives MXCP client-facing scopes using the scope mapper. Issues and persists an MXCP session (it contains the MXCP `access_token` and refresh token, the IdP's tokens, provider granted scopes, and MXCP scopes).
+   5. Creates and persists an MXCP `auth_code`, which is meant to play the role of the OAuth `code` sent to the MCP client, and stores **MXCP scopes** on it.
    6. Redirects the browser to the client's `redirect_uri` with the `code` (`auth_code`) and the original client's `state` (`client_state`).
 4. The client's callback is called with the client's original `state` (if it was present) and MXCP's `code`.
   * The client calls MXCP's `/token` with MXCP's auth code, its `client_id`, and `redirect_uri` (used to validate the call on the server/MXCP side) plus its PKCE `code_verifier`. MCP's token handler validates the verifier against the stored `code_challenge`, then MXCP returns the `access_token` it generated earlier, and a `refresh_token`.
