@@ -9,7 +9,7 @@ import secrets
 import time
 from collections.abc import Mapping, Sequence
 
-from mxcp.sdk.auth.contracts import GrantResult, ProviderAdapter, ProviderError
+from mxcp.sdk.auth.contracts import GrantResult, ProviderAdapter, ProviderError, UserInfo
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import AuthCodeRecord, StateRecord, StoredSession
 from mxcp.sdk.models import SdkBaseModel
@@ -48,7 +48,7 @@ class AuthService:
         *,
         client_id: str,
         redirect_uri: str,
-        scopes: Sequence[str],
+        provider_scopes_requested: Sequence[str],
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
         client_state: str | None = None,
@@ -98,7 +98,7 @@ class AuthService:
             code_challenge_method=code_challenge_method,
             provider_code_verifier=provider_code_verifier,  # Our verifier (for MXCP ↔ provider)
             client_state=client_state,  # Original state from MCP client
-            scopes=scopes,
+            provider_scopes_requested=provider_scopes_requested,
         )
 
         authorize_url = self.provider_adapter.build_authorize_url(
@@ -113,10 +113,27 @@ class AuthService:
             extra={
                 "client_id": client_id,
                 "redirect_uri": redirect_uri,
-                "scopes": list(scopes) if scopes else [],
+                "provider_scopes_requested": (
+                    list(provider_scopes_requested) if provider_scopes_requested else []
+                ),
             },
         )
         return authorize_url, state_record
+
+    def derive_mxcp_scopes(
+        self,
+        *,
+        provider: str,
+        user_info: UserInfo,
+        provider_scopes_granted: Sequence[str],
+    ) -> list[str]:
+        """Derive MXCP client-facing scopes from provider context.
+
+        Placeholder: mapping is not implemented yet. This intentionally returns an
+        empty scope set to avoid leaking provider scope strings to MXCP clients.
+        """
+        _ = (provider, user_info, provider_scopes_granted)
+        return []
 
     async def handle_callback(
         self, *, code: str, state: str
@@ -146,13 +163,26 @@ class AuthService:
             code=code,
             redirect_uri=self.callback_url,
             code_verifier=state_record.provider_code_verifier,  # Use stored provider verifier
-            scopes=state_record.scopes,
+            scopes=state_record.provider_scopes_requested,
         )
 
         user_info = await self.provider_adapter.fetch_user_info(access_token=grant.access_token)
 
         # We have provider user info; this is the right place to derive MXCP scopes
         # (via a shared mapper) and persist them in the session.
+        mxcp_scopes = self.derive_mxcp_scopes(
+            provider=self.provider_adapter.provider_name,
+            user_info=user_info,
+            provider_scopes_granted=grant.provider_scopes_granted,
+        )
+        user_info = user_info.model_copy(
+            update={
+                # Trust the token endpoint scope semantics as the canonical set of
+                # granted provider scopes for refresh operations.
+                "provider_scopes_granted": grant.provider_scopes_granted,
+                "mxcp_scopes": mxcp_scopes,
+            }
+        )
 
         session = await self.session_manager.issue_session(
             provider=self.provider_adapter.provider_name,
@@ -170,7 +200,7 @@ class AuthService:
             redirect_uri=state_record.redirect_uri,
             code_challenge=state_record.code_challenge,
             code_challenge_method=state_record.code_challenge_method,
-            scopes=grant.provider_scopes_granted,
+            mxcp_scopes=mxcp_scopes,
         )
 
         return auth_code, session, state_record.client_state

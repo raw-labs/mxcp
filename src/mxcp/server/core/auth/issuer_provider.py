@@ -23,7 +23,7 @@ from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyUrl, ValidationError
 
 from mxcp.sdk.auth.auth_service import AuthService
-from mxcp.sdk.auth.contracts import ProviderError
+from mxcp.sdk.auth.contracts import ProviderError, UserInfo
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import ClientRecord, StoredSession
 
@@ -184,13 +184,15 @@ class IssuerOAuthAuthorizationServer(
         # field (which is allowed by OAuth 2.0), we can still treat the granted
         # scopes as “the requested scopes” rather than incorrectly assuming zero.
         scope_str = getattr(self.auth_service.provider_adapter, "scope", "")
-        scopes: list[str] = scope_str.split() if isinstance(scope_str, str) and scope_str else []
+        provider_scopes_requested: list[str] = (
+            scope_str.split() if isinstance(scope_str, str) and scope_str else []
+        )
 
         pkce_method = "S256" if params.code_challenge else None
         authorize_url, _ = await self.auth_service.authorize(
             client_id=client.client_id,
             redirect_uri=redirect_uri_str,
-            scopes=scopes,
+            provider_scopes_requested=provider_scopes_requested,
             code_challenge=params.code_challenge,
             code_challenge_method=pkce_method,
             client_state=params.state,  # Store client's original state
@@ -257,7 +259,7 @@ class IssuerOAuthAuthorizationServer(
 
         return AuthorizationCode(
             code=code_record.code,
-            scopes=code_record.scopes,
+            scopes=code_record.mxcp_scopes,
             expires_at=code_record.expires_at,
             client_id=client_id,
             # Returned for MCP token handler PKCE verification.
@@ -299,11 +301,11 @@ class IssuerOAuthAuthorizationServer(
             return None
         if not client or not client.client_id:
             raise TokenError("invalid_client", "Client ID missing for refresh token")
-        provider_scopes = session.user_info.provider_scopes_granted
+        mxcp_scopes = session.user_info.mxcp_scopes or []
         return RefreshToken(
             token=refresh_token,
             client_id=client.client_id if client else "",
-            scopes=provider_scopes,
+            scopes=mxcp_scopes,
             expires_at=int(session.refresh_expires_at) if session.refresh_expires_at else None,
         )
 
@@ -313,9 +315,7 @@ class IssuerOAuthAuthorizationServer(
         refresh_token: RefreshToken,
         scopes: list[str],
     ) -> OAuthTokenType:
-        logger.debug(
-            f"IssuerProvider.exchange_refresh_token: exchanging refresh token: {refresh_token.token}"
-        )
+        logger.debug("IssuerProvider.exchange_refresh_token: exchanging refresh token")
         await self._ensure_store_initialized()
         session = await self.session_manager.token_store.load_session_by_refresh_token(
             refresh_token.token
@@ -330,6 +330,10 @@ class IssuerOAuthAuthorizationServer(
             raise TokenError("invalid_grant", "Provider refresh token missing")
 
         provider_scopes = session.user_info.provider_scopes_granted
+        session_mxcp_scopes = session.user_info.mxcp_scopes or []
+        if scopes and not set(scopes).issubset(set(session_mxcp_scopes)):
+            raise TokenError("invalid_scope", "Requested scopes exceed original grant")
+        effective_mxcp_scopes = scopes or session_mxcp_scopes
 
         try:
             grant = await self.auth_service.provider_adapter.refresh_token(
@@ -351,10 +355,26 @@ class IssuerOAuthAuthorizationServer(
             else session.refresh_expires_at
         )
 
+        # Update stored user_info with refreshed provider scopes and mapped MXCP scopes.
+        # (Mapping is currently a placeholder; still call it so refresh behavior stays
+        # consistent once mapping is implemented.)
+        updated_mxcp_scopes = self.auth_service.derive_mxcp_scopes(
+            provider=session.provider,
+            user_info=session.user_info,
+            provider_scopes_granted=grant.provider_scopes_granted,
+        )
+        updated_user_info: UserInfo = session.user_info.model_copy(
+            update={
+                "provider_scopes_granted": grant.provider_scopes_granted,
+                "mxcp_scopes": updated_mxcp_scopes,
+            }
+        )
+
         # Rotate session
         await self.session_manager.revoke_session(session.access_token)
         new_session = await self._issue_rotated_session(
             session,
+            user_info=updated_user_info,
             provider_access_token=grant.access_token,
             provider_refresh_token=provider_refresh_token,
             provider_expires_at=grant.expires_at,
@@ -371,7 +391,7 @@ class IssuerOAuthAuthorizationServer(
                 if new_session.access_expires_at
                 else None
             ),
-            scope=" ".join(scopes or provider_scopes),
+            scope=" ".join(effective_mxcp_scopes),
         )
 
     # ----- access token verification -----
@@ -382,11 +402,11 @@ class IssuerOAuthAuthorizationServer(
             return None
         if session.access_expires_at and session.access_expires_at < time.time():
             return None
-        provider_scopes = session.user_info.provider_scopes_granted
+        mxcp_scopes = session.user_info.mxcp_scopes or []
         return AccessToken(
             token=session.access_token,
             client_id="",
-            scopes=provider_scopes,
+            scopes=mxcp_scopes,
             expires_at=int(session.access_expires_at) if session.access_expires_at else None,
         )
 
@@ -408,6 +428,7 @@ class IssuerOAuthAuthorizationServer(
         self,
         session: StoredSession,
         *,
+        user_info: UserInfo | None = None,
         provider_access_token: str | None = None,
         provider_refresh_token: str | None = None,
         provider_expires_at: float | None = None,
@@ -416,7 +437,7 @@ class IssuerOAuthAuthorizationServer(
     ) -> StoredSession:
         return await self.session_manager.issue_session(
             provider=session.provider,
-            user_info=session.user_info,
+            user_info=user_info or session.user_info,
             provider_access_token=provider_access_token or session.provider_access_token,
             provider_refresh_token=provider_refresh_token or session.provider_refresh_token,
             provider_expires_at=provider_expires_at or session.provider_expires_at,

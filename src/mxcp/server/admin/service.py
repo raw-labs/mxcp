@@ -8,7 +8,7 @@ No protocols, no abstractions - just direct, simple code.
 from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from mxcp.sdk.audit.backends.noop import NoOpAuditBackend
 from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
@@ -18,7 +18,48 @@ from .models import ConfigResponse, EndpointCounts, Features
 if TYPE_CHECKING:
     from mxcp.sdk.audit.models import AuditRecordModel
     from mxcp.server.core.reload import ReloadRequest
-    from mxcp.server.interfaces.server.mcp import RAWMCP
+
+
+class _AdminApi(Protocol):
+    _socket_path: Path
+
+
+class _ReloadManager(Protocol):
+    def get_status(self) -> dict[str, Any]: ...
+
+
+class _EndpointLoader(Protocol):
+    def discover_endpoints(
+        self,
+    ) -> list[tuple[Path, EndpointDefinitionModel | None, str | None]]: ...
+
+
+class _AdminServer(Protocol):
+    # Minimal structural type for RAWMCP, to keep AdminService type-safe without
+    # importing RAWMCP (avoids mypy cycles between admin/server modules).
+    debug: bool
+    readonly: bool
+    profile_name: str
+    _start_time: datetime
+    _pid: int
+
+    admin_api: _AdminApi
+    reload_manager: _ReloadManager
+
+    # Configuration / runtime bits used for config snapshot
+    site_config: Any
+    runtime_environment: Any | None
+    enable_sql_tools: Any
+    telemetry_enabled: bool
+    transport: str
+
+    # Endpoint discovery + audit
+    loader: Any
+    audit_logger: Any | None
+
+    def get_endpoint_counts(self) -> dict[str, int]: ...
+
+    def reload_configuration(self) -> "ReloadRequest": ...
 
 
 class AdminService:
@@ -29,7 +70,7 @@ class AdminService:
     Only AdminService needs to know about RAWMCP's structure.
     """
 
-    def __init__(self, server: "RAWMCP"):
+    def __init__(self, server: _AdminServer):
         """Initialize admin service with RAWMCP server instance."""
         self._server = server
 
@@ -118,7 +159,10 @@ class AdminService:
             - endpoint_def: Parsed endpoint definition (or None if error)
             - error: Error message (or None if successful)
         """
-        return self._server.loader.discover_endpoints()
+        return cast(
+            list[tuple[Path, EndpointDefinitionModel | None, str | None]],
+            self._server.loader.discover_endpoints(),
+        )
 
     def is_audit_enabled(self) -> bool:
         """Check if audit logging is enabled."""

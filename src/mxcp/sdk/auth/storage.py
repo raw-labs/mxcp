@@ -56,7 +56,7 @@ class StateRecord(SdkBaseModel):
     code_challenge_method: str | None = None
     provider_code_verifier: str | None = None  # Code verifier for provider (Google) PKCE
     client_state: str | None = None  # Original state from MCP client (returned in redirect)
-    scopes: list[str] = Field(default_factory=list)
+    provider_scopes_requested: list[str] = Field(default_factory=list)
     expires_at: float
     created_at: float
 
@@ -70,7 +70,7 @@ class AuthCodeRecord(SdkBaseModel):
     redirect_uri: str | None = None
     code_challenge: str | None = None
     code_challenge_method: str | None = None
-    scopes: list[str] = Field(default_factory=list)
+    mxcp_scopes: list[str] = Field(default_factory=list)
     expires_at: float
     created_at: float
 
@@ -200,7 +200,7 @@ class SqliteTokenStore(TokenStore):
             "code_challenge_method": record.code_challenge_method,
             "provider_code_verifier": record.provider_code_verifier,
             "client_state": record.client_state,
-            "scopes": json.dumps(record.scopes),
+            "provider_scopes_requested": json.dumps(record.provider_scopes_requested),
             "expires_at": record.expires_at,
             "created_at": record.created_at,
         }
@@ -222,7 +222,7 @@ class SqliteTokenStore(TokenStore):
             "redirect_uri": record.redirect_uri,
             "code_challenge": record.code_challenge,
             "code_challenge_method": record.code_challenge_method,
-            "scopes": json.dumps(record.scopes),
+            "mxcp_scopes": json.dumps(record.mxcp_scopes),
             "expires_at": record.expires_at,
             "created_at": record.created_at,
         }
@@ -344,7 +344,7 @@ class SqliteTokenStore(TokenStore):
                 code_challenge_method TEXT,
                 provider_code_verifier TEXT,
                 client_state TEXT,
-                scopes TEXT NOT NULL,
+                provider_scopes_requested TEXT NOT NULL,
                 expires_at REAL NOT NULL,
                 created_at REAL NOT NULL
             )
@@ -359,7 +359,7 @@ class SqliteTokenStore(TokenStore):
                 redirect_uri TEXT,
                 code_challenge TEXT,
                 code_challenge_method TEXT,
-                scopes TEXT NOT NULL,
+                mxcp_scopes TEXT NOT NULL,
                 expires_at REAL NOT NULL,
                 created_at REAL NOT NULL
             )
@@ -408,8 +408,8 @@ class SqliteTokenStore(TokenStore):
             self._conn.execute(
                 """
                 INSERT OR REPLACE INTO states
-                (state, client_id, redirect_uri, code_challenge, code_challenge_method, provider_code_verifier, client_state, scopes, expires_at, created_at)
-                VALUES (:state, :client_id, :redirect_uri, :code_challenge, :code_challenge_method, :provider_code_verifier, :client_state, :scopes, :expires_at, :created_at)
+                (state, client_id, redirect_uri, code_challenge, code_challenge_method, provider_code_verifier, client_state, provider_scopes_requested, expires_at, created_at)
+                VALUES (:state, :client_id, :redirect_uri, :code_challenge, :code_challenge_method, :provider_code_verifier, :client_state, :provider_scopes_requested, :expires_at, :created_at)
                 """,
                 payload,
             )
@@ -438,7 +438,7 @@ class SqliteTokenStore(TokenStore):
                 code_challenge_method=row["code_challenge_method"],
                 provider_code_verifier=row["provider_code_verifier"],
                 client_state=row["client_state"],
-                scopes=json.loads(row["scopes"]),
+                provider_scopes_requested=json.loads(row["provider_scopes_requested"]),
                 expires_at=row["expires_at"],
                 created_at=row["created_at"],
             )
@@ -450,8 +450,8 @@ class SqliteTokenStore(TokenStore):
             self._conn.execute(
                 """
                 INSERT OR REPLACE INTO auth_codes
-                (code, session_id, client_id, redirect_uri, code_challenge, code_challenge_method, scopes, expires_at, created_at)
-                VALUES (:code, :session_id, :client_id, :redirect_uri, :code_challenge, :code_challenge_method, :scopes, :expires_at, :created_at)
+                (code, session_id, client_id, redirect_uri, code_challenge, code_challenge_method, mxcp_scopes, expires_at, created_at)
+                VALUES (:code, :session_id, :client_id, :redirect_uri, :code_challenge, :code_challenge_method, :mxcp_scopes, :expires_at, :created_at)
                 """,
                 payload,
             )
@@ -475,7 +475,7 @@ class SqliteTokenStore(TokenStore):
                 redirect_uri=row["redirect_uri"],
                 code_challenge=row["code_challenge"],
                 code_challenge_method=row["code_challenge_method"],
-                scopes=json.loads(row["scopes"]),
+                mxcp_scopes=json.loads(row["mxcp_scopes"]),
                 expires_at=row["expires_at"],
                 created_at=row["created_at"],
             )
