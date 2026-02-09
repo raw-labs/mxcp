@@ -7,7 +7,7 @@ including CPU, memory, disk, network, and process information.
 
 import logging
 
-import psutil  # type: ignore[import-untyped]
+import psutil
 from fastapi import APIRouter, HTTPException
 
 from ..models import (
