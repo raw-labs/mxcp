@@ -438,9 +438,21 @@ class IssuerOAuthAuthorizationServer(
         return await self.session_manager.issue_session(
             provider=session.provider,
             user_info=user_info if user_info is not None else session.user_info,
-            provider_access_token=provider_access_token if provider_access_token is not None else session.provider_access_token,
-            provider_refresh_token=provider_refresh_token if provider_refresh_token is not None else session.provider_refresh_token,
-            provider_expires_at=provider_expires_at if provider_expires_at is not None else session.provider_expires_at,
+            provider_access_token=(
+                provider_access_token
+                if provider_access_token is not None
+                else session.provider_access_token
+            ),
+            provider_refresh_token=(
+                provider_refresh_token
+                if provider_refresh_token is not None
+                else session.provider_refresh_token
+            ),
+            provider_expires_at=(
+                provider_expires_at
+                if provider_expires_at is not None
+                else session.provider_expires_at
+            ),
             access_expires_at=access_expires_at,
             refresh_expires_at=refresh_expires_at,
         )
