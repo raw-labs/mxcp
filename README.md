@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/raw-labs-mxcp-badge.png)](https://mseep.ai/app/raw-labs-mxcp)
+
 # MXCP: Enterprise-Grade MCP Framework for AI Applications
 
 <div align="center">
