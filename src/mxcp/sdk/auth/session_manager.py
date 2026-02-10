@@ -62,7 +62,7 @@ class SessionManager:
         code_challenge_method: str | None,
         provider_code_verifier: str | None = None,
         client_state: str | None = None,
-        scopes: Sequence[str],
+        provider_scopes_requested: Sequence[str],
         ttl_seconds: int | None = None,
     ) -> StateRecord:
         state = secrets.token_urlsafe(16)
@@ -75,7 +75,7 @@ class SessionManager:
             code_challenge_method=code_challenge_method,
             provider_code_verifier=provider_code_verifier,
             client_state=client_state,
-            scopes=list(scopes),
+            provider_scopes_requested=list(provider_scopes_requested),
             expires_at=now + (ttl_seconds if ttl_seconds is not None else self.state_ttl_seconds),
             created_at=now,
         )
@@ -98,7 +98,7 @@ class SessionManager:
         redirect_uri: str | None,
         code_challenge: str | None,
         code_challenge_method: str | None,
-        scopes: Sequence[str],
+        mxcp_scopes: Sequence[str],
         ttl_seconds: int | None = None,
     ) -> AuthCodeRecord:
         code = f"mcp_{secrets.token_hex(16)}"
@@ -110,7 +110,7 @@ class SessionManager:
             redirect_uri=redirect_uri,
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
-            scopes=list(scopes),
+            mxcp_scopes=list(mxcp_scopes),
             expires_at=now
             + (ttl_seconds if ttl_seconds is not None else self.auth_code_ttl_seconds),
             created_at=now,
@@ -135,12 +135,16 @@ class SessionManager:
         provider_access_token: str | None,
         provider_refresh_token: str | None,
         provider_expires_at: float | None,
+        access_expires_at: float | None = None,
+        refresh_expires_at: float | None = None,
         access_token: str | None = None,
         refresh_token: str | None = None,
         session_id: str | None = None,
-        access_token_ttl_seconds: int | None = None,
     ) -> StoredSession:
         now = time.time()
+        effective_access_expires_at = access_expires_at
+        if effective_access_expires_at is None:
+            effective_access_expires_at = now + self.access_token_ttl_seconds
         session = StoredSession(
             session_id=session_id or secrets.token_hex(16),
             provider=provider,
@@ -150,12 +154,8 @@ class SessionManager:
             provider_access_token=provider_access_token,
             provider_refresh_token=provider_refresh_token,
             provider_expires_at=provider_expires_at,
-            expires_at=now
-            + (
-                access_token_ttl_seconds
-                if access_token_ttl_seconds is not None
-                else self.access_token_ttl_seconds
-            ),
+            access_expires_at=effective_access_expires_at,
+            refresh_expires_at=refresh_expires_at,
             created_at=now,
             issued_at=now,
         )

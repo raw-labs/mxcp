@@ -39,7 +39,7 @@ async def test_state_round_trip(token_store: TokenStore) -> None:
         redirect_uri="http://localhost/callback",
         code_challenge="challenge",
         code_challenge_method="S256",
-        scopes=["a", "b"],
+        provider_scopes_requested=["a", "b"],
         expires_at=now + 5,
         created_at=now,
     )
@@ -61,7 +61,7 @@ async def test_state_expiry(token_store: TokenStore) -> None:
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=[],
+        provider_scopes_requested=[],
         expires_at=time.time() - 1,
         created_at=time.time() - 2,
     )
@@ -79,7 +79,7 @@ async def test_auth_code_round_trip(token_store: TokenStore) -> None:
         code="auth-code-1",
         session_id="session-1",
         redirect_uri="http://localhost/redirect",
-        scopes=["x", "y"],
+        mxcp_scopes=["x", "y"],
         expires_at=now + 30,
         created_at=now,
     )
@@ -114,7 +114,8 @@ async def test_session_store_and_load_with_encryption(token_store: TokenStore) -
         provider_access_token="provider_token",
         provider_refresh_token="provider_refresh",
         provider_expires_at=now + 300,
-        expires_at=now + 600,
+        access_expires_at=now + 600,
+        refresh_expires_at=now + 1200,
         created_at=now,
         issued_at=now,
     )
@@ -153,7 +154,7 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=["s1"],
+        provider_scopes_requested=["s1"],
         expires_at=now + 60,
         created_at=now,
     )
@@ -163,7 +164,7 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=["s2"],
+        provider_scopes_requested=["s2"],
         expires_at=now + 60,
         created_at=now,
     )
@@ -178,7 +179,7 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
         code="code-1",
         session_id="s1",
         redirect_uri=None,
-        scopes=["a"],
+        mxcp_scopes=["a"],
         expires_at=now + 60,
         created_at=now,
     )
@@ -186,7 +187,7 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
         code="code-2",
         session_id="s2",
         redirect_uri=None,
-        scopes=["b"],
+        mxcp_scopes=["b"],
         expires_at=now + 60,
         created_at=now,
     )
@@ -215,7 +216,8 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
         provider_access_token="provider-a",
         provider_refresh_token=None,
         provider_expires_at=now + 300,
-        expires_at=now + 400,
+        access_expires_at=now + 400,
+        refresh_expires_at=now + 800,
         created_at=now,
         issued_at=now,
     )
@@ -228,7 +230,8 @@ async def test_store_isolation_for_multiple_records(token_store: TokenStore) -> 
         provider_access_token=None,
         provider_refresh_token="provider-refresh-b",
         provider_expires_at=now + 500,
-        expires_at=now + 600,
+        access_expires_at=now + 600,
+        refresh_expires_at=None,
         created_at=now,
         issued_at=now,
     )
@@ -265,7 +268,8 @@ async def test_session_store_requires_encryption_key_by_default(tmp_path: Path) 
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now + 10,
+        access_expires_at=now + 10,
+        refresh_expires_at=None,
         created_at=now,
         issued_at=now,
     )
@@ -297,7 +301,8 @@ async def test_session_store_plaintext_opt_in(
         provider_access_token="provider_plain",
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now + 10,
+        access_expires_at=now + 10,
+        refresh_expires_at=now + 20,
         created_at=now,
         issued_at=now,
     )
@@ -335,7 +340,7 @@ async def test_auth_code_load_and_delete(token_store: TokenStore) -> None:
         redirect_uri=None,
         code_challenge="challenge",
         code_challenge_method="S256",
-        scopes=["x"],
+        mxcp_scopes=["x"],
         expires_at=now + 30,
         created_at=now,
     )
@@ -363,7 +368,7 @@ async def test_auth_code_load_expires_on_read(token_store: TokenStore) -> None:
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=[],
+        mxcp_scopes=[],
         expires_at=now - 1,
         created_at=now - 2,
     )
@@ -393,7 +398,8 @@ async def test_session_store_accepts_string_fernet_key(tmp_path: Path) -> None:
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now + 10,
+        access_expires_at=now + 10,
+        refresh_expires_at=None,
         created_at=now,
         issued_at=now,
     )
@@ -423,7 +429,7 @@ async def test_store_can_reinitialize_after_close(tmp_path: Path) -> None:
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=[],
+        provider_scopes_requested=[],
         expires_at=now + 5,
         created_at=now,
     )
@@ -450,7 +456,8 @@ async def test_session_expiry_and_cleanup(tmp_path: Path) -> None:
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now - 1,
+        access_expires_at=now - 1,
+        refresh_expires_at=None,
         created_at=now - 10,
         issued_at=now - 10,
     )
@@ -479,7 +486,8 @@ async def test_load_session_by_refresh_token(token_store: TokenStore) -> None:
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now + 600,
+        access_expires_at=now + 600,
+        refresh_expires_at=now + 1200,
         created_at=now,
         issued_at=now,
     )
@@ -518,7 +526,8 @@ async def test_load_session_by_refresh_token_no_refresh_token(token_store: Token
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now + 600,
+        access_expires_at=now + 600,
+        refresh_expires_at=None,
         created_at=now,
         issued_at=now,
     )
@@ -547,7 +556,8 @@ async def test_load_session_by_refresh_token_expired(tmp_path: Path) -> None:
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        expires_at=now - 1,
+        access_expires_at=now + 600,
+        refresh_expires_at=now - 1,
         created_at=now - 10,
         issued_at=now - 10,
     )

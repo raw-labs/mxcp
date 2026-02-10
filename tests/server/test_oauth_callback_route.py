@@ -183,7 +183,7 @@ def test_callback_provider_error_with_state_redirects_back_to_client(
             code_challenge=None,
             code_challenge_method=None,
             client_state="orig_state",
-            scopes=[],
+            provider_scopes_requested=[],
         )
     )
 

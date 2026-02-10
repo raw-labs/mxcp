@@ -22,14 +22,14 @@ async def test_state_create_and_consume_once(session_manager: SessionManager) ->
         redirect_uri="http://localhost/redirect",
         code_challenge="challenge",
         code_challenge_method="S256",
-        scopes=["a", "b"],
+        provider_scopes_requested=["a", "b"],
     )
 
     loaded = await session_manager.consume_state(record.state)
     assert loaded is not None
     assert loaded.state == record.state
     assert loaded.code_challenge == "challenge"
-    assert loaded.scopes == ["a", "b"]
+    assert loaded.provider_scopes_requested == ["a", "b"]
     assert await session_manager.consume_state(record.state) is None
 
 
@@ -41,7 +41,7 @@ async def test_state_expiry_respected(session_manager: SessionManager) -> None:
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=[],
+        provider_scopes_requested=[],
         ttl_seconds=0,
     )
 
@@ -58,13 +58,13 @@ async def test_auth_code_create_and_consume_once(session_manager: SessionManager
         redirect_uri="http://localhost/redirect",
         code_challenge=None,
         code_challenge_method=None,
-        scopes=["x"],
+        mxcp_scopes=["x"],
     )
 
     loaded = await session_manager.load_auth_code(code.code)
     assert loaded is not None
     assert loaded.session_id == "session-1"
-    assert loaded.scopes == ["x"]
+    assert loaded.mxcp_scopes == ["x"]
     assert await session_manager.try_delete_auth_code(code.code) is True
     assert await session_manager.try_delete_auth_code(code.code) is False
     assert await session_manager.load_auth_code(code.code) is None
@@ -100,13 +100,14 @@ async def test_issue_get_and_revoke_session(session_manager: SessionManager) -> 
 @pytest.mark.asyncio
 async def test_cleanup_expired_session(session_manager: SessionManager) -> None:
     # Cleanup removes expired sessions.
+    now = time.time()
     session = await session_manager.issue_session(
         provider="dummy",
         user_info=UserInfo(provider="dummy", user_id="u", username="u"),
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        access_token_ttl_seconds=0,
+        access_expires_at=now - 1,
     )
 
     await asyncio.sleep(0.05)
@@ -151,7 +152,7 @@ async def test_expired_session_returns_none(session_manager: SessionManager) -> 
         provider_access_token=None,
         provider_refresh_token=None,
         provider_expires_at=None,
-        access_token_ttl_seconds=-1,
+        access_expires_at=time.time() - 1,
     )
 
     assert await session_manager.get_session(session.access_token) is None
@@ -165,7 +166,7 @@ async def test_cleanup_clears_expired_items(session_manager: SessionManager) -> 
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=[],
+        provider_scopes_requested=[],
         ttl_seconds=-1,
     )
     await session_manager.create_auth_code(
@@ -174,7 +175,7 @@ async def test_cleanup_clears_expired_items(session_manager: SessionManager) -> 
         redirect_uri=None,
         code_challenge=None,
         code_challenge_method=None,
-        scopes=[],
+        mxcp_scopes=[],
         ttl_seconds=-1,
     )
 
@@ -192,7 +193,7 @@ async def test_auth_code_load_and_delete(session_manager: SessionManager) -> Non
         redirect_uri=None,
         code_challenge="challenge",
         code_challenge_method="S256",
-        scopes=["y"],
+        mxcp_scopes=["y"],
     )
 
     loaded = await session_manager.load_auth_code(code.code)

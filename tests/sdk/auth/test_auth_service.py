@@ -46,7 +46,7 @@ async def test_upstream_pkce_is_generated_even_without_downstream_pkce(
     authorize_url, state_record = await service.authorize(
         client_id="client-1",
         redirect_uri="http://client/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=None,
         code_challenge_method=None,
     )
@@ -70,7 +70,7 @@ async def test_upstream_pkce_not_used_when_provider_does_not_support_it(
     authorize_url, state_record = await service.authorize(
         client_id="client-1",
         redirect_uri="http://client/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=None,
         code_challenge_method=None,
     )
@@ -88,7 +88,7 @@ async def test_full_auth_flow_pkce_s256(auth_service: AuthService) -> None:
     authorize_url, state_record = await auth_service.authorize(
         client_id="client-1",
         redirect_uri="http://client/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=challenge,
         code_challenge_method="S256",
         extra_params={"foo": "bar"},
@@ -138,7 +138,7 @@ async def test_token_exchange_second_redemption_rejected(auth_service: AuthServi
     authorize_url, state_record = await auth_service.authorize(
         client_id="client-1",
         redirect_uri="http://client/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=challenge,
         code_challenge_method="S256",
     )
@@ -166,7 +166,7 @@ async def test_token_exchange_requires_pkce_missing_verifier(auth_service: AuthS
     authorize_url, state_record = await auth_service.authorize(
         client_id="client-1",
         redirect_uri="http://client/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=challenge,
         code_challenge_method="S256",
     )
@@ -190,7 +190,7 @@ async def test_plain_pkce_validation(auth_service: AuthService) -> None:
     authorize_url, state_record = await auth_service.authorize(
         client_id="client-1",
         redirect_uri="http://client/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=verifier,
         code_challenge_method="plain",
     )
@@ -219,7 +219,7 @@ async def test_no_challenge_allows_token_exchange_without_verifier(
     authorize_url, state_record = await auth_service.authorize(
         client_id="client-1",
         redirect_uri="http://client/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=None,
         code_challenge_method=None,
     )
@@ -242,7 +242,7 @@ async def test_authorize_stores_state_for_unknown_client(auth_service: AuthServi
     _, state_record = await auth_service.authorize(
         client_id="unknown-client",
         redirect_uri="http://client/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=None,
         code_challenge_method=None,
     )
@@ -257,7 +257,7 @@ async def test_authorize_stores_state_for_any_redirect_uri(auth_service: AuthSer
     _, state_record = await auth_service.authorize(
         client_id="client-1",
         redirect_uri="http://evil/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=None,
         code_challenge_method=None,
     )
@@ -272,7 +272,7 @@ async def test_exchange_rejects_wrong_client_or_redirect(auth_service: AuthServi
     _, state_record = await auth_service.authorize(
         client_id="client-1",
         redirect_uri="http://client/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=challenge,
         code_challenge_method="S256",
     )
@@ -302,7 +302,7 @@ async def test_access_token_ttl_aligns_to_provider(auth_service: AuthService) ->
     _, state_record = await auth_service.authorize(
         client_id="client-1",
         redirect_uri="http://client/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=challenge,
         code_challenge_method="S256",
     )
@@ -333,7 +333,7 @@ async def test_authorize_allows_dcr_pattern_when_client_unknown(token_store: Tok
     _, state_record = await service.authorize(
         client_id="dynamic-client",
         redirect_uri="http://localhost/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=None,
         code_challenge_method=None,
     )
@@ -356,7 +356,7 @@ async def test_authorize_accepts_any_redirect_uri_and_client_id(token_store: Tok
     _, state_record = await service.authorize(
         client_id="any-client",
         redirect_uri="http://evil/app",
-        scopes=["dummy.read"],
+        provider_scopes_requested=["dummy.read"],
         code_challenge=None,
         code_challenge_method=None,
     )

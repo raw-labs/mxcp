@@ -92,6 +92,7 @@ class DummyProviderAdapter(ProviderAdapter):
             access_token=self._access_token,
             refresh_token=self._refresh_token,
             expires_at=now + 3600,
+            refresh_expires_at=now + 86400,
             provider_scopes_granted=granted_scopes,
         )
 

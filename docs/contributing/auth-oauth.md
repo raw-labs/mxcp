@@ -27,6 +27,25 @@ These are the calls involved in the OAuth flow:
 
 ## MXCP issuer implementation
 
+### Scope domains (critical distinction)
+
+MXCP issuer-mode tracks **two different scope sets**. Do not mix them:
+
+- **Provider scopes** (MXCP ↔ upstream IdP)
+  - What MXCP requests from / receives from the upstream provider token endpoint.
+  - Used for provider `/token` exchange and provider refresh operations.
+  - Persisted on state as `StateRecord.provider_scopes_requested` so we can pass it into
+    `ProviderAdapter.exchange_code(scopes=...)` and apply correct OAuth scope fallback
+    when the provider omits `scope` in its token response.
+- **MXCP scopes** (MXCP ↔ OAuth/MCP client)
+  - What MXCP returns to the client in token responses (`scope` field) and uses for
+    MXCP authorization.
+  - Derived from provider context via a **scope mapper**.
+  - Persisted on session as `UserInfo.mxcp_scopes` and on auth codes as `AuthCodeRecord.mxcp_scopes`.
+
+Today the scope mapper is intentionally a placeholder (returns an empty list) to avoid leaking
+provider scope strings to clients. See `mxcp.sdk.auth.auth_service.AuthService.derive_mxcp_scopes`.
+
 1. When the client registers dynamically (DCR, Dynamic Client Registration), it calls `/register` and sends a `client_id` it generated along with a list of its `redirect_uris`. That step binds the client (identified by `client_id`) to allowed redirect URIs.
   * During the flow, a single `redirect_uri` is used. It's chosen by the client when it calls `/authorize` and has to match one of the registered URIs. It is where the MXCP server will eventually send the MXCP _authorization code_ (`auth_code`). That authorization code is eventually turned into the MXCP access token (the one appearing in the HTTP Authorization header in the end), by a call to `/token`.
 2. The client calls `/authorize` with its `client_id` and a `redirect_uri`. MXCP validates `redirect_uri` against the stored client record. From then on,
@@ -43,8 +62,8 @@ the goal of MXCP is to redirect the client's browser to the IdP's `/authorize`.
    1. Validates the `state` (its own, now sent by the IdP). It consumes it and deletes it.
    2. Calls the IdP to exchange the `code` for an access token using the IdP's `/token` call.
    3. Fetches user info from the provider.
-   4. Issues and persists an MXCP session (it contains the MXCP `access_token`, and the IdP's refresh and access tokens).
-   5. Creates and persist an MXCP `auth_code`, which is meant to play the role of the OAuth `code` sent to the MCP client.
+   4. Derives MXCP client-facing scopes using the scope mapper. Issues and persists an MXCP session (it contains the MXCP `access_token` and refresh token, the IdP's tokens, provider granted scopes, and MXCP scopes).
+   5. Creates and persists an MXCP `auth_code`, which is meant to play the role of the OAuth `code` sent to the MCP client, and stores **MXCP scopes** on it.
    6. Redirects the browser to the client's `redirect_uri` with the `code` (`auth_code`) and the original client's `state` (`client_state`).
 4. The client's callback is called with the client's original `state` (if it was present) and MXCP's `code`.
   * The client calls MXCP's `/token` with MXCP's auth code, its `client_id`, and `redirect_uri` (used to validate the call on the server/MXCP side) plus its PKCE `code_verifier`. MCP's token handler validates the verifier against the stored `code_challenge`, then MXCP returns the `access_token` it generated earlier, and a `refresh_token`.
@@ -88,6 +107,9 @@ The legacy handler-based stack has been removed. Only the ProviderAdapter-based 
   - downstream PKCE fields (client ↔ MXCP)
   - upstream PKCE verifier (MXCP ↔ IdP), if used
   - the original client `state` (returned back to the client)
+- MXCP stores the **provider scopes requested** in the StateRecord as
+  `provider_scopes_requested` (provider scopes are derived from server/provider configuration;
+  client-supplied OAuth scopes are ignored for upstream IdP authorization).
 - The downstream `code_challenge` is stored so the MCP token handler can verify the
   client `code_verifier` during the `/token` exchange.
 - MXCP redirects the browser to the IdP `/authorize`, using **MXCP callback URL**.
@@ -96,9 +118,15 @@ The legacy handler-based stack has been removed. Only the ProviderAdapter-based 
 
 - Input: `code` and `state` (or `error` and `state`).
 - MXCP consumes state (one-time) and exchanges provider code for provider tokens.
+- Provider token exchange uses `StateRecord.provider_scopes_requested` as the requested
+  provider scopes (this is important for correct OAuth behavior when the provider token
+  response omits `scope`).
 - MXCP issues:
   - an MXCP **session** (opaque MXCP access token + refresh token)
   - an MXCP **authorization code** bound to the session
+- MXCP derives and persists **MXCP client-facing scopes** via the scope mapper:
+  - stored on the session as `UserInfo.mxcp_scopes`
+  - stored on the auth code as `AuthCodeRecord.mxcp_scopes`
 - MXCP redirects the browser to the *client redirect_uri* with the MXCP auth code and the original client state.
 
 ### 3) /token exchange (client → MXCP)
@@ -108,6 +136,7 @@ The legacy handler-based stack has been removed. Only the ProviderAdapter-based 
   - validates code binding (client_id / redirect_uri)
   - ensures one-time use of the auth code
   - returns MXCP access token (and refresh token)
+- The token response `scope` field reflects **MXCP scopes** (not provider scopes).
 
 ## Security invariants (“do not break”)
 
@@ -124,12 +153,16 @@ If you change code touching these rules, require a careful review.
   - Never redirect to a URI that wasn’t safely derived from stored state/client metadata.
 - **Issuer-mode scopes policy**
   - OAuth client-requested scopes must **not** influence upstream IdP scopes.
-  - Upstream IdP scopes come from server/provider configuration.
+  - Upstream IdP scopes come from server/provider configuration and are persisted on state as
+    `StateRecord.provider_scopes_requested`.
   - When provider scope config is omitted or empty, MXCP requests no scopes upstream.
-  - Client-supplied scopes may be stored as metadata (DCR or `/authorize`) but are not used for IdP authorization.
-  - When a provider token response omits `scope` (allowed by OAuth), MXCP treats the
-    granted scopes as the configured provider scopes used at `/authorize` rather than
-    interpreting the omission as “no scopes”.
+  - When a provider token response omits `scope` (allowed by OAuth), provider adapters treat the
+    granted scopes as the requested provider scopes (do not interpret omission as “no scopes”).
+  - Client-facing scopes returned by MXCP are **MXCP scopes** derived via the scope mapper and stored
+    on sessions (`UserInfo.mxcp_scopes`) and auth codes (`AuthCodeRecord.mxcp_scopes`).
+  - Refresh requests that include `scope` must follow OAuth semantics:
+    - allowed: omitted (same scopes) or subset of previously-issued MXCP scopes
+    - forbidden: scope expansion
 - **PKCE boundaries are explicit**
   - Downstream PKCE: client ↔ MXCP token endpoint.
   - Upstream PKCE: MXCP ↔ IdP token exchange (provider capability).
@@ -173,3 +206,4 @@ Coverage expectations:
 - Auth code redemption: `mxcp.sdk.auth.auth_service.AuthService.exchange_token`
 - Server bridge validation: `mxcp.server.core.auth.issuer_provider.IssuerOAuthAuthorizationServer`
 - Callback route behavior: `mxcp.server.interfaces.server.mcp.RAWMCP._register_oauth_routes`
+- Scope mapping placeholder: `mxcp.sdk.auth.auth_service.AuthService.derive_mxcp_scopes`
