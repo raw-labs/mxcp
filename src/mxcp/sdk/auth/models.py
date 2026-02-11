@@ -199,9 +199,9 @@ class AuthConfigModel(SdkBaseModel):
     # Override frozen=True since this is a config object
     model_config = ConfigDict(extra="forbid", frozen=False)
 
-    provider: Literal[
-        "none", "github", "atlassian", "salesforce", "keycloak", "google", "oidc"
-    ] | None = None
+    provider: (
+        Literal["none", "github", "atlassian", "salesforce", "keycloak", "google", "oidc"] | None
+    ) = None
     clients: list[OAuthClientConfigModel] | None = None  # Pre-configured OAuth clients
     authorization: AuthorizationConfigModel | None = None  # Authorization policies
     persistence: AuthPersistenceConfigModel | None = None  # Token/client persistence

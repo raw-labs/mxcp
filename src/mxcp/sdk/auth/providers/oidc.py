@@ -129,7 +129,9 @@ class OIDCProviderAdapter(ProviderAdapter):
         code_challenge_method: str | None = None,
         extra_params: Mapping[str, str] | None = None,
     ) -> str:
-        assert self.auth_url is not None, "ensure_ready() must be called before build_authorize_url()"
+        assert (
+            self.auth_url is not None
+        ), "ensure_ready() must be called before build_authorize_url()"
 
         params: list[tuple[str, str]] = [
             ("client_id", self.client_id),
