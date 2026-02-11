@@ -171,15 +171,37 @@ class AuthorizationConfigModel(SdkBaseModel):
     required_scopes: list[str] | None = None
 
 
+class OIDCAuthConfigModel(SdkBaseModel):
+    """Generic OIDC provider configuration.
+
+    Endpoints are auto-discovered from the OpenID Connect discovery document
+    at ``config_url`` (typically ``…/.well-known/openid-configuration``).
+    """
+
+    config_url: str
+    client_id: str
+    client_secret: str
+    # OAuth 2.0 scope string to request at the provider's /authorize endpoint.
+    #
+    # Intentionally required: the SDK provider adapter must not invent default
+    # scopes (which could silently broaden permissions). Defaults, if any, belong
+    # in higher-level configuration or templates.
+    scope: str
+    callback_path: str
+    audience: str | None = None
+    extra_authorize_params: dict[str, str] | None = None
+    provider_name: str | None = None
+
+
 class AuthConfigModel(SdkBaseModel):
     """Minimal authentication configuration for the OAuth server (issuer-mode)."""
 
     # Override frozen=True since this is a config object
     model_config = ConfigDict(extra="forbid", frozen=False)
 
-    provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google"] | None = (
-        None
-    )
+    provider: (
+        Literal["none", "github", "atlassian", "salesforce", "keycloak", "google", "oidc"] | None
+    ) = None
     clients: list[OAuthClientConfigModel] | None = None  # Pre-configured OAuth clients
     authorization: AuthorizationConfigModel | None = None  # Authorization policies
     persistence: AuthPersistenceConfigModel | None = None  # Token/client persistence

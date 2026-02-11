@@ -1,0 +1,21 @@
+mxcp: 1
+transport:
+  http:
+    port: 8000
+    host: 0.0.0.0
+    base_url: http://localhost:8000
+
+projects:
+  oidc-demo:
+    profiles:
+      dev:
+        auth:
+          provider: oidc
+          oidc:
+            config_url: "${OIDC_CONFIG_URL}"
+            client_id: "${OIDC_CLIENT_ID}"
+            client_secret: "${OIDC_CLIENT_SECRET}"
+            scope: "openid profile email"
+            callback_path: "/oidc/callback"
+            # Optional: label surfaced by get_user_provider(); defaults to "oidc"
+            # provider_name: "keycloak"
