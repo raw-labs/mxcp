@@ -9,7 +9,7 @@ from pytest import MonkeyPatch
 from mxcp.sdk.auth.contracts import ProviderError
 from mxcp.sdk.auth.models import OIDCAuthConfigModel
 from mxcp.sdk.auth.providers.oidc import OIDCProviderAdapter
-from mxcp.sdk.auth.providers.oidc_discovery import OIDCDiscoveryDocument
+from mxcp.sdk.auth.providers.oidc import OIDCDiscoveryDocument
 from tests.sdk.auth.provider_adapter_testkit import (
     FakeAsyncHttpClient,
     FakeResponse,
@@ -84,7 +84,7 @@ async def test_ensure_ready_fetches_and_caches(
     )
     patch_http_client(
         monkeypatch,
-        "mxcp.sdk.auth.providers.oidc_discovery.create_mcp_http_client",
+        "mxcp.sdk.auth.providers.oidc.create_mcp_http_client",
         fake_client,
     )
 
@@ -113,7 +113,7 @@ async def test_ensure_ready_defaults_pkce_when_absent(
     )
     patch_http_client(
         monkeypatch,
-        "mxcp.sdk.auth.providers.oidc_discovery.create_mcp_http_client",
+        "mxcp.sdk.auth.providers.oidc.create_mcp_http_client",
         fake_client,
     )
 

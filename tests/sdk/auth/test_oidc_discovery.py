@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from mxcp.sdk.auth.contracts import ProviderError
-from mxcp.sdk.auth.providers.oidc_discovery import (
+from mxcp.sdk.auth.providers.oidc import (
     OIDCDiscoveryDocument,
     fetch_oidc_discovery,
 )
@@ -110,7 +110,7 @@ async def test_fetch_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     patch_http_client(
         monkeypatch,
-        "mxcp.sdk.auth.providers.oidc_discovery.create_mcp_http_client",
+        "mxcp.sdk.auth.providers.oidc.create_mcp_http_client",
         fake_client,
     )
 
@@ -127,7 +127,7 @@ async def test_fetch_non_200_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     patch_http_client(
         monkeypatch,
-        "mxcp.sdk.auth.providers.oidc_discovery.create_mcp_http_client",
+        "mxcp.sdk.auth.providers.oidc.create_mcp_http_client",
         fake_client,
     )
 
@@ -144,7 +144,7 @@ async def test_fetch_invalid_json_raises(monkeypatch: pytest.MonkeyPatch) -> Non
     )
     patch_http_client(
         monkeypatch,
-        "mxcp.sdk.auth.providers.oidc_discovery.create_mcp_http_client",
+        "mxcp.sdk.auth.providers.oidc.create_mcp_http_client",
         fake_client,
     )
 
@@ -168,7 +168,7 @@ async def test_fetch_network_error_raises(monkeypatch: pytest.MonkeyPatch) -> No
             raise httpx.ConnectError("connection refused")
 
     monkeypatch.setattr(
-        "mxcp.sdk.auth.providers.oidc_discovery.create_mcp_http_client",
+        "mxcp.sdk.auth.providers.oidc.create_mcp_http_client",
         lambda: _FailClient(),
     )
 
