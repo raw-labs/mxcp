@@ -13,12 +13,14 @@ from mxcp.sdk.auth.models import (
     HttpTransportConfigModel,
     KeycloakAuthConfigModel,
     OAuthClientConfigModel,
+    OIDCAuthConfigModel,
     SalesforceAuthConfigModel,
 )
 from mxcp.sdk.auth.providers.atlassian import AtlassianProviderAdapter
 from mxcp.sdk.auth.providers.github import GitHubProviderAdapter
 from mxcp.sdk.auth.providers.google import GoogleProviderAdapter
 from mxcp.sdk.auth.providers.keycloak import KeycloakProviderAdapter
+from mxcp.sdk.auth.providers.oidc import OIDCProviderAdapter
 from mxcp.sdk.auth.providers.salesforce import SalesforceProviderAdapter
 from mxcp.sdk.auth.url_utils import URLBuilder
 from mxcp.server.core.config.models import (
@@ -146,5 +148,12 @@ def create_provider_adapter(
             _model_dump_with_scope(salesforce_config)
         )
         return SalesforceProviderAdapter(salesforce_model)
+
+    if provider == "oidc":
+        oidc_config = user_auth_config.oidc
+        if not oidc_config:
+            raise ValueError("OIDC provider selected but no OIDC configuration found")
+        oidc_model = OIDCAuthConfigModel.model_validate(_model_dump_with_scope(oidc_config))
+        return OIDCProviderAdapter(oidc_model)
 
     raise ValueError(f"Unsupported provider for adapter: {provider}")

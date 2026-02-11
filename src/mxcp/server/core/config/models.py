@@ -365,16 +365,31 @@ class UserGoogleAuthConfigModel(BaseModel):
     token_url: str
 
 
+class UserOIDCAuthConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    config_url: str
+    client_id: str
+    client_secret: str
+    scope: str
+    callback_path: str
+    audience: str | None = None
+    extra_authorize_params: dict[str, str] | None = None
+
+
 class UserAuthConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google"] = "none"
+    provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google", "oidc"] = (
+        "none"
+    )
     clients: list[UserOAuthClientModel] = Field(default_factory=list)
     github: UserGitHubAuthConfigModel | None = None
     atlassian: UserAtlassianAuthConfigModel | None = None
     salesforce: UserSalesforceAuthConfigModel | None = None
     keycloak: UserKeycloakAuthConfigModel | None = None
     google: UserGoogleAuthConfigModel | None = None
+    oidc: UserOIDCAuthConfigModel | None = None
     authorization: UserAuthorizationConfigModel | None = None
     persistence: UserAuthPersistenceConfigModel | None = None
 
