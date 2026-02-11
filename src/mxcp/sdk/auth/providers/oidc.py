@@ -65,10 +65,18 @@ class OIDCProviderAdapter(ProviderAdapter):
     endpoints are resolved.
     """
 
+    # The discovery document ``issuer`` field (e.g.
+    # ``https://keycloak.corp.com/realms/prod``) would be the most descriptive
+    # value here, but it is a URL that may expose internal infrastructure
+    # details (hostnames, realm names, IdP software) to clients via
+    # ``get_user_provider()``.  Default to the generic "oidc" label and let
+    # users override it with ``provider_name`` in config if they want a
+    # more meaningful value.
     provider_name = "oidc"
     pkce_methods_supported: Sequence[str] = []
 
     def __init__(self, oidc_config: OIDCAuthConfigModel):
+        self.provider_name = oidc_config.provider_name or "oidc"
         self.client_id = oidc_config.client_id
         self.client_secret = oidc_config.client_secret
         self.scope = oidc_config.scope

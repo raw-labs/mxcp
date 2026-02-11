@@ -375,6 +375,7 @@ class UserOIDCAuthConfigModel(BaseModel):
     callback_path: str
     audience: str | None = None
     extra_authorize_params: dict[str, str] | None = None
+    provider_name: str | None = None
 
 
 class UserAuthConfigModel(BaseModel):
