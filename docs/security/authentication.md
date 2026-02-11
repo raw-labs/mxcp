@@ -1,6 +1,6 @@
 ---
 title: "Authentication"
-description: "OAuth 2.0 setup for MXCP: GitHub, Google, Atlassian, Salesforce, Keycloak. Client configuration, token handling, user context for policies."
+description: "OAuth 2.0 setup for MXCP: GitHub, Google, Atlassian, Salesforce, Keycloak, generic OIDC. Client configuration, token handling, user context for policies."
 sidebar:
   order: 2
 ---
@@ -44,6 +44,7 @@ MXCP automatically logs user information for each authenticated request:
 | Salesforce | CRM integrations, enterprise apps |
 | Google | Google Workspace organizations |
 | Keycloak | Self-hosted identity management |
+| Generic OIDC | Any OIDC-compliant IdP (Auth0, Okta, Azure AD, etc.) |
 
 ## Configuration Overview
 
@@ -353,6 +354,71 @@ auth:
 | `email` | User email address |
 | `roles` | User roles from Keycloak |
 | `offline_access` | Enable refresh tokens |
+
+## Generic OIDC Authentication
+
+For any OpenID Connect-compliant identity provider. Endpoints are auto-discovered from the provider's `/.well-known/openid-configuration` document, so you don't need to specify individual OAuth URLs.
+
+### 1. Register a Client
+
+Register a client/application with your OIDC provider (Auth0, Okta, Azure AD, Keycloak, etc.):
+- **Redirect URI**: `http://localhost:8000/oidc/callback`
+- **Grant type**: Authorization Code
+- Copy the **Client ID** and **Client Secret**
+
+### 2. Configure MXCP
+
+```yaml
+# In ~/.mxcp/config.yml
+auth:
+  provider: oidc
+  oidc:
+    config_url: "https://your-idp.example.com/.well-known/openid-configuration"
+    client_id: "${OIDC_CLIENT_ID}"
+    client_secret: "${OIDC_CLIENT_SECRET}"
+    scope: "openid profile email"
+    callback_path: /oidc/callback
+```
+
+**Note:** MXCP fetches the discovery document at startup and auto-discovers the authorization, token, and userinfo endpoints.
+
+### 3. Configuration Options
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `config_url` | Yes | URL to the `.well-known/openid-configuration` document |
+| `client_id` | Yes | OAuth client ID |
+| `client_secret` | Yes | OAuth client secret |
+| `scope` | Yes | Scopes to request (must include `openid`) |
+| `callback_path` | Yes | Callback route path |
+| `audience` | No | API audience identifier (e.g. for Auth0) |
+| `extra_authorize_params` | No | Additional parameters for the authorize URL |
+| `provider_name` | No | Label surfaced by `get_user_provider()`; defaults to `"oidc"` |
+
+### 4. Provider-Specific Discovery URLs
+
+| Provider | Discovery URL |
+|----------|---------------|
+| Auth0 | `https://YOUR_TENANT.auth0.com/.well-known/openid-configuration` |
+| Okta | `https://YOUR_ORG.okta.com/.well-known/openid-configuration` |
+| Azure AD | `https://login.microsoftonline.com/TENANT_ID/v2.0/.well-known/openid-configuration` |
+| Keycloak | `https://KEYCLOAK_HOST/realms/REALM/.well-known/openid-configuration` |
+| Google | `https://accounts.google.com/.well-known/openid-configuration` |
+
+### 5. Auth0 Example with Audience
+
+```yaml
+auth:
+  provider: oidc
+  oidc:
+    config_url: "https://mycompany.auth0.com/.well-known/openid-configuration"
+    client_id: "${AUTH0_CLIENT_ID}"
+    client_secret: "${AUTH0_CLIENT_SECRET}"
+    scope: "openid profile email"
+    callback_path: /oidc/callback
+    audience: "https://api.mycompany.com"
+    provider_name: "auth0"
+```
 
 ## Token Persistence
 

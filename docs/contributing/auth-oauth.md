@@ -72,7 +72,7 @@ the goal of MXCP is to redirect the client's browser to the IdP's `/authorize`.
 
 MXCP runs OAuth in **issuer-mode**:
 - **MCP clients authenticate to MXCP** using OAuth.
-- **MXCP can authenticate users against an upstream IdP** (Google/Atlassian today via `ProviderAdapter`).
+- **MXCP can authenticate users against an upstream IdP** (via `ProviderAdapter` — built-in adapters for GitHub, Atlassian, Salesforce, Google, Keycloak, and a generic OIDC adapter for any OIDC-compliant IdP).
 
 The key idea is that **the IdP callback always returns to MXCP**, and then **MXCP redirects to the MCP client**.
 
@@ -180,7 +180,9 @@ If you change code touching these rules, require a careful review.
 
 ### Add a new provider (IdP)
 
-Implement `ProviderAdapter` under `mxcp.sdk.auth.providers`:
+If the IdP is OIDC-compliant, users can use the **generic `oidc` provider** (`mxcp.sdk.auth.providers.oidc.OIDCProviderAdapter`) instead of writing a dedicated adapter. The generic adapter auto-discovers endpoints from the IdP's `.well-known/openid-configuration` document at startup via `ensure_ready()`.
+
+For IdPs that require non-standard behavior (custom token exchange, non-OIDC user endpoints, etc.), implement `ProviderAdapter` under `mxcp.sdk.auth.providers`:
 - Raise `ProviderError(error, description, status_code)` for expected failures.
 - Normalize transport/network failures into `ProviderError` (do not leak HTTP client exceptions).
 - Never log response bodies, tokens, secrets, or PII.
