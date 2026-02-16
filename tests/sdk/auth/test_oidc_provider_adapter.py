@@ -197,7 +197,7 @@ def test_build_authorize_url_raises_without_ensure_ready(
     oidc_config: OIDCAuthConfigModel,
 ) -> None:
     adapter = OIDCProviderAdapter(oidc_config)
-    with pytest.raises(AssertionError, match="ensure_ready"):
+    with pytest.raises(RuntimeError, match="ensure_ready"):
         adapter.build_authorize_url(
             redirect_uri="https://server/oidc/callback",
             state="abc",
