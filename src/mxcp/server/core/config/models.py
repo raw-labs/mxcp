@@ -377,6 +377,14 @@ class UserOIDCAuthConfigModel(BaseModel):
     extra_authorize_params: dict[str, str] | None = None
     provider_name: str | None = None
 
+    @field_validator("scope")
+    @classmethod
+    def _ensure_openid_scope(cls, value: str) -> str:
+        scopes = value.split()
+        if "openid" not in scopes:
+            raise ValueError("OIDC scope must include 'openid'")
+        return value
+
 
 class UserAuthConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)

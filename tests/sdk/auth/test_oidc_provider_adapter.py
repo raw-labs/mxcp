@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from pytest import MonkeyPatch
+from pydantic import ValidationError
 
 from mxcp.sdk.auth.contracts import ProviderError
 from mxcp.sdk.auth.models import OIDCAuthConfigModel
@@ -55,6 +56,17 @@ def oidc_config_with_audience() -> OIDCAuthConfigModel:
         audience="https://api.example.com",
         extra_authorize_params={"prompt": "consent"},
     )
+
+
+def test_oidc_config_requires_openid_scope() -> None:
+    with pytest.raises(ValidationError):
+        OIDCAuthConfigModel(
+            config_url="https://idp.example.com/.well-known/openid-configuration",
+            client_id="cid",
+            client_secret="secret",
+            scope="profile email",
+            callback_path="/oidc/callback",
+        )
 
 
 def _make_ready(adapter: OIDCProviderAdapter, discovery: OIDCDiscoveryDocument) -> None:

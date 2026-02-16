@@ -14,7 +14,7 @@ tests and documented behavior.
 
 from typing import Any, Literal
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, field_validator
 
 from mxcp.sdk.models import SdkBaseModel
 
@@ -191,6 +191,14 @@ class OIDCAuthConfigModel(SdkBaseModel):
     audience: str | None = None
     extra_authorize_params: dict[str, str] | None = None
     provider_name: str | None = None
+
+    @field_validator("scope")
+    @classmethod
+    def _ensure_openid_scope(cls, value: str) -> str:
+        scopes = value.split()
+        if "openid" not in scopes:
+            raise ValueError("OIDC scope must include 'openid'")
+        return value
 
 
 class AuthConfigModel(SdkBaseModel):
