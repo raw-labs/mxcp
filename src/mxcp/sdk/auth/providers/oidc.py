@@ -198,6 +198,19 @@ class OIDCProviderAdapter(ProviderAdapter):
         self.token_url = discovery.token_endpoint
         self.userinfo_url = discovery.userinfo_endpoint
         self.revoke_url = discovery.revocation_endpoint
+        if self.userinfo_url is None:
+            logger.warning(
+                "OIDC discovery document missing userinfo endpoint",
+                extra={
+                    "provider": self.provider_name,
+                    "endpoint": "discovery",
+                },
+            )
+            raise ProviderError(
+                "server_error",
+                "OIDC discovery document missing userinfo_endpoint",
+                status_code=500,
+            )
 
         # Derive PKCE capability from the discovery document.
         if discovery.code_challenge_methods_supported:

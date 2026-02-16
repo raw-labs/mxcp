@@ -33,6 +33,13 @@ DISCOVERY_NO_PKCE = OIDCDiscoveryDocument(
     userinfo_endpoint="https://idp.example.com/userinfo",
 )
 
+DISCOVERY_NO_USERINFO = OIDCDiscoveryDocument(
+    issuer="https://idp.example.com",
+    authorization_endpoint="https://idp.example.com/authorize",
+    token_endpoint="https://idp.example.com/token",
+    userinfo_endpoint=None,
+)
+
 
 @pytest.fixture
 def oidc_config() -> OIDCAuthConfigModel:
@@ -132,6 +139,27 @@ async def test_ensure_ready_defaults_pkce_when_absent(
     adapter = OIDCProviderAdapter(oidc_config)
     await adapter.ensure_ready()
     assert adapter.pkce_methods_supported == ["S256"]
+
+
+@pytest.mark.asyncio
+async def test_ensure_ready_requires_userinfo_endpoint(
+    monkeypatch: MonkeyPatch, oidc_config: OIDCAuthConfigModel
+) -> None:
+    discovery_payload = DISCOVERY_NO_USERINFO.model_dump()
+    fake_client = FakeAsyncHttpClient(
+        post_response=FakeResponse(200, {}),
+        default_get_response=FakeResponse(200, discovery_payload),
+    )
+    patch_http_client(
+        monkeypatch,
+        "mxcp.sdk.auth.providers.oidc.create_mcp_http_client",
+        fake_client,
+    )
+
+    adapter = OIDCProviderAdapter(oidc_config)
+    with pytest.raises(ProviderError) as exc_info:
+        await adapter.ensure_ready()
+    assert exc_info.value.error == "server_error"
 
 
 # ── build_authorize_url ─────────────────────────────────────────────────
