@@ -1,0 +1,31 @@
+mxcp: 1
+transport:
+  http:
+    port: 8000
+    host: 0.0.0.0
+    base_url: http://localhost:8000
+
+projects:
+  oidc-verifier-demo:
+    profiles:
+      dev:
+        auth:
+          mode: verifier
+          provider: oidc
+          oidc:
+            config_url: "${OIDC_CONFIG_URL}"
+            client_id: "${OIDC_CLIENT_ID}"
+            client_secret: "${OIDC_CLIENT_SECRET}"
+            scope: "openid profile email"
+            callback_path: "/oidc/callback"
+            # Optional: label surfaced by get_user_provider(); defaults to "oidc"
+            # provider_name: "my-idp"
+          # Optional verifier settings (requires verifier-mode implementation)
+          # verifier:
+          #   token_hint: auto
+          #   validation: auto
+          #   userinfo: optional
+          #   # Optional overrides if discovery is incomplete
+          #   # introspection_endpoint: "https://idp.example.com/introspect"
+          #   # userinfo_endpoint: "https://idp.example.com/userinfo"
+          #   # jwks_uri: "https://idp.example.com/.well-known/jwks.json"
