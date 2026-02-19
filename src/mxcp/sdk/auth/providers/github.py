@@ -235,53 +235,53 @@ class GitHubProviderAdapter(ProviderAdapter):
                     status_code=503,
                 ) from exc
 
-        if resp.status_code != 200:
-            logger.warning(
-                "GitHub user endpoint returned non-200",
-                extra={
-                    "provider": self.provider_name,
-                    "endpoint": "user",
-                    "status_code": resp.status_code,
-                },
-            )
-            raise ProviderError(
-                "invalid_token",
-                "GitHub userinfo request failed",
-                status_code=resp.status_code,
-            )
+            if resp.status_code != 200:
+                logger.warning(
+                    "GitHub user endpoint returned non-200",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "user",
+                        "status_code": resp.status_code,
+                    },
+                )
+                raise ProviderError(
+                    "invalid_token",
+                    "GitHub userinfo request failed",
+                    status_code=resp.status_code,
+                )
 
-        try:
-            payload = resp.json()
-        except Exception as exc:
-            logger.warning(
-                "GitHub user endpoint returned invalid JSON",
-                extra={
-                    "provider": self.provider_name,
-                    "endpoint": "user",
-                    "status_code": resp.status_code,
-                },
-            )
-            raise ProviderError(
-                "invalid_token",
-                "GitHub userinfo response was invalid",
-                status_code=resp.status_code,
-            ) from exc
+            try:
+                payload = resp.json()
+            except Exception as exc:
+                logger.warning(
+                    "GitHub user endpoint returned invalid JSON",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "user",
+                        "status_code": resp.status_code,
+                    },
+                )
+                raise ProviderError(
+                    "invalid_token",
+                    "GitHub userinfo response was invalid",
+                    status_code=resp.status_code,
+                ) from exc
 
-        if not isinstance(payload, dict):
-            logger.warning(
-                "GitHub user endpoint returned non-object JSON",
-                extra={
-                    "provider": self.provider_name,
-                    "endpoint": "user",
-                    "status_code": resp.status_code,
-                },
-            )
-            raise ProviderError(
-                "invalid_token",
-                "GitHub userinfo response was invalid",
-                status_code=resp.status_code,
-            )
-        return payload
+            if not isinstance(payload, dict):
+                logger.warning(
+                    "GitHub user endpoint returned non-object JSON",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "user",
+                        "status_code": resp.status_code,
+                    },
+                )
+                raise ProviderError(
+                    "invalid_token",
+                    "GitHub userinfo response was invalid",
+                    status_code=resp.status_code,
+                )
+            return payload
 
     async def _fetch_user_email(self, token: str) -> str | None:
         async with create_mcp_http_client() as client:
@@ -304,51 +304,51 @@ class GitHubProviderAdapter(ProviderAdapter):
                 )
                 return None
 
-        if resp.status_code != 200:
-            logger.warning(
-                "GitHub user emails endpoint returned non-200",
-                extra={
-                    "provider": self.provider_name,
-                    "endpoint": "user_emails",
-                    "status_code": resp.status_code,
-                },
-            )
-            return None
+            if resp.status_code != 200:
+                logger.warning(
+                    "GitHub user emails endpoint returned non-200",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "user_emails",
+                        "status_code": resp.status_code,
+                    },
+                )
+                return None
 
-        try:
-            payload = resp.json()
-        except Exception:
-            logger.warning(
-                "GitHub user emails response was not valid JSON",
-                extra={"provider": self.provider_name, "endpoint": "user_emails"},
-            )
-            return None
-
-        if not isinstance(payload, list):
-            logger.warning(
-                "GitHub user emails response was not a list",
-                extra={"provider": self.provider_name, "endpoint": "user_emails"},
-            )
-            return None
-
-        entries: list[_GitHubEmailEntry] = []
-        for item in payload:
             try:
-                entries.append(_GitHubEmailEntry.model_validate(item))
-            except ValidationError:
-                continue
+                payload = resp.json()
+            except Exception:
+                logger.warning(
+                    "GitHub user emails response was not valid JSON",
+                    extra={"provider": self.provider_name, "endpoint": "user_emails"},
+                )
+                return None
 
-        for entry in entries:
-            if entry.primary and entry.verified and entry.email:
-                return entry.email
-        for entry in entries:
-            if entry.verified and entry.email:
-                return entry.email
-        for entry in entries:
-            if entry.email:
-                return entry.email
+            if not isinstance(payload, list):
+                logger.warning(
+                    "GitHub user emails response was not a list",
+                    extra={"provider": self.provider_name, "endpoint": "user_emails"},
+                )
+                return None
 
-        return None
+            entries: list[_GitHubEmailEntry] = []
+            for item in payload:
+                try:
+                    entries.append(_GitHubEmailEntry.model_validate(item))
+                except ValidationError:
+                    continue
+
+            for entry in entries:
+                if entry.primary and entry.verified and entry.email:
+                    return entry.email
+            for entry in entries:
+                if entry.verified and entry.email:
+                    return entry.email
+            for entry in entries:
+                if entry.email:
+                    return entry.email
+
+            return None
 
     async def _request_token(
         self,
@@ -381,7 +381,7 @@ class GitHubProviderAdapter(ProviderAdapter):
                     "GitHub token request failed",
                     status_code=503,
                 ) from exc
-        return self._parse_token_response(resp, context=context)
+            return self._parse_token_response(resp, context=context)
 
     def _parse_token_response(self, resp: Any, *, context: str) -> _GitHubTokenResponse:
         if resp.status_code != 200:

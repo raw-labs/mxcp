@@ -70,46 +70,46 @@ async def fetch_oidc_discovery(config_url: str) -> OIDCDiscoveryDocument:
                 status_code=503,
             ) from exc
 
-    if resp.status_code != 200:
-        logger.warning(
-            "OIDC discovery endpoint returned non-200",
-            extra={
-                "provider": "oidc",
-                "endpoint": "discovery",
-                "status_code": resp.status_code,
-            },
-        )
-        raise ProviderError(
-            "server_error",
-            "OIDC discovery request failed",
-            status_code=resp.status_code,
-        )
+        if resp.status_code != 200:
+            logger.warning(
+                "OIDC discovery endpoint returned non-200",
+                extra={
+                    "provider": "oidc",
+                    "endpoint": "discovery",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "server_error",
+                "OIDC discovery request failed",
+                status_code=resp.status_code,
+            )
 
-    try:
-        data = resp.json()
-    except Exception as exc:
-        logger.warning(
-            "OIDC discovery endpoint returned invalid JSON",
-            extra={
-                "provider": "oidc",
-                "endpoint": "discovery",
-                "status_code": resp.status_code,
-            },
-        )
-        raise ProviderError(
-            "server_error",
-            "OIDC discovery response was invalid",
-            status_code=resp.status_code,
-        ) from exc
+        try:
+            data = resp.json()
+        except Exception as exc:
+            logger.warning(
+                "OIDC discovery endpoint returned invalid JSON",
+                extra={
+                    "provider": "oidc",
+                    "endpoint": "discovery",
+                    "status_code": resp.status_code,
+                },
+            )
+            raise ProviderError(
+                "server_error",
+                "OIDC discovery response was invalid",
+                status_code=resp.status_code,
+            ) from exc
 
-    if not isinstance(data, dict):
-        raise ProviderError(
-            "server_error",
-            "OIDC discovery response was not a JSON object",
-            status_code=resp.status_code,
-        )
+        if not isinstance(data, dict):
+            raise ProviderError(
+                "server_error",
+                "OIDC discovery response was not a JSON object",
+                status_code=resp.status_code,
+            )
 
-    return OIDCDiscoveryDocument.model_validate(data)
+        return OIDCDiscoveryDocument.model_validate(data)
 
 
 # ── Internal response models ────────────────────────────────────────────
@@ -396,53 +396,53 @@ class OIDCProviderAdapter(ProviderAdapter):
                     status_code=503,
                 ) from exc
 
-        if resp.status_code != 200:
-            logger.warning(
-                "OIDC userinfo endpoint returned non-200",
-                extra={
-                    "provider": self.provider_name,
-                    "endpoint": "userinfo",
-                    "status_code": resp.status_code,
-                },
-            )
-            raise ProviderError(
-                "invalid_token",
-                "OIDC userinfo request failed",
-                status_code=resp.status_code,
-            )
+            if resp.status_code != 200:
+                logger.warning(
+                    "OIDC userinfo endpoint returned non-200",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "userinfo",
+                        "status_code": resp.status_code,
+                    },
+                )
+                raise ProviderError(
+                    "invalid_token",
+                    "OIDC userinfo request failed",
+                    status_code=resp.status_code,
+                )
 
-        try:
-            payload = resp.json()
-        except Exception as exc:
-            logger.warning(
-                "OIDC userinfo endpoint returned invalid JSON",
-                extra={
-                    "provider": self.provider_name,
-                    "endpoint": "userinfo",
-                    "status_code": resp.status_code,
-                },
-            )
-            raise ProviderError(
-                "invalid_token",
-                "OIDC userinfo response was invalid",
-                status_code=resp.status_code,
-            ) from exc
+            try:
+                payload = resp.json()
+            except Exception as exc:
+                logger.warning(
+                    "OIDC userinfo endpoint returned invalid JSON",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "userinfo",
+                        "status_code": resp.status_code,
+                    },
+                )
+                raise ProviderError(
+                    "invalid_token",
+                    "OIDC userinfo response was invalid",
+                    status_code=resp.status_code,
+                ) from exc
 
-        if not isinstance(payload, dict):
-            logger.warning(
-                "OIDC userinfo endpoint returned non-object JSON",
-                extra={
-                    "provider": self.provider_name,
-                    "endpoint": "userinfo",
-                    "status_code": resp.status_code,
-                },
-            )
-            raise ProviderError(
-                "invalid_token",
-                "OIDC userinfo response was invalid",
-                status_code=resp.status_code,
-            )
-        return payload
+            if not isinstance(payload, dict):
+                logger.warning(
+                    "OIDC userinfo endpoint returned non-object JSON",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "userinfo",
+                        "status_code": resp.status_code,
+                    },
+                )
+                raise ProviderError(
+                    "invalid_token",
+                    "OIDC userinfo response was invalid",
+                    status_code=resp.status_code,
+                )
+            return payload
 
     async def _request_token(
         self,
@@ -475,7 +475,7 @@ class OIDCProviderAdapter(ProviderAdapter):
                     "OIDC token request failed",
                     status_code=503,
                 ) from exc
-        return self._parse_token_response(resp, context=context)
+            return self._parse_token_response(resp, context=context)
 
     def _parse_token_response(self, resp: Any, *, context: str) -> _OIDCTokenResponse:
         if resp.status_code != 200:
