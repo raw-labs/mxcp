@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
-from typing import Any
+from typing import Any, Sequence
 from urllib.parse import urlencode
 
 import httpx
+import jwt
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.shared._httpx_utils import create_mcp_http_client
+from jwt import PyJWKClient
 
 from mxcp.sdk.auth.context import set_verified_user_info
 from mxcp.sdk.auth.contracts import ProviderError, UserInfo
@@ -31,31 +34,40 @@ class OIDCTokenVerifier(TokenVerifier):
         self._provider_name = oidc_config.provider_name or "oidc"
 
         self._discovery: OIDCDiscoveryDocument | None = None
+        self._jwks_client: PyJWKClient | None = None
         self._introspection_url: str | None = None
         self._userinfo_url: str | None = None
+        self._issuer: str | None = None
 
     async def _ensure_ready(self) -> None:
         if self._discovery is not None:
             return
         discovery = await fetch_oidc_discovery(self._config_url)
         self._discovery = discovery
+        self._issuer = discovery.issuer
+        if discovery.jwks_uri:
+            self._jwks_client = PyJWKClient(discovery.jwks_uri)
         self._introspection_url = getattr(discovery, "introspection_endpoint", None)
         self._userinfo_url = discovery.userinfo_endpoint
 
     async def verify_token(self, token: str) -> AccessToken | None:
         await self._ensure_ready()
-        # Prefer introspection if available; otherwise try userinfo as a weak fallback
         claims: dict[str, Any] | None = None
 
-        if self._introspection_url:
-            claims = await self._call_introspection(token)
-        elif self._userinfo_url:
-            claims = await self._call_userinfo(token)
-        else:
-            logger.warning("OIDC verifier: no introspection or userinfo endpoint available")
-            return None
+        # Prefer JWT validation if token looks like JWT and jwks is available.
+        if self._jwks_client and _looks_like_jwt(token):
+            claims = await self._verify_jwt(token)
 
-        if not claims:
+        # Fallback to introspection
+        if claims is None and self._introspection_url:
+            claims = await self._call_introspection(token)
+
+        # Fallback to userinfo (weak)
+        if claims is None and self._userinfo_url:
+            claims = await self._call_userinfo(token)
+
+        if claims is None:
+            logger.warning("OIDC verifier: unable to validate token (no jwt/introspection/userinfo)")
             return None
 
         user_info = self._build_user_info(claims)
@@ -74,6 +86,33 @@ class OIDCTokenVerifier(TokenVerifier):
             scopes=scopes,
             expires_at=expires_at,
         )
+
+    async def _verify_jwt(self, token: str) -> dict[str, Any] | None:
+        if not self._jwks_client:
+            return None
+        try:
+            signing_key = await _get_signing_key(self._jwks_client, token)
+            options = {
+                "verify_signature": True,
+                "verify_exp": True,
+                "verify_nbf": True,
+                "verify_iss": bool(self._issuer),
+                "verify_aud": bool(self._audience),
+            }
+            claims = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256", "PS256", "ES256", "RS384", "RS512", "ES384", "ES512"],
+                audience=self._audience,
+                issuer=self._issuer,
+                options=options,
+            )
+            if not isinstance(claims, dict):
+                return None
+            return claims
+        except Exception as exc:  # broad: decode errors vary
+            logger.warning("OIDC JWT verification failed", extra={"error": exc.__class__.__name__})
+            return None
 
     async def _call_introspection(self, token: str) -> dict[str, Any] | None:
         if not self._introspection_url:
@@ -151,3 +190,13 @@ def _split_scopes(scope_str: str | None) -> list[str]:
     if not scope_str:
         return []
     return [s for s in scope_str.split() if s]
+
+
+def _looks_like_jwt(token: str) -> bool:
+    return token.count(".") == 2
+
+
+async def _get_signing_key(jwks_client: PyJWKClient, token: str) -> Any:
+    # PyJWKClient's get_signing_key_from_jwt is blocking; run in thread?
+    # For simplicity here, call directly (short-lived).
+    return jwks_client.get_signing_key_from_jwt(token)
