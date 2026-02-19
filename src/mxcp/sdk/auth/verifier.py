@@ -111,7 +111,10 @@ class OIDCTokenVerifier(TokenVerifier):
                 return None
             return claims
         except Exception as exc:  # broad: decode errors vary
-            logger.warning("OIDC JWT verification failed", extra={"error": exc.__class__.__name__})
+            logger.warning(
+                "OIDC JWT verification failed",
+                extra={"error": exc.__class__.__name__, "detail": str(exc)[:200]},
+            )
             return None
 
     async def _call_introspection(self, token: str) -> dict[str, Any] | None:
