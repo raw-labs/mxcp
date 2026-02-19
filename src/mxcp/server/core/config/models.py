@@ -442,9 +442,9 @@ class UserAuthConfigModel(BaseModel):
 
         data = self.oidc.model_dump(exclude_none=True)
         if self.mode == "issuer":
-            self.oidc = UserOIDCAuthConfigModel.model_validate(data)
+            object.__setattr__(self, "oidc", UserOIDCAuthConfigModel.model_validate(data))
         else:
-            self.oidc = UserOIDCVerifierAuthConfigModel.model_validate(data)
+            object.__setattr__(self, "oidc", UserOIDCVerifierAuthConfigModel.model_validate(data))
         return self
 
 
