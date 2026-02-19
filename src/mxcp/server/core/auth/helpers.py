@@ -173,7 +173,5 @@ def create_token_verifier(user_auth_config: UserAuthConfigModel) -> OIDCTokenVer
     oidc_config = user_auth_config.oidc
     if not oidc_config:
         raise ValueError("OIDC verifier selected but no OIDC configuration found")
-    oidc_model = OIDCVerifierAuthConfigModel.model_validate(
-        _model_dump_with_scope(oidc_config)
-    )
+    oidc_model = OIDCVerifierAuthConfigModel.model_validate(_model_dump_with_scope(oidc_config))
     return OIDCTokenVerifier(oidc_model)

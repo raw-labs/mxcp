@@ -648,7 +648,9 @@ class RAWMCP:
             await self.admin_api.stop()
             logger.info("Admin API stopped")
 
-    def require_user_info(self, func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
+    def require_user_info(
+        self, func: Callable[..., Awaitable[Any]]
+    ) -> Callable[..., Awaitable[Any]]:
         """Wrap a handler to ensure verified user info is present and set tool context."""
 
         @functools.wraps(func)

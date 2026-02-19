@@ -6,8 +6,8 @@ that can be set by auth middleware and retrieved by endpoint execution code.
 
 import contextvars
 
-from .models import UserContextModel
 from .contracts import UserInfo
+from .models import UserContextModel
 
 # Thread-safe user context management using contextvars
 # This allows auth middleware to set user context and endpoint code to retrieve it
@@ -16,9 +16,7 @@ from .contracts import UserInfo
 # Create a contextvar to store the current user context
 # The default is None, indicating no authenticated user
 user_context_var = contextvars.ContextVar[UserContextModel | None]("user_context", default=None)
-verified_user_info_var = contextvars.ContextVar[UserInfo | None](
-    "verified_user_info", default=None
-)
+verified_user_info_var = contextvars.ContextVar[UserInfo | None]("verified_user_info", default=None)
 
 
 def get_user_context() -> UserContextModel | None:

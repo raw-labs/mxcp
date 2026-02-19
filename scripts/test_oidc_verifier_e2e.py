@@ -230,13 +230,9 @@ def assert_result(result: dict[str, Any], config: EnvConfig) -> None:
     if not email:
         raise RuntimeError("Expected non-null email")
     if config.expected_provider is not None and provider != config.expected_provider:
-        raise RuntimeError(
-            f"Expected provider {config.expected_provider}, got {provider}"
-        )
+        raise RuntimeError(f"Expected provider {config.expected_provider}, got {provider}")
     if config.expected_email is not None and email != config.expected_email:
-        raise RuntimeError(
-            f"Expected email {config.expected_email}, got {email}"
-        )
+        raise RuntimeError(f"Expected email {config.expected_email}, got {email}")
 
 
 def main() -> int:
