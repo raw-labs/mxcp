@@ -26,7 +26,7 @@ dependencies = [
     "cel-python>=0.2.0",  # Policy enforcement engine
     "httpx>=0.28.0",  # HTTP client for API calls
     "cryptography>=41.0.0",  # Fernet encryption for auth token storage
-    "PyJWT[crypto]>=2.8.0",  # JWT validation for verifier mode
+    "PyJWT[crypto]>=2.11.0",  # JWT validation for verifier mode
     
     # CLI
     "click>=8.1.7",  # CLI framework
