@@ -125,9 +125,7 @@ class OIDCTokenVerifier(TokenVerifier):
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with create_mcp_http_client() as client:
             try:
-                resp = await client.post(
-                    self._introspection_url, data=urlencode(data), headers=headers
-                )
+                resp = await client.post(self._introspection_url, data=data, headers=headers)
             except httpx.RequestError as exc:
                 logger.warning(
                     "OIDC introspection request failed", extra={"error": exc.__class__.__name__}
