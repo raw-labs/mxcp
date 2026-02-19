@@ -180,7 +180,7 @@ If you change code touching these rules, require a careful review.
 
 ### Add a new provider (IdP)
 
-If the IdP is OIDC-compliant, users can use the **generic `oidc` provider** (`mxcp.sdk.auth.providers.oidc.OIDCProviderAdapter`) instead of writing a dedicated adapter. The generic adapter auto-discovers endpoints from the IdP's `.well-known/openid-configuration` document at startup via `ensure_ready()`.
+If the IdP is OIDC-compliant, users can use the **generic `oidc` provider** (`mxcp.sdk.auth.providers.oidc.OIDCProviderAdapter`) instead of writing a dedicated adapter. The generic adapter auto-discovers endpoints from the IdP's `.well-known/openid-configuration` document at startup via `ensure_ready()`. The server awaits this during startup (before transports start), so OAuth flows cannot begin until discovery completes.
 
 For IdPs that require non-standard behavior (custom token exchange, non-OIDC user endpoints, etc.), implement `ProviderAdapter` under `mxcp.sdk.auth.providers`:
 - Raise `ProviderError(error, description, status_code)` for expected failures.

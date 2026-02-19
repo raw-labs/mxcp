@@ -193,12 +193,7 @@ class OIDCProviderAdapter(ProviderAdapter):
             return
 
         discovery = await fetch_oidc_discovery(self._config_url)
-        self._discovery = discovery
-        self.auth_url = discovery.authorization_endpoint
-        self.token_url = discovery.token_endpoint
-        self.userinfo_url = discovery.userinfo_endpoint
-        self.revoke_url = discovery.revocation_endpoint
-        if self.userinfo_url is None:
+        if discovery.userinfo_endpoint is None:
             logger.warning(
                 "OIDC discovery document missing userinfo endpoint",
                 extra={
@@ -211,6 +206,12 @@ class OIDCProviderAdapter(ProviderAdapter):
                 "OIDC discovery document missing userinfo_endpoint",
                 status_code=500,
             )
+
+        self._discovery = discovery
+        self.auth_url = discovery.authorization_endpoint
+        self.token_url = discovery.token_endpoint
+        self.userinfo_url = discovery.userinfo_endpoint
+        self.revoke_url = discovery.revocation_endpoint
 
         # Derive PKCE capability from the discovery document.
         if discovery.code_challenge_methods_supported:

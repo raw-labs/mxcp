@@ -160,6 +160,12 @@ async def test_ensure_ready_requires_userinfo_endpoint(
     with pytest.raises(ProviderError) as exc_info:
         await adapter.ensure_ready()
     assert exc_info.value.error == "server_error"
+    assert adapter._discovery is None
+    assert fake_client.get_calls == 1
+
+    with pytest.raises(ProviderError):
+        await adapter.ensure_ready()
+    assert fake_client.get_calls == 2
 
 
 # ── build_authorize_url ─────────────────────────────────────────────────
