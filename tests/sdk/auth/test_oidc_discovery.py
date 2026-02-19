@@ -75,11 +75,12 @@ def test_missing_token_endpoint_rejected() -> None:
 
 def test_extra_fields_ignored() -> None:
     data = dict(VALID_DISCOVERY)
-    data["jwks_uri"] = "https://idp.example.com/jwks"
-    data["response_types_supported"] = ["code"]
+    data['jwks_uri'] = 'https://idp.example.com/jwks'
+    data['response_types_supported'] = ['code']
     doc = OIDCDiscoveryDocument.model_validate(data)
-    assert doc.issuer == "https://idp.example.com"
-    assert not hasattr(doc, "jwks_uri")
+    assert doc.issuer == 'https://idp.example.com'
+    assert doc.jwks_uri == 'https://idp.example.com/jwks'
+    assert not hasattr(doc, 'response_types_supported')
 
 
 def test_pkce_detection_from_discovery() -> None:
