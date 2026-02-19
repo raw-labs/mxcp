@@ -2,22 +2,20 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import time
-from typing import Any, Sequence
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
 import jwt
+from jwt import PyJWKClient
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.shared._httpx_utils import create_mcp_http_client
-from jwt import PyJWKClient
 
 from mxcp.sdk.auth.context import set_verified_user_info
-from mxcp.sdk.auth.contracts import ProviderError, UserInfo
+from mxcp.sdk.auth.contracts import UserInfo
 from mxcp.sdk.auth.models import OIDCVerifierAuthConfigModel
-from mxcp.sdk.auth.providers.oidc import fetch_oidc_discovery, OIDCDiscoveryDocument
+from mxcp.sdk.auth.providers.oidc import OIDCDiscoveryDocument, fetch_oidc_discovery
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +65,9 @@ class OIDCTokenVerifier(TokenVerifier):
             claims = await self._call_userinfo(token)
 
         if claims is None:
-            logger.warning("OIDC verifier: unable to validate token (no jwt/introspection/userinfo)")
+            logger.warning(
+                "OIDC verifier: unable to validate token (no jwt/introspection/userinfo)"
+            )
             return None
 
         user_info = self._build_user_info(claims)
@@ -77,7 +77,7 @@ class OIDCTokenVerifier(TokenVerifier):
 
         scopes = _split_scopes(claims.get("scope")) or _split_scopes(self.scope)
         exp = claims.get("exp")
-        expires_at = int(exp) if isinstance(exp, (int, float)) else None
+        expires_at = int(exp) if isinstance(exp, (int | float)) else None
         client_id = claims.get("client_id") or claims.get("azp") or self.client_id
 
         return AccessToken(
@@ -125,9 +125,13 @@ class OIDCTokenVerifier(TokenVerifier):
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with create_mcp_http_client() as client:
             try:
-                resp = await client.post(self._introspection_url, data=urlencode(data), headers=headers)
+                resp = await client.post(
+                    self._introspection_url, data=urlencode(data), headers=headers
+                )
             except httpx.RequestError as exc:
-                logger.warning("OIDC introspection request failed", extra={"error": exc.__class__.__name__})
+                logger.warning(
+                    "OIDC introspection request failed", extra={"error": exc.__class__.__name__}
+                )
                 return None
         if resp.status_code != 200:
             logger.warning("OIDC introspection non-200", extra={"status_code": resp.status_code})
@@ -150,7 +154,9 @@ class OIDCTokenVerifier(TokenVerifier):
             try:
                 resp = await client.get(self._userinfo_url, headers=headers)
             except httpx.RequestError as exc:
-                logger.warning("OIDC userinfo request failed", extra={"error": exc.__class__.__name__})
+                logger.warning(
+                    "OIDC userinfo request failed", extra={"error": exc.__class__.__name__}
+                )
                 return None
         if resp.status_code != 200:
             return None
