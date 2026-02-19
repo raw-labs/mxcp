@@ -16,6 +16,8 @@ import signal
 import sys
 import time
 import asyncio
+import threading
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
@@ -66,7 +68,7 @@ def load_config() -> EnvConfig:
         expected_mode=_env("EXPECTED_MODE", default="verifier") or "verifier",
         expected_email=_env("EXPECTED_EMAIL"),
         expected_provider=_env("EXPECTED_PROVIDER"),
-        ready_timeout_sec=float(_env("MXCP_READY_TIMEOUT", default="30") or "30"),
+        ready_timeout_sec=float(_env("MXCP_READY_TIMEOUT", default="10") or "10"),
     )
 
 
@@ -109,7 +111,14 @@ def _parse_port(mxcp_url: str) -> int:
     return 80
 
 
-def start_mxcp(config: EnvConfig) -> subprocess.Popen[str]:
+def _stream_output(pipe, out, buffer: deque[str], label: str) -> None:
+    for line in iter(pipe.readline, ""):
+        out.write(line)
+        out.flush()
+        buffer.append(f"{label}{line}")
+
+
+def start_mxcp(config: EnvConfig, log_buffer: deque[str]) -> subprocess.Popen[str]:
     port = _parse_port(config.mxcp_url)
     env = os.environ.copy()
     if not env.get("MXCP_CONFIG"):
@@ -124,15 +133,28 @@ def start_mxcp(config: EnvConfig) -> subprocess.Popen[str]:
         str(port),
         "--debug",
     ]
-    return subprocess.Popen(
+    proc = subprocess.Popen(
         cmd,
         env=env,
         cwd=config.mxcp_project_dir,
         text=True,
-        stdout=sys.stdout,
-        stderr=sys.stderr,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         preexec_fn=os.setsid,
     )
+    assert proc.stdout is not None
+    assert proc.stderr is not None
+    threading.Thread(
+        target=_stream_output,
+        args=(proc.stdout, sys.stdout, log_buffer, ""),
+        daemon=True,
+    ).start()
+    threading.Thread(
+        target=_stream_output,
+        args=(proc.stderr, sys.stderr, log_buffer, ""),
+        daemon=True,
+    ).start()
+    return proc
 
 
 def _extract_tool_result(result: Any) -> dict[str, Any]:
@@ -168,11 +190,21 @@ async def call_tool_via_mcp(mxcp_url: str, tool_name: str, token: str) -> dict[s
 
 
 async def wait_for_mcp_and_call(
-    mxcp_url: str, tool_name: str, token: str, timeout_sec: float
+    mxcp_url: str,
+    tool_name: str,
+    token: str,
+    timeout_sec: float,
+    proc: subprocess.Popen[str] | None,
+    log_buffer: deque[str],
 ) -> dict[str, Any]:
     deadline = time.time() + timeout_sec
     last_error: Exception | None = None
     while time.time() < deadline:
+        if proc is not None and proc.poll() is not None:
+            tail = "".join(list(log_buffer)[-200:])
+            raise RuntimeError(
+                f"MXCP exited early (code {proc.returncode}). Recent output:\n{tail}"
+            )
         try:
             return await call_tool_via_mcp(mxcp_url, tool_name, token)
         except Exception as exc:
@@ -218,14 +250,17 @@ def main() -> int:
     token = fetch_token(token_url, config)
 
     proc: subprocess.Popen[str] | None = None
+    log_buffer: deque[str] = deque(maxlen=400)
     try:
-        proc = start_mxcp(config)
+        proc = start_mxcp(config, log_buffer)
         result = asyncio.run(
             wait_for_mcp_and_call(
                 config.mxcp_url,
                 config.mxcp_tool_name,
                 token,
                 config.ready_timeout_sec,
+                proc,
+                log_buffer,
             )
         )
         assert_result(result, config)

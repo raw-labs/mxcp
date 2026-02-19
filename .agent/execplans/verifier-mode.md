@@ -19,6 +19,8 @@ MXCP currently runs OAuth in issuer mode, where MXCP acts as the IdP for MCP cli
 
 - Observation: MXCP streamable-http does not expose `/tools` as a simple REST endpoint; tool calls must use MCP JSON-RPC over the `/mcp/` streamable-http transport.
   Evidence: Repeated `GET /tools` returned 404 while the MCP client library (`streamablehttp_client` + `ClientSession`) successfully connected and called tools.
+- Observation: Mode-based OIDC re-validation on frozen config models must use `object.__setattr__` to avoid `frozen_instance` errors.
+  Evidence: `mxcp validate` failed with `Instance is frozen` until the validator used `object.__setattr__`.
 
 ## Decision Log
 
@@ -36,6 +38,9 @@ MXCP currently runs OAuth in issuer mode, where MXCP acts as the IdP for MCP cli
   Date/Author: 2026-02-18 / Codex
 - Decision: Implement OIDC verifier config parsing via Option C (mode-specific OIDC models with re-validation).
   Rationale: Keeps existing auth shape while allowing `callback_path` to be omitted in verifier mode.
+  Date/Author: 2026-02-19 / Codex
+- Decision: Use `object.__setattr__` when coercing `oidc` inside `UserAuthConfigModel` validators.
+  Rationale: The model is frozen; direct assignment raises `frozen_instance` errors during config validation.
   Date/Author: 2026-02-19 / Codex
 - Decision: Use small, focused commits with one-line commit messages throughout implementation.
   Rationale: This keeps the verifier work easy to review and bisect.
