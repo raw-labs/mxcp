@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-from urllib.parse import urlencode
 
 import httpx
 import jwt
@@ -51,18 +50,30 @@ class OIDCTokenVerifier(TokenVerifier):
     async def verify_token(self, token: str) -> AccessToken | None:
         await self._ensure_ready()
         claims: dict[str, Any] | None = None
+        verification_path: str | None = None
 
         # Prefer JWT validation if token looks like JWT and jwks is available.
         if self._jwks_client and _looks_like_jwt(token):
             claims = await self._verify_jwt(token)
+            if claims is not None:
+                verification_path = "jwt"
+                logger.debug("OIDC verifier: JWT verification succeeded")
+            else:
+                logger.debug("OIDC verifier: JWT verification failed; trying fallbacks")
 
         # Fallback to introspection
         if claims is None and self._introspection_url:
             claims = await self._call_introspection(token)
+            if claims is not None:
+                verification_path = "introspection"
+                logger.debug("OIDC verifier: introspection succeeded")
 
         # Fallback to userinfo (weak)
         if claims is None and self._userinfo_url:
             claims = await self._call_userinfo(token)
+            if claims is not None:
+                verification_path = "userinfo"
+                logger.debug("OIDC verifier: userinfo fallback succeeded")
 
         if claims is None:
             logger.warning(
@@ -74,6 +85,16 @@ class OIDCTokenVerifier(TokenVerifier):
         if not user_info:
             return None
         set_verified_user_info(user_info)
+
+        if verification_path:
+            logger.debug(
+                "OIDC verifier: selected validation path",
+                extra={
+                    "provider": self._provider_name,
+                    "issuer": self._issuer,
+                    "path": verification_path,
+                },
+            )
 
         scopes = _split_scopes(claims.get("scope")) or _split_scopes(self.scope)
         exp = claims.get("exp")
