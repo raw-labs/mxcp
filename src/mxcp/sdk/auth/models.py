@@ -172,7 +172,7 @@ class AuthorizationConfigModel(SdkBaseModel):
 
 
 class OIDCAuthConfigModel(SdkBaseModel):
-    """Generic OIDC provider configuration.
+    """Generic OIDC provider configuration (issuer mode).
 
     Endpoints are auto-discovered from the OpenID Connect discovery document
     at ``config_url`` (typically ``…/.well-known/openid-configuration``).
@@ -201,12 +201,41 @@ class OIDCAuthConfigModel(SdkBaseModel):
         return value
 
 
+class OIDCVerifierAuthConfigModel(SdkBaseModel):
+    """Generic OIDC provider configuration (verifier mode).
+
+    Endpoints are auto-discovered from the OpenID Connect discovery document
+    at ``config_url`` (typically ``…/.well-known/openid-configuration``).
+    """
+
+    config_url: str
+    client_id: str
+    client_secret: str
+    # OAuth 2.0 scope string to request at the provider's /authorize endpoint.
+    #
+    # Intentionally required: the SDK must not invent default scopes (which could
+    # silently broaden permissions). Defaults, if any, belong in higher-level
+    # configuration or templates.
+    scope: str
+    audience: str | None = None
+    provider_name: str | None = None
+
+    @field_validator("scope")
+    @classmethod
+    def _ensure_openid_scope(cls, value: str) -> str:
+        scopes = value.split()
+        if "openid" not in scopes:
+            raise ValueError("OIDC scope must include 'openid'")
+        return value
+
+
 class AuthConfigModel(SdkBaseModel):
     """Minimal authentication configuration for the OAuth server (issuer-mode)."""
 
     # Override frozen=True since this is a config object
     model_config = ConfigDict(extra="forbid", frozen=False)
 
+    mode: Literal["issuer", "verifier"] = "issuer"
     provider: (
         Literal["none", "github", "atlassian", "salesforce", "keycloak", "google", "oidc"] | None
     ) = None

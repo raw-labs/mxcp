@@ -17,7 +17,6 @@ projects:
             client_id: "${OIDC_CLIENT_ID}"
             client_secret: "${OIDC_CLIENT_SECRET}"
             scope: "openid profile email"
-            callback_path: "/oidc/callback"
             # Optional: label surfaced by get_user_provider(); defaults to "oidc"
             # provider_name: "my-idp"
           # Optional verifier settings (requires verifier-mode implementation)

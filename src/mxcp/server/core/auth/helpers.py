@@ -52,6 +52,7 @@ def translate_auth_config(user_auth_config: UserAuthConfigModel) -> AuthConfigMo
         )
 
     return AuthConfigModel(
+        mode=user_auth_config.mode,
         provider=user_auth_config.provider,
         clients=clients,
         authorization=authorization,

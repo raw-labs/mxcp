@@ -386,9 +386,29 @@ class UserOIDCAuthConfigModel(BaseModel):
         return value
 
 
+class UserOIDCVerifierAuthConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    config_url: str
+    client_id: str
+    client_secret: str
+    scope: str
+    audience: str | None = None
+    provider_name: str | None = None
+
+    @field_validator("scope")
+    @classmethod
+    def _ensure_openid_scope(cls, value: str) -> str:
+        scopes = value.split()
+        if "openid" not in scopes:
+            raise ValueError("OIDC scope must include 'openid'")
+        return value
+
+
 class UserAuthConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    mode: Literal["issuer", "verifier"] = "issuer"
     provider: Literal["none", "github", "atlassian", "salesforce", "keycloak", "google", "oidc"] = (
         "none"
     )
@@ -398,7 +418,7 @@ class UserAuthConfigModel(BaseModel):
     salesforce: UserSalesforceAuthConfigModel | None = None
     keycloak: UserKeycloakAuthConfigModel | None = None
     google: UserGoogleAuthConfigModel | None = None
-    oidc: UserOIDCAuthConfigModel | None = None
+    oidc: UserOIDCAuthConfigModel | UserOIDCVerifierAuthConfigModel | None = None
     authorization: UserAuthorizationConfigModel | None = None
     persistence: UserAuthPersistenceConfigModel | None = None
 
@@ -413,6 +433,18 @@ class UserAuthConfigModel(BaseModel):
         updated_fields = set(getattr(self, "__pydantic_fields_set__", set()))
         updated_fields.update({"provider", "persistence"})
         object.__setattr__(self, "__pydantic_fields_set__", updated_fields)
+        return self
+
+    @model_validator(mode="after")
+    def _coerce_oidc_by_mode(self) -> UserAuthConfigModel:
+        if self.provider != "oidc" or self.oidc is None:
+            return self
+
+        data = self.oidc.model_dump(exclude_none=True)
+        if self.mode == "issuer":
+            self.oidc = UserOIDCAuthConfigModel.model_validate(data)
+        else:
+            self.oidc = UserOIDCVerifierAuthConfigModel.model_validate(data)
         return self
 
 

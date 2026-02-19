@@ -10,7 +10,7 @@ MXCP currently runs OAuth in issuer mode, where MXCP acts as the IdP for MCP cli
 
 ## Progress
 
-- [ ] (2026-02-18 00:00Z) Make config parsing accept `auth.mode: verifier` (config-first).
+- [x] (2026-02-19 00:00Z) Make config parsing accept `auth.mode: verifier` for OIDC via mode-specific OIDC models (Option C).
 - [ ] (2026-02-18 00:00Z) Implement token validation pipeline (JWT via JWKS, optional introspection, optional userinfo enrichment).
 - [ ] (2026-02-18 00:00Z) Integrate verifier mode into request auth flow and add tests.
 - [x] (2026-02-18 00:00Z) Add end-to-end integration test script that uses a real Keycloak server via environment variables (implemented at `scripts/test_oidc_verifier_e2e.py`, uses MCP streamable-http client, boots `mxcp serve`, and supports `EXPECTED_MODE=none` for no-auth validation).
@@ -34,6 +34,9 @@ MXCP currently runs OAuth in issuer mode, where MXCP acts as the IdP for MCP cli
 - Decision: Order of work is config-first, then implementation, then e2e test run.
   Rationale: `mxcp validate` should accept verifier configs before runtime behavior lands, and the e2e test is only meaningful after implementation.
   Date/Author: 2026-02-18 / Codex
+- Decision: Implement OIDC verifier config parsing via Option C (mode-specific OIDC models with re-validation).
+  Rationale: Keeps existing auth shape while allowing `callback_path` to be omitted in verifier mode.
+  Date/Author: 2026-02-19 / Codex
 - Decision: Use small, focused commits with one-line commit messages throughout implementation.
   Rationale: This keeps the verifier work easy to review and bisect.
   Date/Author: 2026-02-18 / Codex
