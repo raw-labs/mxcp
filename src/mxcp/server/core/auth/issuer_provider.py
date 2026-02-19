@@ -23,6 +23,7 @@ from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyUrl, ValidationError
 
 from mxcp.sdk.auth.auth_service import AuthService
+from mxcp.sdk.auth.context import set_verified_user_info
 from mxcp.sdk.auth.contracts import ProviderError, UserInfo
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import ClientRecord, StoredSession
@@ -402,6 +403,8 @@ class IssuerOAuthAuthorizationServer(
             return None
         if session.access_expires_at and session.access_expires_at < time.time():
             return None
+        # Expose user info for this request (used by tool context)
+        set_verified_user_info(session.user_info)
         mxcp_scopes = session.user_info.mxcp_scopes or []
         return AccessToken(
             token=session.access_token,

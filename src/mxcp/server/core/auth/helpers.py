@@ -14,6 +14,7 @@ from mxcp.sdk.auth.models import (
     KeycloakAuthConfigModel,
     OAuthClientConfigModel,
     OIDCAuthConfigModel,
+    OIDCVerifierAuthConfigModel,
     SalesforceAuthConfigModel,
 )
 from mxcp.sdk.auth.providers.atlassian import AtlassianProviderAdapter
@@ -23,6 +24,7 @@ from mxcp.sdk.auth.providers.keycloak import KeycloakProviderAdapter
 from mxcp.sdk.auth.providers.oidc import OIDCProviderAdapter
 from mxcp.sdk.auth.providers.salesforce import SalesforceProviderAdapter
 from mxcp.sdk.auth.url_utils import URLBuilder
+from mxcp.sdk.auth.verifier import OIDCTokenVerifier
 from mxcp.server.core.config.models import (
     UserAuthConfigModel,
     UserConfigModel,
@@ -105,6 +107,8 @@ def create_provider_adapter(
     user_config: UserConfigModel | None = None,
 ) -> ProviderAdapter | None:
     """Create a ProviderAdapter for issuer-mode OAuth."""
+    if user_auth_config.mode == "verifier":
+        return None
     provider = user_auth_config.provider
     if provider == "none":
         return None
@@ -158,3 +162,18 @@ def create_provider_adapter(
         return OIDCProviderAdapter(oidc_model)
 
     raise ValueError(f"Unsupported provider for adapter: {provider}")
+
+
+def create_token_verifier(user_auth_config: UserAuthConfigModel) -> OIDCTokenVerifier | None:
+    """Create a TokenVerifier for verifier-mode auth."""
+    if user_auth_config.mode != "verifier":
+        return None
+    if user_auth_config.provider != "oidc":
+        raise ValueError("Verifier mode currently supports provider=oidc only")
+    oidc_config = user_auth_config.oidc
+    if not oidc_config:
+        raise ValueError("OIDC verifier selected but no OIDC configuration found")
+    oidc_model = OIDCVerifierAuthConfigModel.model_validate(
+        _model_dump_with_scope(oidc_config)
+    )
+    return OIDCTokenVerifier(oidc_model)
