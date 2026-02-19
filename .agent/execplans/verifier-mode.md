@@ -84,6 +84,8 @@ Fourth, integrate verifier mode into the server request auth flow so that authen
 
 Fifth, add an end-to-end integration test script that uses a live Keycloak server. The script should read `KEYCLOAK_SERVER_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, and test credentials supplied via `KEYCLOAK_USERNAME` and `KEYCLOAK_PASSWORD` to obtain an access token via the password grant. It should then start `mxcp serve --transport streamable-http` in a configurable project directory and call a tool via the MCP streamable-http client, including the bearer token on the MCP requests. The script should assert that the response contains the expected username/email fields (or nulls when `EXPECTED_MODE=none`). The script must shut down the spawned MXCP process on exit.
 
+Testing approach: prefer the end-to-end verifier script as the acceptance check. Avoid adding permanent unit tests that constrain production shape (e.g., old AuthenticationMiddleware). Temporary helper tests are acceptable if they help during implementation but can be removed once the e2e passes.
+
 ## Concrete Steps
 
 1. Update configuration models.
