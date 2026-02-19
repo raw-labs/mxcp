@@ -19,12 +19,3 @@ projects:
             scope: "openid profile email"
             # Optional: label surfaced by get_user_provider(); defaults to "oidc"
             # provider_name: "my-idp"
-          # Optional verifier settings (requires verifier-mode implementation)
-          # verifier:
-          #   token_hint: auto
-          #   validation: auto
-          #   userinfo: optional
-          #   # Optional overrides if discovery is incomplete
-          #   # introspection_endpoint: "https://idp.example.com/introspect"
-          #   # userinfo_endpoint: "https://idp.example.com/userinfo"
-          #   # jwks_uri: "https://idp.example.com/.well-known/jwks.json"
