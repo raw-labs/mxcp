@@ -21,6 +21,8 @@ MXCP currently runs OAuth in issuer mode, where MXCP acts as the IdP for MCP cli
   Evidence: Repeated `GET /tools` returned 404 while the MCP client library (`streamablehttp_client` + `ClientSession`) successfully connected and called tools.
 - Observation: Mode-based OIDC re-validation on frozen config models must use `object.__setattr__` to avoid `frozen_instance` errors.
   Evidence: `mxcp validate` failed with `Instance is frozen` until the validator used `object.__setattr__`.
+- Observation: FastMCP can validate tokens using the `token_verifier` hook, but it only returns `AccessToken` (scopes/expires/client_id), not user profile data.
+  Evidence: `mcp.server.auth.provider.AccessToken` lacks user fields; user context must be computed by MXCP separately.
 
 ## Decision Log
 
@@ -42,6 +44,12 @@ MXCP currently runs OAuth in issuer mode, where MXCP acts as the IdP for MCP cli
 - Decision: Use `object.__setattr__` when coercing `oidc` inside `UserAuthConfigModel` validators.
   Rationale: The model is frozen; direct assignment raises `frozen_instance` errors during config validation.
   Date/Author: 2026-02-19 / Codex
+- Decision: Use FastMCP's `token_verifier` for verification, and cache MXCP `UserInfo` in a request-scoped context variable for user-context construction.
+  Rationale: Ensures IdP validation happens once per request while still populating tool user context.
+  Date/Author: 2026-02-19 / Codex
+- Decision: In issuer mode, store `UserInfo` in a request-scoped context variable during `load_access_token` and reuse it when building user context to avoid duplicate store lookups.
+  Rationale: Keeps persistence via token store while avoiding redundant `SessionManager.get_session` calls in the same request.
+  Date/Author: 2026-02-19 / Codex
 - Decision: Use small, focused commits with one-line commit messages throughout implementation.
   Rationale: This keeps the verifier work easy to review and bisect.
   Date/Author: 2026-02-18 / Codex
@@ -59,6 +67,10 @@ Verifier mode will live alongside issuer mode. It should not run the OAuth autho
 ## Plan of Work
 
 First, extend configuration to accept `auth.mode: issuer|verifier` with a default of `issuer` to preserve behavior. Add a `verifier` sub-config block that controls validation strategy, including token hint (`auto|jwt|opaque`), whether to use introspection when available, and whether to call `userinfo` to enrich identity. These new config fields must be documented in `docs/security/authentication.md` and, if needed, in an example config under `examples/`.
+
+Second, implement verifier mode using FastMCP’s `token_verifier` hook. FastMCP will call our verifier on each request; this is the *only* place where IdP validation should occur. The verifier should return MCP’s `AccessToken` (scopes/expires/client_id) to satisfy FastMCP, and also compute MXCP `UserInfo` for tool context. Store the computed `UserInfo` in a single request-scoped context variable (`verified_user_info`); the tool wrapper will read it, set `UserContextModel`, and then clear it (no reset tokens, just set to `None`).
+
+Third, in issuer mode, store `UserInfo` in `verified_user_info` during `IssuerOAuthAuthorizationServer.load_access_token(...)` (which already reads from the token store). The tool wrapper will set `user_context` from `verified_user_info` and then clear both `user_context` and `verified_user_info` after execution. No SessionManager lookup is needed for the same request (we keep the store for persistence across requests).
 
 Second, implement a verifier pipeline that is provider-aware but OIDC-first. For `provider: oidc`, use discovery to fetch `jwks_uri`, `userinfo_endpoint`, and `introspection_endpoint` (if present). In verifier mode, obtain the bearer token from incoming requests, then:
 
