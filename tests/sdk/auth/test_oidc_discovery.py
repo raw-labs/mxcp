@@ -79,7 +79,8 @@ def test_extra_fields_ignored() -> None:
     data["response_types_supported"] = ["code"]
     doc = OIDCDiscoveryDocument.model_validate(data)
     assert doc.issuer == "https://idp.example.com"
-    assert not hasattr(doc, "jwks_uri")
+    assert doc.jwks_uri == "https://idp.example.com/jwks"
+    assert not hasattr(doc, "response_types_supported")
 
 
 def test_pkce_detection_from_discovery() -> None:

@@ -39,8 +39,10 @@ class OIDCDiscoveryDocument(SdkBaseModel):
     issuer: str
     authorization_endpoint: str
     token_endpoint: str
+    jwks_uri: str | None = None
     userinfo_endpoint: str | None = None
     revocation_endpoint: str | None = None
+    introspection_endpoint: str | None = None
     code_challenge_methods_supported: list[str] | None = None
 
 

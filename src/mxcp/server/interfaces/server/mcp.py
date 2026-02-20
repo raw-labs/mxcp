@@ -16,19 +16,25 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeVar, cast
 
 import uvicorn
 from makefun import create_function
-from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import Context as FastMCPContextRuntime
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import OAuthClientInformationFull
 from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, AnyUrl, ConfigDict, Field, ValidationError, create_model
+from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse, RedirectResponse
 
 from mxcp.sdk.audit import AuditLogger
 from mxcp.sdk.auth.auth_service import AuthService
-from mxcp.sdk.auth.context import get_user_context
-from mxcp.sdk.auth.middleware import AuthenticationMiddleware
+from mxcp.sdk.auth.context import (
+    clear_verified_user_info,
+    get_user_context,
+    get_verified_user_info,
+    reset_user_context,
+    set_user_context,
+)
+from mxcp.sdk.auth.models import UserContextModel
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import SqliteTokenStore
 from mxcp.sdk.core import PACKAGE_VERSION
@@ -44,6 +50,7 @@ from mxcp.sdk.telemetry import (
 from mxcp.server.admin import AdminAPIRunner
 from mxcp.server.core.auth.helpers import (
     create_provider_adapter,
+    create_token_verifier,
     create_url_builder,
     translate_auth_config,
 )
@@ -463,6 +470,8 @@ class RAWMCP:
         """Initialize OAuth authentication using profile-specific auth config."""
         auth_config = self.active_profile.auth
         self.oauth_handler = None  # legacy path disabled for Phase 2
+        self.auth_enabled = False
+        self.token_verifier = None
         # The server-side provider adapter exposes HTTP callback route details
         # (callback_path) beyond the SDK ProviderAdapter protocol, so we keep the
         # attribute permissively typed.
@@ -475,6 +484,27 @@ class RAWMCP:
         self.session_manager: SessionManager | None = None
         self.oauth_server = None
         self.auth_settings = None
+
+        # Verifier mode: use token verifier instead of OAuth server
+        if auth_config.mode == "verifier":
+            self.token_verifier = create_token_verifier(auth_config)
+            if not self.token_verifier:
+                logger.info("OAuth authentication disabled")
+                return
+            self.auth_enabled = True
+            url_builder = create_url_builder(self.user_config)
+            base_url = url_builder.get_base_url(host=self.host, port=self.port)
+            auth_config_dict = translate_auth_config(auth_config)
+            auth_authorization = auth_config_dict.authorization
+            required_scopes = auth_authorization.required_scopes if auth_authorization else []
+            self.auth_settings = AuthSettings(
+                issuer_url=cast(AnyHttpUrl, base_url),
+                resource_server_url=cast(AnyHttpUrl, base_url),
+                client_registration_options=None,
+                required_scopes=required_scopes if required_scopes else None,
+            )
+            logger.info("OAuth verifier mode enabled with provider: %s", auth_config.provider)
+            return
 
         if not self.provider_adapter:
             logger.info("OAuth authentication disabled")
@@ -534,6 +564,7 @@ class RAWMCP:
             required_scopes=required_scopes if required_scopes else None,
         )
         logger.info(f"OAuth authentication enabled with provider: {auth_config.provider}")
+        self.auth_enabled = True
 
     def _build_oauth_clients(
         self,
@@ -579,17 +610,11 @@ class RAWMCP:
         if self.auth_settings and self.oauth_server:
             fastmcp_kwargs["auth"] = self.auth_settings
             fastmcp_kwargs["auth_server_provider"] = self.oauth_server
+        elif self.auth_settings and getattr(self, "token_verifier", None):
+            fastmcp_kwargs["auth"] = self.auth_settings
+            fastmcp_kwargs["token_verifier"] = self.token_verifier
 
         self.mcp = FastMCP(**fastmcp_kwargs)
-
-        # Initialize authentication middleware
-        self.auth_middleware = AuthenticationMiddleware(
-            session_manager=self.session_manager,
-            provider_adapter=getattr(self, "provider_adapter", None),
-            token_getter=lambda: (
-                access_token.token if (access_token := get_access_token()) else None
-            ),
-        )
 
         # Register OAuth routes if enabled
         if self.oauth_server:
@@ -622,6 +647,40 @@ class RAWMCP:
             logger.info("Stopping admin API")
             await self.admin_api.stop()
             logger.info("Admin API stopped")
+
+    def require_user_info(
+        self, func: Callable[..., Awaitable[Any]]
+    ) -> Callable[..., Awaitable[Any]]:
+        """Wrap a handler to ensure verified user info is present and set tool context."""
+
+        @functools.wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if not self.auth_enabled:
+                return await func(*args, **kwargs)
+
+            info = get_verified_user_info()
+            if info is None:
+                raise HTTPException(401, "Authentication required")
+
+            ctx_token = set_user_context(
+                UserContextModel(
+                    provider=info.provider,
+                    user_id=info.user_id,
+                    username=info.username,
+                    email=info.email,
+                    name=info.name,
+                    avatar_url=info.avatar_url,
+                    raw_profile=info.raw_profile,
+                    external_token=None,
+                )
+            )
+            try:
+                return await func(*args, **kwargs)
+            finally:
+                reset_user_context(ctx_token)
+                clear_verified_user_info()
+
+        return wrapper
 
     async def _initialize_audit_logger(self) -> None:
         """Initialize audit logger once the event loop is running."""
@@ -1493,7 +1552,7 @@ class RAWMCP:
         # -------------------------------------------------------------------
         # Wrap with authentication middleware
         # -------------------------------------------------------------------
-        authenticated_body = self.auth_middleware.require_auth(_body)
+        authenticated_body = self.require_user_info(_body)
 
         # -------------------------------------------------------------------
         # Create function with proper signature and annotations using makefun
@@ -1598,7 +1657,7 @@ class RAWMCP:
                 openWorldHint=False,  # Operates on closed database
             ),
         )
-        @self.auth_middleware.require_auth
+        @self.require_user_info
         async def execute_sql_query(sql: str) -> list[dict[str, Any]]:
             """Execute a SQL query against the DuckDB database.
 
@@ -1663,7 +1722,7 @@ class RAWMCP:
                 openWorldHint=False,  # Operates on closed database
             ),
         )
-        @self.auth_middleware.require_auth
+        @self.require_user_info
         async def list_tables() -> list[dict[str, str]]:
             """List all tables in the DuckDB database.
 
@@ -1730,7 +1789,7 @@ class RAWMCP:
                 openWorldHint=False,  # Operates on closed database
             ),
         )
-        @self.auth_middleware.require_auth
+        @self.require_user_info
         async def get_table_schema(table_name: str) -> list[dict[str, Any]]:
             """Get the schema for a specific table.
 
