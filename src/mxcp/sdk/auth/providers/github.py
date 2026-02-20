@@ -16,6 +16,7 @@ from mxcp.sdk.models import SdkBaseModel
 
 from ..contracts import GrantResult, ProviderAdapter, ProviderError, UserInfo
 from ..models import GitHubAuthConfigModel
+from .scope_utils import normalize_granted_scopes
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ class GitHubProviderAdapter(ProviderAdapter):
             raise ProviderError("invalid_grant", "No access_token in response", status_code=400)
 
         expires_at = time.time() + float(expires_in) if expires_in is not None else None
-        granted_scopes = token.scope.split(",") if token.scope else list(scopes)
+        granted_scopes = normalize_granted_scopes(token.scope, scopes, separator=",")
         token_type = token.token_type if token.token_type is not None else "Bearer"
 
         return GrantResult(
@@ -161,7 +162,7 @@ class GitHubProviderAdapter(ProviderAdapter):
         if not access_token:
             raise ProviderError("invalid_grant", "No access_token in refresh response", 400)
 
-        granted_scopes = (token.scope.split(",") if token.scope else []) or list(scopes)
+        granted_scopes = normalize_granted_scopes(token.scope, scopes, separator=",")
         expires_at = time.time() + float(expires_in) if expires_in is not None else None
         token_type = token.token_type if token.token_type is not None else "Bearer"
 
