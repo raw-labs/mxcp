@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 import jwt
 from jwt import PyJWKClient
+from jwt.types import Options
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.shared._httpx_utils import create_mcp_http_client
 
@@ -113,7 +114,7 @@ class OIDCTokenVerifier(TokenVerifier):
             return None
         try:
             signing_key = await _get_signing_key(self._jwks_client, token)
-            options = {
+            options: Options = {
                 "verify_signature": True,
                 "verify_exp": True,
                 "verify_nbf": True,
