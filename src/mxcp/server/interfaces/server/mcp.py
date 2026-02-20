@@ -1963,6 +1963,8 @@ class RAWMCP:
         """Initialize OAuth server persistence if enabled."""
         if self.oauth_server:
             try:
+                if hasattr(self.provider_adapter, "ensure_ready"):
+                    await self.provider_adapter.ensure_ready()
                 await self.oauth_server.initialize()
                 logger.info("OAuth server initialized successfully")
             except Exception as e:
