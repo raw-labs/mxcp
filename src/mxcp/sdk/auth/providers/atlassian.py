@@ -16,6 +16,7 @@ from mxcp.sdk.models import SdkBaseModel
 
 from ..contracts import GrantResult, ProviderAdapter, ProviderError, UserInfo
 from ..models import AtlassianAuthConfigModel
+from .scope_utils import normalize_granted_scopes
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +140,7 @@ class AtlassianProviderAdapter(ProviderAdapter):
         # - The token endpoint `scope` field is OPTIONAL. When absent, it generally means
         #   the granted scopes are identical to those requested at the authorize step.
         # - Do NOT interpret missing `scope` as “zero scopes”.
-        granted_scopes = token.scope.split() if token.scope else list(scopes)
+        granted_scopes = normalize_granted_scopes(token.scope, scopes)
         token_type = token.token_type if token.token_type is not None else "Bearer"
 
         return GrantResult(
@@ -168,7 +169,7 @@ class AtlassianProviderAdapter(ProviderAdapter):
             raise ProviderError("invalid_grant", "No access_token in refresh response", 400)
 
         expires_at = time.time() + float(expires_in) if expires_in is not None else None
-        granted_scopes = (token.scope.split() if token.scope else []) or list(scopes)
+        granted_scopes = normalize_granted_scopes(token.scope, scopes)
         token_type = token.token_type if token.token_type is not None else "Bearer"
 
         return GrantResult(
