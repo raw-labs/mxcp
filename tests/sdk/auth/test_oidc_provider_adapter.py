@@ -366,6 +366,37 @@ async def test_fetch_user_info_happy_path(
 
 
 @pytest.mark.asyncio
+async def test_fetch_user_info_happy_path_with_http_client(
+    monkeypatch: MonkeyPatch, oidc_config: OIDCAuthConfigModel
+) -> None:
+    get_response = FakeResponse(
+        200,
+        {
+            "sub": "user-1",
+            "email": "user@example.com",
+            "preferred_username": "user",
+            "picture": "pic",
+            "scope": "openid email",
+        },
+    )
+    post_response = FakeResponse(200, {})
+    fake_client = FakeAsyncHttpClient(
+        post_response=post_response,
+        default_get_response=get_response,
+    )
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.oidc.create_mcp_http_client", fake_client
+    )
+    adapter = OIDCProviderAdapter(oidc_config)
+    _make_ready(adapter, DISCOVERY_DOC)
+
+    user_info = await adapter.fetch_user_info(access_token="at")
+    assert user_info.user_id == "user-1"
+    assert user_info.email == "user@example.com"
+    assert user_info.avatar_url == "pic"
+
+
+@pytest.mark.asyncio
 async def test_fetch_user_info_requires_sub(
     monkeypatch: MonkeyPatch, oidc_config: OIDCAuthConfigModel
 ) -> None:

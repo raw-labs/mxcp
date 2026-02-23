@@ -113,3 +113,34 @@ async def test_fetch_user_info_requires_account_id(
     monkeypatch.setattr(adapter, "_fetch_me", lambda token: asyncio.sleep(0, {"name": "n"}))
     with pytest.raises(ProviderError):
         await adapter.fetch_user_info(access_token="at")
+
+
+@pytest.mark.asyncio
+async def test_fetch_user_info_happy_path(
+    monkeypatch: MonkeyPatch, atlassian_config: AtlassianAuthConfigModel
+) -> None:
+    get_response = FakeResponse(
+        200,
+        {
+            "account_id": "acct-1",
+            "email": "user@example.com",
+            "name": "User",
+            "picture": "pic",
+            "nickname": "user",
+            "scope": "read:me offline_access",
+        },
+    )
+    post_response = FakeResponse(200, {})
+    fake_client = FakeAsyncHttpClient(
+        post_response=post_response,
+        default_get_response=get_response,
+    )
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.atlassian.create_mcp_http_client", fake_client
+    )
+    adapter = AtlassianProviderAdapter(atlassian_config)
+
+    user_info = await adapter.fetch_user_info(access_token="at")
+    assert user_info.user_id == "acct-1"
+    assert user_info.email == "user@example.com"
+    assert user_info.avatar_url == "pic"

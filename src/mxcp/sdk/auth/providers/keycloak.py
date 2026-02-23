@@ -226,53 +226,53 @@ class KeycloakProviderAdapter(ProviderAdapter):
                     status_code=503,
                 ) from exc
 
-        if resp.status_code != 200:
-            logger.warning(
-                "Keycloak userinfo endpoint returned non-200",
-                extra={
-                    "provider": self.provider_name,
-                    "endpoint": "userinfo",
-                    "status_code": resp.status_code,
-                },
-            )
-            raise ProviderError(
-                "invalid_token",
-                "Keycloak userinfo request failed",
-                status_code=resp.status_code,
-            )
+            if resp.status_code != 200:
+                logger.warning(
+                    "Keycloak userinfo endpoint returned non-200",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "userinfo",
+                        "status_code": resp.status_code,
+                    },
+                )
+                raise ProviderError(
+                    "invalid_token",
+                    "Keycloak userinfo request failed",
+                    status_code=resp.status_code,
+                )
 
-        try:
-            payload = resp.json()
-        except Exception as exc:
-            logger.warning(
-                "Keycloak userinfo endpoint returned invalid JSON",
-                extra={
-                    "provider": self.provider_name,
-                    "endpoint": "userinfo",
-                    "status_code": resp.status_code,
-                },
-            )
-            raise ProviderError(
-                "invalid_token",
-                "Keycloak userinfo response was invalid",
-                status_code=resp.status_code,
-            ) from exc
+            try:
+                payload = resp.json()
+            except Exception as exc:
+                logger.warning(
+                    "Keycloak userinfo endpoint returned invalid JSON",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "userinfo",
+                        "status_code": resp.status_code,
+                    },
+                )
+                raise ProviderError(
+                    "invalid_token",
+                    "Keycloak userinfo response was invalid",
+                    status_code=resp.status_code,
+                ) from exc
 
-        if not isinstance(payload, dict):
-            logger.warning(
-                "Keycloak userinfo endpoint returned non-object JSON",
-                extra={
-                    "provider": self.provider_name,
-                    "endpoint": "userinfo",
-                    "status_code": resp.status_code,
-                },
-            )
-            raise ProviderError(
-                "invalid_token",
-                "Keycloak userinfo response was invalid",
-                status_code=resp.status_code,
-            )
-        return payload
+            if not isinstance(payload, dict):
+                logger.warning(
+                    "Keycloak userinfo endpoint returned non-object JSON",
+                    extra={
+                        "provider": self.provider_name,
+                        "endpoint": "userinfo",
+                        "status_code": resp.status_code,
+                    },
+                )
+                raise ProviderError(
+                    "invalid_token",
+                    "Keycloak userinfo response was invalid",
+                    status_code=resp.status_code,
+                )
+            return payload
 
     async def _request_token(
         self,
@@ -302,7 +302,7 @@ class KeycloakProviderAdapter(ProviderAdapter):
                     "Keycloak token request failed",
                     status_code=503,
                 ) from exc
-        return self._parse_token_response(resp, context=context)
+            return self._parse_token_response(resp, context=context)
 
     def _parse_token_response(self, resp: Any, *, context: str) -> _KeycloakTokenResponse:
         if resp.status_code != 200:

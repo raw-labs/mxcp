@@ -160,3 +160,33 @@ async def test_fetch_user_info_happy_path(
     assert user_info.username == "user"
     assert user_info.avatar_url == "pic"
     assert user_info.provider_scopes_granted == ["openid", "email"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_user_info_happy_path_with_http_client(
+    monkeypatch: MonkeyPatch, keycloak_config: KeycloakAuthConfigModel
+) -> None:
+    get_response = FakeResponse(
+        200,
+        {
+            "sub": "user-1",
+            "email": "user@example.com",
+            "preferred_username": "user",
+            "picture": "pic",
+            "scope": "openid profile",
+        },
+    )
+    post_response = FakeResponse(200, {})
+    fake_client = FakeAsyncHttpClient(
+        post_response=post_response,
+        default_get_response=get_response,
+    )
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.keycloak.create_mcp_http_client", fake_client
+    )
+
+    adapter = KeycloakProviderAdapter(keycloak_config)
+    user_info = await adapter.fetch_user_info(access_token="at")
+    assert user_info.user_id == "user-1"
+    assert user_info.email == "user@example.com"
+    assert user_info.avatar_url == "pic"

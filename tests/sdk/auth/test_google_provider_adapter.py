@@ -127,3 +127,33 @@ async def test_exchange_code_error(
             code_verifier=None,
             scopes=["openid"],
         )
+
+
+@pytest.mark.asyncio
+async def test_fetch_user_info_happy_path(
+    monkeypatch: MonkeyPatch, google_config: GoogleAuthConfigModel
+) -> None:
+    get_response = FakeResponse(
+        200,
+        {
+            "sub": "user-1",
+            "email": "user@example.com",
+            "name": "User",
+            "picture": "pic",
+            "scope": "openid email",
+        },
+    )
+    post_response = FakeResponse(200, {})
+    fake_client = FakeAsyncHttpClient(
+        post_response=post_response,
+        default_get_response=get_response,
+    )
+    patch_http_client(
+        monkeypatch, "mxcp.sdk.auth.providers.google.create_mcp_http_client", fake_client
+    )
+
+    adapter = GoogleProviderAdapter(google_config)
+    user_info = await adapter.fetch_user_info(access_token="at")
+    assert user_info.user_id == "user-1"
+    assert user_info.email == "user@example.com"
+    assert user_info.avatar_url == "pic"
