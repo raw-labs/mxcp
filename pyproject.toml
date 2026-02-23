@@ -57,6 +57,7 @@ dev = [
     "pytest-mock",  # For better mock integration with pytest
     "pytest-timeout",  # For test timeout protection
     "aioresponses",  # For mocking HTTP requests
+    "respx>=0.21.0",  # For mocking httpx requests
     "black",  # For code formatting
     "ruff",  # For linting and import sorting
     "mypy",  # For type checking
@@ -87,6 +88,7 @@ all = [
     "pytest-mock",
     "pytest-timeout",
     "aioresponses",
+    "respx>=0.21.0",
     "black",
     "ruff",
     "mypy",
