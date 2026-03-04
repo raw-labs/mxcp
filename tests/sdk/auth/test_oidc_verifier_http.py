@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import parse_qs
 
 import pytest
 import respx
@@ -90,10 +91,10 @@ async def test_oidc_verifier_falls_back_to_introspection(
     assert access.scopes == ["openid"]
 
     request = introspection.calls[0].request
-    body = request.content.decode()
-    assert "token=a.b.c" in body
-    assert "client_id=client-id" in body
-    assert "client_secret=client-secret" in body
+    form = parse_qs(request.content.decode())
+    assert form["token"] == ["a.b.c"]
+    assert form["client_id"] == ["client-id"]
+    assert form["client_secret"] == ["client-secret"]
 
 
 @respx.mock
