@@ -127,9 +127,7 @@ class TestCapabilityMapperPathResolution:
                 },
             }
         )
-        result = mapper.derive(
-            {"resource_access": {"mxcp-client": {"roles": ["report-viewer"]}}}
-        )
+        result = mapper.derive({"resource_access": {"mxcp-client": {"roles": ["report-viewer"]}}})
         assert result == {"reports.view"}
 
     def test_uri_key_exact_match(self) -> None:
