@@ -14,7 +14,7 @@ tests and documented behavior.
 
 from typing import Any, Literal
 
-from pydantic import ConfigDict, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
 from mxcp.sdk.models import SdkBaseModel
 
@@ -67,6 +67,7 @@ class GitHubAuthConfigModel(SdkBaseModel):
     callback_path: str
     auth_url: str
     token_url: str
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class AtlassianAuthConfigModel(SdkBaseModel):
@@ -86,6 +87,7 @@ class AtlassianAuthConfigModel(SdkBaseModel):
     callback_path: str
     auth_url: str
     token_url: str
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class SalesforceAuthConfigModel(SdkBaseModel):
@@ -105,6 +107,7 @@ class SalesforceAuthConfigModel(SdkBaseModel):
     callback_path: str
     auth_url: str
     token_url: str
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class KeycloakAuthConfigModel(SdkBaseModel):
@@ -124,6 +127,7 @@ class KeycloakAuthConfigModel(SdkBaseModel):
     # in higher-level configuration or templates.
     scope: str
     callback_path: str
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class GoogleAuthConfigModel(SdkBaseModel):
@@ -143,6 +147,7 @@ class GoogleAuthConfigModel(SdkBaseModel):
     callback_path: str
     auth_url: str
     token_url: str
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class AuthPersistenceConfigModel(SdkBaseModel):
@@ -191,6 +196,7 @@ class OIDCAuthConfigModel(SdkBaseModel):
     audience: str | None = None
     extra_authorize_params: dict[str, str] | None = None
     provider_name: str | None = None
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
     @field_validator("scope")
     @classmethod
@@ -219,6 +225,7 @@ class OIDCVerifierAuthConfigModel(SdkBaseModel):
     scope: str
     audience: str | None = None
     provider_name: str | None = None
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
     @field_validator("scope")
     @classmethod

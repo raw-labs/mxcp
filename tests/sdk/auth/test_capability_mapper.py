@@ -238,3 +238,63 @@ class TestCapabilityMapperIntegration:
             claim_mappings={"https://mycompany.com/roles": {"admin": ["admin", "super-admin"]}}
         )
         assert mapper_v2.derive(raw_profile) == {"admin", "super-admin"}
+
+
+from mxcp.sdk.auth.models import (
+    OIDCAuthConfigModel,
+    OIDCVerifierAuthConfigModel,
+    GitHubAuthConfigModel,
+    KeycloakAuthConfigModel,
+    GoogleAuthConfigModel,
+    SalesforceAuthConfigModel,
+    AtlassianAuthConfigModel,
+)
+
+
+class TestClaimMappingsConfigField:
+    """claim_mappings field exists and defaults correctly on all provider configs."""
+
+    @pytest.mark.parametrize(
+        "model_class",
+        [
+            OIDCAuthConfigModel,
+            OIDCVerifierAuthConfigModel,
+            GitHubAuthConfigModel,
+            KeycloakAuthConfigModel,
+            GoogleAuthConfigModel,
+            SalesforceAuthConfigModel,
+            AtlassianAuthConfigModel,
+        ],
+    )
+    def test_claim_mappings_defaults_to_empty_dict(self, model_class: type) -> None:
+        """All provider config models should have claim_mappings defaulting to {}."""
+        field_info = model_class.model_fields.get("claim_mappings")
+        assert field_info is not None, f"{model_class.__name__} missing claim_mappings field"
+        assert field_info.default_factory is not None
+
+    def test_oidc_config_with_claim_mappings(self) -> None:
+        config = OIDCAuthConfigModel(
+            config_url="https://example.com/.well-known/openid-configuration",
+            client_id="test",
+            client_secret="secret",
+            scope="openid profile",
+            callback_path="/callback",
+            claim_mappings={
+                "https://example.com/roles": {
+                    "admin": ["admin"],
+                },
+            },
+        )
+        assert config.claim_mappings == {
+            "https://example.com/roles": {"admin": ["admin"]},
+        }
+
+    def test_oidc_config_without_claim_mappings(self) -> None:
+        config = OIDCAuthConfigModel(
+            config_url="https://example.com/.well-known/openid-configuration",
+            client_id="test",
+            client_secret="secret",
+            scope="openid profile",
+            callback_path="/callback",
+        )
+        assert config.claim_mappings == {}

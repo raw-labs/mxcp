@@ -317,6 +317,7 @@ class UserGitHubAuthConfigModel(BaseModel):
     callback_path: str
     auth_url: str
     token_url: str
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class UserAtlassianAuthConfigModel(BaseModel):
@@ -329,6 +330,7 @@ class UserAtlassianAuthConfigModel(BaseModel):
     callback_path: str
     auth_url: str
     token_url: str
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class UserSalesforceAuthConfigModel(BaseModel):
@@ -340,6 +342,7 @@ class UserSalesforceAuthConfigModel(BaseModel):
     callback_path: str
     auth_url: str
     token_url: str
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class UserKeycloakAuthConfigModel(BaseModel):
@@ -351,6 +354,7 @@ class UserKeycloakAuthConfigModel(BaseModel):
     server_url: str
     scope: str | None = None
     callback_path: str
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class UserGoogleAuthConfigModel(BaseModel):
@@ -363,6 +367,7 @@ class UserGoogleAuthConfigModel(BaseModel):
     callback_path: str
     auth_url: str
     token_url: str
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class UserOIDCAuthConfigModel(BaseModel):
@@ -376,6 +381,7 @@ class UserOIDCAuthConfigModel(BaseModel):
     audience: str | None = None
     extra_authorize_params: dict[str, str] | None = None
     provider_name: str | None = None
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
     @field_validator("scope")
     @classmethod
@@ -395,6 +401,7 @@ class UserOIDCVerifierAuthConfigModel(BaseModel):
     scope: str
     audience: str | None = None
     provider_name: str | None = None
+    claim_mappings: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
     @field_validator("scope")
     @classmethod
