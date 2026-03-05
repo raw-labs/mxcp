@@ -562,3 +562,36 @@ class TestFilterSensitivePolicies:
         assert "is_admin" not in result
 
         assert action == "filter_sensitive_fields"
+
+
+class TestUserContextDictCapabilities:
+    """Test that capabilities are exposed in the CEL user context dict."""
+
+    def test_user_context_dict_includes_capabilities(self):
+        """Capabilities from UserContextModel should appear in the CEL user dict."""
+        enforcer = PolicyEnforcer(PolicySetModel(input_policies=[], output_policies=[]))
+        user_context = UserContextModel(
+            provider="oidc",
+            user_id="user1",
+            username="alice",
+            capabilities=["admin", "billing.manage"],
+        )
+        user_dict = enforcer._user_context_to_dict(user_context)
+        assert user_dict["capabilities"] == ["admin", "billing.manage"]
+
+    def test_user_context_dict_capabilities_default_empty(self):
+        """Capabilities should default to empty list when not set."""
+        enforcer = PolicyEnforcer(PolicySetModel(input_policies=[], output_policies=[]))
+        user_context = UserContextModel(
+            provider="oidc",
+            user_id="user1",
+            username="alice",
+        )
+        user_dict = enforcer._user_context_to_dict(user_context)
+        assert user_dict["capabilities"] == []
+
+    def test_anonymous_user_has_empty_capabilities(self):
+        """Anonymous user (None context) should have empty capabilities."""
+        enforcer = PolicyEnforcer(PolicySetModel(input_policies=[], output_policies=[]))
+        user_dict = enforcer._user_context_to_dict(None)
+        assert user_dict["capabilities"] == []
