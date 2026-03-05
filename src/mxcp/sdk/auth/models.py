@@ -275,6 +275,7 @@ class UserContextModel(SdkBaseModel):
     avatar_url: str | None = None  # User's profile picture URL
     raw_profile: dict[str, Any] | None = None  # Raw profile data for debugging
     external_token: str | None = None  # Original OAuth provider token
+    capabilities: list[str] = Field(default_factory=list)
 
 
 class StateMetaModel(SdkBaseModel):

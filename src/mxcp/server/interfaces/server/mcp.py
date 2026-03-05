@@ -672,6 +672,7 @@ class RAWMCP:
                     avatar_url=info.avatar_url,
                     raw_profile=info.raw_profile,
                     external_token=None,
+                    capabilities=info.capabilities,
                 )
             )
             try:

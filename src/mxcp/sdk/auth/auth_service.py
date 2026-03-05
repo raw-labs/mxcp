@@ -180,7 +180,7 @@ class AuthService:
                 # Trust the token endpoint scope semantics as the canonical set of
                 # granted provider scopes for refresh operations.
                 "provider_scopes_granted": grant.provider_scopes_granted,
-                "mxcp_scopes": mxcp_scopes,
+                "capabilities": mxcp_scopes,
             }
         )
 

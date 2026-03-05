@@ -302,7 +302,7 @@ class IssuerOAuthAuthorizationServer(
             return None
         if not client or not client.client_id:
             raise TokenError("invalid_client", "Client ID missing for refresh token")
-        mxcp_scopes = session.user_info.mxcp_scopes or []
+        mxcp_scopes = session.user_info.capabilities
         return RefreshToken(
             token=refresh_token,
             client_id=client.client_id if client else "",
@@ -331,7 +331,7 @@ class IssuerOAuthAuthorizationServer(
             raise TokenError("invalid_grant", "Provider refresh token missing")
 
         provider_scopes = session.user_info.provider_scopes_granted
-        session_mxcp_scopes = session.user_info.mxcp_scopes or []
+        session_mxcp_scopes = session.user_info.capabilities
         if scopes and not set(scopes).issubset(set(session_mxcp_scopes)):
             raise TokenError("invalid_scope", "Requested scopes exceed original grant")
         effective_mxcp_scopes = scopes or session_mxcp_scopes
@@ -367,7 +367,7 @@ class IssuerOAuthAuthorizationServer(
         updated_user_info: UserInfo = session.user_info.model_copy(
             update={
                 "provider_scopes_granted": grant.provider_scopes_granted,
-                "mxcp_scopes": updated_mxcp_scopes,
+                "capabilities": updated_mxcp_scopes,
             }
         )
 
@@ -405,7 +405,7 @@ class IssuerOAuthAuthorizationServer(
             return None
         # Expose user info for this request (used by tool context)
         set_verified_user_info(session.user_info)
-        mxcp_scopes = session.user_info.mxcp_scopes or []
+        mxcp_scopes = session.user_info.capabilities
         return AccessToken(
             token=session.access_token,
             client_id="",

@@ -63,7 +63,7 @@ class UserInfo(SdkBaseModel):
     avatar_url: str | None = None
     raw_profile: dict[str, Any] | None = None
     provider_scopes_granted: list[str] = Field(default_factory=list)
-    mxcp_scopes: list[str] | None = None
+    capabilities: list[str] = Field(default_factory=list)
 
 
 class Session(SdkBaseModel):
