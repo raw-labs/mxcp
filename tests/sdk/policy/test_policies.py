@@ -595,3 +595,47 @@ class TestUserContextDictCapabilities:
         enforcer = PolicyEnforcer(PolicySetModel(input_policies=[], output_policies=[]))
         user_dict = enforcer._user_context_to_dict(None)
         assert user_dict["capabilities"] == []
+
+    def test_cel_policy_allows_matching_capability(self):
+        """CEL expression grants access when capability is present."""
+        policy_set = PolicySetModel(
+            input_policies=[
+                PolicyDefinitionModel(
+                    condition='!("admin" in user.capabilities)',
+                    action=PolicyAction.DENY,
+                    reason="Admin capability required",
+                )
+            ],
+            output_policies=[],
+        )
+        enforcer = PolicyEnforcer(policy_set)
+        user_context = UserContextModel(
+            provider="oidc",
+            user_id="user1",
+            username="alice",
+            capabilities=["admin", "billing.manage"],
+        )
+        enforcer.enforce_input_policies(user_context, {})
+
+    def test_cel_policy_denies_missing_capability(self):
+        """CEL expression denies access when capability is absent."""
+        policy_set = PolicySetModel(
+            input_policies=[
+                PolicyDefinitionModel(
+                    condition='!("admin" in user.capabilities)',
+                    action=PolicyAction.DENY,
+                    reason="Admin capability required",
+                )
+            ],
+            output_policies=[],
+        )
+        enforcer = PolicyEnforcer(policy_set)
+        user_context = UserContextModel(
+            provider="oidc",
+            user_id="user2",
+            username="bob",
+            capabilities=["reports.view"],
+        )
+        with pytest.raises(PolicyEnforcementError) as excinfo:
+            enforcer.enforce_input_policies(user_context, {})
+        assert "Admin capability required" in str(excinfo.value)

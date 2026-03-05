@@ -42,9 +42,32 @@ MXCP issuer-mode tracks **two different scope sets**. Do not mix them:
     MXCP authorization.
   - Currently hardcoded to `[]` (empty). Persisted on auth codes as `AuthCodeRecord.mxcp_scopes`.
 - **Capabilities** (policy attributes)
-  - Per-request policy attributes derived by `CapabilityMapper` from user identity and context.
+  - Per-request policy attributes derived by `CapabilityMapper` from the user's IdP claims.
   - NOT stored at auth time — computed on each request in `require_user_info`.
-  - See `mxcp.server.core.auth.capability_mapper.CapabilityMapper`.
+
+#### How CapabilityMapper works
+
+`CapabilityMapper` translates IdP claims into MXCP capabilities using `claim_mappings`
+configured on the provider in `mxcp-site.yml`. On each authenticated request,
+`require_user_info` calls `mapper.derive(raw_profile)` where `raw_profile` is the
+user's IdP claims dict (stored on the session at auth time).
+
+The mapper resolves each configured claim path against the profile (supporting top-level
+keys like `"https://mycompany.com/roles"`, dot-separated nested paths like
+`"realm_access.roles"`, and space-separated strings like OAuth `scope` values), then
+maps matched values to capability strings. The result is a deduplicated `set[str]`.
+
+Capabilities are exposed as `user.capabilities` in CEL policy expressions:
+
+```yaml
+policy:
+  input:
+    - condition: '!("admin" in user.capabilities)'
+      action: deny
+      reason: "Admin capability required"
+```
+
+See `mxcp.server.core.auth.capability_mapper.CapabilityMapper`.
 
 1. When the client registers dynamically (DCR, Dynamic Client Registration), it calls `/register` and sends a `client_id` it generated along with a list of its `redirect_uris`. That step binds the client (identified by `client_id`) to allowed redirect URIs.
   * During the flow, a single `redirect_uri` is used. It's chosen by the client when it calls `/authorize` and has to match one of the registered URIs. It is where the MXCP server will eventually send the MXCP _authorization code_ (`auth_code`). That authorization code is eventually turned into the MXCP access token (the one appearing in the HTTP Authorization header in the end), by a call to `/token`.
@@ -62,8 +85,8 @@ the goal of MXCP is to redirect the client's browser to the IdP's `/authorize`.
    1. Validates the `state` (its own, now sent by the IdP). It consumes it and deletes it.
    2. Calls the IdP to exchange the `code` for an access token using the IdP's `/token` call.
    3. Fetches user info from the provider.
-   4. Derives MXCP client-facing scopes using the scope mapper. Issues and persists an MXCP session (it contains the MXCP `access_token` and refresh token, the IdP's tokens, provider granted scopes, and MXCP scopes).
-   5. Creates and persists an MXCP `auth_code`, which is meant to play the role of the OAuth `code` sent to the MCP client, and stores **MXCP scopes** on it.
+   4. Issues and persists an MXCP session (it contains the MXCP `access_token` and refresh token, the IdP's tokens, and provider granted scopes).
+   5. Creates and persists an MXCP `auth_code`, which is meant to play the role of the OAuth `code` sent to the MCP client. MXCP scopes on the auth code are currently hardcoded to `[]`.
    6. Redirects the browser to the client's `redirect_uri` with the `code` (`auth_code`) and the original client's `state` (`client_state`).
 4. The client's callback is called with the client's original `state` (if it was present) and MXCP's `code`.
   * The client calls MXCP's `/token` with MXCP's auth code, its `client_id`, and `redirect_uri` (used to validate the call on the server/MXCP side) plus its PKCE `code_verifier`. MCP's token handler validates the verifier against the stored `code_challenge`, then MXCP returns the `access_token` it generated earlier, and a `refresh_token`.
@@ -124,9 +147,7 @@ The legacy handler-based stack has been removed. Only the ProviderAdapter-based 
 - MXCP issues:
   - an MXCP **session** (opaque MXCP access token + refresh token)
   - an MXCP **authorization code** bound to the session
-- MXCP derives and persists **MXCP client-facing scopes** via the scope mapper:
-  - stored on the session as `UserInfo.mxcp_scopes`
-  - stored on the auth code as `AuthCodeRecord.mxcp_scopes`
+- MXCP scopes are currently hardcoded to `[]` (stored on the auth code as `AuthCodeRecord.mxcp_scopes`)
 - MXCP redirects the browser to the *client redirect_uri* with the MXCP auth code and the original client state.
 
 ### 3) /token exchange (client → MXCP)
@@ -158,8 +179,8 @@ If you change code touching these rules, require a careful review.
   - When provider scope config is omitted or empty, MXCP requests no scopes upstream.
   - When a provider token response omits `scope` (allowed by OAuth), provider adapters treat the
     granted scopes as the requested provider scopes (do not interpret omission as “no scopes”).
-  - Client-facing scopes returned by MXCP are **MXCP scopes** derived via the scope mapper and stored
-    on sessions (`UserInfo.mxcp_scopes`) and auth codes (`AuthCodeRecord.mxcp_scopes`).
+  - Client-facing scopes returned by MXCP are **MXCP scopes**, currently hardcoded to `[]`,
+    stored on auth codes (`AuthCodeRecord.mxcp_scopes`).
   - Refresh requests that include `scope` must follow OAuth semantics:
     - allowed: omitted (same scopes) or subset of previously-issued MXCP scopes
     - forbidden: scope expansion
