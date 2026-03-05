@@ -574,10 +574,15 @@ class RAWMCP:
         """Create a CapabilityMapper from the active provider's claim_mappings."""
         auth_config = self.active_profile.auth
         provider = auth_config.provider
+        if provider == "none":
+            return CapabilityMapper(claim_mappings={})
+
         provider_config = getattr(auth_config, provider, None)
-        if provider_config and hasattr(provider_config, "claim_mappings"):
-            return CapabilityMapper(claim_mappings=provider_config.claim_mappings)
-        return CapabilityMapper(claim_mappings={})
+        if provider_config is None:
+            logger.warning("Provider '%s' selected but no config block found", provider)
+            return CapabilityMapper(claim_mappings={})
+
+        return CapabilityMapper(claim_mappings=provider_config.claim_mappings)
 
     def _build_oauth_clients(
         self,

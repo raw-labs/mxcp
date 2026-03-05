@@ -28,7 +28,7 @@ class CapabilityMapper:
         for claim_path, value_map in self._mappings.items():
             claim_value = self._resolve_path(raw_profile, claim_path)
             if claim_value is None:
-                logger.warning("Claim path '%s' not found in profile", claim_path)
+                logger.debug("Claim path '%s' not found in profile", claim_path)
                 continue
             for value in self._normalize_claim_value(claim_value):
                 if value in value_map:
@@ -55,7 +55,14 @@ class CapabilityMapper:
     def _normalize_claim_value(value: Any) -> list[str]:
         """Normalize a claim value to a list of strings for matching."""
         if isinstance(value, list):
-            return [str(v) for v in value]
+            return [CapabilityMapper._scalar_to_str(v) for v in value]
         if isinstance(value, str) and " " in value:
             return value.split()
-        return [str(value)]
+        return [CapabilityMapper._scalar_to_str(value)]
+
+    @staticmethod
+    def _scalar_to_str(value: Any) -> str:
+        """Convert a scalar to its string form, using lowercase for booleans."""
+        if isinstance(value, bool):
+            return str(value).lower()
+        return str(value)
