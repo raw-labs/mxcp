@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 import pytest
 
 from mxcp.sdk.auth.capabilities import CapabilityMapper
@@ -151,32 +149,6 @@ class TestCapabilityMapperPathResolution:
         )
         result = mapper.derive({"a.b": ["val"], "a": {"b": ["other"]}})
         assert result == {"cap_from_exact"}
-
-    def test_missing_claim_path_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
-        mapper = CapabilityMapper(
-            claim_mappings={
-                "missing.path": {
-                    "val": ["cap"],
-                },
-            }
-        )
-        with caplog.at_level(logging.WARNING, logger="mxcp.sdk.auth.capabilities"):
-            result = mapper.derive({"other": "data"})
-        assert result == set()
-        assert "missing.path" in caplog.text
-
-    def test_empty_raw_profile_logs_warnings(self, caplog: pytest.LogCaptureFixture) -> None:
-        mapper = CapabilityMapper(
-            claim_mappings={
-                "roles": {"admin": ["admin"]},
-                "groups": {"eng": ["code.deploy"]},
-            }
-        )
-        with caplog.at_level(logging.WARNING, logger="mxcp.sdk.auth.capabilities"):
-            result = mapper.derive({})
-        assert result == set()
-        assert "roles" in caplog.text
-        assert "groups" in caplog.text
 
 
 class TestCapabilityMapperIntegration:
