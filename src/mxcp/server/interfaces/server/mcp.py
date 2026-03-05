@@ -27,6 +27,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 
 from mxcp.sdk.audit import AuditLogger
 from mxcp.sdk.auth.auth_service import AuthService
+from mxcp.sdk.auth.capabilities import CapabilityMapper
 from mxcp.sdk.auth.context import (
     clear_verified_user_info,
     get_user_context,
@@ -34,7 +35,6 @@ from mxcp.sdk.auth.context import (
     reset_user_context,
     set_user_context,
 )
-from mxcp.sdk.auth.capabilities import CapabilityMapper
 from mxcp.sdk.auth.models import UserContextModel
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import SqliteTokenStore
