@@ -40,11 +40,11 @@ MXCP issuer-mode tracks **two different scope sets**. Do not mix them:
 - **MXCP scopes** (MXCP ↔ OAuth/MCP client)
   - What MXCP returns to the client in token responses (`scope` field) and uses for
     MXCP authorization.
-  - Derived from provider context via a **scope mapper**.
-  - Persisted on session as `UserInfo.mxcp_scopes` and on auth codes as `AuthCodeRecord.mxcp_scopes`.
-
-Today the scope mapper is intentionally a placeholder (returns an empty list) to avoid leaking
-provider scope strings to clients. See `mxcp.sdk.auth.auth_service.AuthService.derive_mxcp_scopes`.
+  - Currently hardcoded to `[]` (empty). Persisted on auth codes as `AuthCodeRecord.mxcp_scopes`.
+- **Capabilities** (policy attributes)
+  - Per-request policy attributes derived by `CapabilityMapper` from user identity and context.
+  - NOT stored at auth time — computed on each request in `require_user_info`.
+  - See `mxcp.server.core.auth.capability_mapper.CapabilityMapper`.
 
 1. When the client registers dynamically (DCR, Dynamic Client Registration), it calls `/register` and sends a `client_id` it generated along with a list of its `redirect_uris`. That step binds the client (identified by `client_id`) to allowed redirect URIs.
   * During the flow, a single `redirect_uri` is used. It's chosen by the client when it calls `/authorize` and has to match one of the registered URIs. It is where the MXCP server will eventually send the MXCP _authorization code_ (`auth_code`). That authorization code is eventually turned into the MXCP access token (the one appearing in the HTTP Authorization header in the end), by a call to `/token`.
@@ -208,4 +208,4 @@ Coverage expectations:
 - Auth code redemption: `mxcp.sdk.auth.auth_service.AuthService.exchange_token`
 - Server bridge validation: `mxcp.server.core.auth.issuer_provider.IssuerOAuthAuthorizationServer`
 - Callback route behavior: `mxcp.server.interfaces.server.mcp.RAWMCP._register_oauth_routes`
-- Scope mapping placeholder: `mxcp.sdk.auth.auth_service.AuthService.derive_mxcp_scopes`
+- Capability mapping: `mxcp.server.core.auth.capability_mapper.CapabilityMapper`

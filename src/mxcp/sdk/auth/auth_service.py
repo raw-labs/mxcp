@@ -9,7 +9,7 @@ import secrets
 import time
 from collections.abc import Mapping, Sequence
 
-from mxcp.sdk.auth.contracts import GrantResult, ProviderAdapter, ProviderError, UserInfo
+from mxcp.sdk.auth.contracts import GrantResult, ProviderAdapter, ProviderError
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import AuthCodeRecord, StateRecord, StoredSession
 from mxcp.sdk.models import SdkBaseModel
@@ -120,21 +120,6 @@ class AuthService:
         )
         return authorize_url, state_record
 
-    def derive_mxcp_scopes(
-        self,
-        *,
-        provider: str,
-        user_info: UserInfo,
-        provider_scopes_granted: Sequence[str],
-    ) -> list[str]:
-        """Derive MXCP client-facing scopes from provider context.
-
-        Placeholder: mapping is not implemented yet. This intentionally returns an
-        empty scope set to avoid leaking provider scope strings to MXCP clients.
-        """
-        _ = (provider, user_info, provider_scopes_granted)
-        return []
-
     async def handle_callback(
         self, *, code: str, state: str
     ) -> tuple[AuthCodeRecord, StoredSession, str | None]:
@@ -168,19 +153,11 @@ class AuthService:
 
         user_info = await self.provider_adapter.fetch_user_info(access_token=grant.access_token)
 
-        # We have provider user info; this is the right place to derive MXCP scopes
-        # (via a shared mapper) and persist them in the session.
-        mxcp_scopes = self.derive_mxcp_scopes(
-            provider=self.provider_adapter.provider_name,
-            user_info=user_info,
-            provider_scopes_granted=grant.provider_scopes_granted,
-        )
         user_info = user_info.model_copy(
             update={
                 # Trust the token endpoint scope semantics as the canonical set of
                 # granted provider scopes for refresh operations.
                 "provider_scopes_granted": grant.provider_scopes_granted,
-                "capabilities": mxcp_scopes,
             }
         )
 
@@ -200,7 +177,7 @@ class AuthService:
             redirect_uri=state_record.redirect_uri,
             code_challenge=state_record.code_challenge,
             code_challenge_method=state_record.code_challenge_method,
-            mxcp_scopes=mxcp_scopes,
+            mxcp_scopes=[],
         )
 
         return auth_code, session, state_record.client_state
