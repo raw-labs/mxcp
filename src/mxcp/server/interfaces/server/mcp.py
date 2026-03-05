@@ -34,6 +34,7 @@ from mxcp.sdk.auth.context import (
     reset_user_context,
     set_user_context,
 )
+from mxcp.sdk.auth.capabilities import CapabilityMapper
 from mxcp.sdk.auth.models import UserContextModel
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import SqliteTokenStore
@@ -471,6 +472,7 @@ class RAWMCP:
         auth_config = self.active_profile.auth
         self.oauth_handler = None  # legacy path disabled for Phase 2
         self.auth_enabled = False
+        self.capability_mapper = CapabilityMapper(claim_mappings={})
         self.token_verifier = None
         # The server-side provider adapter exposes HTTP callback route details
         # (callback_path) beyond the SDK ProviderAdapter protocol, so we keep the
@@ -503,6 +505,7 @@ class RAWMCP:
                 client_registration_options=None,
                 required_scopes=required_scopes if required_scopes else None,
             )
+            self.capability_mapper = self._build_capability_mapper()
             logger.info("OAuth verifier mode enabled with provider: %s", auth_config.provider)
             return
 
@@ -565,6 +568,16 @@ class RAWMCP:
         )
         logger.info(f"OAuth authentication enabled with provider: {auth_config.provider}")
         self.auth_enabled = True
+        self.capability_mapper = self._build_capability_mapper()
+
+    def _build_capability_mapper(self) -> CapabilityMapper:
+        """Create a CapabilityMapper from the active provider's claim_mappings."""
+        auth_config = self.active_profile.auth
+        provider = auth_config.provider
+        provider_config = getattr(auth_config, provider, None)
+        if provider_config and hasattr(provider_config, "claim_mappings"):
+            return CapabilityMapper(claim_mappings=provider_config.claim_mappings)
+        return CapabilityMapper(claim_mappings={})
 
     def _build_oauth_clients(
         self,
@@ -662,6 +675,8 @@ class RAWMCP:
             if info is None:
                 raise HTTPException(401, "Authentication required")
 
+            capabilities = list(self.capability_mapper.derive(info.raw_profile or {}))
+
             ctx_token = set_user_context(
                 UserContextModel(
                     provider=info.provider,
@@ -672,7 +687,7 @@ class RAWMCP:
                     avatar_url=info.avatar_url,
                     raw_profile=info.raw_profile,
                     external_token=None,
-                    capabilities=info.capabilities,
+                    capabilities=capabilities,
                 )
             )
             try:
