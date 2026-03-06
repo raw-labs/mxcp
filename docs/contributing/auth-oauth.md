@@ -48,15 +48,36 @@ MXCP issuer-mode tracks **two different scope sets**. Do not mix them:
 #### How CapabilityMapper works
 
 `CapabilityMapper` translates IdP claims into MXCP capabilities using `claim_mappings`
-configured on the provider in `mxcp-site.yml`. On each authenticated request,
+configured on the provider in `config.yml`. On each authenticated request,
 `require_user_info` calls `mapper.derive(raw_profile)` where `raw_profile` is the
 user's IdP claims dict (stored on the session at auth time).
 
-In issuer mode, `raw_profile` is assembled from the access token JWT, the id_token JWT,
-and the `/userinfo` response. Merge order: access_token claims < id_token claims < userinfo
-(later sources win). This captures custom claims from wherever the IdP places them:
-Keycloak puts `realm_access.roles` in the access token JWT, while Auth0 puts custom claims
-in the id_token. Non-JWT tokens (opaque access tokens) are gracefully skipped.
+##### Where `raw_profile` comes from
+
+`raw_profile` is the merged dict that CapabilityMapper resolves claim paths against.
+Its content depends on the auth mode and provider type:
+
+- **Verifier mode** (any provider): `raw_profile` is the decoded JWT claims from the
+  access token presented by the client. This typically contains all custom claims
+  (roles, groups, etc.) because the access token JWT is the primary artifact.
+
+- **Issuer mode, OIDC providers** (Keycloak, Auth0, Google, generic OIDC): `raw_profile`
+  is assembled from up to three sources, merged in this order (later sources win):
+  1. **Access token JWT** — decoded if the token is a JWT (Keycloak puts
+     `realm_access.roles` here). Opaque tokens are gracefully skipped.
+  2. **id_token JWT** — decoded if present in the token response (Auth0 puts custom
+     namespace claims like `https://mycompany.com/roles` here).
+  3. **`/userinfo` endpoint response** — always fetched. Contains `sub`, `email`, `name`,
+     `preferred_username`. Some IdPs can be configured to return custom claims here too
+     (e.g. Keycloak "mappers"), but many don't by default.
+
+- **Issuer mode, non-OIDC providers** (GitHub, Salesforce, Atlassian): `raw_profile` is
+  the JSON response from the provider's user API (e.g. GitHub's `/user`). These providers
+  use opaque access tokens (no JWTs), so `raw_profile` contains whatever the API returns:
+  `email`, `login`, `company`, `bio`, etc. All of these fields are mappable.
+
+In all cases, `email` is universally available and always mappable. Custom claims like
+roles or groups depend on the provider and its configuration.
 
 The mapper resolves each configured claim path against the profile (supporting top-level
 keys like `"https://mycompany.com/roles"`, dot-separated nested paths like
