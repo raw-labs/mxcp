@@ -40,11 +40,61 @@ MXCP issuer-mode tracks **two different scope sets**. Do not mix them:
 - **MXCP scopes** (MXCP ↔ OAuth/MCP client)
   - What MXCP returns to the client in token responses (`scope` field) and uses for
     MXCP authorization.
-  - Derived from provider context via a **scope mapper**.
-  - Persisted on session as `UserInfo.mxcp_scopes` and on auth codes as `AuthCodeRecord.mxcp_scopes`.
+  - Currently hardcoded to `[]` (empty). Persisted on auth codes as `AuthCodeRecord.mxcp_scopes`.
+- **Capabilities** (policy attributes)
+  - Per-request policy attributes derived by `CapabilityMapper` from the user's IdP claims.
+  - NOT stored at auth time — computed on each request in `require_user_info`.
 
-Today the scope mapper is intentionally a placeholder (returns an empty list) to avoid leaking
-provider scope strings to clients. See `mxcp.sdk.auth.auth_service.AuthService.derive_mxcp_scopes`.
+#### How CapabilityMapper works
+
+`CapabilityMapper` translates IdP claims into MXCP capabilities using `claim_mappings`
+configured on the provider in `config.yml`. On each authenticated request,
+`require_user_info` calls `mapper.derive(raw_profile)` where `raw_profile` is the
+user's IdP claims dict (stored on the session at auth time).
+
+##### Where `raw_profile` comes from
+
+`raw_profile` is the merged dict that CapabilityMapper resolves claim paths against.
+Its content depends on the auth mode and provider type:
+
+- **Verifier mode** (any provider): `raw_profile` is the decoded JWT claims from the
+  access token presented by the client. This typically contains all custom claims
+  (roles, groups, etc.) because the access token JWT is the primary artifact.
+
+- **Issuer mode, OIDC providers** (Keycloak, Auth0, Google, generic OIDC): `raw_profile`
+  is assembled from up to three sources, merged in this order (later sources win):
+  1. **Access token JWT** — decoded if the token is a JWT (Keycloak puts
+     `realm_access.roles` here). Opaque tokens are gracefully skipped.
+  2. **id_token JWT** — decoded if present in the token response (Auth0 puts custom
+     namespace claims like `https://mycompany.com/roles` here).
+  3. **`/userinfo` endpoint response** — always fetched. Contains `sub`, `email`, `name`,
+     `preferred_username`. Some IdPs can be configured to return custom claims here too
+     (e.g. Keycloak "mappers"), but many don't by default.
+
+- **Issuer mode, non-OIDC providers** (GitHub, Salesforce, Atlassian): `raw_profile` is
+  the JSON response from the provider's user API (e.g. GitHub's `/user`). These providers
+  use opaque access tokens (no JWTs), so `raw_profile` contains whatever the API returns:
+  `email`, `login`, `company`, `bio`, etc. All of these fields are mappable.
+
+In all cases, `email` is universally available and always mappable. Custom claims like
+roles or groups depend on the provider and its configuration.
+
+The mapper resolves each configured claim path against the profile (supporting top-level
+keys like `"https://mycompany.com/roles"`, dot-separated nested paths like
+`"realm_access.roles"`, and space-separated strings like OAuth `scope` values), then
+maps matched values to capability strings. The result is a deduplicated `set[str]`.
+
+Capabilities are exposed as `user.capabilities` in CEL policy expressions:
+
+```yaml
+policy:
+  input:
+    - condition: '!("admin" in user.capabilities)'
+      action: deny
+      reason: "Admin capability required"
+```
+
+See `mxcp.server.core.auth.capability_mapper.CapabilityMapper`.
 
 1. When the client registers dynamically (DCR, Dynamic Client Registration), it calls `/register` and sends a `client_id` it generated along with a list of its `redirect_uris`. That step binds the client (identified by `client_id`) to allowed redirect URIs.
   * During the flow, a single `redirect_uri` is used. It's chosen by the client when it calls `/authorize` and has to match one of the registered URIs. It is where the MXCP server will eventually send the MXCP _authorization code_ (`auth_code`). That authorization code is eventually turned into the MXCP access token (the one appearing in the HTTP Authorization header in the end), by a call to `/token`.
@@ -62,8 +112,14 @@ the goal of MXCP is to redirect the client's browser to the IdP's `/authorize`.
    1. Validates the `state` (its own, now sent by the IdP). It consumes it and deletes it.
    2. Calls the IdP to exchange the `code` for an access token using the IdP's `/token` call.
    3. Fetches user info from the provider.
-   4. Derives MXCP client-facing scopes using the scope mapper. Issues and persists an MXCP session (it contains the MXCP `access_token` and refresh token, the IdP's tokens, provider granted scopes, and MXCP scopes).
-   5. Creates and persists an MXCP `auth_code`, which is meant to play the role of the OAuth `code` sent to the MCP client, and stores **MXCP scopes** on it.
+   4. Decodes JWT claims from the access token and id_token (if present), and merges
+      them into `raw_profile` (access_token < id_token < userinfo — later wins).
+      No signature verification is needed since tokens were received over TLS from
+      the token endpoint. This gives `CapabilityMapper` access to custom claims like
+      `realm_access.roles` (Keycloak, in the access token JWT) or custom namespace
+      claims (Auth0, in the id_token). Non-JWT tokens are gracefully skipped.
+   5. Issues and persists an MXCP session (it contains the MXCP `access_token` and refresh token, the IdP's tokens, and provider granted scopes).
+   5. Creates and persists an MXCP `auth_code`, which is meant to play the role of the OAuth `code` sent to the MCP client. MXCP scopes on the auth code are currently hardcoded to `[]`.
    6. Redirects the browser to the client's `redirect_uri` with the `code` (`auth_code`) and the original client's `state` (`client_state`).
 4. The client's callback is called with the client's original `state` (if it was present) and MXCP's `code`.
   * The client calls MXCP's `/token` with MXCP's auth code, its `client_id`, and `redirect_uri` (used to validate the call on the server/MXCP side) plus its PKCE `code_verifier`. MCP's token handler validates the verifier against the stored `code_challenge`, then MXCP returns the `access_token` it generated earlier, and a `refresh_token`.
@@ -124,9 +180,7 @@ The legacy handler-based stack has been removed. Only the ProviderAdapter-based 
 - MXCP issues:
   - an MXCP **session** (opaque MXCP access token + refresh token)
   - an MXCP **authorization code** bound to the session
-- MXCP derives and persists **MXCP client-facing scopes** via the scope mapper:
-  - stored on the session as `UserInfo.mxcp_scopes`
-  - stored on the auth code as `AuthCodeRecord.mxcp_scopes`
+- MXCP scopes are currently hardcoded to `[]` (stored on the auth code as `AuthCodeRecord.mxcp_scopes`)
 - MXCP redirects the browser to the *client redirect_uri* with the MXCP auth code and the original client state.
 
 ### 3) /token exchange (client → MXCP)
@@ -158,8 +212,8 @@ If you change code touching these rules, require a careful review.
   - When provider scope config is omitted or empty, MXCP requests no scopes upstream.
   - When a provider token response omits `scope` (allowed by OAuth), provider adapters treat the
     granted scopes as the requested provider scopes (do not interpret omission as “no scopes”).
-  - Client-facing scopes returned by MXCP are **MXCP scopes** derived via the scope mapper and stored
-    on sessions (`UserInfo.mxcp_scopes`) and auth codes (`AuthCodeRecord.mxcp_scopes`).
+  - Client-facing scopes returned by MXCP are **MXCP scopes**, currently hardcoded to `[]`,
+    stored on auth codes (`AuthCodeRecord.mxcp_scopes`).
   - Refresh requests that include `scope` must follow OAuth semantics:
     - allowed: omitted (same scopes) or subset of previously-issued MXCP scopes
     - forbidden: scope expansion
@@ -208,4 +262,4 @@ Coverage expectations:
 - Auth code redemption: `mxcp.sdk.auth.auth_service.AuthService.exchange_token`
 - Server bridge validation: `mxcp.server.core.auth.issuer_provider.IssuerOAuthAuthorizationServer`
 - Callback route behavior: `mxcp.server.interfaces.server.mcp.RAWMCP._register_oauth_routes`
-- Scope mapping placeholder: `mxcp.sdk.auth.auth_service.AuthService.derive_mxcp_scopes`
+- Capability mapping: `mxcp.server.core.auth.capability_mapper.CapabilityMapper`

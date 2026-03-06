@@ -126,6 +126,7 @@ class PolicyEnforcer:
             return {
                 "role": "anonymous",
                 "permissions": [],
+                "capabilities": [],
                 "user_id": None,
                 "username": None,
                 "email": None,
@@ -141,6 +142,7 @@ class PolicyEnforcer:
             "name": user_context.name,
             "role": "user",  # Default role
             "permissions": [],  # Default permissions
+            "capabilities": list(user_context.capabilities),
         }
 
         # Extract role and permissions from raw_profile if available

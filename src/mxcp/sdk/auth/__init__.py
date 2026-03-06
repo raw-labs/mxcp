@@ -60,6 +60,7 @@ github_config = GitHubAuthConfigModel(
 """
 
 from .auth_service import AccessTokenResponse, AuthService
+from .capabilities import CapabilityMapper
 from .context import get_user_context, reset_user_context, set_user_context
 from .contracts import (
     GrantResult,
@@ -107,6 +108,7 @@ __all__ = [
     "AuthPersistenceConfigModel",
     "AuthorizationConfigModel",
     "StateMetaModel",
+    "CapabilityMapper",
     # Core classes
     "ExternalUserInfoModel",
     "UserContextModel",

@@ -22,11 +22,13 @@ class DummyProviderAdapter(ProviderAdapter):
         expected_code_verifier: str | None = None,
         issued_scopes: Sequence[str] | None = None,
         scope: str = "",
+        id_token: str | None = None,
     ):
         self.expected_code = expected_code
         self.expected_code_verifier = expected_code_verifier
         self.issued_scopes = list(issued_scopes) if issued_scopes is not None else []
         self.scope = scope
+        self._id_token = id_token
         self._access_token = "DUMMY_ACCESS_TOKEN"
         self._refresh_token = "DUMMY_REFRESH_TOKEN"
 
@@ -75,6 +77,7 @@ class DummyProviderAdapter(ProviderAdapter):
         return GrantResult(
             access_token=self._access_token,
             refresh_token=self._refresh_token,
+            id_token=self._id_token,
             expires_at=now + 3600,
             provider_scopes_granted=granted_scopes,
         )
@@ -91,6 +94,7 @@ class DummyProviderAdapter(ProviderAdapter):
         return GrantResult(
             access_token=self._access_token,
             refresh_token=self._refresh_token,
+            id_token=self._id_token,
             expires_at=now + 3600,
             refresh_expires_at=now + 86400,
             provider_scopes_granted=granted_scopes,
