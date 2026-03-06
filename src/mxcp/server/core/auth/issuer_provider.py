@@ -358,7 +358,7 @@ class IssuerOAuthAuthorizationServer(
 
         # Re-merge JWT claims on refresh (roles/groups may change).
         raw_profile = session.user_info.raw_profile
-        jwt_claims: dict = {}
+        jwt_claims: dict[str, Any] = {}
         access_token_claims = _decode_jwt_payload(grant.access_token)
         if access_token_claims is not None:
             jwt_claims.update(access_token_claims)
