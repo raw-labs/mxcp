@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import logging
 import secrets
 import time
 from collections.abc import Mapping, Sequence
+from typing import Any
 
 from mxcp.sdk.auth.contracts import GrantResult, ProviderAdapter, ProviderError
 from mxcp.sdk.auth.session_manager import SessionManager
@@ -15,6 +17,28 @@ from mxcp.sdk.auth.storage import AuthCodeRecord, StateRecord, StoredSession
 from mxcp.sdk.models import SdkBaseModel
 
 logger = logging.getLogger(__name__)
+
+
+def _decode_jwt_payload(token: str) -> dict[str, Any] | None:
+    """Decode the payload segment of a JWT without signature verification.
+
+    This is safe here because the token was received directly from the IdP's
+    token endpoint over TLS — we trust its origin.  Returns None on any
+    decoding error so callers can gracefully skip merging.
+    """
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        payload_b64 = parts[1]
+        padding = 4 - len(payload_b64) % 4
+        if padding != 4:
+            payload_b64 += "=" * padding
+        payload_bytes = base64.urlsafe_b64decode(payload_b64)
+        claims = json.loads(payload_bytes)
+        return claims if isinstance(claims, dict) else None
+    except Exception:
+        return None
 
 
 class AccessTokenResponse(SdkBaseModel):
@@ -152,6 +176,25 @@ class AuthService:
         )
 
         user_info = await self.provider_adapter.fetch_user_info(access_token=grant.access_token)
+
+        # Merge JWT claims from the token response into raw_profile so
+        # CapabilityMapper has access to custom claims that /userinfo omits.
+        # Keycloak puts realm_access.roles in the access_token JWT; Auth0 puts
+        # custom claims in the id_token JWT. We decode both (gracefully skipping
+        # opaque/non-JWT tokens) and merge.
+        # Merge order: access_token claims < id_token claims < userinfo
+        # (userinfo is most authoritative for basic identity fields).
+        jwt_claims: dict[str, Any] = {}
+        access_token_claims = _decode_jwt_payload(grant.access_token)
+        if access_token_claims is not None:
+            jwt_claims.update(access_token_claims)
+        if grant.id_token is not None:
+            id_token_claims = _decode_jwt_payload(grant.id_token)
+            if id_token_claims is not None:
+                jwt_claims.update(id_token_claims)
+        if jwt_claims:
+            merged_profile = {**jwt_claims, **(user_info.raw_profile or {})}
+            user_info = user_info.model_copy(update={"raw_profile": merged_profile})
 
         user_info = user_info.model_copy(
             update={

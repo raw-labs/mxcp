@@ -52,6 +52,12 @@ configured on the provider in `mxcp-site.yml`. On each authenticated request,
 `require_user_info` calls `mapper.derive(raw_profile)` where `raw_profile` is the
 user's IdP claims dict (stored on the session at auth time).
 
+In issuer mode, `raw_profile` is assembled from the access token JWT, the id_token JWT,
+and the `/userinfo` response. Merge order: access_token claims < id_token claims < userinfo
+(later sources win). This captures custom claims from wherever the IdP places them:
+Keycloak puts `realm_access.roles` in the access token JWT, while Auth0 puts custom claims
+in the id_token. Non-JWT tokens (opaque access tokens) are gracefully skipped.
+
 The mapper resolves each configured claim path against the profile (supporting top-level
 keys like `"https://mycompany.com/roles"`, dot-separated nested paths like
 `"realm_access.roles"`, and space-separated strings like OAuth `scope` values), then
@@ -85,7 +91,13 @@ the goal of MXCP is to redirect the client's browser to the IdP's `/authorize`.
    1. Validates the `state` (its own, now sent by the IdP). It consumes it and deletes it.
    2. Calls the IdP to exchange the `code` for an access token using the IdP's `/token` call.
    3. Fetches user info from the provider.
-   4. Issues and persists an MXCP session (it contains the MXCP `access_token` and refresh token, the IdP's tokens, and provider granted scopes).
+   4. Decodes JWT claims from the access token and id_token (if present), and merges
+      them into `raw_profile` (access_token < id_token < userinfo — later wins).
+      No signature verification is needed since tokens were received over TLS from
+      the token endpoint. This gives `CapabilityMapper` access to custom claims like
+      `realm_access.roles` (Keycloak, in the access token JWT) or custom namespace
+      claims (Auth0, in the id_token). Non-JWT tokens are gracefully skipped.
+   5. Issues and persists an MXCP session (it contains the MXCP `access_token` and refresh token, the IdP's tokens, and provider granted scopes).
    5. Creates and persists an MXCP `auth_code`, which is meant to play the role of the OAuth `code` sent to the MCP client. MXCP scopes on the auth code are currently hardcoded to `[]`.
    6. Redirects the browser to the client's `redirect_uri` with the `code` (`auth_code`) and the original client's `state` (`client_state`).
 4. The client's callback is called with the client's original `state` (if it was present) and MXCP's `code`.

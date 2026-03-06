@@ -22,7 +22,7 @@ from mcp.server.auth.provider import (
 from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyUrl, ValidationError
 
-from mxcp.sdk.auth.auth_service import AuthService
+from mxcp.sdk.auth.auth_service import AuthService, _decode_jwt_payload
 from mxcp.sdk.auth.context import set_verified_user_info
 from mxcp.sdk.auth.contracts import ProviderError, UserInfo
 from mxcp.sdk.auth.session_manager import SessionManager
@@ -356,9 +356,23 @@ class IssuerOAuthAuthorizationServer(
             else session.refresh_expires_at
         )
 
+        # Re-merge JWT claims on refresh (roles/groups may change).
+        raw_profile = session.user_info.raw_profile
+        jwt_claims: dict = {}
+        access_token_claims = _decode_jwt_payload(grant.access_token)
+        if access_token_claims is not None:
+            jwt_claims.update(access_token_claims)
+        if grant.id_token is not None:
+            id_token_claims = _decode_jwt_payload(grant.id_token)
+            if id_token_claims is not None:
+                jwt_claims.update(id_token_claims)
+        if jwt_claims:
+            raw_profile = {**jwt_claims, **(raw_profile or {})}
+
         updated_user_info: UserInfo = session.user_info.model_copy(
             update={
                 "provider_scopes_granted": grant.provider_scopes_granted,
+                "raw_profile": raw_profile,
             }
         )
 

@@ -123,6 +123,7 @@ class _OIDCTokenResponse(SdkBaseModel):
 
     access_token: str | None = None
     refresh_token: str | None = None
+    id_token: str | None = None
     expires_in: float | None = None
     scope: str | None = None
     token_type: str | None = None
@@ -297,6 +298,7 @@ class OIDCProviderAdapter(ProviderAdapter):
         return GrantResult(
             access_token=access_token,
             refresh_token=refresh_token,
+            id_token=token.id_token,
             expires_at=expires_at,
             provider_scopes_granted=granted_scopes,
             token_type=token_type,
@@ -327,6 +329,7 @@ class OIDCProviderAdapter(ProviderAdapter):
         return GrantResult(
             access_token=access_token,
             refresh_token=token.refresh_token if token.refresh_token is not None else refresh_token,
+            id_token=token.id_token,
             expires_at=expires_at,
             provider_scopes_granted=granted_scopes,
             token_type=token_type,

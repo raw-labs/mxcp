@@ -46,6 +46,7 @@ class GrantResult(SdkBaseModel):
 
     access_token: str
     refresh_token: str | None = None
+    id_token: str | None = None
     expires_at: float | None = None
     refresh_expires_at: float | None = None
     provider_scopes_granted: list[str] = Field(default_factory=list)
