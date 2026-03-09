@@ -1693,9 +1693,9 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
+            user_context = get_user_context()
 
             try:
-                user_context = get_user_context()
                 if user_context:
                     logger.info("Authenticated user executing SQL query")
 
@@ -1730,6 +1730,7 @@ class RAWMCP:
                         reason=None,
                         status=cast(Literal["success", "error"], status),
                         error=error_msg,
+                        user_id=user_context.user_id if user_context else None,
                         trace_id=get_current_trace_id(),
                     )
 
@@ -1755,9 +1756,9 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
+            user_context = get_user_context()
 
             try:
-                user_context = get_user_context()
                 if user_context:
                     logger.info(f"User {user_context.username} listing tables")
 
@@ -1797,6 +1798,7 @@ class RAWMCP:
                         reason=None,
                         status=cast(Literal["success", "error"], status),
                         error=error_msg,
+                        user_id=user_context.user_id if user_context else None,
                         trace_id=get_current_trace_id(),
                     )
 
@@ -1825,9 +1827,9 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
+            user_context = get_user_context()
 
             try:
-                user_context = get_user_context()
                 if user_context:
                     logger.info(
                         f"User {user_context.username} getting schema for table {table_name}"
@@ -1872,6 +1874,7 @@ class RAWMCP:
                         reason=None,
                         status=cast(Literal["success", "error"], status),
                         error=error_msg,
+                        user_id=user_context.user_id if user_context else None,
                         trace_id=get_current_trace_id(),
                     )
 
