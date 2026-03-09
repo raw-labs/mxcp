@@ -93,8 +93,13 @@ def create_audit_router(admin_service: AdminService) -> APIRouter:
                         user_id=record.user_id,
                         session_id=record.session_id,
                         trace_id=record.trace_id,
+                        input_data=record.input_data or None,
+                        output_data=record.output_data,
+                        error=record.error,
+                        policies_evaluated=record.policies_evaluated or None,
                         policy_decision=record.policy_decision,
-                        error_message=record.error,
+                        policy_reason=record.policy_reason,
+                        business_context=record.business_context or None,
                     )
                 )
 
