@@ -1,14 +1,23 @@
 import base64
 import hashlib
+import json
 
 import pytest
 import pytest_asyncio
 
-from mxcp.sdk.auth.auth_service import AuthService
+from mxcp.sdk.auth.auth_service import AuthService, _decode_jwt_payload
 from mxcp.sdk.auth.contracts import ProviderError
 from mxcp.sdk.auth.providers.dummy import DummyProviderAdapter
 from mxcp.sdk.auth.session_manager import SessionManager
 from mxcp.sdk.auth.storage import TokenStore
+
+
+def _make_jwt(payload: dict) -> str:
+    """Build a fake JWT (header.payload.signature) with a base64url-encoded payload."""
+    header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256"}).encode()).rstrip(b"=").decode()
+    body = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
+    sig = base64.urlsafe_b64encode(b"fakesig").rstrip(b"=").decode()
+    return f"{header}.{body}.{sig}"
 
 
 class _NoPkceDummyProvider(DummyProviderAdapter):
@@ -362,3 +371,207 @@ async def test_authorize_accepts_any_redirect_uri_and_client_id(token_store: Tok
     )
     assert state_record.client_id == "any-client"
     assert state_record.redirect_uri == "http://evil/app"
+
+
+# ── _decode_jwt_payload tests ──────────────────────────────────────────
+
+
+def test_decode_jwt_payload_valid() -> None:
+    claims = {"sub": "user1", "realm_access": {"roles": ["admin"]}}
+    token = _make_jwt(claims)
+    result = _decode_jwt_payload(token)
+    assert result == claims
+
+
+def test_decode_jwt_payload_invalid_format() -> None:
+    assert _decode_jwt_payload("not-a-jwt") is None
+    assert _decode_jwt_payload("a.b") is None
+    assert _decode_jwt_payload("") is None
+
+
+def test_decode_jwt_payload_invalid_base64() -> None:
+    assert _decode_jwt_payload("header.!!!invalid!!!.sig") is None
+
+
+def test_decode_jwt_payload_non_dict() -> None:
+    body = base64.urlsafe_b64encode(json.dumps([1, 2, 3]).encode()).rstrip(b"=").decode()
+    assert _decode_jwt_payload(f"h.{body}.s") is None
+
+
+# ── id_token claim merging tests ───────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_handle_callback_merges_id_token_claims(token_store: TokenStore) -> None:
+    """When id_token is present, its claims are merged into raw_profile."""
+    id_token_claims = {
+        "sub": "user1",
+        "realm_access": {"roles": ["admin", "editor"]},
+        "custom_claim": "value",
+    }
+    id_token = _make_jwt(id_token_claims)
+    provider = DummyProviderAdapter(expected_code_verifier=None, id_token=id_token)
+    session_manager = SessionManager(token_store)
+    service = AuthService(
+        provider_adapter=provider,
+        session_manager=session_manager,
+        callback_url="http://localhost/auth/callback",
+    )
+
+    _, state_record = await service.authorize(
+        client_id="client-1",
+        redirect_uri="http://client/app",
+        provider_scopes_requested=["openid"],
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    _, session, _ = await service.handle_callback(code="TEST_CODE_OK", state=state_record.state)
+
+    raw = session.user_info.raw_profile
+    assert raw is not None
+    # id_token claims should be present
+    assert raw["realm_access"] == {"roles": ["admin", "editor"]}
+    assert raw["custom_claim"] == "value"
+    # userinfo fields should also be present (from DummyProviderAdapter)
+    assert raw["provider"] == "dummy"
+
+
+@pytest.mark.asyncio
+async def test_handle_callback_without_id_token_unchanged(token_store: TokenStore) -> None:
+    """Without id_token, raw_profile only has userinfo fields."""
+    provider = DummyProviderAdapter(expected_code_verifier=None)
+    session_manager = SessionManager(token_store)
+    service = AuthService(
+        provider_adapter=provider,
+        session_manager=session_manager,
+        callback_url="http://localhost/auth/callback",
+    )
+
+    _, state_record = await service.authorize(
+        client_id="client-1",
+        redirect_uri="http://client/app",
+        provider_scopes_requested=["openid"],
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    _, session, _ = await service.handle_callback(code="TEST_CODE_OK", state=state_record.state)
+
+    raw = session.user_info.raw_profile
+    assert raw is not None
+    assert raw == {"provider": "dummy"}
+    assert "realm_access" not in raw
+
+
+@pytest.mark.asyncio
+async def test_handle_callback_userinfo_overrides_id_token(token_store: TokenStore) -> None:
+    """When both userinfo and id_token have the same key, userinfo wins."""
+    id_token_claims = {
+        "provider": "from-id-token",
+        "extra": "from-id-token",
+    }
+    id_token = _make_jwt(id_token_claims)
+    provider = DummyProviderAdapter(expected_code_verifier=None, id_token=id_token)
+    session_manager = SessionManager(token_store)
+    service = AuthService(
+        provider_adapter=provider,
+        session_manager=session_manager,
+        callback_url="http://localhost/auth/callback",
+    )
+
+    _, state_record = await service.authorize(
+        client_id="client-1",
+        redirect_uri="http://client/app",
+        provider_scopes_requested=["openid"],
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    _, session, _ = await service.handle_callback(code="TEST_CODE_OK", state=state_record.state)
+
+    raw = session.user_info.raw_profile
+    assert raw is not None
+    # userinfo's "provider" key should win over id_token's
+    assert raw["provider"] == "dummy"
+    # id_token-only key should be present
+    assert raw["extra"] == "from-id-token"
+
+
+class _JwtAccessTokenDummyProvider(DummyProviderAdapter):
+    """DummyProvider that returns a JWT as the access token (like Keycloak)."""
+
+    def __init__(self, *, access_token_claims: dict, **kwargs):  # type: ignore[no-untyped-def]
+        super().__init__(**kwargs)
+        self._access_token = _make_jwt(access_token_claims)
+
+
+@pytest.mark.asyncio
+async def test_handle_callback_merges_access_token_jwt_claims(token_store: TokenStore) -> None:
+    """When the access token is a JWT (e.g. Keycloak), its claims are merged into raw_profile."""
+    access_claims = {
+        "sub": "user1",
+        "realm_access": {"roles": ["admin", "editor"]},
+        "resource_access": {"mxcp": {"roles": ["manage"]}},
+    }
+    provider = _JwtAccessTokenDummyProvider(
+        access_token_claims=access_claims,
+        expected_code_verifier=None,
+    )
+    session_manager = SessionManager(token_store)
+    service = AuthService(
+        provider_adapter=provider,
+        session_manager=session_manager,
+        callback_url="http://localhost/auth/callback",
+    )
+
+    _, state_record = await service.authorize(
+        client_id="client-1",
+        redirect_uri="http://client/app",
+        provider_scopes_requested=["openid"],
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    _, session, _ = await service.handle_callback(code="TEST_CODE_OK", state=state_record.state)
+
+    raw = session.user_info.raw_profile
+    assert raw is not None
+    assert raw["realm_access"] == {"roles": ["admin", "editor"]}
+    assert raw["resource_access"] == {"mxcp": {"roles": ["manage"]}}
+    # userinfo fields still present
+    assert raw["provider"] == "dummy"
+
+
+@pytest.mark.asyncio
+async def test_handle_callback_merge_order_access_id_userinfo(token_store: TokenStore) -> None:
+    """Merge order: access_token < id_token < userinfo. Later sources win."""
+    access_claims = {"source": "access", "access_only": "yes", "shared": "from-access"}
+    id_token_claims = {"source": "id_token", "id_only": "yes", "shared": "from-id"}
+    provider = _JwtAccessTokenDummyProvider(
+        access_token_claims=access_claims,
+        expected_code_verifier=None,
+        id_token=_make_jwt(id_token_claims),
+    )
+    session_manager = SessionManager(token_store)
+    service = AuthService(
+        provider_adapter=provider,
+        session_manager=session_manager,
+        callback_url="http://localhost/auth/callback",
+    )
+
+    _, state_record = await service.authorize(
+        client_id="client-1",
+        redirect_uri="http://client/app",
+        provider_scopes_requested=["openid"],
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    _, session, _ = await service.handle_callback(code="TEST_CODE_OK", state=state_record.state)
+
+    raw = session.user_info.raw_profile
+    assert raw is not None
+    # access_token-only claim present
+    assert raw["access_only"] == "yes"
+    # id_token-only claim present
+    assert raw["id_only"] == "yes"
+    # id_token overrides access_token for "shared"
+    assert raw["shared"] == "from-id"
+    # userinfo overrides both for "provider" (DummyProvider sets provider="dummy")
+    assert raw["provider"] == "dummy"

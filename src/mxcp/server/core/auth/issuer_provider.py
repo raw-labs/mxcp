@@ -22,7 +22,7 @@ from mcp.server.auth.provider import (
 from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyUrl, ValidationError
 
-from mxcp.sdk.auth.auth_service import AuthService
+from mxcp.sdk.auth.auth_service import AuthService, _decode_jwt_payload
 from mxcp.sdk.auth.context import set_verified_user_info
 from mxcp.sdk.auth.contracts import ProviderError, UserInfo
 from mxcp.sdk.auth.session_manager import SessionManager
@@ -302,7 +302,7 @@ class IssuerOAuthAuthorizationServer(
             return None
         if not client or not client.client_id:
             raise TokenError("invalid_client", "Client ID missing for refresh token")
-        mxcp_scopes = session.user_info.mxcp_scopes or []
+        mxcp_scopes: list[str] = []
         return RefreshToken(
             token=refresh_token,
             client_id=client.client_id if client else "",
@@ -331,7 +331,7 @@ class IssuerOAuthAuthorizationServer(
             raise TokenError("invalid_grant", "Provider refresh token missing")
 
         provider_scopes = session.user_info.provider_scopes_granted
-        session_mxcp_scopes = session.user_info.mxcp_scopes or []
+        session_mxcp_scopes: list[str] = []
         if scopes and not set(scopes).issubset(set(session_mxcp_scopes)):
             raise TokenError("invalid_scope", "Requested scopes exceed original grant")
         effective_mxcp_scopes = scopes or session_mxcp_scopes
@@ -356,18 +356,23 @@ class IssuerOAuthAuthorizationServer(
             else session.refresh_expires_at
         )
 
-        # Update stored user_info with refreshed provider scopes and mapped MXCP scopes.
-        # (Mapping is currently a placeholder; still call it so refresh behavior stays
-        # consistent once mapping is implemented.)
-        updated_mxcp_scopes = self.auth_service.derive_mxcp_scopes(
-            provider=session.provider,
-            user_info=session.user_info,
-            provider_scopes_granted=grant.provider_scopes_granted,
-        )
+        # Re-merge JWT claims on refresh (roles/groups may change).
+        raw_profile = session.user_info.raw_profile
+        jwt_claims: dict[str, Any] = {}
+        access_token_claims = _decode_jwt_payload(grant.access_token)
+        if access_token_claims is not None:
+            jwt_claims.update(access_token_claims)
+        if grant.id_token is not None:
+            id_token_claims = _decode_jwt_payload(grant.id_token)
+            if id_token_claims is not None:
+                jwt_claims.update(id_token_claims)
+        if jwt_claims:
+            raw_profile = {**(raw_profile or {}), **jwt_claims}
+
         updated_user_info: UserInfo = session.user_info.model_copy(
             update={
                 "provider_scopes_granted": grant.provider_scopes_granted,
-                "mxcp_scopes": updated_mxcp_scopes,
+                "raw_profile": raw_profile,
             }
         )
 
@@ -405,7 +410,7 @@ class IssuerOAuthAuthorizationServer(
             return None
         # Expose user info for this request (used by tool context)
         set_verified_user_info(session.user_info)
-        mxcp_scopes = session.user_info.mxcp_scopes or []
+        mxcp_scopes: list[str] = []
         return AccessToken(
             token=session.access_token,
             client_id="",
