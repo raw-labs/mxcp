@@ -367,7 +367,7 @@ class IssuerOAuthAuthorizationServer(
             if id_token_claims is not None:
                 jwt_claims.update(id_token_claims)
         if jwt_claims:
-            raw_profile = {**jwt_claims, **(raw_profile or {})}
+            raw_profile = {**(raw_profile or {}), **jwt_claims}
 
         updated_user_info: UserInfo = session.user_info.model_copy(
             update={
