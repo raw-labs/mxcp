@@ -6,7 +6,7 @@ Models are organized by feature area to support future expansion.
 """
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -181,8 +181,13 @@ class AuditRecordResponse(BaseModel):
     user_id: str | None = Field(None, description="User ID")
     session_id: str | None = Field(None, description="Session ID")
     trace_id: str | None = Field(None, description="Trace ID")
+    input_data: dict[str, Any] | None = Field(None, description="Input data (tool call arguments)")
+    output_data: Any | None = Field(None, description="Output data (tool call result)")
+    error: str | None = Field(None, description="Error message if failed")
+    policies_evaluated: list[str] | None = Field(None, description="List of evaluated policies")
     policy_decision: str | None = Field(None, description="Policy decision")
-    error_message: str | None = Field(None, description="Error message if failed")
+    policy_reason: str | None = Field(None, description="Reason for policy decision")
+    business_context: dict[str, Any] | None = Field(None, description="Business context metadata")
 
 
 class AuditQueryResponse(BaseModel):

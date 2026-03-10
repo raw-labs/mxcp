@@ -1376,6 +1376,7 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
+            error_type = "unknown"
             result = None  # Initialize result to avoid undefined variable in finally block
             policy_info: dict[str, Any] = {
                 "policies_evaluated": [],
@@ -1468,9 +1469,10 @@ class RAWMCP:
                     logger.debug(f"Result: {json.dumps(result, indent=2, default=str)}")
                     return result
 
-                except Exception:
+                except Exception as e:
                     status = "error"
-                    error_msg = "error"
+                    error_msg = str(e)
+                    error_type = type(e).__name__
                     logger.error(
                         "Error executing %s %s:\n%s",
                         log_name,
@@ -1521,7 +1523,7 @@ class RAWMCP:
                                 "endpoint": name,
                                 "type": endpoint_key,
                                 "caller": caller,
-                                "error_type": type(error_msg).__name__ if error_msg else "unknown",
+                                "error_type": error_type if error_msg else "unknown",
                             },
                             description="Total endpoint errors",
                         )
@@ -1691,9 +1693,9 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
+            user_context = get_user_context()
 
             try:
-                user_context = get_user_context()
                 if user_context:
                     logger.info("Authenticated user executing SQL query")
 
@@ -1728,6 +1730,7 @@ class RAWMCP:
                         reason=None,
                         status=cast(Literal["success", "error"], status),
                         error=error_msg,
+                        user_id=user_context.user_id if user_context else None,
                         trace_id=get_current_trace_id(),
                     )
 
@@ -1753,9 +1756,9 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
+            user_context = get_user_context()
 
             try:
-                user_context = get_user_context()
                 if user_context:
                     logger.info(f"User {user_context.username} listing tables")
 
@@ -1795,6 +1798,7 @@ class RAWMCP:
                         reason=None,
                         status=cast(Literal["success", "error"], status),
                         error=error_msg,
+                        user_id=user_context.user_id if user_context else None,
                         trace_id=get_current_trace_id(),
                     )
 
@@ -1823,9 +1827,9 @@ class RAWMCP:
             start_time = time.time()
             status = "success"
             error_msg = None
+            user_context = get_user_context()
 
             try:
-                user_context = get_user_context()
                 if user_context:
                     logger.info(
                         f"User {user_context.username} getting schema for table {table_name}"
@@ -1870,6 +1874,7 @@ class RAWMCP:
                         reason=None,
                         status=cast(Literal["success", "error"], status),
                         error=error_msg,
+                        user_id=user_context.user_id if user_context else None,
                         trace_id=get_current_trace_id(),
                     )
 
