@@ -164,7 +164,12 @@ def traced_operation(
     otel_kind = _SPAN_KIND_MAP.get(kind, trace.SpanKind.INTERNAL)
 
     # Start span
-    with tracer.start_as_current_span(name, kind=otel_kind) as otel_span:
+    with tracer.start_as_current_span(
+        name,
+        kind=otel_kind,
+        record_exception=True,
+        set_status_on_exception=False,
+    ) as otel_span:
         # Wrap in our interface
         span = SpanWrapper(otel_span)
 
@@ -176,8 +181,7 @@ def traced_operation(
         try:
             yield span
         except Exception as e:
-            # Automatically record exceptions
-            span.record_exception(e)
+            # Let OpenTelemetry record the exception once; we keep control of the status message.
             span.set_status(Status(StatusCode.ERROR, str(e)))
             raise
 
