@@ -1732,9 +1732,7 @@ class RAWMCP:
                     try:
                         # Determine caller type
                         caller = (
-                            "stdio"
-                            if getattr(self, "transport_mode", None) == "stdio"
-                            else "http"
+                            "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
                         )
 
                         await self.audit_logger.log_event(
@@ -1818,9 +1816,7 @@ class RAWMCP:
                     try:
                         # Determine caller type
                         caller = (
-                            "stdio"
-                            if getattr(self, "transport_mode", None) == "stdio"
-                            else "http"
+                            "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
                         )
 
                         await self.audit_logger.log_event(
@@ -1912,9 +1908,7 @@ class RAWMCP:
                     try:
                         # Determine caller type
                         caller = (
-                            "stdio"
-                            if getattr(self, "transport_mode", None) == "stdio"
-                            else "http"
+                            "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
                         )
 
                         await self.audit_logger.log_event(
