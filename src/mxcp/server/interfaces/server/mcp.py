@@ -1036,9 +1036,13 @@ class RAWMCP:
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 if make_nullable:
-                    final_type = Annotated[str | None, BeforeValidator(_coerce_scalar_to_str), Field(**field_kwargs)]
+                    final_type = Annotated[
+                        str | None, BeforeValidator(_coerce_scalar_to_str), Field(**field_kwargs)
+                    ]
                 else:
-                    final_type = Annotated[str, BeforeValidator(_coerce_scalar_to_str), Field(**field_kwargs)]
+                    final_type = Annotated[
+                        str, BeforeValidator(_coerce_scalar_to_str), Field(**field_kwargs)
+                    ]
             else:
                 if make_nullable:
                     final_type = Annotated[str | None, BeforeValidator(_coerce_scalar_to_str)]
