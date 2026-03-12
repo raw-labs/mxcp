@@ -396,3 +396,10 @@ async def _test_impl(
             click.echo(format_multi_endpoint_results(results, debug))
         else:
             click.echo(results)
+
+    # Exit with non-zero status when tests fail
+    if (
+        isinstance(results, TestSuiteResultModel | MultiEndpointTestResultsModel)
+        and results.status != "ok"
+    ):
+        raise SystemExit(1)
