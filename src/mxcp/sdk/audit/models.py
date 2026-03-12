@@ -172,8 +172,8 @@ class ExecutionEventModel(SdkBaseModel):
 
 
 @dataclass(frozen=True, slots=True)
-class ExecutionEventToken:
-    """Timing token used to compute event duration at append time."""
+class ExecutionEventSpan:
+    """Timing span used to compute event duration at append time."""
 
     started_at: datetime
     monotonic_start: float

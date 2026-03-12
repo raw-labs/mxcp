@@ -196,7 +196,6 @@ from .backends.noop import NoOpAuditBackend
 from .context import (
     add_execution_event,
     begin_execution_event,
-    clear_execution_events,
     get_execution_events,
 )
 from .logger import AuditLogger
@@ -209,7 +208,7 @@ from .models import (  # Core types; Protocols
     EvidenceLevel,
     ExecutionEventKind,
     ExecutionEventModel,
-    ExecutionEventToken,
+    ExecutionEventSpan,
     FieldDefinitionModel,
     FieldRedactionModel,
     IntegrityResultModel,
@@ -230,7 +229,7 @@ __all__ = [
     "AuditRecordModel",
     "AuditSchemaModel",
     "ExecutionEventModel",
-    "ExecutionEventToken",
+    "ExecutionEventSpan",
     "FieldDefinitionModel",
     "EvidenceLevel",
     "FieldRedactionModel",
@@ -250,5 +249,4 @@ __all__ = [
     "begin_execution_event",
     "add_execution_event",
     "get_execution_events",
-    "clear_execution_events",
 ]
