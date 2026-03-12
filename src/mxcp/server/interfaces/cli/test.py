@@ -398,10 +398,8 @@ async def _test_impl(
             click.echo(results)
 
     # Exit with non-zero status when tests fail
-    has_failures = False
-    if isinstance(results, TestSuiteResultModel) or isinstance(
-        results, MultiEndpointTestResultsModel
+    if (
+        isinstance(results, TestSuiteResultModel | MultiEndpointTestResultsModel)
+        and results.status != "ok"
     ):
-        has_failures = results.status != "ok"
-    if has_failures:
         raise SystemExit(1)
