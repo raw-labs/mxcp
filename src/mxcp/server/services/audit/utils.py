@@ -134,7 +134,7 @@ def map_legacy_query_params(**kwargs: Any) -> dict[str, Any]:
 
     # Map since to start_time
     if since:
-        query_params["start_time"] = parse_time_since(since).isoformat()
+        query_params["start_time"] = parse_time_since(since)
 
     # Map status - now properly supported in new API!
     if status:
