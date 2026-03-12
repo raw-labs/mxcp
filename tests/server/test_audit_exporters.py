@@ -4,12 +4,20 @@ import asyncio
 import csv
 import json
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
+import duckdb
 import pytest
 
 from mxcp.sdk.audit import AuditLogger, AuditSchemaModel
-from mxcp.server.services.audit.exporters import export_to_csv, export_to_json, export_to_jsonl
+from mxcp.sdk.audit.models import ExecutionEventModel
+from mxcp.server.services.audit.exporters import (
+    export_to_csv,
+    export_to_duckdb,
+    export_to_json,
+    export_to_jsonl,
+)
 
 
 @pytest.mark.asyncio
@@ -245,5 +253,87 @@ async def test_exporters_memory_efficiency():
                 line_count += 1
 
         assert line_count == num_events
+
+        await logger.close()
+
+
+@pytest.mark.asyncio
+async def test_export_to_duckdb():
+    """Test DuckDB export with all fields including execution_events."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        db_path = Path(tmpdir) / "export.duckdb"
+
+        # Create logger with JSONL backend
+        logger = await AuditLogger.jsonl(log_path=log_path)
+
+        schema = AuditSchemaModel(
+            schema_name="duckdb_test", version=1, description="Test schema for DuckDB export"
+        )
+        await logger.create_schema(schema)
+
+        exec_events = [
+            ExecutionEventModel(
+                kind="external",
+                started_at=datetime.now(timezone.utc),
+                duration_ms=42,
+                status="success",
+                target="api.example.com",
+                operation="GET /test",
+                summary="Test call",
+            )
+        ]
+
+        await logger.log_event(
+            caller_type="cli",
+            event_type="tool",
+            name="tool_with_events",
+            input_params={"key": "value"},
+            duration_ms=100,
+            schema_name="duckdb_test",
+            user_id="test_user",
+            status="success",
+            execution_events=exec_events,
+        )
+
+        # Also log one without execution_events
+        await logger.log_event(
+            caller_type="cli",
+            event_type="tool",
+            name="tool_without_events",
+            input_params={"key": "value2"},
+            duration_ms=50,
+            schema_name="duckdb_test",
+            status="success",
+        )
+
+        await asyncio.sleep(0.1)
+        await logger.backend.close()
+
+        # Export to DuckDB
+        count = await export_to_duckdb(logger, db_path)
+        assert count == 2
+
+        # Verify DuckDB content is queryable
+        conn = duckdb.connect(str(db_path))
+        try:
+            rows = conn.execute("SELECT * FROM audit_logs").fetchall()
+            assert len(rows) == 2
+
+            # Verify column count matches all 23 fields
+            cols = conn.execute("PRAGMA table_info('audit_logs')").fetchall()
+            assert len(cols) == 23
+
+            # Verify execution_events content round-trips correctly
+            row = conn.execute(
+                "SELECT execution_events FROM audit_logs WHERE operation_name = 'tool_with_events'"
+            ).fetchone()
+            events = json.loads(row[0])
+            assert len(events) == 1
+            assert events[0]["target"] == "api.example.com"
+            assert events[0]["operation"] == "GET /test"
+            assert events[0]["duration_ms"] == 42
+        finally:
+            conn.close()
 
         await logger.close()
