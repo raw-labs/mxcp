@@ -4,6 +4,7 @@ This module contains all Pydantic model definitions used by the audit system.
 """
 
 from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal, Protocol, runtime_checkable
@@ -18,6 +19,7 @@ CallerType = Literal["cli", "http", "stdio", "api", "system", "unknown"]
 EventType = Literal["tool", "resource", "prompt"]
 PolicyDecision = Literal["allow", "deny", "warn"] | None
 Status = Literal["success", "error"]
+ExecutionEventKind = Literal["external"]
 
 # New type aliases
 RedactionFunc = Callable[[Any, dict[str, Any] | None], Any]
@@ -153,6 +155,30 @@ class IntegrityResultModel(SdkBaseModel):
     error: str | None = None
 
 
+class ExecutionEventModel(SdkBaseModel):
+    """Execution detail attached to a parent audit record."""
+
+    model_config = ConfigDict(extra="forbid", frozen=False)
+
+    kind: ExecutionEventKind = "external"
+    started_at: datetime
+    duration_ms: int = 0
+    status: Status = "success"
+    target: str | None = None
+    operation: str | None = None
+    summary: str | None = None
+    error: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionEventToken:
+    """Timing token used to compute event duration at append time."""
+
+    started_at: datetime
+    monotonic_start: float
+
+
 def _new_uuid() -> str:
     """Generate a new UUID string."""
     return str(uuid4())
@@ -224,6 +250,7 @@ class AuditRecordModel(SdkBaseModel):
 
     # Business context
     business_context: dict[str, Any] = Field(default_factory=dict)
+    execution_events: list[ExecutionEventModel] = Field(default_factory=list)
 
     # Backend-specific
     prev_hash: str | None = None
@@ -236,10 +263,7 @@ class AuditRecordModel(SdkBaseModel):
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        result = self.model_dump(mode="python")
-        # Convert datetime to ISO format
-        result["timestamp"] = self.timestamp.isoformat()
-        return result
+        return self.model_dump(mode="json")
 
 
 # Protocol definitions for extensibility

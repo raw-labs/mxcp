@@ -216,6 +216,7 @@ def _record_to_dict(record: AuditRecordModel) -> dict[str, Any]:
         "policy_decision": record.policy_decision,
         "policy_reason": record.policy_reason,
         "business_context": record.business_context,
+        "execution_events": record.execution_events,
         "schema_name": record.schema_name,
         "schema_version": record.schema_version,
         "input_data": record.input_data,
