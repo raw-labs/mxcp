@@ -193,6 +193,11 @@ Schemas provide several advantages over per-request policies:
 """
 
 from .backends.noop import NoOpAuditBackend
+from .context import (
+    add_execution_event,
+    begin_execution_event,
+    get_execution_events,
+)
 from .logger import AuditLogger
 from .models import (  # Core types; Protocols
     AuditBackend,
@@ -201,6 +206,9 @@ from .models import (  # Core types; Protocols
     CallerType,
     EventType,
     EvidenceLevel,
+    ExecutionEventKind,
+    ExecutionEventModel,
+    ExecutionEventSpan,
     FieldDefinitionModel,
     FieldRedactionModel,
     IntegrityResultModel,
@@ -217,8 +225,11 @@ __all__ = [
     "EventType",
     "PolicyDecision",
     "Status",
+    "ExecutionEventKind",
     "AuditRecordModel",
     "AuditSchemaModel",
+    "ExecutionEventModel",
+    "ExecutionEventSpan",
     "FieldDefinitionModel",
     "EvidenceLevel",
     "FieldRedactionModel",
@@ -234,4 +245,8 @@ __all__ = [
     "AuditBackend",
     # Redaction function
     "apply_redaction",
+    # Execution event helpers
+    "begin_execution_event",
+    "add_execution_event",
+    "get_execution_events",
 ]

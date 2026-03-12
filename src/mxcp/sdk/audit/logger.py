@@ -13,6 +13,7 @@ from .models import (
     AuditSchemaModel,
     CallerType,
     EventType,
+    ExecutionEventModel,
     IntegrityResultModel,
     PolicyDecision,
     Status,
@@ -99,6 +100,7 @@ class AuditLogger:
         session_id: str | None = None,
         trace_id: str | None = None,
         policies_evaluated: list[str] | None = None,
+        execution_events: list[ExecutionEventModel] | None = None,
     ) -> None:
         """Log an audit event.
 
@@ -139,6 +141,7 @@ class AuditLogger:
                 session_id=session_id,
                 trace_id=trace_id,
                 policies_evaluated=policies_evaluated or [],
+                execution_events=execution_events or [],
             )
 
             # Delegate to backend - clean async interface

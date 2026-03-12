@@ -188,6 +188,10 @@ class AuditRecordResponse(BaseModel):
     policy_decision: str | None = Field(None, description="Policy decision")
     policy_reason: str | None = Field(None, description="Reason for policy decision")
     business_context: dict[str, Any] | None = Field(None, description="Business context metadata")
+    execution_events: list[Any] | None = Field(
+        None,
+        description="Execution events emitted during the audited operation",
+    )
 
 
 class AuditQueryResponse(BaseModel):

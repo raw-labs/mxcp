@@ -20,6 +20,7 @@ ENDPOINT_EXECUTION_SCHEMA = AuditSchemaModel(
         FieldDefinitionModel(name="operation_name", type="string"),  # The specific endpoint name
         FieldDefinitionModel(name="input_data", type="object", sensitive=True),
         FieldDefinitionModel(name="output_data", type="object", required=False),
+        FieldDefinitionModel(name="execution_events", type="array", required=False),
         FieldDefinitionModel(name="error", type="string", required=False),
         FieldDefinitionModel(
             name="policy_decision", type="string", required=False

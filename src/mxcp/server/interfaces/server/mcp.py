@@ -34,6 +34,11 @@ from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse, RedirectResponse
 
 from mxcp.sdk.audit import AuditLogger
+from mxcp.sdk.audit.context import (
+    get_execution_events,
+    reset_execution_events,
+    set_execution_events,
+)
 from mxcp.sdk.auth.auth_service import AuthService
 from mxcp.sdk.auth.capabilities import CapabilityMapper
 from mxcp.sdk.auth.context import (
@@ -1399,6 +1404,7 @@ class RAWMCP:
         # -------------------------------------------------------------------
         async def _body(**kwargs: Any) -> Any:
             start_time = time.time()
+            execution_events_token = set_execution_events()
             status = "success"
             error_msg = None
             error_type = "unknown"
@@ -1506,6 +1512,8 @@ class RAWMCP:
                     )
                     raise
                 finally:
+                    execution_events = get_execution_events()
+
                     # Calculate duration
                     duration_ms = int((time.time() - start_time) * 1000)
 
@@ -1589,6 +1597,7 @@ class RAWMCP:
                                 session_id=mcp_session_id,  # MCP session ID
                                 # Add trace ID for correlation with telemetry
                                 trace_id=get_current_trace_id(),
+                                execution_events=execution_events,
                             )
                         except Exception as audit_error:
                             # Log audit failure prominently - this should never be silent
@@ -1596,6 +1605,10 @@ class RAWMCP:
                                 f"CRITICAL: Audit logging failed for endpoint '{name}': {audit_error}",
                                 exc_info=True,
                             )
+                        finally:
+                            reset_execution_events(execution_events_token)
+                    else:
+                        reset_execution_events(execution_events_token)
 
         # -------------------------------------------------------------------
         # Wrap with authentication middleware
@@ -1716,6 +1729,7 @@ class RAWMCP:
                 List of records as dictionaries
             """
             start_time = time.time()
+            execution_events_token = set_execution_events()
             status = "success"
             error_msg = None
             user_context = get_user_context()
@@ -1736,28 +1750,43 @@ class RAWMCP:
                 logger.error(f"Error executing SQL query: {e}")
                 raise
             finally:
+                execution_events = get_execution_events()
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)
                 if self.audit_logger:
-                    # Determine caller type
-                    caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
+                    try:
+                        # Determine caller type
+                        caller = (
+                            "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
+                        )
 
-                    await self.audit_logger.log_event(
-                        caller_type=cast(
-                            Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
-                        ),
-                        event_type="tool",
-                        name="execute_sql_query",
-                        input_params={"sql": sql},
-                        duration_ms=duration_ms,
-                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                        policy_decision=None,
-                        reason=None,
-                        status=cast(Literal["success", "error"], status),
-                        error=error_msg,
-                        user_id=user_context.user_id if user_context else None,
-                        trace_id=get_current_trace_id(),
-                    )
+                        await self.audit_logger.log_event(
+                            caller_type=cast(
+                                Literal["cli", "http", "stdio", "api", "system", "unknown"],
+                                caller,
+                            ),
+                            event_type="tool",
+                            name="execute_sql_query",
+                            input_params={"sql": sql},
+                            duration_ms=duration_ms,
+                            schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
+                            policy_decision=None,
+                            reason=None,
+                            status=cast(Literal["success", "error"], status),
+                            error=error_msg,
+                            user_id=user_context.user_id if user_context else None,
+                            trace_id=get_current_trace_id(),
+                            execution_events=execution_events,
+                        )
+                    except Exception as audit_error:
+                        logger.error(
+                            f"CRITICAL: Audit logging failed for 'execute_sql_query': {audit_error}",
+                            exc_info=True,
+                        )
+                    finally:
+                        reset_execution_events(execution_events_token)
+                else:
+                    reset_execution_events(execution_events_token)
 
         # Register table list tool with proper metadata
         @self.mcp.tool(
@@ -1779,6 +1808,7 @@ class RAWMCP:
                 List of tables with their names and types
             """
             start_time = time.time()
+            execution_events_token = set_execution_events()
             status = "success"
             error_msg = None
             user_context = get_user_context()
@@ -1804,28 +1834,43 @@ class RAWMCP:
                 logger.error(f"Error listing tables: {e}")
                 raise
             finally:
+                execution_events = get_execution_events()
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)
                 if self.audit_logger:
-                    # Determine caller type
-                    caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
+                    try:
+                        # Determine caller type
+                        caller = (
+                            "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
+                        )
 
-                    await self.audit_logger.log_event(
-                        caller_type=cast(
-                            Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
-                        ),
-                        event_type="tool",
-                        name="list_tables",
-                        input_params={},
-                        duration_ms=duration_ms,
-                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                        policy_decision=None,
-                        reason=None,
-                        status=cast(Literal["success", "error"], status),
-                        error=error_msg,
-                        user_id=user_context.user_id if user_context else None,
-                        trace_id=get_current_trace_id(),
-                    )
+                        await self.audit_logger.log_event(
+                            caller_type=cast(
+                                Literal["cli", "http", "stdio", "api", "system", "unknown"],
+                                caller,
+                            ),
+                            event_type="tool",
+                            name="list_tables",
+                            input_params={},
+                            duration_ms=duration_ms,
+                            schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
+                            policy_decision=None,
+                            reason=None,
+                            status=cast(Literal["success", "error"], status),
+                            error=error_msg,
+                            user_id=user_context.user_id if user_context else None,
+                            trace_id=get_current_trace_id(),
+                            execution_events=execution_events,
+                        )
+                    except Exception as audit_error:
+                        logger.error(
+                            f"CRITICAL: Audit logging failed for 'list_tables': {audit_error}",
+                            exc_info=True,
+                        )
+                    finally:
+                        reset_execution_events(execution_events_token)
+                else:
+                    reset_execution_events(execution_events_token)
 
         # Register schema tool with proper metadata
         @self.mcp.tool(
@@ -1850,6 +1895,7 @@ class RAWMCP:
                 List of columns with their names and types
             """
             start_time = time.time()
+            execution_events_token = set_execution_events()
             status = "success"
             error_msg = None
             user_context = get_user_context()
@@ -1880,28 +1926,43 @@ class RAWMCP:
                 logger.error(f"Error getting table schema: {e}")
                 raise
             finally:
+                execution_events = get_execution_events()
                 # Log audit event
                 duration_ms = int((time.time() - start_time) * 1000)
                 if self.audit_logger:
-                    # Determine caller type
-                    caller = "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
+                    try:
+                        # Determine caller type
+                        caller = (
+                            "stdio" if getattr(self, "transport_mode", None) == "stdio" else "http"
+                        )
 
-                    await self.audit_logger.log_event(
-                        caller_type=cast(
-                            Literal["cli", "http", "stdio", "api", "system", "unknown"], caller
-                        ),
-                        event_type="tool",
-                        name="get_table_schema",
-                        input_params={"table_name": table_name},
-                        duration_ms=duration_ms,
-                        schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
-                        policy_decision=None,
-                        reason=None,
-                        status=cast(Literal["success", "error"], status),
-                        error=error_msg,
-                        user_id=user_context.user_id if user_context else None,
-                        trace_id=get_current_trace_id(),
-                    )
+                        await self.audit_logger.log_event(
+                            caller_type=cast(
+                                Literal["cli", "http", "stdio", "api", "system", "unknown"],
+                                caller,
+                            ),
+                            event_type="tool",
+                            name="get_table_schema",
+                            input_params={"table_name": table_name},
+                            duration_ms=duration_ms,
+                            schema_name=ENDPOINT_EXECUTION_SCHEMA.schema_name,
+                            policy_decision=None,
+                            reason=None,
+                            status=cast(Literal["success", "error"], status),
+                            error=error_msg,
+                            user_id=user_context.user_id if user_context else None,
+                            trace_id=get_current_trace_id(),
+                            execution_events=execution_events,
+                        )
+                    except Exception as audit_error:
+                        logger.error(
+                            f"CRITICAL: Audit logging failed for 'get_table_schema': {audit_error}",
+                            exc_info=True,
+                        )
+                    finally:
+                        reset_execution_events(execution_events_token)
+                else:
+                    reset_execution_events(execution_events_token)
 
         logger.info("Registered built-in DuckDB features")
 

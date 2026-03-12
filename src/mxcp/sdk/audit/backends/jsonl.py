@@ -65,7 +65,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         # Convert created_at if it's a string
         if isinstance(d.get("created_at"), str):
-            d["created_at"] = datetime.fromisoformat(d["created_at"])
+            d["created_at"] = self._parse_datetime_str(d["created_at"])
 
         # Convert evidence_level if it's a string
         if isinstance(d.get("evidence_level"), str):
@@ -377,6 +377,12 @@ class JSONLAuditWriter(BaseAuditWriter):
         # Return current time minus delta
         return datetime.now(timezone.utc) - delta
 
+    def _parse_datetime_str(self, value: str) -> datetime:
+        """Parse persisted datetimes from JSON output on Python 3.10+."""
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        return datetime.fromisoformat(value)
+
     def query_records(
         self,
         schema_name: str | None = None,
@@ -519,6 +525,7 @@ class JSONLAuditWriter(BaseAuditWriter):
                     'policy_decision': 'VARCHAR',
                     'policy_reason': 'VARCHAR',
                     'business_context': 'JSON',
+                    'execution_events': 'JSON',
                     'prev_hash': 'VARCHAR',
                     'record_hash': 'VARCHAR',
                     'signature': 'VARCHAR'
@@ -539,13 +546,14 @@ class JSONLAuditWriter(BaseAuditWriter):
 
             for row in result:
                 row_dict = dict(zip(columns, row, strict=False))
-                row_dict["timestamp"] = datetime.fromisoformat(row_dict["timestamp"])
+                row_dict["timestamp"] = self._parse_datetime_str(row_dict["timestamp"])
 
                 json_fields = [
                     "input_data",
                     "output_data",
                     "business_context",
                     "policies_evaluated",
+                    "execution_events",
                 ]
                 for field in json_fields:
                     if field in row_dict and isinstance(row_dict[field], str) and row_dict[field]:
@@ -593,6 +601,7 @@ class JSONLAuditWriter(BaseAuditWriter):
                     'policy_decision': 'VARCHAR',
                     'policy_reason': 'VARCHAR',
                     'business_context': 'JSON',
+                    'execution_events': 'JSON',
                     'prev_hash': 'VARCHAR',
                     'record_hash': 'VARCHAR',
                     'signature': 'VARCHAR'
@@ -613,10 +622,16 @@ class JSONLAuditWriter(BaseAuditWriter):
             row_dict = dict(zip(columns, result[0], strict=False))
 
             # Convert timestamp
-            row_dict["timestamp"] = datetime.fromisoformat(row_dict["timestamp"])
+            row_dict["timestamp"] = self._parse_datetime_str(row_dict["timestamp"])
 
             # Parse JSON fields back to their original types
-            json_fields = ["input_data", "output_data", "business_context", "policies_evaluated"]
+            json_fields = [
+                "input_data",
+                "output_data",
+                "business_context",
+                "policies_evaluated",
+                "execution_events",
+            ]
             for field in json_fields:
                 if field in row_dict and isinstance(row_dict[field], str) and row_dict[field]:
                     with contextlib.suppress(json.JSONDecodeError, TypeError):
@@ -700,7 +715,7 @@ class JSONLAuditWriter(BaseAuditWriter):
                                 continue
 
                             # Check if record should be retained
-                            timestamp = datetime.fromisoformat(record_dict["timestamp"])
+                            timestamp = self._parse_datetime_str(record_dict["timestamp"])
                             age_days = (now - timestamp).days
 
                             if age_days <= schema.retention_days:

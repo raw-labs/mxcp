@@ -7,6 +7,7 @@ interface that applications use for audit logging.
 import asyncio
 import json
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ import pytest
 from mxcp.sdk.audit import (
     AuditLogger,
     AuditSchemaModel,
+    ExecutionEventModel,
     FieldDefinitionModel,
     FieldRedactionModel,
     RedactionStrategy,
@@ -269,5 +271,50 @@ async def test_audit_logger_sync_queries():
         record = await logger.get_record(record_id)
         assert record is not None
         assert record.operation_name == "sync_tool"
+
+        await logger.close()
+
+
+@pytest.mark.asyncio
+async def test_audit_logger_persists_execution_events():
+    """Test that execution events are written and queryable."""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+
+        logger = await AuditLogger.jsonl(log_path=log_path)
+        await logger.create_schema(
+            AuditSchemaModel(schema_name="event_test", version=1, description="Execution events")
+        )
+
+        execution_events = [
+            ExecutionEventModel(
+                started_at=datetime.now(timezone.utc),
+                duration_ms=42,
+                status="success",
+                target="api.example.com",
+                operation="GET /customers/{id}",
+                summary="Fetch customer",
+                details={"kind": "http", "status_code": 200},
+            )
+        ]
+
+        await logger.log_event(
+            caller_type="http",
+            event_type="tool",
+            name="eventful_tool",
+            input_params={},
+            duration_ms=100,
+            schema_name="event_test",
+            execution_events=execution_events,
+        )
+
+        await logger.backend.flush()
+
+        records = [r async for r in logger.query_records(operation_names=["eventful_tool"])]
+        assert len(records) == 1
+        assert len(records[0].execution_events) == 1
+        assert records[0].execution_events[0].target == "api.example.com"
+        assert records[0].execution_events[0].details["status_code"] == 200
 
         await logger.close()
