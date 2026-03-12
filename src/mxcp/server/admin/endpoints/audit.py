@@ -100,6 +100,7 @@ def create_audit_router(admin_service: AdminService) -> APIRouter:
                         policy_decision=record.policy_decision,
                         policy_reason=record.policy_reason,
                         business_context=record.business_context or None,
+                        execution_events=record.execution_events or None,
                     )
                 )
 

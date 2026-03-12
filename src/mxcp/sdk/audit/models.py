@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any, Literal, Protocol, runtime_checkable
 from uuid import uuid4
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator
 
 from mxcp.sdk.models import SdkBaseModel
 
@@ -260,6 +260,15 @@ class AuditRecordModel(SdkBaseModel):
     def get_schema_id(self) -> str:
         """Get the schema identifier for this record."""
         return f"{self.schema_name}:v{self.schema_version}"
+
+    @field_validator("execution_events", mode="before")
+    @classmethod
+    def normalize_execution_events(cls, value: Any) -> list[Any]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        return []
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
