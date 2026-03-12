@@ -21,7 +21,15 @@ from mcp.server.fastmcp import Context as FastMCPContextRuntime
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import OAuthClientInformationFull
 from mcp.types import ToolAnnotations
-from pydantic import AnyHttpUrl, AnyUrl, ConfigDict, Field, ValidationError, create_model
+from pydantic import (
+    AnyHttpUrl,
+    AnyUrl,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    ValidationError,
+    create_model,
+)
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse, RedirectResponse
 
@@ -143,6 +151,19 @@ def with_draining_and_request_tracking(func: T) -> T:
                 self.active_requests -= 1
 
     return cast(T, wrapper)
+
+
+def _coerce_scalar_to_str(v: Any) -> Any:
+    """Coerce scalar values to strings for type: string parameters.
+
+    LLMs frequently send int/float/bool instead of string. This validator
+    runs before Pydantic's own type check to coerce these silently.
+    """
+    if isinstance(v, bool):
+        return str(v).lower()  # True -> "true", False -> "false"
+    if isinstance(v, int | float):
+        return str(v)
+    return v
 
 
 class RAWMCP:
@@ -1005,9 +1026,9 @@ class RAWMCP:
         if json_type == "string":
             if schema_def.enum and all(isinstance(v, str) for v in schema_def.enum):
                 if make_nullable:
-                    final_type = str | None
+                    final_type = Annotated[str | None, BeforeValidator(_coerce_scalar_to_str)]
                 else:
-                    final_type = str
+                    final_type = Annotated[str, BeforeValidator(_coerce_scalar_to_str)]
                 self._model_cache[cache_key] = final_type
                 return final_type
 
@@ -1015,14 +1036,18 @@ class RAWMCP:
             field_kwargs = self._extract_field_constraints(schema_def)
             if field_kwargs:
                 if make_nullable:
-                    final_type = Annotated[str | None, Field(**field_kwargs)]
+                    final_type = Annotated[
+                        str | None, BeforeValidator(_coerce_scalar_to_str), Field(**field_kwargs)
+                    ]
                 else:
-                    final_type = Annotated[str, Field(**field_kwargs)]
+                    final_type = Annotated[
+                        str, BeforeValidator(_coerce_scalar_to_str), Field(**field_kwargs)
+                    ]
             else:
                 if make_nullable:
-                    final_type = str | None
+                    final_type = Annotated[str | None, BeforeValidator(_coerce_scalar_to_str)]
                 else:
-                    final_type = str
+                    final_type = Annotated[str, BeforeValidator(_coerce_scalar_to_str)]
             self._model_cache[cache_key] = final_type
             return final_type
 
