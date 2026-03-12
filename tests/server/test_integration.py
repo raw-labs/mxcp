@@ -1193,6 +1193,80 @@ def check_all_secrets() -> dict:
                 assert "John Doe is a 25-year-old premium user" in analysis["summary"]
 
     @pytest.mark.asyncio
+    async def test_string_coercion_from_scalars(self, integration_fixture_dir):
+        """Test that non-string scalars (int, float, bool) are coerced to strings for type: string parameters.
+
+        Regression test for https://github.com/raw-labs/mxcp/issues/215.
+        LLMs frequently send integers/booleans for string-typed parameters.
+        """
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                # --- Plain string parameter (echo_message: message is type: string) ---
+
+                # int -> str
+                result = await client.call_tool("echo_message", {"message": 42})
+                assert result["original"] == "42"
+                assert result["length"] == 2
+
+                # float -> str
+                result = await client.call_tool("echo_message", {"message": 3.14})
+                assert result["original"] == "3.14"
+                assert result["length"] == 4
+
+                # bool -> str (lowercase JSON convention)
+                result = await client.call_tool("echo_message", {"message": True})
+                assert result["original"] == "true"
+                assert result["length"] == 4
+
+                result = await client.call_tool("echo_message", {"message": False})
+                assert result["original"] == "false"
+                assert result["length"] == 5
+
+                # --- Nested object with string properties ---
+                # process_user_data: name is type: string inside an object,
+                # interests is array of type: string items,
+                # contact.email / contact.phone / address.* are all type: string.
+                user_data = {
+                    "name": 123,  # int where string expected
+                    "age": 25,
+                    "preferences": {
+                        "interests": [1, True, "music"],  # array-of-strings with non-string items
+                        "premium": True,
+                    },
+                    "contact": {
+                        "email": 999,  # int where string expected
+                        "phone": False,  # bool where string expected
+                        "address": {
+                            "street": 42,
+                            "city": 3.14,
+                            "country": True,
+                        },
+                    },
+                }
+
+                result = await client.call_tool("process_user_data", {"user_data": user_data})
+                assert result["processing_status"] == "success"
+
+                # Verify coerced values flow through to the tool
+                analysis = result["analysis"]
+                assert analysis["processed_name"] == "123"  # "123".upper() == "123"
+                assert analysis["has_email"] is True  # "999" is truthy
+                assert analysis["has_phone"] is True  # "false" is truthy (non-empty string)
+                assert analysis["preference_count"] == 3
+
+                # Verify the original_data reflects the coerced string values
+                od = result["original_data"]
+                assert od["name"] == "123"
+                assert od["contact"]["email"] == "999"
+                assert od["contact"]["phone"] == "false"
+                assert od["contact"]["address"]["street"] == "42"
+                assert od["contact"]["address"]["city"] == "3.14"
+                assert od["contact"]["address"]["country"] == "true"
+                assert od["preferences"]["interests"] == ["1", "true", "music"]
+
+    @pytest.mark.asyncio
     async def test_sql_tools_registration(self, integration_fixture_dir):
         """Test that SQL tools are properly registered when enabled."""
         with ServerProcess(integration_fixture_dir) as server:
