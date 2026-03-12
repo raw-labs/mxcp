@@ -21,7 +21,15 @@ from mcp.server.fastmcp import Context as FastMCPContextRuntime
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import OAuthClientInformationFull
 from mcp.types import ToolAnnotations
-from pydantic import AnyHttpUrl, AnyUrl, BeforeValidator, ConfigDict, Field, ValidationError, create_model
+from pydantic import (
+    AnyHttpUrl,
+    AnyUrl,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    ValidationError,
+    create_model,
+)
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse, RedirectResponse
 
@@ -153,7 +161,7 @@ def _coerce_scalar_to_str(v: Any) -> Any:
     """
     if isinstance(v, bool):
         return str(v).lower()  # True -> "true", False -> "false"
-    if isinstance(v, (int, float)):
+    if isinstance(v, int | float):
         return str(v)
     return v
 
