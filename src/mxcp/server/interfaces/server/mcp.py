@@ -1137,6 +1137,7 @@ class RAWMCP:
 
             # Create fields for the model
             model_fields = {}
+            has_aliased_fields = False
             for prop_name, prop_schema in properties.items():
                 prop_type = self._create_pydantic_model_from_schema(
                     prop_schema,
@@ -1147,19 +1148,28 @@ class RAWMCP:
                 # Extract field constraints for this property
                 field_kwargs = self._extract_field_constraints(prop_schema)
 
+                # Pydantic v2 rejects field names starting with underscores (treats them as
+                # private attributes). Map underscore-prefixed names to a safe Python identifier
+                # and record the original name via Field(alias=...) so validation still works.
+                python_name = prop_name
+                if prop_name.startswith("_"):
+                    python_name = "field_" + prop_name[1:]  # strip exactly one underscore to avoid name collisions
+                    field_kwargs["alias"] = prop_name
+                    has_aliased_fields = True
+
                 # Handle required vs optional fields
                 if prop_name in required_fields:
                     if field_kwargs:
-                        model_fields[prop_name] = (prop_type, Field(**field_kwargs))
+                        model_fields[python_name] = (prop_type, Field(**field_kwargs))
                     else:
-                        model_fields[prop_name] = (prop_type, ...)
+                        model_fields[python_name] = (prop_type, ...)
                 else:
                     # Optional field
                     if field_kwargs:
                         default = field_kwargs.pop("default", None)
-                        model_fields[prop_name] = (prop_type | None, Field(default, **field_kwargs))
+                        model_fields[python_name] = (prop_type | None, Field(default, **field_kwargs))
                     else:
-                        model_fields[prop_name] = (prop_type | None, None)
+                        model_fields[python_name] = (prop_type | None, None)
 
             # Create the model with proper configuration
 
@@ -1172,7 +1182,7 @@ class RAWMCP:
 
             final_type = create_model(  # type: ignore[call-overload]
                 self._sanitize_model_name(model_name),
-                __config__=ConfigDict(extra=extra_mode),
+                __config__=ConfigDict(extra=extra_mode, populate_by_name=has_aliased_fields),
                 **model_fields,
             )
 
