@@ -57,10 +57,12 @@ async def export_to_duckdb(
                 _create_duckdb_table(conn, record_dict)
                 table_created = True
 
-            # Insert record
+            # Serialize complex values and insert
+            values = _serialize_for_duckdb(record_dict)
+            placeholders = ", ".join(["?"] * len(values))
             conn.execute(
-                "INSERT INTO audit_logs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                tuple(record_dict.values()),
+                f"INSERT INTO audit_logs VALUES ({placeholders})",
+                values,
             )
 
             total_exported += 1
@@ -216,7 +218,11 @@ def _record_to_dict(record: AuditRecordModel) -> dict[str, Any]:
         "policy_decision": record.policy_decision,
         "policy_reason": record.policy_reason,
         "business_context": record.business_context,
-        "execution_events": record.execution_events,
+        "execution_events": (
+            [e.model_dump(mode="json") for e in record.execution_events]
+            if record.execution_events
+            else []
+        ),
         "schema_name": record.schema_name,
         "schema_version": record.schema_version,
         "input_data": record.input_data,
@@ -250,3 +256,14 @@ def _create_duckdb_table(conn: duckdb.DuckDBPyConnection, sample_record: dict[st
 
     create_stmt = f"CREATE TABLE IF NOT EXISTS audit_logs ({', '.join(columns)})"
     conn.execute(create_stmt)
+
+
+def _serialize_for_duckdb(record_dict: dict[str, Any]) -> list[Any]:
+    """Serialize dict/list values to JSON strings for DuckDB JSON columns."""
+    values = []
+    for value in record_dict.values():
+        if isinstance(value, dict | list):
+            values.append(json.dumps(value, ensure_ascii=False))
+        else:
+            values.append(value)
+    return values
