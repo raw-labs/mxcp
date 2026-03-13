@@ -1153,7 +1153,7 @@ class RAWMCP:
                 # and record the original name via Field(alias=...) so validation still works.
                 python_name = prop_name
                 if prop_name.startswith("_"):
-                    python_name = "field_" + prop_name.lstrip("_")
+                    python_name = "field_" + prop_name[1:]  # strip exactly one underscore to avoid name collisions
                     field_kwargs["alias"] = prop_name
                     has_aliased_fields = True
 
