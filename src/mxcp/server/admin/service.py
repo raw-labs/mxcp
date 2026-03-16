@@ -87,11 +87,7 @@ class AdminService:
         return ConfigResponse(
             project=project_name,
             profile=self._server.profile_name,
-            repository_path=(
-                str(self._server.runtime_environment.duckdb_runtime.database_config.path)
-                if self._server.runtime_environment
-                else None
-            ),
+            repository_path=str(self._server.site_config_path),
             duckdb_path=(
                 str(self._server.runtime_environment.duckdb_runtime.database_config.path)
                 if self._server.runtime_environment

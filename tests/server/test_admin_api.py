@@ -68,6 +68,7 @@ class MockServer:
         self.reload_manager = MockReloadManager()
         self._start_time = datetime.now(timezone.utc)
         self._pid = os.getpid()
+        self.site_config_path = Path("/test/path")
         self.runtime_environment = None  # Add runtime_environment for config tests
         self.enable_sql_tools = True  # Add enable_sql_tools for config tests
         self.audit_logger = None  # Add audit_logger for config tests
@@ -188,7 +189,9 @@ class TestAdminAPI:
         assert data["status"] == "ok"
         assert data["project"] == "test-project"
         assert data["profile"] == "test-profile"
-        # repository_path and duckdb_path can be None if runtime_environment is not initialized
+        assert data["repository_path"] == "/test/path"
+        # duckdb_path can be None if runtime_environment is not initialized
+        assert data["duckdb_path"] is None
         assert data["readonly"] is False
         assert data["debug"] is False
 
