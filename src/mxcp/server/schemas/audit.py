@@ -9,7 +9,7 @@ from mxcp.sdk.audit import AuditSchemaModel, EvidenceLevel, FieldDefinitionModel
 # Single schema for all endpoint executions
 ENDPOINT_EXECUTION_SCHEMA = AuditSchemaModel(
     schema_name="mxcp.endpoints",
-    version=1,
+    version=2,
     description="Audit schema for all endpoint executions (tools, resources, prompts)",
     retention_days=90,
     evidence_level=EvidenceLevel.DETAILED,

@@ -312,10 +312,10 @@ async def test_schema_evolution():
         v1_event = v1_events[0]
         assert "field3" not in v1_event.input_data
 
-        # V2 event should have field3 (but not redacted since it uses schema v1)
+        # V2 event should have field3, redacted per v2 schema rules
         v2_event = v2_events[0]
         assert "field3" in v2_event.input_data
-        assert v2_event.input_data["field3"] == "sensitive_data"  # No redaction applied
+        assert v2_event.input_data["field3"] != "sensitive_data"  # Redaction applied
 
         # Should be able to get both schema versions
         retrieved_v1 = await logger.backend.get_schema("evolving_schema", 1)

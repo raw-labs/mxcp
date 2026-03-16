@@ -34,7 +34,7 @@ mxcp log-cleanup --profile production
 Applying retention policies...
 
 Deleted records by schema:
-  mxcp.endpoints:1: 15234 records
+  mxcp.endpoints:2: 15234 records
 
 Total records deleted: 15234
 ```
@@ -58,7 +58,7 @@ JSON output format (`--json`):
   "status": "success",
   "message": "Deleted 15234 records",
   "deleted_per_schema": {
-    "mxcp.endpoints:1": 15234
+    "mxcp.endpoints:2": 15234
   }
 }
 ```
@@ -70,7 +70,7 @@ Dry-run JSON:
   "status": "dry_run",
   "message": "Would delete 15234 records",
   "deleted_per_schema": {
-    "mxcp.endpoints:1": 15234
+    "mxcp.endpoints:2": 15234
   }
 }
 ```

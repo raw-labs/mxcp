@@ -122,10 +122,14 @@ class AuditLogger:
             policies_evaluated: Optional list of policies that were evaluated
         """
         try:
+            # Look up schema version from registered schema
+            schema = await self.backend.get_schema(schema_name)
+            schema_version = schema.version if schema else 1
+
             # Create audit record with schema reference
             record = AuditRecordModel(
                 schema_name=schema_name,
-                schema_version=1,  # Default to version 1
+                schema_version=schema_version,
                 timestamp=datetime.now(timezone.utc),
                 caller_type=caller_type,
                 operation_type=event_type,

@@ -401,7 +401,7 @@ curl --unix-socket /run/mxcp/mxcp.sock "http://localhost/audit/query?trace_id=ab
       "record_id": "abc123",
       "timestamp": "2024-01-15T10:30:00Z",
       "schema_name": "mxcp.endpoints",
-      "schema_version": 1,
+      "schema_version": 2,
       "operation_type": "tool",
       "operation_name": "get_user",
       "operation_status": "success",
