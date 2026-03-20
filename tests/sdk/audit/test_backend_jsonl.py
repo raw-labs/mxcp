@@ -435,6 +435,36 @@ async def test_same_second_collision():
 
 
 @pytest.mark.asyncio
+async def test_rotation_on_size_threshold():
+    """Writing past size threshold creates a new segment."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path, max_file_size=500)
+        try:
+            schema = AuditSchemaModel(schema_name="rot_test", version=1, description="test")
+            await backend.create_schema(schema)
+
+            first_segment = backend._current_segment
+
+            for i in range(20):
+                record = AuditRecordModel(
+                    schema_name="rot_test", operation_type="tool",
+                    operation_name=f"tool_{i}", caller_type="cli",
+                    input_data={"data": "x" * 50}, duration_ms=i,
+                    operation_status="success",
+                )
+                await backend.write_record(record)
+
+            await backend.flush()
+
+            assert backend._current_segment != first_segment
+            files = backend._list_segment_files()
+            assert len(files) >= 2
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
 async def test_jsonl_retention_policy():
     """Test retention policy application in JSONL backend."""
     with tempfile.TemporaryDirectory() as tmpdir:

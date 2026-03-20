@@ -308,15 +308,22 @@ class JSONLAuditWriter(BaseAuditWriter):
         await self._flush_ack.wait()
 
     async def _write_events_batch(self, events: list[AuditRecordModel]) -> None:
-        """Write a batch of events to the JSONL file."""
+        """Write a batch of events to the current segment file."""
         try:
-            async with self._file_lock, aiofiles.open(self.log_path, "a", encoding="utf-8") as f:
+            async with self._file_lock, aiofiles.open(
+                self._current_segment, "a", encoding="utf-8"
+            ) as f:
                 for event in events:
                     await f.write(json.dumps(event.to_dict(), ensure_ascii=False))
                     await f.write("\n")
                 await f.flush()
 
             logger.debug(f"Wrote batch of {len(events)} audit events")
+
+            # Check if rotation is needed
+            if self._current_segment.stat().st_size >= self._max_file_size:
+                self._new_segment()
+                logger.info(f"Rotated to new segment: {self._current_segment.name}")
 
         except Exception as e:
             logger.error(f"Failed to write event batch: {e}")
