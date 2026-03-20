@@ -387,11 +387,13 @@ audit:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable audit logging. |
-| `path` | string | `{paths.audit}/logs-{profile}.jsonl` | Audit log file path (JSONL format). |
+| `path` | string | `{paths.audit}/logs-{profile}.jsonl` | Base path for audit log files. Used as a prefix for timestamped segment files. |
+| `max_file_size` | integer | `52428800` (50 MB) | Maximum segment file size in bytes before rotation. |
 
 **Path Behavior:**
 - If not specified, defaults to `{paths.audit}/logs-{profile}.jsonl` (e.g., `audit/logs-default.jsonl`)
 - The `paths.audit` value defaults to `"audit"` but can be customized in the paths configuration
+- The writer creates timestamped segment files (e.g., `logs-default-20260320T140000.jsonl`) and rotates to a new segment when the current one exceeds `max_file_size`
 - Override enabled state with `MXCP_AUDIT_ENABLED` environment variable (`true`/`false`, `1`/`0`, `yes`/`no`)
 
 Query audit logs:

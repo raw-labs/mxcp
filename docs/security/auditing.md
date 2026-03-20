@@ -329,38 +329,19 @@ Redaction applies to:
 
 ## Log Rotation
 
-For production environments, implement log rotation:
+MXCP includes built-in size-based rotation. The audit writer creates timestamped segment files and rotates when a segment exceeds the configured `max_file_size` (default: 50 MB). A new segment is also created on each server startup.
 
-### Using logrotate (Linux)
-
-Create `/etc/logrotate.d/mxcp`:
-
-```
-/var/log/mxcp/audit.jsonl {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 0640 mxcp mxcp
-    postrotate
-        systemctl reload mxcp
-    endscript
-}
+```yaml
+profiles:
+  default:
+    audit:
+      enabled: true
+      max_file_size: 52428800  # 50 MB (default)
 ```
 
-### Manual Rotation
+Queries (`mxcp log`, admin socket) scan all segment files transparently. Retention (`mxcp log-cleanup`) deletes whole segment files when their newest record is older than the schema's `retention_days` threshold.
 
-```bash
-# Archive current log
-mv audit/logs.jsonl audit/logs-$(date +%Y%m%d).jsonl
-
-# Compress archived logs
-gzip audit/logs-*.jsonl
-
-# MXCP creates new file automatically
-```
+Existing single-file audit logs are included automatically — no migration needed.
 
 ## Integration with Log Analysis Tools
 

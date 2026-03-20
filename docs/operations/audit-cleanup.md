@@ -194,27 +194,19 @@ volumes:
 
 ## Log Rotation
 
-Audit logs are stored as JSONL files and do not have built-in rotation. Use external tools like `logrotate` to manage file sizes.
+MXCP has built-in size-based log rotation. The audit writer produces timestamped segment files (e.g., `logs-default-20260320T140000.jsonl`) and rotates to a new segment when the current one exceeds `max_file_size` (default: 50 MB). A new segment is also created on each server startup.
 
-### Using logrotate
+Configure the rotation threshold in `mxcp-site.yml`:
 
-Create `/etc/logrotate.d/mxcp`:
-
+```yaml
+profiles:
+  default:
+    audit:
+      enabled: true
+      max_file_size: 52428800  # 50 MB (default)
 ```
-/var/log/mxcp/*.jsonl {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 640 mxcp mxcp
-    postrotate
-        # Signal MXCP to reopen log files
-        kill -HUP $(pgrep -f "mxcp serve") 2>/dev/null || true
-    endscript
-}
-```
+
+Retention (`mxcp log-cleanup`) deletes whole segment files when the newest record in a file is older than the schema's `retention_days`. The active segment is never deleted.
 
 ## Archiving Strategies
 
