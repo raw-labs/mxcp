@@ -128,7 +128,7 @@ class MCPTestClient:
                 "name": tool.name,
                 "description": tool.description if hasattr(tool, "description") else None,
                 "inputSchema": tool.inputSchema if hasattr(tool, "inputSchema") else {},
-                "outputSchema": tool.outputSchema if hasattr(tool, "outputSchema") else {},
+                "outputSchema": getattr(tool, "outputSchema", {}),
             }
             for tool in tools
         ]

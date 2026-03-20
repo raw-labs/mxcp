@@ -1015,7 +1015,10 @@ class RAWMCP:
         """
         schema_dict = self._schema_dict(schema_def)
 
-        cache_key = f"{model_name}_{hash(json.dumps(schema_dict, sort_keys=True))}_{endpoint_type}"
+        cache_key = (
+            f"{model_name}_{hash(json.dumps(schema_dict, sort_keys=True))}_"
+            f"{endpoint_type}_{include_model_description}"
+        )
         if cache_key in self._model_cache:
             return self._model_cache[cache_key]
 
