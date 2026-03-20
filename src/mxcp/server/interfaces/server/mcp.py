@@ -1001,6 +1001,7 @@ class RAWMCP:
         schema_def: TypeDefinitionModel,
         model_name: str,
         endpoint_type: EndpointType | None = None,
+        include_model_description: bool = False,
     ) -> Any:  # Returns types that can be used in type annotations
         """Create a Pydantic model from a JSON Schema definition.
 
@@ -1170,10 +1171,17 @@ class RAWMCP:
             if schema_def.additionalProperties is False:
                 extra_mode = "forbid"
 
+            create_model_kwargs: dict[str, Any] = {
+                "__config__": ConfigDict(extra=extra_mode),
+                **model_fields,
+            }
+            if include_model_description and schema_def.description:
+                # Model-level docstring is emitted as JSON Schema "description".
+                create_model_kwargs["__doc__"] = schema_def.description
+
             final_type = create_model(  # type: ignore[call-overload]
                 self._sanitize_model_name(model_name),
-                __config__=ConfigDict(extra=extra_mode),
-                **model_fields,
+                **create_model_kwargs,
             )
 
             self._model_cache[cache_key] = final_type
@@ -1638,7 +1646,10 @@ class RAWMCP:
         )
         if return_schema:
             return_type = self._create_pydantic_model_from_schema(
-                return_schema, f"{original_name}Return", endpoint_type
+                return_schema,
+                f"{original_name}Return",
+                endpoint_type,
+                include_model_description=True,
             )
             handler.__annotations__["return"] = return_type
 
