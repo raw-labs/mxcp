@@ -27,8 +27,10 @@ async def test_jsonl_file_creation():
 
         backend = JSONLAuditWriter(log_path)
 
-        # Log file is created on init, schema file should not exist yet
-        assert log_path.exists()
+        # Base path should NOT be created as a file
+        # Instead, a segment file should exist
+        assert not log_path.exists() or log_path.stat().st_size == 0
+        assert backend._current_segment.exists()
         assert not schema_path.exists()
 
         # Create a schema - this should create the schema file
@@ -52,8 +54,8 @@ async def test_jsonl_file_creation():
         await backend.write_record(record)
         await backend.close()  # Force flush
 
-        # Log file should now exist
-        assert log_path.exists()
+        # Segment file should exist
+        assert backend._current_segment.exists()
 
 
 @pytest.mark.asyncio
@@ -133,7 +135,7 @@ async def test_jsonl_record_format():
         await backend.close()
 
         # Read the JSONL file and verify format
-        with open(log_path) as f:
+        with open(backend._current_segment) as f:
             line = f.readline().strip()
             data = json.loads(line)
 
@@ -245,8 +247,10 @@ async def test_jsonl_concurrent_writes():
         assert len(set(record_ids)) == 10  # All IDs should be unique
 
         # Verify file contains all records
-        with open(log_path) as f:
-            lines = f.readlines()
+        lines = []
+        for f in backend._list_segment_files():
+            with open(f) as fh:
+                lines.extend(fh.readlines())
 
         assert len(lines) == 10
 
@@ -499,7 +503,10 @@ async def test_jsonl_retention_policy():
         record.timestamp = old_timestamp
 
         await backend.write_record(record)
-        await backend.close()
+        await backend.flush()
+
+        # Move to a new segment so the old one can be evaluated by retention
+        backend._new_segment()
 
         # Apply retention policies
         deleted_counts = await backend.apply_retention_policies()
@@ -510,6 +517,8 @@ async def test_jsonl_retention_policy():
         # Verify record is gone
         remaining_records = [r async for r in backend.query_records()]
         assert len(remaining_records) == 0
+
+        await backend.close()
 
 
 @pytest.mark.asyncio

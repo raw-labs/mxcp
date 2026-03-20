@@ -379,11 +379,15 @@ async def test_backend_retention_policies(backend):
         operation_status="success",
     )
 
+    # Write the old record in its own segment, then rotate
     await backend.write_record(old_record)
-    await backend.write_record(new_record)
+    await backend.flush()
+    backend._new_segment()
 
-    # Ensure writes are committed
-    await backend.close()
+    # Write the new record in the new segment, then rotate so neither is the current segment
+    await backend.write_record(new_record)
+    await backend.flush()
+    backend._new_segment()
 
     # Apply retention policies
     deleted_counts = await backend.apply_retention_policies()
@@ -397,6 +401,8 @@ async def test_backend_retention_policies(backend):
     remaining_records = [r async for r in backend.query_records()]
     assert len(remaining_records) == 1
     assert remaining_records[0].operation_name == "new_tool"
+
+    await backend.close()
 
 
 @pytest.mark.asyncio
