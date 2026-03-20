@@ -627,3 +627,154 @@ async def test_query_empty_file_list():
             assert len(all_records) == 0
         finally:
             await backend.close()
+
+
+@pytest.mark.asyncio
+async def test_retention_deletes_expired_segment():
+    """Segment with all expired records gets deleted."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path, max_file_size=500)
+        try:
+            schema = AuditSchemaModel(
+                schema_name="ret_test", version=1,
+                description="test", retention_days=1,
+            )
+            await backend.create_schema(schema)
+
+            from datetime import timedelta
+            old_time = datetime.now(timezone.utc) - timedelta(days=5)
+            for i in range(10):
+                record = AuditRecordModel(
+                    schema_name="ret_test", operation_type="tool",
+                    operation_name=f"old_{i}", caller_type="cli",
+                    input_data={"data": "x" * 50}, duration_ms=i,
+                    operation_status="success", timestamp=old_time,
+                )
+                await backend.write_record(record)
+
+            await backend.flush()
+
+            for i in range(10):
+                record = AuditRecordModel(
+                    schema_name="ret_test", operation_type="tool",
+                    operation_name=f"new_{i}", caller_type="cli",
+                    input_data={"data": "x" * 50}, duration_ms=i,
+                    operation_status="success",
+                )
+                await backend.write_record(record)
+
+            await backend.flush()
+
+            files_before = backend._list_segment_files()
+            assert len(files_before) >= 2
+
+            counts = await backend.apply_retention_policies()
+
+            files_after = backend._list_segment_files()
+            assert len(files_after) < len(files_before)
+            assert sum(counts.values()) >= 10
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
+async def test_retention_keeps_fresh_segment():
+    """Segment with fresh records is kept."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path)
+        try:
+            schema = AuditSchemaModel(
+                schema_name="keep_test", version=1,
+                description="test", retention_days=30,
+            )
+            await backend.create_schema(schema)
+
+            record = AuditRecordModel(
+                schema_name="keep_test", operation_type="tool",
+                operation_name="fresh", caller_type="cli",
+                input_data={}, duration_ms=1, operation_status="success",
+            )
+            await backend.write_record(record)
+            await backend.flush()
+
+            counts = await backend.apply_retention_policies()
+            assert sum(counts.values()) == 0
+
+            remaining = [r async for r in backend.query_records()]
+            assert len(remaining) == 1
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
+async def test_retention_never_deletes_current_segment():
+    """Current segment is never deleted even if all records are expired."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path)
+        try:
+            schema = AuditSchemaModel(
+                schema_name="cur_test", version=1,
+                description="test", retention_days=1,
+            )
+            await backend.create_schema(schema)
+
+            from datetime import timedelta
+            old_time = datetime.now(timezone.utc) - timedelta(days=5)
+            record = AuditRecordModel(
+                schema_name="cur_test", operation_type="tool",
+                operation_name="old", caller_type="cli",
+                input_data={}, duration_ms=1,
+                operation_status="success", timestamp=old_time,
+            )
+            await backend.write_record(record)
+            await backend.flush()
+
+            await backend.apply_retention_policies()
+
+            assert backend._current_segment.exists()
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
+async def test_retention_multi_schema_longest_wins():
+    """Segment with multiple schemas uses the longest retention_days."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path, max_file_size=50 * 1024 * 1024)
+        try:
+            schema_a = AuditSchemaModel(
+                schema_name="short_ret", version=1,
+                description="test", retention_days=1,
+            )
+            schema_b = AuditSchemaModel(
+                schema_name="long_ret", version=1,
+                description="test", retention_days=365,
+            )
+            await backend.create_schema(schema_a)
+            await backend.create_schema(schema_b)
+
+            from datetime import timedelta
+            old_time = datetime.now(timezone.utc) - timedelta(days=5)
+
+            for schema_name in ["short_ret", "long_ret"]:
+                record = AuditRecordModel(
+                    schema_name=schema_name, operation_type="tool",
+                    operation_name="test", caller_type="cli",
+                    input_data={}, duration_ms=1,
+                    operation_status="success", timestamp=old_time,
+                )
+                await backend.write_record(record)
+
+            await backend.flush()
+
+            backend._new_segment()
+
+            counts = await backend.apply_retention_policies()
+
+            assert sum(counts.values()) == 0
+        finally:
+            await backend.close()

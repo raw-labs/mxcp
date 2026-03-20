@@ -723,86 +723,80 @@ class JSONLAuditWriter(BaseAuditWriter):
         return IntegrityResultModel(valid=True, records_checked=2, chain_breaks=[])
 
     async def apply_retention_policies(self) -> dict[str, int]:
-        """Apply retention policies to remove old records.
-
-        For JSONL backend, this creates a new file with only retained records.
-        """
-        if not self.log_path.exists():
-            return {}
-
+        """Apply retention policies by deleting whole segment files."""
         counts: dict[str, int] = {}
-        temp_path = self.log_path.with_suffix(".tmp")
 
         try:
-            # Flush any pending writes
+            # Flush pending writes
             await self._flush_writer()
             await self._queue.join()
 
-            # Process the file line by line
-            retained_count = 0
+            files = self._list_segment_files()
             now = datetime.now(timezone.utc)
 
-            async with self._file_lock:
-                with (
-                    open(self.log_path, encoding="utf-8") as infile,
-                    open(temp_path, "w", encoding="utf-8") as outfile,
-                ):
-                    for line in infile:
-                        line = line.strip()
-                        if not line:
-                            continue
+            for file_path in files:
+                # Never delete the current segment
+                if file_path == self._current_segment:
+                    continue
 
-                        try:
-                            record_dict = json.loads(line)
-                            schema_name = record_dict.get("schema_name", "unknown")
-                            schema_version = record_dict.get("schema_version", 1)
+                conn = None
+                try:
+                    conn = duckdb.connect(":memory:")
 
-                            # Get the schema
-                            schema = await self.get_schema(schema_name, schema_version)
-                            if not schema or schema.retention_days is None:
-                                # No retention policy, keep the record
-                                outfile.write(line + "\n")
-                                retained_count += 1
-                                continue
+                    # Get newest timestamp and distinct schemas in this file
+                    result = conn.execute(f"""
+                        SELECT
+                            MAX(timestamp) as max_ts,
+                            LIST(DISTINCT schema_name) as schemas
+                        FROM read_json_auto('{file_path}',
+                            columns={{'timestamp': 'VARCHAR', 'schema_name': 'VARCHAR'}})
+                    """).fetchone()
 
-                            # Check if record should be retained
-                            timestamp = self._parse_datetime_str(record_dict["timestamp"])
-                            age_days = (now - timestamp).days
+                    if not result or not result[0]:
+                        continue
 
-                            if age_days <= schema.retention_days:
-                                # Keep the record
-                                outfile.write(line + "\n")
-                                retained_count += 1
-                            else:
-                                # Delete the record
-                                schema_key = f"{schema_name}:v{schema_version}"
-                                logger.debug(
-                                    "Retention deleting record: schema=%s age_days=%s threshold=%s",
-                                    schema_key,
-                                    age_days,
-                                    schema.retention_days,
-                                )
-                                counts[schema_key] = counts.get(schema_key, 0) + 1
+                    max_ts = self._parse_datetime_str(result[0])
+                    schema_names = result[1] if result[1] else []
 
-                        except Exception as e:
-                            logger.warning(f"Error processing record for retention: {e}")
-                            # Keep records we can't process
-                            outfile.write(line + "\n")
-                            retained_count += 1
+                    # Find the longest retention_days across all schemas
+                    max_retention_days: int | None = None
+                    for sname in schema_names:
+                        schema = await self.get_schema(sname)
+                        if schema and schema.retention_days is not None:
+                            if max_retention_days is None or schema.retention_days > max_retention_days:
+                                max_retention_days = schema.retention_days
 
-                # Replace the original file
-                temp_path.replace(self.log_path)
+                    if max_retention_days is None:
+                        # No retention policy, keep the file
+                        continue
 
-            logger.info(
-                f"Retention applied: {retained_count} records retained, "
-                f"{sum(counts.values())} records deleted"
-            )
+                    age_days = (now - max_ts).days
+                    if age_days <= max_retention_days:
+                        continue
 
-            return counts
+                    # File is expired — count records per schema before deleting
+                    schema_counts = conn.execute(f"""
+                        SELECT schema_name, schema_version, COUNT(*) as cnt
+                        FROM read_json_auto('{file_path}',
+                            columns={{'schema_name': 'VARCHAR', 'schema_version': 'INTEGER'}})
+                        GROUP BY schema_name, schema_version
+                    """).fetchall()
+
+                    for sname, sversion, cnt in schema_counts:
+                        key = f"{sname}:v{sversion}"
+                        counts[key] = counts.get(key, 0) + cnt
+
+                    # Delete the file
+                    file_path.unlink()
+                    logger.info(f"Retention deleted segment: {file_path.name}")
+
+                except Exception as e:
+                    logger.error(f"Error processing segment {file_path} for retention: {e}")
+                finally:
+                    if conn:
+                        conn.close()
 
         except Exception as e:
             logger.error(f"Failed to apply retention policies: {e}")
-            # Clean up temp file if it exists
-            if temp_path.exists():
-                temp_path.unlink()
-            return {}
+
+        return counts
