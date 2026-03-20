@@ -1179,7 +1179,7 @@ class RAWMCP:
                 # Model-level docstring is emitted as JSON Schema "description".
                 create_model_kwargs["__doc__"] = schema_def.description
 
-            final_type = create_model(  # type: ignore[call-overload]
+            final_type = create_model(
                 self._sanitize_model_name(model_name),
                 **create_model_kwargs,
             )
