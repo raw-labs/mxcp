@@ -769,12 +769,15 @@ class JSONLAuditWriter(BaseAuditWriter):
                     max_retention_days: int | None = None
                     for sname in schema_names:
                         schema = await self.get_schema(sname)
-                        if schema and schema.retention_days is not None:
-                            if (
+                        if (
+                            schema
+                            and schema.retention_days is not None
+                            and (
                                 max_retention_days is None
                                 or schema.retention_days > max_retention_days
-                            ):
-                                max_retention_days = schema.retention_days
+                            )
+                        ):
+                            max_retention_days = schema.retention_days
 
                     if max_retention_days is None:
                         # No retention policy, keep the file
