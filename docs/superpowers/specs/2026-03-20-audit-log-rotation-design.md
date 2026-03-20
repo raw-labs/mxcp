@@ -17,6 +17,7 @@ Rotation addresses these problems: bounded file sizes, trivial retention via fil
 | Rotation trigger | Size-only (50MB default) | Simple, predictable. Time-based adds config surface with little benefit. |
 | Startup behavior | Always create a new segment | Clean boundary per server session. |
 | Retention granularity | Whole-file deletion | Delete segment when its newest record is older than the retention threshold. Slight imprecision in low-traffic deployments is acceptable. |
+| Retention conflict rule | Most conservative (longest retention wins) | When a segment contains records from multiple schemas with different `retention_days`, the segment is deleted only when the newest record is older than the **longest** `retention_days` across all schemas present in the file. This prevents premature deletion at the cost of retaining some records slightly beyond their schema's policy. |
 | Query scope | Scan all segment files | DuckDB handles this efficiently. No need to filter by file metadata. |
 | Legacy migration | Include legacy file as-is | No rename. The glob includes it for reads; retention deletes it when expired. |
 
@@ -47,23 +48,27 @@ Given a configured path of `.mxcp/audit/logs-default.jsonl`:
 .mxcp/audit/logs-default-20260320T163012.jsonl     # segment after rotation
 ```
 
-Naming scheme: `{stem}-{YYYYMMDDTHHMMSS}.jsonl` using UTC. If two segments are created within the same second (e.g. in tests), a counter suffix is appended: `-20260320T140000-1.jsonl`.
+Naming scheme: `{stem}-{YYYYMMDDTHHMMSS}.jsonl` using UTC. If two segments are created within the same second (e.g. in tests), an in-memory counter suffix is appended: `-20260320T140000-1.jsonl`. The counter resets per writer instance — it only needs to guarantee uniqueness within a single process.
+
+Segment files are sorted lexicographically by filename, which is chronological due to the `YYYYMMDDTHHMMSS` format.
 
 ### Writer changes (`JSONLAuditWriter`)
 
 **`__init__`** gains `max_file_size` parameter. Computes `_base_path` from `log_path`. Calls `_new_segment()` to create the initial segment. No longer calls `log_path.touch()`.
 
-**`_new_segment() -> Path`** generates a timestamped segment path, handles same-second collisions with a counter, sets `self._current_segment`, and ensures the file exists.
+**`_new_segment() -> Path`** generates a timestamped segment path, handles same-second collisions with an in-memory counter, sets `self._current_segment`, and ensures the file exists.
 
 **`_write_events_batch`** writes to `self._current_segment` instead of `self.log_path`. After writing, checks `self._current_segment.stat().st_size`. If over threshold, calls `_new_segment()`. This runs inside the existing `_file_lock`, so there is no race between the size check and the next write.
 
-**`_list_segment_files() -> list[Path]`** returns all files matching the glob pattern `{stem}-*.jsonl`, plus the legacy file `{stem}.jsonl` if it exists. Used by both queries and retention.
+**`_list_segment_files() -> list[Path]`** returns all non-empty files matching the glob pattern `{stem}-*.jsonl`, plus the legacy file `{stem}.jsonl` if it exists and is non-empty. Sorted lexicographically by filename. Used by both queries and retention. Empty segments (0 bytes) are excluded to avoid DuckDB errors and to prevent accumulation from short-lived processes.
 
 ### Query changes
 
-**`_run_query_batch`** uses `read_json_auto(['{file1}', '{file2}', ...])` built from `_list_segment_files()` instead of a single file path. DuckDB accepts a list of paths natively. Using a list (not a glob string) gives control over including the legacy file.
+**`_run_query_batch`** uses `read_json_auto(['{file1}', '{file2}', ...])` built from `_list_segment_files()` instead of a single file path. DuckDB accepts a list of paths natively. Using a list (not a glob string) gives control over including the legacy file. If `_list_segment_files()` returns an empty list, the query returns no results immediately (no DuckDB call).
 
-**`get_record`** receives the same change: list of paths instead of single path.
+The existing early-return guard (`if not self.log_path.exists(): return`) is replaced with a check on `_list_segment_files()` being empty.
+
+**`get_record`** receives the same change: list of paths instead of single path, with the same empty-list guard.
 
 `ORDER BY timestamp DESC` and `LIMIT/OFFSET` work across all files transparently.
 
@@ -76,9 +81,9 @@ No changes to `AuditLogger`, CLI `log` command, admin socket endpoints, or expor
 1. Flush pending writes.
 2. Get segment files via `_list_segment_files()`.
 3. For each file (except the current segment):
-   a. Query `MAX(timestamp)` from the file via DuckDB.
-   b. Look up the schema(s) and their `retention_days`.
-   c. If the newest record is older than the threshold, query `COUNT(*)` (for reporting), then delete the file.
+   a. Query `MAX(timestamp)` and the distinct `schema_name` values from the file via DuckDB.
+   b. Look up each schema's `retention_days`. Use the **longest** `retention_days` across all schemas present in the file (most conservative — prevents premature deletion when schemas have different policies).
+   c. If the newest record is older than that threshold, query `COUNT(*)` grouped by schema (for reporting), then delete the file.
 4. Return counts of deleted records per schema.
 
 The current segment is never deleted. The legacy file follows the same logic.
@@ -98,7 +103,7 @@ No line-by-line rewriting, no temp file, no sustained lock contention.
 
 - Startup creates a new segment file, not the base path.
 - Writing a batch that exceeds the size threshold triggers rotation to a new segment.
-- `_list_segment_files()` returns segments in order and includes the legacy file if present.
+- `_list_segment_files()` returns segments sorted lexicographically, includes the legacy file if present, and excludes empty files.
 - Same-second collision produces distinct filenames.
 
 ### Retention tests
@@ -107,12 +112,14 @@ No line-by-line rewriting, no temp file, no sustained lock contention.
 - Segment with some fresh records is kept.
 - Current segment is never deleted.
 - Legacy file is deleted when expired.
+- Segment with multiple schemas uses the longest `retention_days` for the deletion decision.
 
 ### Query tests
 
 - Queries span multiple segment files and return correct results.
 - Queries work with a mix of legacy file and segments.
 - `get_record` finds a record regardless of which segment it is in.
+- Queries on an empty file list return no results without error.
 
 ### Existing tests
 
