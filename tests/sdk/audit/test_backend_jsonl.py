@@ -412,8 +412,13 @@ async def test_list_segment_files_sorted_lexicographically():
             schema = AuditSchemaModel(schema_name="test", version=1, description="test")
             await backend.create_schema(schema)
             record = AuditRecordModel(
-                schema_name="test", operation_type="tool", operation_name="t",
-                caller_type="cli", input_data={}, duration_ms=1, operation_status="success",
+                schema_name="test",
+                operation_type="tool",
+                operation_name="t",
+                caller_type="cli",
+                input_data={},
+                duration_ms=1,
+                operation_status="success",
             )
             await backend.write_record(record)
             await backend.flush()
@@ -452,9 +457,12 @@ async def test_rotation_on_size_threshold():
 
             for i in range(20):
                 record = AuditRecordModel(
-                    schema_name="rot_test", operation_type="tool",
-                    operation_name=f"tool_{i}", caller_type="cli",
-                    input_data={"data": "x" * 50}, duration_ms=i,
+                    schema_name="rot_test",
+                    operation_type="tool",
+                    operation_name=f"tool_{i}",
+                    caller_type="cli",
+                    input_data={"data": "x" * 50},
+                    duration_ms=i,
                     operation_status="success",
                 )
                 await backend.write_record(record)
@@ -533,9 +541,12 @@ async def test_query_spans_multiple_segments():
 
             for i in range(20):
                 record = AuditRecordModel(
-                    schema_name="multi_seg", operation_type="tool",
-                    operation_name=f"tool_{i}", caller_type="cli",
-                    input_data={"data": "x" * 50}, duration_ms=i,
+                    schema_name="multi_seg",
+                    operation_type="tool",
+                    operation_name=f"tool_{i}",
+                    caller_type="cli",
+                    input_data={"data": "x" * 50},
+                    duration_ms=i,
                     operation_status="success",
                 )
                 await backend.write_record(record)
@@ -557,16 +568,26 @@ async def test_query_with_legacy_file():
         log_path = Path(tmpdir) / "audit.jsonl"
 
         legacy_record = {
-            "schema_name": "legacy_test", "schema_version": 1,
+            "schema_name": "legacy_test",
+            "schema_version": 1,
             "record_id": "legacy-001",
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "operation_type": "tool", "operation_name": "legacy_tool",
-            "operation_status": "success", "duration_ms": 100,
-            "caller_type": "cli", "input_data": {}, "output_data": None,
-            "error": None, "policies_evaluated": [], "policy_decision": None,
-            "policy_reason": None, "business_context": {},
-            "execution_events": [], "prev_hash": None,
-            "record_hash": None, "signature": None,
+            "operation_type": "tool",
+            "operation_name": "legacy_tool",
+            "operation_status": "success",
+            "duration_ms": 100,
+            "caller_type": "cli",
+            "input_data": {},
+            "output_data": None,
+            "error": None,
+            "policies_evaluated": [],
+            "policy_decision": None,
+            "policy_reason": None,
+            "business_context": {},
+            "execution_events": [],
+            "prev_hash": None,
+            "record_hash": None,
+            "signature": None,
         }
         log_path.write_text(json.dumps(legacy_record) + "\n")
 
@@ -576,9 +597,13 @@ async def test_query_with_legacy_file():
             await backend.create_schema(schema)
 
             record = AuditRecordModel(
-                schema_name="legacy_test", operation_type="tool",
-                operation_name="new_tool", caller_type="cli",
-                input_data={}, duration_ms=50, operation_status="success",
+                schema_name="legacy_test",
+                operation_type="tool",
+                operation_name="new_tool",
+                caller_type="cli",
+                input_data={},
+                duration_ms=50,
+                operation_status="success",
             )
             await backend.write_record(record)
             await backend.flush()
@@ -604,9 +629,12 @@ async def test_get_record_across_segments():
             record_ids = []
             for i in range(20):
                 record = AuditRecordModel(
-                    schema_name="get_test", operation_type="tool",
-                    operation_name=f"tool_{i}", caller_type="cli",
-                    input_data={"data": "x" * 50}, duration_ms=i,
+                    schema_name="get_test",
+                    operation_type="tool",
+                    operation_name=f"tool_{i}",
+                    caller_type="cli",
+                    input_data={"data": "x" * 50},
+                    duration_ms=i,
                     operation_status="success",
                 )
                 rid = await backend.write_record(record)
@@ -646,19 +674,26 @@ async def test_retention_deletes_expired_segment():
         backend = JSONLAuditWriter(log_path, max_file_size=500)
         try:
             schema = AuditSchemaModel(
-                schema_name="ret_test", version=1,
-                description="test", retention_days=1,
+                schema_name="ret_test",
+                version=1,
+                description="test",
+                retention_days=1,
             )
             await backend.create_schema(schema)
 
             from datetime import timedelta
+
             old_time = datetime.now(timezone.utc) - timedelta(days=5)
             for i in range(10):
                 record = AuditRecordModel(
-                    schema_name="ret_test", operation_type="tool",
-                    operation_name=f"old_{i}", caller_type="cli",
-                    input_data={"data": "x" * 50}, duration_ms=i,
-                    operation_status="success", timestamp=old_time,
+                    schema_name="ret_test",
+                    operation_type="tool",
+                    operation_name=f"old_{i}",
+                    caller_type="cli",
+                    input_data={"data": "x" * 50},
+                    duration_ms=i,
+                    operation_status="success",
+                    timestamp=old_time,
                 )
                 await backend.write_record(record)
 
@@ -666,9 +701,12 @@ async def test_retention_deletes_expired_segment():
 
             for i in range(10):
                 record = AuditRecordModel(
-                    schema_name="ret_test", operation_type="tool",
-                    operation_name=f"new_{i}", caller_type="cli",
-                    input_data={"data": "x" * 50}, duration_ms=i,
+                    schema_name="ret_test",
+                    operation_type="tool",
+                    operation_name=f"new_{i}",
+                    caller_type="cli",
+                    input_data={"data": "x" * 50},
+                    duration_ms=i,
                     operation_status="success",
                 )
                 await backend.write_record(record)
@@ -695,15 +733,21 @@ async def test_retention_keeps_fresh_segment():
         backend = JSONLAuditWriter(log_path)
         try:
             schema = AuditSchemaModel(
-                schema_name="keep_test", version=1,
-                description="test", retention_days=30,
+                schema_name="keep_test",
+                version=1,
+                description="test",
+                retention_days=30,
             )
             await backend.create_schema(schema)
 
             record = AuditRecordModel(
-                schema_name="keep_test", operation_type="tool",
-                operation_name="fresh", caller_type="cli",
-                input_data={}, duration_ms=1, operation_status="success",
+                schema_name="keep_test",
+                operation_type="tool",
+                operation_name="fresh",
+                caller_type="cli",
+                input_data={},
+                duration_ms=1,
+                operation_status="success",
             )
             await backend.write_record(record)
             await backend.flush()
@@ -725,18 +769,25 @@ async def test_retention_never_deletes_current_segment():
         backend = JSONLAuditWriter(log_path)
         try:
             schema = AuditSchemaModel(
-                schema_name="cur_test", version=1,
-                description="test", retention_days=1,
+                schema_name="cur_test",
+                version=1,
+                description="test",
+                retention_days=1,
             )
             await backend.create_schema(schema)
 
             from datetime import timedelta
+
             old_time = datetime.now(timezone.utc) - timedelta(days=5)
             record = AuditRecordModel(
-                schema_name="cur_test", operation_type="tool",
-                operation_name="old", caller_type="cli",
-                input_data={}, duration_ms=1,
-                operation_status="success", timestamp=old_time,
+                schema_name="cur_test",
+                operation_type="tool",
+                operation_name="old",
+                caller_type="cli",
+                input_data={},
+                duration_ms=1,
+                operation_status="success",
+                timestamp=old_time,
             )
             await backend.write_record(record)
             await backend.flush()
@@ -756,25 +807,34 @@ async def test_retention_multi_schema_longest_wins():
         backend = JSONLAuditWriter(log_path, max_file_size=50 * 1024 * 1024)
         try:
             schema_a = AuditSchemaModel(
-                schema_name="short_ret", version=1,
-                description="test", retention_days=1,
+                schema_name="short_ret",
+                version=1,
+                description="test",
+                retention_days=1,
             )
             schema_b = AuditSchemaModel(
-                schema_name="long_ret", version=1,
-                description="test", retention_days=365,
+                schema_name="long_ret",
+                version=1,
+                description="test",
+                retention_days=365,
             )
             await backend.create_schema(schema_a)
             await backend.create_schema(schema_b)
 
             from datetime import timedelta
+
             old_time = datetime.now(timezone.utc) - timedelta(days=5)
 
             for schema_name in ["short_ret", "long_ret"]:
                 record = AuditRecordModel(
-                    schema_name=schema_name, operation_type="tool",
-                    operation_name="test", caller_type="cli",
-                    input_data={}, duration_ms=1,
-                    operation_status="success", timestamp=old_time,
+                    schema_name=schema_name,
+                    operation_type="tool",
+                    operation_name="test",
+                    caller_type="cli",
+                    input_data={},
+                    duration_ms=1,
+                    operation_status="success",
+                    timestamp=old_time,
                 )
                 await backend.write_record(record)
 

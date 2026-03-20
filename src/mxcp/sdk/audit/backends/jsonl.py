@@ -37,7 +37,9 @@ logger = logging.getLogger(__name__)
 class JSONLAuditWriter(BaseAuditWriter):
     """JSONL file-based audit backend with asyncio-based batching and DuckDB querying."""
 
-    def __init__(self, log_path: Path, max_file_size: int = 50 * 1024 * 1024, **kwargs: Any) -> None:
+    def __init__(
+        self, log_path: Path, max_file_size: int = 50 * 1024 * 1024, **kwargs: Any
+    ) -> None:
         """Initialize the JSONL writer."""
         super().__init__(**kwargs)
         self.log_path = log_path
@@ -73,7 +75,9 @@ class JSONLAuditWriter(BaseAuditWriter):
         segment_path = self._base_path.parent / f"{stem}-{timestamp}.jsonl"
         while segment_path.exists():
             self._segment_counter += 1
-            segment_path = self._base_path.parent / f"{stem}-{timestamp}-{self._segment_counter}.jsonl"
+            segment_path = (
+                self._base_path.parent / f"{stem}-{timestamp}-{self._segment_counter}.jsonl"
+            )
 
         segment_path.touch()
         self._current_segment = segment_path
@@ -310,9 +314,10 @@ class JSONLAuditWriter(BaseAuditWriter):
     async def _write_events_batch(self, events: list[AuditRecordModel]) -> None:
         """Write a batch of events to the current segment file."""
         try:
-            async with self._file_lock, aiofiles.open(
-                self._current_segment, "a", encoding="utf-8"
-            ) as f:
+            async with (
+                self._file_lock,
+                aiofiles.open(self._current_segment, "a", encoding="utf-8") as f,
+            ):
                 for event in events:
                     await f.write(json.dumps(event.to_dict(), ensure_ascii=False))
                     await f.write("\n")
@@ -459,7 +464,7 @@ class JSONLAuditWriter(BaseAuditWriter):
             while True:
                 records, finished = await asyncio.to_thread(
                     self._run_query_batch,
-                    files,              # NEW: list of segment file paths
+                    files,  # NEW: list of segment file paths
                     current_offset,
                     batch_size,
                     schema_name,
@@ -495,7 +500,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
     def _run_query_batch(
         self,
-        files: list[Path],     # NEW
+        files: list[Path],  # NEW
         offset: int,
         batch_size: int,
         schema_name: str | None,
@@ -744,13 +749,15 @@ class JSONLAuditWriter(BaseAuditWriter):
                     conn = duckdb.connect(":memory:")
 
                     # Get newest timestamp and distinct schemas in this file
-                    result = conn.execute(f"""
+                    result = conn.execute(
+                        f"""
                         SELECT
                             MAX(timestamp) as max_ts,
                             LIST(DISTINCT schema_name) as schemas
                         FROM read_json_auto('{file_path}',
                             columns={{'timestamp': 'VARCHAR', 'schema_name': 'VARCHAR'}})
-                    """).fetchone()
+                    """
+                    ).fetchone()
 
                     if not result or not result[0]:
                         continue
@@ -763,7 +770,10 @@ class JSONLAuditWriter(BaseAuditWriter):
                     for sname in schema_names:
                         schema = await self.get_schema(sname)
                         if schema and schema.retention_days is not None:
-                            if max_retention_days is None or schema.retention_days > max_retention_days:
+                            if (
+                                max_retention_days is None
+                                or schema.retention_days > max_retention_days
+                            ):
                                 max_retention_days = schema.retention_days
 
                     if max_retention_days is None:
@@ -775,12 +785,14 @@ class JSONLAuditWriter(BaseAuditWriter):
                         continue
 
                     # File is expired — count records per schema before deleting
-                    schema_counts = conn.execute(f"""
+                    schema_counts = conn.execute(
+                        f"""
                         SELECT schema_name, schema_version, COUNT(*) as cnt
                         FROM read_json_auto('{file_path}',
                             columns={{'schema_name': 'VARCHAR', 'schema_version': 'INTEGER'}})
                         GROUP BY schema_name, schema_version
-                    """).fetchall()
+                    """
+                    ).fetchall()
 
                     for sname, sversion, cnt in schema_counts:
                         key = f"{sname}:v{sversion}"
