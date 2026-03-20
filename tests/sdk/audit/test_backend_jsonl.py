@@ -510,3 +510,120 @@ async def test_jsonl_retention_policy():
         # Verify record is gone
         remaining_records = [r async for r in backend.query_records()]
         assert len(remaining_records) == 0
+
+
+@pytest.mark.asyncio
+async def test_query_spans_multiple_segments():
+    """Queries return results from all segment files."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path, max_file_size=500)
+        try:
+            schema = AuditSchemaModel(schema_name="multi_seg", version=1, description="test")
+            await backend.create_schema(schema)
+
+            for i in range(20):
+                record = AuditRecordModel(
+                    schema_name="multi_seg", operation_type="tool",
+                    operation_name=f"tool_{i}", caller_type="cli",
+                    input_data={"data": "x" * 50}, duration_ms=i,
+                    operation_status="success",
+                )
+                await backend.write_record(record)
+
+            await backend.flush()
+
+            assert len(backend._list_segment_files()) >= 2
+
+            all_records = [r async for r in backend.query_records()]
+            assert len(all_records) == 20
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
+async def test_query_with_legacy_file():
+    """Queries include records from legacy file."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+
+        legacy_record = {
+            "schema_name": "legacy_test", "schema_version": 1,
+            "record_id": "legacy-001",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "operation_type": "tool", "operation_name": "legacy_tool",
+            "operation_status": "success", "duration_ms": 100,
+            "caller_type": "cli", "input_data": {}, "output_data": None,
+            "error": None, "policies_evaluated": [], "policy_decision": None,
+            "policy_reason": None, "business_context": {},
+            "execution_events": [], "prev_hash": None,
+            "record_hash": None, "signature": None,
+        }
+        log_path.write_text(json.dumps(legacy_record) + "\n")
+
+        backend = JSONLAuditWriter(log_path)
+        try:
+            schema = AuditSchemaModel(schema_name="legacy_test", version=1, description="test")
+            await backend.create_schema(schema)
+
+            record = AuditRecordModel(
+                schema_name="legacy_test", operation_type="tool",
+                operation_name="new_tool", caller_type="cli",
+                input_data={}, duration_ms=50, operation_status="success",
+            )
+            await backend.write_record(record)
+            await backend.flush()
+
+            all_records = [r async for r in backend.query_records()]
+            names = {r.operation_name for r in all_records}
+            assert "legacy_tool" in names
+            assert "new_tool" in names
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
+async def test_get_record_across_segments():
+    """get_record finds a record regardless of which segment it's in."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path, max_file_size=500)
+        try:
+            schema = AuditSchemaModel(schema_name="get_test", version=1, description="test")
+            await backend.create_schema(schema)
+
+            record_ids = []
+            for i in range(20):
+                record = AuditRecordModel(
+                    schema_name="get_test", operation_type="tool",
+                    operation_name=f"tool_{i}", caller_type="cli",
+                    input_data={"data": "x" * 50}, duration_ms=i,
+                    operation_status="success",
+                )
+                rid = await backend.write_record(record)
+                record_ids.append(rid)
+
+            await backend.flush()
+            assert len(backend._list_segment_files()) >= 2
+
+            first = await backend.get_record(record_ids[0])
+            last = await backend.get_record(record_ids[-1])
+            assert first is not None
+            assert last is not None
+            assert first.operation_name == "tool_0"
+            assert last.operation_name == "tool_19"
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
+async def test_query_empty_file_list():
+    """Queries on empty file list return no results without error."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path)
+        try:
+            all_records = [r async for r in backend.query_records()]
+            assert len(all_records) == 0
+        finally:
+            await backend.close()

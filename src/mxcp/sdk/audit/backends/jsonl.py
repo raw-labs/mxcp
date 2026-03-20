@@ -448,7 +448,8 @@ class JSONLAuditWriter(BaseAuditWriter):
         """
 
         async def _iterator() -> AsyncIterator[AuditRecordModel]:
-            if not self.log_path.exists():
+            files = self._list_segment_files()
+            if not files:
                 return
 
             batch_size = 1000 if limit is None else min(limit, 1000)
@@ -458,6 +459,7 @@ class JSONLAuditWriter(BaseAuditWriter):
             while True:
                 records, finished = await asyncio.to_thread(
                     self._run_query_batch,
+                    files,              # NEW: list of segment file paths
                     current_offset,
                     batch_size,
                     schema_name,
@@ -493,6 +495,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
     def _run_query_batch(
         self,
+        files: list[Path],     # NEW
         offset: int,
         batch_size: int,
         schema_name: str | None,
@@ -546,8 +549,9 @@ class JSONLAuditWriter(BaseAuditWriter):
                 decisions_str = ",".join([f"'{d}'" for d in policy_decisions])
                 conditions.append(f"policy_decision IN ({decisions_str})")
 
+            file_list = ", ".join(f"'{f}'" for f in files)
             query = f"""
-                SELECT * FROM read_json_auto('{self.log_path}', columns={{
+                SELECT * FROM read_json_auto([{file_list}], columns={{
                     'schema_name': 'VARCHAR',
                     'schema_version': 'INTEGER',
                     'record_id': 'VARCHAR',
@@ -618,12 +622,17 @@ class JSONLAuditWriter(BaseAuditWriter):
 
     async def get_record(self, record_id: str) -> AuditRecordModel | None:
         """Get a specific record by ID."""
+        files = self._list_segment_files()
+        if not files:
+            return None
+
         conn = None
         try:
             conn = duckdb.connect(":memory:")
 
+            file_list = ", ".join(f"'{f}'" for f in files)
             query = f"""
-                SELECT * FROM read_json_auto('{self.log_path}', columns={{
+                SELECT * FROM read_json_auto([{file_list}], columns={{
                     'schema_name': 'VARCHAR',
                     'schema_version': 'INTEGER',
                     'record_id': 'VARCHAR',
