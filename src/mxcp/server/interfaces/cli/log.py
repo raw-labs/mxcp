@@ -186,7 +186,7 @@ async def _log(
         log_path = Path(log_path_str)
 
         # Create audit logger directly
-        audit_logger = await AuditLogger.jsonl(log_path)
+        audit_logger = await AuditLogger.jsonl(log_path, max_file_size=audit_config.max_file_size)
 
         # Handle exports first
         if export_duckdb_path:

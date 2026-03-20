@@ -115,7 +115,7 @@ async def _cleanup(profile: str | None, dry_run: bool, json_output: bool, debug:
         log_path = Path(log_path_str)
 
         # Create audit logger
-        audit_logger = await AuditLogger.jsonl(log_path)
+        audit_logger = await AuditLogger.jsonl(log_path, max_file_size=audit_config.max_file_size)
 
         if dry_run:
             # In dry-run mode, we need to simulate what would be deleted
