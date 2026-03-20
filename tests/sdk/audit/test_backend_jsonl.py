@@ -357,6 +357,84 @@ async def test_jsonl_schema_deactivation():
 
 
 @pytest.mark.asyncio
+async def test_startup_creates_segment_not_base_path():
+    """Startup creates a timestamped segment, not the base path."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path)
+        try:
+            assert not log_path.exists()
+            assert backend._current_segment.exists()
+            assert backend._current_segment.name.startswith("audit-")
+            assert backend._current_segment.suffix == ".jsonl"
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
+async def test_list_segment_files_excludes_empty():
+    """_list_segment_files() excludes empty (0-byte) files."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path)
+        try:
+            files = backend._list_segment_files()
+            assert len(files) == 0
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
+async def test_list_segment_files_includes_legacy():
+    """_list_segment_files() includes legacy file if non-empty."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        log_path.write_text('{"record_id":"legacy"}\n')
+        backend = JSONLAuditWriter(log_path)
+        try:
+            files = backend._list_segment_files()
+            assert log_path in files
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
+async def test_list_segment_files_sorted_lexicographically():
+    """_list_segment_files() returns segments sorted by filename."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path)
+        try:
+            schema = AuditSchemaModel(schema_name="test", version=1, description="test")
+            await backend.create_schema(schema)
+            record = AuditRecordModel(
+                schema_name="test", operation_type="tool", operation_name="t",
+                caller_type="cli", input_data={}, duration_ms=1, operation_status="success",
+            )
+            await backend.write_record(record)
+            await backend.flush()
+            files = backend._list_segment_files()
+            assert files == sorted(files)
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
+async def test_same_second_collision():
+    """Two segments created in same second get distinct names."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "audit.jsonl"
+        backend = JSONLAuditWriter(log_path)
+        try:
+            seg1 = backend._current_segment
+            seg2 = backend._new_segment()
+            assert seg1 != seg2
+            assert seg2.exists()
+        finally:
+            await backend.close()
+
+
+@pytest.mark.asyncio
 async def test_jsonl_retention_policy():
     """Test retention policy application in JSONL backend."""
     with tempfile.TemporaryDirectory() as tmpdir:

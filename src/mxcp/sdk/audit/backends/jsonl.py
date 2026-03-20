@@ -37,16 +37,20 @@ logger = logging.getLogger(__name__)
 class JSONLAuditWriter(BaseAuditWriter):
     """JSONL file-based audit backend with asyncio-based batching and DuckDB querying."""
 
-    def __init__(self, log_path: Path, **kwargs: Any) -> None:
+    def __init__(self, log_path: Path, max_file_size: int = 50 * 1024 * 1024, **kwargs: Any) -> None:
         """Initialize the JSONL writer."""
         super().__init__(**kwargs)
         self.log_path = log_path
-        self.schema_path = self.log_path.parent / f"{self.log_path.stem}_schemas.jsonl"
+        self._base_path = log_path
+        self._max_file_size = max_file_size
+        self.schema_path = self._base_path.parent / f"{self._base_path.stem}_schemas.jsonl"
 
-        # Ensure parent directory exists and file is present
-        self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.log_path.exists():
-            self.log_path.touch()
+        # Ensure parent directory exists
+        self._base_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Segment management
+        self._segment_counter = 0
+        self._current_segment = self._new_segment()
 
         self._queue: asyncio.Queue[AuditRecordModel | object] = asyncio.Queue()
         self._writer_task: asyncio.Task[None] | None = None
@@ -58,7 +62,38 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         self._start_writer_task()
 
-        logger.info(f"JSONL audit writer initialized with file: {self.log_path}")
+        logger.info(f"JSONL audit writer initialized with base path: {self._base_path}")
+
+    def _new_segment(self) -> Path:
+        """Create a new timestamped segment file."""
+        now = datetime.now(timezone.utc)
+        timestamp = now.strftime("%Y%m%dT%H%M%S")
+        stem = self._base_path.stem
+
+        segment_path = self._base_path.parent / f"{stem}-{timestamp}.jsonl"
+        while segment_path.exists():
+            self._segment_counter += 1
+            segment_path = self._base_path.parent / f"{stem}-{timestamp}-{self._segment_counter}.jsonl"
+
+        segment_path.touch()
+        self._current_segment = segment_path
+        logger.debug(f"Created new segment: {segment_path.name}")
+        return segment_path
+
+    def _list_segment_files(self) -> list[Path]:
+        """List all non-empty segment files plus legacy file, sorted lexicographically."""
+        stem = self._base_path.stem
+        parent = self._base_path.parent
+        files: list[Path] = []
+
+        if self._base_path.exists() and self._base_path.stat().st_size > 0:
+            files.append(self._base_path)
+
+        for f in sorted(parent.glob(f"{stem}-*.jsonl")):
+            if f.stat().st_size > 0:
+                files.append(f)
+
+        return files
 
     def _dict_to_schema(self, d: dict[str, Any]) -> AuditSchemaModel:
         """Convert a dictionary to an AuditSchemaModel."""
