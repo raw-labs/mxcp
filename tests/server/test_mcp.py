@@ -93,6 +93,11 @@ def mock_endpoint():
     }
 
 
+def test_instructions_passed_to_fastmcp(mcp_server):
+    """Verify instructions from site config reach the FastMCP instance."""
+    assert mcp_server.mcp.instructions == "Test instructions for MCP clients."
+
+
 def test_convert_param_type_string(mcp_server):
     """Test converting parameters to string type."""
     assert mcp_server._convert_param_type(123, "string") == "123"

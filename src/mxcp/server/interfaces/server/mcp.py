@@ -644,6 +644,7 @@ class RAWMCP:
         """Initialize the FastMCP server."""
         fastmcp_kwargs: dict[str, Any] = {
             "name": "MXCP Server",
+            "instructions": self.site_config.instructions,
             "stateless_http": self.stateless_http,
             "json_response": self.json_response,
             "host": self.host,
