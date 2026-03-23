@@ -55,10 +55,10 @@ async def test_audit_logger_creates_records():
         # Additional wait after shutdown
         await asyncio.sleep(0.1)
 
-        # Verify log was written
-        assert log_path.exists()
+        # Verify log was written (segment file, not base path)
+        assert logger.backend._current_segment.exists()
 
-        with open(log_path) as f:
+        with open(logger.backend._current_segment) as f:
             line = f.readline()
             data = json.loads(line)
 
@@ -148,7 +148,7 @@ async def test_audit_logger_sensitive_data_redaction():
         await asyncio.sleep(0.1)
 
         # Verify redaction - need to find the actual audit record
-        with open(log_path) as f:
+        with open(logger.backend._current_segment) as f:
             lines = f.readlines()
             # Find the audit record (not schema)
             record = None

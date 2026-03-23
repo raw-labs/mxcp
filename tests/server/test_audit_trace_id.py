@@ -91,8 +91,9 @@ def test_audit_logs_include_trace_id():
                 # Ensure the logger has written
                 await logger.backend.flush()
 
-            # Read the audit log to verify
-            with open(audit_file) as f:
+            # Read the audit log to verify (writer uses segment files, not base path)
+            segment = logger.backend._current_segment
+            with open(segment) as f:
                 content = f.read()
                 lines = content.strip().split("\n")
 
@@ -159,8 +160,9 @@ def test_audit_logs_trace_id_null_when_telemetry_disabled():
             # Ensure the logger has written
             await logger.backend.flush()
 
-            # Read the audit log to verify
-            with open(audit_file) as f:
+            # Read the audit log to verify (writer uses segment files, not base path)
+            segment = logger.backend._current_segment
+            with open(segment) as f:
                 content = f.read()
                 lines = content.strip().split("\n")
 

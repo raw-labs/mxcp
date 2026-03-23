@@ -98,6 +98,7 @@ class SiteAuditConfigModel(BaseModel):
 
     enabled: bool = False
     path: str | None = None
+    max_file_size: int = 50 * 1024 * 1024  # 50MB
 
 
 class SiteProfileConfigModel(BaseModel):

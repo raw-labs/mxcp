@@ -37,16 +37,22 @@ logger = logging.getLogger(__name__)
 class JSONLAuditWriter(BaseAuditWriter):
     """JSONL file-based audit backend with asyncio-based batching and DuckDB querying."""
 
-    def __init__(self, log_path: Path, **kwargs: Any) -> None:
+    def __init__(
+        self, log_path: Path, max_file_size: int = 50 * 1024 * 1024, **kwargs: Any
+    ) -> None:
         """Initialize the JSONL writer."""
         super().__init__(**kwargs)
         self.log_path = log_path
-        self.schema_path = self.log_path.parent / f"{self.log_path.stem}_schemas.jsonl"
+        self._base_path = log_path
+        self._max_file_size = max_file_size
+        self.schema_path = self._base_path.parent / f"{self._base_path.stem}_schemas.jsonl"
 
-        # Ensure parent directory exists and file is present
-        self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.log_path.exists():
-            self.log_path.touch()
+        # Ensure parent directory exists
+        self._base_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Segment management
+        self._segment_counter = 0
+        self._current_segment = self._new_segment()
 
         self._queue: asyncio.Queue[AuditRecordModel | object] = asyncio.Queue()
         self._writer_task: asyncio.Task[None] | None = None
@@ -58,7 +64,40 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         self._start_writer_task()
 
-        logger.info(f"JSONL audit writer initialized with file: {self.log_path}")
+        logger.info(f"JSONL audit writer initialized with base path: {self._base_path}")
+
+    def _new_segment(self) -> Path:
+        """Create a new timestamped segment file."""
+        now = datetime.now(timezone.utc)
+        timestamp = now.strftime("%Y%m%dT%H%M%S")
+        stem = self._base_path.stem
+
+        segment_path = self._base_path.parent / f"{stem}-{timestamp}.jsonl"
+        while segment_path.exists():
+            self._segment_counter += 1
+            segment_path = (
+                self._base_path.parent / f"{stem}-{timestamp}-{self._segment_counter}.jsonl"
+            )
+
+        segment_path.touch()
+        self._current_segment = segment_path
+        logger.debug(f"Created new segment: {segment_path.name}")
+        return segment_path
+
+    def _list_segment_files(self) -> list[Path]:
+        """List all non-empty segment files plus legacy file, sorted lexicographically."""
+        stem = self._base_path.stem
+        parent = self._base_path.parent
+        files: list[Path] = []
+
+        if self._base_path.exists() and self._base_path.stat().st_size > 0:
+            files.append(self._base_path)
+
+        for f in sorted(parent.glob(f"{stem}-*.jsonl")):
+            if f.stat().st_size > 0:
+                files.append(f)
+
+        return files
 
     def _dict_to_schema(self, d: dict[str, Any]) -> AuditSchemaModel:
         """Convert a dictionary to an AuditSchemaModel."""
@@ -273,15 +312,23 @@ class JSONLAuditWriter(BaseAuditWriter):
         await self._flush_ack.wait()
 
     async def _write_events_batch(self, events: list[AuditRecordModel]) -> None:
-        """Write a batch of events to the JSONL file."""
+        """Write a batch of events to the current segment file."""
         try:
-            async with self._file_lock, aiofiles.open(self.log_path, "a", encoding="utf-8") as f:
+            async with (
+                self._file_lock,
+                aiofiles.open(self._current_segment, "a", encoding="utf-8") as f,
+            ):
                 for event in events:
                     await f.write(json.dumps(event.to_dict(), ensure_ascii=False))
                     await f.write("\n")
                 await f.flush()
 
             logger.debug(f"Wrote batch of {len(events)} audit events")
+
+            # Check if rotation is needed
+            if self._current_segment.stat().st_size >= self._max_file_size:
+                self._new_segment()
+                logger.info(f"Rotated to new segment: {self._current_segment.name}")
 
         except Exception as e:
             logger.error(f"Failed to write event batch: {e}")
@@ -406,7 +453,8 @@ class JSONLAuditWriter(BaseAuditWriter):
         """
 
         async def _iterator() -> AsyncIterator[AuditRecordModel]:
-            if not self.log_path.exists():
+            files = self._list_segment_files()
+            if not files:
                 return
 
             batch_size = 1000 if limit is None else min(limit, 1000)
@@ -416,6 +464,7 @@ class JSONLAuditWriter(BaseAuditWriter):
             while True:
                 records, finished = await asyncio.to_thread(
                     self._run_query_batch,
+                    files,  # NEW: list of segment file paths
                     current_offset,
                     batch_size,
                     schema_name,
@@ -451,6 +500,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
     def _run_query_batch(
         self,
+        files: list[Path],  # NEW
         offset: int,
         batch_size: int,
         schema_name: str | None,
@@ -504,8 +554,9 @@ class JSONLAuditWriter(BaseAuditWriter):
                 decisions_str = ",".join([f"'{d}'" for d in policy_decisions])
                 conditions.append(f"policy_decision IN ({decisions_str})")
 
+            file_list = ", ".join(f"'{f}'" for f in files)
             query = f"""
-                SELECT * FROM read_json_auto('{self.log_path}', columns={{
+                SELECT * FROM read_json_auto([{file_list}], columns={{
                     'schema_name': 'VARCHAR',
                     'schema_version': 'INTEGER',
                     'record_id': 'VARCHAR',
@@ -576,12 +627,17 @@ class JSONLAuditWriter(BaseAuditWriter):
 
     async def get_record(self, record_id: str) -> AuditRecordModel | None:
         """Get a specific record by ID."""
+        files = self._list_segment_files()
+        if not files:
+            return None
+
         conn = None
         try:
             conn = duckdb.connect(":memory:")
 
+            file_list = ", ".join(f"'{f}'" for f in files)
             query = f"""
-                SELECT * FROM read_json_auto('{self.log_path}', columns={{
+                SELECT * FROM read_json_auto([{file_list}], columns={{
                     'schema_name': 'VARCHAR',
                     'schema_version': 'INTEGER',
                     'record_id': 'VARCHAR',
@@ -672,86 +728,90 @@ class JSONLAuditWriter(BaseAuditWriter):
         return IntegrityResultModel(valid=True, records_checked=2, chain_breaks=[])
 
     async def apply_retention_policies(self) -> dict[str, int]:
-        """Apply retention policies to remove old records.
-
-        For JSONL backend, this creates a new file with only retained records.
-        """
-        if not self.log_path.exists():
-            return {}
-
+        """Apply retention policies by deleting whole segment files."""
         counts: dict[str, int] = {}
-        temp_path = self.log_path.with_suffix(".tmp")
 
         try:
-            # Flush any pending writes
+            # Flush pending writes
             await self._flush_writer()
             await self._queue.join()
 
-            # Process the file line by line
-            retained_count = 0
+            files = self._list_segment_files()
             now = datetime.now(timezone.utc)
 
-            async with self._file_lock:
-                with (
-                    open(self.log_path, encoding="utf-8") as infile,
-                    open(temp_path, "w", encoding="utf-8") as outfile,
-                ):
-                    for line in infile:
-                        line = line.strip()
-                        if not line:
-                            continue
+            for file_path in files:
+                # Never delete the current segment
+                if file_path == self._current_segment:
+                    continue
 
-                        try:
-                            record_dict = json.loads(line)
-                            schema_name = record_dict.get("schema_name", "unknown")
-                            schema_version = record_dict.get("schema_version", 1)
+                conn = None
+                try:
+                    conn = duckdb.connect(":memory:")
 
-                            # Get the schema
-                            schema = await self.get_schema(schema_name, schema_version)
-                            if not schema or schema.retention_days is None:
-                                # No retention policy, keep the record
-                                outfile.write(line + "\n")
-                                retained_count += 1
-                                continue
+                    # Get newest timestamp and distinct schemas in this file
+                    result = conn.execute(
+                        f"""
+                        SELECT
+                            MAX(timestamp) as max_ts,
+                            LIST(DISTINCT schema_name) as schemas
+                        FROM read_json_auto('{file_path}',
+                            columns={{'timestamp': 'VARCHAR', 'schema_name': 'VARCHAR'}})
+                    """
+                    ).fetchone()
 
-                            # Check if record should be retained
-                            timestamp = self._parse_datetime_str(record_dict["timestamp"])
-                            age_days = (now - timestamp).days
+                    if not result or not result[0]:
+                        continue
 
-                            if age_days <= schema.retention_days:
-                                # Keep the record
-                                outfile.write(line + "\n")
-                                retained_count += 1
-                            else:
-                                # Delete the record
-                                schema_key = f"{schema_name}:v{schema_version}"
-                                logger.debug(
-                                    "Retention deleting record: schema=%s age_days=%s threshold=%s",
-                                    schema_key,
-                                    age_days,
-                                    schema.retention_days,
-                                )
-                                counts[schema_key] = counts.get(schema_key, 0) + 1
+                    max_ts = self._parse_datetime_str(result[0])
+                    schema_names = result[1] if result[1] else []
 
-                        except Exception as e:
-                            logger.warning(f"Error processing record for retention: {e}")
-                            # Keep records we can't process
-                            outfile.write(line + "\n")
-                            retained_count += 1
+                    # Find the longest retention_days across all schemas
+                    max_retention_days: int | None = None
+                    for sname in schema_names:
+                        schema = await self.get_schema(sname)
+                        if (
+                            schema
+                            and schema.retention_days is not None
+                            and (
+                                max_retention_days is None
+                                or schema.retention_days > max_retention_days
+                            )
+                        ):
+                            max_retention_days = schema.retention_days
 
-                # Replace the original file
-                temp_path.replace(self.log_path)
+                    if max_retention_days is None:
+                        # No retention policy, keep the file
+                        continue
 
-            logger.info(
-                f"Retention applied: {retained_count} records retained, "
-                f"{sum(counts.values())} records deleted"
-            )
+                    age_days = (now - max_ts).days
+                    if age_days <= max_retention_days:
+                        continue
 
-            return counts
+                    # File is expired — count records per schema before deleting
+                    schema_counts = conn.execute(
+                        f"""
+                        SELECT schema_name, schema_version, COUNT(*) as cnt
+                        FROM read_json_auto('{file_path}',
+                            columns={{'schema_name': 'VARCHAR', 'schema_version': 'INTEGER'}})
+                        GROUP BY schema_name, schema_version
+                    """
+                    ).fetchall()
+
+                    for sname, sversion, cnt in schema_counts:
+                        key = f"{sname}:v{sversion}"
+                        counts[key] = counts.get(key, 0) + cnt
+
+                    # Delete the file
+                    file_path.unlink()
+                    logger.info(f"Retention deleted segment: {file_path.name}")
+
+                except Exception as e:
+                    logger.error(f"Error processing segment {file_path} for retention: {e}")
+                finally:
+                    if conn:
+                        conn.close()
 
         except Exception as e:
             logger.error(f"Failed to apply retention policies: {e}")
-            # Clean up temp file if it exists
-            if temp_path.exists():
-                temp_path.unlink()
-            return {}
+
+        return counts

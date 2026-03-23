@@ -323,6 +323,7 @@ class RAWMCP:
         self._audit_logging_enabled = bool(audit_config and audit_config.enabled)
         audit_path_str = audit_config.path if audit_config and audit_config.path else ""
         self._audit_log_path = Path(audit_path_str) if audit_path_str else Path("audit.log")
+        self._audit_max_file_size = audit_config.max_file_size if audit_config else 50 * 1024 * 1024
 
     def _resolve_and_apply_configs(self) -> None:
         """Resolve external references with selective interpolation and apply CLI overrides.
@@ -740,7 +741,9 @@ class RAWMCP:
 
         log_path = self._audit_log_path
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        self.audit_logger = await AuditLogger.jsonl(log_path=log_path)
+        self.audit_logger = await AuditLogger.jsonl(
+            log_path=log_path, max_file_size=self._audit_max_file_size
+        )
         await self._register_audit_schema()
 
     async def _register_audit_schema(self) -> None:

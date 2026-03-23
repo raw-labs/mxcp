@@ -40,12 +40,15 @@ class AuditLogger:
         logger.info(f"Audit logger initialized with backend: {type(self.backend).__name__}")
 
     @classmethod
-    async def jsonl(cls, log_path: Path, enabled: bool = True) -> "AuditLogger":
+    async def jsonl(
+        cls, log_path: Path, enabled: bool = True, max_file_size: int = 50 * 1024 * 1024
+    ) -> "AuditLogger":
         """Create audit logger with JSONL file backend.
 
         Args:
             log_path: Path to the JSONL audit log file
             enabled: Whether audit logging should be enabled (chooses backend)
+            max_file_size: Maximum file size in bytes before rotation (default 50 MiB)
 
         Returns:
             AuditLogger instance with appropriate backend
@@ -53,7 +56,7 @@ class AuditLogger:
         if enabled:
             from .backends.jsonl import JSONLAuditWriter
 
-            return cls(JSONLAuditWriter(log_path=log_path))
+            return cls(JSONLAuditWriter(log_path=log_path, max_file_size=max_file_size))
         else:
             return cls(NoOpAuditBackend())
 
