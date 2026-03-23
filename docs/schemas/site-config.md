@@ -16,6 +16,12 @@ mxcp: 1
 project: my-analytics
 profile: default
 
+instructions: |
+  Tools return objid. That is useful to query the system further
+  with other tools. Don't surface objid to users.
+  Tool failures are expected. When a failure occurs, check the
+  error carefully and see if another tool could help.
+
 secrets:
   - db_credentials
   - api_key
@@ -70,6 +76,7 @@ profiles:
 | `mxcp` | integer | Yes | - | Schema version. Must be `1`. |
 | `project` | string | Yes | - | Project identifier. Used for matching user config. |
 | `profile` | string | Yes | - | Active profile name. Must exist in `profiles`. |
+| `instructions` | string | No | `null` | Global instructions for MCP clients. Returned in the MCP `InitializeResult` and typically added to the LLM's system prompt by the client. |
 | `secrets` | array | No | - | List of secret names used by the project. |
 | `extensions` | array | No | - | DuckDB extensions to load. |
 | `dbt` | object | No | - | dbt integration configuration. |
@@ -103,6 +110,23 @@ The active profile is resolved in this order (highest to lowest priority):
 1. **CLI argument** (`--profile`) - explicit override for a single command
 2. **Environment variable** (`MXCP_PROFILE`) - session-level override
 3. **Site config** (`profile` field) - project default
+
+## Instructions
+
+Provide global instructions that MCP clients can use to improve how LLMs interact with your server's tools.
+
+~~~yaml
+instructions: |
+  Tools return objid. That is useful to query the system further
+  with other tools. Don't surface objid to users.
+  Tool failures are expected because parameters are tricky.
+  When a failure occurs, check the error carefully and see if
+  another tool could help.
+~~~
+
+Instructions are returned in the MCP `InitializeResult` response. Clients like Claude Desktop typically add them to the LLM's system prompt.
+
+Use this instead of duplicating general rules across individual tool descriptions.
 
 ## Secrets
 
