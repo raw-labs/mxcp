@@ -44,3 +44,17 @@ def test_audit_env_override(
     model = SiteConfigModel.model_validate(_base_config(), context={"repo_root": tmp_path})
     assert model.profiles["dev"].audit.enabled is expected
     monkeypatch.delenv("MXCP_AUDIT_ENABLED")
+
+
+def test_instructions_default_is_none(tmp_path: Path):
+    """instructions field defaults to None when not provided."""
+    model = SiteConfigModel.model_validate(_base_config(), context={"repo_root": tmp_path})
+    assert model.instructions is None
+
+
+def test_instructions_accepted_when_provided(tmp_path: Path):
+    """instructions field is parsed when present in config."""
+    config = _base_config()
+    config["instructions"] = "Always call tool X before tool Y.\nDon't surface objid to users."
+    model = SiteConfigModel.model_validate(config, context={"repo_root": tmp_path})
+    assert model.instructions == "Always call tool X before tool Y.\nDon't surface objid to users."

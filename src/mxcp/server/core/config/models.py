@@ -130,6 +130,7 @@ class SiteConfigModel(BaseModel):
     mxcp: Literal[1] = 1
     project: str
     profile: str
+    instructions: str | None = None
     secrets: list[str] = Field(default_factory=list)
     plugin: list[SitePluginDefinitionModel] = Field(default_factory=list)
     extensions: list[SiteExtensionDefinitionModel] = Field(default_factory=list)
