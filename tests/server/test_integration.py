@@ -1306,6 +1306,41 @@ def check_all_secrets() -> dict:
                 assert "Execute a SQL query" in execute_sql_tool["description"]
 
     @pytest.mark.asyncio
+    async def test_sql_tools_custom_descriptions(self, integration_fixture_dir):
+        """Test that custom SQL tool descriptions from config appear in MCP tool metadata."""
+        site_config_path = integration_fixture_dir / "mxcp-site.yml"
+        with open(site_config_path) as f:
+            site_config_data = yaml.safe_load(f) or {}
+
+        site_config_data["sql_tools"] = {
+            "enabled": True,
+            "execute_sql_query": {"description": "Query the countries database"},
+            "list_tables": {"description": "List country tables"},
+            "get_table_schema": {"description": "Inspect country table schemas"},
+        }
+
+        with open(site_config_path, "w") as f:
+            yaml.dump(site_config_data, f)
+
+        with ServerProcess(integration_fixture_dir) as server:
+            server.start()
+
+            async with MCPTestClient(server.port) as client:
+                tools = await client.list_tools()
+
+                execute_tool = next((t for t in tools if t["name"] == "execute_sql_query"), None)
+                assert execute_tool is not None
+                assert execute_tool["description"] == "Query the countries database"
+
+                list_tool = next((t for t in tools if t["name"] == "list_tables"), None)
+                assert list_tool is not None
+                assert list_tool["description"] == "List country tables"
+
+                schema_tool = next((t for t in tools if t["name"] == "get_table_schema"), None)
+                assert schema_tool is not None
+                assert schema_tool["description"] == "Inspect country table schemas"
+
+    @pytest.mark.asyncio
     async def test_sql_tools_functionality(self, integration_fixture_dir):
         """Test SQL tools functionality using dbt-created tables."""
         # Run dbt to create the tables first

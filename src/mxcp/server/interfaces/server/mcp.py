@@ -1726,7 +1726,10 @@ class RAWMCP:
         # Register SQL query tool with proper metadata
         @self.mcp.tool(
             name="execute_sql_query",
-            description="Execute a SQL query against the DuckDB database and return the results as a list of records",
+            description=(
+                self.site_config.sql_tools.execute_sql_query.description
+                or "Execute a SQL query against the DuckDB database and return the results as a list of records"
+            ),
             annotations=ToolAnnotations(
                 title="SQL Query Executor",
                 readOnlyHint=False,  # SQL can modify data
@@ -1808,7 +1811,10 @@ class RAWMCP:
         # Register table list tool with proper metadata
         @self.mcp.tool(
             name="list_tables",
-            description="List all tables in the DuckDB database",
+            description=(
+                self.site_config.sql_tools.list_tables.description
+                or "List all tables in the DuckDB database"
+            ),
             annotations=ToolAnnotations(
                 title="Database Table Lister",
                 readOnlyHint=True,  # Only reads metadata
@@ -1892,7 +1898,10 @@ class RAWMCP:
         # Register schema tool with proper metadata
         @self.mcp.tool(
             name="get_table_schema",
-            description="Get the schema for a specific table in the DuckDB database",
+            description=(
+                self.site_config.sql_tools.get_table_schema.description
+                or "Get the schema for a specific table in the DuckDB database"
+            ),
             annotations=ToolAnnotations(
                 title="Table Schema Inspector",
                 readOnlyHint=True,  # Only reads metadata
