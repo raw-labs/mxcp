@@ -74,10 +74,19 @@ class SiteDbtConfigModel(BaseModel):
         return [str(value)]
 
 
+class SiteSqlToolConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    description: str | None = Field(default=None, min_length=1)
+
+
 class SiteSqlToolsConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     enabled: bool = False
+    execute_sql_query: SiteSqlToolConfigModel = Field(default_factory=SiteSqlToolConfigModel)
+    list_tables: SiteSqlToolConfigModel = Field(default_factory=SiteSqlToolConfigModel)
+    get_table_schema: SiteSqlToolConfigModel = Field(default_factory=SiteSqlToolConfigModel)
 
 
 class SiteDuckDBConfigModel(BaseModel):

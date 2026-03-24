@@ -32,6 +32,13 @@ dbt:
 
 sql_tools:
   enabled: false
+  # Per-tool descriptions (optional):
+  # execute_sql_query:
+  #   description: "Custom description for SQL query tool"
+  # list_tables:
+  #   description: "Custom description for table listing tool"
+  # get_table_schema:
+  #   description: "Custom description for schema inspection tool"
 
 paths:
   tools: tools
@@ -238,24 +245,41 @@ See [dbt Integration](/integrations/dbt) for complete documentation.
 
 ## SQL Tools Configuration
 
-Enable built-in SQL tools for direct database access.
+Enable built-in SQL tools for direct database access. Each tool's MCP `description` can be customized to provide domain-specific context to the LLM.
 
 ```yaml
 sql_tools:
   enabled: true
+  execute_sql_query:
+    description: "Run SQL queries against the countries and capitals database"
+  list_tables:
+    description: "List available tables about countries and their capitals"
+  get_table_schema:
+    description: "Inspect the schema of country and capital tables"
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable built-in SQL tools. |
+| `execute_sql_query` | object | - | Configuration for the SQL query tool. |
+| `list_tables` | object | - | Configuration for the table listing tool. |
+| `get_table_schema` | object | - | Configuration for the schema inspection tool. |
 
-When enabled, provides these tools:
+### Per-Tool Configuration
 
-| Tool | Description |
+Each tool object supports:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `description` | string | *(see below)* | Custom MCP tool description shown to the LLM. |
+
+When `description` is omitted, the built-in default is used:
+
+| Tool | Default Description |
 |------|-------------|
-| `execute_sql_query` | Execute arbitrary SQL queries |
-| `list_tables` | List all tables in the database |
-| `get_table_schema` | Get schema for a specific table |
+| `execute_sql_query` | "Execute a SQL query against the DuckDB database and return the results as a list of records" |
+| `list_tables` | "List all tables in the DuckDB database" |
+| `get_table_schema` | "Get the schema for a specific table in the DuckDB database" |
 
 **Security Note:** Only enable for trusted environments. Consider using custom tools with proper access controls for production.
 
