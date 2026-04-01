@@ -3,16 +3,11 @@ import json
 import click
 
 from mxcp.sdk.core.analytics import track_command_with_timing
-from mxcp.server.core.config.site_config import find_repo_root, load_site_config
-from mxcp.server.core.config.user_config import load_user_config
+from mxcp.server.core.config.site_config import find_repo_root
 from mxcp.server.interfaces.cli.utils import (
-    configure_logging_from_config,
     get_env_flag,
     output_error,
-    resolve_profile,
-    run_async_cli,
 )
-from mxcp.server.interfaces.server.mcp import RAWMCP
 from mxcp.server.services.endpoints.models import EndpointErrorModel
 
 
@@ -140,6 +135,8 @@ def serve(
         mxcp serve --stateless       # Enable stateless HTTP mode
         mxcp serve --ignore-errors   # Start even if some endpoints have errors
     """
+    from mxcp.server.api import MXCPServer
+
     # Get readonly flag from environment if not set by flag
     if not readonly:
         readonly = get_env_flag("MXCP_READONLY")
@@ -152,7 +149,6 @@ def serve(
         enable_sql_tools = False
 
     try:
-        # Load site config
         try:
             repo_root = find_repo_root()
         except FileNotFoundError as e:
@@ -164,44 +160,21 @@ def serve(
                 "No mxcp-site.yml found in current directory or parents"
             ) from e
 
-        site_config = load_site_config(repo_root)
-
-        # Resolve profile
-        active_profile = resolve_profile(profile, site_config)
-
-        # Load user config with active profile
-        user_config = load_user_config(site_config, active_profile=active_profile)
-
-        # Determine effective transport (CLI flag > user config > default)
-        effective_transport = transport or user_config.transport.provider or "streamable-http"
-
-        # Configure logging ONCE with all settings
-        configure_logging_from_config(
-            user_config=user_config,
-            debug=debug,
-            transport=effective_transport,
-        )
-
-        # Create the server
-        server = RAWMCP(
+        server = MXCPServer(
             site_config_path=repo_root,
-            profile=active_profile,
+            profile=profile,
             transport=transport,
             port=port,
-            stateless_http=stateless if stateless else None,
             enable_sql_tools=enable_sql_tools,
             readonly=readonly,
             debug=debug,
+            stateless_http=stateless,
         )
 
-        # Check for endpoint loading errors (YAML parsing, schema errors)
-        all_errors = list(server.skipped_endpoints)
+        raw = server.raw_mcp
 
-        # Also validate endpoints (SQL syntax, etc.)
-        validation_errors = server.validate_all_endpoints()
-        all_errors.extend(validation_errors)
-
-        # Fail startup if there are any endpoint errors (unless --ignore-errors)
+        # Check for errors that were skipped (when using --ignore-errors)
+        all_errors = list(raw.skipped_endpoints)
         if all_errors and not ignore_errors:
             if json_output:
                 click.echo(_format_endpoint_errors_json(all_errors))
@@ -209,45 +182,34 @@ def serve(
                 click.echo(_format_endpoint_errors(all_errors))
             raise click.Abort()
 
-        # If ignoring errors, add validation errors to skipped list for tracking
-        # and remove failed endpoints from the valid list
-        if validation_errors:
-            server.skipped_endpoints.extend(validation_errors)
-            failed_paths = {e.path for e in validation_errors}
-            server.endpoints = [
-                (path, endpoint)
-                for path, endpoint in server.endpoints
-                if str(path) not in failed_paths
-            ]
-
         # Get endpoint counts for display
-        endpoint_counts = server.get_endpoint_counts()
+        endpoint_counts = raw.get_endpoint_counts()
 
         # Show startup banner (except for stdio mode which needs clean output)
-        if server.transport != "stdio":
+        if raw.transport != "stdio":
             click.echo("\n" + "=" * 60)
             click.echo(click.style("🚀 MXCP Server Starting", fg="green", bold=True).center(70))
             click.echo("=" * 60 + "\n")
 
             # Show configuration
             click.echo(f"{click.style('📋 Configuration:', fg='cyan', bold=True)}")
-            click.echo(f"   • Project: {click.style(server.site_config.project, fg='yellow')}")
-            click.echo(f"   • Profile: {click.style(server.profile_name, fg='yellow')}")
-            click.echo(f"   • Transport: {click.style(server.transport, fg='yellow')}")
+            click.echo(f"   • Project: {click.style(raw.site_config.project, fg='yellow')}")
+            click.echo(f"   • Profile: {click.style(raw.profile_name, fg='yellow')}")
+            click.echo(f"   • Transport: {click.style(raw.transport, fg='yellow')}")
 
-            if server.transport in ["streamable-http", "sse"]:
-                click.echo(f"   • Host: {click.style(server.host, fg='yellow')}")
-                click.echo(f"   • Port: {click.style(str(server.port), fg='yellow')}")
+            if raw.transport in ["streamable-http", "sse"]:
+                click.echo(f"   • Host: {click.style(raw.host, fg='yellow')}")
+                click.echo(f"   • Port: {click.style(str(raw.port), fg='yellow')}")
 
-            if server.readonly:
+            if raw.readonly:
                 click.echo(f"   • Mode: {click.style('Read-only', fg='red')}")
             else:
                 click.echo(f"   • Mode: {click.style('Read-write', fg='green')}")
 
-            if server.stateless_http:
+            if raw.stateless_http:
                 click.echo(f"   • HTTP Mode: {click.style('Stateless', fg='magenta')}")
 
-            if server.enable_sql_tools:
+            if raw.enable_sql_tools:
                 click.echo(f"   • SQL Tools: {click.style('Enabled', fg='green')}")
             else:
                 click.echo(f"   • SQL Tools: {click.style('Disabled', fg='red')}")
@@ -272,35 +234,27 @@ def serve(
                 )
 
             # Show warning if there are skipped endpoints (when using --ignore-errors)
-            if server.skipped_endpoints:
+            if raw.skipped_endpoints:
                 click.echo(
                     f"\n{click.style('⚠️  Skipped endpoints:', fg='yellow', bold=True)} "
-                    f"{click.style(str(len(server.skipped_endpoints)), fg='yellow')}"
+                    f"{click.style(str(len(raw.skipped_endpoints)), fg='yellow')}"
                 )
                 click.echo("   Use 'mxcp validate' to see details")
 
             click.echo("\n" + "-" * 60)
 
-            if server.transport in ["streamable-http", "sse"]:
+            if raw.transport in ["streamable-http", "sse"]:
                 click.echo(f"\n{click.style('✅ Server ready!', fg='green', bold=True)}")
-                url = f"http://{server.host}:{server.port}"
+                url = f"http://{raw.host}:{raw.port}"
                 click.echo(f"   Listening on {click.style(url, fg='cyan', underline=True)}")
                 click.echo(f"\n{click.style('Press Ctrl+C to stop', fg='yellow')}\n")
             else:
                 click.echo(f"\n{click.style('✅ Server starting...', fg='green', bold=True)}\n")
 
-        async def _run_server_lifecycle() -> None:
-            """Run the MCP server and ensure shutdown happens in the same event loop."""
-            try:
-                await server.run(transport=server.transport)
-            finally:
-                await server.shutdown()
-
         try:
-            # Start the server and ensure shutdown runs inside the same event loop
-            run_async_cli(_run_server_lifecycle())
+            server.start(blocking=True)
         finally:
-            if server.transport != "stdio":
+            if raw.transport != "stdio":
                 click.echo(f"{click.style('👋 Server stopped', fg='cyan')}")
     except click.ClickException:
         # Let Click exceptions propagate - they have their own formatting
