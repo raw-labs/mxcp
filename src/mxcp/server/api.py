@@ -14,6 +14,7 @@ Example:
 """
 
 import asyncio
+import contextlib
 import logging
 import threading
 from pathlib import Path
@@ -179,10 +180,8 @@ class MXCPServer:
         except KeyboardInterrupt:
             if self._task and not self._task.done():
                 self._task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError, KeyboardInterrupt):
                     self._loop.run_until_complete(self._task)
-                except (asyncio.CancelledError, KeyboardInterrupt):
-                    pass
         finally:
             self._loop.close()
             self._stopped.set()
@@ -195,10 +194,8 @@ class MXCPServer:
             if t is not threading.main_thread() and t.is_alive() and not t.daemon:
                 tlock = getattr(t, "_tstate_lock", None)
                 if tlock is not None and tlock.locked():
-                    try:
+                    with contextlib.suppress(RuntimeError):
                         tlock.release()
-                    except RuntimeError:
-                        pass
 
         # Shutdown PostHog with timeout to avoid blocking on network I/O.
         if self._analytics:
