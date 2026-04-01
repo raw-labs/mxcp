@@ -171,7 +171,7 @@ class MXCPServer:
             try:
                 await self._raw_mcp.run(transport=self._raw_mcp.transport)
             except asyncio.CancelledError:
-                pass
+                pass  # Task cancellation is the expected shutdown path via stop()
             finally:
                 await self._raw_mcp.shutdown()
 
@@ -207,7 +207,7 @@ class MXCPServer:
                     t.start()
                     t.join(timeout=2)
             except Exception:
-                pass
+                pass  # Best-effort cleanup; must not prevent interpreter shutdown
 
         # Close logging file handlers.
         logging.shutdown()
