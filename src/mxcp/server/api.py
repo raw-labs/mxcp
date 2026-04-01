@@ -99,7 +99,7 @@ class MXCPServer:
 
         self._analytics = analytics
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
         self._thread: threading.Thread | None = None
         self._started = threading.Event()
         self._stopped = threading.Event()
