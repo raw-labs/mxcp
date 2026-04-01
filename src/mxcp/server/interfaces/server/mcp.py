@@ -774,8 +774,13 @@ class RAWMCP:
         """
         if hasattr(signal, "SIGHUP"):
             # SIGHUP triggers a full system reload
-            signal.signal(signal.SIGHUP, self._handle_reload_signal)
-            logger.info("Registered SIGHUP handler for system reload.")
+            try:
+                signal.signal(signal.SIGHUP, self._handle_reload_signal)
+                logger.info("Registered SIGHUP handler for system reload.")
+            except ValueError:
+                # Signal handlers can only be registered from the main thread.
+                # Skip silently when running in embedded/non-main thread contexts.
+                logger.warning("Skipping SIGHUP handler (not in main thread).")
 
     def _handle_reload_signal(self, signum: int, frame: Any) -> None:
         """Handle SIGHUP signal to reload the configuration.
