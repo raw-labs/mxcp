@@ -27,6 +27,8 @@ from mxcp.server.interfaces.cli.utils import (
 )
 from mxcp.server.interfaces.server.mcp import RAWMCP
 
+logger = logging.getLogger(__name__)
+
 
 class MXCPServer:
     """Thread-safe MXCP server with programmatic start/stop.
@@ -150,15 +152,20 @@ class MXCPServer:
         if not self._started.is_set():
             return
 
+        logger.debug("stop: cancelling server task")
         if self._loop and self._task and not self._task.done():
             self._loop.call_soon_threadsafe(self._task.cancel)
 
+        logger.debug("stop: waiting for server to stop")
         self._stopped.wait(timeout=timeout)
 
         if self._thread and self._thread.is_alive():
+            logger.debug("stop: joining server thread")
             self._thread.join(timeout=timeout)
 
+        logger.debug("stop: running cleanup")
         self._cleanup()
+        logger.debug("stop: done")
 
     def _run_blocking(self) -> None:
         """Run the server lifecycle on the current thread."""
@@ -168,28 +175,33 @@ class MXCPServer:
         async def _lifecycle() -> None:
             self._task = asyncio.current_task()
             self._started.set()
+            logger.debug("lifecycle: server starting")
             try:
                 await self._raw_mcp.run(transport=self._raw_mcp.transport)
             except asyncio.CancelledError:
-                pass  # Task cancellation is the expected shutdown path via stop()
+                logger.debug("lifecycle: task cancelled")
             finally:
+                logger.debug("lifecycle: running server.shutdown()")
                 await self._raw_mcp.shutdown()
+                logger.debug("lifecycle: server.shutdown() complete")
 
         try:
             self._loop.run_until_complete(_lifecycle())
         except KeyboardInterrupt:
+            logger.debug("lifecycle: KeyboardInterrupt received")
             if self._task and not self._task.done():
                 self._task.cancel()
                 with contextlib.suppress(asyncio.CancelledError, KeyboardInterrupt):
                     self._loop.run_until_complete(self._task)
         finally:
+            logger.debug("lifecycle: closing event loop")
             self._loop.close()
             self._stopped.set()
+            logger.debug("lifecycle: event loop closed")
 
     def _cleanup(self) -> None:
         """Clean up resources that outlive the event loop."""
-        # Release tstate locks on stuck non-daemon threads so Py_Finalize()
-        # won't wait for them in embedded Python interpreters.
+        logger.debug("cleanup: releasing tstate locks")
         for t in threading.enumerate():
             if t is not threading.main_thread() and t.is_alive() and not t.daemon:
                 tlock = getattr(t, "_tstate_lock", None)
@@ -197,7 +209,7 @@ class MXCPServer:
                     with contextlib.suppress(RuntimeError):
                         tlock.release()
 
-        # Shutdown PostHog with timeout to avoid blocking on network I/O.
+        logger.debug("cleanup: shutting down PostHog")
         if self._analytics:
             try:
                 from mxcp.sdk.core.analytics import posthog_client
@@ -209,5 +221,6 @@ class MXCPServer:
             except Exception:
                 pass  # Best-effort cleanup; must not prevent interpreter shutdown
 
-        # Close logging file handlers.
+        logger.debug("cleanup: shutting down logging")
         logging.shutdown()
+        logger.debug("cleanup: done")
