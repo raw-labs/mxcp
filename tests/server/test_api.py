@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import os
 import threading
 from pathlib import Path
@@ -81,3 +82,39 @@ def test_start_marks_running_after_ready_callback(mcp_repo_path):
 
     if server._thread is not None:
         server._thread.join(timeout=1)
+
+
+def test_cleanup_does_not_release_unrelated_thread_state(mcp_repo_path):
+    """Test that cleanup does not touch private state on host-managed threads."""
+    server = MXCPServer(
+        site_config_path=mcp_repo_path,
+        analytics=False,
+        host="localhost",
+        port=8000,
+    )
+
+    release_called = False
+
+    class FakeLock:
+        def locked(self):
+            return True
+
+        def release(self):
+            nonlocal release_called
+            release_called = True
+
+    class FakeThread:
+        daemon = False
+        _tstate_lock = FakeLock()
+
+        def is_alive(self):
+            return True
+
+    with patch("mxcp.server.api.threading.enumerate", return_value=[FakeThread()]):
+        with patch("mxcp.server.api.logging.shutdown"):
+            server._cleanup()
+
+    assert release_called is False
+
+    with contextlib.suppress(Exception):
+        server.raw_mcp.runtime_environment.shutdown()

@@ -237,13 +237,10 @@ class MXCPServer:
 
     def _cleanup(self) -> None:
         """Clean up resources that outlive the event loop."""
-        logger.debug("cleanup: releasing tstate locks")
-        for t in threading.enumerate():
-            if t is not threading.main_thread() and t.is_alive() and not t.daemon:
-                tlock = getattr(t, "_tstate_lock", None)
-                if tlock is not None and tlock.locked():
-                    with contextlib.suppress(RuntimeError):
-                        tlock.release()
+        # Do not mutate private thread state here. Embedded hosts may have their
+        # own live worker threads, and forcing _tstate_lock open corrupts Python's
+        # bookkeeping for join() and interpreter shutdown.
+        logger.debug("cleanup: skipping thread state mutation")
 
         logger.debug("cleanup: shutting down PostHog")
         if self._analytics:
