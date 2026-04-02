@@ -118,3 +118,53 @@ def test_cleanup_does_not_release_unrelated_thread_state(mcp_repo_path):
 
     with contextlib.suppress(Exception):
         server.raw_mcp.runtime_environment.shutdown()
+
+
+def test_stateless_http_defaults_to_config_when_omitted(mcp_repo_path):
+    """Test that omitting the override passes None through to RAWMCP."""
+    captured: dict[str, object] = {}
+
+    class FakeRAWMCP:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.skipped_endpoints = []
+            self.endpoints = []
+            self.transport = "streamable-http"
+            self.host = "localhost"
+            self.port = 8000
+
+        def validate_all_endpoints(self):
+            return []
+
+    with (
+        patch("mxcp.server.api.RAWMCP", FakeRAWMCP),
+        patch("mxcp.server.api.configure_logging_from_config"),
+    ):
+        MXCPServer(site_config_path=mcp_repo_path, analytics=False)
+
+    assert captured["stateless_http"] is None
+
+
+def test_stateless_http_false_is_preserved_as_an_explicit_override(mcp_repo_path):
+    """Test that stateless_http=False is not collapsed back to config fallback."""
+    captured: dict[str, object] = {}
+
+    class FakeRAWMCP:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.skipped_endpoints = []
+            self.endpoints = []
+            self.transport = "streamable-http"
+            self.host = "localhost"
+            self.port = 8000
+
+        def validate_all_endpoints(self):
+            return []
+
+    with (
+        patch("mxcp.server.api.RAWMCP", FakeRAWMCP),
+        patch("mxcp.server.api.configure_logging_from_config"),
+    ):
+        MXCPServer(site_config_path=mcp_repo_path, analytics=False, stateless_http=False)
+
+    assert captured["stateless_http"] is False

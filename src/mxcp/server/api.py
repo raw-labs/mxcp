@@ -42,7 +42,7 @@ class MXCPServer:
         enable_sql_tools: Enable built-in SQL tools (None = use config default).
         readonly: Open database in read-only mode.
         debug: Enable debug logging.
-        stateless_http: Enable stateless HTTP mode.
+        stateless_http: Override stateless HTTP mode. Use None to keep config default.
         analytics: Enable PostHog analytics (set False for embedded use).
     """
 
@@ -56,7 +56,7 @@ class MXCPServer:
         enable_sql_tools: bool | None = None,
         readonly: bool = False,
         debug: bool = False,
-        stateless_http: bool = False,
+        stateless_http: bool | None = None,
         analytics: bool = True,
     ) -> None:
         site_config_path = Path(site_config_path)
@@ -82,7 +82,7 @@ class MXCPServer:
             transport=transport,
             host=host,
             port=port,
-            stateless_http=stateless_http if stateless_http else None,
+            stateless_http=stateless_http,
             enable_sql_tools=enable_sql_tools,
             readonly=readonly,
             debug=debug,

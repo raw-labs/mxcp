@@ -168,7 +168,7 @@ def serve(
             enable_sql_tools=enable_sql_tools,
             readonly=readonly,
             debug=debug,
-            stateless_http=stateless,
+            stateless_http=stateless if stateless else None,
         )
 
         raw = server.raw_mcp
