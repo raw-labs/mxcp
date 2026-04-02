@@ -665,7 +665,44 @@ class RAWMCP:
         if self.oauth_server:
             self._register_oauth_routes()
 
-    async def _run_admin_api_and_transport(self, transport: str) -> None:
+    async def _serve_uvicorn(
+        self,
+        server: uvicorn.Server,
+        on_ready: Callable[[], None] | None = None,
+    ) -> None:
+        """Run a uvicorn server and surface readiness after startup succeeds."""
+        serve_task = asyncio.create_task(server.serve())
+
+        try:
+            # uvicorn.Server.serve() does not return after bind; it runs for the whole
+            # server lifetime. Poll its startup state so callers can distinguish
+            # "thread started" from "socket bound and ready".
+            while not server.started and not serve_task.done() and not server.should_exit:
+                await asyncio.sleep(0.01)
+
+            if serve_task.done():
+                await serve_task
+                return
+
+            if not server.started:
+                raise RuntimeError("Server exited before becoming ready")
+
+            if on_ready is not None:
+                # This callback unblocks MXCPServer.start(blocking=False).
+                on_ready()
+
+            await serve_task
+        finally:
+            if not serve_task.done():
+                serve_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await serve_task
+
+    async def _run_admin_api_and_transport(
+        self,
+        transport: str,
+        on_ready: Callable[[], None] | None = None,
+    ) -> None:
         """Start the admin API (if enabled) and run the main MCP server."""
         # Start admin API in this event loop (if enabled)
         await self.admin_api.start()
@@ -673,9 +710,19 @@ class RAWMCP:
         try:
             # Now start the main MCP server based on transport
             if transport == "stdio":
+                if on_ready is not None:
+                    on_ready()
                 await self.mcp.run_stdio_async()
             elif transport == "sse":
-                await self.mcp.run_sse_async(None)
+                starlette_app = self.mcp.sse_app(None)
+                config = uvicorn.Config(
+                    starlette_app,
+                    host=self.mcp.settings.host,
+                    port=self.mcp.settings.port,
+                    log_level=self.mcp.settings.log_level.lower(),
+                )
+                server = uvicorn.Server(config)
+                await self._serve_uvicorn(server, on_ready=on_ready)
             elif transport == "streamable-http":
                 # Get the Starlette app and run with uvicorn
                 starlette_app = self.mcp.streamable_http_app()
@@ -686,7 +733,7 @@ class RAWMCP:
                     log_level=self.mcp.settings.log_level.lower(),
                 )
                 server = uvicorn.Server(config)
-                await server.serve()
+                await self._serve_uvicorn(server, on_ready=on_ready)
         finally:
             # Cleanup: stop admin API
             logger.info("Stopping admin API")
@@ -2173,7 +2220,11 @@ class RAWMCP:
                 logger.error(f"Failed to initialize OAuth server: {e}")
                 raise
 
-    async def run(self, transport: str = "streamable-http") -> None:
+    async def run(
+        self,
+        transport: str = "streamable-http",
+        on_ready: Callable[[], None] | None = None,
+    ) -> None:
         """Run the MCP server.
 
         Args:
@@ -2231,7 +2282,7 @@ class RAWMCP:
             await self._initialize_audit_logger()
 
             # Start server
-            await self._run_admin_api_and_transport(transport)
+            await self._run_admin_api_and_transport(transport, on_ready=on_ready)
             logger.info("MCP server started successfully.")
         except Exception as e:
             logger.error(f"Error running MCP server: {e}")

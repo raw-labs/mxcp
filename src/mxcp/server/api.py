@@ -104,6 +104,10 @@ class MXCPServer:
         self._task: asyncio.Task[None] | None = None
         self._thread: threading.Thread | None = None
         self._started = threading.Event()
+        # Non-blocking start waits on this event so callers only return once startup
+        # either succeeded via on_ready() or failed with a captured exception.
+        self._startup_complete = threading.Event()
+        self._startup_error: BaseException | None = None
         self._stopped = threading.Event()
 
     @property
@@ -132,6 +136,10 @@ class MXCPServer:
         if self._started.is_set():
             raise RuntimeError("Server already started")
 
+        self._startup_error = None
+        self._startup_complete.clear()
+        self._stopped.clear()
+
         if blocking:
             self._run_blocking()
         else:
@@ -139,7 +147,9 @@ class MXCPServer:
                 target=self._run_blocking, name="mxcp-server", daemon=True
             )
             self._thread.start()
-            self._started.wait()
+            self._startup_complete.wait()
+            if self._startup_error is not None:
+                raise self._startup_error
 
     def stop(self, timeout: float = 10.0) -> None:
         """Stop the server gracefully.
@@ -174,13 +184,39 @@ class MXCPServer:
 
         async def _lifecycle() -> None:
             self._task = asyncio.current_task()
-            self._started.set()
             logger.debug("lifecycle: server starting")
+
+            def _mark_started() -> None:
+                # RAWMCP invokes this once the transport is actually ready. That is
+                # the point at which embedded callers may safely treat the server as
+                # running; starting the background thread is not enough.
+                if self._started.is_set():
+                    return
+                self._started.set()
+                self._startup_complete.set()
+
             try:
-                await self._raw_mcp.run(transport=self._raw_mcp.transport)
+                await self._raw_mcp.run(
+                    transport=self._raw_mcp.transport,
+                    on_ready=_mark_started,
+                )
             except asyncio.CancelledError:
                 logger.debug("lifecycle: task cancelled")
+            except BaseException as exc:
+                if not self._startup_complete.is_set():
+                    # Startup failed before on_ready(). Record the original exception,
+                    # wake the caller blocked in start(blocking=False), and suppress
+                    # the duplicate traceback from the background thread itself.
+                    self._startup_error = exc
+                    self._startup_complete.set()
+                    if threading.current_thread() is self._thread:
+                        return
+                raise
             finally:
+                # Ensure start(blocking=False) never waits forever if the lifecycle
+                # exits before either the ready signal or an explicit startup error.
+                if not self._startup_complete.is_set():
+                    self._startup_complete.set()
                 logger.debug("lifecycle: running server.shutdown()")
                 await self._raw_mcp.shutdown()
                 logger.debug("lifecycle: server.shutdown() complete")

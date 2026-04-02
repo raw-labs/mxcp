@@ -177,7 +177,9 @@ async def test_run_http(mcp_server):
         new_callable=AsyncMock,
     ) as mock_run:
         await mcp_server.run(transport="streamable-http")
-        mock_run.assert_awaited_once_with("streamable-http")
+        mock_run.assert_awaited_once()
+        assert mock_run.await_args.args == ("streamable-http",)
+        assert mock_run.await_args.kwargs == {"on_ready": None}
 
 
 @pytest.mark.asyncio
@@ -189,7 +191,9 @@ async def test_run_stdio(mcp_server):
         new_callable=AsyncMock,
     ) as mock_run:
         await mcp_server.run(transport="stdio")
-        mock_run.assert_awaited_once_with("stdio")
+        mock_run.assert_awaited_once()
+        assert mock_run.await_args.args == ("stdio",)
+        assert mock_run.await_args.kwargs == {"on_ready": None}
 
 
 @pytest.mark.asyncio
@@ -248,7 +252,38 @@ async def test_server_transport(mcp_server):
         new_callable=AsyncMock,
     ) as mock_run:
         await mcp_server.run(transport="streamable-http")
-        mock_run.assert_awaited_once_with("streamable-http")
+        mock_run.assert_awaited_once()
+        assert mock_run.await_args.args == ("streamable-http",)
+        assert mock_run.await_args.kwargs == {"on_ready": None}
+
+
+@pytest.mark.asyncio
+async def test_serve_uvicorn_reports_ready_after_startup(mcp_server):
+    """Test that uvicorn readiness is reported only after startup completes."""
+
+    class FakeUvicornServer:
+        def __init__(self):
+            self.started = False
+            self.should_exit = False
+            self._serving = asyncio.Event()
+            self._shutdown = asyncio.Event()
+
+        async def serve(self):
+            self._serving.set()
+            self.started = True
+            await self._shutdown.wait()
+
+    server = FakeUvicornServer()
+    ready = asyncio.Event()
+
+    task = asyncio.create_task(mcp_server._serve_uvicorn(server, on_ready=ready.set))
+
+    await server._serving.wait()
+    await asyncio.wait_for(ready.wait(), timeout=1)
+    assert server.started is True
+
+    server._shutdown.set()
+    await asyncio.wait_for(task, timeout=1)
 
 
 @pytest.mark.skip(
