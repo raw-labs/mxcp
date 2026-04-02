@@ -111,10 +111,27 @@ def test_cleanup_does_not_release_unrelated_thread_state(mcp_repo_path):
             return True
 
     with patch("mxcp.server.api.threading.enumerate", return_value=[FakeThread()]):
-        with patch("mxcp.server.api.logging.shutdown"):
-            server._cleanup()
+        server._cleanup()
 
     assert release_called is False
+
+    with contextlib.suppress(Exception):
+        server.raw_mcp.runtime_environment.shutdown()
+
+
+def test_cleanup_does_not_shutdown_process_logging(mcp_repo_path):
+    """Test that cleanup leaves global logging handlers under host control."""
+    server = MXCPServer(
+        site_config_path=mcp_repo_path,
+        analytics=False,
+        host="localhost",
+        port=8000,
+    )
+
+    with patch("mxcp.server.api.logging.shutdown") as mock_logging_shutdown:
+        server._cleanup()
+
+    mock_logging_shutdown.assert_not_called()
 
     with contextlib.suppress(Exception):
         server.raw_mcp.runtime_environment.shutdown()

@@ -254,6 +254,8 @@ class MXCPServer:
             except Exception:
                 pass  # Best-effort cleanup; must not prevent interpreter shutdown
 
-        logger.debug("cleanup: shutting down logging")
-        logging.shutdown()
+        # Leave process-wide logging ownership with the embedding host. MXCP may
+        # add handlers during startup, but logging.shutdown() would close every
+        # handler in the interpreter, including the host application's.
+        logger.debug("cleanup: leaving global logging configured")
         logger.debug("cleanup: done")
