@@ -40,7 +40,7 @@ class TestServeStrictValidation:
         try:
             # Mock the server run so it doesn't actually start
             with patch(
-                "mxcp.server.interfaces.cli.serve.run_async_cli",
+                "mxcp.server.api.MXCPServer.start",
                 side_effect=KeyboardInterrupt,
             ):
                 result = runner.invoke(serve, [])
@@ -61,7 +61,7 @@ class TestServeStrictValidation:
         os.chdir(serve_error_repo)
         try:
             with patch(
-                "mxcp.server.interfaces.cli.serve.run_async_cli",
+                "mxcp.server.api.MXCPServer.start",
                 side_effect=KeyboardInterrupt,
             ):
                 result = runner.invoke(serve, ["--json-output"])
@@ -93,7 +93,7 @@ class TestServeStrictValidation:
         os.chdir(serve_error_repo)
         try:
             with patch(
-                "mxcp.server.interfaces.cli.serve.run_async_cli",
+                "mxcp.server.api.MXCPServer.start",
                 side_effect=KeyboardInterrupt,
             ):
                 result = runner.invoke(serve, [])
@@ -117,7 +117,7 @@ class TestServeIgnoreErrors:
         try:
             # Mock the server run to avoid actually starting
             with patch(
-                "mxcp.server.interfaces.cli.serve.run_async_cli",
+                "mxcp.server.api.MXCPServer.start",
                 side_effect=KeyboardInterrupt,
             ):
                 result = runner.invoke(serve, ["--ignore-errors"])
@@ -140,7 +140,7 @@ class TestServeWithValidRepo:
         try:
             # Mock the server run to avoid actually starting
             with patch(
-                "mxcp.server.interfaces.cli.serve.run_async_cli",
+                "mxcp.server.api.MXCPServer.start",
                 side_effect=KeyboardInterrupt,
             ):
                 result = runner.invoke(serve, [])

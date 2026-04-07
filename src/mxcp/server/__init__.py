@@ -8,3 +8,7 @@ This package contains the server implementation of MXCP, including:
 - External interfaces (CLI, MCP server)
 - Plugin system for extensibility
 """
+
+from mxcp.server.api import MXCPServer
+
+__all__ = ["MXCPServer"]
