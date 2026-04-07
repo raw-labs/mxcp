@@ -669,15 +669,22 @@ class RAWMCP:
         self,
         server: uvicorn.Server,
         on_ready: Callable[[], None] | None = None,
+        startup_timeout: float = 10.0,
     ) -> None:
         """Run a uvicorn server and surface readiness after startup succeeds."""
         serve_task = asyncio.create_task(server.serve())
+        startup_deadline = time.monotonic() + startup_timeout
 
         try:
             # uvicorn.Server.serve() does not return after bind; it runs for the whole
             # server lifetime. Poll its startup state so callers can distinguish
-            # "thread started" from "socket bound and ready".
+            # "thread started" from "socket bound and ready". Bound the wait so
+            # embedded start() calls do not hang forever if uvicorn wedges.
             while not server.started and not serve_task.done() and not server.should_exit:
+                if time.monotonic() >= startup_deadline:
+                    raise RuntimeError(
+                        f"Server startup timed out after {startup_timeout:.1f} seconds"
+                    )
                 await asyncio.sleep(0.01)
 
             if serve_task.done():

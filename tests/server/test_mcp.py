@@ -286,6 +286,31 @@ async def test_serve_uvicorn_reports_ready_after_startup(mcp_server):
     await asyncio.wait_for(task, timeout=1)
 
 
+@pytest.mark.asyncio
+async def test_serve_uvicorn_times_out_when_startup_never_becomes_ready(mcp_server):
+    """Test that wedged uvicorn startup does not hang forever."""
+
+    class FakeUvicornServer:
+        def __init__(self):
+            self.started = False
+            self.should_exit = False
+            self.cancelled = False
+
+        async def serve(self):
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                self.cancelled = True
+                raise
+
+    server = FakeUvicornServer()
+
+    with pytest.raises(RuntimeError, match="Server startup timed out"):
+        await mcp_server._serve_uvicorn(server, startup_timeout=0.02)
+
+    assert server.cancelled is True
+
+
 @pytest.mark.skip(
     reason="Incompatible with pytest-asyncio event loop; should be run in a subprocess or integration test harness. TODO: Refactor to subprocess-based integration test."
 )
