@@ -171,7 +171,7 @@ class MXCPServer:
         # Ask uvicorn to exit gracefully first; stdio has no uvicorn server,
         # so fall back to immediate task cancellation in that case.
         logger.debug("stop: requesting graceful uvicorn exit")
-        if self._raw_mcp.request_exit():
+        if self._raw_mcp.request_graceful_exit():
             # Wait for the graceful path to complete. If it doesn't finish
             # within half the timeout, force-cancel the lifecycle task.
             logger.debug("stop: waiting for graceful stop")

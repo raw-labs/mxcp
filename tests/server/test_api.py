@@ -96,8 +96,8 @@ def test_stop_stdio_cancels_immediately_without_graceful_wait(mcp_repo_path):
 
     events: list[tuple[str, float | None]] = []
 
-    def record_request_exit() -> bool:
-        events.append(("request_exit", None))
+    def record_request_graceful_exit() -> bool:
+        events.append(("request_graceful_exit", None))
         return False
 
     def record_cancel(callback) -> None:
@@ -108,7 +108,7 @@ def test_stop_stdio_cancels_immediately_without_graceful_wait(mcp_repo_path):
         events.append(("wait", timeout))
         return False
 
-    server.raw_mcp.request_exit = Mock(side_effect=record_request_exit)
+    server.raw_mcp.request_graceful_exit = Mock(side_effect=record_request_graceful_exit)
     server._loop.call_soon_threadsafe.side_effect = record_cancel
     server._stopped.wait.side_effect = record_wait
 
@@ -116,7 +116,7 @@ def test_stop_stdio_cancels_immediately_without_graceful_wait(mcp_repo_path):
         server.stop()
 
     assert events == [
-        ("request_exit", None),
+        ("request_graceful_exit", None),
         ("cancel", None),
         ("wait", 5.0),
     ]
@@ -145,7 +145,7 @@ def test_stop_stays_within_timeout_budget(mcp_repo_path):
         now += timeout
         return False
 
-    server.raw_mcp.request_exit = Mock(return_value=True)
+    server.raw_mcp.request_graceful_exit = Mock(return_value=True)
     server._stopped.wait.side_effect = record_wait
 
     with (

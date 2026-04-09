@@ -991,7 +991,7 @@ class RAWMCP:
             payload_func=reload_config_files, description="Configuration reload (SIGHUP)"
         )
 
-    def request_exit(self) -> bool:
+    def request_graceful_exit(self) -> bool:
         """Signal uvicorn to exit gracefully.
 
         Thread-safe. Can be called from any thread to initiate a clean
