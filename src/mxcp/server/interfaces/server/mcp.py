@@ -989,7 +989,7 @@ class RAWMCP:
             payload_func=reload_config_files, description="Configuration reload (SIGHUP)"
         )
 
-    def request_exit(self) -> None:
+    def request_exit(self) -> bool:
         """Signal uvicorn to exit gracefully.
 
         Thread-safe. Can be called from any thread to initiate a clean
@@ -998,6 +998,8 @@ class RAWMCP:
         """
         if self._uvicorn_server is not None:
             self._uvicorn_server.should_exit = True
+            return True
+        return False
 
     async def shutdown(self) -> None:
         """Shutdown the server gracefully."""

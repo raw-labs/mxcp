@@ -162,16 +162,19 @@ class MXCPServer:
         if not self._started.is_set():
             return
 
-        # Ask uvicorn to exit gracefully first; this lets the serve loop
-        # finish on its own without CancelledError noise.
+        # Ask uvicorn to exit gracefully first; stdio has no uvicorn server,
+        # so fall back to immediate task cancellation in that case.
         logger.debug("stop: requesting graceful uvicorn exit")
-        self._raw_mcp.request_exit()
-
-        # Wait for the graceful path to complete.  If it doesn't finish
-        # within half the timeout, force-cancel the lifecycle task.
-        logger.debug("stop: waiting for graceful stop")
-        if not self._stopped.wait(timeout=timeout / 2):
-            logger.debug("stop: graceful stop timed out, cancelling server task")
+        if self._raw_mcp.request_exit():
+            # Wait for the graceful path to complete. If it doesn't finish
+            # within half the timeout, force-cancel the lifecycle task.
+            logger.debug("stop: waiting for graceful stop")
+            if not self._stopped.wait(timeout=timeout / 2):
+                logger.debug("stop: graceful stop timed out, cancelling server task")
+                if self._loop and self._task and not self._task.done():
+                    self._loop.call_soon_threadsafe(self._task.cancel)
+        else:
+            logger.debug("stop: no uvicorn server, cancelling server task immediately")
             if self._loop and self._task and not self._task.done():
                 self._loop.call_soon_threadsafe(self._task.cancel)
 
