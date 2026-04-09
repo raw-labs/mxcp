@@ -242,17 +242,13 @@ class MXCPServer:
             # Cancel any leftover tasks (e.g. sse_starlette _shutdown_watcher,
             # Windows IocpProactor.accept) before closing the loop so they don't
             # trigger "Task was destroyed but it is pending!" warnings.
-            pending = [
-                t for t in asyncio.all_tasks(self._loop) if not t.done()
-            ]
+            pending = [t for t in asyncio.all_tasks(self._loop) if not t.done()]
             for t in pending:
                 t.cancel()
             if pending:
                 logger.debug("lifecycle: cancelling %d leftover tasks", len(pending))
                 with contextlib.suppress(asyncio.CancelledError):
-                    self._loop.run_until_complete(
-                        asyncio.gather(*pending, return_exceptions=True)
-                    )
+                    self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
 
             logger.debug("lifecycle: closing event loop")
             self._loop.close()

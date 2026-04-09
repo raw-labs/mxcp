@@ -1488,7 +1488,7 @@ wheels = [
 
 [[package]]
 name = "mxcp"
-version = "0.12.0"
+version = "0.12.2rc1"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
