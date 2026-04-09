@@ -101,6 +101,7 @@ class AdminAPIRunner:
                 app=app,
                 log_level=uvicorn_log_level,
                 access_log=False,  # Don't spam logs with every request
+                timeout_graceful_shutdown=5,
             )
 
             self._uvicorn_server = uvicorn.Server(config)

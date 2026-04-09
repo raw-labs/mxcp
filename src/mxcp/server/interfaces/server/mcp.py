@@ -731,6 +731,7 @@ class RAWMCP:
                     host=self.mcp.settings.host,
                     port=self.mcp.settings.port,
                     log_level=self.mcp.settings.log_level.lower(),
+                    timeout_graceful_shutdown=5,
                 )
                 server = uvicorn.Server(config)
                 await self._serve_uvicorn(server, on_ready=on_ready)
@@ -742,6 +743,7 @@ class RAWMCP:
                     host=self.mcp.settings.host,
                     port=self.mcp.settings.port,
                     log_level=self.mcp.settings.log_level.lower(),
+                    timeout_graceful_shutdown=5,
                 )
                 server = uvicorn.Server(config)
                 await self._serve_uvicorn(server, on_ready=on_ready)
