@@ -17,6 +17,7 @@ import asyncio
 import contextlib
 import logging
 import threading
+import time
 from pathlib import Path
 
 from mxcp.server.core.config.site_config import load_site_config
@@ -162,6 +163,11 @@ class MXCPServer:
         if not self._started.is_set():
             return
 
+        deadline = time.monotonic() + max(timeout, 0.0)
+
+        def remaining_timeout() -> float:
+            return max(0.0, deadline - time.monotonic())
+
         # Ask uvicorn to exit gracefully first; stdio has no uvicorn server,
         # so fall back to immediate task cancellation in that case.
         logger.debug("stop: requesting graceful uvicorn exit")
@@ -169,7 +175,8 @@ class MXCPServer:
             # Wait for the graceful path to complete. If it doesn't finish
             # within half the timeout, force-cancel the lifecycle task.
             logger.debug("stop: waiting for graceful stop")
-            if not self._stopped.wait(timeout=timeout / 2):
+            graceful_timeout = min(timeout / 2, remaining_timeout())
+            if not self._stopped.wait(timeout=graceful_timeout):
                 logger.debug("stop: graceful stop timed out, cancelling server task")
                 if self._loop and self._task and not self._task.done():
                     self._loop.call_soon_threadsafe(self._task.cancel)
@@ -179,11 +186,13 @@ class MXCPServer:
                 self._loop.call_soon_threadsafe(self._task.cancel)
 
         logger.debug("stop: waiting for server to stop")
-        self._stopped.wait(timeout=timeout / 2)
+        self._stopped.wait(timeout=min(timeout / 2, remaining_timeout()))
 
         if self._thread and self._thread.is_alive():
-            logger.debug("stop: joining server thread")
-            self._thread.join(timeout=timeout)
+            join_timeout = remaining_timeout()
+            if join_timeout > 0:
+                logger.debug("stop: joining server thread")
+                self._thread.join(timeout=join_timeout)
 
         logger.debug("stop: running cleanup")
         self._cleanup()

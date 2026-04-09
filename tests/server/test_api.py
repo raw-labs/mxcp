@@ -122,6 +122,42 @@ def test_stop_stdio_cancels_immediately_without_graceful_wait(mcp_repo_path):
     ]
 
 
+def test_stop_stays_within_timeout_budget(mcp_repo_path):
+    """Test that stop() does not wait past its declared timeout."""
+    server = MXCPServer(site_config_path=mcp_repo_path, analytics=False)
+    server._started.set()
+    server._stopped = Mock()
+    server._loop = Mock()
+    server._task = Mock()
+    server._task.done.return_value = False
+    server._thread = Mock()
+    server._thread.is_alive.return_value = True
+
+    now = 100.0
+    waits: list[float] = []
+
+    def monotonic() -> float:
+        return now
+
+    def record_wait(*, timeout: float) -> bool:
+        nonlocal now
+        waits.append(timeout)
+        now += timeout
+        return False
+
+    server.raw_mcp.request_exit = Mock(return_value=True)
+    server._stopped.wait.side_effect = record_wait
+
+    with (
+        patch("mxcp.server.api.time.monotonic", side_effect=monotonic),
+        patch.object(server, "_cleanup"),
+    ):
+        server.stop(timeout=10.0)
+
+    assert waits == [5.0, 5.0]
+    server._thread.join.assert_not_called()
+
+
 def test_cleanup_does_not_release_unrelated_thread_state(mcp_repo_path):
     """Test that cleanup does not touch private state on host-managed threads."""
     server = MXCPServer(
