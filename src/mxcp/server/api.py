@@ -162,12 +162,21 @@ class MXCPServer:
         if not self._started.is_set():
             return
 
-        logger.debug("stop: cancelling server task")
-        if self._loop and self._task and not self._task.done():
-            self._loop.call_soon_threadsafe(self._task.cancel)
+        # Ask uvicorn to exit gracefully first; this lets the serve loop
+        # finish on its own without CancelledError noise.
+        logger.debug("stop: requesting graceful uvicorn exit")
+        self._raw_mcp.request_exit()
+
+        # Wait for the graceful path to complete.  If it doesn't finish
+        # within half the timeout, force-cancel the lifecycle task.
+        logger.debug("stop: waiting for graceful stop")
+        if not self._stopped.wait(timeout=timeout / 2):
+            logger.debug("stop: graceful stop timed out, cancelling server task")
+            if self._loop and self._task and not self._task.done():
+                self._loop.call_soon_threadsafe(self._task.cancel)
 
         logger.debug("stop: waiting for server to stop")
-        self._stopped.wait(timeout=timeout)
+        self._stopped.wait(timeout=timeout / 2)
 
         if self._thread and self._thread.is_alive():
             logger.debug("stop: joining server thread")
@@ -230,6 +239,21 @@ class MXCPServer:
                 with contextlib.suppress(asyncio.CancelledError, KeyboardInterrupt):
                     self._loop.run_until_complete(self._task)
         finally:
+            # Cancel any leftover tasks (e.g. sse_starlette _shutdown_watcher,
+            # Windows IocpProactor.accept) before closing the loop so they don't
+            # trigger "Task was destroyed but it is pending!" warnings.
+            pending = [
+                t for t in asyncio.all_tasks(self._loop) if not t.done()
+            ]
+            for t in pending:
+                t.cancel()
+            if pending:
+                logger.debug("lifecycle: cancelling %d leftover tasks", len(pending))
+                with contextlib.suppress(asyncio.CancelledError):
+                    self._loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True)
+                    )
+
             logger.debug("lifecycle: closing event loop")
             self._loop.close()
             self._stopped.set()
