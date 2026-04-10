@@ -283,6 +283,9 @@ class RAWMCP:
         # Initialize runtime components
         self.initialize_runtime_components()
 
+        # Uvicorn server reference for graceful shutdown from embedders
+        self._uvicorn_server: uvicorn.Server | None = None
+
         # Initialize OAuth authentication
         self._initialize_oauth()
 
@@ -672,6 +675,7 @@ class RAWMCP:
         startup_timeout: float = 10.0,
     ) -> None:
         """Run a uvicorn server and surface readiness after startup succeeds."""
+        self._uvicorn_server = server
         serve_task = asyncio.create_task(server.serve())
         startup_deadline = time.monotonic() + startup_timeout
 
@@ -727,6 +731,7 @@ class RAWMCP:
                     host=self.mcp.settings.host,
                     port=self.mcp.settings.port,
                     log_level=self.mcp.settings.log_level.lower(),
+                    timeout_graceful_shutdown=5,
                 )
                 server = uvicorn.Server(config)
                 await self._serve_uvicorn(server, on_ready=on_ready)
@@ -738,6 +743,7 @@ class RAWMCP:
                     host=self.mcp.settings.host,
                     port=self.mcp.settings.port,
                     log_level=self.mcp.settings.log_level.lower(),
+                    timeout_graceful_shutdown=5,
                 )
                 server = uvicorn.Server(config)
                 await self._serve_uvicorn(server, on_ready=on_ready)
@@ -984,6 +990,18 @@ class RAWMCP:
         return self.reload_manager.request_reload(
             payload_func=reload_config_files, description="Configuration reload (SIGHUP)"
         )
+
+    def request_graceful_exit(self) -> bool:
+        """Signal uvicorn to exit gracefully.
+
+        Thread-safe. Can be called from any thread to initiate a clean
+        shutdown without cancelling asyncio tasks. The server loop will
+        finish naturally, triggering the normal shutdown path.
+        """
+        if self._uvicorn_server is not None:
+            self._uvicorn_server.should_exit = True
+            return True
+        return False
 
     async def shutdown(self) -> None:
         """Shutdown the server gracefully."""
