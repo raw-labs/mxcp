@@ -138,33 +138,32 @@ if site_cfg:
 
 ## User Context
 
-Python endpoints run with an execution context that may include an authenticated
-user. When OAuth capability mapping is configured, derived capabilities are
-available on that user context.
+Python endpoints can access the authenticated user directly through
+`get_user_context()`. When OAuth capability mapping is configured, derived
+capabilities are available on that user context.
 
-Use the executor context API to inspect the authenticated user:
+Use the auth context API to inspect the authenticated user:
 
 ```python
-from mxcp.sdk.executor import get_execution_context
+from mxcp.sdk.auth.context import get_user_context
 
-def my_endpoint() -> dict:
-    ctx = get_execution_context()
-    user = ctx.user_context if ctx else None
-
-    if not user:
-        raise PermissionError("Authentication required")
-
-    if "reports.view" not in user.capabilities:
-        raise PermissionError("reports.view capability required")
+def get_capabilities() -> dict:
+    context = get_user_context()
+    if context is None:
+        return {"username": None, "email": None, "capabilities": [], "raw_profile": {}}
 
     return {
-        "user_id": user.user_id,
-        "provider": user.provider,
-        "capabilities": user.capabilities,
+        "username": context.username,
+        "email": context.email,
+        "capabilities": list(context.capabilities),
+        "raw_profile": context.raw_profile or {},
     }
 ```
 
-Common fields on `ctx.user_context`:
+This is the same access pattern used in the Python OAuth examples, including the
+Google Calendar example.
+
+Common fields on the returned user context:
 
 - `user_id`
 - `username`

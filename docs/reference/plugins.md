@@ -246,20 +246,25 @@ claims using `claim_mappings`. Those capabilities are available in Python throug
 the authenticated user context.
 
 ```python
+from mxcp.sdk.auth.context import get_user_context
+
 @udf
-def can_manage_billing(self) -> bool:
-    if not self.user_context:
-        return False
-    return "billing.manage" in self.user_context.capabilities
+def get_capabilities(self) -> dict:
+    context = get_user_context()
+    if context is None:
+        return {"username": None, "email": None, "capabilities": [], "raw_profile": {}}
+
+    return {
+        "username": context.username,
+        "email": context.email,
+        "capabilities": list(context.capabilities),
+        "raw_profile": context.raw_profile or {},
+    }
 ```
 
-```python
-@udf
-def get_visible_report(self) -> dict:
-    if not self.user_context or "reports.view" not in self.user_context.capabilities:
-        raise PermissionError("reports.view capability required")
-    return {"status": "ok"}
-```
+This matches the pattern used by the OAuth plugin examples: fetch the current user
+with `get_user_context()`, then read `external_token`, `raw_profile`, or
+`capabilities` from that context as needed.
 
 Use Python capability checks for endpoint-specific business logic. For declarative
 authorization and output redaction, prefer CEL policies with `user.capabilities`.
