@@ -239,6 +239,31 @@ self.get_user_token() -> Optional[str]
 self.user_context -> Optional[UserContext]
 ```
 
+### Accessing Capabilities in Python
+
+When authentication is enabled, MXCP may derive capabilities from OAuth or OIDC
+claims using `claim_mappings`. Those capabilities are available in Python through
+the authenticated user context.
+
+```python
+@udf
+def can_manage_billing(self) -> bool:
+    if not self.user_context:
+        return False
+    return "billing.manage" in self.user_context.capabilities
+```
+
+```python
+@udf
+def get_visible_report(self) -> dict:
+    if not self.user_context or "reports.view" not in self.user_context.capabilities:
+        raise PermissionError("reports.view capability required")
+    return {"status": "ok"}
+```
+
+Use Python capability checks for endpoint-specific business logic. For declarative
+authorization and output redaction, prefer CEL policies with `user.capabilities`.
+
 ### External API Calls
 
 ```python

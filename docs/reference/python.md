@@ -136,6 +136,46 @@ if site_cfg:
 
 **Returns:** `dict | None` - Site configuration or None
 
+## User Context
+
+Python endpoints run with an execution context that may include an authenticated
+user. When OAuth capability mapping is configured, derived capabilities are
+available on that user context.
+
+Use the executor context API to inspect the authenticated user:
+
+```python
+from mxcp.sdk.executor import get_execution_context
+
+def my_endpoint() -> dict:
+    ctx = get_execution_context()
+    user = ctx.user_context if ctx else None
+
+    if not user:
+        raise PermissionError("Authentication required")
+
+    if "reports.view" not in user.capabilities:
+        raise PermissionError("reports.view capability required")
+
+    return {
+        "user_id": user.user_id,
+        "provider": user.provider,
+        "capabilities": user.capabilities,
+    }
+```
+
+Common fields on `ctx.user_context`:
+
+- `user_id`
+- `username`
+- `email`
+- `provider`
+- `external_token`
+- `capabilities`
+
+Prefer CEL policies for declarative authorization and output redaction. Use
+Python user-context checks when the rule is part of endpoint-specific logic.
+
 ## Plugin Access
 
 ### plugins.get()
