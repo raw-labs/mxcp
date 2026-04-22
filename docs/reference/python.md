@@ -136,6 +136,45 @@ if site_cfg:
 
 **Returns:** `dict | None` - Site configuration or None
 
+## User Context
+
+Python endpoints can access the authenticated user directly through
+`get_user_context()`. When OAuth capability mapping is configured, derived
+capabilities are available on that user context.
+
+Use the auth context API to inspect the authenticated user:
+
+```python
+from mxcp.sdk.auth.context import get_user_context
+
+def get_capabilities() -> dict:
+    context = get_user_context()
+    if context is None:
+        return {"username": None, "email": None, "capabilities": [], "raw_profile": {}}
+
+    return {
+        "username": context.username,
+        "email": context.email,
+        "capabilities": list(context.capabilities),
+        "raw_profile": context.raw_profile or {},
+    }
+```
+
+This is the same access pattern used in the Python OAuth examples, including the
+Google Calendar example.
+
+Common fields on the returned user context:
+
+- `user_id`
+- `username`
+- `email`
+- `provider`
+- `external_token`
+- `capabilities`
+
+Prefer CEL policies for declarative authorization and output redaction. Use
+Python user-context checks when the rule is part of endpoint-specific logic.
+
 ## Plugin Access
 
 ### plugins.get()

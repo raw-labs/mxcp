@@ -239,6 +239,36 @@ self.get_user_token() -> Optional[str]
 self.user_context -> Optional[UserContext]
 ```
 
+### Accessing Capabilities in Python
+
+When authentication is enabled, MXCP may derive capabilities from OAuth or OIDC
+claims using `claim_mappings`. Those capabilities are available in Python through
+the authenticated user context.
+
+```python
+from mxcp.sdk.auth.context import get_user_context
+
+@udf
+def get_capabilities(self) -> dict:
+    context = get_user_context()
+    if context is None:
+        return {"username": None, "email": None, "capabilities": [], "raw_profile": {}}
+
+    return {
+        "username": context.username,
+        "email": context.email,
+        "capabilities": list(context.capabilities),
+        "raw_profile": context.raw_profile or {},
+    }
+```
+
+This matches the pattern used by the OAuth plugin examples: fetch the current user
+with `get_user_context()`, then read `external_token`, `raw_profile`, or
+`capabilities` from that context as needed.
+
+Use Python capability checks for endpoint-specific business logic. For declarative
+authorization and output redaction, prefer CEL policies with `user.capabilities`.
+
 ### External API Calls
 
 ```python

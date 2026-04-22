@@ -64,6 +64,85 @@ projects:
             callback_path: /callback
             auth_url: https://github.com/login/oauth/authorize
             token_url: https://github.com/login/oauth/access_token
+
+### Mapping IdP Claims to MXCP Capabilities
+
+MXCP can derive internal authorization capabilities from OAuth/OIDC claims in the
+authenticated user's profile. This is configured with `claim_mappings` on the active
+provider block in `config.yml`.
+
+Use this when you want to:
+
+- Map provider roles or groups to internal capability names
+- Map OAuth scopes to capabilities used by CEL policies
+- Reuse the same capability names across different identity providers
+
+Example:
+
+```yaml
+mxcp: 1
+projects:
+  my-project:
+    profiles:
+      default:
+        auth:
+          provider: oidc
+          oidc:
+            config_url: "https://mycompany.auth0.com/.well-known/openid-configuration"
+            client_id: "${AUTH0_CLIENT_ID}"
+            client_secret: "${AUTH0_CLIENT_SECRET}"
+            scope: "openid profile email"
+            callback_path: /oidc/callback
+            claim_mappings:
+              "https://mycompany.com/roles":
+                "admin": [admin, billing.manage, reports.view]
+                "billing-manager": [billing.manage]
+              "https://mycompany.com/groups":
+                "finance-team": [billing.manage]
+              "scope":
+                "https://www.googleapis.com/auth/calendar.readonly": [calendar.read]
+```
+
+How mapping works:
+
+- Mapping keys are claim paths in the authenticated user's raw profile
+- Top-level claims are supported: `"scope"`
+- Nested claims are supported: `"realm_access.roles"`
+- URI-style claim names are supported: `"https://mycompany.com/roles"`
+- A matched claim value can produce one or more capabilities
+
+Supported claim value shapes:
+
+- Lists such as `["admin", "viewer"]`
+- Space-separated strings such as `"openid profile email"`
+- Single scalar values such as `"engineering"` or `true`
+
+Capabilities are derived on each authenticated request and then exposed to:
+
+- CEL policies as `user.capabilities`
+- Python plugin code as `self.user_context.capabilities`
+
+For Keycloak, nested role claims typically look like this:
+
+```yaml
+auth:
+  provider: keycloak
+  keycloak:
+    client_id: "${KC_CLIENT_ID}"
+    client_secret: "${KC_CLIENT_SECRET}"
+    realm: "mxcp"
+    server_url: "https://keycloak.internal"
+    scope: "openid profile email"
+    callback_path: /keycloak/callback
+    claim_mappings:
+      "realm_access.roles":
+        "admin": [admin]
+        "billing-manager": [billing.manage]
+      "resource_access.mxcp-client.roles":
+        "report-viewer": [reports.view]
+```
+
+Use [Policies](/security/policies) to enforce these capabilities declaratively.
 ```
 
 ### Disable Authentication

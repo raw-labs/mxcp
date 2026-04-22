@@ -71,12 +71,14 @@ Conditions use a CEL-like expression syntax:
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `user.id` | string | User identifier |
+| `user.user_id` | string | User identifier |
+| `user.username` | string | User login or handle |
 | `user.email` | string | User email address |
 | `user.name` | string | User display name |
+| `user.provider` | string | Auth provider name |
 | `user.role` | string | Primary role |
 | `user.permissions` | array | List of permissions |
-| `user.groups` | array | Group memberships |
+| `user.capabilities` | array | Capabilities derived from IdP claims via `claim_mappings` |
 
 For anonymous users (when no authentication is configured), the user context defaults to:
 
@@ -84,6 +86,7 @@ For anonymous users (when no authentication is configured), the user context def
 {
   "role": "anonymous",
   "permissions": [],
+  "capabilities": [],
   "user_id": null,
   "username": null,
   "email": null,
@@ -106,7 +109,8 @@ Example context for an endpoint with parameters `employee_id` and `department`:
   "user": {
     "user_id": "123",
     "role": "admin",
-    "permissions": ["employee.read"]
+    "permissions": ["employee.read"],
+    "capabilities": ["employee.read", "employee.write"]
   },
   "employee_id": "emp456",
   "department": "engineering"
@@ -132,7 +136,8 @@ Example context for an employee endpoint response:
   "user": {
     "user_id": "123",
     "role": "user",
-    "permissions": ["employee.read"]
+    "permissions": ["employee.read"],
+    "capabilities": ["employee.read"]
   },
   "response": {
     "id": "emp456",
@@ -273,6 +278,49 @@ condition: "'employee.read' in user.permissions && 'employee.write' in user.perm
 # Check for any of several permissions
 condition: "user.permissions.exists(p, p in ['admin', 'manager'])"
 ```
+
+### Capability Checks
+
+Capabilities are the internal authorization vocabulary derived from OAuth or OIDC
+claims using `claim_mappings` in your auth provider configuration.
+
+```yaml
+# Deny access unless the user has a capability
+condition: '! ("billing.manage" in user.capabilities)'
+action: deny
+reason: "billing.manage capability required"
+```
+
+```yaml
+# Equivalent form using exists()
+condition: '! user.capabilities.exists(c, c == "reports.view")'
+action: deny
+reason: "reports.view capability required"
+```
+
+You can use capabilities for both input and output policies:
+
+```yaml
+tool:
+  name: employee_data
+  policies:
+    input:
+      - condition: '! ("employee.read" in user.capabilities)'
+        action: deny
+        reason: "employee.read capability required"
+    output:
+      - condition: '! ("employee.view_sensitive" in user.capabilities)'
+        action: mask_fields
+        fields: ["salary", "ssn"]
+        reason: "Sensitive fields require employee.view_sensitive"
+```
+
+Output policy behavior:
+
+- `deny` blocks the entire response
+- `filter_fields` removes named fields
+- `mask_fields` replaces named fields with masked values
+- `filter_sensitive_fields` removes fields marked `sensitive: true` in the return schema
 
 ### Parameter-based Policies
 
