@@ -255,6 +255,35 @@ class TestTypeValidator:
         result = validator.validate_output(df)
         assert result == [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
 
+    def test_dataframe_output_with_nat(self):
+        """Test DataFrame output validation converts NaT values to None."""
+        schema = {
+            "output": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "created_at": {"type": "string", "format": "date-time"},
+                    },
+                },
+            }
+        }
+
+        validator = TypeValidator.from_dict(schema)
+        df = pd.DataFrame(
+            [
+                {"id": 1, "created_at": pd.Timestamp("2024-01-01T00:00:00")},
+                {"id": 2, "created_at": pd.NaT},
+            ]
+        )
+
+        result = validator.validate_output(df)
+        assert result == [
+            {"id": 1, "created_at": pd.Timestamp("2024-01-01T00:00:00")},
+            {"id": 2, "created_at": None},
+        ]
+
     def test_series_output(self):
         """Test Series output validation."""
         schema = {"output": {"type": "array", "items": {"type": "number"}}}
@@ -265,6 +294,16 @@ class TestTypeValidator:
         series = pd.Series([1.0, 2.0, 3.0])
         result = validator.validate_output(series)
         assert result == [1.0, 2.0, 3.0]
+
+    def test_series_output_with_nat(self):
+        """Test Series output validation converts NaT values to None."""
+        schema = {"output": {"type": "array", "items": {"type": "string", "format": "date-time"}}}
+
+        validator = TypeValidator.from_dict(schema)
+        series = pd.Series([pd.Timestamp("2024-01-01T00:00:00"), pd.NaT])
+
+        result = validator.validate_output(series)
+        assert result == [pd.Timestamp("2024-01-01T00:00:00"), None]
 
     def test_sensitive_field_masking(self):
         """Test sensitive field masking."""

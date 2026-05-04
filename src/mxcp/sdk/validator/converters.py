@@ -21,6 +21,16 @@ class TypeConverter:
     """Utility class for type conversion and validation."""
 
     @staticmethod
+    def _normalize_pandas_dataframe_nulls(value: pd.DataFrame) -> pd.DataFrame:
+        """Convert pandas null sentinels into Python None for output handling."""
+        return value.astype(object).where(value.notna(), None)
+
+    @staticmethod
+    def _normalize_pandas_series_nulls(value: pd.Series) -> pd.Series:
+        """Convert pandas null sentinels into Python None for output handling."""
+        return value.astype(object).where(value.notna(), None)
+
+    @staticmethod
     def python_type_to_schema_type(python_type: str) -> str:
         """Map Python type names to schema types."""
         type_map = {
@@ -238,13 +248,13 @@ class TypeConverter:
                     f"DataFrame rows must be objects, but schema expects array of {schema.items.type}"
                 )
             # Convert DataFrame to list of dicts for validation
-            value = value.replace({pd.NaT: None}).to_dict("records")
+            value = TypeConverter._normalize_pandas_dataframe_nulls(value).to_dict("records")
 
         # Handle Series - they validate as arrays
         if isinstance(value, pd.Series):
             if return_type != "array":
                 raise ValidationError(f"Expected {return_type}, got Series (which is array)")
-            value = value.replace({pd.NaT: None}).tolist()
+            value = TypeConverter._normalize_pandas_series_nulls(value).tolist()
 
         if return_type == "string":
             if (
@@ -355,10 +365,10 @@ class TypeConverter:
             return [TypeConverter.serialize_for_output(item) for item in items]
         elif isinstance(obj, pd.DataFrame):
             # Convert DataFrame to list of dicts
-            return obj.replace({pd.NaT: None}).to_dict("records")
+            return TypeConverter._normalize_pandas_dataframe_nulls(obj).to_dict("records")
         elif isinstance(obj, pd.Series):
             # Convert Series to list
-            return obj.replace({pd.NaT: None}).tolist()
+            return TypeConverter._normalize_pandas_series_nulls(obj).tolist()
         elif isinstance(obj, pd.Timestamp | datetime | date | time):
             return obj.isoformat()
         elif isinstance(obj, type(pd.NaT)):
