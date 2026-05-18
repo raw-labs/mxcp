@@ -748,7 +748,7 @@ wheels = [
 
 [[package]]
 name = "dbt-core"
-version = "1.11.8"
+version = "1.11.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agate" },
@@ -775,9 +775,9 @@ dependencies = [
     { name = "sqlparse" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/54/4f/5524b85f0bd94053ee51fe7e8b0011295f056da707c754975ed7da3888f9/dbt_core-1.11.8.tar.gz", hash = "sha256:1bfe0b40c958785680a1b2b894b0851f5bf780ddc058747dd1e62c389b0d3b1d", size = 972635, upload-time = "2026-04-08T19:01:46.63Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/d1/54125cdf64932b076a669efd43fb4c1ce79c988b379ae65b6dfc755f4259/dbt_core-1.11.10.tar.gz", hash = "sha256:b261aff38824ccf032d56862fd3453ef176b9c1bb271fd45904fc9258ef0aeae", size = 973077, upload-time = "2026-05-14T10:48:05.12Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/36/47/a07061c70e0872d8f49fbd12cf93f481b22cabb2e75016ce00aa3520a7ab/dbt_core-1.11.8-py3-none-any.whl", hash = "sha256:13ff79252a7ae9c9acc7de243789b72f04f7f915f05930d3407edeeea3758b6f", size = 1061289, upload-time = "2026-04-08T19:01:44.83Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/7e/a78ca7bc9c19b1a51558586f9f2bbb4cbeb90de39152964f21f649c74847/dbt_core-1.11.10-py3-none-any.whl", hash = "sha256:7f54ac2a55e65f4eac4232653d28305d1258a89c9106d849e24f61ea73ec13db", size = 1061920, upload-time = "2026-05-14T10:48:03.116Z" },
 ]
 
 [[package]]
@@ -1693,7 +1693,7 @@ wheels = [
 
 [[package]]
 name = "mxcp"
-version = "0.12.3rc2"
+version = "0.12.3rc3"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
