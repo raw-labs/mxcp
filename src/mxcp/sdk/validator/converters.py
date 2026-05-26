@@ -23,12 +23,14 @@ class TypeConverter:
     @staticmethod
     def _normalize_pandas_dataframe_nulls(value: pd.DataFrame) -> pd.DataFrame:
         """Convert pandas null sentinels into Python None for output handling."""
-        return value.astype(object).where(value.notna(), None)
+        # pandas-stubs rejects None as the `other` arg of where(), but it is supported at runtime.
+        return value.astype(object).where(value.notna(), None)  # type: ignore[call-overload,no-any-return]
 
     @staticmethod
     def _normalize_pandas_series_nulls(value: pd.Series) -> pd.Series:
         """Convert pandas null sentinels into Python None for output handling."""
-        return value.astype(object).where(value.notna(), None)
+        # pandas-stubs rejects None as the `other` arg of where(), but it is supported at runtime.
+        return value.astype(object).where(value.notna(), None)  # type: ignore[call-overload,no-any-return]
 
     @staticmethod
     def python_type_to_schema_type(python_type: str) -> str:
