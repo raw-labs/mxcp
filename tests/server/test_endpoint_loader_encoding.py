@@ -102,9 +102,7 @@ def test_tool_description_survives_utf8_round_trip(tmp_path, monkeypatch):
     tools_dir.mkdir()
 
     # Write the definition explicitly as UTF-8, exactly as an editor would.
-    (tools_dir / "summarize.yml").write_text(
-        _tool_yaml(NON_ASCII_DESCRIPTION), encoding="utf-8"
-    )
+    (tools_dir / "summarize.yml").write_text(_tool_yaml(NON_ASCII_DESCRIPTION), encoding="utf-8")
 
     # find_repo_root() walks up from the cwd looking for mxcp-site.yml.
     monkeypatch.chdir(tmp_path)
@@ -149,9 +147,7 @@ def test_tool_description_mojibake_round_trip(tmp_path, monkeypatch):
     )
     tools_dir = tmp_path / "tools"
     tools_dir.mkdir()
-    (tools_dir / "summarize.yml").write_text(
-        _tool_yaml(MOJIBAKE_DESCRIPTION), encoding="utf-8"
-    )
+    (tools_dir / "summarize.yml").write_text(_tool_yaml(MOJIBAKE_DESCRIPTION), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
     loader = EndpointLoader(SiteConfigModel(project="enc_test", profile="default"))
@@ -182,9 +178,7 @@ def test_discover_tools_preserves_utf8_description(tmp_path, monkeypatch):
     )
     tools_dir = tmp_path / "tools"
     tools_dir.mkdir()
-    (tools_dir / "summarize.yml").write_text(
-        _tool_yaml(NON_ASCII_DESCRIPTION), encoding="utf-8"
-    )
+    (tools_dir / "summarize.yml").write_text(_tool_yaml(NON_ASCII_DESCRIPTION), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
     loader = EndpointLoader(SiteConfigModel(project="enc_test", profile="default"))
