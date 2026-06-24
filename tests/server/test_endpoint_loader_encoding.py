@@ -61,6 +61,23 @@ def _default_encoding_is_utf8() -> bool:
     return locale.getpreferredencoding(False).lower().replace("-", "") == "utf8"
 
 
+def _tool_yaml(description: str) -> str:
+    """A *complete*, schema-valid tool definition with the given description.
+
+    ``source`` is required by ToolDefinitionModel (exactly one of code/file), so
+    it must be present — otherwise validation fails with "tool.source: Field
+    required" and masks the encoding behaviour we're actually testing.
+    """
+    return (
+        "mxcp: 1\n"
+        "tool:\n"
+        "  name: summarize\n"
+        f"  description: {description!r}\n"
+        "  source:\n"
+        "    code: 'SELECT 1'\n"
+    )
+
+
 @pytest.mark.skipif(
     _default_encoding_is_utf8(),
     reason=(
@@ -84,14 +101,10 @@ def test_tool_description_survives_utf8_round_trip(tmp_path, monkeypatch):
     tools_dir = tmp_path / "tools"
     tools_dir.mkdir()
 
-    tool_yaml = (
-        "mxcp: 1\n"
-        "tool:\n"
-        "  name: summarize\n"
-        f"  description: {NON_ASCII_DESCRIPTION!r}\n"
-    )
     # Write the definition explicitly as UTF-8, exactly as an editor would.
-    (tools_dir / "summarize.yml").write_text(tool_yaml, encoding="utf-8")
+    (tools_dir / "summarize.yml").write_text(
+        _tool_yaml(NON_ASCII_DESCRIPTION), encoding="utf-8"
+    )
 
     # find_repo_root() walks up from the cwd looking for mxcp-site.yml.
     monkeypatch.chdir(tmp_path)
@@ -137,11 +150,7 @@ def test_tool_description_mojibake_round_trip(tmp_path, monkeypatch):
     tools_dir = tmp_path / "tools"
     tools_dir.mkdir()
     (tools_dir / "summarize.yml").write_text(
-        "mxcp: 1\n"
-        "tool:\n"
-        "  name: summarize\n"
-        f"  description: {MOJIBAKE_DESCRIPTION!r}\n",
-        encoding="utf-8",
+        _tool_yaml(MOJIBAKE_DESCRIPTION), encoding="utf-8"
     )
     monkeypatch.chdir(tmp_path)
 
@@ -174,11 +183,7 @@ def test_discover_tools_preserves_utf8_description(tmp_path, monkeypatch):
     tools_dir = tmp_path / "tools"
     tools_dir.mkdir()
     (tools_dir / "summarize.yml").write_text(
-        "mxcp: 1\n"
-        "tool:\n"
-        "  name: summarize\n"
-        f"  description: {NON_ASCII_DESCRIPTION!r}\n",
-        encoding="utf-8",
+        _tool_yaml(NON_ASCII_DESCRIPTION), encoding="utf-8"
     )
     monkeypatch.chdir(tmp_path)
 
