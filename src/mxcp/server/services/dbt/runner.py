@@ -34,7 +34,8 @@ def _load_profiles() -> dict[str, Any]:
     """Load existing dbt profiles or return empty dict."""
     profiles_path = _get_dbt_profiles_path()
     if profiles_path.exists():
-        with open(profiles_path) as f:
+        # Binary mode: let PyYAML detect the encoding (UTF-8/16) rather than the OS locale.
+        with open(profiles_path, "rb") as f:
             return yaml.safe_load(f) or {}
     return {}
 
@@ -43,7 +44,8 @@ def _load_dbt_project() -> dict[str, Any]:
     """Load existing dbt_project.yml or return empty dict."""
     project_path = _get_dbt_project_path()
     if project_path.exists():
-        with open(project_path) as f:
+        # Binary mode: let PyYAML detect the encoding (UTF-8/16) rather than the OS locale.
+        with open(project_path, "rb") as f:
             return yaml.safe_load(f) or {}
     return {}
 
@@ -56,7 +58,7 @@ def _save_profiles(profiles: dict[str, Any]) -> None:
 
     # Write to temp file first
     temp_path = profiles_path.with_suffix(".yml.tmp")
-    with open(temp_path, "w") as f:
+    with open(temp_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(profiles, f, default_flow_style=False)
 
     # Atomic rename
@@ -69,7 +71,7 @@ def _save_dbt_project(project_config: dict[str, Any]) -> None:
 
     # Write to temp file first
     temp_path = project_path.with_suffix(".yml.tmp")
-    with open(temp_path, "w") as f:
+    with open(temp_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(project_config, f, default_flow_style=False)
 
     # Atomic rename

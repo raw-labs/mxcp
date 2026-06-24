@@ -54,7 +54,8 @@ def load_site_config(repo_path: Path | None = None) -> SiteConfigModel:
     if not config_path.exists():
         raise FileNotFoundError(f"mxcp-site.yml not found at {config_path}")
 
-    with open(config_path) as f:
+    # Binary mode: let PyYAML detect the encoding (UTF-8/16) rather than the OS locale.
+    with open(config_path, "rb") as f:
         config = yaml.safe_load(f) or {}
 
     # Check for legacy version format and provide migration guidance (stops execution)

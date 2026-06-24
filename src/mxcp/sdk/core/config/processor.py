@@ -352,7 +352,8 @@ class ResolverEngine:
             raise FileNotFoundError(f"Configuration file not found: {file_path}")
 
         try:
-            with open(file_path) as f:
+            # Binary mode: let PyYAML detect the encoding (UTF-8/16) rather than the OS locale.
+            with open(file_path, "rb") as f:
                 config_data = yaml.safe_load(f)
         except yaml.YAMLError as e:
             raise ValueError(f"Invalid YAML in {file_path}: {e}") from e

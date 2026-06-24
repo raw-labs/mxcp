@@ -173,7 +173,7 @@ async def generate_snapshot(
                 resources=resources,
             )
             if not dry_run:
-                with open(drift_path, "w") as f:
+                with open(drift_path, "w", encoding="utf-8") as f:
                     json.dump(snapshot.model_dump(mode="json", exclude_none=True), f, indent=2)
                 logger.info(f"Wrote drift snapshot to {drift_path}")
             else:

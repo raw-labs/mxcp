@@ -59,7 +59,8 @@ def load_resolver_config(config_path: Path | None = None) -> ResolverConfigModel
 
     # Load the YAML file
     try:
-        with open(config_path) as f:
+        # Binary mode: let PyYAML detect the encoding (UTF-8/16) rather than the OS locale.
+        with open(config_path, "rb") as f:
             raw_config = yaml.safe_load(f)
     except Exception as e:
         raise ValueError(f"Failed to parse YAML config file {config_path}: {e}") from e

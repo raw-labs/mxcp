@@ -310,7 +310,8 @@ async def _test_impl(
             if not file_path.exists():
                 raise click.BadParameter(f"User context file not found: {file_path}")
             try:
-                with open(file_path) as f:
+                # Binary mode: let json detect the encoding (UTF-8/16/32) rather than the OS locale.
+                with open(file_path, "rb") as f:
                     context_data = json.load(f)
             except json.JSONDecodeError as e:
                 raise click.BadParameter(
@@ -343,7 +344,8 @@ async def _test_impl(
             if not file_path.exists():
                 raise click.BadParameter(f"Request headers file not found: {file_path}")
             try:
-                with open(file_path) as f:
+                # Binary mode: let json detect the encoding (UTF-8/16/32) rather than the OS locale.
+                with open(file_path, "rb") as f:
                     headers = json.load(f)
             except json.JSONDecodeError as e:
                 raise click.BadParameter(
