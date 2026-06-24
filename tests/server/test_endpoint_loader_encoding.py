@@ -37,10 +37,24 @@ import pytest
 from mxcp.server.core.config.models import SiteConfigModel
 from mxcp.server.definitions.endpoints.loader import EndpointLoader
 
-# A description with characters that are multi-byte in UTF-8 and corrupt cleanly
-# under cp1252 (every constituent byte is defined in cp1252, so we get mojibake
-# rather than a hard decode error — which makes the equality assertion precise).
-NON_ASCII_DESCRIPTION = "Summarize café revenue — uses “smart” rounding © 2026"
+# Two distinct UTF-8 failure modes under a cp1252 default decode:
+#
+# 1. HARD DECODE ERROR — the closing curly quote “”” is UTF-8 ``e2 80 9d`` and
+#    byte ``0x9d`` is UNDEFINED in cp1252, so the decode raises
+#    ``UnicodeDecodeError`` before PyYAML sees anything. In ``load_endpoint`` the
+#    broad ``except Exception`` swallows it and returns ``None`` (a silent
+#    failure); ``discover_tools`` surfaces it as the error element of its tuple.
+HARD_ERROR_DESCRIPTION = "Summarize café revenue — uses “smart” rounding © 2026"
+
+# 2. SILENT MOJIBAKE — every byte of café / em-dash / © IS defined in cp1252, so
+#    nothing raises: the file decodes successfully into corrupted text and the
+#    load *succeeds* with a wrong description. e.g. the em-dash ``—`` (UTF-8
+#    ``e2 80 94``) becomes the three characters ``â€"``. Here the equality
+#    assertion — not an exception — is what catches the bug.
+MOJIBAKE_DESCRIPTION = "Summarize café revenue — 100% © 2026"
+
+# Backwards-compatible alias used by the original two tests below.
+NON_ASCII_DESCRIPTION = HARD_ERROR_DESCRIPTION
 
 
 def _default_encoding_is_utf8() -> bool:
@@ -55,7 +69,13 @@ def _default_encoding_is_utf8() -> bool:
     ),
 )
 def test_tool_description_survives_utf8_round_trip(tmp_path, monkeypatch):
-    """A UTF-8 tool description must load unchanged through the endpoint loader."""
+    """HARD-ERROR path: a UTF-8 description with a cp1252-undefined byte.
+
+    The ``“”`` quotes make the cp1252 decode raise ``UnicodeDecodeError``, which
+    ``load_endpoint`` swallows into ``None`` — so on Windows this fails at the
+    "loader returned None" assertion rather than the equality check. See
+    :data:`MOJIBAKE_DESCRIPTION` / the next test for the silent-corruption case.
+    """
     # --- Arrange: a minimal mxcp project on disk ---------------------------
     (tmp_path / "mxcp-site.yml").write_text(
         "mxcp: 1\nproject: enc_test\nprofile: default\n",
@@ -91,6 +111,53 @@ def test_tool_description_survives_utf8_round_trip(tmp_path, monkeypatch):
         f"  expected: {NON_ASCII_DESCRIPTION!r}\n"
         f"  got:      {model.tool.description!r}\n"
         "This is the UTF-8-read-as-cp1252 bug: open() needs encoding='utf-8'."
+    )
+
+
+@pytest.mark.skipif(
+    _default_encoding_is_utf8(),
+    reason=(
+        "Platform default text encoding is UTF-8, so the cp1252 mis-decode "
+        "cannot occur here. Run this on Windows (cp1252 locale) to exercise it."
+    ),
+)
+def test_tool_description_mojibake_round_trip(tmp_path, monkeypatch):
+    """SILENT-MOJIBAKE path: cp1252-safe bytes that decode without raising.
+
+    Every byte of café / em-dash / © is defined in cp1252, so on Windows the
+    loader does NOT raise — it returns a valid model whose description is
+    silently corrupted (e.g. ``—`` -> ``â€"``). The load "succeeds", so the
+    equality assertion below is the only thing that catches the corruption.
+    Passes everywhere once the loader opens files with ``encoding="utf-8"``.
+    """
+    (tmp_path / "mxcp-site.yml").write_text(
+        "mxcp: 1\nproject: enc_test\nprofile: default\n",
+        encoding="utf-8",
+    )
+    tools_dir = tmp_path / "tools"
+    tools_dir.mkdir()
+    (tools_dir / "summarize.yml").write_text(
+        "mxcp: 1\n"
+        "tool:\n"
+        "  name: summarize\n"
+        f"  description: {MOJIBAKE_DESCRIPTION!r}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    loader = EndpointLoader(SiteConfigModel(project="enc_test", profile="default"))
+    result = loader.load_endpoint("tool", "summarize")
+
+    # The load itself succeeds here (no UnicodeDecodeError) — that is the trap.
+    assert result is not None, "loader returned None — endpoint failed to load"
+    _path, model = result
+    assert model.tool is not None
+    assert model.tool.description == MOJIBAKE_DESCRIPTION, (
+        "Tool description was silently corrupted (mojibake) by the loader.\n"
+        f"  expected: {MOJIBAKE_DESCRIPTION!r}\n"
+        f"  got:      {model.tool.description!r}\n"
+        "The load did not raise — it returned wrong text. open() needs "
+        "encoding='utf-8'."
     )
 
 
