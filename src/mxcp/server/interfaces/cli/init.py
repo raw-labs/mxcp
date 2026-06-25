@@ -41,7 +41,8 @@ def check_project_exists_in_user_config(project_name: str) -> bool:
         return False
 
     try:
-        with open(config_path) as f:
+        # Binary mode: let PyYAML detect the encoding (UTF-8/16) rather than the OS locale.
+        with open(config_path, "rb") as f:
             config = yaml.safe_load(f)
 
         if not config:
@@ -57,7 +58,7 @@ def create_mxcp_site_yml(target_dir: Path, project_name: str, profile_name: str)
     """Create the mxcp-site.yml file with the given project and profile names."""
     config = {"mxcp": 1, "project": project_name, "profile": profile_name}
 
-    with open(target_dir / "mxcp-site.yml", "w") as f:
+    with open(target_dir / "mxcp-site.yml", "w", encoding="utf-8") as f:
         yaml.dump(config, f, default_flow_style=False)
 
 
@@ -90,7 +91,7 @@ def create_hello_world_files(target_dir: Path) -> None:
     hello_world_sql = """SELECT 'Hello, ' || $name || '!' as greeting
 """
 
-    with open(target_dir / "sql" / "hello-world.sql", "w") as f:
+    with open(target_dir / "sql" / "hello-world.sql", "w", encoding="utf-8") as f:
         f.write(hello_world_sql)
 
     # Create hello-world.yml in the tools directory
@@ -113,7 +114,7 @@ def create_hello_world_files(target_dir: Path) -> None:
         },
     }
 
-    with open(target_dir / "tools" / "hello-world.yml", "w") as f:
+    with open(target_dir / "tools" / "hello-world.yml", "w", encoding="utf-8") as f:
         yaml.dump(hello_world_yml, f, default_flow_style=False, sort_keys=False)
 
 
@@ -385,7 +386,7 @@ def init(
                 claude_config = generate_claude_config(target_dir, project)
                 config_path = target_dir / "server_config.json"
 
-                with open(config_path, "w") as f:
+                with open(config_path, "w", encoding="utf-8") as f:
                     json.dump(claude_config, f, indent=2)
 
                 click.echo("✓ Generated server_config.json for Claude Desktop")

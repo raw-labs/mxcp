@@ -152,7 +152,8 @@ class EndpointLoader:
 
         for f in directory.rglob("*.yml"):
             try:
-                with open(f) as file:
+                # Binary mode: let PyYAML detect the encoding (UTF-8/16) rather than the OS locale.
+                with open(f, "rb") as file:
                     data = yaml.safe_load(file)
 
                     if not data:
@@ -267,7 +268,8 @@ class EndpointLoader:
             for f in search_dir.rglob("*.yml"):
                 logger.debug(f"Checking file: {f}")
                 try:
-                    with open(f) as file:
+                    # Binary mode: let PyYAML detect the encoding (UTF-8/16) rather than the OS locale.
+                    with open(f, "rb") as file:
                         data = yaml.safe_load(file) or {}
 
                     model = EndpointDefinitionModel.model_validate(data)

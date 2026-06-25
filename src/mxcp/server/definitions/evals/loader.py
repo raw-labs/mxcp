@@ -55,7 +55,8 @@ def discover_eval_files(
     # Find all YAML files in the evals directory
     for file_path in evals_dir.rglob("*.yml"):
         try:
-            with open(file_path) as f:
+            # Binary mode: let PyYAML detect the encoding (UTF-8/16) rather than the OS locale.
+            with open(file_path, "rb") as f:
                 data = yaml.safe_load(f) or {}
 
             # Check if this is a mxcp eval file

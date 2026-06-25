@@ -51,7 +51,8 @@ def load_user_config(
             return _generate_default_config(site_config)
         raise FileNotFoundError(f"MXCP user config not found at {path}")
 
-    with open(path) as f:
+    # Binary mode: let PyYAML detect the encoding (UTF-8/16) rather than the OS locale.
+    with open(path, "rb") as f:
         config_data = yaml.safe_load(f) or {}
 
     if not isinstance(config_data, dict):

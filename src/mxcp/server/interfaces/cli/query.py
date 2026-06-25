@@ -136,7 +136,8 @@ async def _query(
             if not file_path.exists():
                 raise click.BadParameter(f"JSON file not found: {file_path}")
             try:
-                with open(file_path) as f:
+                # Binary mode: let json detect the encoding (UTF-8/16/32) rather than the OS locale.
+                with open(file_path, "rb") as f:
                     value = json.load(f)
             except json.JSONDecodeError as e:
                 raise click.BadParameter(f"Invalid JSON in file {file_path}: {e}") from e
@@ -146,7 +147,8 @@ async def _query(
     # Get SQL query
     query_sql = sql
     if file:
-        with open(file) as f:
+        # Plain text (.sql): no embedded encoding marker, so declare UTF-8 explicitly.
+        with open(file, encoding="utf-8") as f:
             query_sql = f.read()
 
     # Ensure we have a query to execute

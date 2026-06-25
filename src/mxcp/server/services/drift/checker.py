@@ -30,7 +30,8 @@ def load_and_validate_snapshot(snapshot_path: Path) -> DriftSnapshot:
     if not snapshot_path.exists():
         raise FileNotFoundError(f"Snapshot file not found: {snapshot_path}")
 
-    with open(snapshot_path) as f:
+    # Binary mode: let json detect the encoding (UTF-8/16/32) rather than the OS locale.
+    with open(snapshot_path, "rb") as f:
         snapshot_data = json.load(f)
 
     # Validate version
