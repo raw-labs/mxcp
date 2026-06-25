@@ -94,6 +94,11 @@ class SiteDuckDBConfigModel(BaseModel):
 
     path: str | None = None
     readonly: bool = False
+    # When False, the DuckDB runtime is never created and the duckdb dependency
+    # is never imported. SQL endpoints and SQL tools become unavailable; Python
+    # endpoints that don't touch the database still work. Useful for deployments
+    # that only use Python endpoints and want to avoid DuckDB's memory footprint.
+    enabled: bool = True
 
 
 class SiteDriftConfigModel(BaseModel):

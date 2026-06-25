@@ -1800,6 +1800,19 @@ class RAWMCP:
         if not self.enable_sql_tools:
             return
 
+        # These tools require the DuckDB runtime. If DuckDB is disabled for this
+        # profile there is no SQL executor, so registering them would only expose
+        # tools that fail at call time. Skip them with a clear warning instead.
+        profile_config = self.site_config.profiles.get(self.profile_name)
+        if profile_config is not None and not profile_config.duckdb.enabled:
+            logger.warning(
+                "Built-in SQL tools are enabled but DuckDB is disabled "
+                "(duckdb.enabled: false) for profile '%s'. Skipping registration of "
+                "execute_sql_query, list_tables, and get_table_schema.",
+                self.profile_name,
+            )
+            return
+
         # Register SQL query tool with proper metadata
         @self.mcp.tool(
             name="execute_sql_query",

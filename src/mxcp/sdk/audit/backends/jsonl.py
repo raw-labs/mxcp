@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any
 
 import aiofiles  # type: ignore[import-untyped]
-import duckdb
 
 from ..models import (
     AuditRecordModel,
@@ -32,6 +31,19 @@ from ..models import (
 from ..writer import BaseAuditWriter
 
 logger = logging.getLogger(__name__)
+
+
+def _duckdb() -> Any:
+    """Import duckdb lazily.
+
+    The JSONL writer only needs DuckDB to *query* existing audit logs (via
+    in-memory connections). Importing it lazily keeps the duckdb native library
+    out of the process at server startup — it is only loaded when an audit query
+    actually runs. This matters when DuckDB is otherwise disabled.
+    """
+    import duckdb
+
+    return duckdb
 
 
 class JSONLAuditWriter(BaseAuditWriter):
@@ -522,7 +534,7 @@ class JSONLAuditWriter(BaseAuditWriter):
         conn = None
         records: list[AuditRecordModel] = []
         try:
-            conn = duckdb.connect(":memory:")
+            conn = _duckdb().connect(":memory:")
 
             conditions: list[str] = []
 
@@ -633,7 +645,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
         conn = None
         try:
-            conn = duckdb.connect(":memory:")
+            conn = _duckdb().connect(":memory:")
 
             file_list = ", ".join(f"'{f}'" for f in files)
             query = f"""
@@ -746,7 +758,7 @@ class JSONLAuditWriter(BaseAuditWriter):
 
                 conn = None
                 try:
-                    conn = duckdb.connect(":memory:")
+                    conn = _duckdb().connect(":memory:")
 
                     # Get newest timestamp and distinct schemas in this file
                     result = conn.execute(

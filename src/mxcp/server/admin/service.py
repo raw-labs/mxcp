@@ -91,6 +91,7 @@ class AdminService:
             duckdb_path=(
                 str(self._server.runtime_environment.duckdb_runtime.database_config.path)
                 if self._server.runtime_environment
+                and self._server.runtime_environment.duckdb_runtime is not None
                 else None
             ),
             readonly=self._server.readonly,

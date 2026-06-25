@@ -361,12 +361,33 @@ profiles:
 duckdb:
   path: ./data/app.duckdb
   readonly: false
+  enabled: true
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `path` | string | `{paths.data}/db-{profile}.duckdb` | Database file path. |
 | `readonly` | boolean | `false` | Open database in read-only mode. |
+| `enabled` | boolean | `true` | When `false`, the DuckDB runtime is never created and the `duckdb` library is never imported. See "Disabling DuckDB" below. |
+
+**Disabling DuckDB:**
+
+Set `enabled: false` for deployments that use only Python endpoints and want to
+avoid DuckDB's memory footprint (the connection pool pre-opens
+`max(10, cpu_count * 2)` connections at startup, plus the native library itself):
+
+```yaml
+profiles:
+  default:
+    duckdb:
+      enabled: false
+```
+
+When disabled:
+- The `duckdb` Python package is **never imported**, so its native library is not loaded into the process.
+- No connection pool is created.
+- SQL endpoints and the built-in SQL tools (`execute_sql_query`, `list_tables`, `get_table_schema`) are unavailable. SQL execution fails with a clear "Language 'sql' not supported" error, and the built-in SQL tools are not registered (a warning is logged if they were enabled).
+- Python endpoints continue to work, except `db.execute(...)` calls (the runtime database API), which raise a clear "No DuckDB runtime available" error.
 
 **Path Behavior:**
 - If not specified, defaults to `{paths.data}/db-{profile}.duckdb` (e.g., `data/db-default.duckdb`)
