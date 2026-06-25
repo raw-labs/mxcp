@@ -51,9 +51,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
-import pandas as pd
-
 from mxcp.sdk.telemetry import (
     decrement_gauge,
     increment_gauge,
@@ -69,6 +66,37 @@ if TYPE_CHECKING:
     from .python_plugin.loader import PythonEndpointLoader
 
 logger = logging.getLogger(__name__)
+
+
+class _LazyModule:
+    """Module proxy that imports the wrapped module on first attribute access.
+
+    Injected into inline-endpoint namespaces as ``pd``/``np`` so that pandas and
+    numpy (together ~47MB resident) are only imported when an endpoint actually
+    references them, rather than eagerly at server startup. Code that never
+    touches ``pd``/``np`` never triggers the import.
+    """
+
+    def __init__(self, module_name: str) -> None:
+        object.__setattr__(self, "_module_name", module_name)
+        object.__setattr__(self, "_module", None)
+
+    def _resolve(self) -> Any:
+        module = object.__getattribute__(self, "_module")
+        if module is None:
+            import importlib
+
+            module = importlib.import_module(object.__getattribute__(self, "_module_name"))
+            object.__setattr__(self, "_module", module)
+        return module
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._resolve(), name)
+
+
+# Lazy stand-ins for the inline-endpoint namespace (see _LazyModule).
+np: Any = _LazyModule("numpy")
+pd: Any = _LazyModule("pandas")
 
 
 class PythonExecutor(ExecutorPlugin):

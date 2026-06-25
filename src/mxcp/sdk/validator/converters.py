@@ -1,14 +1,40 @@
 """Type conversion utilities for MXCP validator."""
 
+from __future__ import annotations
+
 import json
 import re
+import sys
 from datetime import date, datetime, time
-from typing import Any
-
-import numpy as np
-import pandas as pd
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 from .models import ParameterSchemaModel, TypeSchemaModel
+
+if TYPE_CHECKING:
+    import numpy as np
+    import pandas as pd
+
+
+# numpy/pandas are imported lazily. This module is on the hot path for every
+# endpoint's input/output validation, but a value can only be an ndarray /
+# DataFrame / Series if numpy / pandas has already been imported elsewhere
+# (you cannot construct one otherwise). So if the module is absent from
+# sys.modules, the isinstance check is guaranteed False and we skip it without
+# forcing the (~47MB) import. This lets a Python-only server that never touches
+# pandas/numpy avoid loading them at all.
+def _is_ndarray(value: Any) -> TypeGuard[np.ndarray]:
+    np_mod = sys.modules.get("numpy")
+    return np_mod is not None and isinstance(value, np_mod.ndarray)
+
+
+def _is_dataframe(value: Any) -> TypeGuard[pd.DataFrame]:
+    pd_mod = sys.modules.get("pandas")
+    return pd_mod is not None and isinstance(value, pd_mod.DataFrame)
+
+
+def _is_series(value: Any) -> TypeGuard[pd.Series]:
+    pd_mod = sys.modules.get("pandas")
+    return pd_mod is not None and isinstance(value, pd_mod.Series)
 
 
 class ValidationError(ValueError):
@@ -152,7 +178,7 @@ class TypeConverter:
             return bool(value)
 
         elif param_type == "array":
-            if not isinstance(value, list | np.ndarray):
+            if not (isinstance(value, list) or _is_ndarray(value)):
                 if isinstance(value, str):
                     try:
                         value = json.loads(value)
@@ -162,7 +188,7 @@ class TypeConverter:
                     actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
                     raise ValidationError(f"Expected array, got {actual_type}")
 
-            if isinstance(value, np.ndarray):
+            if _is_ndarray(value):
                 value = value.tolist()
 
             # Validate array constraints
@@ -241,7 +267,7 @@ class TypeConverter:
             return
 
         # Handle DataFrames - they validate as array of objects
-        if isinstance(value, pd.DataFrame):
+        if _is_dataframe(value):
             if return_type != "array":
                 raise ValidationError(f"Expected {return_type}, got DataFrame (which is array)")
             # Validate as array of objects
@@ -253,7 +279,7 @@ class TypeConverter:
             value = TypeConverter._normalize_pandas_dataframe_nulls(value).to_dict("records")
 
         # Handle Series - they validate as arrays
-        if isinstance(value, pd.Series):
+        if _is_series(value):
             if return_type != "array":
                 raise ValidationError(f"Expected {return_type}, got Series (which is array)")
             value = TypeConverter._normalize_pandas_series_nulls(value).tolist()
@@ -313,11 +339,11 @@ class TypeConverter:
                 raise ValidationError(f"Expected boolean, got {type(value).__name__}")
 
         elif return_type == "array":
-            if not isinstance(value, list | np.ndarray):
+            if not (isinstance(value, list) or _is_ndarray(value)):
                 raise ValidationError(f"Expected array, got {type(value).__name__}")
 
             # Convert numpy arrays to lists for consistent validation
-            if isinstance(value, np.ndarray):
+            if _is_ndarray(value):
                 value = value.tolist()
 
             # Validate array constraints
@@ -361,20 +387,21 @@ class TypeConverter:
         """Serialize output objects for JSON compatibility."""
         if isinstance(obj, dict):
             return {k: TypeConverter.serialize_for_output(v) for k, v in obj.items()}
-        elif isinstance(obj, list | np.ndarray):
+        elif isinstance(obj, list) or _is_ndarray(obj):
             # Convert numpy arrays to lists and serialize recursively
-            items = obj.tolist() if isinstance(obj, np.ndarray) else obj
+            items = obj.tolist() if _is_ndarray(obj) else obj
             return [TypeConverter.serialize_for_output(item) for item in items]
-        elif isinstance(obj, pd.DataFrame):
+        elif _is_dataframe(obj):
             # Convert DataFrame to list of dicts
             return TypeConverter._normalize_pandas_dataframe_nulls(obj).to_dict("records")
-        elif isinstance(obj, pd.Series):
+        elif _is_series(obj):
             # Convert Series to list
             return TypeConverter._normalize_pandas_series_nulls(obj).tolist()
-        elif isinstance(obj, pd.Timestamp | datetime | date | time):
+        elif isinstance(obj, (datetime, date, time)):
+            # pd.Timestamp and pd.NaT both subclass datetime, so they are handled
+            # here (matching prior behavior, where the explicit pd.NaT branch was
+            # unreachable because NaT is an instance of datetime).
             return obj.isoformat()
-        elif isinstance(obj, type(pd.NaT)):
-            return None
         elif hasattr(obj, "isoformat"):
             # Handle any other datetime-like objects
             return obj.isoformat()
