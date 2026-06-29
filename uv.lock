@@ -1693,7 +1693,7 @@ wheels = [
 
 [[package]]
 name = "mxcp"
-version = "0.12.3rc3"
+version = "0.12.3"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -1712,7 +1712,6 @@ dependencies = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
-    { name = "pandas" },
     { name = "posthog" },
     { name = "psutil" },
     { name = "pyjwt", extra = ["crypto"] },
@@ -1726,9 +1725,12 @@ all = [
     { name = "aioresponses" },
     { name = "black" },
     { name = "build" },
+    { name = "dbt-duckdb" },
+    { name = "duckdb" },
     { name = "hvac" },
     { name = "mypy" },
     { name = "onepassword-sdk" },
+    { name = "pandas" },
     { name = "pandas-stubs" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1757,8 +1759,16 @@ dev = [
     { name = "types-psutil" },
     { name = "types-pyyaml" },
 ]
+duckdb = [
+    { name = "dbt-duckdb" },
+    { name = "duckdb" },
+    { name = "pandas" },
+]
 onepassword = [
     { name = "onepassword-sdk" },
+]
+pandas = [
+    { name = "pandas" },
 ]
 vault = [
     { name = "hvac" },
@@ -1786,7 +1796,11 @@ requires-dist = [
     { name = "cryptography", specifier = ">=41.0.0" },
     { name = "dbt-core", specifier = ">=1.6.0" },
     { name = "dbt-duckdb", specifier = ">=1.6.0" },
+    { name = "dbt-duckdb", marker = "extra == 'all'", specifier = ">=1.6.0" },
+    { name = "dbt-duckdb", marker = "extra == 'duckdb'", specifier = ">=1.6.0" },
     { name = "duckdb", specifier = ">=1.4.1" },
+    { name = "duckdb", marker = "extra == 'all'", specifier = ">=1.4.1" },
+    { name = "duckdb", marker = "extra == 'duckdb'", specifier = ">=1.4.1" },
     { name = "fastapi", specifier = ">=0.110.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "hvac", marker = "extra == 'all'", specifier = ">=2.0.0" },
@@ -1801,7 +1815,9 @@ requires-dist = [
     { name = "opentelemetry-api", specifier = ">=1.24.0" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.24.0" },
     { name = "opentelemetry-sdk", specifier = ">=1.24.0" },
-    { name = "pandas", specifier = ">=2.0.0" },
+    { name = "pandas", marker = "extra == 'all'", specifier = ">=2.0.0" },
+    { name = "pandas", marker = "extra == 'duckdb'", specifier = ">=2.0.0" },
+    { name = "pandas", marker = "extra == 'pandas'", specifier = ">=2.0.0" },
     { name = "pandas-stubs", marker = "extra == 'all'" },
     { name = "pandas-stubs", marker = "extra == 'dev'" },
     { name = "posthog", specifier = ">=3.0.0" },
@@ -1830,7 +1846,7 @@ requires-dist = [
     { name = "types-pyyaml", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
 ]
-provides-extras = ["dev", "vault", "onepassword", "all"]
+provides-extras = ["dev", "vault", "onepassword", "pandas", "duckdb", "all"]
 
 [package.metadata.requires-dev]
 dev = [

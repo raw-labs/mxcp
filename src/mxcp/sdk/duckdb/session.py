@@ -13,7 +13,6 @@ from typing import Any
 
 import duckdb
 from duckdb import func
-from pandas import NaT
 
 from .extension_loader import load_extensions
 from .models import DatabaseConfigModel, SecretDefinitionModel
@@ -37,7 +36,9 @@ def execute_query_to_dict(
     Returns:
         List of dictionaries representing query results
     """
-    return conn.execute(query, params).fetchdf().replace({NaT: None}).to_dict("records")
+    result = conn.execute(query, params)
+    columns = [column[0] for column in result.description or []]
+    return [dict(zip(columns, row, strict=False)) for row in result.fetchall()]
 
 
 class DuckDBSession:
