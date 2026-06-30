@@ -29,6 +29,11 @@ from mxcp.sdk.mcp import MCPLogProxy, NullMCPProxy
 
 logger = logging.getLogger(__name__)
 
+_DUCKDB_UNAVAILABLE_MESSAGE = (
+    "DuckDB runtime is not available. Install with: pip install 'mxcp[duckdb]' "
+    "and enable a SQL endpoint or SQL tools to use database access."
+)
+
 
 class DatabaseProxy:
     """Proxy for database operations using the current execution context."""
@@ -43,10 +48,7 @@ class DatabaseProxy:
 
         duckdb_runtime = context.get("duckdb_runtime")
         if not duckdb_runtime:
-            raise RuntimeError(
-                "No DuckDB runtime available. Database access is only available "
-                "after runtime initialization."
-            )
+            raise RuntimeError(_DUCKDB_UNAVAILABLE_MESSAGE)
 
         with duckdb_runtime.get_connection() as session:
             result = session.execute_query_to_dict(query, params)
@@ -331,6 +333,10 @@ def reload_duckdb(payload_func: Callable[[], None] | None = None, description: s
             "Server reference not available in context. "
             "This function can only be called from within MXCP server endpoints."
         )
+
+    runtime_environment = getattr(server, "runtime_environment", None)
+    if runtime_environment is None or getattr(runtime_environment, "duckdb_runtime", None) is None:
+        raise RuntimeError(_DUCKDB_UNAVAILABLE_MESSAGE)
 
     logger.info(f"Requesting DuckDB reload: {description or 'No description'}")
 

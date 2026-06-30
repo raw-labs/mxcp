@@ -84,14 +84,17 @@ class AdminService:
         """
         site_config_obj = self._server.site_config
         project_name = site_config_obj.project
+        duckdb_runtime = (
+            self._server.runtime_environment.duckdb_runtime
+            if self._server.runtime_environment
+            else None
+        )
         return ConfigResponse(
             project=project_name,
             profile=self._server.profile_name,
             repository_path=str(self._server.site_config_path),
             duckdb_path=(
-                str(self._server.runtime_environment.duckdb_runtime.database_config.path)
-                if self._server.runtime_environment
-                else None
+                str(duckdb_runtime.database_config.path) if duckdb_runtime is not None else None
             ),
             readonly=self._server.readonly,
             debug=self._server.debug,

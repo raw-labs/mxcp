@@ -85,7 +85,11 @@ from mxcp.server.definitions.endpoints.models import (
 )
 from mxcp.server.definitions.endpoints.utils import EndpointType
 from mxcp.server.executor.context_utils import build_execution_context
-from mxcp.server.executor.engine import RuntimeEnvironment, create_runtime_environment
+from mxcp.server.executor.engine import (
+    RuntimeEnvironment,
+    create_runtime_environment,
+    duckdb_required_for_runtime,
+)
 from mxcp.server.interfaces.cli.utils import (
     get_env_admin_socket_enabled,
     get_env_admin_socket_path,
@@ -280,9 +284,6 @@ class RAWMCP:
         # Initialize telemetry
         self._initialize_telemetry()
 
-        # Initialize runtime components
-        self.initialize_runtime_components()
-
         # Uvicorn server reference for graceful shutdown from embedders
         self._uvicorn_server: uvicorn.Server | None = None
 
@@ -294,6 +295,9 @@ class RAWMCP:
 
         # Load and validate endpoints
         self._load_endpoints()
+
+        # Initialize runtime components after endpoints have been classified.
+        self.initialize_runtime_components()
 
         # Track transport mode and other state
         self.transport_mode = None
@@ -894,10 +898,21 @@ class RAWMCP:
         """
         logger.info("Initializing runtime components...")
 
+        require_duckdb = duckdb_required_for_runtime(
+            self.site_config,
+            enable_sql_tools=bool(self.enable_sql_tools),
+            endpoints=self.endpoints,
+        )
+        logger.info("DuckDB runtime required: %s", require_duckdb)
+
         # Create runtime environment (contains execution engine + shared resources)
         logger.info("Creating runtime environment...")
         self.runtime_environment = create_runtime_environment(
-            self.user_config, self.site_config, self.profile_name, readonly=self.readonly
+            self.user_config,
+            self.site_config,
+            self.profile_name,
+            readonly=self.readonly,
+            require_duckdb=require_duckdb,
         )
         logger.info("Runtime environment created.")
 

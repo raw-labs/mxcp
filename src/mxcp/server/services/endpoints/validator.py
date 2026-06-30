@@ -15,6 +15,7 @@ from mxcp.server.definitions.endpoints.models import (
     ToolDefinitionModel,
 )
 from mxcp.server.definitions.endpoints.utils import get_endpoint_source_code
+from mxcp.server.executor.engine import DUCKDB_INSTALL_HINT
 from mxcp.server.services.endpoints.models import (
     EndpointValidationResultModel,
     EndpointValidationSummaryModel,
@@ -220,6 +221,13 @@ def validate_endpoint_payload(
             return EndpointValidationResultModel(status="ok", path=relative_path)
 
         if language == "sql":
+            if not execution_engine.supports_language("sql"):
+                return EndpointValidationResultModel(
+                    status="error",
+                    path=relative_path,
+                    message=DUCKDB_INSTALL_HINT,
+                )
+
             try:
                 sql_query = get_endpoint_source_code(endpoint, endpoint_type, path_obj, repo_root)
             except Exception as e:

@@ -9,21 +9,22 @@ import logging
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from mxcp.sdk.duckdb import (
-    DatabaseConfigModel,
-    ExtensionDefinitionModel,
-    PluginConfigModel,
-    PluginDefinitionModel,
-    SecretDefinitionModel,
-)
 from mxcp.sdk.executor import (
     ExecutionContext,
     reset_execution_context,
     set_execution_context,
 )
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
+
+if TYPE_CHECKING:
+    from mxcp.sdk.duckdb import (
+        DatabaseConfigModel,
+        PluginConfigModel,
+        PluginDefinitionModel,
+        SecretDefinitionModel,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,10 @@ def create_duckdb_session_config(
     profile_name: str,
     readonly: bool = False,
 ) -> tuple[
-    DatabaseConfigModel, list[PluginDefinitionModel], PluginConfigModel, list[SecretDefinitionModel]
+    "DatabaseConfigModel",
+    list["PluginDefinitionModel"],
+    "PluginConfigModel",
+    list["SecretDefinitionModel"],
 ]:
     """Convert MXCP configs to SDK session configuration objects.
 
@@ -47,6 +51,14 @@ def create_duckdb_session_config(
     Returns:
         Tuple of (database_config, plugins, plugin_config, secrets)
     """
+    from mxcp.sdk.duckdb import (
+        DatabaseConfigModel,
+        ExtensionDefinitionModel,
+        PluginConfigModel,
+        PluginDefinitionModel,
+        SecretDefinitionModel,
+    )
+
     # Get project name from site config
     project_name = site_config.project
 

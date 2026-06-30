@@ -210,6 +210,10 @@ class ExecutionEngine:
             raise ValueError(f"Executor for language '{language}' is already registered")
         self._executors[language] = executor
 
+    def supports_language(self, language: str) -> bool:
+        """Return True if an executor is registered for the language."""
+        return language in self._executors
+
     def shutdown(self) -> None:
         """Shut down all registered executors.
 
