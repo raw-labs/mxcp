@@ -47,18 +47,21 @@ Example usage:
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from mxcp.sdk.duckdb import DuckDBRuntime
 from mxcp.sdk.executor import ExecutionEngine
-from mxcp.sdk.executor.plugins import DuckDBExecutor, PythonExecutor
+from mxcp.sdk.executor.plugins.python import PythonExecutor
 from mxcp.server.core.config.models import SiteConfigModel, UserConfigModel
-from mxcp.server.core.config.parsers import (
-    create_duckdb_session_config,
-    execution_context_for_init_hooks,
-)
+from mxcp.server.core.config.parsers import execution_context_for_init_hooks
 from mxcp.server.core.config.site_config import find_repo_root
+from mxcp.server.definitions.endpoints.models import EndpointDefinitionModel
+
+if TYPE_CHECKING:
+    from mxcp.sdk.duckdb import DuckDBRuntime
 
 logger = logging.getLogger(__name__)
+
+DUCKDB_INSTALL_HINT = "DuckDB support is required. Install with: pip install 'mxcp[duckdb]'"
 
 
 @dataclass
@@ -70,7 +73,7 @@ class RuntimeEnvironment:
     """
 
     execution_engine: ExecutionEngine
-    duckdb_runtime: DuckDBRuntime
+    duckdb_runtime: "DuckDBRuntime | None"
 
     def shutdown(self) -> None:
         """Shutdown all components in the correct order.
@@ -85,10 +88,49 @@ class RuntimeEnvironment:
         self.execution_engine.shutdown()
 
         # Then shutdown shared resources
-        logger.info("Shutting down shared DuckDB runtime...")
-        self.duckdb_runtime.shutdown()
+        if self.duckdb_runtime is not None:
+            logger.info("Shutting down shared DuckDB runtime...")
+            self.duckdb_runtime.shutdown()
 
         logger.info("Runtime environment shutdown complete")
+
+
+def endpoint_requires_duckdb(endpoint: EndpointDefinitionModel) -> bool:
+    """Return True if an enabled endpoint requires the SQL/DuckDB runtime."""
+    component = endpoint.tool or endpoint.resource
+    if component is None:
+        return False
+    if not component.enabled:
+        return False
+    return (component.language or "sql") == "sql"
+
+
+def site_config_requires_duckdb(site_config: SiteConfigModel, enable_sql_tools: bool) -> bool:
+    """Return True if site-level features require the DuckDB runtime."""
+    return bool(enable_sql_tools or site_config.plugin or site_config.extensions)
+
+
+def endpoints_require_duckdb(
+    endpoints: list[tuple[Path, EndpointDefinitionModel | None]] | None,
+) -> bool:
+    """Return True if any loaded endpoint requires DuckDB."""
+    if endpoints is None:
+        return False
+    return any(
+        endpoint is not None and endpoint_requires_duckdb(endpoint) for _, endpoint in endpoints
+    )
+
+
+def duckdb_required_for_runtime(
+    site_config: SiteConfigModel,
+    *,
+    enable_sql_tools: bool = False,
+    endpoints: list[tuple[Path, EndpointDefinitionModel | None]] | None = None,
+) -> bool:
+    """Determine whether this runtime must include DuckDB support."""
+    return site_config_requires_duckdb(site_config, enable_sql_tools) or endpoints_require_duckdb(
+        endpoints
+    )
 
 
 def create_runtime_environment(
@@ -97,6 +139,7 @@ def create_runtime_environment(
     profile: str | None = None,
     repo_root: Path | None = None,
     readonly: bool | None = None,
+    require_duckdb: bool = True,
 ) -> RuntimeEnvironment:
     """Create a RuntimeEnvironment with DuckDB and Python executors.
 
@@ -143,32 +186,43 @@ def create_runtime_environment(
         # Get the profile name to use
         profile_name = profile or site_config.profile
 
-        # Handle readonly override
-        db_readonly_from_config = False
-        site_profile_config = site_config.profiles.get(profile_name)
-        if site_profile_config:
-            db_readonly_from_config = bool(site_profile_config.duckdb.readonly)
-        else:
+        duckdb_runtime = None
+        if require_duckdb:
+            try:
+                from mxcp.sdk.duckdb import DuckDBRuntime
+                from mxcp.sdk.executor.plugins.duckdb import DuckDBExecutor
+                from mxcp.server.core.config.parsers import create_duckdb_session_config
+            except ImportError as exc:
+                raise RuntimeError(DUCKDB_INSTALL_HINT) from exc
+
+            # Handle readonly override
             db_readonly_from_config = False
-        db_readonly = readonly if readonly is not None else db_readonly_from_config
+            site_profile_config = site_config.profiles.get(profile_name)
+            if site_profile_config:
+                db_readonly_from_config = bool(site_profile_config.duckdb.readonly)
+            else:
+                db_readonly_from_config = False
+            db_readonly = readonly if readonly is not None else db_readonly_from_config
 
-        # Create SDK session configuration using the shared function
-        database_config, plugins_list, plugin_config, secrets_list = create_duckdb_session_config(
-            site_config, user_config, profile_name, readonly=db_readonly
-        )
+            # Create SDK session configuration using the shared function
+            database_config, plugins_list, plugin_config, secrets_list = create_duckdb_session_config(
+                site_config, user_config, profile_name, readonly=db_readonly
+            )
 
-        # Create shared DuckDB runtime first
-        duckdb_runtime = DuckDBRuntime(
-            database_config=database_config,
-            plugins=plugins_list,
-            plugin_config=plugin_config,
-            secrets=secrets_list,
-        )
+            # Create shared DuckDB runtime first
+            duckdb_runtime = DuckDBRuntime(
+                database_config=database_config,
+                plugins=plugins_list,
+                plugin_config=plugin_config,
+                secrets=secrets_list,
+            )
 
-        # Create and register DuckDB executor with shared runtime
-        duckdb_executor = DuckDBExecutor(duckdb_runtime)
-        engine.register_executor(duckdb_executor)
-        logger.info("Registered DuckDB executor")
+            # Create and register DuckDB executor with shared runtime
+            duckdb_executor = DuckDBExecutor(duckdb_runtime)
+            engine.register_executor(duckdb_executor)
+            logger.info("Registered DuckDB executor")
+        else:
+            logger.info("DuckDB runtime not required; creating Python-only execution engine")
 
         # Create and register Python executor
         if repo_root is None:
@@ -188,9 +242,11 @@ def create_runtime_environment(
         # Create RuntimeEnvironment with all components
         runtime_env = RuntimeEnvironment(execution_engine=engine, duckdb_runtime=duckdb_runtime)
 
-        logger.info("RuntimeEnvironment created successfully with DuckDB and Python executors")
+        logger.info("RuntimeEnvironment created successfully")
         return runtime_env
 
     except Exception as e:
+        if isinstance(e, RuntimeError) and str(e) == DUCKDB_INSTALL_HINT:
+            raise
         logger.error(f"Failed to create RuntimeEnvironment: {e}")
         raise RuntimeError(f"Failed to create RuntimeEnvironment: {e}") from e

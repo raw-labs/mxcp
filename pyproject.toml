@@ -18,8 +18,6 @@ dependencies = [
     "starlette>=0.27.0",  # HTTP server framework
     
     # Data & Processing
-    "duckdb>=1.4.1",  # Embedded analytics database
-    "pandas>=2.0.0",  # DataFrame operations with DuckDB
     "pyyaml>=6.0.1",  # Configuration parsing
     "jinja2>=3.1.3",  # Template engine for SQL/Python generation
     "makefun",  # Dynamic function creation
@@ -31,8 +29,6 @@ dependencies = [
     # CLI
     "click>=8.1.7",  # CLI framework
     "posthog>=3.0.0",  # Usage analytics (always available)
-    "dbt-core>=1.6.0",  # dbt core for data transformations
-    "dbt-duckdb>=1.6.0",  # dbt DuckDB adapter
     
     # Observability
     "opentelemetry-api>=1.24.0",  # OpenTelemetry API
@@ -75,12 +71,28 @@ vault = [
 onepassword = [
     "onepassword-sdk>=0.3.0",  # 1Password SDK for mxcp.sdk.core.config.resolvers.onepassword
 ]
+pandas = [
+    "pandas>=2.0.0",  # DataFrame/Series support for Python endpoint outputs
+]
+duckdb = [
+    "duckdb>=1.4.1",  # Embedded analytics database
+    "pandas>=2.0.0",  # DataFrame/Series support for DuckDB-oriented workflows
+]
+dbt = [
+    "dbt-core>=1.6.0",  # dbt core for data transformations
+    "dbt-duckdb>=1.6.0",  # dbt DuckDB adapter
+]
 
 # === Everything Optional ===
 all = [
     # Secret providers
     "hvac>=2.0.0",
     "onepassword-sdk>=0.3.0",
+    # Data integrations
+    "pandas>=2.0.0",
+    "duckdb>=1.4.1",
+    "dbt-core>=1.6.0",
+    "dbt-duckdb>=1.6.0",
     # Development tools
     "pytest",
     "pytest-asyncio",

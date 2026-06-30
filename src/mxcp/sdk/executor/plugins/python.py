@@ -44,15 +44,14 @@ Example usage:
 import ast
 import asyncio
 import hashlib
+import importlib
 import inspect
 import logging
 import tempfile
 from collections.abc import Callable
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-import numpy as np
-import pandas as pd
 
 from mxcp.sdk.telemetry import (
     decrement_gauge,
@@ -69,6 +68,34 @@ if TYPE_CHECKING:
     from .python_plugin.loader import PythonEndpointLoader
 
 logger = logging.getLogger(__name__)
+
+
+class MissingOptionalModule:
+    """Proxy that raises a clear error when inline code uses a missing optional module."""
+
+    def __init__(self, module_name: str, extra_name: str):
+        self.module_name = module_name
+        self.extra_name = extra_name
+
+    def __getattr__(self, name: str) -> Any:
+        raise ImportError(
+            f"{self.module_name} is required for this Python endpoint. "
+            f"Install with: pip install 'mxcp[{self.extra_name}]'"
+        ) from None
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        raise ImportError(
+            f"{self.module_name} is required for this Python endpoint. "
+            f"Install with: pip install 'mxcp[{self.extra_name}]'"
+        ) from None
+
+
+@cache
+def _optional_module(module_name: str, extra_name: str) -> Any:
+    try:
+        return importlib.import_module(module_name)
+    except ImportError:
+        return MissingOptionalModule(module_name, extra_name)
 
 
 class PythonExecutor(ExecutorPlugin):
@@ -510,10 +537,10 @@ class PythonExecutor(ExecutorPlugin):
             # Add common imports
             namespace.update(
                 {
-                    "pd": pd,
-                    "np": np,
-                    "pandas": pd,
-                    "numpy": np,
+                    "pd": _optional_module("pandas", "pandas"),
+                    "np": _optional_module("numpy", "pandas"),
+                    "pandas": _optional_module("pandas", "pandas"),
+                    "numpy": _optional_module("numpy", "pandas"),
                 }
             )
 

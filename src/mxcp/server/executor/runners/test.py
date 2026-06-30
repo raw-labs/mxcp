@@ -8,9 +8,8 @@ normalization, and assertion checking.
 import json
 import logging
 import time
+from functools import cache
 from typing import Any, Literal
-
-import numpy as np
 
 from mxcp.sdk.auth import UserContextModel
 from mxcp.sdk.executor import ExecutionEngine
@@ -30,6 +29,15 @@ from mxcp.server.services.tests.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@cache
+def _numpy() -> Any | None:
+    try:
+        import numpy as np
+    except ImportError:
+        return None
+    return np
 
 
 class TestRunner:
@@ -385,7 +393,8 @@ def compare_results(result: Any, test_def: TestDefinitionModel) -> tuple[bool, s
         if expected is not None:
             # Convert complex objects for comparison
             def make_serializable(obj: Any) -> Any:
-                if isinstance(obj, np.ndarray):
+                np = _numpy()
+                if np is not None and isinstance(obj, np.ndarray):
                     return obj.tolist()
                 elif isinstance(obj, dict):
                     return {k: make_serializable(v) for k, v in obj.items()}

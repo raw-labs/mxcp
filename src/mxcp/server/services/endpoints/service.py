@@ -30,7 +30,11 @@ from mxcp.server.definitions.endpoints.models import (
     ToolDefinitionModel,
 )
 from mxcp.server.executor.context_utils import build_execution_context
-from mxcp.server.executor.engine import create_runtime_environment
+from mxcp.server.executor.engine import (
+    create_runtime_environment,
+    endpoint_requires_duckdb,
+    site_config_requires_duckdb,
+)
 from mxcp.server.executor.runners.endpoint import (
     execute_code_with_engine,
     execute_prompt_with_validation,
@@ -149,9 +153,23 @@ async def execute_endpoint(
         RuntimeError: If execution fails
     """
 
+    loader = EndpointLoader(site_config)
+    endpoint_result = loader.load_endpoint(endpoint_type, name)
+    if not endpoint_result:
+        raise FileNotFoundError(f"Endpoint '{name}' not found in {endpoint_type}s")
+
+    _endpoint_file_path, endpoint_definition = endpoint_result
+    require_duckdb = site_config_requires_duckdb(
+        site_config, enable_sql_tools=False
+    ) or endpoint_requires_duckdb(endpoint_definition)
+
     # Create runtime environment
     runtime_env = create_runtime_environment(
-        user_config, site_config, profile_name, readonly=readonly
+        user_config,
+        site_config,
+        profile_name,
+        readonly=readonly,
+        require_duckdb=require_duckdb,
     )
 
     try:

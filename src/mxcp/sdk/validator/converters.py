@@ -3,10 +3,8 @@
 import json
 import re
 from datetime import date, datetime, time
+from functools import cache
 from typing import Any
-
-import numpy as np
-import pandas as pd
 
 from .models import ParameterSchemaModel, TypeSchemaModel
 
@@ -21,16 +19,32 @@ class TypeConverter:
     """Utility class for type conversion and validation."""
 
     @staticmethod
-    def _normalize_pandas_dataframe_nulls(value: pd.DataFrame) -> pd.DataFrame:
-        """Convert pandas null sentinels into Python None for output handling."""
-        # pandas-stubs rejects None as the `other` arg of where(), but it is supported at runtime.
-        return value.astype(object).where(value.notna(), None)  # type: ignore[call-overload,no-any-return]
+    @cache
+    def _pandas() -> Any | None:
+        try:
+            import pandas as pd
+        except ImportError:
+            return None
+        return pd
 
     @staticmethod
-    def _normalize_pandas_series_nulls(value: pd.Series) -> pd.Series:
+    @cache
+    def _numpy() -> Any | None:
+        try:
+            import numpy as np
+        except ImportError:
+            return None
+        return np
+
+    @staticmethod
+    def _normalize_pandas_dataframe_nulls(value: Any) -> Any:
         """Convert pandas null sentinels into Python None for output handling."""
-        # pandas-stubs rejects None as the `other` arg of where(), but it is supported at runtime.
-        return value.astype(object).where(value.notna(), None)  # type: ignore[call-overload,no-any-return]
+        return value.astype(object).where(value.notna(), None)
+
+    @staticmethod
+    def _normalize_pandas_series_nulls(value: Any) -> Any:
+        """Convert pandas null sentinels into Python None for output handling."""
+        return value.astype(object).where(value.notna(), None)
 
     @staticmethod
     def python_type_to_schema_type(python_type: str) -> str:
@@ -152,7 +166,9 @@ class TypeConverter:
             return bool(value)
 
         elif param_type == "array":
-            if not isinstance(value, list | np.ndarray):
+            np = TypeConverter._numpy()
+            is_numpy_array = np is not None and isinstance(value, np.ndarray)
+            if not isinstance(value, list) and not is_numpy_array:
                 if isinstance(value, str):
                     try:
                         value = json.loads(value)
@@ -162,7 +178,7 @@ class TypeConverter:
                     actual_type = TypeConverter.python_type_to_schema_type(type(value).__name__)
                     raise ValidationError(f"Expected array, got {actual_type}")
 
-            if isinstance(value, np.ndarray):
+            if is_numpy_array:
                 value = value.tolist()
 
             # Validate array constraints
@@ -240,8 +256,10 @@ class TypeConverter:
         if value is None:
             return
 
+        pd = TypeConverter._pandas()
+
         # Handle DataFrames - they validate as array of objects
-        if isinstance(value, pd.DataFrame):
+        if pd is not None and isinstance(value, pd.DataFrame):
             if return_type != "array":
                 raise ValidationError(f"Expected {return_type}, got DataFrame (which is array)")
             # Validate as array of objects
@@ -253,7 +271,7 @@ class TypeConverter:
             value = TypeConverter._normalize_pandas_dataframe_nulls(value).to_dict("records")
 
         # Handle Series - they validate as arrays
-        if isinstance(value, pd.Series):
+        if pd is not None and isinstance(value, pd.Series):
             if return_type != "array":
                 raise ValidationError(f"Expected {return_type}, got Series (which is array)")
             value = TypeConverter._normalize_pandas_series_nulls(value).tolist()
@@ -313,11 +331,13 @@ class TypeConverter:
                 raise ValidationError(f"Expected boolean, got {type(value).__name__}")
 
         elif return_type == "array":
-            if not isinstance(value, list | np.ndarray):
+            np = TypeConverter._numpy()
+            is_numpy_array = np is not None and isinstance(value, np.ndarray)
+            if not isinstance(value, list) and not is_numpy_array:
                 raise ValidationError(f"Expected array, got {type(value).__name__}")
 
             # Convert numpy arrays to lists for consistent validation
-            if isinstance(value, np.ndarray):
+            if is_numpy_array:
                 value = value.tolist()
 
             # Validate array constraints
@@ -359,21 +379,27 @@ class TypeConverter:
     @staticmethod
     def serialize_for_output(obj: Any) -> Any:
         """Serialize output objects for JSON compatibility."""
+        pd = TypeConverter._pandas()
+        np = TypeConverter._numpy()
+
         if isinstance(obj, dict):
             return {k: TypeConverter.serialize_for_output(v) for k, v in obj.items()}
-        elif isinstance(obj, list | np.ndarray):
+        elif isinstance(obj, list) or (np is not None and isinstance(obj, np.ndarray)):
             # Convert numpy arrays to lists and serialize recursively
-            items = obj.tolist() if isinstance(obj, np.ndarray) else obj
+            items = obj.tolist() if np is not None and isinstance(obj, np.ndarray) else obj
             return [TypeConverter.serialize_for_output(item) for item in items]
-        elif isinstance(obj, pd.DataFrame):
+        elif pd is not None and isinstance(obj, pd.DataFrame):
             # Convert DataFrame to list of dicts
             return TypeConverter._normalize_pandas_dataframe_nulls(obj).to_dict("records")
-        elif isinstance(obj, pd.Series):
+        elif pd is not None and isinstance(obj, pd.Series):
             # Convert Series to list
             return TypeConverter._normalize_pandas_series_nulls(obj).tolist()
-        elif isinstance(obj, pd.Timestamp | datetime | date | time):
+        elif (
+            (pd is not None and isinstance(obj, pd.Timestamp))
+            or isinstance(obj, datetime | date | time)
+        ):
             return obj.isoformat()
-        elif isinstance(obj, type(pd.NaT)):
+        elif pd is not None and isinstance(obj, type(pd.NaT)):
             return None
         elif hasattr(obj, "isoformat"):
             # Handle any other datetime-like objects

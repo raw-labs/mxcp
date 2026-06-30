@@ -6,8 +6,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, cast
 
-import duckdb
-
 logger = logging.getLogger(__name__)
 
 
@@ -69,6 +67,8 @@ class AuditQuery:
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         """Query audit logs with optional filters."""
+        import duckdb
+
         conn = None
         try:
             # Use DuckDB in-memory to query the JSONL file
@@ -148,6 +148,8 @@ class AuditQuery:
         since: str | None = None,
     ) -> int:
         """Export audit logs to CSV file."""
+        import duckdb
+
         conn = None
         try:
             conn = duckdb.connect(":memory:")
@@ -219,6 +221,8 @@ class AuditQuery:
         Returns:
             Number of rows exported
         """
+        import duckdb
+
         conn = None
         try:
             # Connect to the output database
@@ -260,6 +264,8 @@ class AuditQuery:
         Returns:
             Dictionary with summary statistics
         """
+        import duckdb
+
         conn = None
         try:
             conn = duckdb.connect(":memory:")

@@ -9,8 +9,6 @@ import click
 import yaml
 
 from mxcp.sdk.core.analytics import track_command_with_timing
-from mxcp.sdk.duckdb import DuckDBSession
-from mxcp.server.core.config.parsers import create_duckdb_session_config
 from mxcp.server.core.config.site_config import load_site_config
 from mxcp.server.core.config.user_config import load_user_config
 from mxcp.server.interfaces.cli.utils import configure_logging, get_env_profile, output_error
@@ -367,6 +365,9 @@ def init(
 
         # Initialize DuckDB session to create .duckdb file
         try:
+            from mxcp.sdk.duckdb import DuckDBSession
+            from mxcp.server.core.config.parsers import create_duckdb_session_config
+
             # Get DuckDB configuration
             database_config, plugins, plugin_config, secrets = create_duckdb_session_config(
                 site_config, user_config, profile, readonly=False

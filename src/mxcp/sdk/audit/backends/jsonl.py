@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any
 
 import aiofiles  # type: ignore[import-untyped]
-import duckdb
 
 from ..models import (
     AuditRecordModel,
@@ -516,6 +515,8 @@ class JSONLAuditWriter(BaseAuditWriter):
         business_context_filters: dict[str, Any] | None,
     ) -> tuple[list[AuditRecordModel], bool]:
         """Execute a filtered query batch using DuckDB synchronously."""
+        import duckdb
+
         # TODO: business_context_filters support for JSONL backend
         del business_context_filters
 
@@ -627,6 +628,8 @@ class JSONLAuditWriter(BaseAuditWriter):
 
     async def get_record(self, record_id: str) -> AuditRecordModel | None:
         """Get a specific record by ID."""
+        import duckdb
+
         files = self._list_segment_files()
         if not files:
             return None
@@ -729,6 +732,8 @@ class JSONLAuditWriter(BaseAuditWriter):
 
     async def apply_retention_policies(self) -> dict[str, int]:
         """Apply retention policies by deleting whole segment files."""
+        import duckdb
+
         counts: dict[str, int] = {}
 
         try:
