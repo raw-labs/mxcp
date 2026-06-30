@@ -15,6 +15,8 @@ from .utils import (
     resolve_profile,
 )
 
+DBT_INSTALL_COMMAND = "pip install 'mxcp[dbt]'"
+
 
 @click.command(name="dbt-config")
 @click.option("--profile", help="Override the profile name from mxcp-site.yml")
@@ -76,7 +78,7 @@ def dbt_config(
                 f"\n{click.style('⚠️  Warning:', fg='yellow')} dbt CLI is not installed or not available in PATH."
             )
             click.echo(
-                f"   Install with: {click.style('pip install dbt-core dbt-duckdb', fg='cyan')}"
+                f"   Install with: {click.style(DBT_INSTALL_COMMAND, fg='cyan')}"
             )
 
         click.echo()  # Empty line for spacing
@@ -162,11 +164,9 @@ def dbt_wrapper(ctx: click.Context, profile: str | None, debug: bool) -> None:
                 f"\n{click.style('❌ Error:', fg='red', bold=True)} dbt CLI is not installed or not available in PATH."
             )
             click.echo(
-                f"   Install with: {click.style('pip install dbt-core dbt-duckdb', fg='cyan')}"
+                f"   Install with: {click.style(DBT_INSTALL_COMMAND, fg='cyan')}"
             )
-            raise click.ClickException(
-                "dbt CLI is not installed. Please install dbt-core and dbt-duckdb."
-            )
+            raise click.ClickException("dbt CLI is not installed. Install with: mxcp[dbt].")
 
         # Get project name
         project = site_config.project

@@ -1701,7 +1701,6 @@ dependencies = [
     { name = "cel-python" },
     { name = "click" },
     { name = "cryptography" },
-    { name = "dbt-core" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "jinja2" },
@@ -1723,6 +1722,7 @@ all = [
     { name = "aioresponses" },
     { name = "black" },
     { name = "build" },
+    { name = "dbt-core" },
     { name = "dbt-duckdb" },
     { name = "duckdb" },
     { name = "hvac" },
@@ -1739,6 +1739,10 @@ all = [
     { name = "ruff" },
     { name = "twine" },
     { name = "types-psutil" },
+]
+dbt = [
+    { name = "dbt-core" },
+    { name = "dbt-duckdb" },
 ]
 dev = [
     { name = "aioresponses" },
@@ -1758,7 +1762,6 @@ dev = [
     { name = "types-pyyaml" },
 ]
 duckdb = [
-    { name = "dbt-duckdb" },
     { name = "duckdb" },
     { name = "pandas" },
 ]
@@ -1792,9 +1795,10 @@ requires-dist = [
     { name = "cel-python", specifier = ">=0.2.0" },
     { name = "click", specifier = ">=8.1.7" },
     { name = "cryptography", specifier = ">=41.0.0" },
-    { name = "dbt-core", specifier = ">=1.6.0" },
+    { name = "dbt-core", marker = "extra == 'all'", specifier = ">=1.6.0" },
+    { name = "dbt-core", marker = "extra == 'dbt'", specifier = ">=1.6.0" },
     { name = "dbt-duckdb", marker = "extra == 'all'", specifier = ">=1.6.0" },
-    { name = "dbt-duckdb", marker = "extra == 'duckdb'", specifier = ">=1.6.0" },
+    { name = "dbt-duckdb", marker = "extra == 'dbt'", specifier = ">=1.6.0" },
     { name = "duckdb", marker = "extra == 'all'", specifier = ">=1.4.1" },
     { name = "duckdb", marker = "extra == 'duckdb'", specifier = ">=1.4.1" },
     { name = "fastapi", specifier = ">=0.110.0" },
@@ -1842,7 +1846,7 @@ requires-dist = [
     { name = "types-pyyaml", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
 ]
-provides-extras = ["dev", "vault", "onepassword", "pandas", "duckdb", "all"]
+provides-extras = ["dev", "vault", "onepassword", "pandas", "duckdb", "dbt", "all"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -29,7 +29,6 @@ dependencies = [
     # CLI
     "click>=8.1.7",  # CLI framework
     "posthog>=3.0.0",  # Usage analytics (always available)
-    "dbt-core>=1.6.0",  # dbt core for data transformations
     
     # Observability
     "opentelemetry-api>=1.24.0",  # OpenTelemetry API
@@ -78,6 +77,9 @@ pandas = [
 duckdb = [
     "duckdb>=1.4.1",  # Embedded analytics database
     "pandas>=2.0.0",  # DataFrame/Series support for DuckDB-oriented workflows
+]
+dbt = [
+    "dbt-core>=1.6.0",  # dbt core for data transformations
     "dbt-duckdb>=1.6.0",  # dbt DuckDB adapter
 ]
 
@@ -89,6 +91,7 @@ all = [
     # Data integrations
     "pandas>=2.0.0",
     "duckdb>=1.4.1",
+    "dbt-core>=1.6.0",
     "dbt-duckdb>=1.6.0",
     # Development tools
     "pytest",
