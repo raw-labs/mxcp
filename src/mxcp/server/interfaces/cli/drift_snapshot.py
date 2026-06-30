@@ -1,5 +1,6 @@
 import hashlib
 import json
+from typing import Any
 
 import click
 
@@ -13,11 +14,9 @@ from mxcp.server.interfaces.cli.utils import (
     resolve_profile,
     run_async_cli,
 )
-from mxcp.server.services.drift.models import DriftSnapshot
-from mxcp.server.services.drift.snapshot import generate_snapshot
 
 
-def _compute_snapshot_hash(snapshot: DriftSnapshot) -> tuple[str, str]:
+def _compute_snapshot_hash(snapshot: Any) -> tuple[str, str]:
     """Compute JSON string and hash for a snapshot.
 
     Args:
@@ -123,6 +122,8 @@ async def _drift_snapshot_impl(
 ) -> None:
     """Async implementation of the drift-snapshot command."""
     try:
+        from mxcp.server.services.drift.snapshot import generate_snapshot
+
         # Load configs
         site_config = load_site_config()
         user_config = load_user_config(site_config)

@@ -140,6 +140,28 @@ assert "duckdb" not in sys.modules
     subprocess.run([sys.executable, "-c", code], check=True, env=env)
 
 
+def test_top_level_cli_import_does_not_import_duckdb() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repo_root / "src")
+    code = """
+import builtins
+import sys
+
+orig_import = builtins.__import__
+
+def guarded_import(name, *args, **kwargs):
+    if name == "duckdb" or name.startswith("duckdb."):
+        raise AssertionError(f"duckdb import attempted by {name}")
+    return orig_import(name, *args, **kwargs)
+
+builtins.__import__ = guarded_import
+import mxcp.__main__  # noqa: F401
+assert "duckdb" not in sys.modules
+"""
+    subprocess.run([sys.executable, "-c", code], check=True, env=env)
+
+
 @pytest.mark.asyncio
 async def test_python_only_server_starts_and_executes_without_duckdb(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

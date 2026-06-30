@@ -11,8 +11,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-import duckdb
-
 from mxcp.sdk.audit import AuditLogger, AuditRecordModel
 
 
@@ -38,6 +36,8 @@ async def export_to_duckdb(
     Returns:
         Number of records exported
     """
+    import duckdb
+
     conn = duckdb.connect(str(export_path))
     total_exported = 0
 
@@ -234,7 +234,7 @@ def _record_to_dict(record: AuditRecordModel) -> dict[str, Any]:
     }
 
 
-def _create_duckdb_table(conn: duckdb.DuckDBPyConnection, sample_record: dict[str, Any]) -> None:
+def _create_duckdb_table(conn: Any, sample_record: dict[str, Any]) -> None:
     """Create DuckDB table based on a sample record."""
     # Infer column types from sample data
     columns = []

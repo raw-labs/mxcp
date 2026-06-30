@@ -20,7 +20,6 @@ from mxcp.server.services.drift.models import (
     TestResults,
     ValidationResults,
 )
-from mxcp.server.services.drift.snapshot import generate_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -304,6 +303,8 @@ async def check_drift(
     Returns:
         DriftReport with comparison results
     """
+    from mxcp.server.services.drift.snapshot import generate_snapshot
+
     profile_name = profile or site_config.profile
 
     # Determine baseline snapshot path
